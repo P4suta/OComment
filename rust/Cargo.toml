@@ -30,7 +30,7 @@ tower-lsp = "0.20.0"
 tokio = { version = "1.53.0", features = ["io-std", "macros", "rt-multi-thread", "sync"] }
 unicode-width = "0.2.2"
 wasm_component_layer = { package = "ocomment-wasm-component-layer", path = "vendor/wasm_component_layer", version = "=0.1.18-ocomment.1" }
-wasmi = "0.31.2"
+wasmi = "1.1.0"
 wasmi_runtime_layer = { package = "ocomment-wasmi-runtime-layer", path = "vendor/wasmi_runtime_layer", version = "=0.31.0" }
 
 [profile.release]
