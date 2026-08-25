@@ -6,7 +6,7 @@ use memchr::{memchr, memchr2, memchr3, memmem};
 use regex::bytes::RegexSet;
 
 pub fn scan(source: &[u8], language: Language, options: ScanOptions) -> ScanReport {
-    scan_internal(source, language, options, 0, false).0
+    scan_internal(source, language, options, 0, false, None).0
 }
 
 pub(crate) fn scan_with_checkpoints(
@@ -15,7 +15,27 @@ pub(crate) fn scan_with_checkpoints(
     options: ScanOptions,
     offset: usize,
 ) -> (ScanReport, Vec<usize>) {
-    scan_internal(source, language, options, offset, true)
+    let (report, checkpoints, _) = scan_internal(source, language, options, offset, true, None);
+    (report, checkpoints)
+}
+
+/// Scan `source` — which must be the *whole* remaining document suffix, so that
+/// every lexical lookahead sees the bytes a full scan would — but stop as soon
+/// as the scanner reaches the clean top-level state at absolute offset `stop`.
+///
+/// Returns whether that state was actually reached. When it was not, the scan
+/// ran to the end of `source` and the report covers the entire suffix. Handing
+/// the scanner a slice that had been truncated at `stop` instead would let a
+/// bounded lookahead straddling the cut decide differently than it does in the
+/// real document.
+pub(crate) fn scan_until_checkpoint(
+    source: &[u8],
+    language: Language,
+    options: ScanOptions,
+    offset: usize,
+    stop: usize,
+) -> (ScanReport, Vec<usize>, bool) {
+    scan_internal(source, language, options, offset, true, Some(stop))
 }
 
 fn scan_internal(
@@ -24,8 +44,10 @@ fn scan_internal(
     options: ScanOptions,
     offset: usize,
     track_checkpoints: bool,
-) -> (ScanReport, Vec<usize>) {
-    let mut scanner = Scanner::with_offset(source, language, options, offset, track_checkpoints);
+    stop: Option<usize>,
+) -> (ScanReport, Vec<usize>, bool) {
+    let mut scanner =
+        Scanner::with_offset(source, language, options, offset, track_checkpoints, stop);
     match language {
         Language::Rust
         | Language::C
@@ -63,6 +85,7 @@ fn scan_internal(
             valid,
         },
         scanner.safe_checkpoints,
+        scanner.stopped,
     )
 }
 
@@ -76,6 +99,9 @@ struct Scanner<'a> {
     patterns: DispositionPatterns,
     safe_checkpoints: Vec<usize>,
     track_checkpoints: bool,
+    stop: Option<usize>,
+    stopped: bool,
+    restart_rules: RestartRules,
 }
 
 impl<'a> Scanner<'a> {
@@ -85,6 +111,7 @@ impl<'a> Scanner<'a> {
         options: ScanOptions,
         offset: usize,
         track_checkpoints: bool,
+        stop: Option<usize>,
     ) -> Self {
         let (patterns, pattern_error) = match DispositionPatterns::compile(&options) {
             Ok(patterns) => (patterns, None),
@@ -102,6 +129,9 @@ impl<'a> Scanner<'a> {
                 .then_some(vec![offset])
                 .unwrap_or_default(),
             track_checkpoints,
+            stop,
+            stopped: false,
+            restart_rules: RestartRules::of(source, language),
         };
         if let Some(error) = pattern_error {
             scanner.error(
@@ -126,6 +156,9 @@ impl<'a> Scanner<'a> {
             patterns,
             safe_checkpoints: Vec::new(),
             track_checkpoints: false,
+            stop: None,
+            stopped: false,
+            restart_rules: RestartRules::of(source, language),
         }
     }
 
@@ -161,13 +194,26 @@ impl<'a> Scanner<'a> {
         self.diagnostics.extend(child.diagnostics);
     }
 
+    /// Whether a checkpoint the scanner is about to emit at `local` is a
+    /// restart point, asked of the same [`RestartRules`] the incremental engine
+    /// consults before reusing one. A suffix scan is past the preamble by
+    /// construction — its source starts mid-document, so the offset-sensitive
+    /// rules cannot fire for it, and the engine validates the offset it
+    /// restarts *from* against the whole edited document instead.
+    fn checkpoint_is_restartable(&self, local: usize) -> bool {
+        self.offset > 0 || self.restart_rules.permit_restart_at(self.source, local)
+    }
+
     fn add_safe_checkpoint(&mut self, local: usize) {
-        if !self.track_checkpoints {
+        if !self.track_checkpoints || !self.checkpoint_is_restartable(local) {
             return;
         }
         let absolute = self.offset + local;
         if self.safe_checkpoints.last().copied() != Some(absolute) {
             self.safe_checkpoints.push(absolute);
+        }
+        if self.stop == Some(absolute) {
+            self.stopped = true;
         }
     }
 
@@ -175,7 +221,7 @@ impl<'a> Scanner<'a> {
         if !self.track_checkpoints {
             return;
         }
-        while start < end {
+        while start < end && !self.stopped {
             let Some(relative) = memchr2(b'\r', b'\n', &self.source[start..end]) else {
                 break;
             };
@@ -187,9 +233,11 @@ impl<'a> Scanner<'a> {
     }
 
     fn scan_c_family(&mut self) {
-        // Translation phase 2 line splicing is significant to C-family lexical input.
-        if matches!(self.language, Language::C | Language::Cpp) && contains_line_splice(self.source)
-        {
+        // Translation phase 2 line splicing is significant to C-family lexical
+        // input. The remapped copy is scanned by a child, which tracks no
+        // checkpoints — that is the document-wide half of the restart rules, and
+        // it is the same answer the incremental engine gets from them.
+        if !self.restart_rules.splicing_permits_restarts {
             let mapped = MappedBytes::without_c_line_splices(self.source);
             let mut child = Scanner::child(&mapped.bytes, self.language, self.options.clone(), 0);
             child.scan_c_family_unmapped();
@@ -208,6 +256,9 @@ impl<'a> Scanner<'a> {
                 break;
             };
             self.add_safe_newlines(index, next);
+            if self.stopped {
+                break;
+            }
             index = next;
             if starts(bytes, index, b"//") && self.language != Language::Css {
                 let end = line_end(bytes, index + 2);
@@ -587,7 +638,7 @@ impl<'a> Scanner<'a> {
     fn scan_ocaml(&mut self) {
         let bytes = self.source;
         let mut index = 0;
-        while index < bytes.len() {
+        while index < bytes.len() && !self.stopped {
             if starts(bytes, index, b"(*") {
                 let (end, closed) = ocaml_comment_end(bytes, index);
                 self.add_comment(
@@ -640,7 +691,7 @@ impl<'a> Scanner<'a> {
     fn scan_python(&mut self) {
         let bytes = self.source;
         let mut index = 0;
-        while index < bytes.len() {
+        while index < bytes.len() && !self.stopped {
             if bytes[index] == b'#' {
                 let end = line_end(bytes, index + 1);
                 self.add_comment(index, end, CommentKind::Line);
@@ -823,7 +874,7 @@ impl<'a> Scanner<'a> {
         let mut word_open = false;
         let mut command_position = true;
         let mut case_states = Vec::new();
-        while index < bytes.len() {
+        while index < bytes.len() && !self.stopped {
             match bytes[index] {
                 b'#' if !word_open => {
                     let end = line_end(bytes, index + 1);
@@ -1077,7 +1128,7 @@ impl<'a> Scanner<'a> {
         let bytes = self.source;
         let nested = matches!(self.options.dialect, Dialect::PostgreSql | Dialect::TSql);
         let mut index = 0;
-        while index < bytes.len() {
+        while index < bytes.len() && !self.stopped {
             if starts(bytes, index, b"--")
                 && (self.options.dialect != Dialect::MySql
                     || mysql_dash_comment_boundary(bytes.get(index + 2).copied()))
@@ -1217,7 +1268,7 @@ impl<'a> Scanner<'a> {
         let mut brace_blocks = Vec::new();
         let mut statement_start = stop_brace.is_none();
         let mut pending_block = false;
-        while index < bytes.len() {
+        while index < bytes.len() && !self.stopped {
             if index == 0 && self.offset == 0 && starts(bytes, index, b"#!") {
                 let end = js_line_end(bytes, index + 2);
                 self.add_comment(index, end, CommentKind::Line);
@@ -1552,7 +1603,7 @@ impl<'a> Scanner<'a> {
     fn scan_html(&mut self) {
         let bytes = self.source;
         let mut index = 0;
-        while index < bytes.len() {
+        while index < bytes.len() && !self.stopped {
             if starts(bytes, index, b"<!--") {
                 let end = if let Some(relative) = find_subslice(&bytes[index + 4..], b"-->") {
                     index + 4 + relative + 3
@@ -1757,6 +1808,82 @@ fn classify_comment(
     lexical
 }
 
+/// The document-wide half of the restart rules: C and C++ splice
+/// `\<newline>` out of the input before lexing, and the remapped copy that
+/// results is scanned without tracking checkpoints, so a full scan of a spliced
+/// document offers no restart point beyond offset 0.
+fn line_splicing_permits_restarts(source: &[u8], language: Language) -> bool {
+    !matches!(language, Language::C | Language::Cpp) || !contains_line_splice(source)
+}
+
+/// A checkpoint sits immediately after a line terminator, and a CRLF pair is a
+/// single terminator. An edit that supplies the LF after an existing CR moves
+/// the boundary one byte on, leaving the offset a previous revision recorded
+/// inside the pair, where no scan of these bytes would ever resume.
+fn the_line_ending_permits_a_restart(source: &[u8], offset: usize) -> bool {
+    offset == 0 || source.get(offset - 1) != Some(&b'\r') || source.get(offset) != Some(&b'\n')
+}
+
+/// Preamble classification depends on the absolute offset, and Python only
+/// recognises an encoding declaration while scanning from offset 0, which makes
+/// the start of line 2 a restart point exactly when no encoding declaration
+/// follows. Offset 0 always passes — restarting a scan there *is* the full
+/// scan.
+fn the_preamble_permits_a_restart(source: &[u8], language: Language, offset: usize) -> bool {
+    offset == 0
+        || language != Language::Python
+        || !is_within_first_two_lines(source, offset)
+        || !python_line_declares_encoding(source, offset)
+}
+
+/// The restart rules for one revision of a document: a safe checkpoint promises
+/// that restarting the scan there reproduces the rest of a full scan byte for
+/// byte, and both halves of that promise are conditions on the bytes *around*
+/// the checkpoint. The document-wide half is answered once here, when the rules
+/// are built, because answering it costs a scan of the source.
+///
+/// The scanner consults these rules before emitting a checkpoint; the
+/// incremental engine builds them for the *edited* bytes and consults them
+/// again before restarting at a checkpoint the previous revision recorded.
+/// Emitting a checkpoint and reusing one therefore ask one function and cannot
+/// drift apart.
+#[derive(Clone, Copy)]
+pub(crate) struct RestartRules {
+    language: Language,
+    splicing_permits_restarts: bool,
+}
+
+impl RestartRules {
+    pub(crate) fn of(source: &[u8], language: Language) -> Self {
+        Self {
+            language,
+            splicing_permits_restarts: line_splicing_permits_restarts(source, language),
+        }
+    }
+
+    /// Whether restarting a scan of `source` — the bytes these rules were built
+    /// from — at `offset` reproduces the rest of a full scan of it.
+    pub(crate) fn permit_restart_at(&self, source: &[u8], offset: usize) -> bool {
+        self.splicing_permits_restarts
+            && the_line_ending_permits_a_restart(source, offset)
+            && the_preamble_permits_a_restart(source, self.language, offset)
+    }
+}
+
+/// Whether classification from `offset` onwards is independent of where those
+/// bytes sit in the document. The preamble rules are the only position
+/// sensitive ones — a `#!` line is a shebang only at offset 0, and a Python
+/// encoding declaration only inside the first two lines — so anything past the
+/// first two lines classifies the same wherever an edit moves it to.
+///
+/// The incremental engine reuses the previous revision's report for the tail it
+/// converges on, shifted by the edit's length delta. That reuse keeps the old
+/// classification, so it is sound exactly while the tail is settled at both its
+/// old and its new position.
+pub(crate) fn preamble_is_settled(source: &[u8], offset: usize) -> bool {
+    !is_within_first_two_lines(source, offset)
+}
+
 fn is_within_first_two_lines(source: &[u8], offset: usize) -> bool {
     let mut line_breaks = 0;
     let mut index = 0;
@@ -1777,6 +1904,21 @@ fn is_within_first_two_lines(source: &[u8], offset: usize) -> bool {
         index += 1;
     }
     true
+}
+
+/// Whether the line beginning at `line_start` carries a Python encoding
+/// declaration, and therefore a comment whose classification depends on the
+/// scan starting at offset 0.
+fn python_line_declares_encoding(source: &[u8], line_start: usize) -> bool {
+    let mut index = line_start;
+    while matches!(source.get(index), Some(b' ' | b'\t' | 0x0c)) {
+        index += 1;
+    }
+    if source.get(index) != Some(&b'#') {
+        return false;
+    }
+    let end = line_end(source, index + 1);
+    is_python_encoding_declaration(source, index, &source[index..end])
 }
 
 fn is_python_encoding_declaration(source: &[u8], start: usize, raw: &[u8]) -> bool {

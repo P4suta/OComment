@@ -318,7 +318,7 @@ fn init_stdout_prints_the_template_and_writes_nothing() {
 
 /// A config in a parent directory already governs this one, so a new starter
 /// file here layers over it rather than starting from nothing. The note says
-/// so before the file is written, and does not stop it being written.
+/// so once the file exists, and does not stop it being written.
 #[test]
 fn init_notes_a_project_config_that_already_applies() {
     let directory = tempfile::tempdir().unwrap();
@@ -357,6 +357,18 @@ fn init_notes_a_project_config_that_already_applies() {
         !String::from_utf8_lossy(&quiet.stderr).contains("already applies"),
         "{}",
         String::from_utf8_lossy(&quiet.stderr)
+    );
+
+    // The note is advice about a file that was just created. A refused `init`
+    // created nothing, so it has nothing to advise about: the error stands
+    // alone rather than trailing guidance for a file that does not exist.
+    let refused = run(&nested, &["init", "config"]);
+    assert_eq!(refused.status.code(), Some(2));
+    let error = String::from_utf8_lossy(&refused.stderr);
+    assert!(error.contains(".ocomment.toml already exists"), "{error}");
+    assert!(
+        !error.contains("already applies"),
+        "a refused init still advised about the inherited config:\n{error}"
     );
 }
 
@@ -1446,6 +1458,30 @@ fn help_lists_the_verbosity_and_progress_flags() {
     );
 }
 
+/// `-q` does not print nothing: it drops the commentary and keeps whatever the
+/// command was asked to produce — the findings, the patch, the listing. A help
+/// line that claims otherwise sends a reader hunting for output that was never
+/// dropped, or piping a run they think is silent.
+#[test]
+fn quiet_help_says_what_it_keeps() {
+    let directory = tempfile::tempdir().unwrap();
+    let output = run(directory.path(), &["check", "--help"]);
+    assert_eq!(output.status.code(), Some(0));
+    let help = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        help.contains("Drop the run summary and notes"),
+        "`-q` does not say what it drops:\n{help}"
+    );
+    assert!(
+        help.contains("still written"),
+        "`-q` does not say what it keeps:\n{help}"
+    );
+    assert!(
+        !help.contains("Print nothing but errors"),
+        "`-q` still claims to print nothing:\n{help}"
+    );
+}
+
 /// Fill a directory with `count` one-comment Rust files.
 fn many_files(count: usize) -> TempDir {
     let directory = tempfile::tempdir().unwrap();
@@ -1994,32 +2030,39 @@ fn fix_dry_run_on_a_clean_file_reports_nothing_to_fix() {
     );
 }
 
-/// A skipped path is the entire answer to the run, so the preview has to name
-/// it: `fix --dry-run` lists the skip on standard output exactly as the `fix`
-/// it stands in for does, instead of leaving a bare "Nothing to fix." with no
-/// reason attached. Plain `diff` keeps its standard output for the patch.
+/// A skipped path can be the whole answer to the run, so the preview still has
+/// to name it — but `fix --dry-run` promises a patch on standard output, and a
+/// reader piping that into `git apply` cannot be handed a prose line in the
+/// middle of it. The reason goes to standard error instead, directly above the
+/// summary that counts it, word for word what the `fix` it stands in for says.
+///
+/// Spec change: the preview used to print that line on standard output, where
+/// it corrupted the patch. Plain `fix` writes no patch and keeps its skips on
+/// standard output; plain `diff` folds them into the summary as before.
 #[test]
 fn fix_dry_run_lists_a_skipped_path_the_way_fix_does() {
     let directory = tempfile::tempdir().unwrap();
     fs::write(directory.path().join("notes.md"), b"# notes\n").unwrap();
 
+    let skip = format!("notes.md: skipped: {NO_LANGUAGE}\n");
     let previewed = run(directory.path(), &["fix", "--dry-run", "notes.md"]);
     assert_eq!(previewed.status.code(), Some(0));
     assert_eq!(
-        String::from_utf8(previewed.stdout.clone()).unwrap(),
-        format!("notes.md: skipped: {NO_LANGUAGE}\n"),
-        "the preview never said why it had nothing to fix"
+        String::from_utf8(previewed.stdout).unwrap(),
+        "",
+        "the preview put prose on the standard output it promises as a patch"
     );
     assert_eq!(
         String::from_utf8(previewed.stderr).unwrap(),
-        "Nothing to fix.\n"
+        format!("{skip}Nothing to fix.\n"),
+        "the preview never said why it had nothing to fix"
     );
 
     let fixed = run(directory.path(), &["fix", "notes.md"]);
     assert_eq!(
-        String::from_utf8(previewed.stdout).unwrap(),
         String::from_utf8(fixed.stdout).unwrap(),
-        "the preview and the run it stands in for disagree about the skip"
+        skip,
+        "`fix` stopped listing the skip on standard output"
     );
 
     let diffed = run(directory.path(), &["diff", "notes.md"]);
@@ -2028,6 +2071,11 @@ fn fix_dry_run_lists_a_skipped_path_the_way_fix_does() {
         String::from_utf8(diffed.stdout).unwrap(),
         "",
         "`diff` reserves its standard output for the patch"
+    );
+    assert_eq!(
+        String::from_utf8(diffed.stderr).unwrap(),
+        "Nothing to diff.\n",
+        "plain `diff` folds a skip into its summary rather than listing it"
     );
 }
 
@@ -2422,12 +2470,19 @@ fn progress_clears_the_counter_only_when_one_was_drawn() {
 fn an_empty_run_summarizes_itself_in_the_vocabulary_of_its_command() {
     let directory = tempfile::tempdir().unwrap();
     fs::write(directory.path().join("notes.md"), b"# notes\n").unwrap();
+    // `fix --dry-run` keeps its standard output for the patch, so the named
+    // skip it met stands on standard error directly above the summary this
+    // test is about; every other command reports the skip elsewhere.
+    let skip = format!("notes.md: skipped: {NO_LANGUAGE}\n");
     for (arguments, expected) in [
-        (vec!["check", "notes.md"], "Nothing to check.\n"),
-        (vec!["fix", "notes.md"], "Nothing to fix.\n"),
-        (vec!["fix", "--dry-run", "notes.md"], "Nothing to fix.\n"),
-        (vec!["diff", "notes.md"], "Nothing to diff.\n"),
-        (vec!["scan", "notes.md"], "Nothing to scan.\n"),
+        (vec!["check", "notes.md"], "Nothing to check.\n".to_owned()),
+        (vec!["fix", "notes.md"], "Nothing to fix.\n".to_owned()),
+        (
+            vec!["fix", "--dry-run", "notes.md"],
+            format!("{skip}Nothing to fix.\n"),
+        ),
+        (vec!["diff", "notes.md"], "Nothing to diff.\n".to_owned()),
+        (vec!["scan", "notes.md"], "Nothing to scan.\n".to_owned()),
     ] {
         let output = run(directory.path(), &arguments);
         assert_eq!(output.status.code(), Some(0), "`ocomment {arguments:?}`");
@@ -2631,6 +2686,283 @@ fn a_missing_plugin_tool_names_it_its_purpose_and_doctor() {
     }
 }
 
+/// Write an executable stand-in for one external tool, printing `lines` and
+/// nothing else. `doctor` reports whatever a tool says about itself, so a fake
+/// that says something recognizable is enough to pin the row it produces.
+#[cfg(unix)]
+fn fake_tool_lines(directory: &Path, name: &str, lines: &[&str]) {
+    use std::os::unix::fs::PermissionsExt;
+    let path = directory.join(name);
+    let arguments: String = lines
+        .iter()
+        .map(|line| {
+            assert!(
+                !line.contains(['"', '\\', '$', '`']),
+                "the fake tool writes a shell script, so `{line}` needs quoting it does not do"
+            );
+            format!(" \"{line}\"")
+        })
+        .collect();
+    fs::write(&path, format!("#!/bin/sh\nprintf '%s\\n'{arguments}\n")).unwrap();
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+/// The common case: a tool that answers with one line.
+#[cfg(unix)]
+fn fake_tool(directory: &Path, name: &str, line: &str) {
+    fake_tool_lines(directory, name, &[line]);
+}
+
+/// Run the binary with `PATH` pointing at `tools` and nothing else, so a probe
+/// sees exactly the tools the test installed there.
+#[cfg(unix)]
+fn run_with_tools(directory: &Path, tools: &Path, arguments: &[&str]) -> Output {
+    Command::new(binary())
+        .current_dir(directory)
+        .env("PATH", tools)
+        .args(arguments)
+        .output()
+        .unwrap()
+}
+
+/// `doctor` is the command every missing-tool failure points at, so it has to
+/// probe the tools the plugin commands and `--staged` shell out to instead of
+/// assuming them. A tool that is not installed is reported with the very
+/// purpose the failure would have named, and is not itself a failure: all five
+/// are optional, and a run that never touches a plugin never needs one.
+#[cfg(unix)]
+#[test]
+fn doctor_probes_the_optional_tools_it_shells_out_to() {
+    let directory = tempfile::tempdir().unwrap();
+    let tools = tempfile::tempdir().unwrap();
+    fake_tool(tools.path(), "git", "git version 9.9.9");
+
+    let output = run_with_tools(directory.path(), tools.path(), &["doctor"]);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "a missing optional tool failed the run: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        report.contains("git: git version 9.9.9"),
+        "doctor did not report the one tool on PATH:\n{report}"
+    );
+    for missing in [
+        "curl: not found (needed for https:// plugin sources)",
+        "gh: not found (needed for gh: plugin sources)",
+        "oras: not found (needed for oci: plugin sources)",
+        "cosign: not found (needed for --identity verification)",
+    ] {
+        assert!(
+            report.contains(missing),
+            "doctor never reported `{missing}`:\n{report}"
+        );
+    }
+}
+
+/// The row carries the tool's own version line, whatever the tool chose to
+/// say: `doctor` reports the environment rather than parsing it. `git` is
+/// probed for the same reason as the rest — `--staged` is the part of the run
+/// that stops working without it.
+#[cfg(unix)]
+#[test]
+fn doctor_reports_a_probed_tools_own_version_line() {
+    let directory = tempfile::tempdir().unwrap();
+    let tools = tempfile::tempdir().unwrap();
+    fake_tool(tools.path(), "cosign", "cosign v9.9.9");
+
+    let output = run_with_tools(directory.path(), tools.path(), &["doctor"]);
+    assert_eq!(output.status.code(), Some(0));
+    let report = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        report.contains("cosign: cosign v9.9.9"),
+        "doctor did not carry the tool's own version line:\n{report}"
+    );
+    assert!(
+        report.contains("git: not found (needed for --staged)"),
+        "a missing `git` never named the flag that needs it:\n{report}"
+    );
+}
+
+/// `cosign version` draws several lines of ASCII art before it says anything
+/// about itself, and a row carrying the top of that banner would tell a reader
+/// nothing at all. A version has a number in it, so that is the line the row
+/// carries — sanitised like every probed line, so the run of spaces the tool
+/// aligned its banner with is collapsed to one.
+#[cfg(unix)]
+#[test]
+fn doctor_looks_past_a_banner_for_the_version_line() {
+    let directory = tempfile::tempdir().unwrap();
+    let tools = tempfile::tempdir().unwrap();
+    fake_tool_lines(
+        tools.path(),
+        "cosign",
+        &[
+            "  ______   ______",
+            " |      | |  __  |",
+            "cosign: A tool for Container Signing",
+            "",
+            "GitVersion:    v9.9.9",
+        ],
+    );
+
+    let output = run_with_tools(directory.path(), tools.path(), &["doctor"]);
+    assert_eq!(output.status.code(), Some(0));
+    let report = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        report.contains("cosign: GitVersion: v9.9.9"),
+        "doctor reported the banner instead of the version behind it:\n{report}"
+    );
+    assert!(
+        !report.contains("GitVersion:    v9.9.9"),
+        "the tool's own alignment survived into the row:\n{report}"
+    );
+    assert!(
+        !report.contains("cosign:   ______"),
+        "the top of the banner reached the report:\n{report}"
+    );
+}
+
+/// A probed tool chooses the bytes `doctor` prints, so a version line is
+/// untrusted input on its way to a terminal: a tool planted on `PATH` could
+/// clear the screen or repaint the report from its own banner. The row carries
+/// what the tool said with every control sequence replaced, and a tool that
+/// answers at all is still a healthy row rather than a failing run.
+#[cfg(unix)]
+#[test]
+fn doctor_strips_control_sequences_from_a_probed_tools_version_line() {
+    let directory = tempfile::tempdir().unwrap();
+    let tools = tempfile::tempdir().unwrap();
+    fake_tool(
+        tools.path(),
+        "cosign",
+        "\u{1b}[2J\u{1b}[1;31mv1.0 PWNED\u{1b}[0m",
+    );
+
+    let output = run_with_tools(directory.path(), tools.path(), &["doctor"]);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "a tool that answered with control sequences failed the run: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        !output.stdout.contains(&0x1b),
+        "an escape byte reached the report: {:?}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    let report = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        report.contains("cosign: \u{fffd}[2J\u{fffd}[1;31mv1.0 PWNED\u{fffd}[0m\n"),
+        "doctor did not report the version line with its controls replaced:\n{report}"
+    );
+}
+
+/// The other half of "why did that run do that?" is the environment the run
+/// resolved for itself: where it stood, what it took as the root, which
+/// configuration files it merged, and whether its output is decorated.
+#[test]
+fn doctor_reports_the_environment_it_resolved() {
+    let directory = tempfile::tempdir().unwrap();
+    let empty = tempfile::tempdir().unwrap();
+    let doctor = |no_color: Option<&str>| {
+        let mut command = Command::new(binary());
+        command
+            .current_dir(directory.path())
+            .env("PATH", "/usr/bin:/bin")
+            // Pin the user layer away from whoever is running the tests: the
+            // trace this reports has to be the one this run resolved.
+            .env("XDG_CONFIG_HOME", empty.path())
+            .arg("doctor");
+        match no_color {
+            Some(value) => command.env("NO_COLOR", value),
+            None => command.env_remove("NO_COLOR"),
+        };
+        let output = command.output().unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8(output.stdout).unwrap()
+    };
+
+    let report = doctor(None);
+    let cwd = fs::canonicalize(directory.path()).unwrap();
+    assert!(
+        report.contains(&format!("cwd: {}", cwd.display())),
+        "doctor never said where it was standing:\n{report}"
+    );
+    assert!(
+        report.contains("root: "),
+        "doctor never said what it took as the root:\n{report}"
+    );
+    assert!(
+        report.contains("config: built-in defaults"),
+        "doctor never traced the configuration it merged:\n{report}"
+    );
+    // The report is read through a pipe, so the decoration it describes is the
+    // decoration this very run chose.
+    assert!(
+        report.contains("stdout: not a terminal"),
+        "doctor never said whether its output is a terminal:\n{report}"
+    );
+    assert!(
+        report.contains("NO_COLOR: unset"),
+        "doctor never said whether NO_COLOR is set:\n{report}"
+    );
+    assert!(
+        doctor(Some("1")).contains("NO_COLOR: set"),
+        "doctor ignored the NO_COLOR that silences its colour"
+    );
+
+    let created = run(directory.path(), &["init", "config"]);
+    assert_eq!(created.status.code(), Some(0));
+    let report = doctor(None);
+    assert!(
+        report.contains(&format!(
+            "config: project {}",
+            cwd.join(".ocomment.toml").display()
+        )),
+        "doctor did not name the project configuration it found:\n{report}"
+    );
+    assert!(
+        report.contains(&format!("root: {}", cwd.display())),
+        "the project file did not move the root with it:\n{report}"
+    );
+}
+
+/// The scaffold refuses to write into a directory that already exists, and a
+/// refusal that only says "refusing" leaves the reader to guess. There are two
+/// ways out — take the directory away, or take the plugin that owns it away —
+/// and the message names both.
+#[test]
+fn plugin_new_refuses_an_existing_directory_and_says_what_to_do() {
+    let directory = tempfile::tempdir().unwrap();
+    let taken = directory.path().join("scanner");
+    fs::create_dir(&taken).unwrap();
+
+    let output = run(directory.path(), &["plugin", "new", "scanner"]);
+    assert_eq!(output.status.code(), Some(2));
+    let error = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        error.contains("refusing to overwrite plugin directory"),
+        "{error}"
+    );
+    assert!(
+        error.contains("remove it or run `ocomment plugin remove <name>` first"),
+        "the refusal never said what to do about it:\n{error}"
+    );
+    assert_eq!(
+        fs::read_dir(&taken).unwrap().count(),
+        0,
+        "the refusal wrote into the directory it refused"
+    );
+}
+
 /// `--policy all` means "take everything out", so the one thing it deliberately
 /// leaves behind has to explain itself: the summary counts the kept preambles
 /// and names the flag that removes them too.
@@ -2642,7 +2974,7 @@ fn policy_all_says_how_to_remove_a_kept_preamble() {
         b"#!/usr/bin/env python3\n# note\nx = 1\n",
     )
     .unwrap();
-    let hint = "1 protected preamble comment kept; add --force-protected to remove them.";
+    let hint = "1 protected preamble comment kept; add --force-protected to remove it.";
 
     let all = run(directory.path(), &["check", "--policy", "all", "a.py"]);
     assert_eq!(all.status.code(), Some(1));
@@ -2679,6 +3011,24 @@ fn policy_all_says_how_to_remove_a_kept_preamble() {
     assert!(
         !stderr.contains("--force-protected"),
         "a run that kept no preamble advertised the flag anyway:\n{stderr}"
+    );
+
+    // The hint counts what it kept, so its pronoun has to agree with the
+    // count: one preamble is removed with "it", several with "them".
+    fs::write(
+        directory.path().join("c.py"),
+        b"#!/usr/bin/env python3\nx = 2\n",
+    )
+    .unwrap();
+    let both = run(
+        directory.path(),
+        &["check", "--policy", "all", "a.py", "c.py"],
+    );
+    let stderr = String::from_utf8(both.stderr).unwrap();
+    assert!(
+        stderr
+            .contains("2 protected preamble comments kept; add --force-protected to remove them."),
+        "the plural hint does not agree with the two preambles it counted:\n{stderr}"
     );
 }
 

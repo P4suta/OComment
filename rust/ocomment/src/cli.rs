@@ -214,7 +214,7 @@ struct OutputArgs {
     /// When to draw the live scanning counter on standard error.
     #[arg(long, global = true, value_enum, default_value_t, value_name = "WHEN")]
     progress: AutoChoice,
-    /// Print nothing but errors and diagnostics.
+    /// Drop the run summary and notes; the command's product (findings, patch, listing) is still written.
     #[arg(short, long, global = true, conflicts_with = "verbose")]
     quiet: bool,
     /// Trace what is scanned and summarize every comment kind and skipped file.
@@ -890,18 +890,23 @@ fn run_init(args: InitArgs) -> Result<u8> {
         output::finish(&mut stdout)?;
         return Ok(0);
     }
-    note_inherited_config()?;
     write_template(&mut stdout, path, &contents, args.force, next_step)?;
+    // The note is advice about the file that now exists, so it follows the
+    // line that reports it — and a refused `init` never reaches it, because
+    // there is no new file for an inherited configuration to layer under.
+    // Standard output is flushed first so a terminal reading both streams sees
+    // the creation before the note about it.
     output::finish(&mut stdout)?;
+    note_inherited_config()?;
     Ok(0)
 }
 
 /// Say so when a project configuration from a parent directory already governs
 /// this directory.
 ///
-/// The starter file is about to layer over it rather than start from nothing,
-/// and the hook a `lefthook` run installs will read it — either way the reader
-/// is better off knowing before they start editing. It is a note and not a
+/// The starter file layers over it rather than starting from nothing, and the
+/// hook a `lefthook` run installs will read it — either way the reader is
+/// better off knowing before they start editing. It is a note and not a
 /// refusal: a nested per-crate configuration is a normal thing to want.
 ///
 /// The search starts at the parent so that the file this very run is about to
@@ -1075,31 +1080,130 @@ fn run_plugin(args: PluginArgs, common: &CommonArgs) -> Result<u8> {
     Ok(0)
 }
 
+/// What `git` is needed for. The four plugin purposes are declared beside the
+/// spawn sites that name them in a failure; this one belongs to the flag it
+/// serves, and is worded the same way so the rows read alike.
+const STAGED_READS: &str = "--staged";
+
+/// The optional external tools OComment shells out to, in the order `doctor`
+/// reports them: the binary, the arguments that make it identify itself, and
+/// the part of a run that stops working without it. Not one of them is needed
+/// to check or fix a file, so a missing tool is a row in the report and never
+/// a failing run.
+const PROBED_TOOLS: [(&str, &[&str], &str); 5] = [
+    ("git", &["--version"], STAGED_READS),
+    ("curl", &["--version"], plugin::HTTPS_SOURCES),
+    ("gh", &["--version"], plugin::GH_SOURCES),
+    ("oras", &["version"], plugin::OCI_SOURCES),
+    ("cosign", &["version"], plugin::SIGNATURE_VERIFICATION),
+];
+
+/// What one external tool answered when `doctor` asked it to identify itself.
+enum Probe {
+    /// It ran and said this about itself.
+    Found(String),
+    /// Nothing by that name is on `PATH`.
+    Missing,
+    /// It is there but could not be started, or answered with a failure.
+    Failed(String),
+}
+
+/// Ask one external tool for its version.
+///
+/// The answer is read from standard output, or from standard error for the
+/// tools that put their banner there, and it is the line the tool chose:
+/// `doctor` reports what a tool says about itself rather than parsing it into
+/// fields that the next release would rename.
+fn probe(tool: &str, args: &[&str]) -> Probe {
+    let output = match std::process::Command::new(tool).args(args).output() {
+        Ok(output) => output,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Probe::Missing,
+        Err(error) => return Probe::Failed(error.to_string()),
+    };
+    let version = version_line(&output.stdout).or_else(|| version_line(&output.stderr));
+    match (output.status.success(), version) {
+        (true, Some(line)) => Probe::Found(line),
+        (true, None) => Probe::Failed("ran but said nothing about itself".to_owned()),
+        (false, Some(line)) => Probe::Failed(line),
+        (false, None) => Probe::Failed(output.status.to_string()),
+    }
+}
+
+/// The line a tool identifies itself by, out of everything it printed.
+///
+/// Usually that is the first line carrying anything, but `cosign version`
+/// draws six lines of ASCII art before it mentions a version, and a row
+/// showing the top of that banner would tell the reader nothing. A version has
+/// a number in it, so the first line with a digit wins and the first non-empty
+/// line is the fallback for a tool that names no number at all.
+///
+/// A banner that is not UTF-8 is still worth showing, so the bytes are read
+/// lossily rather than dropped, and one line of it is kept: a row of the
+/// report stays one line whatever the tool decided to print.
+///
+/// The tool chose those bytes, so the line it identifies itself by is
+/// untrusted input on its way to a terminal, and it is sanitised exactly like
+/// a comment preview before it becomes a row.
+fn version_line(bytes: &[u8]) -> Option<String> {
+    let text = String::from_utf8_lossy(bytes);
+    let mut fallback = None;
+    for line in text.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        if line.chars().any(|character| character.is_ascii_digit()) {
+            return Some(output::sanitize_line(line));
+        }
+        fallback.get_or_insert_with(|| output::sanitize_line(line));
+    }
+    fallback
+}
+
 fn run_doctor(common: &CommonArgs) -> Result<u8> {
+    // Asked before standard output is locked for the report, so the answer is
+    // about the same handle the report is written to.
+    let stdout_tty = io::stdout().is_terminal();
     let mut stdout = output::stdout();
     output::wrote(writeln!(stdout, "ocomment {}", env!("CARGO_PKG_VERSION")))?;
+    match std::env::current_dir() {
+        Ok(directory) => output::wrote(writeln!(stdout, "cwd: {}", directory.display()))?,
+        Err(error) => output::wrote(writeln!(stdout, "cwd: unavailable ({error})"))?,
+    }
     let resolved = config::load(common.config.as_deref())?;
-    output::wrote(writeln!(
-        stdout,
-        "configuration: ok (root {})",
-        resolved.root.display()
-    ))?;
+    output::wrote(writeln!(stdout, "root: {}", resolved.root.display()))?;
+    for source in config_trace(&resolved.trace) {
+        output::wrote(writeln!(stdout, "config: {source}"))?;
+    }
+    output::wrote(writeln!(stdout, "configuration: ok"))?;
     output::wrote(writeln!(
         stdout,
         "languages: {} built in",
         Language::ALL.len()
     ))?;
-    if std::process::Command::new("git")
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
-        output::wrote(writeln!(stdout, "git: available"))?;
-    } else {
-        output::wrote(writeln!(
-            stdout,
-            "git: unavailable (only --staged is affected)"
-        ))?;
+    // Whether the report is decorated is the first thing a reader piping it
+    // somewhere wants explained, and both halves of that answer are here.
+    output::wrote(writeln!(
+        stdout,
+        "stdout: {}",
+        if stdout_tty {
+            "a terminal"
+        } else {
+            "not a terminal"
+        }
+    ))?;
+    output::wrote(writeln!(
+        stdout,
+        "NO_COLOR: {}",
+        if std::env::var_os("NO_COLOR").is_some() {
+            "set"
+        } else {
+            "unset"
+        }
+    ))?;
+    for (tool, arguments, purpose) in PROBED_TOOLS {
+        let row = match probe(tool, arguments) {
+            Probe::Found(version) => format!("{tool}: {version}"),
+            Probe::Missing => format!("{tool}: not found (needed for {purpose})"),
+            Probe::Failed(reason) => format!("{tool}: failed (needed for {purpose}): {reason}"),
+        };
+        output::wrote(writeln!(stdout, "{row}"))?;
     }
     plugin::verify(&mut stdout, &resolved.root, None)?;
     output::wrote(writeln!(
@@ -1197,21 +1301,31 @@ fn trace_run(resolved: &config::ResolvedConfig, paths: &[PathBuf]) -> Result<()>
             .join(" ")
     };
     output::note(&mut report, &format!("target: {target}"))?;
-    let trace = &resolved.trace;
-    let sources = [
+    for source in config_trace(&resolved.trace) {
+        output::note(&mut report, &format!("config: {source}"))?;
+    }
+    Ok(())
+}
+
+/// Which configuration files a run merged, one line each in the order they
+/// were layered, or the single line that says there were none.
+///
+/// `doctor` and the `-v` trace both report this, and a reader comparing the
+/// two is entitled to read the same answer twice, so they read it from here.
+fn config_trace(trace: &config::ConfigTrace) -> Vec<String> {
+    let sources: Vec<String> = [
         ("user", &trace.user),
         ("project", &trace.project),
         ("explicit", &trace.explicit),
-    ];
-    let mut traced = false;
-    for (label, path) in sources {
-        if let Some(path) = path {
-            output::note(&mut report, &format!("config: {label} {}", path.display()))?;
-            traced = true;
-        }
+    ]
+    .into_iter()
+    .filter_map(|(label, path)| {
+        path.as_ref()
+            .map(|path| format!("{label} {}", path.display()))
+    })
+    .collect();
+    if sources.is_empty() {
+        return vec!["built-in defaults".to_owned()];
     }
-    if !traced {
-        output::note(&mut report, "config: built-in defaults")?;
-    }
-    Ok(())
+    sources
 }

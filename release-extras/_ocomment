@@ -82,8 +82,8 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
-'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
 '--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
 '-h[Print help (see more with '\''--help'\'')]' \
@@ -171,8 +171,8 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
-'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
 '--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
 '-h[Print help (see more with '\''--help'\'')]' \
@@ -252,8 +252,8 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
-'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
 '--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
 '-h[Print help (see more with '\''--help'\'')]' \
@@ -332,8 +332,8 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
-'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
 '--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
 '-h[Print help (see more with '\''--help'\'')]' \
@@ -412,8 +412,8 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
-'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
 '--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
 '-h[Print help (see more with '\''--help'\'')]' \
@@ -490,8 +490,8 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
-'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
 '--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
 '-h[Print help (see more with '\''--help'\'')]' \
@@ -567,8 +567,8 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
-'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
 '--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
 '-h[Print help (see more with '\''--help'\'')]' \
@@ -647,8 +647,8 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
-'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
 '--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
 '-h[Print help (see more with '\''--help'\'')]' \
@@ -725,8 +725,8 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
-'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
 '--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
 '-h[Print help (see more with '\''--help'\'')]' \
@@ -803,8 +803,8 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
-'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
 '--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
 '-h[Print help (see more with '\''--help'\'')]' \
@@ -880,8 +880,8 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
-'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
 '--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
 '-h[Print help (see more with '\''--help'\'')]' \
@@ -968,8 +968,8 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
-'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
 '--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
 '-h[Print help (see more with '\''--help'\'')]' \
@@ -1046,8 +1046,8 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
-'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
 '--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
 '-h[Print help (see more with '\''--help'\'')]' \
@@ -1124,8 +1124,8 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
-'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
 '--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
 '-h[Print help (see more with '\''--help'\'')]' \
@@ -1201,8 +1201,8 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
-'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
 '--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
 '-h[Print help (see more with '\''--help'\'')]' \
@@ -1279,8 +1279,8 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
-'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
 '--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
 '-h[Print help (see more with '\''--help'\'')]' \
@@ -1357,8 +1357,8 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
-'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
 '--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
 '-h[Print help (see more with '\''--help'\'')]' \
@@ -1483,8 +1483,8 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
-'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
 '--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
 '-h[Print help (see more with '\''--help'\'')]' \
@@ -1561,8 +1561,8 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
-'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
 '--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
 '-h[Print help (see more with '\''--help'\'')]' \
@@ -1638,8 +1638,8 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
-'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
 '--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
 '-h[Print help (see more with '\''--help'\'')]' \

@@ -22,6 +22,13 @@ All notable changes to OComment will be documented here. The project follows
 - `-` as a target: `check`, `diff`, and `scan` read standard input under the
   `<stdin>` pseudo-path.
 - `fix --dry-run`, which prints the patch `fix` would apply and writes nothing.
+  Skipped paths are reported on standard error, so its standard output stays a
+  patch that `git apply` accepts.
+- `ocomment doctor` probes the optional tools OComment shells out to — `curl`,
+  `gh`, `oras`, and `cosign`, alongside `git` — and reports the environment it
+  resolved: the working directory, the root, the configuration files it merged,
+  and whether its output is a terminal. A missing tool is a row in the report
+  naming what needs it, never a failing run.
 - `init --force` and `init --stdout`; `init` otherwise refuses to overwrite an
   existing file and notes a configuration that already applies to the directory.
 

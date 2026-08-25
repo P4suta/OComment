@@ -4,6 +4,64 @@ use ocomment_core::{
 };
 use proptest::prelude::*;
 
+/// Bytes that exercise every built-in scanner's string, comment, heredoc and
+/// template states rather than only the C-family delimiters.
+fn lexical_byte() -> impl Strategy<Value = u8> {
+    prop_oneof![
+        4 => any::<u8>(),
+        2 => Just(b'\n'),
+        1 => Just(b'\r'),
+        1 => Just(b'/'),
+        1 => Just(b'*'),
+        1 => Just(b'\''),
+        1 => Just(b'"'),
+        1 => Just(b'#'),
+        1 => Just(b'`'),
+        1 => Just(b'{'),
+        1 => Just(b'}'),
+        1 => Just(b'<'),
+        1 => Just(b'>'),
+        1 => Just(b'='),
+        1 => Just(b'['),
+        1 => Just(b']'),
+        1 => Just(b'-'),
+        1 => Just(b'|'),
+        1 => Just(b'?'),
+        1 => Just(b'\\'),
+        1 => Just(b'$'),
+        1 => Just(b'%'),
+        1 => Just(b'('),
+        1 => Just(b')'),
+        1 => Just(b'@'),
+        1 => Just(b':'),
+        1 => Just(b'!'),
+        1 => Just(b'~'),
+    ]
+}
+
+/// Multi-byte tokens a single-byte alphabet can never synthesise. The preamble
+/// and directive rules only fire on whole words, so without these the generated
+/// sources never reach the code paths that make a scan depend on where in the
+/// document it starts.
+fn lexical_fragment() -> impl Strategy<Value = Vec<u8>> {
+    prop_oneof![
+        8 => lexical_byte().prop_map(|byte| vec![byte]),
+        1 => Just(b"coding:".to_vec()),
+        1 => Just(b"# -*- coding: utf-8 -*-".to_vec()),
+        1 => Just(b"# coding: latin-1".to_vec()),
+        1 => Just(b"#!".to_vec()),
+        1 => Just(b"//go:build".to_vec()),
+        1 => Just(b"/*#__PURE__*/".to_vec()),
+        1 => Just(b"<!--".to_vec()),
+        1 => Just(b"r#\"".to_vec()),
+    ]
+}
+
+/// A source built from at most `fragments` raw bytes and literal tokens.
+fn lexical_source(fragments: std::ops::Range<usize>) -> impl Strategy<Value = Vec<u8>> {
+    prop::collection::vec(lexical_fragment(), fragments).prop_map(|fragments| fragments.concat())
+}
+
 fn newlines(bytes: &[u8]) -> Vec<u8> {
     bytes
         .iter()
@@ -13,7 +71,7 @@ fn newlines(bytes: &[u8]) -> Vec<u8> {
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(256))]
+    #![proptest_config(ProptestConfig::default())]
 
     #[test]
     fn lines_layout_keeps_the_exact_newline_sequence(body in "[A-Za-z0-9 \\t\\r\\n]{0,200}") {
@@ -68,20 +126,8 @@ proptest! {
 
     #[test]
     fn arbitrary_incremental_edits_match_full_scans_for_every_builtin(
-        source in prop::collection::vec(prop_oneof![
-            4 => any::<u8>(),
-            2 => Just(b'\n'),
-            1 => Just(b'\r'),
-            1 => Just(b'/'),
-            1 => Just(b'*'),
-            1 => Just(b'\''),
-            1 => Just(b'"'),
-            1 => Just(b'#'),
-            1 => Just(b'`'),
-            1 => Just(b'{'),
-            1 => Just(b'}'),
-        ], 0..96),
-        replacement in prop::collection::vec(any::<u8>(), 0..32),
+        source in lexical_source(0..48),
+        replacement in lexical_source(0..8),
         first in any::<usize>(),
         second in any::<usize>(),
     ) {
@@ -115,5 +161,52 @@ proptest! {
         let source = format!("/*{body}*/").into_bytes();
         let result = transform(&source, Language::Css, TransformOptions { layout: Layout::Columns, ..Default::default() });
         prop_assert_eq!(newlines(&source), newlines(&result.output));
+    }
+}
+
+/// The two counterexamples recorded in `properties.proptest-regressions` were
+/// drawn from the single-byte alphabet this file's generator no longer uses on
+/// its own, so proptest can no longer replay them from their seeds. They are
+/// kept here verbatim instead: both are unterminated Rust character literals
+/// whose six-byte lookahead straddles the rescan window.
+#[test]
+fn recorded_counterexamples_still_match_a_full_scan_for_every_builtin() {
+    let cases: [(&[u8], ByteSpan, &[u8]); 2] = [
+        (
+            &[
+                0, 0, 0, 0, 0, 42, 0, 0, 0, 0, 39, 128, 10, 34, 39, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
+            ByteSpan::new(13, 15),
+            &[],
+        ),
+        (
+            &[
+                0, 0, 35, 0, 39, 128, 34, 39, 10, 39, 0, 35, 35, 0, 0, 35, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0,
+            ],
+            ByteSpan::new(5, 8),
+            &[128],
+        ),
+    ];
+    for (source, span, replacement) in cases {
+        for language in Language::ALL {
+            let mut document =
+                IncrementalDocument::new(source.to_vec(), language, ScanOptions::default(), 1);
+            document
+                .apply_changes(
+                    &[DocumentChange {
+                        span,
+                        replacement: replacement.to_vec(),
+                    }],
+                    2,
+                )
+                .unwrap();
+            assert_eq!(
+                document.report(),
+                &scan(document.source(), language, ScanOptions::default()),
+                "incremental mismatch for {language} at {span:?}",
+            );
+        }
     }
 }

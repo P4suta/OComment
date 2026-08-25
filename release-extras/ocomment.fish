@@ -101,7 +101,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_needs_command" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_needs_command" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
 complete -c ocomment -n "__fish_ocomment_needs_command" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_needs_command" -s q -l quiet -d 'Print nothing but errors and diagnostics'
+complete -c ocomment -n "__fish_ocomment_needs_command" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_needs_command" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_needs_command" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_needs_command" -s V -l version -d 'Print version'
@@ -198,7 +198,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l index-only -
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand check" -s q -l quiet -d 'Print nothing but errors and diagnostics'
+complete -c ocomment -n "__fish_ocomment_using_subcommand check" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
@@ -281,7 +281,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l dry-run -d 'Pr
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -s q -l quiet -d 'Print nothing but errors and diagnostics'
+complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
@@ -363,7 +363,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l index-only -d
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -s q -l quiet -d 'Print nothing but errors and diagnostics'
+complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
@@ -445,7 +445,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l index-only -d
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -s q -l quiet -d 'Print nothing but errors and diagnostics'
+complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
@@ -525,7 +525,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -s q -l quiet -d 'Print nothing but errors and diagnostics'
+complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
@@ -605,7 +605,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -s q -l quiet -d 'Print nothing but errors and diagnostics'
+complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
@@ -688,7 +688,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l stdout -d 'Pr
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand init" -s q -l quiet -d 'Print nothing but errors and diagnostics'
+complete -c ocomment -n "__fish_ocomment_using_subcommand init" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
@@ -768,7 +768,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand config" -s q -l quiet -d 'Print nothing but errors and diagnostics'
+complete -c ocomment -n "__fish_ocomment_using_subcommand config" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
@@ -848,7 +848,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -s q -l quiet -d 'Print nothing but errors and diagnostics'
+complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
@@ -928,7 +928,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -s q -l quiet -d 'Print nothing but errors and diagnostics'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -f -a "add" -d 'Install a plugin and pin its digest in .ocomment.lock'
@@ -1018,7 +1018,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -s q -l quiet -d 'Print nothing but errors and diagnostics'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
@@ -1098,7 +1098,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -s q -l quiet -d 'Print nothing but errors and diagnostics'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
@@ -1178,7 +1178,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -s q -l quiet -d 'Print nothing but errors and diagnostics'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
@@ -1258,7 +1258,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -s q -l quiet -d 'Print nothing but errors and diagnostics'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
@@ -1338,7 +1338,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -s q -l quiet -d 'Print nothing but errors and diagnostics'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
@@ -1418,7 +1418,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -s q -l quiet -d 'Print nothing but errors and diagnostics'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from help" -f -a "add" -d 'Install a plugin and pin its digest in .ocomment.lock'
@@ -1505,7 +1505,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -s q -l quiet -d 'Print nothing but errors and diagnostics'
+complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
@@ -1585,7 +1585,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -s q -l quiet -d 'Print nothing but errors and diagnostics'
+complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
@@ -1665,7 +1665,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand man" -s q -l quiet -d 'Print nothing but errors and diagnostics'
+complete -c ocomment -n "__fish_ocomment_using_subcommand man" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions doctor man help" -f -a "check" -d 'Report removable comments (default command)'

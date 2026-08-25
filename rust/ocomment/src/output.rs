@@ -238,7 +238,21 @@ const PREVIEW_COLUMNS: usize = 72;
 fn preview(source: &[u8], span: ByteSpan, max_columns: usize) -> String {
     let start = span.start.min(source.len());
     let end = span.end.clamp(start, source.len());
-    let text = String::from_utf8_lossy(&source[start..end]);
+    fold(&String::from_utf8_lossy(&source[start..end]), max_columns)
+}
+
+/// The same treatment for a line that did not come out of a source file.
+///
+/// What an external tool on `PATH` says about itself is untrusted for exactly
+/// the reason a comment is: `doctor` prints it to the same terminal, and a
+/// tool planted there could otherwise clear the screen or repaint the report
+/// from its own version line.
+pub(crate) fn sanitize_line(text: &str) -> String {
+    fold(text, PREVIEW_COLUMNS)
+}
+
+/// Fold `text` onto one control-free line of at most `max_columns` columns.
+fn fold(text: &str, max_columns: usize) -> String {
     let mut folded = String::with_capacity(text.len());
     let mut pending_space = false;
     for character in text.chars() {
@@ -510,36 +524,49 @@ fn render_human(
             }
         }
     }
-    // `diff` keeps standard output for the patch alone, so the skips it met
-    // are left to the summary on standard error. `fix --dry-run` is that same
-    // `diff` speaking for the `fix` it stands in for: a skipped path can be
-    // the whole answer to the run, and the preview owes the reader the reason
-    // exactly where `fix` would put it.
-    if operation != Operation::Diff || options.dry_run {
-        for item in skipped {
-            if !item.error && (quiet || !(item.explicit || verbose)) {
-                continue;
-            }
-            wrote(writeln!(
-                output,
+    // The skips this run has to name, in one wording for whichever stream ends
+    // up carrying them. An I/O error is named however quiet the run was asked
+    // to be: it is a failure, not commentary.
+    let skips: Vec<String> = skipped
+        .iter()
+        .filter(|item| item.error || (!quiet && (item.explicit || verbose)))
+        .map(|item| {
+            format!(
                 "{}: {}: {}",
                 display_path(&item.path, presentation.hyperlinks),
                 if item.error { "error" } else { "skipped" },
                 item.reason
-            ))?;
+            )
+        })
+        .collect();
+    // `diff` keeps standard output for the patch alone, so the skips it met
+    // are left to standard error. `fix --dry-run` is that same `diff` speaking
+    // for the `fix` it stands in for: a skipped path can be the whole answer
+    // to the run, so the preview still owes the reader the reason — but beside
+    // the summary that counts it, because what the preview promises on
+    // standard output is a patch that has to survive being piped into `git
+    // apply`. A plain `fix` writes no patch and keeps its skips there.
+    if operation != Operation::Diff {
+        for line in &skips {
+            wrote(writeln!(output, "{line}"))?;
+        }
+    }
+    // The findings are on standard output and the commentary that follows is
+    // on standard error; a terminal sees both, so the buffer is emptied first
+    // to keep the report in the order it was written.
+    finish(output)?;
+    let stderr = io::stderr();
+    let mut report = stderr.lock();
+    if operation == Operation::Diff && options.dry_run {
+        for line in &skips {
+            note(&mut report, line)?;
         }
     }
     if quiet {
         return Ok(());
     }
-    // The findings are on standard output and the summary that follows is on
-    // standard error; a terminal sees both, so the buffer is emptied first to
-    // keep the report in the order it was written.
-    finish(output)?;
     let summary = Summary::compute(files, skipped, operation);
     let folded = !verbose && skipped.iter().any(|item| !item.error && !item.explicit);
-    let stderr = io::stderr();
-    let mut report = stderr.lock();
     if verbose && let Some(line) = kind_breakdown(files, options) {
         note(&mut report, &line)?;
     }
@@ -550,10 +577,13 @@ fn render_human(
     if options.policy == Policy::All {
         let protected = protected_preambles(files);
         if protected > 0 {
+            // The line counts what it kept, so the pronoun that stands for it
+            // has to agree with that count.
+            let pronoun = if protected == 1 { "it" } else { "them" };
             note(
                 &mut report,
                 &format!(
-                    "{} kept; add --force-protected to remove them.",
+                    "{} kept; add --force-protected to remove {pronoun}.",
                     comments(protected, "protected preamble")
                 ),
             )?;
@@ -1095,6 +1125,26 @@ mod tests {
             rendered.chars().count()
         );
         assert!(rendered.ends_with('\u{2026}'), "truncation is unmarked");
+    }
+
+    /// What a probed tool says about itself gets the preview's treatment: one
+    /// line, no control sequences, and no more of it than a preview shows.
+    #[test]
+    fn sanitize_line_replaces_controls_and_caps_the_width() {
+        assert_eq!(
+            sanitize_line("\u{1b}[2J\u{1b}[1;31mv1.0\tPWNED\u{1b}[0m"),
+            "\u{fffd}[2J\u{fffd}[1;31mv1.0 PWNED\u{fffd}[0m"
+        );
+        let capped = sanitize_line(&"v".repeat(PREVIEW_COLUMNS * 3));
+        let width: usize = capped
+            .chars()
+            .map(|ch| unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0))
+            .sum();
+        assert!(
+            width <= PREVIEW_COLUMNS,
+            "`{capped}` is {width} columns wide"
+        );
+        assert!(capped.ends_with('\u{2026}'), "truncation is unmarked");
     }
 
     #[test]

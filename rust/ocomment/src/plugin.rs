@@ -721,8 +721,13 @@ fn is_remote_source(source: &str) -> bool {
 }
 
 pub fn new_plugin(output: &mut impl Write, path: &Path) -> Result<()> {
-    fs::create_dir(path)
-        .with_context(|| format!("refusing to overwrite plugin directory {}", path.display()))?;
+    fs::create_dir(path).with_context(|| {
+        format!(
+            "refusing to overwrite plugin directory {}; remove it or run \
+             `ocomment plugin remove <name>` first",
+            path.display()
+        )
+    })?;
     fs::create_dir(path.join("src"))?;
     fs::write(
         path.join("ocomment-scanner.wit"),
@@ -816,11 +821,12 @@ self-contained and return sorted, non-overlapping, non-empty byte spans.
 
 /// What each external tool is needed for, in the words the command line uses.
 /// One constant per purpose keeps the four spawn sites and `doctor` naming the
-/// same thing.
-const HTTPS_SOURCES: &str = "https:// plugin sources";
-const GH_SOURCES: &str = "gh: plugin sources";
-const OCI_SOURCES: &str = "oci: plugin sources";
-const SIGNATURE_VERIFICATION: &str = "--identity verification";
+/// same thing: the line `doctor` prints for a tool that is missing has to be
+/// the line the failure would have printed once something needed it.
+pub const HTTPS_SOURCES: &str = "https:// plugin sources";
+pub const GH_SOURCES: &str = "gh: plugin sources";
+pub const OCI_SOURCES: &str = "oci: plugin sources";
+pub const SIGNATURE_VERIFICATION: &str = "--identity verification";
 
 /// Why a tool OComment shells out to could not be started.
 ///
