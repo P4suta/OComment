@@ -15,24 +15,82 @@ _ocomment() {
 
     local context curcontext="$curcontext" state line
     _arguments "${_arguments_options[@]}" : \
-'--config=[Explicit configuration file]:CONFIG:_files' \
+'--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
+legal\:"Like safe, and keep licence and copyright comments as well"
+all\:"Remove every comment that no keep override protects"))' \
+'--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
+columns\:"Pad each removed comment so the following columns do not shift"
+compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+'--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
+ocaml\:"OCaml implementation and interface files"
+c\:"C source and header files"
+cpp\:"C++ source and header files"
+go\:"Go source files"
+java\:"Java source files, including Unicode escape translation"
+javascript\:"JavaScript modules and scripts, including JSX"
+typescript\:"TypeScript modules and scripts, including TSX"
+python\:"Python source and stub files"
+shell\:"POSIX sh, Bash, and zsh scripts"
+html\:"HTML documents, including nested script and style elements"
+css\:"CSS stylesheets"
+jsonc\:"JSON with comments, including JSON5"
+sql\:"SQL for every supported database dialect"
+kotlin\:"Kotlin source and script files"))' \
+'--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
+jsx\:"JavaScript with JSX elements"
+tsx\:"TypeScript with JSX elements"
+objective-c\:"Objective-C extensions to C"
+objective-cpp\:"Objective-C++ extensions to C++"
+gnu-c\:"GNU extensions to C"
+gnu-cpp\:"GNU extensions to C++"
+cuda\:"CUDA extensions to C++"
+posix-sh\:"The POSIX shell command language"
+bash53\:"Bash 5.3"
+zsh\:"The Z shell"
+postgresql\:"PostgreSQL, with dollar-quoted bodies"
+mysql\:"MySQL, including its executable versioned comments"
+sqlite\:"SQLite"
+t-sql\:"Microsoft Transact-SQL"
+oracle\:"Oracle SQL and PL/SQL"))' \
+'*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
+'*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
-'--policy=[]:POLICY:_default' \
-'--layout=[]:LAYOUT:_default' \
-'--language=[]:LANGUAGE:_default' \
-'--dialect=[]:DIALECT:_default' \
-'*--keep-kind=[]:KEEP_KIND:_default' \
-'*--remove-kind=[]:REMOVE_KIND:_default' \
-'--color=[]:COLOR:(auto always never)' \
-'--hyperlinks=[]:HYPERLINKS:(auto always never)' \
-'--progress=[]:PROGRESS:(auto always never)' \
-'--force-invalid[]' \
-'--force-protected[]' \
-'-h[Print help]' \
-'--help[Print help]' \
+'--color=[When to colour terminal output]:WHEN:(auto always never)' \
+'--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
+'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
+'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'-v[Trace what is scanned and summarize every comment kind and skipped file]' \
+'--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
 '-V[Print version]' \
 '--version[Print version]' \
-'::paths -- Paths for the implicit `check` command:_files' \
+'::paths -- Files or directories to check (default\: current directory):_files' \
 ":: :_ocomment_commands" \
 "*::: :->ocomment" \
 && ret=0
@@ -44,207 +102,787 @@ _ocomment() {
         case $line[2] in
             (check)
 _arguments "${_arguments_options[@]}" : \
-'--config=[Explicit configuration file]:CONFIG:_files' \
+'--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
+legal\:"Like safe, and keep licence and copyright comments as well"
+all\:"Remove every comment that no keep override protects"))' \
+'--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
+columns\:"Pad each removed comment so the following columns do not shift"
+compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+'--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
+ocaml\:"OCaml implementation and interface files"
+c\:"C source and header files"
+cpp\:"C++ source and header files"
+go\:"Go source files"
+java\:"Java source files, including Unicode escape translation"
+javascript\:"JavaScript modules and scripts, including JSX"
+typescript\:"TypeScript modules and scripts, including TSX"
+python\:"Python source and stub files"
+shell\:"POSIX sh, Bash, and zsh scripts"
+html\:"HTML documents, including nested script and style elements"
+css\:"CSS stylesheets"
+jsonc\:"JSON with comments, including JSON5"
+sql\:"SQL for every supported database dialect"
+kotlin\:"Kotlin source and script files"))' \
+'--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
+jsx\:"JavaScript with JSX elements"
+tsx\:"TypeScript with JSX elements"
+objective-c\:"Objective-C extensions to C"
+objective-cpp\:"Objective-C++ extensions to C++"
+gnu-c\:"GNU extensions to C"
+gnu-cpp\:"GNU extensions to C++"
+cuda\:"CUDA extensions to C++"
+posix-sh\:"The POSIX shell command language"
+bash53\:"Bash 5.3"
+zsh\:"The Z shell"
+postgresql\:"PostgreSQL, with dollar-quoted bodies"
+mysql\:"MySQL, including its executable versioned comments"
+sqlite\:"SQLite"
+t-sql\:"Microsoft Transact-SQL"
+oracle\:"Oracle SQL and PL/SQL"))' \
+'*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
+'*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
-'--policy=[]:POLICY:_default' \
-'--layout=[]:LAYOUT:_default' \
-'--language=[]:LANGUAGE:_default' \
-'--dialect=[]:DIALECT:_default' \
-'*--keep-kind=[]:KEEP_KIND:_default' \
-'*--remove-kind=[]:REMOVE_KIND:_default' \
-'--color=[]:COLOR:(auto always never)' \
-'--hyperlinks=[]:HYPERLINKS:(auto always never)' \
-'--progress=[]:PROGRESS:(auto always never)' \
+'--color=[When to colour terminal output]:WHEN:(auto always never)' \
+'--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
-'--force-invalid[]' \
-'--force-protected[]' \
-'-h[Print help]' \
-'--help[Print help]' \
-'*::paths:_files' \
+'--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
+'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
+'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'-v[Trace what is scanned and summarize every comment kind and skipped file]' \
+'--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+'*::paths -- Files or directories to process (default\: current directory):_files' \
 && ret=0
 ;;
 (fix)
 _arguments "${_arguments_options[@]}" : \
-'--config=[Explicit configuration file]:CONFIG:_files' \
+'--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
+legal\:"Like safe, and keep licence and copyright comments as well"
+all\:"Remove every comment that no keep override protects"))' \
+'--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
+columns\:"Pad each removed comment so the following columns do not shift"
+compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+'--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
+ocaml\:"OCaml implementation and interface files"
+c\:"C source and header files"
+cpp\:"C++ source and header files"
+go\:"Go source files"
+java\:"Java source files, including Unicode escape translation"
+javascript\:"JavaScript modules and scripts, including JSX"
+typescript\:"TypeScript modules and scripts, including TSX"
+python\:"Python source and stub files"
+shell\:"POSIX sh, Bash, and zsh scripts"
+html\:"HTML documents, including nested script and style elements"
+css\:"CSS stylesheets"
+jsonc\:"JSON with comments, including JSON5"
+sql\:"SQL for every supported database dialect"
+kotlin\:"Kotlin source and script files"))' \
+'--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
+jsx\:"JavaScript with JSX elements"
+tsx\:"TypeScript with JSX elements"
+objective-c\:"Objective-C extensions to C"
+objective-cpp\:"Objective-C++ extensions to C++"
+gnu-c\:"GNU extensions to C"
+gnu-cpp\:"GNU extensions to C++"
+cuda\:"CUDA extensions to C++"
+posix-sh\:"The POSIX shell command language"
+bash53\:"Bash 5.3"
+zsh\:"The Z shell"
+postgresql\:"PostgreSQL, with dollar-quoted bodies"
+mysql\:"MySQL, including its executable versioned comments"
+sqlite\:"SQLite"
+t-sql\:"Microsoft Transact-SQL"
+oracle\:"Oracle SQL and PL/SQL"))' \
+'*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
+'*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
-'--policy=[]:POLICY:_default' \
-'--layout=[]:LAYOUT:_default' \
-'--language=[]:LANGUAGE:_default' \
-'--dialect=[]:DIALECT:_default' \
-'*--keep-kind=[]:KEEP_KIND:_default' \
-'*--remove-kind=[]:REMOVE_KIND:_default' \
-'--color=[]:COLOR:(auto always never)' \
-'--hyperlinks=[]:HYPERLINKS:(auto always never)' \
-'--progress=[]:PROGRESS:(auto always never)' \
+'--color=[When to colour terminal output]:WHEN:(auto always never)' \
+'--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
-'--force-invalid[]' \
-'--force-protected[]' \
-'-h[Print help]' \
-'--help[Print help]' \
-'*::paths:_files' \
+'--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
+'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
+'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'-v[Trace what is scanned and summarize every comment kind and skipped file]' \
+'--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+'*::paths -- Files or directories to process (default\: current directory):_files' \
 && ret=0
 ;;
 (diff)
 _arguments "${_arguments_options[@]}" : \
-'--config=[Explicit configuration file]:CONFIG:_files' \
+'--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
+legal\:"Like safe, and keep licence and copyright comments as well"
+all\:"Remove every comment that no keep override protects"))' \
+'--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
+columns\:"Pad each removed comment so the following columns do not shift"
+compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+'--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
+ocaml\:"OCaml implementation and interface files"
+c\:"C source and header files"
+cpp\:"C++ source and header files"
+go\:"Go source files"
+java\:"Java source files, including Unicode escape translation"
+javascript\:"JavaScript modules and scripts, including JSX"
+typescript\:"TypeScript modules and scripts, including TSX"
+python\:"Python source and stub files"
+shell\:"POSIX sh, Bash, and zsh scripts"
+html\:"HTML documents, including nested script and style elements"
+css\:"CSS stylesheets"
+jsonc\:"JSON with comments, including JSON5"
+sql\:"SQL for every supported database dialect"
+kotlin\:"Kotlin source and script files"))' \
+'--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
+jsx\:"JavaScript with JSX elements"
+tsx\:"TypeScript with JSX elements"
+objective-c\:"Objective-C extensions to C"
+objective-cpp\:"Objective-C++ extensions to C++"
+gnu-c\:"GNU extensions to C"
+gnu-cpp\:"GNU extensions to C++"
+cuda\:"CUDA extensions to C++"
+posix-sh\:"The POSIX shell command language"
+bash53\:"Bash 5.3"
+zsh\:"The Z shell"
+postgresql\:"PostgreSQL, with dollar-quoted bodies"
+mysql\:"MySQL, including its executable versioned comments"
+sqlite\:"SQLite"
+t-sql\:"Microsoft Transact-SQL"
+oracle\:"Oracle SQL and PL/SQL"))' \
+'*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
+'*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
-'--policy=[]:POLICY:_default' \
-'--layout=[]:LAYOUT:_default' \
-'--language=[]:LANGUAGE:_default' \
-'--dialect=[]:DIALECT:_default' \
-'*--keep-kind=[]:KEEP_KIND:_default' \
-'*--remove-kind=[]:REMOVE_KIND:_default' \
-'--color=[]:COLOR:(auto always never)' \
-'--hyperlinks=[]:HYPERLINKS:(auto always never)' \
-'--progress=[]:PROGRESS:(auto always never)' \
+'--color=[When to colour terminal output]:WHEN:(auto always never)' \
+'--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
-'--force-invalid[]' \
-'--force-protected[]' \
-'-h[Print help]' \
-'--help[Print help]' \
-'*::paths:_files' \
+'--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
+'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
+'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'-v[Trace what is scanned and summarize every comment kind and skipped file]' \
+'--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+'*::paths -- Files or directories to process (default\: current directory):_files' \
 && ret=0
 ;;
 (scan)
 _arguments "${_arguments_options[@]}" : \
-'--config=[Explicit configuration file]:CONFIG:_files' \
+'--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
+legal\:"Like safe, and keep licence and copyright comments as well"
+all\:"Remove every comment that no keep override protects"))' \
+'--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
+columns\:"Pad each removed comment so the following columns do not shift"
+compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+'--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
+ocaml\:"OCaml implementation and interface files"
+c\:"C source and header files"
+cpp\:"C++ source and header files"
+go\:"Go source files"
+java\:"Java source files, including Unicode escape translation"
+javascript\:"JavaScript modules and scripts, including JSX"
+typescript\:"TypeScript modules and scripts, including TSX"
+python\:"Python source and stub files"
+shell\:"POSIX sh, Bash, and zsh scripts"
+html\:"HTML documents, including nested script and style elements"
+css\:"CSS stylesheets"
+jsonc\:"JSON with comments, including JSON5"
+sql\:"SQL for every supported database dialect"
+kotlin\:"Kotlin source and script files"))' \
+'--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
+jsx\:"JavaScript with JSX elements"
+tsx\:"TypeScript with JSX elements"
+objective-c\:"Objective-C extensions to C"
+objective-cpp\:"Objective-C++ extensions to C++"
+gnu-c\:"GNU extensions to C"
+gnu-cpp\:"GNU extensions to C++"
+cuda\:"CUDA extensions to C++"
+posix-sh\:"The POSIX shell command language"
+bash53\:"Bash 5.3"
+zsh\:"The Z shell"
+postgresql\:"PostgreSQL, with dollar-quoted bodies"
+mysql\:"MySQL, including its executable versioned comments"
+sqlite\:"SQLite"
+t-sql\:"Microsoft Transact-SQL"
+oracle\:"Oracle SQL and PL/SQL"))' \
+'*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
+'*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
-'--policy=[]:POLICY:_default' \
-'--layout=[]:LAYOUT:_default' \
-'--language=[]:LANGUAGE:_default' \
-'--dialect=[]:DIALECT:_default' \
-'*--keep-kind=[]:KEEP_KIND:_default' \
-'*--remove-kind=[]:REMOVE_KIND:_default' \
-'--color=[]:COLOR:(auto always never)' \
-'--hyperlinks=[]:HYPERLINKS:(auto always never)' \
-'--progress=[]:PROGRESS:(auto always never)' \
+'--color=[When to colour terminal output]:WHEN:(auto always never)' \
+'--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
-'--force-invalid[]' \
-'--force-protected[]' \
-'-h[Print help]' \
-'--help[Print help]' \
-'*::paths:_files' \
+'--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
+'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
+'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'-v[Trace what is scanned and summarize every comment kind and skipped file]' \
+'--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+'*::paths -- Files or directories to process (default\: current directory):_files' \
 && ret=0
 ;;
 (strip)
 _arguments "${_arguments_options[@]}" : \
-'--config=[Explicit configuration file]:CONFIG:_files' \
+'--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
+legal\:"Like safe, and keep licence and copyright comments as well"
+all\:"Remove every comment that no keep override protects"))' \
+'--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
+columns\:"Pad each removed comment so the following columns do not shift"
+compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+'--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
+ocaml\:"OCaml implementation and interface files"
+c\:"C source and header files"
+cpp\:"C++ source and header files"
+go\:"Go source files"
+java\:"Java source files, including Unicode escape translation"
+javascript\:"JavaScript modules and scripts, including JSX"
+typescript\:"TypeScript modules and scripts, including TSX"
+python\:"Python source and stub files"
+shell\:"POSIX sh, Bash, and zsh scripts"
+html\:"HTML documents, including nested script and style elements"
+css\:"CSS stylesheets"
+jsonc\:"JSON with comments, including JSON5"
+sql\:"SQL for every supported database dialect"
+kotlin\:"Kotlin source and script files"))' \
+'--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
+jsx\:"JavaScript with JSX elements"
+tsx\:"TypeScript with JSX elements"
+objective-c\:"Objective-C extensions to C"
+objective-cpp\:"Objective-C++ extensions to C++"
+gnu-c\:"GNU extensions to C"
+gnu-cpp\:"GNU extensions to C++"
+cuda\:"CUDA extensions to C++"
+posix-sh\:"The POSIX shell command language"
+bash53\:"Bash 5.3"
+zsh\:"The Z shell"
+postgresql\:"PostgreSQL, with dollar-quoted bodies"
+mysql\:"MySQL, including its executable versioned comments"
+sqlite\:"SQLite"
+t-sql\:"Microsoft Transact-SQL"
+oracle\:"Oracle SQL and PL/SQL"))' \
+'*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
+'*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
-'--policy=[]:POLICY:_default' \
-'--layout=[]:LAYOUT:_default' \
-'--language=[]:LANGUAGE:_default' \
-'--dialect=[]:DIALECT:_default' \
-'*--keep-kind=[]:KEEP_KIND:_default' \
-'*--remove-kind=[]:REMOVE_KIND:_default' \
-'--color=[]:COLOR:(auto always never)' \
-'--hyperlinks=[]:HYPERLINKS:(auto always never)' \
-'--progress=[]:PROGRESS:(auto always never)' \
-'--force-invalid[]' \
-'--force-protected[]' \
-'-h[Print help]' \
-'--help[Print help]' \
+'--color=[When to colour terminal output]:WHEN:(auto always never)' \
+'--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
+'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
+'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'-v[Trace what is scanned and summarize every comment kind and skipped file]' \
+'--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
 && ret=0
 ;;
 (lsp)
 _arguments "${_arguments_options[@]}" : \
-'--config=[Explicit configuration file]:CONFIG:_files' \
+'--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
+legal\:"Like safe, and keep licence and copyright comments as well"
+all\:"Remove every comment that no keep override protects"))' \
+'--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
+columns\:"Pad each removed comment so the following columns do not shift"
+compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+'--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
+ocaml\:"OCaml implementation and interface files"
+c\:"C source and header files"
+cpp\:"C++ source and header files"
+go\:"Go source files"
+java\:"Java source files, including Unicode escape translation"
+javascript\:"JavaScript modules and scripts, including JSX"
+typescript\:"TypeScript modules and scripts, including TSX"
+python\:"Python source and stub files"
+shell\:"POSIX sh, Bash, and zsh scripts"
+html\:"HTML documents, including nested script and style elements"
+css\:"CSS stylesheets"
+jsonc\:"JSON with comments, including JSON5"
+sql\:"SQL for every supported database dialect"
+kotlin\:"Kotlin source and script files"))' \
+'--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
+jsx\:"JavaScript with JSX elements"
+tsx\:"TypeScript with JSX elements"
+objective-c\:"Objective-C extensions to C"
+objective-cpp\:"Objective-C++ extensions to C++"
+gnu-c\:"GNU extensions to C"
+gnu-cpp\:"GNU extensions to C++"
+cuda\:"CUDA extensions to C++"
+posix-sh\:"The POSIX shell command language"
+bash53\:"Bash 5.3"
+zsh\:"The Z shell"
+postgresql\:"PostgreSQL, with dollar-quoted bodies"
+mysql\:"MySQL, including its executable versioned comments"
+sqlite\:"SQLite"
+t-sql\:"Microsoft Transact-SQL"
+oracle\:"Oracle SQL and PL/SQL"))' \
+'*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
+'*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
-'--policy=[]:POLICY:_default' \
-'--layout=[]:LAYOUT:_default' \
-'--language=[]:LANGUAGE:_default' \
-'--dialect=[]:DIALECT:_default' \
-'*--keep-kind=[]:KEEP_KIND:_default' \
-'*--remove-kind=[]:REMOVE_KIND:_default' \
-'--color=[]:COLOR:(auto always never)' \
-'--hyperlinks=[]:HYPERLINKS:(auto always never)' \
-'--progress=[]:PROGRESS:(auto always never)' \
-'--force-invalid[]' \
-'--force-protected[]' \
-'-h[Print help]' \
-'--help[Print help]' \
+'--color=[When to colour terminal output]:WHEN:(auto always never)' \
+'--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
+'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
+'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'-v[Trace what is scanned and summarize every comment kind and skipped file]' \
+'--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
 && ret=0
 ;;
 (init)
 _arguments "${_arguments_options[@]}" : \
-'--config=[Explicit configuration file]:CONFIG:_files' \
+'--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
+legal\:"Like safe, and keep licence and copyright comments as well"
+all\:"Remove every comment that no keep override protects"))' \
+'--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
+columns\:"Pad each removed comment so the following columns do not shift"
+compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+'--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
+ocaml\:"OCaml implementation and interface files"
+c\:"C source and header files"
+cpp\:"C++ source and header files"
+go\:"Go source files"
+java\:"Java source files, including Unicode escape translation"
+javascript\:"JavaScript modules and scripts, including JSX"
+typescript\:"TypeScript modules and scripts, including TSX"
+python\:"Python source and stub files"
+shell\:"POSIX sh, Bash, and zsh scripts"
+html\:"HTML documents, including nested script and style elements"
+css\:"CSS stylesheets"
+jsonc\:"JSON with comments, including JSON5"
+sql\:"SQL for every supported database dialect"
+kotlin\:"Kotlin source and script files"))' \
+'--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
+jsx\:"JavaScript with JSX elements"
+tsx\:"TypeScript with JSX elements"
+objective-c\:"Objective-C extensions to C"
+objective-cpp\:"Objective-C++ extensions to C++"
+gnu-c\:"GNU extensions to C"
+gnu-cpp\:"GNU extensions to C++"
+cuda\:"CUDA extensions to C++"
+posix-sh\:"The POSIX shell command language"
+bash53\:"Bash 5.3"
+zsh\:"The Z shell"
+postgresql\:"PostgreSQL, with dollar-quoted bodies"
+mysql\:"MySQL, including its executable versioned comments"
+sqlite\:"SQLite"
+t-sql\:"Microsoft Transact-SQL"
+oracle\:"Oracle SQL and PL/SQL"))' \
+'*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
+'*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
-'--policy=[]:POLICY:_default' \
-'--layout=[]:LAYOUT:_default' \
-'--language=[]:LANGUAGE:_default' \
-'--dialect=[]:DIALECT:_default' \
-'*--keep-kind=[]:KEEP_KIND:_default' \
-'*--remove-kind=[]:REMOVE_KIND:_default' \
-'--color=[]:COLOR:(auto always never)' \
-'--hyperlinks=[]:HYPERLINKS:(auto always never)' \
-'--progress=[]:PROGRESS:(auto always never)' \
-'--fix[]' \
-'--force-invalid[]' \
-'--force-protected[]' \
-'-h[Print help]' \
-'--help[Print help]' \
-'::kind:(config lefthook)' \
+'--color=[When to colour terminal output]:WHEN:(auto always never)' \
+'--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--fix[For the Lefthook hook, run \`fix\` instead of \`check\`]' \
+'--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
+'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
+'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'-v[Trace what is scanned and summarize every comment kind and skipped file]' \
+'--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+'::kind -- Which starter file to write:(config lefthook)' \
 && ret=0
 ;;
 (config)
 _arguments "${_arguments_options[@]}" : \
-'--config=[Explicit configuration file]:CONFIG:_files' \
+'--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
+legal\:"Like safe, and keep licence and copyright comments as well"
+all\:"Remove every comment that no keep override protects"))' \
+'--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
+columns\:"Pad each removed comment so the following columns do not shift"
+compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+'--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
+ocaml\:"OCaml implementation and interface files"
+c\:"C source and header files"
+cpp\:"C++ source and header files"
+go\:"Go source files"
+java\:"Java source files, including Unicode escape translation"
+javascript\:"JavaScript modules and scripts, including JSX"
+typescript\:"TypeScript modules and scripts, including TSX"
+python\:"Python source and stub files"
+shell\:"POSIX sh, Bash, and zsh scripts"
+html\:"HTML documents, including nested script and style elements"
+css\:"CSS stylesheets"
+jsonc\:"JSON with comments, including JSON5"
+sql\:"SQL for every supported database dialect"
+kotlin\:"Kotlin source and script files"))' \
+'--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
+jsx\:"JavaScript with JSX elements"
+tsx\:"TypeScript with JSX elements"
+objective-c\:"Objective-C extensions to C"
+objective-cpp\:"Objective-C++ extensions to C++"
+gnu-c\:"GNU extensions to C"
+gnu-cpp\:"GNU extensions to C++"
+cuda\:"CUDA extensions to C++"
+posix-sh\:"The POSIX shell command language"
+bash53\:"Bash 5.3"
+zsh\:"The Z shell"
+postgresql\:"PostgreSQL, with dollar-quoted bodies"
+mysql\:"MySQL, including its executable versioned comments"
+sqlite\:"SQLite"
+t-sql\:"Microsoft Transact-SQL"
+oracle\:"Oracle SQL and PL/SQL"))' \
+'*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
+'*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
-'--policy=[]:POLICY:_default' \
-'--layout=[]:LAYOUT:_default' \
-'--language=[]:LANGUAGE:_default' \
-'--dialect=[]:DIALECT:_default' \
-'*--keep-kind=[]:KEEP_KIND:_default' \
-'*--remove-kind=[]:REMOVE_KIND:_default' \
-'--color=[]:COLOR:(auto always never)' \
-'--hyperlinks=[]:HYPERLINKS:(auto always never)' \
-'--progress=[]:PROGRESS:(auto always never)' \
-'--force-invalid[]' \
-'--force-protected[]' \
-'-h[Print help]' \
-'--help[Print help]' \
-'::action:(show locate explain schema)' \
+'--color=[When to colour terminal output]:WHEN:(auto always never)' \
+'--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
+'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
+'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'-v[Trace what is scanned and summarize every comment kind and skipped file]' \
+'--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+'::action -- Which view of the resolved configuration to print:(show locate explain schema)' \
 && ret=0
 ;;
 (languages)
 _arguments "${_arguments_options[@]}" : \
-'--config=[Explicit configuration file]:CONFIG:_files' \
+'--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
+legal\:"Like safe, and keep licence and copyright comments as well"
+all\:"Remove every comment that no keep override protects"))' \
+'--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
+columns\:"Pad each removed comment so the following columns do not shift"
+compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+'--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
+ocaml\:"OCaml implementation and interface files"
+c\:"C source and header files"
+cpp\:"C++ source and header files"
+go\:"Go source files"
+java\:"Java source files, including Unicode escape translation"
+javascript\:"JavaScript modules and scripts, including JSX"
+typescript\:"TypeScript modules and scripts, including TSX"
+python\:"Python source and stub files"
+shell\:"POSIX sh, Bash, and zsh scripts"
+html\:"HTML documents, including nested script and style elements"
+css\:"CSS stylesheets"
+jsonc\:"JSON with comments, including JSON5"
+sql\:"SQL for every supported database dialect"
+kotlin\:"Kotlin source and script files"))' \
+'--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
+jsx\:"JavaScript with JSX elements"
+tsx\:"TypeScript with JSX elements"
+objective-c\:"Objective-C extensions to C"
+objective-cpp\:"Objective-C++ extensions to C++"
+gnu-c\:"GNU extensions to C"
+gnu-cpp\:"GNU extensions to C++"
+cuda\:"CUDA extensions to C++"
+posix-sh\:"The POSIX shell command language"
+bash53\:"Bash 5.3"
+zsh\:"The Z shell"
+postgresql\:"PostgreSQL, with dollar-quoted bodies"
+mysql\:"MySQL, including its executable versioned comments"
+sqlite\:"SQLite"
+t-sql\:"Microsoft Transact-SQL"
+oracle\:"Oracle SQL and PL/SQL"))' \
+'*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
+'*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
-'--policy=[]:POLICY:_default' \
-'--layout=[]:LAYOUT:_default' \
-'--language=[]:LANGUAGE:_default' \
-'--dialect=[]:DIALECT:_default' \
-'*--keep-kind=[]:KEEP_KIND:_default' \
-'*--remove-kind=[]:REMOVE_KIND:_default' \
-'--color=[]:COLOR:(auto always never)' \
-'--hyperlinks=[]:HYPERLINKS:(auto always never)' \
-'--progress=[]:PROGRESS:(auto always never)' \
-'--force-invalid[]' \
-'--force-protected[]' \
-'-h[Print help]' \
-'--help[Print help]' \
+'--color=[When to colour terminal output]:WHEN:(auto always never)' \
+'--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
+'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
+'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'-v[Trace what is scanned and summarize every comment kind and skipped file]' \
+'--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
 && ret=0
 ;;
 (plugin)
 _arguments "${_arguments_options[@]}" : \
-'--config=[Explicit configuration file]:CONFIG:_files' \
+'--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
+legal\:"Like safe, and keep licence and copyright comments as well"
+all\:"Remove every comment that no keep override protects"))' \
+'--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
+columns\:"Pad each removed comment so the following columns do not shift"
+compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+'--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
+ocaml\:"OCaml implementation and interface files"
+c\:"C source and header files"
+cpp\:"C++ source and header files"
+go\:"Go source files"
+java\:"Java source files, including Unicode escape translation"
+javascript\:"JavaScript modules and scripts, including JSX"
+typescript\:"TypeScript modules and scripts, including TSX"
+python\:"Python source and stub files"
+shell\:"POSIX sh, Bash, and zsh scripts"
+html\:"HTML documents, including nested script and style elements"
+css\:"CSS stylesheets"
+jsonc\:"JSON with comments, including JSON5"
+sql\:"SQL for every supported database dialect"
+kotlin\:"Kotlin source and script files"))' \
+'--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
+jsx\:"JavaScript with JSX elements"
+tsx\:"TypeScript with JSX elements"
+objective-c\:"Objective-C extensions to C"
+objective-cpp\:"Objective-C++ extensions to C++"
+gnu-c\:"GNU extensions to C"
+gnu-cpp\:"GNU extensions to C++"
+cuda\:"CUDA extensions to C++"
+posix-sh\:"The POSIX shell command language"
+bash53\:"Bash 5.3"
+zsh\:"The Z shell"
+postgresql\:"PostgreSQL, with dollar-quoted bodies"
+mysql\:"MySQL, including its executable versioned comments"
+sqlite\:"SQLite"
+t-sql\:"Microsoft Transact-SQL"
+oracle\:"Oracle SQL and PL/SQL"))' \
+'*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
+'*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
-'--policy=[]:POLICY:_default' \
-'--layout=[]:LAYOUT:_default' \
-'--language=[]:LANGUAGE:_default' \
-'--dialect=[]:DIALECT:_default' \
-'*--keep-kind=[]:KEEP_KIND:_default' \
-'*--remove-kind=[]:REMOVE_KIND:_default' \
-'--color=[]:COLOR:(auto always never)' \
-'--hyperlinks=[]:HYPERLINKS:(auto always never)' \
-'--progress=[]:PROGRESS:(auto always never)' \
-'--force-invalid[]' \
-'--force-protected[]' \
-'-h[Print help]' \
-'--help[Print help]' \
+'--color=[When to colour terminal output]:WHEN:(auto always never)' \
+'--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
+'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
+'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'-v[Trace what is scanned and summarize every comment kind and skipped file]' \
+'--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
 ":: :_ocomment__subcmd__plugin_commands" \
 "*::: :->plugin" \
 && ret=0
@@ -257,124 +895,472 @@ _arguments "${_arguments_options[@]}" : \
         case $line[1] in
             (add)
 _arguments "${_arguments_options[@]}" : \
-'--name=[]:NAME:_default' \
-'--sha256=[]:SHA256:_default' \
-'--identity=[]:IDENTITY:_default' \
-'--config=[Explicit configuration file]:CONFIG:_files' \
+'--name=[Name to register the plugin under (default\: the file stem)]:NAME:_default' \
+'--sha256=[Expected SHA-256 digest of the component, verified before install]:HEX:_default' \
+'--identity=[Publisher identity recorded alongside the pinned digest]:IDENTITY:_default' \
+'--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
+legal\:"Like safe, and keep licence and copyright comments as well"
+all\:"Remove every comment that no keep override protects"))' \
+'--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
+columns\:"Pad each removed comment so the following columns do not shift"
+compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+'--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
+ocaml\:"OCaml implementation and interface files"
+c\:"C source and header files"
+cpp\:"C++ source and header files"
+go\:"Go source files"
+java\:"Java source files, including Unicode escape translation"
+javascript\:"JavaScript modules and scripts, including JSX"
+typescript\:"TypeScript modules and scripts, including TSX"
+python\:"Python source and stub files"
+shell\:"POSIX sh, Bash, and zsh scripts"
+html\:"HTML documents, including nested script and style elements"
+css\:"CSS stylesheets"
+jsonc\:"JSON with comments, including JSON5"
+sql\:"SQL for every supported database dialect"
+kotlin\:"Kotlin source and script files"))' \
+'--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
+jsx\:"JavaScript with JSX elements"
+tsx\:"TypeScript with JSX elements"
+objective-c\:"Objective-C extensions to C"
+objective-cpp\:"Objective-C++ extensions to C++"
+gnu-c\:"GNU extensions to C"
+gnu-cpp\:"GNU extensions to C++"
+cuda\:"CUDA extensions to C++"
+posix-sh\:"The POSIX shell command language"
+bash53\:"Bash 5.3"
+zsh\:"The Z shell"
+postgresql\:"PostgreSQL, with dollar-quoted bodies"
+mysql\:"MySQL, including its executable versioned comments"
+sqlite\:"SQLite"
+t-sql\:"Microsoft Transact-SQL"
+oracle\:"Oracle SQL and PL/SQL"))' \
+'*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
+'*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
-'--policy=[]:POLICY:_default' \
-'--layout=[]:LAYOUT:_default' \
-'--language=[]:LANGUAGE:_default' \
-'--dialect=[]:DIALECT:_default' \
-'*--keep-kind=[]:KEEP_KIND:_default' \
-'*--remove-kind=[]:REMOVE_KIND:_default' \
-'--color=[]:COLOR:(auto always never)' \
-'--hyperlinks=[]:HYPERLINKS:(auto always never)' \
-'--progress=[]:PROGRESS:(auto always never)' \
-'--force-invalid[]' \
-'--force-protected[]' \
-'-h[Print help]' \
-'--help[Print help]' \
-':source:_default' \
+'--color=[When to colour terminal output]:WHEN:(auto always never)' \
+'--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
+'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
+'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'-v[Trace what is scanned and summarize every comment kind and skipped file]' \
+'--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+':source -- Path or URL of the WASM component to install:_default' \
 && ret=0
 ;;
 (remove)
 _arguments "${_arguments_options[@]}" : \
-'--config=[Explicit configuration file]:CONFIG:_files' \
+'--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
+legal\:"Like safe, and keep licence and copyright comments as well"
+all\:"Remove every comment that no keep override protects"))' \
+'--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
+columns\:"Pad each removed comment so the following columns do not shift"
+compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+'--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
+ocaml\:"OCaml implementation and interface files"
+c\:"C source and header files"
+cpp\:"C++ source and header files"
+go\:"Go source files"
+java\:"Java source files, including Unicode escape translation"
+javascript\:"JavaScript modules and scripts, including JSX"
+typescript\:"TypeScript modules and scripts, including TSX"
+python\:"Python source and stub files"
+shell\:"POSIX sh, Bash, and zsh scripts"
+html\:"HTML documents, including nested script and style elements"
+css\:"CSS stylesheets"
+jsonc\:"JSON with comments, including JSON5"
+sql\:"SQL for every supported database dialect"
+kotlin\:"Kotlin source and script files"))' \
+'--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
+jsx\:"JavaScript with JSX elements"
+tsx\:"TypeScript with JSX elements"
+objective-c\:"Objective-C extensions to C"
+objective-cpp\:"Objective-C++ extensions to C++"
+gnu-c\:"GNU extensions to C"
+gnu-cpp\:"GNU extensions to C++"
+cuda\:"CUDA extensions to C++"
+posix-sh\:"The POSIX shell command language"
+bash53\:"Bash 5.3"
+zsh\:"The Z shell"
+postgresql\:"PostgreSQL, with dollar-quoted bodies"
+mysql\:"MySQL, including its executable versioned comments"
+sqlite\:"SQLite"
+t-sql\:"Microsoft Transact-SQL"
+oracle\:"Oracle SQL and PL/SQL"))' \
+'*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
+'*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
-'--policy=[]:POLICY:_default' \
-'--layout=[]:LAYOUT:_default' \
-'--language=[]:LANGUAGE:_default' \
-'--dialect=[]:DIALECT:_default' \
-'*--keep-kind=[]:KEEP_KIND:_default' \
-'*--remove-kind=[]:REMOVE_KIND:_default' \
-'--color=[]:COLOR:(auto always never)' \
-'--hyperlinks=[]:HYPERLINKS:(auto always never)' \
-'--progress=[]:PROGRESS:(auto always never)' \
-'--force-invalid[]' \
-'--force-protected[]' \
-'-h[Print help]' \
-'--help[Print help]' \
-':name:_default' \
+'--color=[When to colour terminal output]:WHEN:(auto always never)' \
+'--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
+'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
+'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'-v[Trace what is scanned and summarize every comment kind and skipped file]' \
+'--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+':name -- Name of the plugin to remove:_default' \
 && ret=0
 ;;
 (list)
 _arguments "${_arguments_options[@]}" : \
-'--config=[Explicit configuration file]:CONFIG:_files' \
+'--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
+legal\:"Like safe, and keep licence and copyright comments as well"
+all\:"Remove every comment that no keep override protects"))' \
+'--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
+columns\:"Pad each removed comment so the following columns do not shift"
+compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+'--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
+ocaml\:"OCaml implementation and interface files"
+c\:"C source and header files"
+cpp\:"C++ source and header files"
+go\:"Go source files"
+java\:"Java source files, including Unicode escape translation"
+javascript\:"JavaScript modules and scripts, including JSX"
+typescript\:"TypeScript modules and scripts, including TSX"
+python\:"Python source and stub files"
+shell\:"POSIX sh, Bash, and zsh scripts"
+html\:"HTML documents, including nested script and style elements"
+css\:"CSS stylesheets"
+jsonc\:"JSON with comments, including JSON5"
+sql\:"SQL for every supported database dialect"
+kotlin\:"Kotlin source and script files"))' \
+'--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
+jsx\:"JavaScript with JSX elements"
+tsx\:"TypeScript with JSX elements"
+objective-c\:"Objective-C extensions to C"
+objective-cpp\:"Objective-C++ extensions to C++"
+gnu-c\:"GNU extensions to C"
+gnu-cpp\:"GNU extensions to C++"
+cuda\:"CUDA extensions to C++"
+posix-sh\:"The POSIX shell command language"
+bash53\:"Bash 5.3"
+zsh\:"The Z shell"
+postgresql\:"PostgreSQL, with dollar-quoted bodies"
+mysql\:"MySQL, including its executable versioned comments"
+sqlite\:"SQLite"
+t-sql\:"Microsoft Transact-SQL"
+oracle\:"Oracle SQL and PL/SQL"))' \
+'*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
+'*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
-'--policy=[]:POLICY:_default' \
-'--layout=[]:LAYOUT:_default' \
-'--language=[]:LANGUAGE:_default' \
-'--dialect=[]:DIALECT:_default' \
-'*--keep-kind=[]:KEEP_KIND:_default' \
-'*--remove-kind=[]:REMOVE_KIND:_default' \
-'--color=[]:COLOR:(auto always never)' \
-'--hyperlinks=[]:HYPERLINKS:(auto always never)' \
-'--progress=[]:PROGRESS:(auto always never)' \
-'--force-invalid[]' \
-'--force-protected[]' \
-'-h[Print help]' \
-'--help[Print help]' \
+'--color=[When to colour terminal output]:WHEN:(auto always never)' \
+'--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
+'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
+'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'-v[Trace what is scanned and summarize every comment kind and skipped file]' \
+'--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
 && ret=0
 ;;
 (update)
 _arguments "${_arguments_options[@]}" : \
-'--config=[Explicit configuration file]:CONFIG:_files' \
+'--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
+legal\:"Like safe, and keep licence and copyright comments as well"
+all\:"Remove every comment that no keep override protects"))' \
+'--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
+columns\:"Pad each removed comment so the following columns do not shift"
+compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+'--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
+ocaml\:"OCaml implementation and interface files"
+c\:"C source and header files"
+cpp\:"C++ source and header files"
+go\:"Go source files"
+java\:"Java source files, including Unicode escape translation"
+javascript\:"JavaScript modules and scripts, including JSX"
+typescript\:"TypeScript modules and scripts, including TSX"
+python\:"Python source and stub files"
+shell\:"POSIX sh, Bash, and zsh scripts"
+html\:"HTML documents, including nested script and style elements"
+css\:"CSS stylesheets"
+jsonc\:"JSON with comments, including JSON5"
+sql\:"SQL for every supported database dialect"
+kotlin\:"Kotlin source and script files"))' \
+'--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
+jsx\:"JavaScript with JSX elements"
+tsx\:"TypeScript with JSX elements"
+objective-c\:"Objective-C extensions to C"
+objective-cpp\:"Objective-C++ extensions to C++"
+gnu-c\:"GNU extensions to C"
+gnu-cpp\:"GNU extensions to C++"
+cuda\:"CUDA extensions to C++"
+posix-sh\:"The POSIX shell command language"
+bash53\:"Bash 5.3"
+zsh\:"The Z shell"
+postgresql\:"PostgreSQL, with dollar-quoted bodies"
+mysql\:"MySQL, including its executable versioned comments"
+sqlite\:"SQLite"
+t-sql\:"Microsoft Transact-SQL"
+oracle\:"Oracle SQL and PL/SQL"))' \
+'*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
+'*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
-'--policy=[]:POLICY:_default' \
-'--layout=[]:LAYOUT:_default' \
-'--language=[]:LANGUAGE:_default' \
-'--dialect=[]:DIALECT:_default' \
-'*--keep-kind=[]:KEEP_KIND:_default' \
-'*--remove-kind=[]:REMOVE_KIND:_default' \
-'--color=[]:COLOR:(auto always never)' \
-'--hyperlinks=[]:HYPERLINKS:(auto always never)' \
-'--progress=[]:PROGRESS:(auto always never)' \
-'--force-invalid[]' \
-'--force-protected[]' \
-'-h[Print help]' \
-'--help[Print help]' \
-'::name:_default' \
+'--color=[When to colour terminal output]:WHEN:(auto always never)' \
+'--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
+'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
+'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'-v[Trace what is scanned and summarize every comment kind and skipped file]' \
+'--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+'::name -- Name of the plugin to update (default\: all of them):_default' \
 && ret=0
 ;;
 (verify)
 _arguments "${_arguments_options[@]}" : \
-'--config=[Explicit configuration file]:CONFIG:_files' \
+'--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
+legal\:"Like safe, and keep licence and copyright comments as well"
+all\:"Remove every comment that no keep override protects"))' \
+'--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
+columns\:"Pad each removed comment so the following columns do not shift"
+compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+'--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
+ocaml\:"OCaml implementation and interface files"
+c\:"C source and header files"
+cpp\:"C++ source and header files"
+go\:"Go source files"
+java\:"Java source files, including Unicode escape translation"
+javascript\:"JavaScript modules and scripts, including JSX"
+typescript\:"TypeScript modules and scripts, including TSX"
+python\:"Python source and stub files"
+shell\:"POSIX sh, Bash, and zsh scripts"
+html\:"HTML documents, including nested script and style elements"
+css\:"CSS stylesheets"
+jsonc\:"JSON with comments, including JSON5"
+sql\:"SQL for every supported database dialect"
+kotlin\:"Kotlin source and script files"))' \
+'--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
+jsx\:"JavaScript with JSX elements"
+tsx\:"TypeScript with JSX elements"
+objective-c\:"Objective-C extensions to C"
+objective-cpp\:"Objective-C++ extensions to C++"
+gnu-c\:"GNU extensions to C"
+gnu-cpp\:"GNU extensions to C++"
+cuda\:"CUDA extensions to C++"
+posix-sh\:"The POSIX shell command language"
+bash53\:"Bash 5.3"
+zsh\:"The Z shell"
+postgresql\:"PostgreSQL, with dollar-quoted bodies"
+mysql\:"MySQL, including its executable versioned comments"
+sqlite\:"SQLite"
+t-sql\:"Microsoft Transact-SQL"
+oracle\:"Oracle SQL and PL/SQL"))' \
+'*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
+'*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
-'--policy=[]:POLICY:_default' \
-'--layout=[]:LAYOUT:_default' \
-'--language=[]:LANGUAGE:_default' \
-'--dialect=[]:DIALECT:_default' \
-'*--keep-kind=[]:KEEP_KIND:_default' \
-'*--remove-kind=[]:REMOVE_KIND:_default' \
-'--color=[]:COLOR:(auto always never)' \
-'--hyperlinks=[]:HYPERLINKS:(auto always never)' \
-'--progress=[]:PROGRESS:(auto always never)' \
-'--force-invalid[]' \
-'--force-protected[]' \
-'-h[Print help]' \
-'--help[Print help]' \
-'::name:_default' \
+'--color=[When to colour terminal output]:WHEN:(auto always never)' \
+'--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
+'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
+'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'-v[Trace what is scanned and summarize every comment kind and skipped file]' \
+'--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+'::name -- Name of the plugin to verify (default\: all of them):_default' \
 && ret=0
 ;;
 (new)
 _arguments "${_arguments_options[@]}" : \
-'--config=[Explicit configuration file]:CONFIG:_files' \
+'--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
+legal\:"Like safe, and keep licence and copyright comments as well"
+all\:"Remove every comment that no keep override protects"))' \
+'--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
+columns\:"Pad each removed comment so the following columns do not shift"
+compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+'--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
+ocaml\:"OCaml implementation and interface files"
+c\:"C source and header files"
+cpp\:"C++ source and header files"
+go\:"Go source files"
+java\:"Java source files, including Unicode escape translation"
+javascript\:"JavaScript modules and scripts, including JSX"
+typescript\:"TypeScript modules and scripts, including TSX"
+python\:"Python source and stub files"
+shell\:"POSIX sh, Bash, and zsh scripts"
+html\:"HTML documents, including nested script and style elements"
+css\:"CSS stylesheets"
+jsonc\:"JSON with comments, including JSON5"
+sql\:"SQL for every supported database dialect"
+kotlin\:"Kotlin source and script files"))' \
+'--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
+jsx\:"JavaScript with JSX elements"
+tsx\:"TypeScript with JSX elements"
+objective-c\:"Objective-C extensions to C"
+objective-cpp\:"Objective-C++ extensions to C++"
+gnu-c\:"GNU extensions to C"
+gnu-cpp\:"GNU extensions to C++"
+cuda\:"CUDA extensions to C++"
+posix-sh\:"The POSIX shell command language"
+bash53\:"Bash 5.3"
+zsh\:"The Z shell"
+postgresql\:"PostgreSQL, with dollar-quoted bodies"
+mysql\:"MySQL, including its executable versioned comments"
+sqlite\:"SQLite"
+t-sql\:"Microsoft Transact-SQL"
+oracle\:"Oracle SQL and PL/SQL"))' \
+'*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
+'*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
-'--policy=[]:POLICY:_default' \
-'--layout=[]:LAYOUT:_default' \
-'--language=[]:LANGUAGE:_default' \
-'--dialect=[]:DIALECT:_default' \
-'*--keep-kind=[]:KEEP_KIND:_default' \
-'*--remove-kind=[]:REMOVE_KIND:_default' \
-'--color=[]:COLOR:(auto always never)' \
-'--hyperlinks=[]:HYPERLINKS:(auto always never)' \
-'--progress=[]:PROGRESS:(auto always never)' \
-'--force-invalid[]' \
-'--force-protected[]' \
-'-h[Print help]' \
-'--help[Print help]' \
-':path:_files' \
+'--color=[When to colour terminal output]:WHEN:(auto always never)' \
+'--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
+'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
+'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'-v[Trace what is scanned and summarize every comment kind and skipped file]' \
+'--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+':path -- Directory to create the plugin crate in:_files' \
 && ret=0
 ;;
 (help)
@@ -427,41 +1413,234 @@ esac
 ;;
 (completions)
 _arguments "${_arguments_options[@]}" : \
-'--config=[Explicit configuration file]:CONFIG:_files' \
+'--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
+legal\:"Like safe, and keep licence and copyright comments as well"
+all\:"Remove every comment that no keep override protects"))' \
+'--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
+columns\:"Pad each removed comment so the following columns do not shift"
+compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+'--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
+ocaml\:"OCaml implementation and interface files"
+c\:"C source and header files"
+cpp\:"C++ source and header files"
+go\:"Go source files"
+java\:"Java source files, including Unicode escape translation"
+javascript\:"JavaScript modules and scripts, including JSX"
+typescript\:"TypeScript modules and scripts, including TSX"
+python\:"Python source and stub files"
+shell\:"POSIX sh, Bash, and zsh scripts"
+html\:"HTML documents, including nested script and style elements"
+css\:"CSS stylesheets"
+jsonc\:"JSON with comments, including JSON5"
+sql\:"SQL for every supported database dialect"
+kotlin\:"Kotlin source and script files"))' \
+'--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
+jsx\:"JavaScript with JSX elements"
+tsx\:"TypeScript with JSX elements"
+objective-c\:"Objective-C extensions to C"
+objective-cpp\:"Objective-C++ extensions to C++"
+gnu-c\:"GNU extensions to C"
+gnu-cpp\:"GNU extensions to C++"
+cuda\:"CUDA extensions to C++"
+posix-sh\:"The POSIX shell command language"
+bash53\:"Bash 5.3"
+zsh\:"The Z shell"
+postgresql\:"PostgreSQL, with dollar-quoted bodies"
+mysql\:"MySQL, including its executable versioned comments"
+sqlite\:"SQLite"
+t-sql\:"Microsoft Transact-SQL"
+oracle\:"Oracle SQL and PL/SQL"))' \
+'*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
+'*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
-'--policy=[]:POLICY:_default' \
-'--layout=[]:LAYOUT:_default' \
-'--language=[]:LANGUAGE:_default' \
-'--dialect=[]:DIALECT:_default' \
-'*--keep-kind=[]:KEEP_KIND:_default' \
-'*--remove-kind=[]:REMOVE_KIND:_default' \
-'--color=[]:COLOR:(auto always never)' \
-'--hyperlinks=[]:HYPERLINKS:(auto always never)' \
-'--progress=[]:PROGRESS:(auto always never)' \
-'--force-invalid[]' \
-'--force-protected[]' \
-'-h[Print help]' \
-'--help[Print help]' \
-':shell:(bash elvish fish powershell zsh)' \
+'--color=[When to colour terminal output]:WHEN:(auto always never)' \
+'--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
+'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
+'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'-v[Trace what is scanned and summarize every comment kind and skipped file]' \
+'--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+':shell -- Shell whose completion script is written to stdout:(bash elvish fish powershell zsh)' \
 && ret=0
 ;;
 (doctor)
 _arguments "${_arguments_options[@]}" : \
-'--config=[Explicit configuration file]:CONFIG:_files' \
+'--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
+legal\:"Like safe, and keep licence and copyright comments as well"
+all\:"Remove every comment that no keep override protects"))' \
+'--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
+columns\:"Pad each removed comment so the following columns do not shift"
+compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+'--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
+ocaml\:"OCaml implementation and interface files"
+c\:"C source and header files"
+cpp\:"C++ source and header files"
+go\:"Go source files"
+java\:"Java source files, including Unicode escape translation"
+javascript\:"JavaScript modules and scripts, including JSX"
+typescript\:"TypeScript modules and scripts, including TSX"
+python\:"Python source and stub files"
+shell\:"POSIX sh, Bash, and zsh scripts"
+html\:"HTML documents, including nested script and style elements"
+css\:"CSS stylesheets"
+jsonc\:"JSON with comments, including JSON5"
+sql\:"SQL for every supported database dialect"
+kotlin\:"Kotlin source and script files"))' \
+'--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
+jsx\:"JavaScript with JSX elements"
+tsx\:"TypeScript with JSX elements"
+objective-c\:"Objective-C extensions to C"
+objective-cpp\:"Objective-C++ extensions to C++"
+gnu-c\:"GNU extensions to C"
+gnu-cpp\:"GNU extensions to C++"
+cuda\:"CUDA extensions to C++"
+posix-sh\:"The POSIX shell command language"
+bash53\:"Bash 5.3"
+zsh\:"The Z shell"
+postgresql\:"PostgreSQL, with dollar-quoted bodies"
+mysql\:"MySQL, including its executable versioned comments"
+sqlite\:"SQLite"
+t-sql\:"Microsoft Transact-SQL"
+oracle\:"Oracle SQL and PL/SQL"))' \
+'*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
+'*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
-'--policy=[]:POLICY:_default' \
-'--layout=[]:LAYOUT:_default' \
-'--language=[]:LANGUAGE:_default' \
-'--dialect=[]:DIALECT:_default' \
-'*--keep-kind=[]:KEEP_KIND:_default' \
-'*--remove-kind=[]:REMOVE_KIND:_default' \
-'--color=[]:COLOR:(auto always never)' \
-'--hyperlinks=[]:HYPERLINKS:(auto always never)' \
-'--progress=[]:PROGRESS:(auto always never)' \
-'--force-invalid[]' \
-'--force-protected[]' \
-'-h[Print help]' \
-'--help[Print help]' \
+'--color=[When to colour terminal output]:WHEN:(auto always never)' \
+'--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
+'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
+'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'-v[Trace what is scanned and summarize every comment kind and skipped file]' \
+'--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+&& ret=0
+;;
+(man)
+_arguments "${_arguments_options[@]}" : \
+'--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
+legal\:"Like safe, and keep licence and copyright comments as well"
+all\:"Remove every comment that no keep override protects"))' \
+'--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
+columns\:"Pad each removed comment so the following columns do not shift"
+compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+'--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
+ocaml\:"OCaml implementation and interface files"
+c\:"C source and header files"
+cpp\:"C++ source and header files"
+go\:"Go source files"
+java\:"Java source files, including Unicode escape translation"
+javascript\:"JavaScript modules and scripts, including JSX"
+typescript\:"TypeScript modules and scripts, including TSX"
+python\:"Python source and stub files"
+shell\:"POSIX sh, Bash, and zsh scripts"
+html\:"HTML documents, including nested script and style elements"
+css\:"CSS stylesheets"
+jsonc\:"JSON with comments, including JSON5"
+sql\:"SQL for every supported database dialect"
+kotlin\:"Kotlin source and script files"))' \
+'--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
+jsx\:"JavaScript with JSX elements"
+tsx\:"TypeScript with JSX elements"
+objective-c\:"Objective-C extensions to C"
+objective-cpp\:"Objective-C++ extensions to C++"
+gnu-c\:"GNU extensions to C"
+gnu-cpp\:"GNU extensions to C++"
+cuda\:"CUDA extensions to C++"
+posix-sh\:"The POSIX shell command language"
+bash53\:"Bash 5.3"
+zsh\:"The Z shell"
+postgresql\:"PostgreSQL, with dollar-quoted bodies"
+mysql\:"MySQL, including its executable versioned comments"
+sqlite\:"SQLite"
+t-sql\:"Microsoft Transact-SQL"
+oracle\:"Oracle SQL and PL/SQL"))' \
+'*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
+'*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright preamble"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"))' \
+'--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
+'--color=[When to colour terminal output]:WHEN:(auto always never)' \
+'--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
+'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'(-v --verbose)-q[Print nothing but errors and diagnostics]' \
+'(-v --verbose)--quiet[Print nothing but errors and diagnostics]' \
+'-v[Trace what is scanned and summarize every comment kind and skipped file]' \
+'--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
 && ret=0
 ;;
 (help)
@@ -560,6 +1739,10 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
+(man)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
 (help)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
@@ -576,18 +1759,19 @@ esac
 (( $+functions[_ocomment_commands] )) ||
 _ocomment_commands() {
     local commands; commands=(
-'check:' \
-'fix:' \
-'diff:' \
-'scan:' \
-'strip:' \
-'lsp:' \
-'init:' \
-'config:' \
-'languages:' \
-'plugin:' \
-'completions:' \
-'doctor:' \
+'check:Report removable comments (default command)' \
+'fix:Remove comments in place through an atomic, rollback-backed transaction' \
+'diff:Print a unified diff of the changes fix would make' \
+'scan:List every comment with its kind, disposition and byte span' \
+'strip:Read source on stdin and write the stripped result to stdout' \
+'lsp:Run the LSP 3.18 server over stdio' \
+'init:Write a starter .ocomment.toml or Lefthook configuration' \
+'config:Show, locate, explain, or export the resolved configuration' \
+'languages:List built-in languages, extensions, and dialects' \
+'plugin:Manage sandboxed WASM scanner plugins' \
+'completions:Generate shell completions' \
+'doctor:Diagnose the environment (config, git, plugins, tools)' \
+'man:Render the roff manual page to stdout' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'ocomment commands' commands "$@"
@@ -625,18 +1809,19 @@ _ocomment__subcmd__fix_commands() {
 (( $+functions[_ocomment__subcmd__help_commands] )) ||
 _ocomment__subcmd__help_commands() {
     local commands; commands=(
-'check:' \
-'fix:' \
-'diff:' \
-'scan:' \
-'strip:' \
-'lsp:' \
-'init:' \
-'config:' \
-'languages:' \
-'plugin:' \
-'completions:' \
-'doctor:' \
+'check:Report removable comments (default command)' \
+'fix:Remove comments in place through an atomic, rollback-backed transaction' \
+'diff:Print a unified diff of the changes fix would make' \
+'scan:List every comment with its kind, disposition and byte span' \
+'strip:Read source on stdin and write the stripped result to stdout' \
+'lsp:Run the LSP 3.18 server over stdio' \
+'init:Write a starter .ocomment.toml or Lefthook configuration' \
+'config:Show, locate, explain, or export the resolved configuration' \
+'languages:List built-in languages, extensions, and dialects' \
+'plugin:Manage sandboxed WASM scanner plugins' \
+'completions:Generate shell completions' \
+'doctor:Diagnose the environment (config, git, plugins, tools)' \
+'man:Render the roff manual page to stdout' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'ocomment help commands' commands "$@"
@@ -691,15 +1876,20 @@ _ocomment__subcmd__help__subcmd__lsp_commands() {
     local commands; commands=()
     _describe -t commands 'ocomment help lsp commands' commands "$@"
 }
+(( $+functions[_ocomment__subcmd__help__subcmd__man_commands] )) ||
+_ocomment__subcmd__help__subcmd__man_commands() {
+    local commands; commands=()
+    _describe -t commands 'ocomment help man commands' commands "$@"
+}
 (( $+functions[_ocomment__subcmd__help__subcmd__plugin_commands] )) ||
 _ocomment__subcmd__help__subcmd__plugin_commands() {
     local commands; commands=(
-'add:' \
-'remove:' \
-'list:' \
-'update:' \
-'verify:' \
-'new:' \
+'add:Install a plugin and pin its digest in .ocomment.lock' \
+'remove:Uninstall a plugin and drop its lock entry' \
+'list:List the installed plugins and their pinned digests' \
+'update:Re-fetch plugins and refresh their pinned digests' \
+'verify:Check installed plugins against their pinned digests' \
+'new:Scaffold a new plugin crate from the scanner WIT world' \
     )
     _describe -t commands 'ocomment help plugin commands' commands "$@"
 }
@@ -758,15 +1948,20 @@ _ocomment__subcmd__lsp_commands() {
     local commands; commands=()
     _describe -t commands 'ocomment lsp commands' commands "$@"
 }
+(( $+functions[_ocomment__subcmd__man_commands] )) ||
+_ocomment__subcmd__man_commands() {
+    local commands; commands=()
+    _describe -t commands 'ocomment man commands' commands "$@"
+}
 (( $+functions[_ocomment__subcmd__plugin_commands] )) ||
 _ocomment__subcmd__plugin_commands() {
     local commands; commands=(
-'add:' \
-'remove:' \
-'list:' \
-'update:' \
-'verify:' \
-'new:' \
+'add:Install a plugin and pin its digest in .ocomment.lock' \
+'remove:Uninstall a plugin and drop its lock entry' \
+'list:List the installed plugins and their pinned digests' \
+'update:Re-fetch plugins and refresh their pinned digests' \
+'verify:Check installed plugins against their pinned digests' \
+'new:Scaffold a new plugin crate from the scanner WIT world' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'ocomment plugin commands' commands "$@"
@@ -779,12 +1974,12 @@ _ocomment__subcmd__plugin__subcmd__add_commands() {
 (( $+functions[_ocomment__subcmd__plugin__subcmd__help_commands] )) ||
 _ocomment__subcmd__plugin__subcmd__help_commands() {
     local commands; commands=(
-'add:' \
-'remove:' \
-'list:' \
-'update:' \
-'verify:' \
-'new:' \
+'add:Install a plugin and pin its digest in .ocomment.lock' \
+'remove:Uninstall a plugin and drop its lock entry' \
+'list:List the installed plugins and their pinned digests' \
+'update:Re-fetch plugins and refresh their pinned digests' \
+'verify:Check installed plugins against their pinned digests' \
+'new:Scaffold a new plugin crate from the scanner WIT world' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'ocomment plugin help commands' commands "$@"

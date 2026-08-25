@@ -89,7 +89,7 @@ proptest! {
         let left = first % modulus;
         let right = second % modulus;
         let span = ByteSpan::new(left.min(right), left.max(right));
-        for language in Language::BUILT_INS {
+        for language in Language::ALL {
             let mut document = IncrementalDocument::new(
                 source.clone(),
                 language,

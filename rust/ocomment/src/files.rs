@@ -23,6 +23,10 @@ pub struct SkippedFile {
     pub path: PathBuf,
     pub reason: String,
     pub error: bool,
+    /// The path itself was named on the command line. Such a skip is always
+    /// reported on its own line; a skip found while walking a directory is
+    /// folded into the end-of-run summary instead.
+    pub explicit: bool,
 }
 
 #[derive(Default)]
@@ -74,6 +78,7 @@ fn discover_with_scope(
             load_one(
                 &path,
                 explicit_scope,
+                explicit_scope,
                 resolved,
                 forced_language,
                 forced_dialect,
@@ -104,6 +109,7 @@ fn discover_with_scope(
                         load_one(
                             entry.path(),
                             explicit_scope,
+                            false,
                             resolved,
                             forced_language,
                             forced_dialect,
@@ -117,6 +123,7 @@ fn discover_with_scope(
                         path: path.clone(),
                         reason: error.to_string(),
                         error: true,
+                        explicit: explicit_scope,
                     }),
                 }
             }
@@ -125,6 +132,7 @@ fn discover_with_scope(
                 path,
                 reason: "path does not exist".into(),
                 error: true,
+                explicit: explicit_scope,
             });
         }
     }
@@ -144,6 +152,7 @@ fn discover_with_scope(
 fn load_one(
     path: &Path,
     explicit_scope: bool,
+    explicit_path: bool,
     resolved: &ResolvedConfig,
     forced_language: Option<Language>,
     forced_dialect: Option<Dialect>,
@@ -158,7 +167,7 @@ fn load_one(
     let link_metadata = match path.symlink_metadata() {
         Ok(value) => value,
         Err(error) => {
-            discovery.skipped.push(skip(path, error));
+            discovery.skipped.push(skip(path, explicit_path, error));
             return;
         }
     };
@@ -168,6 +177,7 @@ fn load_one(
                 path: path.to_path_buf(),
                 reason: "symbolic link".into(),
                 error: false,
+                explicit: explicit_path,
             });
             return;
         }
@@ -175,7 +185,7 @@ fn load_one(
             Ok(metadata) if metadata.is_file() => metadata,
             Ok(_) => return,
             Err(error) => {
-                discovery.skipped.push(skip(path, error));
+                discovery.skipped.push(skip(path, explicit_path, error));
                 return;
             }
         }
@@ -188,13 +198,14 @@ fn load_one(
             path: path.to_path_buf(),
             reason: format!("larger than {} bytes", resolved.config.files.max_size),
             error: false,
+            explicit: explicit_path,
         });
         return;
     }
     let source = match fs::read(path) {
         Ok(value) => value,
         Err(error) => {
-            discovery.skipped.push(skip(path, error));
+            discovery.skipped.push(skip(path, explicit_path, error));
             return;
         }
     };
@@ -203,6 +214,7 @@ fn load_one(
             path: path.to_path_buf(),
             reason: "binary file (NUL byte)".into(),
             error: false,
+            explicit: explicit_path,
         });
         return;
     }
@@ -227,6 +239,7 @@ fn load_one(
             path: path.to_path_buf(),
             reason: "language disabled by configuration".into(),
             error: false,
+            explicit: explicit_path,
         });
         return;
     }
@@ -252,6 +265,7 @@ fn load_one(
             path: path.to_path_buf(),
             reason: "unknown language".into(),
             error: false,
+            explicit: explicit_path,
         });
         return;
     }
@@ -299,10 +313,11 @@ fn compile_globs(patterns: &[String]) -> Result<GlobSet> {
     builder.build().context("cannot compile file globs")
 }
 
-fn skip(path: &Path, error: impl std::fmt::Display) -> SkippedFile {
+fn skip(path: &Path, explicit: bool, error: impl std::fmt::Display) -> SkippedFile {
     SkippedFile {
         path: path.to_path_buf(),
         reason: error.to_string(),
         error: true,
+        explicit,
     }
 }

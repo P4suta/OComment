@@ -449,3 +449,64 @@ fn on_save_is_opt_in_and_returns_annotated_safe_edits() {
     assert_eq!(response["result"][0]["range"]["start"]["character"], 11);
     client.stop();
 }
+
+#[test]
+fn diagnostics_and_hover_name_comment_kinds_in_canonical_spelling() {
+    let workspace = tempfile::tempdir().unwrap();
+    let uri = Url::from_file_path(workspace.path().join("doc.rs")).unwrap();
+    let mut client = LspClient::start(workspace.path());
+    let _ = client.initialize(workspace.path(), &["utf-8"]);
+    client.send(json!({
+        "jsonrpc": "2.0", "method": "textDocument/didOpen",
+        "params": { "textDocument": {
+            "uri": uri, "languageId": "rust", "version": 1,
+            "text": "/** doc */\n// SPDX-License-Identifier: MIT\n"
+        }}
+    }));
+    let pushed = client.notification("textDocument/publishDiagnostics");
+    let diagnostics = pushed["params"]["diagnostics"].as_array().unwrap();
+    assert_eq!(diagnostics[0]["message"], "removable doc-block comment");
+    assert_eq!(diagnostics[0]["code"], "removable-comment");
+
+    client.send(json!({
+        "jsonrpc": "2.0", "id": 60, "method": "textDocument/hover",
+        "params": {
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 3 }
+        }
+    }));
+    assert_eq!(
+        client.response(60)["result"]["contents"],
+        "OComment: removable doc-block comment"
+    );
+
+    client.stop();
+}
+
+#[test]
+fn hover_over_a_protected_comment_names_the_kind_and_reason() {
+    let workspace = tempfile::tempdir().unwrap();
+    let uri = Url::from_file_path(workspace.path().join("preamble.py")).unwrap();
+    let mut client = LspClient::start(workspace.path());
+    let _ = client.initialize(workspace.path(), &["utf-8"]);
+    client.send(json!({
+        "jsonrpc": "2.0", "method": "textDocument/didOpen",
+        "params": { "textDocument": {
+            "uri": uri, "languageId": "python", "version": 1,
+            "text": "#!/usr/bin/env python3\nx = 1\n"
+        }}
+    }));
+    let _ = client.notification("textDocument/publishDiagnostics");
+    client.send(json!({
+        "jsonrpc": "2.0", "id": 61, "method": "textDocument/hover",
+        "params": {
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 3 }
+        }
+    }));
+    assert_eq!(
+        client.response(61)["result"]["contents"],
+        "OComment: kept shebang comment: required source preamble"
+    );
+    client.stop();
+}

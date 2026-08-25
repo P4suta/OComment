@@ -1,7 +1,9 @@
 use crate::{
     atomic::{WritePlan, apply_transaction},
     config::ResolvedConfig,
-    output::{self, Operation, OutputFormat, Presentation, ProcessedFile},
+    output::{
+        self, Operation, OutputFormat, Presentation, ProcessedFile, RenderOptions, Verbosity,
+    },
     plugin::PluginHost,
 };
 use anyhow::{Context, Result, anyhow, bail};
@@ -35,6 +37,8 @@ pub struct StagedRequest<'a> {
     pub forced_language: Option<ocomment_core::Language>,
     pub forced_dialect: Option<ocomment_core::Dialect>,
     pub presentation: Presentation,
+    pub verbosity: Verbosity,
+    pub preview: bool,
 }
 
 pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
@@ -48,6 +52,8 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
         forced_language,
         forced_dialect,
         presentation,
+        verbosity,
+        preview,
     } = request;
     let root = repository_root()?;
     let names = staged_paths(&root, paths)?;
@@ -173,12 +179,26 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
             .iter()
             .any(|diagnostic| diagnostic.code == "staged-existing-block-comment")
     });
-    if operation == Operation::Fix
-        && (!invalid || (resolved.config.policy.force_invalid && !staged_conflict))
-    {
+    let applied = operation == Operation::Fix
+        && (!invalid || (resolved.config.policy.force_invalid && !staged_conflict));
+    if applied {
         fix_index(&root, &entries, index_only)?;
     }
-    output::render(&files, &[], format, operation, presentation)?;
+    output::render(
+        &files,
+        &[],
+        &RenderOptions {
+            format,
+            operation,
+            presentation,
+            verbosity,
+            preview,
+            explain: false,
+            dry_run: false,
+            force_invalid: resolved.config.policy.force_invalid,
+            applied,
+        },
+    )?;
     if invalid {
         return Ok(2);
     }

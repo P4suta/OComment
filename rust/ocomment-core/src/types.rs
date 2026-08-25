@@ -26,6 +26,33 @@ impl ByteSpan {
     }
 }
 
+/// Fold a spelling to lower case and drop every `-` and `_`.
+fn fold_compact(value: &str) -> String {
+    value.to_ascii_lowercase().replace(['_', '-'], "")
+}
+
+/// Fold a spelling to lower case and normalise `_` to the canonical `-`.
+fn fold_kebab(value: &str) -> String {
+    value.to_ascii_lowercase().replace('_', "-")
+}
+
+/// Fold a spelling to lower case.
+fn fold_lower(value: &str) -> String {
+    value.to_ascii_lowercase()
+}
+
+/// Find the variant whose canonical name or alias equals the folded spelling.
+fn lookup<T: Copy>(
+    all: &[T],
+    folded: &str,
+    name: fn(T) -> &'static str,
+    aliases: fn(T) -> &'static [&'static str],
+) -> Option<T> {
+    all.iter()
+        .copied()
+        .find(|value| name(*value) == folded || aliases(*value).contains(&folded))
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Language {
@@ -51,7 +78,8 @@ pub enum Language {
 }
 
 impl Language {
-    pub const BUILT_INS: [Self; 15] = [
+    /// Every CLI-visible language; `Unknown` is deliberately excluded.
+    pub const ALL: [Self; 15] = [
         Self::Rust,
         Self::Ocaml,
         Self::C,
@@ -69,6 +97,7 @@ impl Language {
         Self::Kotlin,
     ];
 
+    /// The canonical name, identical to the serde representation.
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Rust => "rust",
@@ -89,6 +118,25 @@ impl Language {
             Self::Unknown => "unknown",
         }
     }
+
+    /// Accepted spellings besides [`Self::as_str`], already case- and
+    /// separator-folded.
+    pub const fn aliases(self) -> &'static [&'static str] {
+        match self {
+            Self::Rust => &["rs"],
+            Self::Ocaml => &["ml"],
+            Self::C | Self::Java | Self::Css | Self::Sql | Self::Unknown => &[],
+            Self::Cpp => &["c++", "cxx"],
+            Self::Go => &["golang"],
+            Self::JavaScript => &["js", "jsx", "ecmascript"],
+            Self::TypeScript => &["ts", "tsx"],
+            Self::Python => &["py"],
+            Self::Shell => &["sh", "bash", "zsh"],
+            Self::Html => &["htm"],
+            Self::Jsonc => &["json5"],
+            Self::Kotlin => &["kt", "kts"],
+        }
+    }
 }
 
 impl fmt::Display for Language {
@@ -100,24 +148,13 @@ impl fmt::Display for Language {
 impl FromStr for Language {
     type Err = String;
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value.to_ascii_lowercase().replace(['_', '-'], "").as_str() {
-            "rust" | "rs" => Ok(Self::Rust),
-            "ocaml" | "ml" => Ok(Self::Ocaml),
-            "c" => Ok(Self::C),
-            "cpp" | "c++" | "cxx" => Ok(Self::Cpp),
-            "go" | "golang" => Ok(Self::Go),
-            "java" => Ok(Self::Java),
-            "javascript" | "js" | "jsx" | "ecmascript" => Ok(Self::JavaScript),
-            "typescript" | "ts" | "tsx" => Ok(Self::TypeScript),
-            "python" | "py" => Ok(Self::Python),
-            "shell" | "sh" | "bash" | "zsh" => Ok(Self::Shell),
-            "html" | "htm" => Ok(Self::Html),
-            "css" => Ok(Self::Css),
-            "jsonc" | "json5" => Ok(Self::Jsonc),
-            "sql" => Ok(Self::Sql),
-            "kotlin" | "kt" | "kts" => Ok(Self::Kotlin),
-            _ => Err(format!("unsupported language `{value}`")),
-        }
+        lookup(
+            &Self::ALL,
+            &fold_compact(value),
+            Self::as_str,
+            Self::aliases,
+        )
+        .ok_or_else(|| format!("unsupported language `{value}`"))
     }
 }
 
@@ -152,28 +189,84 @@ pub enum Dialect {
     Oracle,
 }
 
+impl Dialect {
+    /// Every CLI-visible dialect.
+    pub const ALL: [Self; 16] = [
+        Self::Standard,
+        Self::Jsx,
+        Self::Tsx,
+        Self::ObjectiveC,
+        Self::ObjectiveCpp,
+        Self::GnuC,
+        Self::GnuCpp,
+        Self::Cuda,
+        Self::PosixSh,
+        Self::Bash53,
+        Self::Zsh,
+        Self::PostgreSql,
+        Self::MySql,
+        Self::Sqlite,
+        Self::TSql,
+        Self::Oracle,
+    ];
+
+    /// The canonical name, identical to the serde representation.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Standard => "standard",
+            Self::Jsx => "jsx",
+            Self::Tsx => "tsx",
+            Self::ObjectiveC => "objective-c",
+            Self::ObjectiveCpp => "objective-cpp",
+            Self::GnuC => "gnu-c",
+            Self::GnuCpp => "gnu-cpp",
+            Self::Cuda => "cuda",
+            Self::PosixSh => "posix-sh",
+            Self::Bash53 => "bash53",
+            Self::Zsh => "zsh",
+            Self::PostgreSql => "postgresql",
+            Self::MySql => "mysql",
+            Self::Sqlite => "sqlite",
+            Self::TSql => "t-sql",
+            Self::Oracle => "oracle",
+        }
+    }
+
+    /// Accepted spellings besides [`Self::as_str`], already case- and
+    /// separator-folded.
+    pub const fn aliases(self) -> &'static [&'static str] {
+        match self {
+            Self::Standard
+            | Self::Jsx
+            | Self::Tsx
+            | Self::Cuda
+            | Self::Zsh
+            | Self::MySql
+            | Self::Sqlite
+            | Self::Oracle => &[],
+            Self::ObjectiveC => &["objc"],
+            Self::ObjectiveCpp => &["objective-c++", "objcpp"],
+            Self::GnuC => &["gnuc"],
+            Self::GnuCpp => &["gnu-c++", "gnucpp"],
+            Self::PosixSh => &["posix", "sh"],
+            Self::Bash53 => &["bash-5.3", "bash"],
+            Self::PostgreSql => &["postgres", "pgsql"],
+            Self::TSql => &["tsql"],
+        }
+    }
+}
+
+impl fmt::Display for Dialect {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 impl FromStr for Dialect {
     type Err = String;
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value.to_ascii_lowercase().replace('_', "-").as_str() {
-            "standard" => Ok(Self::Standard),
-            "jsx" => Ok(Self::Jsx),
-            "tsx" => Ok(Self::Tsx),
-            "objective-c" | "objc" => Ok(Self::ObjectiveC),
-            "objective-cpp" | "objective-c++" | "objcpp" => Ok(Self::ObjectiveCpp),
-            "gnu-c" | "gnuc" => Ok(Self::GnuC),
-            "gnu-cpp" | "gnu-c++" | "gnucpp" => Ok(Self::GnuCpp),
-            "cuda" => Ok(Self::Cuda),
-            "posix-sh" | "posix" | "sh" => Ok(Self::PosixSh),
-            "bash53" | "bash-5.3" | "bash" => Ok(Self::Bash53),
-            "zsh" => Ok(Self::Zsh),
-            "postgresql" | "postgres" | "pgsql" => Ok(Self::PostgreSql),
-            "mysql" => Ok(Self::MySql),
-            "sqlite" => Ok(Self::Sqlite),
-            "t-sql" | "tsql" => Ok(Self::TSql),
-            "oracle" => Ok(Self::Oracle),
-            _ => Err(format!("unknown dialect `{value}`")),
-        }
+        lookup(&Self::ALL, &fold_kebab(value), Self::as_str, Self::aliases)
+            .ok_or_else(|| format!("unknown dialect `{value}`"))
     }
 }
 
@@ -194,23 +287,69 @@ pub enum CommentKind {
     VersionComment,
 }
 
+impl CommentKind {
+    /// Every CLI-visible comment kind.
+    pub const ALL: [Self; 11] = [
+        Self::Line,
+        Self::Block,
+        Self::DocLine,
+        Self::DocBlock,
+        Self::Directive,
+        Self::License,
+        Self::HtmlComment,
+        Self::Shebang,
+        Self::Encoding,
+        Self::OptimizerHint,
+        Self::VersionComment,
+    ];
+
+    /// The canonical name, identical to the serde representation.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Line => "line",
+            Self::Block => "block",
+            Self::DocLine => "doc-line",
+            Self::DocBlock => "doc-block",
+            Self::Directive => "directive",
+            Self::License => "license",
+            Self::HtmlComment => "html-comment",
+            Self::Shebang => "shebang",
+            Self::Encoding => "encoding",
+            Self::OptimizerHint => "optimizer-hint",
+            Self::VersionComment => "version-comment",
+        }
+    }
+
+    /// Accepted spellings besides [`Self::as_str`], already case- and
+    /// separator-folded.
+    pub const fn aliases(self) -> &'static [&'static str] {
+        match self {
+            Self::Line
+            | Self::Block
+            | Self::DocBlock
+            | Self::Shebang
+            | Self::Encoding
+            | Self::OptimizerHint
+            | Self::VersionComment => &[],
+            Self::DocLine => &["doc"],
+            Self::Directive => &["pragma"],
+            Self::License => &["legal"],
+            Self::HtmlComment => &["html"],
+        }
+    }
+}
+
+impl fmt::Display for CommentKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 impl FromStr for CommentKind {
     type Err = String;
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value.to_ascii_lowercase().replace('_', "-").as_str() {
-            "line" => Ok(Self::Line),
-            "block" => Ok(Self::Block),
-            "doc-line" | "doc" => Ok(Self::DocLine),
-            "doc-block" => Ok(Self::DocBlock),
-            "directive" | "pragma" => Ok(Self::Directive),
-            "license" | "legal" => Ok(Self::License),
-            "html" | "html-comment" => Ok(Self::HtmlComment),
-            "shebang" => Ok(Self::Shebang),
-            "encoding" => Ok(Self::Encoding),
-            "optimizer-hint" => Ok(Self::OptimizerHint),
-            "version-comment" => Ok(Self::VersionComment),
-            _ => Err(format!("unknown comment kind `{value}`")),
-        }
+        lookup(&Self::ALL, &fold_kebab(value), Self::as_str, Self::aliases)
+            .ok_or_else(|| format!("unknown comment kind `{value}`"))
     }
 }
 
@@ -224,6 +363,15 @@ pub enum Disposition {
 impl Disposition {
     pub const fn is_remove(&self) -> bool {
         matches!(self, Self::Remove)
+    }
+}
+
+impl fmt::Display for Disposition {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Remove => f.write_str("remove"),
+            Self::Keep { reason } => write!(f, "keep ({reason})"),
+        }
     }
 }
 
@@ -242,6 +390,40 @@ pub enum Severity {
     #[default]
     Info,
     Hint,
+}
+
+impl Severity {
+    /// Every severity, ordered from most to least severe.
+    pub const ALL: [Self; 4] = [Self::Error, Self::Warning, Self::Info, Self::Hint];
+
+    /// The canonical name, identical to the serde representation.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Error => "error",
+            Self::Warning => "warning",
+            Self::Info => "info",
+            Self::Hint => "hint",
+        }
+    }
+
+    /// Accepted spellings besides [`Self::as_str`], already case-folded.
+    pub const fn aliases(self) -> &'static [&'static str] {
+        &[]
+    }
+}
+
+impl fmt::Display for Severity {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for Severity {
+    type Err = String;
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        lookup(&Self::ALL, &fold_lower(value), Self::as_str, Self::aliases)
+            .ok_or_else(|| format!("unknown severity `{value}`"))
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -289,15 +471,36 @@ pub enum Policy {
     All,
 }
 
+impl Policy {
+    /// Every CLI-visible policy.
+    pub const ALL: [Self; 3] = [Self::Safe, Self::Legal, Self::All];
+
+    /// The canonical name, identical to the serde representation.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Safe => "safe",
+            Self::Legal => "legal",
+            Self::All => "all",
+        }
+    }
+
+    /// Accepted spellings besides [`Self::as_str`], already case-folded.
+    pub const fn aliases(self) -> &'static [&'static str] {
+        &[]
+    }
+}
+
+impl fmt::Display for Policy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 impl FromStr for Policy {
     type Err = String;
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value.to_ascii_lowercase().as_str() {
-            "safe" => Ok(Self::Safe),
-            "legal" => Ok(Self::Legal),
-            "all" => Ok(Self::All),
-            _ => Err(format!("unknown policy `{value}`")),
-        }
+        lookup(&Self::ALL, &fold_lower(value), Self::as_str, Self::aliases)
+            .ok_or_else(|| format!("unknown policy `{value}`"))
     }
 }
 
@@ -310,15 +513,36 @@ pub enum Layout {
     Compact,
 }
 
+impl Layout {
+    /// Every CLI-visible layout.
+    pub const ALL: [Self; 3] = [Self::Lines, Self::Columns, Self::Compact];
+
+    /// The canonical name, identical to the serde representation.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Lines => "lines",
+            Self::Columns => "columns",
+            Self::Compact => "compact",
+        }
+    }
+
+    /// Accepted spellings besides [`Self::as_str`], already case-folded.
+    pub const fn aliases(self) -> &'static [&'static str] {
+        &[]
+    }
+}
+
+impl fmt::Display for Layout {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 impl FromStr for Layout {
     type Err = String;
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value.to_ascii_lowercase().as_str() {
-            "lines" => Ok(Self::Lines),
-            "columns" => Ok(Self::Columns),
-            "compact" => Ok(Self::Compact),
-            _ => Err(format!("unknown layout `{value}`")),
-        }
+        lookup(&Self::ALL, &fold_lower(value), Self::as_str, Self::aliases)
+            .ok_or_else(|| format!("unknown layout `{value}`"))
     }
 }
 

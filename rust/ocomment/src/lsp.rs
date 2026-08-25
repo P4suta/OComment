@@ -1,6 +1,7 @@
 use crate::{
     config::{self, ResolvedConfig},
     files,
+    output::{kept_label, removable_label},
     plugin::PluginHost,
 };
 use anyhow::Result as AnyResult;
@@ -155,7 +156,7 @@ impl Backend {
                 code: Some(NumberOrString::String("removable-comment".into())),
                 code_description: None,
                 source: Some("ocomment".into()),
-                message: format!("removable {:?} comment", comment.kind),
+                message: removable_label(comment.kind),
                 related_information: None,
                 tags: Some(vec![DiagnosticTag::UNNECESSARY]),
                 data: None,
@@ -855,11 +856,10 @@ impl LanguageServer for Backend {
             return Ok(None);
         };
         let text = match &comment.disposition {
-            Disposition::Remove => format!("OComment: removable {:?} comment", comment.kind),
-            Disposition::Keep { reason } => format!(
-                "OComment protects this {:?} comment: {reason}",
-                comment.kind
-            ),
+            Disposition::Remove => format!("OComment: {}", removable_label(comment.kind)),
+            Disposition::Keep { reason } => {
+                format!("OComment: {}", kept_label(comment.kind, reason))
+            }
         };
         Ok(Some(Hover {
             contents: HoverContents::Scalar(MarkedString::String(text)),

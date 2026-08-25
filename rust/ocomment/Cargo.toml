@@ -30,6 +30,7 @@ path = "src/main.rs"
 anyhow.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
+clap_mangen.workspace = true
 globset.workspace = true
 ignore.workspace = true
 ocomment-core = { version = "0.1.0", path = "../ocomment-core" }
@@ -45,6 +46,7 @@ thiserror.workspace = true
 toml.workspace = true
 tokio.workspace = true
 tower-lsp.workspace = true
+unicode-width.workspace = true
 wasm_component_layer.workspace = true
 wasmi.workspace = true
 wasmi_runtime_layer.workspace = true

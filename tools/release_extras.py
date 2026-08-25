@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Generate shell completions and copy stable documentation for release archives."""
+"""Generate the shell completions and the manual page for release archives."""
 
 from __future__ import annotations
 
 import argparse
 import pathlib
-import shutil
 import subprocess
 
 
@@ -34,7 +33,12 @@ def main() -> int:
             capture_output=True,
         )
         (args.output / filename).write_bytes(completed.stdout)
-    shutil.copyfile(ROOT / "docs/ocomment.1", args.output / "ocomment.1")
+    page = subprocess.run(
+        [str(args.binary), "man"],
+        check=True,
+        capture_output=True,
+    )
+    (args.output / "ocomment.1").write_bytes(page.stdout)
     return 0
 
 

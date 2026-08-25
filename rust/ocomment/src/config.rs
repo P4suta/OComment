@@ -295,36 +295,46 @@ fn validate_languages(config: &Config) -> Result<()> {
     Ok(())
 }
 
+/// Every dialect the scanner accepts for `language`, in canonical order.
+pub fn supported_dialects(language: Language) -> &'static [Dialect] {
+    match language {
+        Language::JavaScript => &[Dialect::Standard, Dialect::Jsx],
+        Language::TypeScript => &[Dialect::Standard, Dialect::Tsx],
+        Language::C => &[Dialect::Standard, Dialect::ObjectiveC, Dialect::GnuC],
+        Language::Cpp => &[
+            Dialect::Standard,
+            Dialect::ObjectiveCpp,
+            Dialect::GnuCpp,
+            Dialect::Cuda,
+        ],
+        Language::Shell => &[
+            Dialect::Standard,
+            Dialect::PosixSh,
+            Dialect::Bash53,
+            Dialect::Zsh,
+        ],
+        Language::Sql => &[
+            Dialect::Standard,
+            Dialect::PostgreSql,
+            Dialect::MySql,
+            Dialect::Sqlite,
+            Dialect::TSql,
+            Dialect::Oracle,
+        ],
+        _ => &[Dialect::Standard],
+    }
+}
+
 pub fn validate_dialect(language: Language, dialect: Dialect) -> Result<()> {
-    let compatible = match language {
-        Language::JavaScript => matches!(dialect, Dialect::Standard | Dialect::Jsx),
-        Language::TypeScript => matches!(dialect, Dialect::Standard | Dialect::Tsx),
-        Language::C => matches!(
-            dialect,
-            Dialect::Standard | Dialect::GnuC | Dialect::ObjectiveC
-        ),
-        Language::Cpp => matches!(
-            dialect,
-            Dialect::Standard | Dialect::GnuCpp | Dialect::ObjectiveCpp | Dialect::Cuda
-        ),
-        Language::Shell => matches!(
-            dialect,
-            Dialect::Standard | Dialect::PosixSh | Dialect::Bash53 | Dialect::Zsh
-        ),
-        Language::Sql => matches!(
-            dialect,
-            Dialect::Standard
-                | Dialect::PostgreSql
-                | Dialect::MySql
-                | Dialect::Sqlite
-                | Dialect::TSql
-                | Dialect::Oracle
-        ),
-        _ => dialect == Dialect::Standard,
-    };
+    let supported = supported_dialects(language);
     ensure!(
-        compatible,
-        "dialect `{dialect:?}` is not supported for language `{language}`"
+        supported.contains(&dialect),
+        "unsupported dialect `{dialect}` for {language}; supported: {}",
+        supported
+            .iter()
+            .map(|value| value.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
     );
     Ok(())
 }

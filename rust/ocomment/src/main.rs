@@ -6,6 +6,7 @@ mod git;
 mod lsp;
 mod output;
 mod plugin;
+mod values;
 
 use std::process::ExitCode;
 
