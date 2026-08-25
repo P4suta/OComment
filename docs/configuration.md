@@ -53,6 +53,14 @@ skip hidden files, binary files, symlinks, and files larger than 32 MiB. An
 explicit file or directory bypasses the hidden and size limits. Binary and
 symlink safety checks still apply.
 
+A command that names no path walks the current directory under those normal
+limits; naming a path explicitly (`ocomment .`, `ocomment src`) is a request
+rather than a default, so it bypasses the hidden-file and size limits.
+
+`files.include`, `files.exclude`, and every `[[overrides]].paths` glob is
+relative to the project root — the directory holding `.ocomment.toml`, or the
+repository above it — however deep in the tree the command is run from.
+
 ## Declarative language profiles
 
 Profiles cover unambiguous delimiter-based syntaxes. Ambiguous or empty

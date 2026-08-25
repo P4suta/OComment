@@ -3,6 +3,7 @@ mod cli;
 mod config;
 mod files;
 mod git;
+mod interactive;
 mod lsp;
 mod output;
 mod plugin;

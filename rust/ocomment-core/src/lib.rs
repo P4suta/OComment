@@ -16,6 +16,6 @@ pub use incremental::{DocumentChange, IncrementalDocument, PositionEncoding};
 pub use profile::{
     DeclarativeProfile, ProfileError, scan_profile, transform_profile, validate_profile,
 };
-pub use scanner::scan;
+pub use scanner::{DispositionPatterns, explain_disposition, explain_disposition_with, scan};
 pub use transform::{apply_edits, transform, transform_spans};
 pub use types::*;

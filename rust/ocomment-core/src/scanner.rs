@@ -1,6 +1,6 @@
 use crate::{
-    ByteSpan, Comment, CommentKind, Diagnostic, Dialect, Disposition, Language, Policy,
-    ScanOptions, ScanReport, Severity,
+    ByteSpan, Comment, CommentKind, Diagnostic, Dialect, Disposition, DispositionExplanation,
+    Language, Policy, ScanOptions, ScanReport, Severity,
 };
 use memchr::{memchr, memchr2, memchr3, memmem};
 use regex::bytes::RegexSet;
@@ -1687,21 +1687,33 @@ impl<'a> Scanner<'a> {
     }
 }
 
+/// The `keep_regex` and `remove_regex` sets of one [`ScanOptions`], compiled.
+///
+/// Compiling a regex set is far more expensive than matching against it, and
+/// every comment scanned under one set of options is matched against the very
+/// same two sets. A caller explaining a whole file compiles them once here and
+/// hands them to [`explain_disposition_with`] for each of its comments.
 #[derive(Clone)]
-pub(crate) struct DispositionPatterns {
+pub struct DispositionPatterns {
     keep: RegexSet,
     remove: RegexSet,
 }
 
 impl DispositionPatterns {
-    pub(crate) fn compile(options: &ScanOptions) -> Result<Self, regex::Error> {
+    /// The two sets `options` asks for, or the error the first pattern that
+    /// would not compile raised.
+    pub fn compile(options: &ScanOptions) -> Result<Self, regex::Error> {
         Ok(Self {
             keep: RegexSet::new(&options.keep_regex)?,
             remove: RegexSet::new(&options.remove_regex)?,
         })
     }
 
-    pub(crate) fn empty() -> Self {
+    /// Sets that match nothing: what a pattern list that will not compile falls
+    /// back to. The scanner reports such a list as a diagnostic and then scans
+    /// as though it were empty, so an explanation has to ignore it the same way
+    /// to stay in step with the verdict it is accounting for.
+    pub fn empty() -> Self {
         Self {
             keep: RegexSet::empty(),
             remove: RegexSet::empty(),
@@ -1753,6 +1765,101 @@ pub(crate) fn disposition(
     Disposition::Remove
 }
 
+/// The index and text of the first pattern in `set` that matches `raw`.
+///
+/// `set` was compiled from `sources` in order, so the index addresses both.
+fn first_match(set: &RegexSet, raw: &[u8], sources: &[String]) -> Option<(usize, String)> {
+    let index = set.matches(raw).iter().next()?;
+    let pattern = sources.get(index).cloned().unwrap_or_default();
+    Some((index, pattern))
+}
+
+/// Recover the directive name of an already-classified comment from its bytes,
+/// exactly as [`classify_comment`] found it.
+fn directive_name_of(raw: &[u8], language: Language) -> Option<&'static str> {
+    let lower = String::from_utf8_lossy(strip_comment_markers(raw)).to_ascii_lowercase();
+    directive_name(lower.trim(), language, raw)
+}
+
+/// Recover the legal marker of an already-classified comment from its bytes,
+/// exactly as [`classify_comment`] found it.
+fn legal_marker_of(raw: &[u8]) -> Option<&'static str> {
+    let lower = String::from_utf8_lossy(strip_comment_markers(raw)).to_ascii_lowercase();
+    legal_marker(lower.trim())
+}
+
+/// Name the rule that decides this comment's fate.
+///
+/// The branches below are the branches of `disposition()` in the same order,
+/// so `explain_disposition(..).action().is_remove()` always equals
+/// `disposition(..).is_remove()` for the same comment and options. An
+/// unparseable pattern list is ignored here as the scanner ignores it, which
+/// keeps the two in step even on input the scanner has already flagged.
+pub fn explain_disposition(
+    kind: CommentKind,
+    raw: &[u8],
+    language: Language,
+    options: &ScanOptions,
+) -> DispositionExplanation {
+    let patterns =
+        DispositionPatterns::compile(options).unwrap_or_else(|_| DispositionPatterns::empty());
+    explain_disposition_with(&patterns, kind, raw, language, options)
+}
+
+/// The same answer, against pattern sets the caller already compiled.
+///
+/// [`explain_disposition`] compiles `options.keep_regex` and
+/// `options.remove_regex` on every call, which is once per comment for a caller
+/// explaining a file. `patterns` must be [`DispositionPatterns::compile`] of the
+/// same `options` — or [`DispositionPatterns::empty`] where that compile failed,
+/// which is what the wrapper falls back to — and the two functions then return
+/// the identical explanation.
+pub fn explain_disposition_with(
+    patterns: &DispositionPatterns,
+    kind: CommentKind,
+    raw: &[u8],
+    language: Language,
+    options: &ScanOptions,
+) -> DispositionExplanation {
+    if options.keep_kinds.contains(&kind) {
+        return DispositionExplanation::KeptByKind(kind);
+    }
+    if let Some((index, pattern)) = first_match(&patterns.keep, raw, &options.keep_regex) {
+        return DispositionExplanation::KeptByRegex { index, pattern };
+    }
+    let hard = matches!(kind, CommentKind::Shebang | CommentKind::Encoding);
+    if hard && !options.force_protected {
+        return DispositionExplanation::ProtectedPreamble;
+    }
+    if options.remove_kinds.contains(&kind) {
+        return DispositionExplanation::RemovedByKind(kind);
+    }
+    if let Some((index, pattern)) = first_match(&patterns.remove, raw, &options.remove_regex) {
+        return DispositionExplanation::RemovedByRegex { index, pattern };
+    }
+    if options.policy == Policy::All {
+        return DispositionExplanation::RemovedByPolicy(options.policy);
+    }
+    if kind == CommentKind::HtmlComment {
+        return DispositionExplanation::KeptHtml;
+    }
+    if matches!(
+        kind,
+        CommentKind::Directive | CommentKind::OptimizerHint | CommentKind::VersionComment
+    ) {
+        return DispositionExplanation::KeptDirective {
+            kind,
+            name: directive_name_of(raw, language),
+        };
+    }
+    if kind == CommentKind::License && options.policy == Policy::Legal {
+        return DispositionExplanation::KeptLicense {
+            marker: legal_marker_of(raw),
+        };
+    }
+    DispositionExplanation::RemovedByDefault(options.policy)
+}
+
 fn java_text_block_end(source: &[u8], start: usize) -> (usize, bool) {
     let mut index = start.saturating_add(3);
     while index + 2 < source.len() {
@@ -1799,10 +1906,10 @@ fn classify_comment(
     if raw.starts_with(b"/*!") && language == Language::Sql {
         return CommentKind::VersionComment;
     }
-    if contains_legal_marker(trimmed) {
+    if legal_marker(trimmed).is_some() {
         return CommentKind::License;
     }
-    if is_directive(trimmed, language, raw) {
+    if directive_name(trimmed, language, raw).is_some() {
         return CommentKind::Directive;
     }
     lexical
@@ -1983,15 +2090,25 @@ fn strip_comment_markers(raw: &[u8]) -> &[u8] {
     &raw[start.min(end)..end]
 }
 
-fn contains_legal_marker(text: &str) -> bool {
-    text.contains("spdx-license-identifier")
-        || text.contains("copyright")
-        || text.contains("licensed under")
-        || text.contains("permission is hereby granted")
-        || text.contains("all rights reserved")
+/// The legal marker `text` carries, or `None` when it carries none. The marker
+/// is the phrase that matched, which is what an explanation has to quote to
+/// justify calling a comment a license.
+fn legal_marker(text: &str) -> Option<&'static str> {
+    [
+        "spdx-license-identifier",
+        "copyright",
+        "licensed under",
+        "permission is hereby granted",
+        "all rights reserved",
+    ]
+    .into_iter()
+    .find(|marker| text.contains(marker))
 }
 
-fn is_directive(text: &str, language: Language, raw: &[u8]) -> bool {
+/// The tool or language directive `text` opens, or `None` when it opens none.
+/// The name is the prefix that matched, so an explanation can point at the
+/// directive a reader recognises instead of at the whole comment.
+fn directive_name(text: &str, language: Language, raw: &[u8]) -> Option<&'static str> {
     let compact = text.trim_start_matches(['!', '/', '*', '#', '@', ' ']);
     let common = [
         "sourcemappingurl=",
@@ -2027,27 +2144,27 @@ fn is_directive(text: &str, language: Language, raw: &[u8]) -> bool {
         "region",
         "endregion",
     ];
-    if common.iter().any(|prefix| compact.starts_with(prefix)) {
-        return true;
+    if let Some(name) = common
+        .into_iter()
+        .find(|prefix| compact.starts_with(prefix))
+    {
+        return Some(name);
     }
     match language {
-        Language::Go => {
-            compact.starts_with("go:")
-                || compact.starts_with("+build")
-                || compact.starts_with("line ")
+        Language::Go => ["go:", "+build", "line "]
+            .into_iter()
+            .find(|prefix| compact.starts_with(prefix)),
+        Language::TypeScript => {
+            (raw.starts_with(b"///") && compact.starts_with('<')).then_some("///")
         }
-        Language::TypeScript => raw.starts_with(b"///") && compact.starts_with('<'),
-        Language::C | Language::Cpp => {
-            compact.starts_with("pragma") || compact.starts_with("line ")
-        }
-        Language::Python => {
-            compact.starts_with("pyright:")
-                || compact.starts_with("mypy:")
-                || compact.starts_with("ruff:")
-                || compact.starts_with("fmt:")
-        }
-        Language::Shell => compact.starts_with("shellcheck"),
-        _ => false,
+        Language::C | Language::Cpp => ["pragma", "line "]
+            .into_iter()
+            .find(|prefix| compact.starts_with(prefix)),
+        Language::Python => ["pyright:", "mypy:", "ruff:", "fmt:"]
+            .into_iter()
+            .find(|prefix| compact.starts_with(prefix)),
+        Language::Shell => compact.starts_with("shellcheck").then_some("shellcheck"),
+        _ => None,
     }
 }
 

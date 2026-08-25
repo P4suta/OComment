@@ -127,13 +127,31 @@ pub fn stdin_source(
     })
 }
 
+/// What a command with no PATH walks.
+///
+/// The project root is where the configuration was found, not what the caller
+/// is looking at: a command run from a subdirectory checks that subdirectory,
+/// the way every other file-walking developer tool does. Reaching back up to
+/// the root would put files the caller cannot see — and, with `fix`, files
+/// they did not mean to rewrite — into the run.
+pub const DEFAULT_TARGET: &str = ".";
+
 pub fn discover(
     paths: &[PathBuf],
     resolved: &ResolvedConfig,
     forced_language: Option<Language>,
     forced_dialect: Option<Dialect>,
 ) -> Result<Discovery> {
-    discover_with_scope(paths, resolved, forced_language, forced_dialect, true)
+    let implicit = [PathBuf::from(DEFAULT_TARGET)];
+    // The substituted target stands in for an argument nobody typed, so it is
+    // walked with the ordinary limits: only a path the caller actually named
+    // is a request to look past the hidden-file and size rules.
+    let (paths, explicit) = if paths.is_empty() {
+        (&implicit[..], false)
+    } else {
+        (paths, true)
+    };
+    discover_with_scope(paths, resolved, forced_language, forced_dialect, explicit)
 }
 
 /// Discover workspace roots with normal traversal limits. Unlike explicit CLI
@@ -152,6 +170,8 @@ fn discover_with_scope(
     let include = compile_globs(&resolved.config.files.include)?;
     let exclude = compile_globs(&resolved.config.files.exclude)?;
     let mut discovery = Discovery::default();
+    // Only an editor asking for its workspace arrives here without a target;
+    // `discover` gives a command line the current directory instead.
     let targets: Vec<_> = if paths.is_empty() {
         vec![(resolved.root.clone(), false)]
     } else {
@@ -240,6 +260,20 @@ fn discover_with_scope(
     Ok(discovery)
 }
 
+/// The name a walked file is reported under.
+///
+/// The implicit target is `.`, so a walk rooted there hands back every entry
+/// as `./name`. `ocomment` and `ocomment check name` report one file, and a
+/// reader — or a `git apply` reading the patch — is owed one spelling of it,
+/// so the prefix the walk root contributed is dropped. The target itself is
+/// left alone: `.` names a directory, and `` names nothing.
+fn reported_path(path: &Path) -> PathBuf {
+    match path.strip_prefix(DEFAULT_TARGET) {
+        Ok(stripped) if !stripped.as_os_str().is_empty() => stripped.to_path_buf(),
+        _ => path.to_path_buf(),
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn load_one(
     path: &Path,
@@ -252,8 +286,12 @@ fn load_one(
     exclude: &GlobSet,
     discovery: &mut Discovery,
 ) {
-    let relative = path.strip_prefix(&resolved.root).unwrap_or(path);
-    if (!include.is_empty() && !include.is_match(relative)) || exclude.is_match(relative) {
+    let path = &reported_path(path);
+    // The globs are written relative to the root; the path was typed — or
+    // walked — relative to the working directory, so it is measured against
+    // the root before either set is asked about it.
+    let relative = resolved.relative_to_root(path);
+    if (!include.is_empty() && !include.is_match(&relative)) || exclude.is_match(&relative) {
         return;
     }
     let link_metadata = match path.symlink_metadata() {

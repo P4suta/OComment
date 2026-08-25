@@ -445,6 +445,44 @@ mod tests {
             .prop_map(|fragments| fragments.concat())
     }
 
+    /// One end of an edit span, drawn with a heavy bias towards the two
+    /// document boundaries. The degenerate spans live there — an empty edit at
+    /// offset 0, an append at the end, a replacement that swallows the whole
+    /// document — and a uniform draw finds them only as often as it finds any
+    /// other single offset.
+    fn edit_endpoint() -> impl Strategy<Value = usize> {
+        prop_oneof![
+            1 => Just(0usize),
+            1 => Just(usize::MAX),
+            2 => any::<usize>(),
+        ]
+    }
+
+    /// Place a drawn endpoint in `source`. The document length is unknown when
+    /// the endpoint is drawn, so `usize::MAX` is the name of its end; every
+    /// other draw wraps into the document and keeps the interior offsets
+    /// spread evenly.
+    fn endpoint(source: &[u8], drawn: usize) -> usize {
+        if drawn == usize::MAX {
+            source.len()
+        } else {
+            drawn % (source.len() + 1)
+        }
+    }
+
+    /// The endpoint mapping has to reach both boundaries exactly, or the
+    /// biased draws below would still miss the degenerate spans they exist to
+    /// produce.
+    #[test]
+    fn an_edit_endpoint_reaches_both_document_boundaries() {
+        let source = b"// comment\n";
+        assert_eq!(endpoint(source, 0), 0);
+        assert_eq!(endpoint(source, usize::MAX), source.len());
+        assert_eq!(endpoint(source, source.len()), source.len());
+        assert_eq!(endpoint(b"", usize::MAX), 0);
+        assert!(endpoint(source, 12345) <= source.len());
+    }
+
     proptest! {
         // Unit-test proptests cannot persist regressions next to `src`, so the
         // shrunk counterexample is reported inline instead.
@@ -512,12 +550,11 @@ mod tests {
         fn arbitrary_edits_leave_every_builtin_document_equal_to_a_full_scan(
             source in lexical_source(0..48),
             replacement in lexical_source(0..8),
-            first in any::<usize>(),
-            second in any::<usize>(),
+            first in edit_endpoint(),
+            second in edit_endpoint(),
         ) {
-            let modulus = source.len() + 1;
-            let left = first % modulus;
-            let right = second % modulus;
+            let left = endpoint(&source, first);
+            let right = endpoint(&source, second);
             let span = ByteSpan::new(left.min(right), left.max(right));
             for language in Language::ALL {
                 let mut document = IncrementalDocument::new(

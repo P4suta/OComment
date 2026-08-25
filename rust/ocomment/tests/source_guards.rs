@@ -9,12 +9,13 @@ use std::{collections::BTreeSet, fs, path::PathBuf};
 /// Every source file of the crate, embedded at compile time so the scan does
 /// not depend on the directory the test runs in. `the_guard_reads_every_source`
 /// keeps this list equal to what is on disk.
-const SOURCES: [(&str, &str); 10] = [
+const SOURCES: [(&str, &str); 11] = [
     ("atomic.rs", include_str!("../src/atomic.rs")),
     ("cli.rs", include_str!("../src/cli.rs")),
     ("config.rs", include_str!("../src/config.rs")),
     ("files.rs", include_str!("../src/files.rs")),
     ("git.rs", include_str!("../src/git.rs")),
+    ("interactive.rs", include_str!("../src/interactive.rs")),
     ("lsp.rs", include_str!("../src/lsp.rs")),
     ("main.rs", include_str!("../src/main.rs")),
     ("output.rs", include_str!("../src/output.rs")),

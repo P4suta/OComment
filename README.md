@@ -21,13 +21,21 @@ recursively.
 ```sh
 cargo install ocomment --locked
 
-ocomment                 # check the current repository
+ocomment                 # check the current directory
 ocomment check src tests
 ocomment diff src
 ocomment fix --dry-run src
 ocomment fix src
 printf '%s\n' 'let x = 1; // remove' | ocomment strip --language rust
 ```
+
+A command that names no path checks the current directory, so running it from
+a subdirectory checks that subdirectory; a bare `ocomment` run from the
+repository root already checks the whole repository, under the ordinary walk
+limits — `cd "$(git rev-parse --show-toplevel)"` gets there from anywhere
+inside it. Naming a path explicitly (`ocomment .`, `ocomment src`) is a request
+rather than a default, so it bypasses the hidden-file and size limits, as
+[configuration](docs/configuration.md) describes.
 
 A human run previews each removable comment and closes with a summary:
 
@@ -45,6 +53,45 @@ code, while `diff` and `scan` still write the patch or listing they exist for;
 drops the previewed text. A `-` target reads standard input under the `<stdin>`
 pseudo-path, and `fix --dry-run` prints the patch `fix` would apply without
 writing a file.
+
+`fix -i` (`--interactive`) asks before each removal instead of applying them
+all. Every comment `fix` would take out is shown where it starts, with three
+lines of context either side and the line as the removal would leave it, above
+a prompt: `y` removes it, `n` keeps it, `a` and `d` answer for the rest of the
+file at once, `q` stops asking and applies what was accepted, `x` abandons the
+run without writing anything, and `?` lists them again. A comment taller than
+the window is shown as its first and last three lines with a marker for the
+rest, so the question stays in view. The accepted removals are written through
+the same rollback-backed transaction a plain `fix` uses.
+Because it is a conversation, it needs a terminal on both standard input and
+standard output and refuses `--staged`, `--dry-run`, `-q`, and every machine
+`--format`; `ocomment diff` is the way to review the same changes without one.
+
+### Why was this comment kept?
+
+`--explain` lists every comment a human `check` or `scan` met — the kept ones
+included — and puts the rule that decided each one, together with the setting
+behind that rule, on the line under it:
+
+```console
+$ ocomment check --explain
+gen/api.rs:1:1: kept block comment: /* generated */
+    kept: matched keep_regex #0 `(?i)generated` ([[overrides]] #0, paths = ["gen/**"])
+src/app.js:1:1: kept directive comment: // eslint-disable-next-line
+    kept: tool or language directive `eslint`; use --remove-kind directive or --policy all to remove it
+src/app.js:3:12: removable line comment: // TODO
+    removed: policy `safe` removes ordinary comments ([policy] in .ocomment.toml)
+```
+
+A setting is named where it was written: the `[policy]` table of a file, a
+`[languages.<name>]` table, the `[[overrides]]` entry whose globs matched the
+path, or the flag on the command line. A comment no setting decided is left
+with the flag that would overrule the built-in rule instead. `--explain`
+annotates a report of comments, so it belongs to the two commands that write
+one and to the one format with room for prose: asking for it with `--format
+json`, or any other machine format, or with `fix`, `diff`, or `strip`, is a
+usage error rather than a flag that quietly does nothing, and `-q` silences
+`check` altogether, explanations included.
 
 `check` exits 0 when clean, 1 when removable comments exist, and 2 for an
 invalid source, configuration, plugin, or I/O failure. `diff` and
@@ -70,6 +117,10 @@ layout = "lines"
 paths = ["generated/**"]
 policy = "all"
 ```
+
+`files.include`, `files.exclude`, and every `[[overrides]].paths` glob is
+relative to the project root — the directory holding `.ocomment.toml`, or the
+repository above it — however deep in the tree the command is run from.
 
 Run `ocomment init config` for the complete default file or `ocomment config
 schema` for its JSON Schema. See [configuration](docs/configuration.md),

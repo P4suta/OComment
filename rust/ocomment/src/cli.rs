@@ -1,8 +1,9 @@
 use crate::{
     atomic::{WritePlan, apply_transaction},
-    config, files, git, lsp,
+    config, files, git, interactive, lsp,
     output::{
-        self, Operation, OutputFormat, Presentation, ProcessedFile, RenderOptions, Verbosity,
+        self, Explanations, FileExplanation, Operation, OutputFormat, Presentation, ProcessedFile,
+        RenderOptions, Verbosity,
     },
     plugin,
     values::{CommentKindArg, DialectArg, LanguageArg, LayoutArg, PolicyArg},
@@ -40,7 +41,7 @@ FILES
 
 EXAMPLES
   ocomment
-      Check the current repository and report removable comments.
+      Check the current directory and report removable comments.
   ocomment fix --policy all --layout compact src
       Remove every comment under src and close the gaps it leaves.
   ocomment strip --language rust < before.rs > after.rs
@@ -78,7 +79,7 @@ User configuration, merged over the built\-in defaults.
 .SH EXAMPLES
 .TP
 .B ocomment
-Check the current repository and report removable comments.
+Check the current directory and report removable comments.
 .TP
 .B ocomment fix \-\-policy all \-\-layout compact src
 Remove every comment under src and close the gaps it leaves.
@@ -211,6 +212,9 @@ struct OutputArgs {
     /// Omit the one-line comment text from human `check` and `scan` lines.
     #[arg(long, global = true)]
     no_preview: bool,
+    /// List every comment human `check` and `scan` met and name the rule and setting behind each one.
+    #[arg(long, global = true)]
+    explain: bool,
     /// When to draw the live scanning counter on standard error.
     #[arg(long, global = true, value_enum, default_value_t, value_name = "WHEN")]
     progress: AutoChoice,
@@ -327,6 +331,13 @@ struct FixArgs {
     /// Print the patch `fix` would apply and write nothing.
     #[arg(long)]
     dry_run: bool,
+    /// Ask about each comment in turn and remove only the accepted ones.
+    ///
+    /// The index has no working-tree line to show a hunk from, `--dry-run`
+    /// writes nothing whatever the answers were, and `-q` asks for a run with
+    /// no commentary at all. None of the three can also be a conversation.
+    #[arg(short = 'i', long, conflicts_with_all = ["staged", "dry_run", "quiet"])]
+    interactive: bool,
 }
 
 impl FixArgs {
@@ -425,9 +436,52 @@ enum PluginCommand {
     },
 }
 
+/// The `fix` variants that change what a run does with what it found. Every
+/// other command runs with neither.
+#[derive(Clone, Copy, Default)]
+struct RunFlags {
+    /// The run produces the patch `fix` would apply and writes nothing.
+    dry_run: bool,
+    /// The run asks about each comment before removing it.
+    interactive: bool,
+}
+
+impl RunFlags {
+    const NONE: Self = Self {
+        dry_run: false,
+        interactive: false,
+    };
+    const DRY_RUN: Self = Self {
+        dry_run: true,
+        interactive: false,
+    };
+    const INTERACTIVE: Self = Self {
+        dry_run: false,
+        interactive: true,
+    };
+}
+
 pub fn run() -> Result<u8> {
     let cli = Cli::parse();
     let common = cli.common;
+    // The machine formats are schemas rather than prose, and none of them has
+    // a place to put an explanation; the JSON one is closed to extension by
+    // design. So the combination is refused instead of quietly doing nothing.
+    if common.output.explain && common.output.format != OutputFormat::Human {
+        bail!("--explain is only available with --format human");
+    }
+    // The flag annotates a report of comments, and only `check` and `scan`
+    // write one: `fix` reports the files it rewrote, `diff` writes a patch,
+    // and `strip` writes the stripped source. `--explain` is global, so the
+    // combination is refused rather than quietly doing nothing.
+    if common.output.explain
+        && matches!(
+            cli.command,
+            Some(Command::Fix(_) | Command::Diff(_) | Command::Strip)
+        )
+    {
+        bail!("--explain is only available with `check` and `scan`");
+    }
     match cli.command {
         None => run_target(
             Operation::Check,
@@ -436,17 +490,41 @@ pub fn run() -> Result<u8> {
                 ..Default::default()
             },
             &common,
-            false,
+            RunFlags::NONE,
         ),
-        Some(Command::Check(args)) => run_target(Operation::Check, args, &common, false),
+        Some(Command::Check(args)) => run_target(Operation::Check, args, &common, RunFlags::NONE),
         // `--dry-run` runs the diff and reports it in fix vocabulary: the two
         // commands must agree on the patch, so only the wording differs.
         Some(Command::Fix(args)) if args.dry_run => {
-            run_target(Operation::Diff, args.target(), &common, true)
+            run_target(Operation::Diff, args.target(), &common, RunFlags::DRY_RUN)
         }
-        Some(Command::Fix(args)) => run_target(Operation::Fix, args.target(), &common, false),
-        Some(Command::Diff(args)) => run_target(Operation::Diff, args, &common, false),
-        Some(Command::Scan(args)) => run_target(Operation::Scan, args, &common, false),
+        Some(Command::Fix(args)) if args.interactive => {
+            // The prompt is prose on a terminal and the answers come back the
+            // same way; a machine format has nowhere to put either, so the
+            // combination is refused rather than one of the two flags being
+            // quietly dropped. It is refused before the terminal is looked at,
+            // because the pair is wrong however the run was started.
+            if common.output.format != OutputFormat::Human {
+                bail!("--interactive is only available with --format human");
+            }
+            // Without somebody there to answer, the questions would be read out
+            // of whatever the pipe happened to carry and files would be
+            // rewritten from it. Nothing is scanned, let alone written.
+            if !io::stdin().is_terminal() || !io::stdout().is_terminal() {
+                bail!("--interactive needs a terminal; run without -i or use `ocomment diff`");
+            }
+            run_target(
+                Operation::Fix,
+                args.target(),
+                &common,
+                RunFlags::INTERACTIVE,
+            )
+        }
+        Some(Command::Fix(args)) => {
+            run_target(Operation::Fix, args.target(), &common, RunFlags::NONE)
+        }
+        Some(Command::Diff(args)) => run_target(Operation::Diff, args, &common, RunFlags::NONE),
+        Some(Command::Scan(args)) => run_target(Operation::Scan, args, &common, RunFlags::NONE),
         Some(Command::Strip) => run_strip(&common),
         Some(Command::Lsp) => lsp::run(common.config.as_deref()),
         Some(Command::Init(args)) => run_init(args),
@@ -463,10 +541,10 @@ fn run_target(
     operation: Operation,
     args: TargetArgs,
     common: &CommonArgs,
-    dry_run: bool,
+    flags: RunFlags,
 ) -> Result<u8> {
     let mut resolved = config::load(common.config.as_deref())?;
-    apply_cli_overrides(&mut resolved.config, common);
+    apply_cli_overrides(&mut resolved, common);
     let plugin_host = plugin::PluginHost::load(&resolved.root, &resolved.config.plugins)?;
     let presentation = presentation(common);
     let verbosity = common.verbosity();
@@ -477,11 +555,29 @@ fn run_target(
     }
     let progress = progress_enabled(common);
     let staged = args.git.staged || resolved.config.git.staged;
+    if operation == Operation::Fix && !staged && args.paths.is_empty() {
+        note_fix_scope(&resolved, common)?;
+    }
+    // `git` names a staged path relative to the repository root rather than to
+    // the working directory, so a staged run measures its paths against the
+    // root from there. Every other run measures them from where it was typed.
+    if staged && let Some(repository) = config::locate_repository(&resolved.cwd) {
+        resolved.cwd = repository;
+    }
     // `fix --dry-run` writes nothing, but it is still the command whose job is
     // to rewrite files in place, and standard input cannot be rewritten.
-    let rewrites = operation == Operation::Fix || dry_run;
+    let rewrites = operation == Operation::Fix || flags.dry_run;
     let (paths, stdin) = target_paths(&args.paths, rewrites, staged)?;
     if staged {
+        // A staged run reports index blobs through a path that carries no
+        // policy trace, so it says so rather than printing a listing with
+        // every explanation quietly missing.
+        if common.output.explain {
+            bail!(
+                "--explain is not available with --staged; explain the working tree with \
+                 `ocomment check --explain`"
+            );
+        }
         return git::run_staged(git::StagedRequest {
             operation,
             paths: &paths,
@@ -494,18 +590,28 @@ fn run_target(
             presentation,
             verbosity,
             preview: !common.output.no_preview,
-            dry_run,
+            dry_run: flags.dry_run,
         });
     }
     let discovery = read_targets(&paths, stdin, &resolved, common)?;
     let total = discovery.files.len();
     let counter = Progress::default();
+    let explain = common.output.explain;
     let processed = discovery
         .files
         .par_iter()
         .map(|file| {
-            let (mut language, mut options) =
-                resolved.for_path(&file.path, file.language, file.dialect);
+            // Only an explaining run pays for the trace; every other one takes
+            // the hot path it always took.
+            let (mut language, mut options, trace) = if explain {
+                let (language, options, trace) =
+                    resolved.for_path_traced(&file.path, file.language, file.dialect);
+                (language, options, Some(trace))
+            } else {
+                let (language, options) =
+                    resolved.for_path(&file.path, file.language, file.dialect);
+                (language, options, None)
+            };
             if let Some(value) = common.language() {
                 language = value;
             }
@@ -513,6 +619,13 @@ fn run_target(
                 config::validate_dialect(language, value)?;
                 options.scan.dialect = value;
             }
+            // Recorded as the scan is about to run with them, `--language` and
+            // `--dialect` included, so an explanation accounts for the run that
+            // actually happened.
+            let material = trace.map(|trace| FileExplanation {
+                options: options.scan.clone(),
+                trace,
+            });
             let result = if let Some(name) = &file.plugin {
                 let language_name = file
                     .path
@@ -530,23 +643,44 @@ fn run_target(
             if progress {
                 counter.report(total);
             }
-            Ok::<_, anyhow::Error>(ProcessedFile {
-                path: file.path.clone(),
-                source: file.source.clone(),
-                language,
-                result,
-            })
+            Ok::<_, anyhow::Error>((
+                ProcessedFile {
+                    path: file.path.clone(),
+                    source: file.source.clone(),
+                    language,
+                    result,
+                },
+                material,
+            ))
         })
         .collect::<Result<Vec<_>>>();
     if progress {
         counter.clear();
     }
-    let files = processed?;
+    // The explanations travel beside the files rather than inside them: a
+    // staged run reports the same `ProcessedFile` and has no trace to put in
+    // one, and the path is what the renderer looks each file up by anyway.
+    let processed = processed?;
+    let mut explanations = Explanations::new();
+    let mut files = Vec::with_capacity(processed.len());
+    for (file, material) in processed {
+        if let Some(material) = material {
+            explanations.insert(file.path.clone(), material);
+        }
+        files.push(file);
+    }
 
     let report_invalid = output::invalid(&files);
     let io_invalid = discovery.skipped.iter().any(|item| item.error);
     let invalid = report_invalid || io_invalid;
     let may_fix = !io_invalid && (!report_invalid || resolved.config.policy.force_invalid);
+    // An interactive run replaces the whole `fix` report: what it wrote is the
+    // answers it was given, and the ordinary summary counts what the run
+    // *could* have removed. A run the invalid-file gate has already stopped
+    // falls through instead, so that report says why nothing was written.
+    if flags.interactive && may_fix {
+        return run_interactive(&files, &discovery.skipped, invalid, presentation, verbosity);
+    }
     let applied = operation == Operation::Fix && may_fix;
     if applied {
         let plans = files
@@ -560,7 +694,7 @@ fn run_target(
             .collect();
         apply_transaction(plans)?;
     }
-    output::render(
+    output::render_explained(
         &files,
         &discovery.skipped,
         &RenderOptions {
@@ -569,12 +703,13 @@ fn run_target(
             presentation,
             verbosity,
             preview: !common.output.no_preview,
-            explain: false,
-            dry_run,
+            explain,
+            dry_run: flags.dry_run,
             force_invalid: resolved.config.policy.force_invalid,
             applied,
             policy: resolved.config.policy.mode,
         },
+        &explanations,
     )?;
     if invalid {
         return Ok(2);
@@ -583,6 +718,58 @@ fn run_target(
         Operation::Check | Operation::Diff if output::changed(&files) => Ok(1),
         _ => Ok(0),
     }
+}
+
+/// Ask about each comment this run would remove, write the accepted removals
+/// through the same transaction a plain `fix` uses, and report what the answers
+/// came to.
+///
+/// A clean abort is not a failure of the run: `x` is the answer for a fix that
+/// should never have started, and it exits 0 having touched nothing.
+fn run_interactive(
+    files: &[ProcessedFile],
+    skipped: &[files::SkippedFile],
+    invalid: bool,
+    presentation: Presentation,
+    verbosity: Verbosity,
+) -> Result<u8> {
+    let offered: usize = files.iter().map(|file| file.result.edits.len()).sum();
+    let selection = {
+        let stdin = io::stdin();
+        let mut answers = stdin.lock();
+        let mut questions = output::stdout();
+        let selection = interactive::select(files, &mut answers, &mut questions, &presentation)?;
+        // The conversation is on standard output and the verdict that follows
+        // is on standard error; a terminal sees both, so the buffer is emptied
+        // first to keep them in the order they were written.
+        output::finish(&mut questions)?;
+        selection
+    };
+    let outcome = output::InteractiveOutcome {
+        removed: selection.accepted,
+        reviewed: selection.accepted + selection.declined,
+        offered,
+        changed: selection.plans.len(),
+        scanned: files.len(),
+    };
+    let aborted = selection.aborted;
+    if !aborted {
+        apply_transaction(selection.plans)?;
+    }
+    let stderr = io::stderr();
+    let mut report = stderr.lock();
+    if aborted {
+        output::note(&mut report, "Aborted; nothing was written.")?;
+        return Ok(0);
+    }
+    // A skipped path can be the whole answer to a run that was never asked a
+    // question, so the one command that writes no report of its own still says
+    // why it passed a file over.
+    for line in output::skip_lines(skipped, presentation, verbosity) {
+        output::note(&mut report, &line)?;
+    }
+    output::note(&mut report, &output::interactive_summary(outcome))?;
+    if invalid { Ok(2) } else { Ok(0) }
 }
 
 /// How the PATH list names standard input.
@@ -665,7 +852,7 @@ fn run_strip(common: &CommonArgs) -> Result<u8> {
         .read_to_end(&mut source)
         .context("cannot read standard input")?;
     let mut resolved = config::load(common.config.as_deref())?;
-    apply_cli_overrides(&mut resolved.config, common);
+    apply_cli_overrides(&mut resolved, common);
     let detection = common
         .language()
         .map(|language| (language, common.dialect().unwrap_or(Dialect::Standard)))
@@ -704,21 +891,32 @@ fn run_strip(common: &CommonArgs) -> Result<u8> {
     Ok(if result.report.valid { 0 } else { 2 })
 }
 
-fn apply_cli_overrides(config: &mut config::Config, common: &CommonArgs) {
+/// Layer the command line over the merged configuration, noting what it
+/// overrode so `--explain` can name the flag rather than a file that never
+/// mentioned the setting.
+fn apply_cli_overrides(resolved: &mut config::ResolvedConfig, common: &CommonArgs) {
     let policy = &common.policy;
+    let config = &mut resolved.config;
+    let overrides = &mut resolved.cli_overrides;
     if let Some(value) = policy.policy {
         config.policy.mode = *value;
+        overrides.policy = true;
     }
     if let Some(value) = policy.layout {
         config.policy.layout = *value;
+        overrides.layout = true;
     }
     if !policy.keep_kind.is_empty() {
+        // The flag adds to the configured list rather than replacing it, so
+        // the boundary is what tells the two apart afterwards.
+        overrides.keep_kind_from = Some(config.policy.keep_kind.len());
         config
             .policy
             .keep_kind
             .extend(policy.keep_kind.iter().copied().map(CommentKind::from));
     }
     if !policy.remove_kind.is_empty() {
+        overrides.remove_kind_from = Some(config.policy.remove_kind.len());
         config
             .policy
             .remove_kind
@@ -976,7 +1174,7 @@ fn run_config(args: ConfigArgs, common: &CommonArgs) -> Result<u8> {
         }
         action => {
             let mut resolved = config::load(common.config.as_deref())?;
-            apply_cli_overrides(&mut resolved.config, common);
+            apply_cli_overrides(&mut resolved, common);
             match action {
                 ConfigAction::Show => {
                     resolved.config.version = Some(1);
@@ -1008,7 +1206,7 @@ fn run_config(args: ConfigArgs, common: &CommonArgs) -> Result<u8> {
                         stdout,
                         "precedence: built-in < XDG user < project < path override < CLI"
                     ))?;
-                    output::wrote(writeln!(stdout, "root: {}", resolved.root.display()))?;
+                    output::wrote(writeln!(stdout, "root: {}", root_row(&resolved)))?;
                     output::wrote(writeln!(
                         stdout,
                         "policy: {}; layout: {}",
@@ -1163,11 +1361,15 @@ fn run_doctor(common: &CommonArgs) -> Result<u8> {
     let mut stdout = output::stdout();
     output::wrote(writeln!(stdout, "ocomment {}", env!("CARGO_PKG_VERSION")))?;
     match std::env::current_dir() {
-        Ok(directory) => output::wrote(writeln!(stdout, "cwd: {}", directory.display()))?,
+        Ok(directory) => output::wrote(writeln!(
+            stdout,
+            "cwd: {}",
+            output::sanitize_path(&directory.to_string_lossy())
+        ))?,
         Err(error) => output::wrote(writeln!(stdout, "cwd: unavailable ({error})"))?,
     }
     let resolved = config::load(common.config.as_deref())?;
-    output::wrote(writeln!(stdout, "root: {}", resolved.root.display()))?;
+    output::wrote(writeln!(stdout, "root: {}", root_row(&resolved)))?;
     for source in config_trace(&resolved.trace) {
         output::wrote(writeln!(stdout, "config: {source}"))?;
     }
@@ -1285,22 +1487,65 @@ fn presentation(common: &CommonArgs) -> Presentation {
     }
 }
 
+/// The project root, as a report names it.
+///
+/// A directory name is chosen by whoever made the directory, not by OComment,
+/// so a row carrying one is untrusted text on its way to a terminal for the
+/// same reason a probed tool's version line is — and, unlike one, it must not
+/// be cut short: a path that ends in an ellipsis names no directory at all.
+fn root_row(resolved: &config::ResolvedConfig) -> String {
+    output::sanitize_path(&resolved.root.to_string_lossy())
+}
+
+/// What the run was pointed at, in the words the caller used, or the implicit
+/// target that stands in when they named nothing.
+fn target_label(paths: &[PathBuf]) -> String {
+    if paths.is_empty() {
+        return files::DEFAULT_TARGET.to_owned();
+    }
+    paths
+        .iter()
+        .map(|path| path.display().to_string())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Say where a bare `fix` is pointed when that is not where the project
+/// starts.
+///
+/// A reader who has only ever run `ocomment fix` from the top of a repository
+/// can read the bare command as "fix the project", and it is the one command
+/// that writes. So the run that was told nothing about where to write names
+/// both the target it chose and the root the configuration came from, once,
+/// before it starts. A caller who named a path has already said what they
+/// meant, and from the root itself the two are the same directory: either way
+/// the line would be noise.
+fn note_fix_scope(resolved: &config::ResolvedConfig, common: &CommonArgs) -> Result<()> {
+    if resolved.cwd == resolved.root
+        || common.output.format != OutputFormat::Human
+        || common.verbosity() == Verbosity::Quiet
+    {
+        return Ok(());
+    }
+    let stderr = io::stderr();
+    let mut report = stderr.lock();
+    output::note(
+        &mut report,
+        &format!(
+            "note: fixing files under {} (project root: {})",
+            files::DEFAULT_TARGET,
+            root_row(resolved)
+        ),
+    )
+}
+
 /// The `--verbose` header: where the run is rooted, what it was pointed at,
 /// and which configuration files it merged.
 fn trace_run(resolved: &config::ResolvedConfig, paths: &[PathBuf]) -> Result<()> {
     let stderr = io::stderr();
     let mut report = stderr.lock();
-    output::note(&mut report, &format!("root: {}", resolved.root.display()))?;
-    let target = if paths.is_empty() {
-        ".".to_owned()
-    } else {
-        paths
-            .iter()
-            .map(|path| path.display().to_string())
-            .collect::<Vec<_>>()
-            .join(" ")
-    };
-    output::note(&mut report, &format!("target: {target}"))?;
+    output::note(&mut report, &format!("root: {}", root_row(resolved)))?;
+    output::note(&mut report, &format!("target: {}", target_label(paths)))?;
     for source in config_trace(&resolved.trace) {
         output::note(&mut report, &format!("config: {source}"))?;
     }
@@ -1320,8 +1565,10 @@ fn config_trace(trace: &config::ConfigTrace) -> Vec<String> {
     ]
     .into_iter()
     .filter_map(|(label, path)| {
+        // The row carries a directory name OComment did not choose, so it is
+        // sanitised for the same reason a `root` row is.
         path.as_ref()
-            .map(|path| format!("{label} {}", path.display()))
+            .map(|path| format!("{label} {}", output::sanitize_path(&path.to_string_lossy())))
     })
     .collect();
     if sources.is_empty() {

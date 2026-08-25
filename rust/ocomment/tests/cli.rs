@@ -627,15 +627,158 @@ fn explicit_io_failure_returns_two_and_blocks_the_whole_fix() {
     assert!(String::from_utf8_lossy(&output.stdout).contains("path does not exist"));
 }
 
+/// A command that names no path checks the current directory, the way every
+/// other file-walking developer tool does. The repository root is still where
+/// the configuration is discovered and where the override globs are anchored,
+/// but it is no longer what a bare `ocomment` walks: run from a subdirectory,
+/// the command must not reach back up to files the caller cannot see.
 #[test]
-fn no_argument_scan_uses_repository_root_from_a_subdirectory() {
+fn no_argument_scan_uses_the_current_directory_not_the_repository_root() {
     let directory = repository();
     fs::write(directory.path().join("root.rs"), b"// root comment\n").unwrap();
     let nested = directory.path().join("nested/deeper");
     fs::create_dir_all(&nested).unwrap();
+    fs::write(nested.join("deep.rs"), b"// deep comment\n").unwrap();
+
     let output = run(&nested, &[]);
     assert_eq!(output.status.code(), Some(1));
-    assert!(String::from_utf8_lossy(&output.stdout).contains("root.rs"));
+    let report = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        !report.contains("root.rs"),
+        "the bare command reached above the current directory:\n{report}"
+    );
+    assert!(
+        report.contains("deep.rs:1:1: removable"),
+        "the bare command never checked the current directory:\n{report}"
+    );
+    // The implicit target is `.`, and a walk rooted there prefixes every entry
+    // with `./`. `ocomment` and `ocomment check deep.rs` report one file under
+    // one name, so that prefix is not part of it.
+    assert!(
+        !report.contains("./"),
+        "the implicit target leaked its `./` into the report:\n{report}"
+    );
+
+    // `-v` names both halves of the answer: the root the configuration came
+    // from, and the target that root no longer decides.
+    let traced = run(&nested, &["-v"]);
+    let trace = String::from_utf8(traced.stderr).unwrap();
+    let repository_name = directory.path().file_name().unwrap().to_str().unwrap();
+    assert!(
+        trace
+            .lines()
+            .any(|line| line.starts_with("root: ") && line.ends_with(repository_name)),
+        "the trace did not root the run at the repository:\n{trace}"
+    );
+    assert!(
+        trace.lines().any(|line| line == "target: ."),
+        "the trace did not name the implicit target:\n{trace}"
+    );
+}
+
+/// The root keeps the two jobs it did not lose: it is where `.ocomment.toml`
+/// is found, and it is what `files.include`, `files.exclude`, and every
+/// `[[overrides]].paths` glob is written relative to. A path named on the
+/// command line is relative to the working directory instead, so the two only
+/// line up once a path is resolved against the directory it was typed in —
+/// whichever of the three ways the file was named.
+#[test]
+fn project_config_and_overrides_apply_from_a_subdirectory() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        b"version = 1\n\n[files]\nexclude = [\"nested/skip/**\"]\n\n[[overrides]]\npaths = [\"nested/**\"]\npolicy = \"all\"\n",
+    )
+    .unwrap();
+    let nested = directory.path().join("nested");
+    fs::create_dir_all(nested.join("skip")).unwrap();
+    // A directive is kept under the default `safe` policy and removed under
+    // `all`, so the line it is reported on is the override speaking.
+    fs::write(nested.join("kept.rs"), b"let x = 1; // rustfmt::skip\n").unwrap();
+    fs::write(nested.join("skip/ignored.rs"), b"let y = 2; // remove\n").unwrap();
+
+    for arguments in [&[][..], &["check", "."][..], &["check", "kept.rs"][..]] {
+        let output = run(&nested, arguments);
+        let report = String::from_utf8(output.stdout).unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(1),
+            "`ocomment {}` did not apply the override:\n{report}",
+            arguments.join(" ")
+        );
+        assert!(
+            report.contains("kept.rs:1:12: removable directive comment"),
+            "`ocomment {}` did not apply the override:\n{report}",
+            arguments.join(" ")
+        );
+        assert!(
+            !report.contains("ignored.rs"),
+            "`ocomment {}` walked into the excluded directory:\n{report}",
+            arguments.join(" ")
+        );
+    }
+}
+
+/// `fix` is the command that writes, so the change of target matters most
+/// there: run from a subdirectory it rewrites that subdirectory, and the
+/// files above it are none of its business.
+#[test]
+fn fix_from_a_subdirectory_leaves_the_repository_root_alone() {
+    let directory = repository();
+    let untouched = directory.path().join("root.rs");
+    let original = b"let a = 1; // root comment\n";
+    fs::write(&untouched, original).unwrap();
+    let nested = directory.path().join("nested");
+    fs::create_dir(&nested).unwrap();
+    let rewritten = nested.join("deep.rs");
+    fs::write(&rewritten, b"let b = 2; // deep comment\n").unwrap();
+
+    let output = run(&nested, &["fix"]);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        fs::read(&untouched).unwrap(),
+        original,
+        "`fix` from a subdirectory rewrote the repository root"
+    );
+    assert_eq!(fs::read(&rewritten).unwrap(), b"let b = 2; \n");
+}
+
+/// A reader who has only ever run `ocomment fix` from the top of a repository
+/// can read the bare command as "fix the project", so the one run that writes
+/// says where it is pointed and where the project it belongs to starts. From
+/// the root the two are the same directory and the note would be noise.
+#[test]
+fn fix_from_a_subdirectory_notes_the_project_root() {
+    let directory = repository();
+    let nested = directory.path().join("nested");
+    fs::create_dir(&nested).unwrap();
+    fs::write(nested.join("deep.rs"), b"let b = 2; // deep comment\n").unwrap();
+
+    let output = run(&nested, &["fix"]);
+    assert_eq!(output.status.code(), Some(0));
+    let note = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        note.contains("note: fixing files under . (project root: "),
+        "`fix` never said what it was pointed at:\n{note}"
+    );
+    assert_eq!(
+        note.matches("note: fixing files under").count(),
+        1,
+        "the scope was noted more than once:\n{note}"
+    );
+
+    let from_root = run(directory.path(), &["fix"]);
+    assert_eq!(from_root.status.code(), Some(0));
+    let quiet = String::from_utf8(from_root.stderr).unwrap();
+    assert!(
+        !quiet.contains("note: fixing files under"),
+        "the note was printed where the target and the root agree:\n{quiet}"
+    );
 }
 
 #[test]
@@ -654,6 +797,99 @@ fn explicit_directory_bypasses_hidden_and_size_limits() {
     let output = run(directory.path(), &["check", "."]);
     assert_eq!(output.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&output.stdout).contains(".hidden.rs"));
+}
+
+/// The target a command with no PATH stands in for is not an explicitly named
+/// one: `.` substituted for a missing argument walks with the ordinary hidden
+/// and size limits, so a bare run reports what a run naming its files would.
+/// Naming the same directory is a request, and still bypasses both.
+#[test]
+fn an_implicit_target_keeps_the_hidden_and_size_limits() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        b"version = 1\n[files]\nmax_size = 1000\n",
+    )
+    .unwrap();
+    fs::create_dir(directory.path().join(".hidden")).unwrap();
+    fs::write(
+        directory.path().join(".hidden/b.rs"),
+        b"let b = 1; // hidden\n",
+    )
+    .unwrap();
+    fs::create_dir(directory.path().join("src")).unwrap();
+    fs::write(
+        directory.path().join("src/a.rs"),
+        b"let a = 1; // remove me\n",
+    )
+    .unwrap();
+    let mut big = String::from("// oversized\n");
+    while big.len() <= 100_000 {
+        big.push_str("let x = 1;\n");
+    }
+    fs::write(directory.path().join("src/big.rs"), big.as_bytes()).unwrap();
+
+    let bare = run(directory.path(), &[]);
+    let stdout = String::from_utf8_lossy(&bare.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&bare.stderr).into_owned();
+    assert_eq!(
+        bare.status.code(),
+        Some(1),
+        "bare run said:\n{stdout}{stderr}"
+    );
+    assert!(
+        stdout.contains("src/a.rs:1:12: removable line comment"),
+        "a bare run missed the one file it should report:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains(".hidden"),
+        "a bare run reached into a hidden directory:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("big.rs"),
+        "a bare run scanned a file over files.max_size:\n{stdout}"
+    );
+    assert!(
+        stderr.contains("Found 1 removable comment in 1 file (1 file scanned)."),
+        "a bare run counted more than the one file it may walk:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("1 file skipped (too large: 1"),
+        "a bare run did not fold the oversized file into its skips:\n{stderr}"
+    );
+}
+
+/// `.git` is hidden, so nothing a bare run does may look inside it — and `fix`
+/// least of all: the sample hooks git writes into a fresh repository are full
+/// of comments, and rewriting them is not what "fix my project" asked for.
+#[test]
+fn a_bare_run_never_reaches_into_the_git_directory() {
+    let directory = tempfile::tempdir().unwrap();
+    git(directory.path(), &["init"]);
+    fs::write(directory.path().join(".ocomment.toml"), b"version = 1\n").unwrap();
+    let hook = directory.path().join(".git/hooks/x.sample");
+    fs::write(&hook, b"let x = 1; // sample hook comment\n").unwrap();
+    let before = fs::read(&hook).unwrap();
+    fs::write(directory.path().join("a.rs"), b"let a = 1; // remove me\n").unwrap();
+
+    let check = run(directory.path(), &[]);
+    let listing = String::from_utf8_lossy(&check.stdout).into_owned();
+    assert!(
+        !listing.contains(".git"),
+        "a bare check listed something under .git:\n{listing}"
+    );
+
+    let fixed = run(directory.path(), &["fix"]);
+    let report = String::from_utf8_lossy(&fixed.stdout).into_owned();
+    assert!(
+        !report.contains(".git"),
+        "a bare fix reported something under .git:\n{report}"
+    );
+    assert_eq!(
+        fs::read(&hook).unwrap(),
+        before,
+        "a bare fix rewrote a file under .git"
+    );
 }
 
 #[cfg(unix)]
@@ -2935,6 +3171,63 @@ fn doctor_reports_the_environment_it_resolved() {
     );
 }
 
+/// A directory name is chosen by whoever made the directory, not by OComment,
+/// so the two rows that print one are untrusted input on their way to a
+/// terminal exactly like a probed tool's version line. They are sanitised the
+/// same way and cut nowhere: a path is the answer the reader came for, and one
+/// ending in an ellipsis names no directory at all.
+#[cfg(unix)]
+#[test]
+fn doctor_sanitises_the_directories_it_reports_without_cutting_them_short() {
+    // Long enough that a preview-width cap would have to cut it, and carrying
+    // the escape that would let a directory name repaint the report.
+    let name = format!("ocomment\u{1b}{}", "a".repeat(90));
+    let directory = tempfile::Builder::new()
+        .prefix(&name)
+        .tempdir()
+        .expect("a directory name may carry an escape on this platform");
+    // A project file of its own makes this directory the root as well, so both
+    // rows name it and both are pinned by one run.
+    fs::write(directory.path().join(".ocomment.toml"), b"version = 1\n").unwrap();
+    let empty = tempfile::tempdir().unwrap();
+    let output = Command::new(binary())
+        .current_dir(directory.path())
+        .env("PATH", "/usr/bin:/bin")
+        .env("XDG_CONFIG_HOME", empty.path())
+        .arg("doctor")
+        .output()
+        .unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        !output.stdout.contains(&0x1b),
+        "an escape byte reached the report: {:?}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    let report = String::from_utf8(output.stdout).unwrap();
+    let sanitised = name.replace('\u{1b}', "\u{fffd}");
+    for row in ["cwd", "root"] {
+        let prefix = format!("{row}: ");
+        let named = report
+            .lines()
+            .find(|line| line.starts_with(&prefix))
+            .unwrap_or_else(|| panic!("doctor printed no `{row}` row:\n{report}"));
+        assert!(
+            named.contains(&sanitised),
+            "the `{row}` row lost the directory it names:\n{report}"
+        );
+        // A version line may be cut to the preview width; a path may not.
+        assert!(
+            !named.contains('\u{2026}'),
+            "the `{row}` row was cut to the preview width:\n{report}"
+        );
+    }
+}
+
 /// The scaffold refuses to write into a directory that already exists, and a
 /// refusal that only says "refusing" leaves the reader to guess. There are two
 /// ways out — take the directory away, or take the plugin that owns it away —
@@ -3169,4 +3462,385 @@ fn the_checked_in_completions_are_the_ones_the_binary_generates() {
              `python3 tools/release_extras.py --binary rust/target/debug/ocomment`"
         );
     }
+}
+
+/// `--explain` answers "why was this comment kept?": it lists every comment,
+/// kept ones included, and names both the rule that decided each one and the
+/// table that rule was written in. A plain `check` still reports only what it
+/// would remove.
+#[test]
+fn check_explain_names_the_override_and_the_pattern_that_kept_a_comment() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        b"version = 1\n\n[policy]\nkeep_regex = [\"(?i)^// api\"]\n\n\
+          [[overrides]]\npaths = [\"gen/**\"]\nkeep_regex = [\"(?i)generated\"]\n",
+    )
+    .unwrap();
+    fs::create_dir(directory.path().join("gen")).unwrap();
+    fs::write(
+        directory.path().join("gen/b.rs"),
+        b"/* generated */\nlet x = 1; // TODO\n",
+    )
+    .unwrap();
+    fs::write(directory.path().join("a.rs"), b"// API stays\n").unwrap();
+
+    let plain = run(directory.path(), &["check"]);
+    assert_eq!(plain.status.code(), Some(1));
+    let plain = String::from_utf8(plain.stdout).unwrap();
+    assert!(
+        !plain.contains("kept"),
+        "a plain `check` listed a kept comment:\n{plain}"
+    );
+
+    let output = run(directory.path(), &["check", "--explain"]);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report = String::from_utf8(output.stdout).unwrap();
+    for needle in [
+        "gen/b.rs:1:1: kept block comment: /* generated */",
+        "kept: matched keep_regex #1 `(?i)generated` ([[overrides]] #0, paths = [\"gen/**\"])",
+        "gen/b.rs:2:12: removable line comment: // TODO",
+        // Nothing set `[policy] mode`, so the reader is told it is a default
+        // rather than sent to a file that never mentions it. The pattern the
+        // same file does set is named with the file, spelled the way the reader
+        // typed their way into the directory.
+        "removed: policy `safe` removes ordinary comments (built-in defaults)",
+        "a.rs:1:1: kept line comment: // API stays",
+        "kept: matched keep_regex #0 `(?i)^// api` ([policy] in .ocomment.toml)",
+    ] {
+        assert!(
+            report.contains(needle),
+            "`check --explain` lacks {needle:?}:\n{report}"
+        );
+    }
+}
+
+/// A comment no setting decided is explained by the flag that would change its
+/// fate, because there is no table to send the reader to.
+#[test]
+fn check_explain_says_what_would_remove_a_preamble_or_a_directive() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join("script.py"),
+        b"#!/usr/bin/env python3\n# note\n",
+    )
+    .unwrap();
+    fs::write(
+        directory.path().join("app.js"),
+        b"// eslint-disable-next-line\nlet x = 1;\n",
+    )
+    .unwrap();
+
+    let output = run(directory.path(), &["check", "--explain"]);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report = String::from_utf8(output.stdout).unwrap();
+    for needle in [
+        "script.py:1:1: kept shebang comment: #!/usr/bin/env python3",
+        "required source preamble",
+        "add --force-protected to remove it",
+        "app.js:1:1: kept directive comment: // eslint-disable-next-line",
+        "kept: tool or language directive `eslint`; use --remove-kind directive \
+         or --policy all to remove it",
+    ] {
+        assert!(
+            report.contains(needle),
+            "`check --explain` lacks {needle:?}:\n{report}"
+        );
+    }
+}
+
+/// A setting the command line supplied is named as the command line, not as
+/// the file it would otherwise have been written in.
+#[test]
+fn explain_names_the_command_line_when_a_flag_set_the_policy() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join("notice.rs"),
+        b"// Copyright 2026 Example\nlet x = 1; // TODO\n",
+    )
+    .unwrap();
+
+    let output = run(
+        directory.path(),
+        &["check", "--explain", "--policy", "legal"],
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report = String::from_utf8(output.stdout).unwrap();
+    for needle in [
+        "notice.rs:1:1: kept license comment: // Copyright 2026 Example",
+        "kept: policy legal protects license comments, and this one says `copyright` \
+         (--policy on the command line)",
+        "removed: policy `legal` removes ordinary comments (--policy on the command line)",
+    ] {
+        assert!(
+            report.contains(needle),
+            "`check --explain --policy legal` lacks {needle:?}:\n{report}"
+        );
+    }
+}
+
+/// The machine formats are schemas, not prose, and none of them has a place to
+/// put an explanation. Asking for one is a usage error rather than a flag that
+/// quietly does nothing.
+#[test]
+fn explain_is_refused_by_every_machine_format() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(directory.path().join("a.rs"), b"let x = 1; // TODO\n").unwrap();
+    for format in ["json", "jsonl", "sarif", "github"] {
+        let output = run(
+            directory.path(),
+            &["check", "--explain", "--format", format],
+        );
+        assert_eq!(
+            output.status.code(),
+            Some(2),
+            "`--format {format} --explain` was accepted"
+        );
+        let error = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            error.contains("--explain is only available with --format human"),
+            "`--format {format} --explain` said:\n{error}"
+        );
+        assert!(
+            output.stdout.is_empty(),
+            "`--format {format} --explain` wrote a report anyway"
+        );
+    }
+}
+
+/// `--explain` annotates a report of comments, and only `check` and `scan`
+/// write one: `fix` reports the files it rewrote, `diff` writes a patch, and
+/// `strip` writes the stripped source. The flag is global, so asking for it
+/// there is a usage error rather than a flag that quietly does nothing.
+#[test]
+fn explain_is_refused_by_the_commands_that_write_no_report() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(directory.path().join("a.rs"), b"let x = 1; // TODO\n").unwrap();
+    let refused: [&[&str]; 4] = [
+        &["fix", "--explain", "--dry-run"],
+        &["fix", "--explain"],
+        &["diff", "--explain"],
+        &["strip", "--explain", "--language", "rust"],
+    ];
+    for arguments in refused {
+        let output = run_stdin(directory.path(), arguments, b"let x = 1; // TODO\n");
+        assert_eq!(
+            output.status.code(),
+            Some(2),
+            "`ocomment {}` was accepted",
+            arguments.join(" ")
+        );
+        let error = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            error.contains("--explain is only available with `check` and `scan`"),
+            "`ocomment {}` said:\n{error}",
+            arguments.join(" ")
+        );
+        assert!(
+            output.stdout.is_empty(),
+            "`ocomment {}` wrote a report anyway",
+            arguments.join(" ")
+        );
+    }
+    assert_eq!(
+        fs::read(directory.path().join("a.rs")).unwrap(),
+        b"let x = 1; // TODO\n",
+        "a refused run rewrote the file anyway"
+    );
+    // The two commands the flag is for still take it.
+    for command in ["check", "scan"] {
+        let output = run(directory.path(), &[command, "--explain"]);
+        assert!(
+            output.status.code() != Some(2),
+            "`ocomment {command} --explain` was refused:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            String::from_utf8_lossy(&output.stdout).contains("a.rs"),
+            "`ocomment {command} --explain` wrote no report"
+        );
+    }
+}
+
+/// `scan` already lists every comment; `--explain` puts the reason under each
+/// of its lines without disturbing the listing itself.
+#[test]
+fn scan_explain_annotates_every_listed_comment() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join("a.py"),
+        b"#!/usr/bin/env python3\nx = 1  # remove\n",
+    )
+    .unwrap();
+    let output = run(directory.path(), &["scan", "a.py", "--explain"]);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(
+        lines.first().copied(),
+        Some("a.py:1:1: shebang keep (required source preamble) 0..22: #!/usr/bin/env python3"),
+        "`scan --explain` changed the listing:\n{stdout}"
+    );
+    assert!(
+        lines
+            .get(1)
+            .is_some_and(|line| line.starts_with("    kept: required source preamble")),
+        "`scan --explain` did not explain the shebang:\n{stdout}"
+    );
+    assert_eq!(
+        lines.get(2).copied(),
+        Some("a.py:2:8: line remove 30..38: # remove"),
+        "`scan --explain` changed the listing:\n{stdout}"
+    );
+    assert!(
+        lines.get(3).is_some_and(
+            |line| line.starts_with("    removed: policy `safe` removes ordinary comments")
+        ),
+        "`scan --explain` did not explain the removal:\n{stdout}"
+    );
+    assert_no_debug_leak("human scan --explain output", &stdout);
+}
+
+/// A staged run reads index blobs through a path that carries no policy trace,
+/// so it says so rather than printing a listing with every explanation missing.
+#[test]
+fn explain_is_refused_by_a_staged_run() {
+    let directory = repository();
+    fs::write(directory.path().join("a.rs"), b"let x = 1; // TODO\n").unwrap();
+    git(directory.path(), &["add", "a.rs"]);
+    let output = run(directory.path(), &["check", "--staged", "--explain"]);
+    assert_eq!(output.status.code(), Some(2));
+    let error = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        error.contains("--explain is not available with --staged"),
+        "`check --staged --explain` said:\n{error}"
+    );
+}
+
+/// `fix -i` asks a question per comment, so it needs somebody there to answer
+/// it. A piped or redirected run would otherwise read the prompt's answer out
+/// of whatever the pipe carried — a script's own data — and start writing
+/// files from it. The refusal names both ways out and touches nothing.
+#[test]
+fn fix_interactive_without_a_terminal_refuses_and_writes_nothing() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("sample.rs");
+    let before = b"let x = 1; // remove\n";
+    fs::write(&path, before).unwrap();
+
+    let output = run_stdin(directory.path(), &["fix", "-i", "sample.rs"], b"y\n");
+    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(fs::read(&path).unwrap(), before);
+    assert_eq!(String::from_utf8(output.stdout).unwrap(), "");
+    assert_eq!(
+        String::from_utf8(output.stderr).unwrap(),
+        "ocomment: --interactive needs a terminal; run without -i or use `ocomment diff`\n"
+    );
+}
+
+/// The long spelling refuses the same way, so a script that uses it is not
+/// told something different from one that uses `-i`.
+#[test]
+fn fix_interactive_long_spelling_refuses_without_a_terminal() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join("sample.rs"),
+        b"let x = 1; // remove\n",
+    )
+    .unwrap();
+    let output = run(directory.path(), &["fix", "--interactive", "sample.rs"]);
+    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(
+        String::from_utf8(output.stderr).unwrap(),
+        "ocomment: --interactive needs a terminal; run without -i or use `ocomment diff`\n"
+    );
+}
+
+/// A machine format has no prompt to put a question on and no place to put the
+/// answer, so the combination is refused rather than quietly ignoring one of
+/// the two flags. It is refused before the terminal is looked at, because the
+/// flag combination is wrong however the run was started.
+#[test]
+fn fix_interactive_refuses_a_machine_format() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("sample.rs");
+    let before = b"let x = 1; // remove\n";
+    fs::write(&path, before).unwrap();
+
+    let output = run(
+        directory.path(),
+        &["fix", "-i", "--format", "json", "sample.rs"],
+    );
+    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(fs::read(&path).unwrap(), before);
+    assert_eq!(
+        String::from_utf8(output.stderr).unwrap(),
+        "ocomment: --interactive is only available with --format human\n"
+    );
+}
+
+/// Each of these describes a run that cannot also be interactive: the index
+/// carries no working-tree file to show a hunk from, `--dry-run` writes
+/// nothing whatever the answers were, and `-q` asks for a run with no
+/// commentary at all. Clap refuses the pair at parse time, before any file is
+/// read.
+#[test]
+fn fix_interactive_conflicts_with_the_flags_that_contradict_it() {
+    let directory = repository();
+    let path = directory.path().join("sample.rs");
+    let before = b"let x = 1; // remove\n";
+    fs::write(&path, before).unwrap();
+    git(directory.path(), &["add", "sample.rs"]);
+
+    for conflicting in ["--staged", "--dry-run", "--quiet", "-q"] {
+        let output = run(directory.path(), &["fix", "-i", conflicting]);
+        assert_eq!(
+            output.status.code(),
+            Some(2),
+            "`fix -i {conflicting}` was accepted"
+        );
+        let error = String::from_utf8(output.stderr).unwrap();
+        assert!(
+            error.contains("cannot be used with"),
+            "`fix -i {conflicting}` did not report a conflict:\n{error}"
+        );
+        assert_eq!(
+            fs::read(&path).unwrap(),
+            before,
+            "`fix -i {conflicting}` reached the file"
+        );
+    }
+}
+
+/// The flag is discoverable where the reader looks for it.
+#[test]
+fn help_documents_the_interactive_fix() {
+    let directory = tempfile::tempdir().unwrap();
+    let fixed = run(directory.path(), &["fix", "--help"]);
+    assert_eq!(fixed.status.code(), Some(0));
+    let help = String::from_utf8(fixed.stdout).unwrap();
+    assert!(
+        help.contains("-i, --interactive"),
+        "`fix --help` does not document --interactive:\n{help}"
+    );
 }

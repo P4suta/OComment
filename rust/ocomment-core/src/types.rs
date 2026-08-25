@@ -375,6 +375,136 @@ impl fmt::Display for Disposition {
     }
 }
 
+/// A [`DispositionExplanation`] with the reasoning taken away: the
+/// keep-or-remove verdict on its own.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum Action {
+    Keep,
+    Remove,
+}
+
+impl Action {
+    /// The canonical name, matching the `action` tag [`Disposition`]
+    /// serialises.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Keep => "keep",
+            Self::Remove => "remove",
+        }
+    }
+
+    pub const fn is_remove(self) -> bool {
+        matches!(self, Self::Remove)
+    }
+}
+
+impl fmt::Display for Action {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Which rule decided one comment's fate.
+///
+/// A [`Disposition`] says what happens and gives a short reason a machine
+/// cannot take apart; an explanation names the branch, so a caller can quote
+/// the pattern, kind or directive that actually applied. The variants are
+/// listed in the order the rules are tested, and the first rule that applies is
+/// the variant returned — `keep` overrides always win, and the policy default
+/// is the last word.
+///
+/// Regex indices are zero-based positions in [`ScanOptions::keep_regex`] and
+/// [`ScanOptions::remove_regex`], and `pattern` is that entry verbatim.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum DispositionExplanation {
+    /// The kind is listed in [`ScanOptions::keep_kinds`].
+    KeptByKind(CommentKind),
+    /// A [`ScanOptions::keep_regex`] entry matched the whole comment token.
+    KeptByRegex { index: usize, pattern: String },
+    /// A shebang or encoding declaration the source needs to keep working;
+    /// only [`ScanOptions::force_protected`] gives it up.
+    ProtectedPreamble,
+    /// An HTML comment, which the DOM exposes to scripts.
+    KeptHtml,
+    /// A directive addressed to a tool or to the compiler.
+    KeptDirective {
+        kind: CommentKind,
+        name: Option<&'static str>,
+    },
+    /// A license or copyright notice under [`Policy::Legal`].
+    KeptLicense { marker: Option<&'static str> },
+    /// The kind is listed in [`ScanOptions::remove_kinds`].
+    RemovedByKind(CommentKind),
+    /// A [`ScanOptions::remove_regex`] entry matched the whole comment token.
+    RemovedByRegex { index: usize, pattern: String },
+    /// The policy removes every comment it is offered.
+    RemovedByPolicy(Policy),
+    /// Nothing protected an ordinary comment, so the policy default removed it.
+    RemovedByDefault(Policy),
+}
+
+impl DispositionExplanation {
+    /// The verdict alone. Equal to the [`Disposition`] the scanner records for
+    /// the same comment under the same options.
+    pub const fn action(&self) -> Action {
+        match self {
+            Self::KeptByKind(_)
+            | Self::KeptByRegex { .. }
+            | Self::ProtectedPreamble
+            | Self::KeptHtml
+            | Self::KeptDirective { .. }
+            | Self::KeptLicense { .. } => Action::Keep,
+            Self::RemovedByKind(_)
+            | Self::RemovedByRegex { .. }
+            | Self::RemovedByPolicy(_)
+            | Self::RemovedByDefault(_) => Action::Remove,
+        }
+    }
+}
+
+impl fmt::Display for DispositionExplanation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::KeptByKind(kind) => {
+                write!(f, "kept: comment kind `{kind}` is listed in keep_kinds")
+            }
+            Self::KeptByRegex { index, pattern } => {
+                write!(f, "kept: matched keep_regex #{index} `{pattern}`")
+            }
+            Self::ProtectedPreamble => {
+                f.write_str("kept: required source preamble, removable only with force_protected")
+            }
+            Self::KeptHtml => f.write_str("kept: HTML comments are DOM-observable"),
+            Self::KeptDirective { kind, name } => match name {
+                Some(name) => write!(f, "kept: tool or language directive `{name}`"),
+                None => write!(f, "kept: `{kind}` is a tool or language directive"),
+            },
+            Self::KeptLicense { marker } => match marker {
+                Some(marker) => write!(
+                    f,
+                    "kept: policy legal protects license comments, and this one says `{marker}`"
+                ),
+                None => f.write_str("kept: policy legal protects license comments"),
+            },
+            Self::RemovedByKind(kind) => {
+                write!(
+                    f,
+                    "removed: comment kind `{kind}` is listed in remove_kinds"
+                )
+            }
+            Self::RemovedByRegex { index, pattern } => {
+                write!(f, "removed: matched remove_regex #{index} `{pattern}`")
+            }
+            Self::RemovedByPolicy(policy) => {
+                write!(f, "removed: policy `{policy}` removes every comment")
+            }
+            Self::RemovedByDefault(policy) => {
+                write!(f, "removed: policy `{policy}` removes ordinary comments")
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Comment {
     pub span: ByteSpan,

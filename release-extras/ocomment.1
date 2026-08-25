@@ -4,7 +4,7 @@
 .SH NAME
 ocomment \- Check and remove source\-code comments safely
 .SH SYNOPSIS
-\fBocomment\fR [\fB\-\-config\fR] [\fB\-\-policy\fR] [\fB\-\-layout\fR] [\fB\-\-language\fR] [\fB\-\-dialect\fR] [\fB\-\-keep\-kind\fR] [\fB\-\-remove\-kind\fR] [\fB\-\-force\-invalid\fR] [\fB\-\-force\-protected\fR] [\fB\-\-format\fR] [\fB\-\-color\fR] [\fB\-\-hyperlinks\fR] [\fB\-\-no\-preview\fR] [\fB\-\-progress\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIPATH\fR] [\fIsubcommands\fR]
+\fBocomment\fR [\fB\-\-config\fR] [\fB\-\-policy\fR] [\fB\-\-layout\fR] [\fB\-\-language\fR] [\fB\-\-dialect\fR] [\fB\-\-keep\-kind\fR] [\fB\-\-remove\-kind\fR] [\fB\-\-force\-invalid\fR] [\fB\-\-force\-protected\fR] [\fB\-\-format\fR] [\fB\-\-color\fR] [\fB\-\-hyperlinks\fR] [\fB\-\-no\-preview\fR] [\fB\-\-explain\fR] [\fB\-\-progress\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIPATH\fR] [\fIsubcommands\fR]
 .SH DESCRIPTION
 OComment scans source bytes without requiring UTF\-8 and reports or removes comment tokens. The default policy protects source preambles and tool or language directives. Rewrites are prepared and committed as one rollback\-backed transaction.
 .SH OPTIONS
@@ -253,6 +253,9 @@ never
 \fB\-\-no\-preview\fR
 Omit the one\-line comment text from human `check` and `scan` lines
 .TP
+\fB\-\-explain\fR
+List every comment human `check` and `scan` met and name the rule and setting behind each one
+.TP
 \fB\-\-progress\fR \fI<WHEN>\fR [default: auto]
 When to draw the live scanning counter on standard error
 .br
@@ -337,6 +340,11 @@ With `\-\-staged`, do not attempt a uniquely mappable working\-tree update
 .TP
 \fB\-\-dry\-run\fR
 Print the patch `fix` would apply and write nothing
+.TP
+\fB\-i\fR, \fB\-\-interactive\fR
+Ask about each comment in turn and remove only the accepted ones.
+
+The index has no working\-tree line to show a hunk from, `\-\-dry\-run` writes nothing whatever the answers were, and `\-q` asks for a run with no commentary at all. None of the three can also be a conversation.
 .TP
 [\fIPATH\fR]
 Files or directories to rewrite (default: current directory)
@@ -478,7 +486,7 @@ User configuration, merged over the built\-in defaults.
 .SH EXAMPLES
 .TP
 .B ocomment
-Check the current repository and report removable comments.
+Check the current directory and report removable comments.
 .TP
 .B ocomment fix \-\-policy all \-\-layout compact src
 Remove every comment under src and close the gaps it leaves.
