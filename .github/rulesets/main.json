@@ -35,7 +35,10 @@
           {"context": "reference"},
           {"context": "host-smoke (ubuntu-latest)"},
           {"context": "host-smoke (macos-15)"},
-          {"context": "host-smoke (windows-2025)"}
+          {"context": "host-smoke (windows-2025)"},
+          {"context": "Analyze (actions)"},
+          {"context": "Analyze (python)"},
+          {"context": "Analyze (rust)"}
         ],
         "strict_required_status_checks_policy": true
       }

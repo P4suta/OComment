@@ -1,6 +1,7 @@
 # OComment
 
 [![CI](https://github.com/P4suta/OComment/actions/workflows/ci.yml/badge.svg)](https://github.com/P4suta/OComment/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/P4suta/OComment/actions/workflows/codeql.yml/badge.svg)](https://github.com/P4suta/OComment/actions/workflows/codeql.yml)
 [![MSRV 1.88](https://img.shields.io/badge/MSRV-1.88-93450a.svg)](rust/Cargo.toml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
