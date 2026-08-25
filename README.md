@@ -1,5 +1,9 @@
 # OComment
 
+[![CI](https://github.com/P4suta/OComment/actions/workflows/ci.yml/badge.svg)](https://github.com/P4suta/OComment/actions/workflows/ci.yml)
+[![MSRV 1.88](https://img.shields.io/badge/MSRV-1.88-93450a.svg)](rust/Cargo.toml)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
+
 OComment is a fast, byte-preserving comment checker and remover. The production
 tool is the Rust `ocomment` binary and the public `ocomment-core` library.
 `ocomment-ref` is an independent OCaml implementation used to check the scanner,
@@ -102,5 +106,16 @@ python3 tools/check_embedded_specs.py
 ```
 
 The release process and performance gates are documented in
-[docs/releasing.md](docs/releasing.md). OComment is dual-licensed under MIT or
-Apache-2.0.
+[docs/releasing.md](docs/releasing.md).
+
+## Contributing and support
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Use
+[Discussions](https://github.com/P4suta/OComment/discussions) for support and
+design questions, and follow [SECURITY.md](SECURITY.md) for private vulnerability
+reports.
+
+## License
+
+OComment is available under either the [MIT license](LICENSE-MIT) or the
+[Apache License 2.0](LICENSE-APACHE), at your option.

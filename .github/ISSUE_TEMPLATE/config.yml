@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and support
+    url: https://github.com/P4suta/OComment/discussions
+    about: Ask configuration, usage, and design questions in Discussions.
+  - name: Private security report
+    url: https://github.com/P4suta/OComment/security/advisories/new
+    about: Report suspected vulnerabilities privately, never in a public issue.

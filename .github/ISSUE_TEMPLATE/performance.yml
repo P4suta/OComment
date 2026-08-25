@@ -1,0 +1,42 @@
+name: Performance report
+description: Report a reproducible throughput, latency, memory, or binary-size regression.
+title: "[Performance]: "
+labels: ["performance", "needs reproduction"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Compared versions or commits
+    validations:
+      required: true
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Hardware and environment
+      description: Include CPU, memory, OS, filesystem, compiler, build profile, and thread count.
+    validations:
+      required: true
+  - type: textarea
+    id: workload
+    attributes:
+      label: Reproduction and workload
+      description: Include commands, warmup, sample count, input size and language, and whether files are cached.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: results
+    attributes:
+      label: Results
+      description: Provide raw measurements and summary statistics, not only percentages.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: The benchmark input can be shared or independently reproduced.
+          required: true
+        - label: I compared equivalent release builds and configurations.
+          required: true
