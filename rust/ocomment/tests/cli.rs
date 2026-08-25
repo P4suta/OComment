@@ -1,7 +1,8 @@
 use std::{
     fs,
+    io::{Read, Write},
     path::Path,
-    process::{Command, Output},
+    process::{Command, ExitStatus, Output, Stdio},
 };
 use tempfile::TempDir;
 
@@ -16,6 +17,26 @@ fn run(directory: &Path, arguments: &[&str]) -> Output {
         .args(arguments)
         .output()
         .unwrap()
+}
+
+/// Run the binary with `input` piped to its standard input.
+fn run_stdin(directory: &Path, arguments: &[&str], input: &[u8]) -> Output {
+    let mut child = Command::new(binary())
+        .current_dir(directory)
+        .env("PATH", "/usr/bin:/bin")
+        .args(arguments)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .expect("standard input was piped")
+        .write_all(input)
+        .unwrap();
+    child.wait_with_output().unwrap()
 }
 
 fn git(directory: &Path, arguments: &[&str]) -> Vec<u8> {
@@ -937,8 +958,8 @@ fn check_writes_its_summary_to_standard_error() {
     );
     assert_eq!(
         stderr,
-        "Found 1 removable comment in 1 file(s) (1 files scanned). \
-         Run `ocomment fix` to remove them.\n"
+        "Found 1 removable comment in 1 file (1 file scanned). \
+         Run `ocomment fix` to remove it.\n"
     );
 }
 
@@ -950,7 +971,7 @@ fn a_clean_check_summarizes_the_files_it_scanned() {
     assert_eq!(output.status.code(), Some(0));
     assert_eq!(
         String::from_utf8(output.stderr).unwrap(),
-        "No removable comments in 1 file(s).\n"
+        "No removable comments in 1 file.\n"
     );
     assert_eq!(String::from_utf8(output.stdout).unwrap(), "");
 }
@@ -974,8 +995,8 @@ fn diff_keeps_the_patch_on_stdout_and_summarizes_on_stderr() {
     );
     assert_eq!(
         String::from_utf8(output.stderr).unwrap(),
-        "Found 1 removable comment in 1 file(s) (1 files scanned). \
-         Run `ocomment fix` to apply.\n"
+        "Found 1 removable comment in 1 file (1 file scanned). \
+         Run `ocomment fix` to apply the patch.\n"
     );
 }
 
@@ -1000,7 +1021,7 @@ fn fix_reports_every_changed_file_and_summarizes_on_stderr() {
     );
     assert_eq!(
         String::from_utf8(output.stderr).unwrap(),
-        "Removed 1 comment in 1 file(s) (1 files scanned).\n"
+        "Removed 1 comment in 1 file (1 file scanned).\n"
     );
 }
 
@@ -1013,7 +1034,7 @@ fn a_clean_fix_says_there_was_nothing_to_do() {
     assert_eq!(String::from_utf8(output.stdout).unwrap(), "");
     assert_eq!(
         String::from_utf8(output.stderr).unwrap(),
-        "Nothing to fix in 1 file(s).\n"
+        "Nothing to fix in 1 file.\n"
     );
 }
 
@@ -1029,7 +1050,7 @@ fn scan_summarizes_the_comment_counts() {
     assert_eq!(output.status.code(), Some(0));
     assert_eq!(
         String::from_utf8(output.stderr).unwrap(),
-        "Scanned 1 file(s): 2 comments (1 removable, 1 kept).\n"
+        "Scanned 1 file: 2 comments (1 removable, 1 kept).\n"
     );
 }
 
@@ -1100,7 +1121,7 @@ fn directory_walks_fold_skipped_files_into_the_summary() {
         "a walked skip was listed individually:\n{stdout}"
     );
     assert!(
-        stderr.contains("1 file(s) skipped (unknown language: 1; use -v to list)."),
+        stderr.contains("1 file skipped (unknown language: 1; use -v to list)."),
         "summary is:\n{stderr}"
     );
 }
@@ -1147,7 +1168,15 @@ fn machine_formats_never_emit_the_summary() {
     for format in ["json", "jsonl", "sarif", "github"] {
         let output = run(
             directory.path(),
-            &["check", "sample.rs", "--format", format],
+            &[
+                "check",
+                "sample.rs",
+                "-v",
+                "--progress",
+                "always",
+                "--format",
+                format,
+            ],
         );
         assert_eq!(
             String::from_utf8(output.stderr).unwrap(),
@@ -1176,7 +1205,7 @@ fn a_blocked_fix_does_not_claim_removals() {
         "fix claimed a write that was blocked:\n{stdout}"
     );
     assert!(
-        stderr.contains("1 file(s) have invalid syntax; nothing was written for them (use --force-invalid to apply known-safe edits)."),
+        stderr.contains("1 file has invalid syntax; nothing was written for it (use --force-invalid to apply known-safe edits)."),
         "summary is:\n{stderr}"
     );
     assert!(
@@ -1198,13 +1227,13 @@ fn staged_runs_also_emit_the_summary() {
     assert_eq!(output.status.code(), Some(1));
     assert_eq!(
         String::from_utf8(output.stderr).unwrap(),
-        "Found 1 removable comment in 1 file(s) (1 files scanned). \
-         Run `ocomment fix` to remove them.\n"
+        "Found 1 removable comment in 1 file (1 file scanned). \
+         Run `ocomment fix` to remove it.\n"
     );
 }
 
 #[test]
-fn help_lists_the_verbosity_flags_and_retires_the_progress_indicator() {
+fn help_lists_the_verbosity_and_progress_flags() {
     let directory = tempfile::tempdir().unwrap();
     let output = run(directory.path(), &["check", "--help"]);
     assert_eq!(output.status.code(), Some(0));
@@ -1221,24 +1250,63 @@ fn help_lists_the_verbosity_flags_and_retires_the_progress_indicator() {
     );
 }
 
-/// `--progress` stays accepted, but the summary replaced the line it drew.
-#[test]
-fn the_progress_flag_no_longer_prints_a_progress_line() {
+/// Fill a directory with `count` one-comment Rust files.
+fn many_files(count: usize) -> TempDir {
     let directory = tempfile::tempdir().unwrap();
-    fs::write(
-        directory.path().join("sample.rs"),
-        b"let x = 1; // remove\n",
-    )
-    .unwrap();
-    let output = run(
-        directory.path(),
-        &["check", "--progress", "always", "sample.rs"],
-    );
+    for index in 0..count {
+        fs::write(
+            directory.path().join(format!("file{index:03}.rs")),
+            b"let x = 1; // remove\n",
+        )
+        .unwrap();
+    }
+    directory
+}
+
+/// `--progress always` draws a live counter on standard error and still leaves
+/// the end-of-run summary readable once the counter line is cleared.
+#[test]
+fn progress_always_draws_a_live_counter_and_keeps_the_summary() {
+    let directory = many_files(120);
+    let output = run(directory.path(), &["check", "--progress", "always", "."]);
     assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        stderr.contains("ocomment: scanning 120/120 files"),
+        "progress counter is missing from:\n{stderr:?}"
+    );
+    assert!(
+        stderr.contains("\r\x1b[2K"),
+        "the counter line was never cleared:\n{stderr:?}"
+    );
+    assert!(
+        stderr.ends_with(
+            "Found 120 removable comments in 120 files (120 files scanned). \
+             Run `ocomment fix` to remove them.\n"
+        ),
+        "summary is missing from:\n{stderr:?}"
+    );
+}
+
+#[test]
+fn progress_never_draws_nothing_and_quiet_wins_over_progress() {
+    let directory = many_files(120);
+    let output = run(directory.path(), &["check", "--progress", "never", "."]);
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        !stderr.contains("scanning"),
+        "`--progress never` still drew a counter:\n{stderr:?}"
+    );
+    let quiet = run(
+        directory.path(),
+        &["check", "-q", "--progress", "always", "."],
+    );
+    assert_eq!(quiet.status.code(), Some(1));
     assert_eq!(
-        String::from_utf8(output.stderr).unwrap(),
-        "Found 1 removable comment in 1 file(s) (1 files scanned). \
-         Run `ocomment fix` to remove them.\n"
+        String::from_utf8(quiet.stderr).unwrap(),
+        "",
+        "`-q` did not silence the progress counter"
     );
 }
 
@@ -1352,5 +1420,745 @@ fn help_documents_the_preview_switch() {
     assert!(
         help.contains("--no-preview"),
         "`check --help` lacks --no-preview:\n{help}"
+    );
+}
+
+/// `clap_mangen` dumps `after_long_help` as one opaque `.SH EXTRA` blob; the
+/// manual must carry the same content as real roff sections instead.
+#[test]
+fn man_page_renders_real_sections_instead_of_one_extra_blob() {
+    let directory = tempfile::tempdir().unwrap();
+    let output = run(directory.path(), &["man"]);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let page = String::from_utf8(output.stdout).unwrap();
+    for needle in [
+        ".SH EXIT STATUS",
+        ".SH FILES",
+        ".SH EXAMPLES",
+        ".SH SEE ALSO",
+    ] {
+        assert!(page.contains(needle), "man page lacks {needle}:\n{page}");
+    }
+    assert!(
+        !page.contains(".SH EXTRA"),
+        "the help blob is still dumped verbatim:\n{page}"
+    );
+}
+
+/// A bidirectional override can make a comment render as its own reverse; the
+/// preview must neutralize the whole format-control class, not only C0.
+#[test]
+fn a_previewed_comment_cannot_reorder_the_line_with_bidi_controls() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join("bidi.rs"),
+        "let x = 1; // \u{202e}drowssap\u{202c} end\n".as_bytes(),
+    )
+    .unwrap();
+    let output = run(directory.path(), &["check", "bidi.rs"]);
+    assert_eq!(output.status.code(), Some(1));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        !stdout.contains('\u{202e}'),
+        "a bidi override reached the terminal:\n{stdout:?}"
+    );
+    assert_eq!(
+        stdout,
+        "bidi.rs:1:12: removable line comment: // \u{fffd}drowssap\u{fffd} end\n"
+    );
+}
+
+/// An explicitly named skip already has its own line on standard output, so
+/// the folded clause must not count it a second time.
+#[test]
+fn a_named_skip_is_not_counted_twice_in_the_summary() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join("sample.rs"),
+        b"let x = 1; // remove\n",
+    )
+    .unwrap();
+    fs::write(directory.path().join("notes.md"), b"# notes\n").unwrap();
+    let output = run(directory.path(), &["check", "sample.rs", "notes.md"]);
+    assert_eq!(output.status.code(), Some(1));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        stdout.contains("notes.md: skipped: unknown language"),
+        "check output is:\n{stdout}"
+    );
+    assert_eq!(
+        stderr,
+        "Found 1 removable comment in 1 file (1 file scanned). \
+         Run `ocomment fix` to remove it.\n"
+    );
+}
+
+/// Scanning nothing at all is not "no removable comments in 0 files": say what
+/// actually happened to the files that were passed over.
+#[test]
+fn a_run_that_scans_nothing_reports_the_skips_instead() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(directory.path().join("notes.md"), b"# notes\n").unwrap();
+    let output = run(directory.path(), &["check", "."]);
+    assert_eq!(output.status.code(), Some(0));
+    assert_eq!(
+        String::from_utf8(output.stderr).unwrap(),
+        "Nothing to check: 1 file skipped (unknown language: 1; use -v to list).\n"
+    );
+}
+
+/// Every noun in the summary is pluralized; `file(s)` never reaches a user.
+#[test]
+fn the_summary_pluralizes_every_noun() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join("a.rs"),
+        b"let x = 1; // one\nlet y = 2; // two\n",
+    )
+    .unwrap();
+    fs::write(directory.path().join("b.rs"), b"let z = 3; // three\n").unwrap();
+    let output = run(directory.path(), &["check", "a.rs", "b.rs"]);
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert_eq!(
+        stderr,
+        "Found 3 removable comments in 2 files (2 files scanned). \
+         Run `ocomment fix` to remove them.\n"
+    );
+    assert!(!stderr.contains("(s)"), "summary is:\n{stderr}");
+}
+
+/// An unreadable path is an I/O error, and the summary must own up to it.
+#[cfg(unix)]
+#[test]
+fn the_summary_counts_io_errors() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join("sample.rs"),
+        b"let x = 1; // remove\n",
+    )
+    .unwrap();
+    let output = run(directory.path(), &["check", "sample.rs", "missing.rs"]);
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        stderr.contains("1 I/O error."),
+        "the summary hides the I/O error:\n{stderr}"
+    );
+}
+
+/// `-q` silences the chatter, never the product: a patch is the whole point of
+/// `diff`, so it survives.
+#[test]
+fn quiet_diff_still_writes_the_patch() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join("sample.rs"),
+        b"let x = 1; // remove\n",
+    )
+    .unwrap();
+    let output = run(directory.path(), &["diff", "-q", "sample.rs"]);
+    assert_eq!(output.status.code(), Some(1));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.starts_with("--- a/sample.rs"), "diff is:\n{stdout}");
+    assert!(
+        stdout.contains("-let x = 1; // remove"),
+        "diff is:\n{stdout}"
+    );
+    assert_eq!(String::from_utf8(output.stderr).unwrap(), "");
+}
+
+/// The same rule for `scan`: the listing is the product.
+#[test]
+fn quiet_scan_still_writes_the_listing() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join("a.py"),
+        b"#!/usr/bin/env python3\nx = 1  # remove\n",
+    )
+    .unwrap();
+    let output = run(directory.path(), &["scan", "-q", "a.py"]);
+    assert_eq!(output.status.code(), Some(0));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(stdout.lines().count(), 2, "scan output is:\n{stdout}");
+    assert!(
+        stdout.contains("a.py:2:8: line remove "),
+        "scan output is:\n{stdout}"
+    );
+    assert_eq!(String::from_utf8(output.stderr).unwrap(), "");
+}
+
+/// Nothing was scanned and the only skip was named on the command line, where
+/// it already has its own line: the summary says so without repeating it.
+#[test]
+fn a_run_of_only_named_skips_does_not_repeat_them() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(directory.path().join("notes.md"), b"# notes\n").unwrap();
+    let output = run(directory.path(), &["check", "notes.md"]);
+    assert_eq!(output.status.code(), Some(0));
+    assert!(
+        String::from_utf8(output.stdout)
+            .unwrap()
+            .contains("notes.md: skipped: unknown language")
+    );
+    assert_eq!(
+        String::from_utf8(output.stderr).unwrap(),
+        "Nothing to check.\n"
+    );
+}
+
+/// `-` in the PATH list is standard input: it is scanned like any other file
+/// and reported under the pseudo path `<stdin>`.
+#[test]
+fn a_dash_reads_standard_input_as_a_file() {
+    let directory = tempfile::tempdir().unwrap();
+    let output = run_stdin(
+        directory.path(),
+        &["check", "--language", "rust", "-"],
+        b"let x = 1; // note\n",
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        "<stdin>:1:12: removable line comment: // note\n"
+    );
+}
+
+/// The patch for standard input names the same pseudo path.
+#[test]
+fn a_dash_diffs_standard_input_under_the_pseudo_path() {
+    let directory = tempfile::tempdir().unwrap();
+    let output = run_stdin(
+        directory.path(),
+        &["diff", "--language", "rust", "-"],
+        b"let x = 1; // note\n",
+    );
+    assert_eq!(output.status.code(), Some(1));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.starts_with("--- a/<stdin>\n"), "diff is:\n{stdout}");
+    assert!(stdout.contains("-let x = 1; // note"), "diff is:\n{stdout}");
+}
+
+/// The machine formats carry the pseudo path too, so a piped run is as
+/// scriptable as a walked one.
+#[test]
+fn a_dash_names_standard_input_in_json() {
+    let directory = tempfile::tempdir().unwrap();
+    let output = run_stdin(
+        directory.path(),
+        &["check", "--format", "json", "--language", "rust", "-"],
+        b"let x = 1; // note\n",
+    );
+    assert_eq!(output.status.code(), Some(1));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("\"path\": \"<stdin>\""),
+        "json is:\n{stdout}"
+    );
+}
+
+/// Standard input has no name to detect a language from, so bytes that carry
+/// no signature are a usage error with an actionable message.
+#[test]
+fn undetectable_standard_input_asks_for_a_language() {
+    let directory = tempfile::tempdir().unwrap();
+    let output = run_stdin(directory.path(), &["check", "-"], b"let x = 1; // note\n");
+    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(
+        String::from_utf8(output.stderr).unwrap(),
+        "ocomment: cannot detect the language of standard input; \
+         pass --language <LANGUAGE> (see `ocomment languages`)\n"
+    );
+}
+
+/// `strip` and `check -` read the same standard input, so they must fail with
+/// the same words when they cannot tell what it is.
+#[test]
+fn strip_and_check_agree_on_the_undetectable_input_message() {
+    let directory = tempfile::tempdir().unwrap();
+    let stripped = run_stdin(directory.path(), &["strip"], b"let x = 1; // note\n");
+    let checked = run_stdin(directory.path(), &["check", "-"], b"let x = 1; // note\n");
+    assert_eq!(stripped.status.code(), Some(2));
+    assert_eq!(checked.status.code(), Some(2));
+    assert_eq!(
+        String::from_utf8(stripped.stderr).unwrap(),
+        String::from_utf8(checked.stderr).unwrap()
+    );
+}
+
+/// A pipe cannot be rewritten in place; `fix` says so and names the command
+/// that does write a stripped stream.
+#[test]
+fn fix_refuses_standard_input() {
+    let directory = tempfile::tempdir().unwrap();
+    let output = run_stdin(
+        directory.path(),
+        &["fix", "--language", "rust", "-"],
+        b"let x = 1; // note\n",
+    );
+    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(
+        String::from_utf8(output.stderr).unwrap(),
+        "ocomment: cannot rewrite standard input in place; use `ocomment strip`\n"
+    );
+}
+
+/// There is only one standard input, so naming it twice is a usage error
+/// rather than a silently deduplicated target.
+#[test]
+fn standard_input_may_be_named_only_once() {
+    let directory = tempfile::tempdir().unwrap();
+    let output = run_stdin(
+        directory.path(),
+        &["check", "--language", "rust", "-", "-"],
+        b"let x = 1; // note\n",
+    );
+    assert_eq!(output.status.code(), Some(2));
+    assert!(
+        String::from_utf8(output.stderr)
+            .unwrap()
+            .contains("cannot read standard input twice"),
+        "the second `-` was accepted"
+    );
+}
+
+/// `--staged` reads the Git index; a pipe cannot be one of its entries.
+#[test]
+fn standard_input_conflicts_with_staged() {
+    let directory = repository();
+    let output = run_stdin(
+        directory.path(),
+        &["check", "--staged", "--language", "rust", "-"],
+        b"let x = 1; // note\n",
+    );
+    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(
+        String::from_utf8(output.stderr).unwrap(),
+        "ocomment: cannot read standard input with --staged; the index is the source\n"
+    );
+}
+
+/// `fix --dry-run` is `diff` with fix vocabulary: the patch goes to standard
+/// output, the file keeps every byte, and the exit code still reports a
+/// pending change.
+#[test]
+fn fix_dry_run_writes_a_patch_and_leaves_the_file_alone() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("sample.rs");
+    let before = b"let x = 1; // remove\n";
+    fs::write(&path, before).unwrap();
+
+    let output = run(directory.path(), &["fix", "--dry-run", "sample.rs"]);
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(fs::read(&path).unwrap(), before);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.starts_with("--- a/sample.rs\n"),
+        "diff is:\n{stdout}"
+    );
+    assert_eq!(
+        String::from_utf8(output.stderr).unwrap(),
+        "Would remove 1 comment in 1 file. Rerun without --dry-run to apply.\n"
+    );
+}
+
+/// With nothing to take out, the preview says what a real `fix` would say.
+#[test]
+fn fix_dry_run_on_a_clean_file_reports_nothing_to_fix() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("clean.rs");
+    fs::write(&path, b"let x = 1;\n").unwrap();
+
+    let output = run(directory.path(), &["fix", "--dry-run", "clean.rs"]);
+    assert_eq!(output.status.code(), Some(0));
+    assert_eq!(String::from_utf8(output.stdout).unwrap(), "");
+    assert_eq!(
+        String::from_utf8(output.stderr).unwrap(),
+        "Nothing to fix in 1 file.\n"
+    );
+}
+
+/// Both new entry points are discoverable from `--help`.
+#[test]
+fn help_documents_standard_input_and_the_dry_run() {
+    let directory = tempfile::tempdir().unwrap();
+    let checked = run(directory.path(), &["check", "--help"]);
+    assert_eq!(checked.status.code(), Some(0));
+    let help = String::from_utf8(checked.stdout).unwrap();
+    assert!(
+        help.contains("`-` reads standard input"),
+        "`check --help` does not document `-`:\n{help}"
+    );
+    let fixed = run(directory.path(), &["fix", "--help"]);
+    assert_eq!(fixed.status.code(), Some(0));
+    let help = String::from_utf8(fixed.stdout).unwrap();
+    assert!(
+        help.contains("--dry-run"),
+        "`fix --help` does not document --dry-run:\n{help}"
+    );
+}
+
+/// Standard input is one target among others, not a mode: a piped file and a
+/// named one are reported by the same run.
+#[test]
+fn a_dash_can_be_mixed_with_named_paths() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(directory.path().join("sample.rs"), b"let y = 2; // named\n").unwrap();
+    let output = run_stdin(
+        directory.path(),
+        &["check", "--language", "rust", "sample.rs", "-"],
+        b"let x = 1; // piped\n",
+    );
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        "<stdin>:1:12: removable line comment: // piped\n\
+         sample.rs:1:12: removable line comment: // named\n"
+    );
+}
+
+/// The default command takes the same PATH list, so `-` works without naming
+/// `check` at all.
+#[test]
+fn the_default_command_also_reads_a_dash() {
+    let directory = tempfile::tempdir().unwrap();
+    let output = run_stdin(
+        directory.path(),
+        &["--language", "rust", "-"],
+        b"let x = 1; // note\n",
+    );
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        "<stdin>:1:12: removable line comment: // note\n"
+    );
+}
+
+/// `--dry-run` previews the staged run too: the patch is the one `--staged`
+/// would apply, and the index keeps every byte.
+#[test]
+fn fix_dry_run_previews_the_staged_patch_without_writing_the_index() {
+    let directory = repository();
+    fs::write(
+        directory.path().join("sample.rs"),
+        b"let x = 1; // remove\n",
+    )
+    .unwrap();
+    git(directory.path(), &["add", "sample.rs"]);
+    let output = run(directory.path(), &["fix", "--dry-run", "--staged"]);
+    assert_eq!(output.status.code(), Some(1));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.starts_with("--- a/sample.rs\n"),
+        "diff is:\n{stdout}"
+    );
+    assert_eq!(
+        String::from_utf8(output.stderr).unwrap(),
+        "Would remove 1 comment in 1 file. Rerun without --dry-run to apply.\n"
+    );
+    assert_eq!(
+        git(directory.path(), &["show", ":sample.rs"]),
+        b"let x = 1; // remove\n"
+    );
+}
+
+/// A tree whose report is far larger than any pipe buffer, so a reader that
+/// stops early is guaranteed to close the pipe while the run is still writing.
+fn wide_tree(files: usize, comments: usize) -> TempDir {
+    let directory = tempfile::tempdir().unwrap();
+    let mut source = String::new();
+    for index in 0..comments {
+        source.push_str(&format!("let value{index} = {index}; // remove {index}\n"));
+    }
+    for index in 0..files {
+        fs::write(directory.path().join(format!("file{index}.rs")), &source).unwrap();
+    }
+    directory
+}
+
+/// Run the binary, take `head` bytes of its output, then close the pipe and
+/// report how the run ended and what it said on standard error.
+fn run_closed_pipe(directory: &Path, arguments: &[&str], head: usize) -> (ExitStatus, String) {
+    let mut child = Command::new(binary())
+        .current_dir(directory)
+        .env("PATH", "/usr/bin:/bin")
+        .args(arguments)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut output = child.stdout.take().expect("standard output was piped");
+    let mut taken = vec![0u8; head];
+    if head > 0 {
+        output.read_exact(&mut taken).unwrap();
+    }
+    // The reader has what it wanted; from here every write the run attempts
+    // fails with EPIPE.
+    drop(output);
+    let mut message = String::new();
+    child
+        .stderr
+        .take()
+        .expect("standard error was piped")
+        .read_to_string(&mut message)
+        .unwrap();
+    (child.wait().unwrap(), message)
+}
+
+/// `ocomment check --format json . | head` is a reader that stops early, not a
+/// failure: the run ends quietly with status 0 and says nothing.
+#[test]
+fn a_closed_pipe_ends_the_json_report_quietly() {
+    let directory = wide_tree(100, 50);
+    let (status, stderr) =
+        run_closed_pipe(directory.path(), &["check", "--format", "json", "."], 10);
+    assert!(
+        status.success(),
+        "expected a quiet exit, got {status:?} with stderr:\n{stderr}"
+    );
+    assert_eq!(stderr, "");
+}
+
+/// The human report is written the same way, so it ends the same way.
+#[test]
+fn a_closed_pipe_ends_the_human_report_quietly() {
+    let directory = wide_tree(100, 50);
+    let (status, stderr) = run_closed_pipe(directory.path(), &["check", "."], 10);
+    assert!(
+        status.success(),
+        "expected a quiet exit, got {status:?} with stderr:\n{stderr}"
+    );
+    assert_eq!(stderr, "");
+}
+
+/// So are the machine formats that serialize straight into standard output.
+#[test]
+fn a_closed_pipe_ends_the_sarif_report_quietly() {
+    let directory = wide_tree(100, 50);
+    let (status, stderr) =
+        run_closed_pipe(directory.path(), &["check", "--format", "sarif", "."], 10);
+    assert!(
+        status.success(),
+        "expected a quiet exit, got {status:?} with stderr:\n{stderr}"
+    );
+    assert_eq!(stderr, "");
+}
+
+/// A short report can lose its reader before it writes its first byte. The
+/// listing commands must survive that too.
+#[test]
+fn a_pipe_closed_before_the_first_byte_ends_languages_quietly() {
+    let directory = tempfile::tempdir().unwrap();
+    let (status, stderr) = run_closed_pipe(directory.path(), &["languages"], 0);
+    assert!(
+        status.success(),
+        "expected a quiet exit, got {status:?} with stderr:\n{stderr}"
+    );
+    assert_eq!(stderr, "");
+}
+
+/// `clap_complete` writes straight into the handle it is handed and panics if
+/// that write fails, so the completion script is buffered before it is written.
+#[test]
+fn a_pipe_closed_before_the_first_byte_ends_completions_quietly() {
+    let directory = tempfile::tempdir().unwrap();
+    let (status, stderr) = run_closed_pipe(directory.path(), &["completions", "zsh"], 0);
+    assert!(
+        status.success(),
+        "expected a quiet exit, got {status:?} with stderr:\n{stderr}"
+    );
+    assert_eq!(stderr, "");
+}
+
+/// Run the binary with its standard error piped to a reader that closes at
+/// once, and report how it ended.
+fn run_closed_error_pipe(directory: &Path, arguments: &[&str]) -> ExitStatus {
+    let mut child = Command::new(binary())
+        .current_dir(directory)
+        .env("PATH", "/usr/bin:/bin")
+        .args(arguments)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    drop(child.stderr.take().expect("standard error was piped"));
+    child.wait().unwrap()
+}
+
+/// Standard error carries commentary, not the product of the run, so losing
+/// its reader changes nothing: `-v` still reports its verdict through the exit
+/// status instead of dying on the trace it could not write.
+#[test]
+fn a_closed_error_pipe_does_not_end_the_run() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join("sample.rs"),
+        b"let x = 1; // remove\n",
+    )
+    .unwrap();
+    let status = run_closed_error_pipe(directory.path(), &["check", "-v", "."]);
+    assert_eq!(
+        status.code(),
+        Some(1),
+        "a closed standard error changed the verdict: {status:?}"
+    );
+}
+
+/// A closed pipe is benign only when it is *our* report that lost its reader.
+/// `git hash-object` exiting before it reads the rewritten blob breaks a pipe
+/// the run owns in the other direction: the index was never updated, so the
+/// run must report the failure instead of ending quietly with success.
+#[cfg(unix)]
+#[test]
+fn a_broken_pipe_from_git_hash_object_fails_the_staged_fix() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let directory = repository();
+    // The blob has to outgrow any pipe buffer, so the write is still in flight
+    // when the fake `git hash-object` drops the reading end.
+    let mut source = String::new();
+    for index in 0..8000 {
+        source.push_str(&format!("let value{index} = {index}; // remove {index}\n"));
+    }
+    let path = directory.path().join("wide.rs");
+    fs::write(&path, &source).unwrap();
+    git(directory.path(), &["add", "wide.rs"]);
+    let staged_before = git(directory.path(), &["show", ":wide.rs"]);
+
+    // Every invocation reaches the real Git except `hash-object`, which closes
+    // its standard input and fails without reading a byte.
+    let fake = tempfile::tempdir().unwrap();
+    let script = fake.path().join("git");
+    fs::write(
+        &script,
+        "#!/bin/sh\n\
+         if [ \"$1\" = hash-object ]; then\n\
+         exec 0<&-\n\
+         exit 1\n\
+         fi\n\
+         exec /usr/bin/git \"$@\"\n",
+    )
+    .unwrap();
+    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+
+    let output = Command::new(binary())
+        .current_dir(directory.path())
+        .env("PATH", format!("{}:/usr/bin:/bin", fake.path().display()))
+        .args(["fix", "--staged"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "a failed blob write ended the run quietly; stderr was:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !stderr.is_empty(),
+        "the failed staged fix was never reported on standard error"
+    );
+    assert!(
+        stderr.contains("git hash-object"),
+        "the report does not say which write failed:\n{stderr}"
+    );
+    assert_eq!(
+        git(directory.path(), &["show", ":wide.rs"]),
+        staged_before,
+        "the index changed although no blob was written"
+    );
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        source.as_bytes(),
+        "the working tree changed although no blob was written"
+    );
+}
+
+/// `fix` refuses standard input, so its `--help` must not offer it as a target.
+#[test]
+fn fix_help_does_not_advertise_the_standard_input_it_refuses() {
+    let directory = tempfile::tempdir().unwrap();
+    let fixed = run(directory.path(), &["fix", "--help"]);
+    assert_eq!(fixed.status.code(), Some(0));
+    let help = String::from_utf8(fixed.stdout).unwrap();
+    assert!(
+        !help.contains("reads standard input"),
+        "`fix --help` advertises a target it refuses:\n{help}"
+    );
+    assert!(
+        help.contains("Files or directories to rewrite"),
+        "`fix --help` does not describe its PATH list:\n{help}"
+    );
+    let checked = run(directory.path(), &["check", "--help"]);
+    assert_eq!(checked.status.code(), Some(0));
+    let help = String::from_utf8(checked.stdout).unwrap();
+    assert!(
+        help.contains("reads standard input"),
+        "`check --help` stopped documenting `-`:\n{help}"
+    );
+}
+
+/// The counter line is erased only if one was ever drawn: a run that scans
+/// nothing must not write an escape sequence to a terminal that saw no counter.
+#[test]
+fn progress_clears_the_counter_only_when_one_was_drawn() {
+    let empty = tempfile::tempdir().unwrap();
+    let output = run(empty.path(), &["check", "--progress", "always", "."]);
+    assert_eq!(output.status.code(), Some(0));
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        !stderr.contains("\r\x1b[2K"),
+        "a counter that was never drawn was cleared anyway:\n{stderr:?}"
+    );
+
+    let directory = many_files(120);
+    let output = run(directory.path(), &["check", "--progress", "always", "."]);
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        stderr.contains("\r\x1b[2K"),
+        "the counter line was never cleared:\n{stderr:?}"
+    );
+}
+
+/// "Nothing to check" is the vocabulary of `check`. Every command has its own
+/// verb for the run that found nothing to work on.
+#[test]
+fn an_empty_run_summarizes_itself_in_the_vocabulary_of_its_command() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(directory.path().join("notes.md"), b"# notes\n").unwrap();
+    for (arguments, expected) in [
+        (vec!["check", "notes.md"], "Nothing to check.\n"),
+        (vec!["fix", "notes.md"], "Nothing to fix.\n"),
+        (vec!["fix", "--dry-run", "notes.md"], "Nothing to fix.\n"),
+        (vec!["diff", "notes.md"], "Nothing to diff.\n"),
+        (vec!["scan", "notes.md"], "Nothing to scan.\n"),
+    ] {
+        let output = run(directory.path(), &arguments);
+        assert_eq!(output.status.code(), Some(0), "`ocomment {arguments:?}`");
+        assert_eq!(
+            String::from_utf8(output.stderr).unwrap(),
+            expected,
+            "`ocomment {arguments:?}`"
+        );
+    }
+    let output = run(directory.path(), &["scan", "."]);
+    assert_eq!(output.status.code(), Some(0));
+    assert_eq!(
+        String::from_utf8(output.stderr).unwrap(),
+        "Nothing to scan: 1 file skipped (unknown language: 1; use -v to list).\n"
     );
 }

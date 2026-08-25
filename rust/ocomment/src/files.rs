@@ -35,6 +35,74 @@ pub struct Discovery {
     pub skipped: Vec<SkippedFile>,
 }
 
+/// The path standard input is reported under. It is not a real file name: the
+/// renderers print it, and the configuration override matcher sees it, exactly
+/// as it reads here.
+pub const STDIN_PATH: &str = "<stdin>";
+
+/// What both `strip` and a `-` target say when the bytes carry no signature to
+/// detect a language from. Standard input has no name to fall back on, so the
+/// only way forward is for the caller to name the language.
+pub const STDIN_LANGUAGE_HELP: &str = "cannot detect the language of standard input; \
+pass --language <LANGUAGE> (see `ocomment languages`)";
+
+/// Turn the bytes read from standard input into a source file the ordinary
+/// pipeline can process, or the skip that says why it cannot. Detection has no
+/// path to work with, so it is driven by `--language` or by the contents.
+///
+/// Declarative profiles and plugins route on a file extension, which standard
+/// input does not have; a pipe is therefore always handled by a built-in
+/// language or not at all.
+pub fn stdin_source(
+    bytes: Vec<u8>,
+    resolved: &ResolvedConfig,
+    forced_language: Option<Language>,
+    forced_dialect: Option<Dialect>,
+) -> Result<SourceFile, SkippedFile> {
+    let skipped = |reason: &str, error: bool| SkippedFile {
+        path: PathBuf::from(STDIN_PATH),
+        reason: reason.to_owned(),
+        error,
+        // Standard input was named on the command line, so its skip is always
+        // reported on its own line rather than folded into the summary.
+        explicit: true,
+    };
+    if bytes.iter().take(8192).any(|byte| *byte == 0) {
+        return Err(skipped("binary file (NUL byte)", false));
+    }
+    let detection = forced_language
+        .map(|language| Detection {
+            language,
+            dialect: forced_dialect.unwrap_or(Dialect::Standard),
+            reason: "command-line",
+        })
+        .or_else(|| detect_language(None, &bytes));
+    let Some(Detection {
+        language, dialect, ..
+    }) = detection
+    else {
+        return Err(skipped(STDIN_LANGUAGE_HELP, true));
+    };
+    if forced_language.is_none()
+        && resolved
+            .config
+            .languages
+            .get(language.as_str())
+            .and_then(|item| item.enabled)
+            == Some(false)
+    {
+        return Err(skipped("language disabled by configuration", false));
+    }
+    Ok(SourceFile {
+        path: PathBuf::from(STDIN_PATH),
+        source: bytes,
+        language,
+        dialect: forced_dialect.unwrap_or(dialect),
+        profile: None,
+        plugin: None,
+    })
+}
+
 pub fn discover(
     paths: &[PathBuf],
     resolved: &ResolvedConfig,

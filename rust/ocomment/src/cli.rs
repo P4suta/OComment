@@ -7,7 +7,7 @@ use crate::{
     plugin,
     values::{CommentKindArg, DialectArg, LanguageArg, LayoutArg, PolicyArg},
 };
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{Shell, generate};
 use ocomment_core::{CommentKind, Dialect, Language, transform};
@@ -16,6 +16,7 @@ use std::{
     fs,
     io::{self, IsTerminal, Read, Write},
     path::PathBuf,
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
 const LONG_ABOUT: &str = "\
@@ -48,6 +49,46 @@ EXAMPLES
 SEE ALSO
   The complete schemas and guides are available in the OComment repository.";
 
+/// The roff sections `clap_mangen` cannot derive, carrying the same content as
+/// the `--help` epilogue above. A line that would start with `.` is escaped
+/// with `\&` so roff reads a file name as text rather than as a macro.
+const MAN_SECTIONS: &str = r#".SH EXIT STATUS
+.TP
+.B 0
+Nothing removable was found and every requested change was applied.
+.TP
+.B 1
+Removable comments were reported, or a diff was printed.
+.TP
+.B 2
+Invalid source, configuration, plugin, or I/O failure.
+.SH FILES
+.TP
+.B \&.ocomment.toml
+Project configuration, merged over the user file.
+.TP
+.B \&.ocommentignore
+Extra ignore patterns honoured by repository walks.
+.TP
+.B \&.ocomment.lock
+Pinned digests of the installed WASM scanner plugins.
+.TP
+.B $XDG_CONFIG_HOME/ocomment/config.toml
+User configuration, merged over the built\-in defaults.
+.SH EXAMPLES
+.TP
+.B ocomment
+Check the current repository and report removable comments.
+.TP
+.B ocomment fix \-\-policy all \-\-layout compact src
+Remove every comment under src and close the gaps it leaves.
+.TP
+.B ocomment strip \-\-language rust < before.rs > after.rs
+Strip one file from standard input to standard output.
+.SH SEE ALSO
+The complete schemas and guides are available in the OComment repository.
+"#;
+
 #[derive(Parser)]
 #[command(
     name = "ocomment",
@@ -58,7 +99,7 @@ SEE ALSO
 #[command(args_conflicts_with_subcommands = true)]
 #[command(after_long_help = AFTER_LONG_HELP)]
 struct Cli {
-    /// Files or directories to check (default: current directory).
+    /// Files or directories to check; `-` reads standard input (default: current directory).
     #[arg(value_name = "PATH")]
     paths: Vec<PathBuf>,
     /// The command to run; `check` runs when none is given.
@@ -170,10 +211,7 @@ struct OutputArgs {
     /// Omit the one-line comment text from human `check` and `scan` lines.
     #[arg(long, global = true)]
     no_preview: bool,
-    /// Accepted for compatibility; the end-of-run summary replaced this line.
-    // Nothing reads the value: the summary is written whether or not standard
-    // error is a terminal.
-    #[allow(dead_code)]
+    /// When to draw the live scanning counter on standard error.
     #[arg(long, global = true, value_enum, default_value_t, value_name = "WHEN")]
     progress: AutoChoice,
     /// Print nothing but errors and diagnostics.
@@ -226,7 +264,7 @@ enum Command {
     /// Report removable comments (default command)
     Check(TargetArgs),
     /// Remove comments in place through an atomic, rollback-backed transaction
-    Fix(TargetArgs),
+    Fix(FixArgs),
     /// Print a unified diff of the changes fix would make
     Diff(TargetArgs),
     /// List every comment with its kind, disposition and byte span
@@ -256,15 +294,49 @@ enum Command {
 
 #[derive(Clone, Debug, Default, Args)]
 struct TargetArgs {
-    /// Files or directories to process (default: current directory).
+    /// Files or directories to process; `-` reads standard input (default: current directory).
     #[arg(value_name = "PATH")]
     paths: Vec<PathBuf>,
+    /// Whether the Git index, rather than the working tree, is the source.
+    #[command(flatten)]
+    git: GitArgs,
+}
+
+/// The `--staged` pair, shared by every command that can read the Git index.
+#[derive(Clone, Debug, Default, Args)]
+struct GitArgs {
     /// Read and update Git index blobs rather than treating the working tree as the source.
     #[arg(long)]
     staged: bool,
     /// With `--staged`, do not attempt a uniquely mappable working-tree update.
     #[arg(long, requires = "staged")]
     index_only: bool,
+}
+
+#[derive(Args)]
+struct FixArgs {
+    // `fix` rewrites files in place and refuses the `-` that stands for
+    // standard input, so its PATH list is not the one every other command
+    // takes and does not borrow that command's help line.
+    /// Files or directories to rewrite (default: current directory).
+    #[arg(value_name = "PATH")]
+    paths: Vec<PathBuf>,
+    /// Whether the Git index, rather than the working tree, is rewritten.
+    #[command(flatten)]
+    git: GitArgs,
+    /// Print the patch `fix` would apply and write nothing.
+    #[arg(long)]
+    dry_run: bool,
+}
+
+impl FixArgs {
+    /// The same targets in the shape every other command hands to the run.
+    fn target(self) -> TargetArgs {
+        TargetArgs {
+            paths: self.paths,
+            git: self.git,
+        }
+    }
 }
 
 #[derive(Args)]
@@ -358,56 +430,71 @@ pub fn run() -> Result<u8> {
                 ..Default::default()
             },
             &common,
+            false,
         ),
-        Some(Command::Check(args)) => run_target(Operation::Check, args, &common),
-        Some(Command::Fix(args)) => run_target(Operation::Fix, args, &common),
-        Some(Command::Diff(args)) => run_target(Operation::Diff, args, &common),
-        Some(Command::Scan(args)) => run_target(Operation::Scan, args, &common),
+        Some(Command::Check(args)) => run_target(Operation::Check, args, &common, false),
+        // `--dry-run` runs the diff and reports it in fix vocabulary: the two
+        // commands must agree on the patch, so only the wording differs.
+        Some(Command::Fix(args)) if args.dry_run => {
+            run_target(Operation::Diff, args.target(), &common, true)
+        }
+        Some(Command::Fix(args)) => run_target(Operation::Fix, args.target(), &common, false),
+        Some(Command::Diff(args)) => run_target(Operation::Diff, args, &common, false),
+        Some(Command::Scan(args)) => run_target(Operation::Scan, args, &common, false),
         Some(Command::Strip) => run_strip(&common),
         Some(Command::Lsp) => lsp::run(common.config.as_deref()),
         Some(Command::Init(args)) => run_init(args),
         Some(Command::Config(args)) => run_config(args, &common),
-        Some(Command::Languages) => {
-            print_languages();
-            Ok(0)
-        }
+        Some(Command::Languages) => print_languages(),
         Some(Command::Plugin(args)) => run_plugin(args, &common),
-        Some(Command::Completions { shell }) => {
-            generate(shell, &mut Cli::command(), "ocomment", &mut io::stdout());
-            Ok(0)
-        }
+        Some(Command::Completions { shell }) => run_completions(shell),
         Some(Command::Doctor) => run_doctor(&common),
         Some(Command::Man) => run_man(),
     }
 }
 
-fn run_target(operation: Operation, args: TargetArgs, common: &CommonArgs) -> Result<u8> {
+fn run_target(
+    operation: Operation,
+    args: TargetArgs,
+    common: &CommonArgs,
+    dry_run: bool,
+) -> Result<u8> {
     let mut resolved = config::load(common.config.as_deref())?;
     apply_cli_overrides(&mut resolved.config, common);
     let plugin_host = plugin::PluginHost::load(&resolved.root, &resolved.config.plugins)?;
     let presentation = presentation(common);
     let verbosity = common.verbosity();
-    if verbosity == Verbosity::Verbose {
-        trace_run(&resolved, &args.paths);
+    // The trace is part of the human report; a machine format keeps standard
+    // error empty however loud the run was asked to be.
+    if verbosity == Verbosity::Verbose && common.output.format == OutputFormat::Human {
+        trace_run(&resolved, &args.paths)?;
     }
-    let staged = args.staged || resolved.config.git.staged;
+    let progress = progress_enabled(common);
+    let staged = args.git.staged || resolved.config.git.staged;
+    // `fix --dry-run` writes nothing, but it is still the command whose job is
+    // to rewrite files in place, and standard input cannot be rewritten.
+    let rewrites = operation == Operation::Fix || dry_run;
+    let (paths, stdin) = target_paths(&args.paths, rewrites, staged)?;
     if staged {
         return git::run_staged(git::StagedRequest {
             operation,
-            paths: &args.paths,
+            paths: &paths,
             resolved: &resolved,
             format: common.output.format,
-            index_only: args.index_only || resolved.config.git.index_only,
+            index_only: args.git.index_only || resolved.config.git.index_only,
             plugin_host: &plugin_host,
             forced_language: common.language(),
             forced_dialect: common.dialect(),
             presentation,
             verbosity,
             preview: !common.output.no_preview,
+            dry_run,
         });
     }
-    let discovery = files::discover(&args.paths, &resolved, common.language(), common.dialect())?;
-    let files: Vec<_> = discovery
+    let discovery = read_targets(&paths, stdin, &resolved, common)?;
+    let total = discovery.files.len();
+    let counter = Progress::default();
+    let processed = discovery
         .files
         .par_iter()
         .map(|file| {
@@ -434,6 +521,9 @@ fn run_target(operation: Operation, args: TargetArgs, common: &CommonArgs) -> Re
             } else {
                 transform(&file.source, language, options)
             };
+            if progress {
+                counter.report(total);
+            }
             Ok::<_, anyhow::Error>(ProcessedFile {
                 path: file.path.clone(),
                 source: file.source.clone(),
@@ -441,7 +531,11 @@ fn run_target(operation: Operation, args: TargetArgs, common: &CommonArgs) -> Re
                 result,
             })
         })
-        .collect::<Result<Vec<_>>>()?;
+        .collect::<Result<Vec<_>>>();
+    if progress {
+        counter.clear();
+    }
+    let files = processed?;
 
     let report_invalid = output::invalid(&files);
     let io_invalid = discovery.skipped.iter().any(|item| item.error);
@@ -470,7 +564,7 @@ fn run_target(operation: Operation, args: TargetArgs, common: &CommonArgs) -> Re
             verbosity,
             preview: !common.output.no_preview,
             explain: false,
-            dry_run: false,
+            dry_run,
             force_invalid: resolved.config.policy.force_invalid,
             applied,
         },
@@ -482,6 +576,79 @@ fn run_target(operation: Operation, args: TargetArgs, common: &CommonArgs) -> Re
         Operation::Check | Operation::Diff if output::changed(&files) => Ok(1),
         _ => Ok(0),
     }
+}
+
+/// How the PATH list names standard input.
+const STDIN_ARGUMENT: &str = "-";
+
+/// Split the requested targets into ordinary paths and the `-` that stands for
+/// standard input, refusing the combinations that cannot be honoured.
+fn target_paths(paths: &[PathBuf], rewrites: bool, staged: bool) -> Result<(Vec<PathBuf>, bool)> {
+    let is_stdin = |path: &PathBuf| path.as_os_str() == STDIN_ARGUMENT;
+    match paths.iter().filter(|path| is_stdin(path)).count() {
+        0 => return Ok((paths.to_vec(), false)),
+        1 => {}
+        // A pipe is consumed once; a second `-` would silently report the same
+        // bytes twice or nothing at all.
+        _ => bail!("cannot read standard input twice; `-` may appear only once"),
+    }
+    if rewrites {
+        bail!("cannot rewrite standard input in place; use `ocomment strip`");
+    }
+    if staged {
+        bail!("cannot read standard input with --staged; the index is the source");
+    }
+    Ok((
+        paths
+            .iter()
+            .filter(|path| !is_stdin(path))
+            .cloned()
+            .collect(),
+        true,
+    ))
+}
+
+/// Discover the named paths and, when `-` was among them, fold the bytes read
+/// from standard input in as one more file so a piped run takes exactly the
+/// same reporting path as a walked one.
+fn read_targets(
+    paths: &[PathBuf],
+    stdin: bool,
+    resolved: &config::ResolvedConfig,
+    common: &CommonArgs,
+) -> Result<files::Discovery> {
+    if !stdin {
+        return files::discover(paths, resolved, common.language(), common.dialect());
+    }
+    // An empty list means "the whole repository" only when no target was named
+    // at all; `-` on its own is a target, and walking would ignore it.
+    let mut discovery = if paths.is_empty() {
+        files::Discovery::default()
+    } else {
+        files::discover(paths, resolved, common.language(), common.dialect())?
+    };
+    let mut bytes = Vec::new();
+    io::stdin()
+        .lock()
+        .read_to_end(&mut bytes)
+        .context("cannot read standard input")?;
+    match files::stdin_source(bytes, resolved, common.language(), common.dialect()) {
+        Ok(file) => discovery.files.push(file),
+        // A skip that cannot be reported per file — nothing was named to skip
+        // — is a usage error the run must not swallow.
+        Err(skipped) if skipped.error => {
+            let reason = skipped.reason;
+            bail!("{reason}")
+        }
+        Err(skipped) => discovery.skipped.push(skipped),
+    }
+    discovery
+        .files
+        .sort_by(|left, right| left.path.cmp(&right.path));
+    discovery
+        .skipped
+        .sort_by(|left, right| left.path.cmp(&right.path));
+    Ok(discovery)
 }
 
 fn run_strip(common: &CommonArgs) -> Result<u8> {
@@ -499,27 +666,34 @@ fn run_strip(common: &CommonArgs) -> Result<u8> {
             ocomment_core::detect_language(None, &source)
                 .map(|value| (value.language, value.dialect))
         })
-        .context("cannot detect stdin language; pass --language")?;
-    let (language, mut options) =
-        resolved.for_path(std::path::Path::new("<stdin>"), detection.0, detection.1);
+        .context(files::STDIN_LANGUAGE_HELP)?;
+    let (language, mut options) = resolved.for_path(
+        std::path::Path::new(files::STDIN_PATH),
+        detection.0,
+        detection.1,
+    );
     if let Some(value) = common.dialect() {
         config::validate_dialect(language, value)?;
         options.scan.dialect = value;
     }
     let result = transform(&source, language, options);
+    let stderr = io::stderr();
+    let mut report = stderr.lock();
     for diagnostic in &result.report.diagnostics {
-        eprintln!(
-            "stdin:{}..{}: {}: {}",
-            diagnostic.span.start, diagnostic.span.end, diagnostic.code, diagnostic.message
-        );
+        output::note(
+            &mut report,
+            &format!(
+                "stdin:{}..{}: {}: {}",
+                diagnostic.span.start, diagnostic.span.end, diagnostic.code, diagnostic.message
+            ),
+        )?;
     }
     if !result.report.valid && !resolved.config.policy.force_invalid {
         return Ok(2);
     }
-    io::stdout()
-        .lock()
-        .write_all(&result.output)
-        .context("cannot write standard output")?;
+    let mut stdout = output::stdout();
+    output::wrote(stdout.write_all(&result.output))?;
+    output::finish(&mut stdout)?;
     Ok(if result.report.valid { 0 } else { 2 })
 }
 
@@ -554,21 +728,46 @@ fn apply_cli_overrides(config: &mut config::Config, common: &CommonArgs) {
 /// Render the roff manual page from the parser definition itself.
 fn run_man() -> Result<u8> {
     let mut page = Vec::new();
-    clap_mangen::Man::new(Cli::command())
+    // `clap_mangen` renders `after_long_help` as one opaque `.SH EXTRA` body,
+    // so the page is built without it and the same content is appended below
+    // as real roff sections.
+    //
+    // The `.TH` date is left blank on purpose: stamping the build date would
+    // make two reproducible builds of the same source disagree.
+    clap_mangen::Man::new(Cli::command().after_long_help(None))
         .title("OCOMMENT")
         .manual("User Commands")
         .render(&mut page)
         .context("cannot render the manual page")?;
-    io::stdout()
-        .lock()
-        .write_all(&page)
-        .context("cannot write standard output")?;
+    if !page.ends_with(b"\n") {
+        page.push(b'\n');
+    }
+    page.extend_from_slice(MAN_SECTIONS.as_bytes());
+    let mut stdout = output::stdout();
+    output::wrote(stdout.write_all(&page))?;
+    output::finish(&mut stdout)?;
+    Ok(0)
+}
+
+/// Write the shell completion script.
+///
+/// `clap_complete` writes straight into the handle it is given and panics if
+/// that write fails, so it is given a buffer in memory and the one write that
+/// can fail is made here.
+fn run_completions(shell: Shell) -> Result<u8> {
+    let mut script = Vec::new();
+    generate(shell, &mut Cli::command(), "ocomment", &mut script);
+    let mut stdout = output::stdout();
+    output::wrote(stdout.write_all(&script))?;
+    output::finish(&mut stdout)?;
     Ok(0)
 }
 
 fn run_init(args: InitArgs) -> Result<u8> {
+    let mut stdout = output::stdout();
     match args.kind {
         InitKind::Config => create_new(
+            &mut stdout,
             config::CONFIG_FILE,
             include_str!("../assets/default-config.toml"),
         )?,
@@ -579,89 +778,115 @@ fn run_init(args: InitArgs) -> Result<u8> {
                 "ocomment check --staged"
             };
             create_new(
+                &mut stdout,
                 "lefthook.yml",
                 &format!("pre-commit:\n  commands:\n    ocomment:\n      run: {command}\n"),
             )?;
         }
     }
+    output::finish(&mut stdout)?;
     Ok(0)
 }
 
-fn create_new(path: &str, contents: &str) -> Result<()> {
+fn create_new(output: &mut impl Write, path: &str, contents: &str) -> Result<()> {
     let mut file = fs::OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(path)
         .with_context(|| format!("refusing to overwrite {path}"))?;
     file.write_all(contents.as_bytes())?;
-    println!("created {path}");
+    output::wrote(writeln!(output, "created {path}"))?;
     Ok(())
 }
 
 fn run_config(args: ConfigArgs, common: &CommonArgs) -> Result<u8> {
+    let mut stdout = output::stdout();
     match args.action {
-        ConfigAction::Schema => print!("{}", include_str!("../assets/config.schema.json")),
+        ConfigAction::Schema => {
+            output::wrote(write!(
+                stdout,
+                "{}",
+                include_str!("../assets/config.schema.json")
+            ))?;
+        }
         action => {
             let mut resolved = config::load(common.config.as_deref())?;
             apply_cli_overrides(&mut resolved.config, common);
             match action {
                 ConfigAction::Show => {
                     resolved.config.version = Some(1);
-                    print!("{}", toml::to_string_pretty(&resolved.config)?);
+                    output::wrote(write!(
+                        stdout,
+                        "{}",
+                        toml::to_string_pretty(&resolved.config)?
+                    ))?;
                 }
                 ConfigAction::Locate => {
                     if let Some(path) = &resolved.trace.user {
-                        println!("user\t{}", path.display());
+                        output::wrote(writeln!(stdout, "user\t{}", path.display()))?;
                     }
                     if let Some(path) = &resolved.trace.project {
-                        println!("project\t{}", path.display());
+                        output::wrote(writeln!(stdout, "project\t{}", path.display()))?;
                     }
                     if let Some(path) = &resolved.trace.explicit {
-                        println!("explicit\t{}", path.display());
+                        output::wrote(writeln!(stdout, "explicit\t{}", path.display()))?;
                     }
                     if resolved.trace.user.is_none()
                         && resolved.trace.project.is_none()
                         && resolved.trace.explicit.is_none()
                     {
-                        println!("built-in defaults");
+                        output::wrote(writeln!(stdout, "built-in defaults"))?;
                     }
                 }
                 ConfigAction::Explain => {
-                    println!("precedence: built-in < XDG user < project < path override < CLI");
-                    println!("root: {}", resolved.root.display());
-                    println!(
+                    output::wrote(writeln!(
+                        stdout,
+                        "precedence: built-in < XDG user < project < path override < CLI"
+                    ))?;
+                    output::wrote(writeln!(stdout, "root: {}", resolved.root.display()))?;
+                    output::wrote(writeln!(
+                        stdout,
                         "policy: {}; layout: {}",
                         resolved.config.policy.mode, resolved.config.policy.layout
-                    );
+                    ))?;
                 }
                 ConfigAction::Schema => unreachable!(),
             }
         }
     }
+    output::finish(&mut stdout)?;
     Ok(0)
 }
 
-fn print_languages() {
-    println!("language\textensions / guaranteed dialects");
-    println!("rust\trs");
-    println!("ocaml\tml,mli (OCaml 5.5 lexical forms)");
-    println!("c\tc,h / standard, GNU, Objective-C");
-    println!("cpp\tcc,cpp,cxx,hpp / standard, GNU, Objective-C++, CUDA");
-    println!("go\tgo");
-    println!("java\tjava (Unicode escape translation)");
-    println!("javascript\tjs,mjs,cjs,jsx / ECMAScript, JSX");
-    println!("typescript\tts,mts,cts,tsx / TypeScript, TSX");
-    println!("python\tpy,pyw,pyi");
-    println!("shell\tsh,bash,zsh / POSIX sh, Bash 5.3, zsh");
-    println!("html\thtml,htm / recursive script and style");
-    println!("css\tcss");
-    println!("jsonc\tjsonc,json5");
-    println!("sql\tsql / PostgreSQL, MySQL, SQLite, T-SQL, Oracle");
-    println!("kotlin\tkt,kts");
+fn print_languages() -> Result<u8> {
+    let mut stdout = output::stdout();
+    for line in [
+        "language\textensions / guaranteed dialects",
+        "rust\trs",
+        "ocaml\tml,mli (OCaml 5.5 lexical forms)",
+        "c\tc,h / standard, GNU, Objective-C",
+        "cpp\tcc,cpp,cxx,hpp / standard, GNU, Objective-C++, CUDA",
+        "go\tgo",
+        "java\tjava (Unicode escape translation)",
+        "javascript\tjs,mjs,cjs,jsx / ECMAScript, JSX",
+        "typescript\tts,mts,cts,tsx / TypeScript, TSX",
+        "python\tpy,pyw,pyi",
+        "shell\tsh,bash,zsh / POSIX sh, Bash 5.3, zsh",
+        "html\thtml,htm / recursive script and style",
+        "css\tcss",
+        "jsonc\tjsonc,json5",
+        "sql\tsql / PostgreSQL, MySQL, SQLite, T-SQL, Oracle",
+        "kotlin\tkt,kts",
+    ] {
+        output::wrote(writeln!(stdout, "{line}"))?;
+    }
+    output::finish(&mut stdout)?;
+    Ok(0)
 }
 
 fn run_plugin(args: PluginArgs, common: &CommonArgs) -> Result<u8> {
     let resolved = config::load(common.config.as_deref())?;
+    let mut stdout = output::stdout();
     match args.command {
         PluginCommand::Add {
             source,
@@ -669,41 +894,113 @@ fn run_plugin(args: PluginArgs, common: &CommonArgs) -> Result<u8> {
             sha256,
             identity,
         } => plugin::add(
+            &mut stdout,
             &resolved.root,
             &source,
             name.as_deref(),
             sha256.as_deref(),
             identity.as_deref(),
         )?,
-        PluginCommand::Remove { name } => plugin::remove(&resolved.root, &name)?,
-        PluginCommand::List => plugin::list(&resolved.root)?,
-        PluginCommand::Update { name } => plugin::update(&resolved.root, name.as_deref())?,
-        PluginCommand::Verify { name } => plugin::verify(&resolved.root, name.as_deref())?,
-        PluginCommand::New { path } => plugin::new_plugin(&path)?,
+        PluginCommand::Remove { name } => plugin::remove(&mut stdout, &resolved.root, &name)?,
+        PluginCommand::List => plugin::list(&mut stdout, &resolved.root)?,
+        PluginCommand::Update { name } => {
+            plugin::update(&mut stdout, &resolved.root, name.as_deref())?;
+        }
+        PluginCommand::Verify { name } => {
+            plugin::verify(&mut stdout, &resolved.root, name.as_deref())?;
+        }
+        PluginCommand::New { path } => plugin::new_plugin(&mut stdout, &path)?,
     }
+    output::finish(&mut stdout)?;
     Ok(0)
 }
 
 fn run_doctor(common: &CommonArgs) -> Result<u8> {
-    println!("ocomment {}", env!("CARGO_PKG_VERSION"));
+    let mut stdout = output::stdout();
+    output::wrote(writeln!(stdout, "ocomment {}", env!("CARGO_PKG_VERSION")))?;
     let resolved = config::load(common.config.as_deref())?;
-    println!("configuration: ok (root {})", resolved.root.display());
-    println!("languages: {} built in", Language::ALL.len());
+    output::wrote(writeln!(
+        stdout,
+        "configuration: ok (root {})",
+        resolved.root.display()
+    ))?;
+    output::wrote(writeln!(
+        stdout,
+        "languages: {} built in",
+        Language::ALL.len()
+    ))?;
     if std::process::Command::new("git")
         .arg("--version")
         .output()
         .is_ok()
     {
-        println!("git: available");
+        output::wrote(writeln!(stdout, "git: available"))?;
     } else {
-        println!("git: unavailable (only --staged is affected)");
+        output::wrote(writeln!(
+            stdout,
+            "git: unavailable (only --staged is affected)"
+        ))?;
     }
-    plugin::verify(&resolved.root, None)?;
-    println!(
+    plugin::verify(&mut stdout, &resolved.root, None)?;
+    output::wrote(writeln!(
+        stdout,
         "LSP: stdio server available; on-save is opt-in ({})",
         resolved.config.lsp.on_save
-    );
+    ))?;
+    output::finish(&mut stdout)?;
     Ok(0)
+}
+
+/// How many files may be processed between two redraws of the counter.
+const PROGRESS_STEP: usize = 50;
+
+/// Whether this run draws the live scanning counter. The counter is terminal
+/// decoration: it never belongs in a machine format, and `-q` silences it.
+fn progress_enabled(common: &CommonArgs) -> bool {
+    common.output.format == OutputFormat::Human
+        && common.verbosity() != Verbosity::Quiet
+        && match common.output.progress {
+            AutoChoice::Auto => io::stderr().is_terminal(),
+            AutoChoice::Always => true,
+            AutoChoice::Never => false,
+        }
+}
+
+/// The live scanning counter: how many files it has seen, and whether it ever
+/// put a line on the screen.
+#[derive(Default)]
+struct Progress {
+    scanned: AtomicUsize,
+    drawn: AtomicBool,
+}
+
+impl Progress {
+    /// Advance the live `n/total` counter, rewriting one line on standard
+    /// error rather than scrolling a line for every file.
+    fn report(&self, total: usize) {
+        let seen = self.scanned.fetch_add(1, Ordering::Relaxed) + 1;
+        if !seen.is_multiple_of(PROGRESS_STEP) && seen != total {
+            return;
+        }
+        let mut stderr = io::stderr().lock();
+        let _ = write!(stderr, "\rocomment: scanning {seen}/{total} files");
+        let _ = stderr.flush();
+        self.drawn.store(true, Ordering::Relaxed);
+    }
+
+    /// Erase the counter so the report that follows starts on a clean line.
+    ///
+    /// A run with nothing to scan draws no counter, and erasing a line it
+    /// never wrote would put an escape sequence on a standard error whose
+    /// reader was promised only the summary.
+    fn clear(&self) {
+        if !self.drawn.load(Ordering::Relaxed) {
+            return;
+        }
+        let mut stderr = io::stderr().lock();
+        let _ = write!(stderr, "\r\x1b[2K");
+        let _ = stderr.flush();
+    }
 }
 
 fn presentation(common: &CommonArgs) -> Presentation {
@@ -726,8 +1023,10 @@ fn presentation(common: &CommonArgs) -> Presentation {
 
 /// The `--verbose` header: where the run is rooted, what it was pointed at,
 /// and which configuration files it merged.
-fn trace_run(resolved: &config::ResolvedConfig, paths: &[PathBuf]) {
-    eprintln!("root: {}", resolved.root.display());
+fn trace_run(resolved: &config::ResolvedConfig, paths: &[PathBuf]) -> Result<()> {
+    let stderr = io::stderr();
+    let mut report = stderr.lock();
+    output::note(&mut report, &format!("root: {}", resolved.root.display()))?;
     let target = if paths.is_empty() {
         ".".to_owned()
     } else {
@@ -737,7 +1036,7 @@ fn trace_run(resolved: &config::ResolvedConfig, paths: &[PathBuf]) {
             .collect::<Vec<_>>()
             .join(" ")
     };
-    eprintln!("target: {target}");
+    output::note(&mut report, &format!("target: {target}"))?;
     let trace = &resolved.trace;
     let sources = [
         ("user", &trace.user),
@@ -747,11 +1046,12 @@ fn trace_run(resolved: &config::ResolvedConfig, paths: &[PathBuf]) {
     let mut traced = false;
     for (label, path) in sources {
         if let Some(path) = path {
-            eprintln!("config: {label} {}", path.display());
+            output::note(&mut report, &format!("config: {label} {}", path.display()))?;
             traced = true;
         }
     }
     if !traced {
-        eprintln!("config: built-in defaults");
+        output::note(&mut report, "config: built-in defaults")?;
     }
+    Ok(())
 }

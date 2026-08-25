@@ -515,7 +515,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__fix)
-            opts="-q -v -h --staged --index-only --config --policy --layout --language --dialect --keep-kind --remove-kind --force-invalid --force-protected --format --color --hyperlinks --no-preview --progress --quiet --verbose --help"
+            opts="-q -v -h --staged --index-only --dry-run --config --policy --layout --language --dialect --keep-kind --remove-kind --force-invalid --force-protected --format --color --hyperlinks --no-preview --progress --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0

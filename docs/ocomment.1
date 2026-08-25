@@ -19,7 +19,7 @@ Print help (see a summary with \*(Aq\-h\*(Aq)
 Print version
 .TP
 [\fIPATH\fR]
-Files or directories to check (default: current directory)
+Files or directories to check; `\-` reads standard input (default: current directory)
 .SH POLICY
 .TP
 \fB\-\-policy\fR \fI<POLICY>\fR
@@ -254,7 +254,7 @@ never
 Omit the one\-line comment text from human `check` and `scan` lines
 .TP
 \fB\-\-progress\fR \fI<WHEN>\fR [default: auto]
-Accepted for compatibility; the end\-of\-run summary replaced this line
+When to draw the live scanning counter on standard error
 .br
 
 .br
@@ -316,28 +316,40 @@ Render the roff manual page to stdout
 .TP
 ocomment\-help(1)
 Print this message or the help of the given subcommand(s)
-.SH EXTRA
-EXIT STATUS
-  0  Nothing removable was found and every requested change was applied.
-  1  Removable comments were reported, or a diff was printed.
-  2  Invalid source, configuration, plugin, or I/O failure.
-
-FILES
-  .ocomment.toml   Project configuration, merged over the user file.
-  .ocommentignore  Extra ignore patterns honoured by repository walks.
-  .ocomment.lock   Pinned digests of the installed WASM scanner plugins.
-  $XDG_CONFIG_HOME/ocomment/config.toml
-                   User configuration, merged over the built\-in defaults.
-
-EXAMPLES
-  ocomment
-      Check the current repository and report removable comments.
-  ocomment fix \-\-policy all \-\-layout compact src
-      Remove every comment under src and close the gaps it leaves.
-  ocomment strip \-\-language rust < before.rs > after.rs
-      Strip one file from standard input to standard output.
-
-SEE ALSO
-  The complete schemas and guides are available in the OComment repository.
 .SH VERSION
 v0.1.0
+.SH EXIT STATUS
+.TP
+.B 0
+Nothing removable was found and every requested change was applied.
+.TP
+.B 1
+Removable comments were reported, or a diff was printed.
+.TP
+.B 2
+Invalid source, configuration, plugin, or I/O failure.
+.SH FILES
+.TP
+.B \&.ocomment.toml
+Project configuration, merged over the user file.
+.TP
+.B \&.ocommentignore
+Extra ignore patterns honoured by repository walks.
+.TP
+.B \&.ocomment.lock
+Pinned digests of the installed WASM scanner plugins.
+.TP
+.B $XDG_CONFIG_HOME/ocomment/config.toml
+User configuration, merged over the built\-in defaults.
+.SH EXAMPLES
+.TP
+.B ocomment
+Check the current repository and report removable comments.
+.TP
+.B ocomment fix \-\-policy all \-\-layout compact src
+Remove every comment under src and close the gaps it leaves.
+.TP
+.B ocomment strip \-\-language rust < before.rs > after.rs
+Strip one file from standard input to standard output.
+.SH SEE ALSO
+The complete schemas and guides are available in the OComment repository.

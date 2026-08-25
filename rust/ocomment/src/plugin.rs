@@ -1,4 +1,4 @@
-use crate::config::PluginsConfig;
+use crate::{config::PluginsConfig, output::wrote};
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use ocomment_core::{
     ByteSpan, CommentKind, Language, TransformOptions, TransformResult, transform_spans,
@@ -519,16 +519,26 @@ fn locked_artifact_candidate(root: &Path, artifact: &str) -> Result<PathBuf> {
 }
 
 pub fn add(
+    output: &mut impl Write,
     root: &Path,
     source: &str,
     requested_name: Option<&str>,
     expected: Option<&str>,
     identity: Option<&str>,
 ) -> Result<()> {
-    install(root, source, requested_name, expected, identity, true)
+    install(
+        output,
+        root,
+        source,
+        requested_name,
+        expected,
+        identity,
+        true,
+    )
 }
 
 fn install(
+    output: &mut impl Write,
     root: &Path,
     source: &str,
     requested_name: Option<&str>,
@@ -599,11 +609,11 @@ fn install(
         },
     );
     save_lock(root, &lock)?;
-    println!("added plugin {name}");
+    wrote(writeln!(output, "added plugin {name}"))?;
     Ok(())
 }
 
-pub fn remove(root: &Path, name: &str) -> Result<()> {
+pub fn remove(output: &mut impl Write, root: &Path, name: &str) -> Result<()> {
     let mut lock = load_lock(root)?;
     let removed = lock
         .plugins
@@ -623,25 +633,26 @@ pub fn remove(root: &Path, name: &str) -> Result<()> {
         }
     }
     save_lock(root, &lock)?;
-    println!("removed plugin {name}");
+    wrote(writeln!(output, "removed plugin {name}"))?;
     Ok(())
 }
 
-pub fn list(root: &Path) -> Result<()> {
+pub fn list(output: &mut impl Write, root: &Path) -> Result<()> {
     let lock = load_lock(root)?;
     if lock.plugins.is_empty() {
-        println!("no plugins locked");
+        wrote(writeln!(output, "no plugins locked"))?;
     }
     for (name, plugin) in lock.plugins {
-        println!(
+        wrote(writeln!(
+            output,
             "{name}\t{}\tsha256:{}\tAPI {}",
             plugin.version, plugin.sha256, plugin.api
-        );
+        ))?;
     }
     Ok(())
 }
 
-pub fn verify(root: &Path, selected: Option<&str>) -> Result<()> {
+pub fn verify(output: &mut impl Write, root: &Path, selected: Option<&str>) -> Result<()> {
     let lock = load_lock(root)?;
     for (name, plugin) in lock
         .plugins
@@ -657,7 +668,11 @@ pub fn verify(root: &Path, selected: Option<&str>) -> Result<()> {
         if actual != plugin.sha256 {
             bail!("plugin `{name}` digest mismatch");
         }
-        println!("plugin {name}: verified sha256:{}", plugin.sha256);
+        wrote(writeln!(
+            output,
+            "plugin {name}: verified sha256:{}",
+            plugin.sha256
+        ))?;
     }
     if let Some(name) = selected
         && !lock.plugins.contains_key(name)
@@ -665,12 +680,12 @@ pub fn verify(root: &Path, selected: Option<&str>) -> Result<()> {
         bail!("plugin `{name}` is not locked");
     }
     if lock.plugins.is_empty() {
-        println!("plugins: none (offline lock is valid)");
+        wrote(writeln!(output, "plugins: none (offline lock is valid)"))?;
     }
     Ok(())
 }
 
-pub fn update(root: &Path, selected: Option<&str>) -> Result<()> {
+pub fn update(output: &mut impl Write, root: &Path, selected: Option<&str>) -> Result<()> {
     let lock = load_lock(root)?;
     let entries: Vec<_> = lock
         .plugins
@@ -683,11 +698,12 @@ pub fn update(root: &Path, selected: Option<&str>) -> Result<()> {
     }
     for (name, plugin) in entries {
         if !is_remote_source(&plugin.source) {
-            add(root, &plugin.source, Some(&name), None, None)?;
+            add(output, root, &plugin.source, Some(&name), None, None)?;
         } else {
             // The existing signature identity authorizes a freshly fetched
             // artifact. Its new digest is then written to the lockfile.
             install(
+                output,
                 root,
                 &plugin.source,
                 Some(&name),
@@ -704,7 +720,7 @@ fn is_remote_source(source: &str) -> bool {
     source.starts_with("https://") || source.starts_with("gh:") || source.starts_with("oci:")
 }
 
-pub fn new_plugin(path: &Path) -> Result<()> {
+pub fn new_plugin(output: &mut impl Write, path: &Path) -> Result<()> {
     fs::create_dir(path)
         .with_context(|| format!("refusing to overwrite plugin directory {}", path.display()))?;
     fs::create_dir(path.join("src"))?;
@@ -790,7 +806,11 @@ The host provides no WASI, filesystem, network, clock, or random imports. Keep t
 self-contained and return sorted, non-overlapping, non-empty byte spans.
 "#,
     )?;
-    println!("created plugin scaffold {}", path.display());
+    wrote(writeln!(
+        output,
+        "created plugin scaffold {}",
+        path.display()
+    ))?;
     Ok(())
 }
 

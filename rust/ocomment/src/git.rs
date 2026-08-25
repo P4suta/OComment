@@ -39,6 +39,9 @@ pub struct StagedRequest<'a> {
     pub presentation: Presentation,
     pub verbosity: Verbosity,
     pub preview: bool,
+    /// The run only previews the patch; `fix --dry-run` writes nothing to
+    /// the index and reports what a real run would remove.
+    pub dry_run: bool,
 }
 
 pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
@@ -54,6 +57,7 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
         presentation,
         verbosity,
         preview,
+        dry_run,
     } = request;
     let root = repository_root()?;
     let names = staged_paths(&root, paths)?;
@@ -194,7 +198,7 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
             verbosity,
             preview,
             explain: false,
-            dry_run: false,
+            dry_run,
             force_invalid: resolved.config.policy.force_invalid,
             applied,
         },
@@ -424,7 +428,12 @@ fn hash_object(root: &Path, bytes: &[u8]) -> Result<String> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?;
-    child.stdin.take().expect("piped stdin").write_all(bytes)?;
+    child
+        .stdin
+        .take()
+        .expect("piped stdin")
+        .write_all(bytes)
+        .context("cannot write the rewritten blob to git hash-object")?;
     let output = child.wait_with_output()?;
     if !output.status.success() {
         bail!(

@@ -78,7 +78,7 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
-'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
@@ -90,7 +90,7 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--help[Print help (see more with '\''--help'\'')]' \
 '-V[Print version]' \
 '--version[Print version]' \
-'::paths -- Files or directories to check (default\: current directory):_files' \
+'::paths -- Files or directories to check; `-` reads standard input (default\: current directory):_files' \
 ":: :_ocomment_commands" \
 "*::: :->ocomment" \
 && ret=0
@@ -165,7 +165,7 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
-'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
@@ -177,7 +177,7 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
-'*::paths -- Files or directories to process (default\: current directory):_files' \
+'*::paths -- Files or directories to process; `-` reads standard input (default\: current directory):_files' \
 && ret=0
 ;;
 (fix)
@@ -245,9 +245,10 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
-'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
+'--dry-run[Print the patch \`fix\` would apply and write nothing]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
@@ -257,7 +258,7 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
-'*::paths -- Files or directories to process (default\: current directory):_files' \
+'*::paths -- Files or directories to rewrite (default\: current directory):_files' \
 && ret=0
 ;;
 (diff)
@@ -325,7 +326,7 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
-'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
@@ -337,7 +338,7 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
-'*::paths -- Files or directories to process (default\: current directory):_files' \
+'*::paths -- Files or directories to process; `-` reads standard input (default\: current directory):_files' \
 && ret=0
 ;;
 (scan)
@@ -405,7 +406,7 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
-'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
@@ -417,7 +418,7 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
-'*::paths -- Files or directories to process (default\: current directory):_files' \
+'*::paths -- Files or directories to process; `-` reads standard input (default\: current directory):_files' \
 && ret=0
 ;;
 (strip)
@@ -485,7 +486,7 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
-'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
@@ -562,7 +563,7 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
-'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
@@ -639,7 +640,7 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
-'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--fix[For the Lefthook hook, run \`fix\` instead of \`check\`]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
@@ -718,7 +719,7 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
-'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
@@ -796,7 +797,7 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
-'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
@@ -873,7 +874,7 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
-'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
@@ -961,7 +962,7 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
-'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
@@ -1039,7 +1040,7 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
-'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
@@ -1117,7 +1118,7 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
-'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
@@ -1194,7 +1195,7 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
-'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
@@ -1272,7 +1273,7 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
-'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
@@ -1350,7 +1351,7 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
-'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
@@ -1476,7 +1477,7 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
-'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
@@ -1554,7 +1555,7 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
-'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
@@ -1631,7 +1632,7 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
-'--progress=[Accepted for compatibility; the end-of-run summary replaced this line]:WHEN:(auto always never)' \
+'--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \

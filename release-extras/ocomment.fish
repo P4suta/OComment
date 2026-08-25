@@ -95,7 +95,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_needs_command" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_needs_command" -l progress -d 'Accepted for compatibility; the end-of-run summary replaced this line' -r -f -a "auto\t''
+complete -c ocomment -n "__fish_ocomment_needs_command" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_needs_command" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
@@ -190,7 +190,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l progress -d 'Accepted for compatibility; the end-of-run summary replaced this line' -r -f -a "auto\t''
+complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l staged -d 'Read and update Git index blobs rather than treating the working tree as the source'
@@ -272,11 +272,12 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l progress -d 'Accepted for compatibility; the end-of-run summary replaced this line' -r -f -a "auto\t''
+complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l staged -d 'Read and update Git index blobs rather than treating the working tree as the source'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l index-only -d 'With `--staged`, do not attempt a uniquely mappable working-tree update'
+complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l dry-run -d 'Print the patch `fix` would apply and write nothing'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
@@ -354,7 +355,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l progress -d 'Accepted for compatibility; the end-of-run summary replaced this line' -r -f -a "auto\t''
+complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l staged -d 'Read and update Git index blobs rather than treating the working tree as the source'
@@ -436,7 +437,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l progress -d 'Accepted for compatibility; the end-of-run summary replaced this line' -r -f -a "auto\t''
+complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l staged -d 'Read and update Git index blobs rather than treating the working tree as the source'
@@ -518,7 +519,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l progress -d 'Accepted for compatibility; the end-of-run summary replaced this line' -r -f -a "auto\t''
+complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
@@ -598,7 +599,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l progress -d 'Accepted for compatibility; the end-of-run summary replaced this line' -r -f -a "auto\t''
+complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
@@ -678,7 +679,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l progress -d 'Accepted for compatibility; the end-of-run summary replaced this line' -r -f -a "auto\t''
+complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l fix -d 'For the Lefthook hook, run `fix` instead of `check`'
@@ -759,7 +760,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l progress -d 'Accepted for compatibility; the end-of-run summary replaced this line' -r -f -a "auto\t''
+complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
@@ -839,7 +840,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l progress -d 'Accepted for compatibility; the end-of-run summary replaced this line' -r -f -a "auto\t''
+complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
@@ -919,7 +920,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l progress -d 'Accepted for compatibility; the end-of-run summary replaced this line' -r -f -a "auto\t''
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
@@ -1009,7 +1010,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l progress -d 'Accepted for compatibility; the end-of-run summary replaced this line' -r -f -a "auto\t''
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
@@ -1089,7 +1090,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l progress -d 'Accepted for compatibility; the end-of-run summary replaced this line' -r -f -a "auto\t''
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
@@ -1169,7 +1170,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l progress -d 'Accepted for compatibility; the end-of-run summary replaced this line' -r -f -a "auto\t''
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
@@ -1249,7 +1250,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l progress -d 'Accepted for compatibility; the end-of-run summary replaced this line' -r -f -a "auto\t''
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
@@ -1329,7 +1330,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l progress -d 'Accepted for compatibility; the end-of-run summary replaced this line' -r -f -a "auto\t''
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
@@ -1409,7 +1410,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l progress -d 'Accepted for compatibility; the end-of-run summary replaced this line' -r -f -a "auto\t''
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
@@ -1496,7 +1497,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l progress -d 'Accepted for compatibility; the end-of-run summary replaced this line' -r -f -a "auto\t''
+complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
@@ -1576,7 +1577,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l progress -d 'Accepted for compatibility; the end-of-run summary replaced this line' -r -f -a "auto\t''
+complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
@@ -1656,7 +1657,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l progress -d 'Accepted for compatibility; the end-of-run summary replaced this line' -r -f -a "auto\t''
+complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
