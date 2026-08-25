@@ -1,0 +1,5 @@
+self-hosted-runner:
+  labels:
+    - ocomment-benchmark
+
+config-variables: null

@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "runner": {
+    "architecture": "x86_64",
+    "cpu": "Intel Core i7-7700K @ 4.20GHz",
+    "threads": 8,
+    "profile": "release, thin LTO, stripped",
+    "recorded": "2026-08-25"
+  },
+  "metrics": {
+    "version_median_ms": 2.0,
+    "binary_mib": 9.2,
+    "c_mib_per_second": 1200.0,
+    "javascript_mib_per_second": 275.0,
+    "shell_mib_per_second": 370.0,
+    "typos_ratio": 0.28
+  }
+}

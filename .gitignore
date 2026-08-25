@@ -1,0 +1,15 @@
+/rust/target/
+/ocaml/_build/
+target/
+/.ocomment.lock.tmp
+__pycache__/
+*.py[cod]
+*.profraw
+.env
+.env.*
+!.env.example
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.tmp

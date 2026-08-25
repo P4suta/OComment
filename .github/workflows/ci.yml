@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy,rustfmt
+      - run: cargo fmt --all --manifest-path rust/Cargo.toml -- --check
+      - run: cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets --locked -- -D warnings
+      - run: cargo test --manifest-path rust/Cargo.toml --workspace --all-targets --locked
+      - run: python3 tools/check_embedded_specs.py
+      - run: python3 -m pip install --disable-pip-version-check jsonschema==4.25.1
+      - run: cargo build --manifest-path rust/Cargo.toml --locked -p ocomment
+      - run: python3 tools/validate_schemas.py
+      - name: Check publishable file sets
+        run: ./tools/package-list.sh
+
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - run: cargo check --manifest-path rust/Cargo.toml --workspace --all-targets --locked
+
+  reference:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: "5.5"
+      - run: opam install ./ocaml/ocomment-ref.opam --deps-only
+      - run: opam exec -- dune runtest --root ocaml
+      - run: opam exec -- ./tools/differential.sh
+
+  host-smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15, windows-2025]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --manifest-path rust/Cargo.toml --release --locked -p ocomment
+      - name: Unix smoke test
+        if: runner.os != 'Windows'
+        run: ./rust/target/release/ocomment --version
+      - name: Windows smoke test
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: '& rust/target/release/ocomment.exe --version'

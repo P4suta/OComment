@@ -1,0 +1,19 @@
+opam-version: "2.0"
+synopsis: "Independent OCaml reference implementation for OComment"
+description: "Byte-oriented scanner and JSONL differential oracle used by the OComment repository."
+maintainer: "OComment contributors"
+authors: "OComment contributors"
+license: "MIT OR Apache-2.0"
+homepage: "https://github.com/P4suta/OComment"
+bug-reports: "https://github.com/P4suta/OComment/issues"
+dev-repo: "git+https://github.com/P4suta/OComment.git"
+depends: [
+  "ocaml" {>= "5.5" & < "5.6"}
+  "dune" {= "3.24.2"}
+  "yojson" {= "3.0.0"}
+  "re" {= "1.14.0"}
+  "uucp" {= "17.0.0"}
+]
+build: [
+  ["dune" "build" "-p" name "-j" jobs]
+]

@@ -1,0 +1,19 @@
+version = 1
+
+protected = [
+  "shebang", "encoding", "go:", "+build", "triple-slash-reference",
+  "sourceMappingURL", "sourceURL", "#__PURE__", "@__PURE__",
+  "lint-and-formatter", "type-checker", "optimizer-hint", "version-comment"
+]
+
+[policy.safe]
+remove = ["line", "block", "doc-line", "doc-block", "license"]
+keep = ["directive", "html-comment", "shebang", "encoding", "optimizer-hint", "version-comment"]
+
+[policy.legal]
+remove = ["line", "block", "doc-line", "doc-block"]
+keep = ["license", "directive", "html-comment", "shebang", "encoding", "optimizer-hint", "version-comment"]
+
+[policy.all]
+remove = ["line", "block", "doc-line", "doc-block", "license", "directive", "html-comment", "optimizer-hint", "version-comment"]
+keep_without_force_protected = ["shebang", "encoding"]

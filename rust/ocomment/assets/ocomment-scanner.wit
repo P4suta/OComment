@@ -1,0 +1,18 @@
+package ocomment:scanner@1.0.0;
+
+interface types {
+  record span { start: u64, end: u64 }
+  enum comment-kind {
+    line, block, doc-line, doc-block, directive, license, html-comment,
+    shebang, encoding, optimizer-hint, version-comment
+  }
+  record comment { location: span, kind: comment-kind }
+  record scan-options { language: string, dialect: string, configuration: list<u8> }
+  variant scan-error { invalid-configuration(string), invalid-source(string), resource-limit(string) }
+}
+
+world scanner {
+  use types.{comment, scan-options, scan-error};
+  export api-version: func() -> u32;
+  export scan: func(source: list<u8>, options: scan-options) -> result<list<comment>, scan-error>;
+}

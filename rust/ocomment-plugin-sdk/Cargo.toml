@@ -1,0 +1,19 @@
+[package]
+name = "ocomment-plugin-sdk"
+description = "Guest and host-side types for OComment scanner plugins"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage = "https://github.com/P4suta/OComment"
+documentation = "https://docs.rs/ocomment-plugin-sdk"
+readme = "README.md"
+keywords = ["comments", "plugin", "wasm", "component-model"]
+categories = ["development-tools", "wasm"]
+include = ["src/**", "README.md"]
+
+[dependencies]
+ocomment-core = { version = "0.1.0", path = "../ocomment-core" }
+serde.workspace = true
+thiserror.workspace = true

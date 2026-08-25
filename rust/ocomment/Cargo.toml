@@ -1,0 +1,55 @@
+[package]
+name = "ocomment"
+description = "Fast, byte-preserving comment checker and remover"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage = "https://github.com/P4suta/OComment"
+documentation = "https://docs.rs/ocomment"
+readme = "README.md"
+keywords = ["comments", "linter", "source-code", "lsp", "wasm"]
+categories = ["command-line-utilities", "development-tools"]
+include = ["src/**", "assets/**", "README.md"]
+
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/ocomment-{ target }.tar.gz"
+pkg-fmt = "tgz"
+bin-dir = "ocomment-{ target }/{ bin }{ binary-ext }"
+
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-url = "{ repo }/releases/download/v{ version }/ocomment-{ target }.zip"
+pkg-fmt = "zip"
+
+[[bin]]
+name = "ocomment"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+clap_complete.workspace = true
+globset.workspace = true
+ignore.workspace = true
+ocomment-core = { version = "0.1.0", path = "../ocomment-core" }
+ocomment-plugin-sdk = { version = "0.1.0", path = "../ocomment-plugin-sdk" }
+rayon.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+similar.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+tokio.workspace = true
+tower-lsp.workspace = true
+wasm_component_layer.workspace = true
+wasmi.workspace = true
+wasmi_runtime_layer.workspace = true
+
+[dev-dependencies]
+wat = "1.252.0"
+wit-component = "0.19.1"
+wit-parser = "0.13.2"

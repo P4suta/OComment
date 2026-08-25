@@ -1,0 +1,86 @@
+.TH OCOMMENT 1 "August 2026" "ocomment 0.1.0" "User Commands"
+.SH NAME
+ocomment \- check and remove source-code comments safely
+.SH SYNOPSIS
+.B ocomment
+.RI [ PATH ...]
+.br
+.B ocomment
+.RI COMMAND " [OPTIONS]"
+.SH DESCRIPTION
+OComment scans source bytes without requiring UTF-8 and reports or removes
+comment tokens. The default policy protects source preambles and tool or
+language directives. Rewrites are prepared and committed as one rollback-backed
+transaction.
+.SH COMMANDS
+.TP
+.B check [PATH...]
+Report removable comments. This is the default command.
+.TP
+.B fix [PATH...]
+Atomically apply safe edits.
+.TP
+.B diff [PATH...]
+Print unified differences.
+.TP
+.B strip
+Read source from standard input and write transformed bytes to standard output.
+.TP
+.B scan [PATH...]
+Print comment spans, kinds, dispositions, diagnostics, edits, and source maps.
+.TP
+.B lsp
+Run the LSP 3.18 server over stdio.
+.TP
+.B init, config, languages, plugin, completions, doctor
+Manage configuration, integrations, plugins, generated completions, and
+environment diagnostics.
+.SH OPTIONS
+.TP
+.BI --format " human|json|jsonl|sarif|github"
+Select output format.
+.TP
+.BI --policy " safe|legal|all"
+Select removal policy.
+.TP
+.BI --layout " lines|columns|compact"
+Select replacement layout.
+.TP
+.BI --language " LANGUAGE"
+Override language detection.
+.TP
+.BI --dialect " DIALECT"
+Select a guaranteed language dialect.
+.TP
+.BI --keep-kind " KIND"
+Keep a comment kind. May be repeated or comma separated.
+.TP
+.BI --remove-kind " KIND"
+Remove a comment kind. May be repeated or comma separated.
+.TP
+.B --force-invalid
+Apply known safe spans even when the lexical scan reports invalid input.
+.TP
+.B --force-protected
+Allow the all policy to remove protected comment preambles.
+.TP
+.B --staged
+Operate on comments whose starting delimiter is in a Git index addition.
+.TP
+.B --index-only
+With --staged, update only the Git index.
+.SH EXIT STATUS
+0 means clean or a successful transformation. 1 means check or diff found a
+change. 2 means configuration, I/O, source, staged-mapping, or plugin failure.
+.SH FILES
+.TP
+.B .ocomment.toml
+Project configuration, version 1.
+.TP
+.B .ocommentignore
+Additional ignore patterns.
+.TP
+.B .ocomment.lock
+Pinned plugin artifacts and identities.
+.SH SEE ALSO
+The complete schemas and guides are available in the OComment repository.

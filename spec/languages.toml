@@ -1,0 +1,76 @@
+version = 1
+
+[[languages]]
+name = "rust"
+extensions = ["rs"]
+dialects = ["standard"]
+
+[[languages]]
+name = "ocaml"
+extensions = ["ml", "mli"]
+dialects = ["standard"]
+
+[[languages]]
+name = "c"
+extensions = ["c", "h", "m"]
+dialects = ["standard", "gnu-c", "objective-c"]
+
+[[languages]]
+name = "cpp"
+extensions = ["cc", "cpp", "cxx", "hpp", "mm", "cu"]
+dialects = ["standard", "gnu-cpp", "objective-cpp", "cuda"]
+
+[[languages]]
+name = "go"
+extensions = ["go"]
+dialects = ["standard"]
+
+[[languages]]
+name = "java"
+extensions = ["java"]
+dialects = ["standard"]
+
+[[languages]]
+name = "javascript"
+extensions = ["js", "mjs", "cjs", "jsx"]
+dialects = ["standard", "jsx"]
+
+[[languages]]
+name = "typescript"
+extensions = ["ts", "mts", "cts", "tsx"]
+dialects = ["standard", "tsx"]
+
+[[languages]]
+name = "python"
+extensions = ["py", "pyw", "pyi"]
+dialects = ["standard"]
+
+[[languages]]
+name = "shell"
+extensions = ["sh", "bash", "zsh"]
+dialects = ["posix-sh", "bash53", "zsh"]
+
+[[languages]]
+name = "html"
+extensions = ["html", "htm", "xhtml"]
+dialects = ["standard"]
+
+[[languages]]
+name = "css"
+extensions = ["css"]
+dialects = ["standard"]
+
+[[languages]]
+name = "jsonc"
+extensions = ["jsonc", "json5"]
+dialects = ["standard"]
+
+[[languages]]
+name = "sql"
+extensions = ["sql"]
+dialects = ["standard", "postgresql", "mysql", "sqlite", "t-sql", "oracle"]
+
+[[languages]]
+name = "kotlin"
+extensions = ["kt", "kts"]
+dialects = ["standard"]

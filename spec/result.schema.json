@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ocomment.dev/schema/result-v1.json",
+  "title": "OComment JSON output v1",
+  "oneOf": [
+    { "$ref": "#/$defs/envelope" },
+    { "$ref": "#/$defs/file" },
+    { "$ref": "#/$defs/skip" }
+  ],
+  "$defs": {
+    "envelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "files", "skipped"],
+      "properties": {
+        "version": { "const": 1 },
+        "files": { "type": "array", "items": { "$ref": "#/$defs/file" } },
+        "skipped": { "type": "array", "items": { "$ref": "#/$defs/skipBody" } }
+      }
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "language", "changed", "report", "edits", "source_map"],
+      "properties": {
+        "path": { "type": "string" },
+        "language": { "$ref": "#/$defs/language" },
+        "changed": { "type": "boolean" },
+        "report": { "$ref": "#/$defs/report" },
+        "edits": { "type": "array", "items": { "$ref": "#/$defs/edit" } },
+        "source_map": { "$ref": "#/$defs/sourceMap" }
+      }
+    },
+    "skip": {
+      "allOf": [
+        { "$ref": "#/$defs/skipBody" },
+        { "type": "object", "required": ["type"], "properties": { "type": { "const": "skip" } } }
+      ]
+    },
+    "skipBody": {
+      "type": "object",
+      "required": ["path", "reason", "error"],
+      "properties": {
+        "type": { "const": "skip" },
+        "path": { "type": "string" },
+        "reason": { "type": "string" },
+        "error": { "type": "boolean" }
+      }
+    },
+    "report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["language", "comments", "diagnostics", "valid"],
+      "properties": {
+        "language": { "$ref": "#/$defs/language" },
+        "comments": { "type": "array", "items": { "$ref": "#/$defs/comment" } },
+        "diagnostics": { "type": "array", "items": { "$ref": "#/$defs/diagnostic" } },
+        "valid": { "type": "boolean" }
+      }
+    },
+    "span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": { "type": "integer", "minimum": 0 },
+        "end": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "comment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["span", "kind", "disposition"],
+      "properties": {
+        "span": { "$ref": "#/$defs/span" },
+        "kind": { "$ref": "#/$defs/kind" },
+        "disposition": { "$ref": "#/$defs/disposition" }
+      }
+    },
+    "disposition": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["action"], "properties": { "action": { "const": "remove" } }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["action", "reason"],
+          "properties": { "action": { "const": "keep" }, "reason": { "type": "string" } }
+        }
+      ]
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "severity", "span"],
+      "properties": {
+        "code": { "type": "string" },
+        "message": { "type": "string" },
+        "severity": { "enum": ["error", "warning", "info", "hint"] },
+        "span": { "$ref": "#/$defs/span" }
+      }
+    },
+    "edit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["span", "replacement"],
+      "properties": {
+        "span": { "$ref": "#/$defs/span" },
+        "replacement": { "type": "string" }
+      }
+    },
+    "sourceMap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["segments"],
+      "properties": {
+        "segments": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sourceMapSegment" }
+        }
+      }
+    },
+    "sourceMapSegment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["original", "output", "exact"],
+      "properties": {
+        "original": { "$ref": "#/$defs/span" },
+        "output": { "$ref": "#/$defs/span" },
+        "exact": { "type": "boolean" }
+      }
+    },
+    "language": {
+      "enum": ["rust", "ocaml", "c", "cpp", "go", "java", "javascript", "typescript", "python", "shell", "html", "css", "jsonc", "sql", "kotlin", "unknown"]
+    },
+    "kind": {
+      "enum": ["line", "block", "doc-line", "doc-block", "directive", "license", "html-comment", "shebang", "encoding", "optimizer-hint", "version-comment"]
+    }
+  }
+}

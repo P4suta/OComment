@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "language": "rust",
+      "source_utf8": "r#\"// string\"# /* block */\r\n// line\r\n",
+      "note": "raw string, block and line comments, CRLF"
+    },
+    {
+      "language": "ocaml",
+      "source_utf8": "\"(* string *)\" (* outer (* nested *) end *)\n",
+      "note": "string opacity and nested comments"
+    },
+    {
+      "language": "c",
+      "source_utf8": "char *s = \"// string\"; /* block */\n// line\n",
+      "note": "quoted delimiter opacity"
+    },
+    {
+      "language": "cpp",
+      "source_utf8": "auto s = \"/* string */\"; // line\n",
+      "note": "quoted delimiter opacity"
+    },
+    {
+      "language": "go",
+      "source_utf8": "var s = `// raw`; /* block */\n",
+      "note": "raw string opacity"
+    },
+    {
+      "language": "java",
+      "source_utf8": "String s = \"// raw\"; // line\n",
+      "note": "string opacity"
+    },
+    {
+      "language": "javascript",
+      "source_utf8": "const s = \"// raw\"; /* block */\n",
+      "note": "string opacity"
+    },
+    {
+      "language": "typescript",
+      "source_utf8": "const s: string = \"// raw\"; // line\n",
+      "note": "typed source and string opacity"
+    },
+    {
+      "language": "python",
+      "source_utf8": "s = \"# raw\"  # line\n",
+      "note": "string opacity"
+    },
+    {
+      "language": "shell",
+      "source_utf8": "s='# raw' # line\n",
+      "note": "single quote opacity and token boundary"
+    },
+    {
+      "language": "html",
+      "source_utf8": "<!-- visible --><script>let x=1;// line\n</script>",
+      "note": "DOM-observable HTML comment and recursive script"
+    },
+    {
+      "language": "css",
+      "source_utf8": "a{content:\"/* raw */\";/* block */}\n",
+      "note": "string opacity"
+    },
+    {
+      "language": "jsonc",
+      "source_utf8": "{\"x\":\"// raw\" // line\n}\n",
+      "note": "JSON string opacity"
+    },
+    {
+      "language": "sql",
+      "source_utf8": "select '-- raw'; -- line\n/* block */\n",
+      "note": "SQL string opacity and both comment forms"
+    },
+    {
+      "language": "kotlin",
+      "source_utf8": "val s = \"// raw\" // line\n/* outer /* nested */ end */",
+      "note": "string opacity and nested comments"
+    }
+  ]
+}

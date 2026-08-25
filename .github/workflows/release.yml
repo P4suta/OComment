@@ -1,0 +1,183 @@
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --manifest-path rust/Cargo.toml --release --locked -p ocomment
+      - run: python3 tools/release_extras.py --binary rust/target/release/ocomment
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-extras
+          path: release-extras/
+          if-no-files-found: error
+
+  build:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            build_tool: cargo
+            cross: false
+            tar: all
+            zip: none
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            build_tool: cross
+            cross: true
+            tar: all
+            zip: none
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            build_tool: cross
+            cross: true
+            tar: all
+            zip: none
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            build_tool: cross
+            cross: true
+            tar: all
+            zip: none
+          - target: x86_64-apple-darwin
+            os: macos-15-intel
+            build_tool: cargo
+            cross: false
+            tar: all
+            zip: none
+          - target: aarch64-apple-darwin
+            os: macos-15
+            build_tool: cargo
+            cross: false
+            tar: all
+            zip: none
+          - target: x86_64-pc-windows-msvc
+            os: windows-2025
+            build_tool: cargo
+            cross: false
+            tar: none
+            zip: all
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-extras
+          path: release-extras
+      - id: package
+        uses: taiki-e/upload-rust-binary-action@v1
+        with:
+          bin: ocomment
+          package: ocomment
+          manifest-path: rust/Cargo.toml
+          target: ${{ matrix.target }}
+          build-tool: ${{ matrix.build_tool }}
+          locked: true
+          archive: ocomment-${{ matrix.target }}
+          tar: ${{ matrix.tar }}
+          zip: ${{ matrix.zip }}
+          checksum: sha256
+          include: LICENSE-MIT,LICENSE-APACHE,README.md,release-extras/ocomment.1,release-extras/ocomment.bash,release-extras/_ocomment,release-extras/ocomment.fish,release-extras/_ocomment.ps1,release-extras/ocomment.elv
+          leading-dir: true
+          dry-run: true
+          dry-run-intended: true
+      - name: Native Unix smoke test
+        if: runner.os != 'Windows' && !matrix.cross
+        run: ./rust/target/${{ matrix.target }}/release/ocomment --version
+      - name: Cross Linux smoke test
+        if: matrix.cross
+        run: cross run --manifest-path rust/Cargo.toml --locked -p ocomment --target ${{ matrix.target }} -- --version
+      - name: Native Windows smoke test
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: '& rust/target/${{ matrix.target }}/release/ocomment.exe --version'
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ocomment-${{ matrix.target }}
+          path: |
+            ${{ steps.package.outputs.tar }}
+            ${{ steps.package.outputs.zip }}
+            ${{ steps.package.outputs.sha256 }}
+          if-no-files-found: error
+
+  publish-release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      artifact-metadata: write
+      attestations: write
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: ocomment-*
+          path: release
+          merge-multiple: true
+      - name: Generate SPDX SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: release
+          format: spdx-json
+          output-file: release/ocomment.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - name: Generate package-manager definitions
+        run: >-
+          python3 tools/release_manifests.py
+          --release-dir release
+          --version "$GITHUB_REF_NAME"
+          --repository "$GITHUB_REPOSITORY"
+      - name: Generate combined checksums
+        working-directory: release
+        run: >-
+          sha256sum ocomment-*.tar.gz ocomment-*.zip ocomment.spdx.json
+          ocomment.rb ocomment-scoop.json ocomment.winget.yaml > SHA256SUMS
+      - uses: sigstore/cosign-installer@v4.1.0
+      - name: Sign every release subject
+        shell: bash
+        run: |
+          while IFS= read -r -d '' asset; do
+            cosign sign-blob --yes --bundle "${asset}.sigstore.json" "$asset"
+          done < <(find release -maxdepth 1 -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.spdx.json' -o -name '*.rb' -o -name '*-scoop.json' -o -name '*.winget.yaml' -o -name 'SHA256SUMS' \) -print0)
+      - name: Attest build provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            release/*.tar.gz
+            release/*.zip
+      - name: Create immutable GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" release/* --generate-notes --verify-tag
+
+  publish-crates:
+    needs: publish-release
+    runs-on: ubuntu-latest
+    environment: crates-io
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - run: ./tools/publish-crates.sh
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
