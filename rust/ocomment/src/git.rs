@@ -378,7 +378,7 @@ fn added_line_ranges(root: &Path, path: &Path) -> Result<Vec<std::ops::Range<usi
             continue;
         };
         let range = plus.trim_start_matches('+');
-        let (start, length) = range.split_once(',').map_or((range, "1"), |parts| parts);
+        let (start, length) = range.split_once(',').unwrap_or((range, "1"));
         let start: usize = start.parse()?;
         let length: usize = length.parse()?;
         if length > 0 {

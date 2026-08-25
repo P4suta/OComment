@@ -1,0 +1,61 @@
+name: Bug report
+description: Report reproducible incorrect behavior or a safety issue.
+title: "[Bug]: "
+labels: ["bug", "needs reproduction"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve OComment. For vulnerabilities, stop here and use the private security-report link.
+  - type: input
+    id: version
+    attributes:
+      label: OComment version
+      description: Paste `ocomment --version` or the commit SHA.
+      placeholder: ocomment 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, architecture, installation method, and relevant Git/editor version.
+    validations:
+      required: true
+  - type: input
+    id: language
+    attributes:
+      label: Language and dialect
+      description: Include how the language was detected or selected.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include safe input bytes, configuration, command, and exact steps. Redact secrets and private paths.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and diagnostics
+      description: Include exit status and sanitized output from `ocomment doctor` when relevant.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues and discussions.
+          required: true
+        - label: This report does not contain a credential or confidential source file.
+          required: true
