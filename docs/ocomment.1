@@ -316,6 +316,140 @@ Render the roff manual page to stdout
 .TP
 ocomment\-help(1)
 Print this message or the help of the given subcommand(s)
+.SH COMMAND OPTIONS
+.SS ocomment check
+.TP
+\fB\-\-staged\fR
+Read and update Git index blobs rather than treating the working tree as the source
+.TP
+\fB\-\-index\-only\fR
+With `\-\-staged`, do not attempt a uniquely mappable working\-tree update
+.TP
+[\fIPATH\fR]
+Files or directories to process; `\-` reads standard input (default: current directory)
+.SS ocomment fix
+.TP
+\fB\-\-staged\fR
+Read and update Git index blobs rather than treating the working tree as the source
+.TP
+\fB\-\-index\-only\fR
+With `\-\-staged`, do not attempt a uniquely mappable working\-tree update
+.TP
+\fB\-\-dry\-run\fR
+Print the patch `fix` would apply and write nothing
+.TP
+[\fIPATH\fR]
+Files or directories to rewrite (default: current directory)
+.SS ocomment diff
+.TP
+\fB\-\-staged\fR
+Read and update Git index blobs rather than treating the working tree as the source
+.TP
+\fB\-\-index\-only\fR
+With `\-\-staged`, do not attempt a uniquely mappable working\-tree update
+.TP
+[\fIPATH\fR]
+Files or directories to process; `\-` reads standard input (default: current directory)
+.SS ocomment scan
+.TP
+\fB\-\-staged\fR
+Read and update Git index blobs rather than treating the working tree as the source
+.TP
+\fB\-\-index\-only\fR
+With `\-\-staged`, do not attempt a uniquely mappable working\-tree update
+.TP
+[\fIPATH\fR]
+Files or directories to process; `\-` reads standard input (default: current directory)
+.SS ocomment init
+.TP
+\fB\-\-fix\fR
+For the Lefthook hook, run `fix` instead of `check`
+.TP
+\fB\-\-force\fR
+Replace the file if it already exists
+.TP
+\fB\-\-stdout\fR
+Print the template to standard output and write no file
+.TP
+[\fIKIND\fR] [default: config]
+Which starter file to write
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+config
+.IP \(bu 2
+lefthook
+.RE
+.SS ocomment config
+.TP
+[\fIACTION\fR] [default: show]
+Which view of the resolved configuration to print
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+show
+.IP \(bu 2
+locate
+.IP \(bu 2
+explain
+.IP \(bu 2
+schema
+.RE
+.SS ocomment plugin add
+.TP
+\fB\-\-name\fR \fI<NAME>\fR
+Name to register the plugin under (default: the file stem)
+.TP
+\fB\-\-sha256\fR \fI<HEX>\fR
+Expected SHA\-256 digest of the component, verified before install
+.TP
+\fB\-\-identity\fR \fI<IDENTITY>\fR
+Publisher identity recorded alongside the pinned digest
+.TP
+<\fISOURCE\fR>
+Path or URL of the WASM component to install
+.SS ocomment plugin remove
+.TP
+<\fINAME\fR>
+Name of the plugin to remove
+.SS ocomment plugin update
+.TP
+[\fINAME\fR]
+Name of the plugin to update (default: all of them)
+.SS ocomment plugin verify
+.TP
+[\fINAME\fR]
+Name of the plugin to verify (default: all of them)
+.SS ocomment plugin new
+.TP
+<\fIPATH\fR>
+Directory to create the plugin crate in
+.SS ocomment completions
+.TP
+<\fISHELL\fR>
+Shell whose completion script is written to stdout
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+bash
+.IP \(bu 2
+elvish
+.IP \(bu 2
+fish
+.IP \(bu 2
+powershell
+.IP \(bu 2
+zsh
+.RE
 .SH VERSION
 v0.1.0
 .SH EXIT STATUS

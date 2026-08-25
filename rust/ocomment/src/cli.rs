@@ -347,6 +347,12 @@ struct InitArgs {
     /// For the Lefthook hook, run `fix` instead of `check`.
     #[arg(long)]
     fix: bool,
+    /// Replace the file if it already exists.
+    #[arg(long, conflicts_with = "stdout")]
+    force: bool,
+    /// Print the template to standard output and write no file.
+    #[arg(long)]
+    stdout: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, ValueEnum)]
@@ -567,6 +573,7 @@ fn run_target(
             dry_run,
             force_invalid: resolved.config.policy.force_invalid,
             applied,
+            policy: resolved.config.policy.mode,
         },
     )?;
     if invalid {
@@ -725,26 +732,116 @@ fn apply_cli_overrides(config: &mut config::Config, common: &CommonArgs) {
     }
 }
 
+/// The apostrophe definition `roff` writes at the top of every fragment it
+/// renders. A page needs it once, so it is stripped from every fragment after
+/// the first.
+const ROFF_PREAMBLE: &str = concat!(r".ie \n(.g .ds Aq \(aq", "\n", r".el .ds Aq '", "\n");
+
+/// Append one rendered `roff` fragment to the page under construction.
+fn append_fragment(page: &mut String, fragment: &[u8]) -> Result<()> {
+    let text = std::str::from_utf8(fragment).context("the manual page is not valid UTF-8")?;
+    page.push_str(text.strip_prefix(ROFF_PREAMBLE).unwrap_or(text));
+    Ok(())
+}
+
+/// Render the arguments that belong to one command alone, as `.SS` subsections.
+///
+/// `clap_mangen` renders a single page for the root command, so an argument
+/// declared on a subcommand — `fix --dry-run`, `init --force`, `plugin add
+/// --sha256` — would never reach the manual at all. Every command is walked
+/// and the arguments it does not inherit are written under its own heading.
+fn command_options(command: &clap::Command, path: &str, page: &mut String) -> Result<()> {
+    for subcommand in command.get_subcommands() {
+        if subcommand.is_hide_set() || subcommand.get_name() == "help" {
+            continue;
+        }
+        let name = format!("{path} {}", subcommand.get_name());
+        // The global arguments already have one entry each under OPTIONS,
+        // POLICY, and OUTPUT, and `--help` is on every command by definition.
+        // Repeating them here would bury the few arguments this section is
+        // for. Hiding is how `clap_mangen` is told to skip an argument.
+        let mut own = subcommand.clone();
+        let inherited: Vec<clap::Id> = own
+            .get_arguments()
+            .filter(|argument| {
+                argument.is_global_set()
+                    || argument.get_id() == "help"
+                    || argument.get_id() == "version"
+            })
+            .map(|argument| argument.get_id().clone())
+            .collect();
+        for id in inherited {
+            own = own.mut_arg(id, |argument| argument.hide(true));
+        }
+        let mut fragment = Vec::new();
+        clap_mangen::Man::new(own)
+            .render_options_section(&mut fragment)
+            .context("cannot render the manual page")?;
+        let mut rendered = String::new();
+        append_fragment(&mut rendered, &fragment)?;
+        // A command with nothing of its own renders an empty fragment, and an
+        // empty heading would claim otherwise.
+        if let Some(body) = rendered.strip_prefix(".SH OPTIONS\n")
+            && !body.is_empty()
+        {
+            page.push_str(&format!(".SS {}\n{body}", name.replace('-', "\\-")));
+        }
+        command_options(subcommand, &name, page)?;
+    }
+    Ok(())
+}
+
 /// Render the roff manual page from the parser definition itself.
 fn run_man() -> Result<u8> {
-    let mut page = Vec::new();
     // `clap_mangen` renders `after_long_help` as one opaque `.SH EXTRA` body,
     // so the page is built without it and the same content is appended below
-    // as real roff sections.
+    // as real roff sections. It is assembled section by section rather than
+    // through `render`, because the per-command options belong next to the
+    // command list and `render` puts VERSION after it.
     //
     // The `.TH` date is left blank on purpose: stamping the build date would
     // make two reproducible builds of the same source disagree.
-    clap_mangen::Man::new(Cli::command().after_long_help(None))
+    let man = clap_mangen::Man::new(Cli::command().after_long_help(None))
         .title("OCOMMENT")
-        .manual("User Commands")
-        .render(&mut page)
+        .manual("User Commands");
+    let mut page = String::new();
+    let mut fragment = Vec::new();
+    // The title fragment keeps the apostrophe definition the whole page needs.
+    man.render_title(&mut fragment)
         .context("cannot render the manual page")?;
-    if !page.ends_with(b"\n") {
-        page.push(b'\n');
+    page.push_str(std::str::from_utf8(&fragment).context("the manual page is not valid UTF-8")?);
+    type Section = fn(&clap_mangen::Man, &mut dyn Write) -> io::Result<()>;
+    for section in [
+        clap_mangen::Man::render_name_section as Section,
+        clap_mangen::Man::render_synopsis_section,
+        clap_mangen::Man::render_description_section,
+        clap_mangen::Man::render_options_section,
+        clap_mangen::Man::render_subcommands_section,
+    ] {
+        fragment.clear();
+        section(&man, &mut fragment).context("cannot render the manual page")?;
+        append_fragment(&mut page, &fragment)?;
     }
-    page.extend_from_slice(MAN_SECTIONS.as_bytes());
+    let mut per_command = String::new();
+    let mut root = Cli::command();
+    // Building propagates the global arguments into every subcommand, which is
+    // what makes them recognizable as inherited below.
+    root.build();
+    command_options(&root, "ocomment", &mut per_command)?;
+    if !per_command.is_empty() {
+        page.push_str(".SH COMMAND OPTIONS\n");
+        page.push_str(&per_command);
+    }
+    fragment.clear();
+    man.render_version_section(&mut fragment)
+        .context("cannot render the manual page")?;
+    append_fragment(&mut page, &fragment)?;
+    if !page.ends_with('\n') {
+        page.push('\n');
+    }
+    page.push_str(MAN_SECTIONS);
     let mut stdout = output::stdout();
-    output::wrote(stdout.write_all(&page))?;
+    output::wrote(stdout.write_all(page.as_bytes()))?;
     output::finish(&mut stdout)?;
     Ok(0)
 }
@@ -764,38 +861,101 @@ fn run_completions(shell: Shell) -> Result<u8> {
 }
 
 fn run_init(args: InitArgs) -> Result<u8> {
-    let mut stdout = output::stdout();
-    match args.kind {
-        InitKind::Config => create_new(
-            &mut stdout,
+    // Writing the file is only the first half of the task, so each template
+    // carries the step that finishes it.
+    let (path, contents, next_step) = match args.kind {
+        InitKind::Config => (
             config::CONFIG_FILE,
-            include_str!("../assets/default-config.toml"),
-        )?,
+            include_str!("../assets/default-config.toml").to_owned(),
+            "edit [policy] and run `ocomment check`",
+        ),
         InitKind::Lefthook => {
             let command = if args.fix {
                 "ocomment fix --staged"
             } else {
                 "ocomment check --staged"
             };
-            create_new(
-                &mut stdout,
+            (
                 "lefthook.yml",
-                &format!("pre-commit:\n  commands:\n    ocomment:\n      run: {command}\n"),
-            )?;
+                format!("pre-commit:\n  commands:\n    ocomment:\n      run: {command}\n"),
+                "run `lefthook install` to activate the hook",
+            )
         }
+    };
+    let mut stdout = output::stdout();
+    if args.stdout {
+        // Nothing is created, so nothing is said about creating it: the
+        // template alone is on standard output, ready to be redirected.
+        output::wrote(write!(stdout, "{contents}"))?;
+        output::finish(&mut stdout)?;
+        return Ok(0);
     }
+    note_inherited_config()?;
+    write_template(&mut stdout, path, &contents, args.force, next_step)?;
     output::finish(&mut stdout)?;
     Ok(0)
 }
 
-fn create_new(output: &mut impl Write, path: &str, contents: &str) -> Result<()> {
-    let mut file = fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(path)
-        .with_context(|| format!("refusing to overwrite {path}"))?;
-    file.write_all(contents.as_bytes())?;
-    output::wrote(writeln!(output, "created {path}"))?;
+/// Say so when a project configuration from a parent directory already governs
+/// this directory.
+///
+/// The starter file is about to layer over it rather than start from nothing,
+/// and the hook a `lefthook` run installs will read it — either way the reader
+/// is better off knowing before they start editing. It is a note and not a
+/// refusal: a nested per-crate configuration is a normal thing to want.
+///
+/// The search starts at the parent so that the file this very run is about to
+/// write — or the one `--force` is replacing — is never reported as inherited.
+fn note_inherited_config() -> Result<()> {
+    let Ok(directory) = std::env::current_dir() else {
+        return Ok(());
+    };
+    let Some(inherited) = directory.parent().and_then(config::locate_project) else {
+        return Ok(());
+    };
+    let stderr = io::stderr();
+    let mut report = stderr.lock();
+    output::note(
+        &mut report,
+        &format!(
+            "note: {} already applies to this directory",
+            inherited.display()
+        ),
+    )
+}
+
+/// Write one starter file, refusing an existing one unless `force` says
+/// otherwise.
+///
+/// The refusal is `create_new` rather than a prior `exists()` test: between
+/// such a test and the open the file could appear, and never writing over
+/// someone's edited configuration is the whole point of the check.
+fn write_template(
+    output: &mut impl Write,
+    path: &str,
+    contents: &str,
+    force: bool,
+    next_step: &str,
+) -> Result<()> {
+    let mut options = fs::OpenOptions::new();
+    options.write(true);
+    if force {
+        options.create(true).truncate(true);
+    } else {
+        options.create_new(true);
+    }
+    let mut file = options.open(path).map_err(|error| {
+        if error.kind() == io::ErrorKind::AlreadyExists {
+            anyhow::anyhow!(
+                "{path} already exists; use --force to overwrite or --stdout to print the template"
+            )
+        } else {
+            anyhow::Error::new(error).context(format!("cannot write {path}"))
+        }
+    })?;
+    file.write_all(contents.as_bytes())
+        .with_context(|| format!("cannot write {path}"))?;
+    output::wrote(writeln!(output, "created {path} — {next_step}"))?;
     Ok(())
 }
 

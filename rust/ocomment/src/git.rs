@@ -201,6 +201,7 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
             dry_run,
             force_invalid: resolved.config.policy.force_invalid,
             applied,
+            policy: resolved.config.policy.mode,
         },
     )?;
     if invalid {
@@ -229,7 +230,10 @@ fn fix_index(root: &Path, entries: &[IndexEntry], index_only: bool) -> Result<()
     let original_index = fs::read(&index_path)
         .with_context(|| format!("cannot read Git index {}", index_path.display()))?;
     if index_path.with_file_name("index.lock").exists() {
-        bail!("Git index is locked; no files were modified");
+        bail!(
+            "Git index is locked; no files were modified; another Git process may be \
+             running, or remove a stale .git/index.lock"
+        );
     }
     let mut temporary_index = NamedTempFile::new_in(index_path.parent().unwrap_or(root))?;
     temporary_index.write_all(&original_index)?;
@@ -324,7 +328,9 @@ fn map_edits_uniquely(index: &[u8], working: &[u8], edits: &[Edit]) -> Result<Ve
 fn repository_root() -> Result<PathBuf> {
     let mut output = command_output(
         Command::new("git").args(["rev-parse", "--show-toplevel"]),
-        "not inside a Git repository",
+        // Git's own words follow: they name the directory it searched from,
+        // which is the difference between "wrong directory" and "no repository".
+        "--staged needs a Git repository",
     )?;
     trim_line_ending(&mut output);
     Ok(bytes_to_path(&output))

@@ -642,6 +642,8 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--fix[For the Lefthook hook, run \`fix\` instead of \`check\`]' \
+'(--stdout)--force[Replace the file if it already exists]' \
+'--stdout[Print the template to standard output and write no file]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments such as shebang and encoding preambles]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \

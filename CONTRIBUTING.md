@@ -56,6 +56,20 @@ case. Keep byte spans half-open, edits sorted and non-overlapping, and output
 deterministic. Update both implementations and their differential expectations
 when the shared contract changes.
 
+## CLI output conventions
+
+Findings, patches, generated files, and every machine format are written to
+standard output; run summaries, progress, and notes are written to standard
+error, so `ocomment diff > fix.patch` and `--format json | jq` stay clean. A
+machine format writes nothing to standard error but errors and diagnostics.
+Every write to standard output goes through `output::wrote(...)`, which tags a
+lost reader as `OutputPipeClosed` so the run ends quietly instead of reporting
+an unexplained broken pipe; `rust/ocomment/tests/source_guards.rs` enforces
+that. Name a language, dialect, comment kind, policy, layout, or disposition
+through its `as_str()` and never through `Debug`: the canonical spellings are
+kebab-case (`doc-block`, `html-comment`) and are shared with the human, JSON,
+JSONL, SARIF, and GitHub output. All user-facing text is English.
+
 ## Pull requests
 
 - Keep each pull request focused and explain compatibility or safety effects.

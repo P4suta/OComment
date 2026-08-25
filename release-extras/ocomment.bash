@@ -867,7 +867,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__init)
-            opts="-q -v -h --fix --config --policy --layout --language --dialect --keep-kind --remove-kind --force-invalid --force-protected --format --color --hyperlinks --no-preview --progress --quiet --verbose --help config lefthook"
+            opts="-q -v -h --fix --force --stdout --config --policy --layout --language --dialect --keep-kind --remove-kind --force-invalid --force-protected --format --color --hyperlinks --no-preview --progress --quiet --verbose --help config lefthook"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0

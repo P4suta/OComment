@@ -1,7 +1,7 @@
-use crate::files::SkippedFile;
+use crate::files::{NO_LANGUAGE, SkippedFile};
 use anyhow::Result;
 use clap::ValueEnum;
-use ocomment_core::{ByteSpan, CommentKind, Language, TransformResult};
+use ocomment_core::{ByteSpan, CommentKind, Disposition, Language, Policy, TransformResult};
 use serde::Serialize;
 use serde_json::{Value, json};
 use similar::{ChangeTag, TextDiff};
@@ -68,6 +68,9 @@ pub struct RenderOptions {
     /// The run reached the disk. A `fix` blocked by invalid syntax or an I/O
     /// error leaves this false and must not claim any removal.
     pub applied: bool,
+    /// The policy the run was asked for. Only `all` promises to take every
+    /// comment out, so only `all` owes an explanation for the ones it keeps.
+    pub policy: Policy,
 }
 
 /// What one run found, counted once for the end-of-run summary.
@@ -143,6 +146,9 @@ fn removable_count(file: &ProcessedFile) -> usize {
 }
 
 /// Fold a skip reason onto a short label the summary can group by.
+///
+/// The per-file line says what to do about one file; the summary counts many,
+/// so it trades the sentence for a key short enough to sit in a list of them.
 fn skip_label(reason: &str) -> &str {
     if reason.starts_with("larger than ") {
         "too large"
@@ -150,9 +156,33 @@ fn skip_label(reason: &str) -> &str {
         "binary"
     } else if reason.starts_with("language disabled") {
         "language disabled"
+    } else if reason == NO_LANGUAGE {
+        "unknown language"
     } else {
         reason
     }
+}
+
+/// The `Keep` reason the core scanner gives a shebang or encoding line that
+/// `--force-protected` would have removed. It is one of the five reasons the
+/// differential protocol freezes, so matching on it is stable; the end-to-end
+/// test `policy_all_says_how_to_remove_a_kept_preamble` is what would catch it
+/// drifting apart from the scanner.
+const PROTECTED_PREAMBLE: &str = "required source preamble";
+
+/// How many comments were kept only because `--force-protected` was absent.
+///
+/// Counted from the disposition rather than from the comment kind: a shebang
+/// held back by `--keep-kind shebang` stays kept whatever `--force-protected`
+/// says, and advertising the flag for it would be a lie.
+fn protected_preambles(files: &[ProcessedFile]) -> usize {
+    files
+        .iter()
+        .flat_map(|file| &file.result.report.comments)
+        .filter(|comment| {
+            matches!(&comment.disposition, Disposition::Keep { reason } if reason == PROTECTED_PREAMBLE)
+        })
+        .count()
 }
 
 /// `1 file` / `2 files`: the count and its noun, pluralized by the regular
@@ -480,7 +510,12 @@ fn render_human(
             }
         }
     }
-    if operation != Operation::Diff {
+    // `diff` keeps standard output for the patch alone, so the skips it met
+    // are left to the summary on standard error. `fix --dry-run` is that same
+    // `diff` speaking for the `fix` it stands in for: a skipped path can be
+    // the whole answer to the run, and the preview owes the reader the reason
+    // exactly where `fix` would put it.
+    if operation != Operation::Diff || options.dry_run {
         for item in skipped {
             if !item.error && (quiet || !(item.explicit || verbose)) {
                 continue;
@@ -509,6 +544,21 @@ fn render_human(
         note(&mut report, &line)?;
     }
     note(&mut report, &summary_report(&summary, options, folded))?;
+    // Under any other policy a kept preamble is one of many deliberate keeps
+    // and saying so every run would be noise. `all` said it would take
+    // everything, so what it left behind is the surprise worth a line.
+    if options.policy == Policy::All {
+        let protected = protected_preambles(files);
+        if protected > 0 {
+            note(
+                &mut report,
+                &format!(
+                    "{} kept; add --force-protected to remove them.",
+                    comments(protected, "protected preamble")
+                ),
+            )?;
+        }
+    }
     if summary.invalid_files > 0 && !options.force_invalid {
         let (verb, pronoun) = if summary.invalid_files == 1 {
             ("has", "it")

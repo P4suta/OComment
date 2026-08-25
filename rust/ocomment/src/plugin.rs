@@ -814,6 +814,24 @@ self-contained and return sorted, non-overlapping, non-empty byte spans.
     Ok(())
 }
 
+/// What each external tool is needed for, in the words the command line uses.
+/// One constant per purpose keeps the four spawn sites and `doctor` naming the
+/// same thing.
+const HTTPS_SOURCES: &str = "https:// plugin sources";
+const GH_SOURCES: &str = "gh: plugin sources";
+const OCI_SOURCES: &str = "oci: plugin sources";
+const SIGNATURE_VERIFICATION: &str = "--identity verification";
+
+/// Why a tool OComment shells out to could not be started.
+///
+/// The operating system says only "No such file or directory", which names
+/// neither the missing binary nor the part of the run that wanted it. This
+/// says both, and sends the reader to the command that reports every tool at
+/// once instead of making them rediscover the next gap one failure at a time.
+fn missing_tool(tool: &str, purpose: &str) -> String {
+    format!("cannot run `{tool}` (needed for {purpose}); run `ocomment doctor`")
+}
+
 fn fetch_remote(source: &str, directory: &Path) -> Result<AcquiredArtifact> {
     let temporary = TemporaryPath::new(directory, ".wasm")?;
     if source.starts_with("https://") {
@@ -828,7 +846,7 @@ fn fetch_remote(source: &str, directory: &Path) -> Result<AcquiredArtifact> {
             .arg(temporary.path())
             .arg(source)
             .status()
-            .context("cannot launch HTTPS plugin retrieval")?;
+            .with_context(|| missing_tool("curl", HTTPS_SOURCES))?;
         ensure!(status.success(), "plugin retrieval failed with {status}");
     } else if let Some(spec) = source.strip_prefix("gh:") {
         let (repository, tag, asset) = parse_github_source(spec)?;
@@ -845,7 +863,7 @@ fn fetch_remote(source: &str, directory: &Path) -> Result<AcquiredArtifact> {
             ])
             .arg(temporary.path())
             .status()
-            .context("cannot launch GitHub plugin retrieval")?;
+            .with_context(|| missing_tool("gh", GH_SOURCES))?;
         ensure!(status.success(), "plugin retrieval failed with {status}");
     } else {
         let specification = source.strip_prefix("oci:").expect("remote kind checked");
@@ -860,7 +878,7 @@ fn fetch_remote(source: &str, directory: &Path) -> Result<AcquiredArtifact> {
             .args(["pull", reference, "--output"])
             .arg(pulled.path())
             .status()
-            .context("cannot launch OCI plugin retrieval")?;
+            .with_context(|| missing_tool("oras", OCI_SOURCES))?;
         ensure!(status.success(), "plugin retrieval failed with {status}");
         let artifact = if let Some(relative) = artifact_path {
             let relative = Path::new(relative);
@@ -913,7 +931,7 @@ fn verify_sigstore(source: &str, artifact: &Path, identity: &str, directory: &Pa
             ])
             .arg(reference)
             .status()
-            .context("cannot launch cosign")?;
+            .with_context(|| missing_tool("cosign", SIGNATURE_VERIFICATION))?;
         ensure!(status.success(), "Sigstore verification failed");
         return Ok(());
     }
@@ -933,7 +951,7 @@ fn verify_sigstore(source: &str, artifact: &Path, identity: &str, directory: &Pa
             ])
             .arg(bundle.path())
             .status()
-            .context("cannot retrieve GitHub Sigstore bundle")?
+            .with_context(|| missing_tool("gh", GH_SOURCES))?
     } else {
         let bundle_url = format!("{source}.sigstore.json");
         Command::new("curl")
@@ -947,7 +965,7 @@ fn verify_sigstore(source: &str, artifact: &Path, identity: &str, directory: &Pa
             .arg(bundle.path())
             .arg(&bundle_url)
             .status()
-            .with_context(|| format!("cannot retrieve Sigstore bundle {bundle_url}"))?
+            .with_context(|| missing_tool("curl", HTTPS_SOURCES))?
     };
     ensure!(download.success(), "cannot retrieve Sigstore bundle");
     let status = Command::new("cosign")
@@ -961,7 +979,7 @@ fn verify_sigstore(source: &str, artifact: &Path, identity: &str, directory: &Pa
         ])
         .arg(artifact)
         .status()
-        .context("cannot launch cosign")?;
+        .with_context(|| missing_tool("cosign", SIGNATURE_VERIFICATION))?;
     if !status.success() {
         bail!("Sigstore verification failed");
     }
@@ -1256,6 +1274,37 @@ mod tests {
             .unwrap();
         assert_eq!(result.output, source);
         assert!(result.report.comments.is_empty());
+    }
+
+    /// A tool that is not installed is the most common way a plugin command
+    /// fails, and the shell's "No such file or directory" names neither the
+    /// binary nor the reason this run wanted it. Every spawn site says both,
+    /// and points at the one command that reports the whole environment.
+    ///
+    /// `cosign` runs only after an artifact has already been fetched and
+    /// validated, which no offline test can arrange, so its wording is pinned
+    /// here rather than through the command line.
+    #[test]
+    fn a_missing_tool_names_itself_its_purpose_and_doctor() {
+        for (tool, purpose) in [
+            ("curl", HTTPS_SOURCES),
+            ("gh", GH_SOURCES),
+            ("oras", OCI_SOURCES),
+            ("cosign", SIGNATURE_VERIFICATION),
+        ] {
+            assert_eq!(
+                missing_tool(tool, purpose),
+                format!("cannot run `{tool}` (needed for {purpose}); run `ocomment doctor`")
+            );
+        }
+        assert_eq!(
+            missing_tool("gh", GH_SOURCES),
+            "cannot run `gh` (needed for gh: plugin sources); run `ocomment doctor`"
+        );
+        assert_eq!(
+            missing_tool("cosign", SIGNATURE_VERIFICATION),
+            "cannot run `cosign` (needed for --identity verification); run `ocomment doctor`"
+        );
     }
 
     #[test]

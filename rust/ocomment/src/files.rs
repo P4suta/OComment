@@ -4,7 +4,7 @@ use globset::{Glob, GlobSet, GlobSetBuilder};
 use ignore::WalkBuilder;
 use ocomment_core::{DeclarativeProfile, Detection, Dialect, Language, detect_language};
 use std::{
-    fs,
+    env, fs,
     path::{Path, PathBuf},
 };
 
@@ -45,6 +45,30 @@ pub const STDIN_PATH: &str = "<stdin>";
 /// only way forward is for the caller to name the language.
 pub const STDIN_LANGUAGE_HELP: &str = "cannot detect the language of standard input; \
 pass --language <LANGUAGE> (see `ocomment languages`)";
+
+/// Why a file OComment has no scanner for is passed over, and the two ways out
+/// of it: consult the list of what is built in, or name a language anyway.
+///
+/// The end-of-run summary must not repeat this sentence once per file, so it
+/// folds the reason onto a short key of its own; `output::skip_label` is what
+/// ties the two together.
+pub const NO_LANGUAGE: &str =
+    "no built-in language for this file (see `ocomment languages`; use --language to force)";
+
+/// Why a named path was not found. A relative path is resolved against the
+/// working directory, which is exactly what a caller who typed it from the
+/// wrong place cannot see, so the directory that was searched is named.
+fn missing_path_reason() -> String {
+    env::current_dir().map_or_else(
+        |_| "path does not exist".to_owned(),
+        |cwd| {
+            format!(
+                "path does not exist (checked relative to {})",
+                cwd.display()
+            )
+        },
+    )
+}
 
 /// Turn the bytes read from standard input into a source file the ordinary
 /// pipeline can process, or the skip that says why it cannot. Detection has no
@@ -198,7 +222,7 @@ fn discover_with_scope(
         } else {
             discovery.skipped.push(SkippedFile {
                 path,
-                reason: "path does not exist".into(),
+                reason: missing_path_reason(),
                 error: true,
                 explicit: explicit_scope,
             });
@@ -331,7 +355,7 @@ fn load_one(
     if language == Language::Unknown && profile.is_none() && plugin.is_none() {
         discovery.skipped.push(SkippedFile {
             path: path.to_path_buf(),
-            reason: "unknown language".into(),
+            reason: NO_LANGUAGE.into(),
             error: false,
             explicit: explicit_path,
         });

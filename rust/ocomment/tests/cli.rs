@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeSet,
     fs,
     io::{Read, Write},
     path::Path,
@@ -70,6 +71,12 @@ fn git_with_path(directory: &Path, arguments: &[&str], path: &std::ffi::OsStr) -
     );
     output.stdout
 }
+
+/// What a file OComment has no built-in scanner for is skipped with. The
+/// sentence is pinned literally by `an_unknown_language_skip_says_how_to_force_one`;
+/// every other test names it through this constant.
+const NO_LANGUAGE: &str =
+    "no built-in language for this file (see `ocomment languages`; use --language to force)";
 
 fn repository() -> TempDir {
     let directory = tempfile::tempdir().unwrap();
@@ -212,6 +219,190 @@ fn init_lefthook_preserves_partial_stage_contract() {
     let generated = fs::read_to_string(directory.path().join("lefthook.yml")).unwrap();
     assert!(generated.contains("ocomment fix --staged"));
     assert!(!generated.contains("stage_fixed"));
+}
+
+/// The starter file is a decision the reader may already have made
+/// differently: a second `init` must not quietly replace the config they have
+/// been editing, and the refusal has to name both ways out.
+#[test]
+fn init_config_refuses_to_overwrite_an_existing_file() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join(".ocomment.toml");
+    let mine = b"version = 1\n[policy]\nmode = \"all\"\n";
+    fs::write(&path, mine).unwrap();
+
+    let output = run(directory.path(), &["init", "config"]);
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let error = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        error.contains(
+            ".ocomment.toml already exists; use --force to overwrite or --stdout to print the \
+             template"
+        ),
+        "{error}"
+    );
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        mine,
+        "the refusal edited the file"
+    );
+}
+
+/// The same refusal guards the hook file, and `--force` is the way past it.
+#[test]
+fn init_force_overwrites_an_existing_file() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join(".ocomment.toml");
+    fs::write(&path, b"stale\n").unwrap();
+
+    let output = run(directory.path(), &["init", "config", "--force"]);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let written = fs::read_to_string(&path).unwrap();
+    assert!(written.contains("version = 1"), "{written}");
+    assert!(
+        !written.contains("stale"),
+        "the old bytes survived: {written}"
+    );
+
+    let hook = directory.path().join("lefthook.yml");
+    fs::write(&hook, b"stale\n").unwrap();
+    let refused = run(directory.path(), &["init", "lefthook"]);
+    assert_eq!(refused.status.code(), Some(2));
+    assert!(
+        String::from_utf8_lossy(&refused.stderr).contains("lefthook.yml already exists"),
+        "{}",
+        String::from_utf8_lossy(&refused.stderr)
+    );
+    assert_eq!(fs::read(&hook).unwrap(), b"stale\n");
+    let forced = run(directory.path(), &["init", "lefthook", "--force"]);
+    assert_eq!(forced.status.code(), Some(0));
+    assert!(fs::read_to_string(&hook).unwrap().contains("pre-commit:"));
+}
+
+/// `--stdout` is the read-only door: the template goes to the pipe and the
+/// working directory is left exactly as it was found.
+#[test]
+fn init_stdout_prints_the_template_and_writes_nothing() {
+    let directory = tempfile::tempdir().unwrap();
+    let output = run(directory.path(), &["init", "config", "--stdout"]);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let printed = String::from_utf8(output.stdout).unwrap();
+    assert!(printed.contains("version = 1"), "{printed}");
+    assert!(
+        !printed.contains("created "),
+        "nothing was created, so nothing may claim it was: {printed}"
+    );
+    assert!(!directory.path().join(".ocomment.toml").exists());
+
+    let hook = run(directory.path(), &["init", "lefthook", "--fix", "--stdout"]);
+    assert_eq!(hook.status.code(), Some(0));
+    let printed = String::from_utf8(hook.stdout).unwrap();
+    assert!(printed.contains("ocomment fix --staged"), "{printed}");
+    assert!(!directory.path().join("lefthook.yml").exists());
+}
+
+/// A config in a parent directory already governs this one, so a new starter
+/// file here layers over it rather than starting from nothing. The note says
+/// so before the file is written, and does not stop it being written.
+#[test]
+fn init_notes_a_project_config_that_already_applies() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        b"version = 1\n[policy]\nmode = \"all\"\n",
+    )
+    .unwrap();
+    let nested = directory.path().join("crate");
+    fs::create_dir(&nested).unwrap();
+
+    let output = run(&nested, &["init", "config"]);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let note = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        note.contains("note: ")
+            && note.contains(".ocomment.toml already applies to this directory"),
+        "{note}"
+    );
+    assert!(
+        nested.join(".ocomment.toml").is_file(),
+        "the note replaced the file"
+    );
+
+    // The config the run itself just created is this directory's own, not an
+    // inherited one, so a first `init` in a bare directory says nothing.
+    let bare = tempfile::tempdir().unwrap();
+    let quiet = run(bare.path(), &["init", "config"]);
+    assert_eq!(quiet.status.code(), Some(0));
+    assert!(
+        !String::from_utf8_lossy(&quiet.stderr).contains("already applies"),
+        "{}",
+        String::from_utf8_lossy(&quiet.stderr)
+    );
+}
+
+/// Creating the file is not the end of the task, so the line that reports it
+/// names the step that is.
+#[test]
+fn init_success_messages_name_the_next_step() {
+    let directory = tempfile::tempdir().unwrap();
+    let config = run(directory.path(), &["init", "config"]);
+    assert_eq!(config.status.code(), Some(0));
+    assert_eq!(
+        String::from_utf8_lossy(&config.stdout).trim_end(),
+        "created .ocomment.toml \u{2014} edit [policy] and run `ocomment check`"
+    );
+
+    let hook = run(directory.path(), &["init", "lefthook"]);
+    assert_eq!(hook.status.code(), Some(0));
+    assert_eq!(
+        String::from_utf8_lossy(&hook.stdout).trim_end(),
+        "created lefthook.yml \u{2014} run `lefthook install` to activate the hook"
+    );
+}
+
+/// One writes a file and the other refuses to; asking for both is a mistake
+/// clap can catch before anything is opened.
+#[test]
+fn init_refuses_force_together_with_stdout() {
+    let directory = tempfile::tempdir().unwrap();
+    let output = run(directory.path(), &["init", "config", "--force", "--stdout"]);
+    assert_eq!(output.status.code(), Some(2));
+    let error = String::from_utf8_lossy(&output.stderr);
+    assert!(error.contains("--force"), "{error}");
+    assert!(error.contains("--stdout"), "{error}");
+    assert!(!directory.path().join(".ocomment.toml").exists());
+}
+
+/// The two new switches are documented where a reader looks for them.
+#[test]
+fn init_help_documents_force_and_stdout() {
+    let directory = tempfile::tempdir().unwrap();
+    let output = run(directory.path(), &["init", "--help"]);
+    assert_eq!(output.status.code(), Some(0));
+    let help = String::from_utf8(output.stdout).unwrap();
+    for needle in ["--force", "--stdout"] {
+        assert!(help.contains(needle), "`{needle}` is missing from:\n{help}");
+    }
 }
 
 #[test]
@@ -1139,7 +1330,7 @@ fn verbose_lists_the_folded_skips() {
     assert_eq!(output.status.code(), Some(1));
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(
-        stdout.contains("notes.md: skipped: unknown language"),
+        stdout.contains(&format!("notes.md: skipped: {NO_LANGUAGE}")),
         "verbose check output is:\n{stdout}"
     );
 }
@@ -1152,7 +1343,7 @@ fn an_explicit_unknown_language_argument_is_still_listed() {
     assert_eq!(output.status.code(), Some(0));
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(
-        stdout.contains("notes.md: skipped: unknown language"),
+        stdout.contains(&format!("notes.md: skipped: {NO_LANGUAGE}")),
         "check output is:\n{stdout}"
     );
 }
@@ -1245,8 +1436,13 @@ fn help_lists_the_verbosity_and_progress_flags() {
         );
     }
     assert!(
+        help.contains("live scanning counter"),
+        "`--progress` does not say that it draws the live counter:\n{help}"
+    );
+    assert!(
         !help.contains("progress indicator"),
-        "`--progress` still promises an indicator that is never drawn:\n{help}"
+        "`--progress` describes the live counter it draws, not a vague \
+         indicator:\n{help}"
     );
 }
 
@@ -1489,7 +1685,7 @@ fn a_named_skip_is_not_counted_twice_in_the_summary() {
     let stdout = String::from_utf8(output.stdout).unwrap();
     let stderr = String::from_utf8(output.stderr).unwrap();
     assert!(
-        stdout.contains("notes.md: skipped: unknown language"),
+        stdout.contains(&format!("notes.md: skipped: {NO_LANGUAGE}")),
         "check output is:\n{stdout}"
     );
     assert_eq!(
@@ -1605,7 +1801,7 @@ fn a_run_of_only_named_skips_does_not_repeat_them() {
     assert!(
         String::from_utf8(output.stdout)
             .unwrap()
-            .contains("notes.md: skipped: unknown language")
+            .contains(&format!("notes.md: skipped: {NO_LANGUAGE}"))
     );
     assert_eq!(
         String::from_utf8(output.stderr).unwrap(),
@@ -1682,19 +1878,28 @@ fn undetectable_standard_input_asks_for_a_language() {
     );
 }
 
-/// `strip` and `check -` read the same standard input, so they must fail with
-/// the same words when they cannot tell what it is.
+/// `strip` and every command that accepts `-` read the same standard input,
+/// so they must fail with the same words when they cannot tell what it is.
+/// One constant is what makes that true; this test is what keeps it true.
 #[test]
 fn strip_and_check_agree_on_the_undetectable_input_message() {
     let directory = tempfile::tempdir().unwrap();
-    let stripped = run_stdin(directory.path(), &["strip"], b"let x = 1; // note\n");
-    let checked = run_stdin(directory.path(), &["check", "-"], b"let x = 1; // note\n");
-    assert_eq!(stripped.status.code(), Some(2));
-    assert_eq!(checked.status.code(), Some(2));
-    assert_eq!(
-        String::from_utf8(stripped.stderr).unwrap(),
-        String::from_utf8(checked.stderr).unwrap()
-    );
+    let expected = "ocomment: cannot detect the language of standard input; \
+                    pass --language <LANGUAGE> (see `ocomment languages`)\n";
+    for arguments in [
+        vec!["strip"],
+        vec!["check", "-"],
+        vec!["diff", "-"],
+        vec!["scan", "-"],
+    ] {
+        let output = run_stdin(directory.path(), &arguments, b"let x = 1; // note\n");
+        assert_eq!(output.status.code(), Some(2), "`ocomment {arguments:?}`");
+        assert_eq!(
+            String::from_utf8(output.stderr).unwrap(),
+            expected,
+            "`ocomment {arguments:?}`"
+        );
+    }
 }
 
 /// A pipe cannot be rewritten in place; `fix` says so and names the command
@@ -1786,6 +1991,43 @@ fn fix_dry_run_on_a_clean_file_reports_nothing_to_fix() {
     assert_eq!(
         String::from_utf8(output.stderr).unwrap(),
         "Nothing to fix in 1 file.\n"
+    );
+}
+
+/// A skipped path is the entire answer to the run, so the preview has to name
+/// it: `fix --dry-run` lists the skip on standard output exactly as the `fix`
+/// it stands in for does, instead of leaving a bare "Nothing to fix." with no
+/// reason attached. Plain `diff` keeps its standard output for the patch.
+#[test]
+fn fix_dry_run_lists_a_skipped_path_the_way_fix_does() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(directory.path().join("notes.md"), b"# notes\n").unwrap();
+
+    let previewed = run(directory.path(), &["fix", "--dry-run", "notes.md"]);
+    assert_eq!(previewed.status.code(), Some(0));
+    assert_eq!(
+        String::from_utf8(previewed.stdout.clone()).unwrap(),
+        format!("notes.md: skipped: {NO_LANGUAGE}\n"),
+        "the preview never said why it had nothing to fix"
+    );
+    assert_eq!(
+        String::from_utf8(previewed.stderr).unwrap(),
+        "Nothing to fix.\n"
+    );
+
+    let fixed = run(directory.path(), &["fix", "notes.md"]);
+    assert_eq!(
+        String::from_utf8(previewed.stdout).unwrap(),
+        String::from_utf8(fixed.stdout).unwrap(),
+        "the preview and the run it stands in for disagree about the skip"
+    );
+
+    let diffed = run(directory.path(), &["diff", "notes.md"]);
+    assert_eq!(diffed.status.code(), Some(0));
+    assert_eq!(
+        String::from_utf8(diffed.stdout).unwrap(),
+        "",
+        "`diff` reserves its standard output for the patch"
     );
 }
 
@@ -2017,6 +2259,23 @@ fn a_closed_error_pipe_does_not_end_the_run() {
     );
 }
 
+/// The real `git` on this machine, found on `PATH` the way a shell finds it.
+///
+/// A fake `git` planted ahead of it has to hand every other subcommand to the
+/// genuine one by absolute path: the fake is first on `PATH` itself, so `exec
+/// git` would only call it back. `/usr/bin/git` is the fallback for a `PATH`
+/// that names none.
+#[cfg(unix)]
+fn real_git() -> std::path::PathBuf {
+    std::env::var_os("PATH")
+        .and_then(|path| {
+            std::env::split_paths(&path)
+                .map(|directory| directory.join("git"))
+                .find(|candidate| candidate.is_file())
+        })
+        .unwrap_or_else(|| std::path::PathBuf::from("/usr/bin/git"))
+}
+
 /// A closed pipe is benign only when it is *our* report that lost its reader.
 /// `git hash-object` exiting before it reads the rewritten blob breaks a pipe
 /// the run owns in the other direction: the index was never updated, so the
@@ -2027,11 +2286,23 @@ fn a_broken_pipe_from_git_hash_object_fails_the_staged_fix() {
     use std::os::unix::fs::PermissionsExt;
 
     let directory = repository();
-    // The blob has to outgrow any pipe buffer, so the write is still in flight
-    // when the fake `git hash-object` drops the reading end.
+    // What travels down the pipe is the blob with the comments already taken
+    // out, so it is that which has to outgrow the pipe buffer — 64 KiB on
+    // Linux — for the write to still be in flight when the fake
+    // `git hash-object` drops the reading end. Half again as much is margin
+    // enough. The file is therefore sized by the bytes that survive the fix
+    // rather than by its own length, and it carries them on a few long lines
+    // instead of many short ones: the run costs time per comment, and this
+    // test needs bytes.
+    let padding = "x".repeat(200);
     let mut source = String::new();
-    for index in 0..8000 {
-        source.push_str(&format!("let value{index} = {index}; // remove {index}\n"));
+    let mut stripped = 0;
+    let mut index = 0;
+    while stripped < 96 * 1024 {
+        let code = format!("let value{index} = \"{padding}\";");
+        stripped += code.len() + 1;
+        source.push_str(&format!("{code} // remove {index}\n"));
+        index += 1;
     }
     let path = directory.path().join("wide.rs");
     fs::write(&path, &source).unwrap();
@@ -2044,12 +2315,15 @@ fn a_broken_pipe_from_git_hash_object_fails_the_staged_fix() {
     let script = fake.path().join("git");
     fs::write(
         &script,
-        "#!/bin/sh\n\
-         if [ \"$1\" = hash-object ]; then\n\
-         exec 0<&-\n\
-         exit 1\n\
-         fi\n\
-         exec /usr/bin/git \"$@\"\n",
+        format!(
+            "#!/bin/sh\n\
+             if [ \"$1\" = hash-object ]; then\n\
+             exec 0<&-\n\
+             exit 1\n\
+             fi\n\
+             exec {} \"$@\"\n",
+            real_git().display()
+        ),
     )
     .unwrap();
     fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
@@ -2074,6 +2348,14 @@ fn a_broken_pipe_from_git_hash_object_fails_the_staged_fix() {
     assert!(
         stderr.contains("git hash-object"),
         "the report does not say which write failed:\n{stderr}"
+    );
+    // `hash-object` also exits non-zero, and that failure carries the same
+    // name. This is the test for the broken pipe, so the blob must have been
+    // in flight when the reader went away, not sitting whole in the buffer.
+    assert!(
+        stderr.contains("cannot write the rewritten blob"),
+        "the run failed before the blob was ever written, so the broken pipe \
+         went untested:\n{stderr}"
     );
     assert_eq!(
         git(directory.path(), &["show", ":wide.rs"]),
@@ -2161,4 +2443,380 @@ fn an_empty_run_summarizes_itself_in_the_vocabulary_of_its_command() {
         String::from_utf8(output.stderr).unwrap(),
         "Nothing to scan: 1 file skipped (unknown language: 1; use -v to list).\n"
     );
+}
+
+/// A file OComment has no scanner for is not "unknown": the skip line names
+/// the list to consult and the flag that forces a language anyway. The folded
+/// summary clause keeps the short key, so a walk over a hundred unreadable
+/// extensions still reads as one clause instead of a hundred sentences.
+#[test]
+fn an_unknown_language_skip_says_how_to_force_one() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join("sample.rs"),
+        b"let x = 1; // remove\n",
+    )
+    .unwrap();
+    fs::write(directory.path().join("notes.md"), b"# notes\n").unwrap();
+    let output = run(directory.path(), &["check", "-v", "."]);
+    assert_eq!(output.status.code(), Some(1));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        stdout.contains(
+            "notes.md: skipped: no built-in language for this file \
+             (see `ocomment languages`; use --language to force)"
+        ),
+        "the skip line never said what to do about it:\n{stdout}"
+    );
+    assert!(
+        stderr.contains("1 file skipped (unknown language: 1)."),
+        "the folded clause stopped using the short key:\n{stderr}"
+    );
+}
+
+/// A path that was named and is not there says where it was looked for, so a
+/// typo, a wrong working directory, and a deleted file are told apart without
+/// a second run.
+#[test]
+fn a_missing_path_says_where_it_was_looked_for() {
+    let directory = tempfile::tempdir().unwrap();
+    let cwd = fs::canonicalize(directory.path()).unwrap();
+    let output = run(&cwd, &["check", "missing.rs"]);
+    assert_eq!(output.status.code(), Some(2));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains(&format!(
+            "missing.rs: error: path does not exist (checked relative to {})",
+            cwd.display()
+        )),
+        "check output is:\n{stdout}"
+    );
+}
+
+/// A project configuration without the version key is refused; saying which
+/// line to add, and to which file, is the whole fix.
+#[test]
+fn a_configuration_without_a_version_says_how_to_add_one() {
+    let directory = tempfile::tempdir().unwrap();
+    let config = directory.path().join(".ocomment.toml");
+    fs::write(&config, b"[policy]\nmode = \"all\"\n").unwrap();
+    fs::write(
+        directory.path().join("sample.rs"),
+        b"let x = 1; // remove\n",
+    )
+    .unwrap();
+    let output = run(directory.path(), &["check", "sample.rs"]);
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        stderr.contains(&format!(
+            "must contain `version = 1` (add `version = 1` at the top of {})",
+            config.display()
+        )),
+        "the version error never said what to write:\n{stderr}"
+    );
+}
+
+/// A misspelled `[languages.*]` key is refused by name; the fix is the list of
+/// the languages that do exist.
+#[test]
+fn an_unknown_language_key_points_at_the_language_list() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        b"version = 1\n[languages.klingon]\n",
+    )
+    .unwrap();
+    fs::write(
+        directory.path().join("sample.rs"),
+        b"let x = 1; // remove\n",
+    )
+    .unwrap();
+    let output = run(directory.path(), &["check", "sample.rs"]);
+    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(
+        String::from_utf8(output.stderr).unwrap(),
+        "ocomment: unknown language configuration key `klingon`; see `ocomment languages`\n"
+    );
+}
+
+/// `--staged` reads the index, so outside a repository the flag is the thing
+/// to drop. Git's own words are kept: they say which directory was searched.
+#[test]
+fn staged_outside_a_repository_names_the_flag_and_quotes_git() {
+    let directory = tempfile::tempdir().unwrap();
+    let output = run(directory.path(), &["check", "--staged"]);
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        stderr.contains("--staged needs a Git repository:"),
+        "the failure never named the flag that needed one:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("not a git repository"),
+        "Git's own explanation was dropped:\n{stderr}"
+    );
+}
+
+/// A lock file left behind by a crashed Git is indistinguishable from a Git
+/// that is running right now, so the message offers both readings and the
+/// path to delete.
+#[test]
+fn a_locked_git_index_says_what_to_do_about_the_lock() {
+    let directory = repository();
+    fs::write(
+        directory.path().join("sample.rs"),
+        b"let x = 1; // remove\n",
+    )
+    .unwrap();
+    git(directory.path(), &["add", "sample.rs"]);
+    fs::write(directory.path().join(".git/index.lock"), b"").unwrap();
+    let output = run(directory.path(), &["fix", "--staged"]);
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        stderr.contains(
+            "Git index is locked; no files were modified; another Git process may be \
+             running, or remove a stale .git/index.lock"
+        ),
+        "the lock failure never said what to do about it:\n{stderr}"
+    );
+}
+
+/// The plugin commands shell out to four tools. A missing one must name the
+/// binary, say what this run wanted it for, and point at the command that
+/// reports the whole environment at once.
+#[test]
+fn a_missing_plugin_tool_names_it_its_purpose_and_doctor() {
+    let directory = tempfile::tempdir().unwrap();
+    // Pin the project root: without a configuration the walk upwards can find
+    // a repository marker above the temporary directory and install there.
+    fs::write(directory.path().join(".ocomment.toml"), b"version = 1\n").unwrap();
+    let empty = tempfile::tempdir().unwrap();
+    for (source, expected) in [
+        (
+            "https://example.invalid/scanner.wasm",
+            "cannot run `curl` (needed for https:// plugin sources); run `ocomment doctor`",
+        ),
+        (
+            "gh:owner/repo@v1#scanner.wasm",
+            "cannot run `gh` (needed for gh: plugin sources); run `ocomment doctor`",
+        ),
+        (
+            "oci:example.invalid/scanner:1",
+            "cannot run `oras` (needed for oci: plugin sources); run `ocomment doctor`",
+        ),
+    ] {
+        let output = Command::new(binary())
+            .current_dir(directory.path())
+            .env("PATH", empty.path())
+            .args([
+                "plugin",
+                "add",
+                source,
+                "--sha256",
+                "0000000000000000000000000000000000000000000000000000000000000000",
+                "--identity",
+                "publisher@example.test",
+            ])
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(2), "`plugin add {source}`");
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        assert!(
+            stderr.contains(expected),
+            "`plugin add {source}` said:\n{stderr}"
+        );
+    }
+}
+
+/// `--policy all` means "take everything out", so the one thing it deliberately
+/// leaves behind has to explain itself: the summary counts the kept preambles
+/// and names the flag that removes them too.
+#[test]
+fn policy_all_says_how_to_remove_a_kept_preamble() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join("a.py"),
+        b"#!/usr/bin/env python3\n# note\nx = 1\n",
+    )
+    .unwrap();
+    let hint = "1 protected preamble comment kept; add --force-protected to remove them.";
+
+    let all = run(directory.path(), &["check", "--policy", "all", "a.py"]);
+    assert_eq!(all.status.code(), Some(1));
+    let stderr = String::from_utf8(all.stderr).unwrap();
+    assert!(
+        stderr.contains(hint),
+        "`--policy all` never explained the comment it kept:\n{stderr}"
+    );
+
+    // Nothing is protected any more, so there is nothing to explain.
+    let forced = run(
+        directory.path(),
+        &["check", "--policy", "all", "--force-protected", "a.py"],
+    );
+    let stderr = String::from_utf8(forced.stderr).unwrap();
+    assert!(
+        !stderr.contains("--force-protected"),
+        "the hint outlived the flag that answers it:\n{stderr}"
+    );
+
+    // Under `safe` the preamble is one of many deliberate keeps; singling it
+    // out would be noise on every run.
+    let safe = run(directory.path(), &["check", "a.py"]);
+    let stderr = String::from_utf8(safe.stderr).unwrap();
+    assert!(
+        !stderr.contains("--force-protected"),
+        "a policy that keeps much more than preambles advertised the flag:\n{stderr}"
+    );
+
+    // A file with no preamble at all never mentions it.
+    fs::write(directory.path().join("b.py"), b"# note\nx = 1\n").unwrap();
+    let plain = run(directory.path(), &["check", "--policy", "all", "b.py"]);
+    let stderr = String::from_utf8(plain.stderr).unwrap();
+    assert!(
+        !stderr.contains("--force-protected"),
+        "a run that kept no preamble advertised the flag anyway:\n{stderr}"
+    );
+}
+
+/// A file that ships with the repository, resolved from the crate directory so
+/// a test can read it from whatever temporary directory it runs in.
+fn shipped(relative: &str) -> std::path::PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join(relative)
+}
+
+/// How `clap_mangen` writes one option name: every `-` escaped, the name in
+/// bold. Help text that merely mentions a flag is rendered in roman, so this
+/// matches a real entry rather than a passing reference in someone else's
+/// description.
+fn roff_option(flag: &str) -> String {
+    format!("\\fB{}\\fR", flag.replace('-', "\\-"))
+}
+
+/// Every long flag the CLI shows a user, gathered by walking `--help` down
+/// every subcommand. Descriptions are scanned too: a flag a description names
+/// is a flag the reader will look up.
+fn long_flags_in_help(directory: &Path, path: &[&str], found: &mut BTreeSet<String>) {
+    let mut arguments = path.to_vec();
+    arguments.push("--help");
+    let output = run(directory, &arguments);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "`ocomment {}` did not print help",
+        arguments.join(" ")
+    );
+    let help = String::from_utf8(output.stdout).unwrap();
+    let mut rest = help.as_str();
+    while let Some(start) = rest.find("--") {
+        let tail = &rest[start + 2..];
+        let end = tail
+            .find(|character: char| {
+                !(character.is_ascii_lowercase() || character.is_ascii_digit() || character == '-')
+            })
+            .unwrap_or(tail.len());
+        let name = tail[..end].trim_end_matches('-');
+        if name.starts_with(|character: char| character.is_ascii_lowercase()) {
+            found.insert(format!("--{name}"));
+        }
+        rest = tail;
+    }
+    let children = subcommand_lines(&help);
+    for (name, _) in &children {
+        if name == "help" {
+            continue;
+        }
+        let mut child = path.to_vec();
+        child.push(name.as_str());
+        long_flags_in_help(directory, &child, found);
+    }
+}
+
+/// A flag nobody can look up is a flag nobody knows about. The manual page is
+/// the reference the `man` subcommand and the release archives both hand out,
+/// so every flag `--help` mentions anywhere in the command tree has to have an
+/// entry there.
+#[test]
+fn the_manual_page_documents_every_long_flag() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut flags = BTreeSet::new();
+    long_flags_in_help(directory.path(), &[], &mut flags);
+    assert!(
+        flags.len() >= 20,
+        "the help walk stopped finding flags, so this test proves nothing: {flags:?}"
+    );
+    // A walk that stopped at the root would still collect enough flags to look
+    // healthy, so it is pinned to one flag from each depth it has to reach.
+    for reached in ["--dry-run", "--sha256"] {
+        assert!(
+            flags.contains(reached),
+            "the help walk never reached `{reached}`, so it is not descending: {flags:?}"
+        );
+    }
+    let page = fs::read_to_string(shipped("docs/ocomment.1")).unwrap();
+    let missing: Vec<&String> = flags
+        .iter()
+        .filter(|flag| !page.contains(&roff_option(flag)))
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "docs/ocomment.1 has no entry for {missing:?}; regenerate it with `ocomment man`"
+    );
+}
+
+/// The manual page is generated from the parser, and the generated bytes are
+/// checked in twice: once for `man -l docs/ocomment.1` and once for the release
+/// archives. A page that drifted from the binary documents a tool nobody ships.
+#[test]
+fn the_checked_in_manual_page_is_the_one_the_binary_renders() {
+    let directory = tempfile::tempdir().unwrap();
+    let output = run(directory.path(), &["man"]);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    for path in ["docs/ocomment.1", "release-extras/ocomment.1"] {
+        let checked_in = fs::read(shipped(path)).unwrap();
+        assert!(
+            checked_in == output.stdout,
+            "{path} is stale; regenerate it with \
+             `python3 tools/release_extras.py --binary rust/target/debug/ocomment` \
+             and copy release-extras/ocomment.1 to docs/"
+        );
+    }
+}
+
+/// The completion scripts ship from the same generator and go stale the same
+/// way, so they are pinned to the binary too.
+#[test]
+fn the_checked_in_completions_are_the_ones_the_binary_generates() {
+    let directory = tempfile::tempdir().unwrap();
+    for (shell, path) in [
+        ("bash", "release-extras/ocomment.bash"),
+        ("zsh", "release-extras/_ocomment"),
+        ("fish", "release-extras/ocomment.fish"),
+        ("powershell", "release-extras/_ocomment.ps1"),
+        ("elvish", "release-extras/ocomment.elv"),
+    ] {
+        let output = run(directory.path(), &["completions", shell]);
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let checked_in = fs::read(shipped(path)).unwrap();
+        assert!(
+            checked_in == output.stdout,
+            "{path} is stale; regenerate it with \
+             `python3 tools/release_extras.py --binary rust/target/debug/ocomment`"
+        );
+    }
 }

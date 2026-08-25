@@ -24,14 +24,34 @@ cargo install ocomment --locked
 ocomment                 # check the current repository
 ocomment check src tests
 ocomment diff src
+ocomment fix --dry-run src
 ocomment fix src
 printf '%s\n' 'let x = 1; // remove' | ocomment strip --language rust
 ```
 
+A human run previews each removable comment and closes with a summary:
+
+```console
+$ ocomment check src
+src/main.rs:2:5: removable line comment: // TODO: drop this
+Found 1 removable comment in 1 file (1 file scanned). Run `ocomment fix` to remove it.
+```
+
+Findings, patches, and machine formats go to standard output; the summary and
+every note go to standard error, so `ocomment diff src > fix.patch` keeps the
+patch clean. `-q` drops the summary and leaves `check` to answer with its exit
+code, while `diff` and `scan` still write the patch or listing they exist for;
+`-v` traces what was scanned and counts every comment kind; `--no-preview`
+drops the previewed text. A `-` target reads standard input under the `<stdin>`
+pseudo-path, and `fix --dry-run` prints the patch `fix` would apply without
+writing a file.
+
 `check` exits 0 when clean, 1 when removable comments exist, and 2 for an
-invalid source, configuration, plugin, or I/O failure. `diff` exits 1 when it
-prints a change. Successful `fix` and `strip` operations exit 0. JSON, JSONL,
-SARIF, and GitHub annotation output are available through `--format`.
+invalid source, configuration, plugin, or I/O failure. `diff` and
+`fix --dry-run` exit 1 when they print a change. Successful `fix` and `strip`
+operations exit 0. JSON, JSONL, SARIF, and GitHub annotation output are
+available through `--format`. Run `ocomment --help` for every option and
+`ocomment man` for the manual page.
 
 The default `safe` policy removes ordinary and documentation comments while
 keeping source preambles and tool/language directives. `legal` additionally

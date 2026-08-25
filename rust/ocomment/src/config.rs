@@ -278,9 +278,9 @@ pub fn load(explicit: Option<&Path>) -> Result<ResolvedConfig> {
 
 fn validate_languages(config: &Config) -> Result<()> {
     for (name, language_config) in &config.languages {
-        let language: Language = name
-            .parse()
-            .map_err(|_| anyhow!("unknown language configuration key `{name}`"))?;
+        let language: Language = name.parse().map_err(|_| {
+            anyhow!("unknown language configuration key `{name}`; see `ocomment languages`")
+        })?;
         if let Some(dialect) = language_config.dialect {
             validate_dialect(language, dialect)
                 .with_context(|| format!("invalid dialect for [languages.{name}]"))?;
@@ -377,7 +377,11 @@ fn parse_layer(path: &Path, require_version: bool) -> Result<toml::Value> {
         )
     })?;
     if require_version && config.version != Some(1) {
-        bail!("{} must contain `version = 1`", path.display());
+        // The path is repeated deliberately: the first half is the verdict on
+        // a file the reader may not have opened, the second is the edit that
+        // settles it, and an editor is opened on the second one.
+        let path = path.display();
+        bail!("{path} must contain `version = 1` (add `version = 1` at the top of {path})");
     }
     toml::from_str(&text).with_context(|| format!("cannot parse {}", path.display()))
 }

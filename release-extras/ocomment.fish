@@ -683,6 +683,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l progress -d '
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l fix -d 'For the Lefthook hook, run `fix` instead of `check`'
+complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l force -d 'Replace the file if it already exists'
+complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l stdout -d 'Print the template to standard output and write no file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'

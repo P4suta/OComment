@@ -219,6 +219,8 @@ Register-ArgumentCompleter -Native -CommandName 'ocomment' -ScriptBlock {
             [CompletionResult]::new('--hyperlinks', '--hyperlinks', [CompletionResultType]::ParameterName, 'When to emit terminal hyperlinks for reported paths')
             [CompletionResult]::new('--progress', '--progress', [CompletionResultType]::ParameterName, 'When to draw the live scanning counter on standard error')
             [CompletionResult]::new('--fix', '--fix', [CompletionResultType]::ParameterName, 'For the Lefthook hook, run `fix` instead of `check`')
+            [CompletionResult]::new('--force', '--force', [CompletionResultType]::ParameterName, 'Replace the file if it already exists')
+            [CompletionResult]::new('--stdout', '--stdout', [CompletionResultType]::ParameterName, 'Print the template to standard output and write no file')
             [CompletionResult]::new('--force-invalid', '--force-invalid', [CompletionResultType]::ParameterName, 'Apply the edits that are still provably safe when the source fails to scan')
             [CompletionResult]::new('--force-protected', '--force-protected', [CompletionResultType]::ParameterName, 'Remove protected comments such as shebang and encoding preambles')
             [CompletionResult]::new('--no-preview', '--no-preview', [CompletionResultType]::ParameterName, 'Omit the one-line comment text from human `check` and `scan` lines')

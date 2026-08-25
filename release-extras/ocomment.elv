@@ -209,6 +209,8 @@ set edit:completion:arg-completer[ocomment] = {|@words|
             cand --hyperlinks 'When to emit terminal hyperlinks for reported paths'
             cand --progress 'When to draw the live scanning counter on standard error'
             cand --fix 'For the Lefthook hook, run `fix` instead of `check`'
+            cand --force 'Replace the file if it already exists'
+            cand --stdout 'Print the template to standard output and write no file'
             cand --force-invalid 'Apply the edits that are still provably safe when the source fails to scan'
             cand --force-protected 'Remove protected comments such as shebang and encoding preambles'
             cand --no-preview 'Omit the one-line comment text from human `check` and `scan` lines'
