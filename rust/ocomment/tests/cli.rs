@@ -348,8 +348,8 @@ fn init_notes_a_project_config_that_already_applies() {
         "the note replaced the file"
     );
 
-    // The config the run itself just created is this directory's own, not an
-    // inherited one, so a first `init` in a bare directory says nothing.
+    /* NOTE: The config the run itself just created is this directory's own, not an
+     * inherited one, so a first `init` in a bare directory says nothing. */
     let bare = tempfile::tempdir().unwrap();
     let quiet = run(bare.path(), &["init", "config"]);
     assert_eq!(quiet.status.code(), Some(0));
@@ -359,9 +359,9 @@ fn init_notes_a_project_config_that_already_applies() {
         String::from_utf8_lossy(&quiet.stderr)
     );
 
-    // The note is advice about a file that was just created. A refused `init`
-    // created nothing, so it has nothing to advise about: the error stands
-    // alone rather than trailing guidance for a file that does not exist.
+    /* NOTE: The note is advice about a file that was just created. A refused `init`
+     * created nothing, so it has nothing to advise about: the error stands
+     * alone rather than trailing guidance for a file that does not exist. */
     let refused = run(&nested, &["init", "config"]);
     assert_eq!(refused.status.code(), Some(2));
     let error = String::from_utf8_lossy(&refused.stderr);
@@ -458,6 +458,129 @@ fn staged_fix_does_not_stage_unrelated_working_tree_changes() {
     ))
     .unwrap();
     assert!(!cached.contains("// unstaged"));
+}
+
+/// `--staged` reads its paths from the index rather than from a walk, but
+/// `[files]` says which of the project's files OComment is allowed to touch
+/// either way. A path the configuration excludes is not the commit hook's
+/// business: it is not reported, and `fix --staged` leaves its blob alone.
+#[test]
+fn staged_runs_honour_the_files_exclude_globs() {
+    let directory = repository();
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        b"version = 1\n\n[files]\nexclude = [\"vendor/**\"]\n",
+    )
+    .unwrap();
+    fs::create_dir(directory.path().join("vendor")).unwrap();
+    fs::create_dir(directory.path().join("src")).unwrap();
+    fs::write(
+        directory.path().join("vendor/x.rs"),
+        b"let a = 1; // vendored\n",
+    )
+    .unwrap();
+    fs::write(directory.path().join("src/y.rs"), b"let b = 2; // ours\n").unwrap();
+    git(directory.path(), &["add", "vendor/x.rs", "src/y.rs"]);
+
+    let checked = run(directory.path(), &["check", "--staged"]);
+    let report = String::from_utf8(checked.stdout).unwrap();
+    assert_eq!(
+        checked.status.code(),
+        Some(1),
+        "`check --staged` said:\n{report}"
+    );
+    assert!(report.contains("src/y.rs"), "{report}");
+    assert!(
+        !report.contains("vendor/x.rs"),
+        "an excluded path was reported:\n{report}"
+    );
+
+    let fixed = run(directory.path(), &["fix", "--staged"]);
+    assert_eq!(
+        fixed.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&fixed.stderr)
+    );
+    assert_eq!(
+        git(directory.path(), &["show", ":vendor/x.rs"]),
+        b"let a = 1; // vendored\n",
+        "an excluded blob was rewritten"
+    );
+    assert_eq!(
+        git(directory.path(), &["show", ":src/y.rs"]),
+        b"let b = 2; \n"
+    );
+}
+
+/// The other half of the same rule: an `include` list narrows a staged run to
+/// the paths it names, exactly as it narrows a walk.
+#[test]
+fn staged_runs_honour_the_files_include_globs() {
+    let directory = repository();
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        b"version = 1\n\n[files]\ninclude = [\"src/**\"]\n",
+    )
+    .unwrap();
+    fs::create_dir(directory.path().join("vendor")).unwrap();
+    fs::create_dir(directory.path().join("src")).unwrap();
+    fs::write(
+        directory.path().join("vendor/x.rs"),
+        b"let a = 1; // vendored\n",
+    )
+    .unwrap();
+    fs::write(directory.path().join("src/y.rs"), b"let b = 2; // ours\n").unwrap();
+    git(directory.path(), &["add", "vendor/x.rs", "src/y.rs"]);
+
+    let checked = run(directory.path(), &["check", "--staged"]);
+    let report = String::from_utf8(checked.stdout).unwrap();
+    assert_eq!(
+        checked.status.code(),
+        Some(1),
+        "`check --staged` said:\n{report}"
+    );
+    assert!(report.contains("src/y.rs"), "{report}");
+    assert!(
+        !report.contains("vendor/x.rs"),
+        "a path outside the include list was reported:\n{report}"
+    );
+}
+
+/// `git` names a staged path relative to the repository root and a `[files]`
+/// glob is written relative to the project root, so the two meet wherever the
+/// command was typed. A run from a subdirectory must reach the same verdict as
+/// a run from the top.
+#[test]
+fn staged_globs_stay_root_relative_from_a_subdirectory() {
+    let directory = repository();
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        b"version = 1\n\n[files]\nexclude = [\"vendor/**\"]\n",
+    )
+    .unwrap();
+    fs::create_dir(directory.path().join("vendor")).unwrap();
+    fs::create_dir(directory.path().join("src")).unwrap();
+    fs::write(
+        directory.path().join("vendor/x.rs"),
+        b"let a = 1; // vendored\n",
+    )
+    .unwrap();
+    fs::write(directory.path().join("src/y.rs"), b"let b = 2; // ours\n").unwrap();
+    git(directory.path(), &["add", "vendor/x.rs", "src/y.rs"]);
+
+    let checked = run(&directory.path().join("src"), &["check", "--staged"]);
+    let report = String::from_utf8(checked.stdout).unwrap();
+    assert_eq!(
+        checked.status.code(),
+        Some(1),
+        "`check --staged` said:\n{report}"
+    );
+    assert!(report.contains("src/y.rs"), "{report}");
+    assert!(
+        !report.contains("vendor/x.rs"),
+        "an excluded path was reported from a subdirectory:\n{report}"
+    );
 }
 
 #[test]
@@ -651,16 +774,16 @@ fn no_argument_scan_uses_the_current_directory_not_the_repository_root() {
         report.contains("deep.rs:1:1: removable"),
         "the bare command never checked the current directory:\n{report}"
     );
-    // The implicit target is `.`, and a walk rooted there prefixes every entry
-    // with `./`. `ocomment` and `ocomment check deep.rs` report one file under
-    // one name, so that prefix is not part of it.
+    /* NOTE: The implicit target is `.`, and a walk rooted there prefixes every entry
+     * with `./`. `ocomment` and `ocomment check deep.rs` report one file under
+     * one name, so that prefix is not part of it. */
     assert!(
         !report.contains("./"),
         "the implicit target leaked its `./` into the report:\n{report}"
     );
 
-    // `-v` names both halves of the answer: the root the configuration came
-    // from, and the target that root no longer decides.
+    /* NOTE: `-v` names both halves of the answer: the root the configuration came
+     * from, and the target that root no longer decides. */
     let traced = run(&nested, &["-v"]);
     let trace = String::from_utf8(traced.stderr).unwrap();
     let repository_name = directory.path().file_name().unwrap().to_str().unwrap();
@@ -692,8 +815,8 @@ fn project_config_and_overrides_apply_from_a_subdirectory() {
     .unwrap();
     let nested = directory.path().join("nested");
     fs::create_dir_all(nested.join("skip")).unwrap();
-    // A directive is kept under the default `safe` policy and removed under
-    // `all`, so the line it is reported on is the override speaking.
+    /* NOTE: A directive is kept under the default `safe` policy and removed under
+     * `all`, so the line it is reported on is the override speaking. */
     fs::write(nested.join("kept.rs"), b"let x = 1; // rustfmt::skip\n").unwrap();
     fs::write(nested.join("skip/ignored.rs"), b"let y = 2; // remove\n").unwrap();
 
@@ -906,9 +1029,9 @@ fn a_named_directory_never_reaches_into_the_git_directory() {
         let hook = directory.path().join(".git/hooks/x.sample");
         fs::write(&hook, b"#!/bin/sh\necho hi # sample hook comment\n").unwrap();
         let before = fs::read(&hook).unwrap();
-        // A submodule or a linked worktree keeps its `.git` as a *file*; it
-        // points at git's storage and is no more a candidate than the
-        // directory it stands in for.
+        /* NOTE: A submodule or a linked worktree keeps its `.git` as a *file*; it
+         * points at git's storage and is no more a candidate than the
+         * directory it stands in for. */
         fs::create_dir(directory.path().join("vendor")).unwrap();
         fs::write(
             directory.path().join("vendor/.git"),
@@ -1207,8 +1330,8 @@ fn man_subcommand_renders_a_roff_page() {
         String::from_utf8_lossy(&output.stderr)
     );
     let page = String::from_utf8(output.stdout).unwrap();
-    // roff requires the `\*(Aq` string definition before the title macro, so
-    // `.TH` is the first macro that is not a string definition.
+    /* NOTE: roff requires the `\*(Aq` string definition before the title macro, so
+     * `.TH` is the first macro that is not a string definition. */
     let header = page
         .lines()
         .find(|line| !line.starts_with(".ie ") && !line.starts_with(".el "))
@@ -1340,8 +1463,8 @@ fn config_explain_prints_canonical_policy_and_layout() {
         stdout.contains("policy: safe; layout: lines"),
         "config explain output is:\n{stdout}"
     );
-    // Only the policy line is pinned: the surrounding lines print filesystem
-    // paths that may legitimately contain any spelling.
+    /* NOTE: Only the policy line is pinned: the surrounding lines print filesystem
+     * paths that may legitimately contain any spelling. */
     let policy_line = stdout
         .lines()
         .find(|line| line.starts_with("policy:"))
@@ -2271,6 +2394,108 @@ fn a_reported_path_cannot_inject_escape_sequences() {
         stdout.contains("evil\u{fffd}[2Jskip.bin: skipped: binary file"),
         "the skip lost the file it names:\n{stdout}"
     );
+
+    /* NOTE: Asked for hyperlinks, the report writes escape bytes of its own: the
+     * OSC 8 frame is delimited by them. They are the only ones it may write.
+     * The name goes into the frame's *target* as well as its text, so the
+     * target percent-encodes what it is given rather than forwarding it. */
+    let linked = run(
+        directory.path(),
+        &["check", "-v", ".", "--hyperlinks", "always"],
+    );
+    assert_eq!(
+        linked.status.code(),
+        Some(1),
+        "{}",
+        String::from_utf8_lossy(&linked.stderr)
+    );
+    let linked_stdout = String::from_utf8(linked.stdout).unwrap();
+    assert!(
+        linked_stdout.contains("\x1b]8;;file://"),
+        "no hyperlink was written to link a path with:\n{linked_stdout}"
+    );
+    let unframed = linked_stdout.replace("\x1b]8;;", "").replace("\x1b\\", "");
+    assert!(
+        !unframed.contains('\x1b'),
+        "an escape byte reached the report outside the hyperlink frame: {unframed:?}"
+    );
+    assert!(
+        linked_stdout.contains("%1B%5B2Jname.rs"),
+        "the link target forwarded the name instead of encoding it:\n{linked_stdout}"
+    );
+}
+
+/// A file name is not commentary. The spaces and tabs in it are the name — a
+/// reader who cannot see them cannot type the name back, and a report that
+/// quietly drops them names a file the checkout does not have. Every control
+/// character is still replaced, the tab included, so the row stays one row.
+#[cfg(unix)]
+#[test]
+fn a_reported_path_keeps_the_spacing_of_the_name_it_reports() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join("ta\tb.rs"),
+        b"let x = 1; // remove me\n",
+    )
+    .unwrap();
+    fs::write(
+        directory.path().join(" lead.rs"),
+        b"let x = 1; // remove me\n",
+    )
+    .unwrap();
+
+    let output = run(directory.path(), &["check", "."]);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("ta\u{fffd}b.rs:1:12: removable line comment"),
+        "the tab in a file name vanished from the report:\n{stdout}"
+    );
+    assert!(
+        stdout
+            .lines()
+            .any(|line| line == " lead.rs:1:12: removable line comment: // remove me"),
+        "the leading space in a file name vanished from the report:\n{stdout}"
+    );
+}
+
+/// A directory and a file inside it are both named, so the walk meets the file
+/// twice. It is one file: the report says so once, exactly as it does for a
+/// file it can scan.
+#[test]
+fn a_file_reached_twice_is_skipped_once() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(directory.path().join("plain.txt"), b"nothing to scan\n").unwrap();
+
+    let output = run(
+        directory.path(),
+        &["check", ".", "plain.txt", "--format", "github"],
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let annotations: Vec<_> = stdout
+        .lines()
+        .filter(|line| line.contains("plain.txt"))
+        .collect();
+    assert_eq!(
+        annotations.len(),
+        1,
+        "one file was annotated more than once:\n{stdout}"
+    );
+    assert!(
+        annotations[0].starts_with("::notice file=plain.txt,title=OComment skipped file::"),
+        "the skip was not reported as a notice:\n{stdout}"
+    );
 }
 
 /// A configuration file is read from the project, and the pattern in it is
@@ -2302,6 +2527,87 @@ fn an_invalid_policy_regex_cannot_inject_escape_sequences() {
     assert!(
         error.contains("invalid comment policy regex `\u{fffd}[2J(`"),
         "the error lost the pattern it rejects:\n{error}"
+    );
+}
+
+/// The GitHub renderer annotates a pull request, and an annotation costs the
+/// reader a line in the checks tab. So it folds a skip away exactly as the
+/// human renderer does: an I/O error and a path the caller named are always
+/// worth saying, while a file a walk merely wandered past is `-v` material.
+#[test]
+fn github_annotations_fold_walked_skips_away_unless_asked() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(directory.path().join("a.rs"), b"let x = 1; // remove\n").unwrap();
+    fs::write(directory.path().join("notes.md"), b"# notes\n").unwrap();
+
+    let quiet = run(directory.path(), &["check", "--format", "github"]);
+    let stdout = String::from_utf8(quiet.stdout).unwrap();
+    assert!(stdout.contains("::notice file=a.rs"), "{stdout}");
+    assert!(
+        !stdout.contains("notes.md"),
+        "a walked skip was annotated without -v:\n{stdout}"
+    );
+
+    let loud = run(directory.path(), &["check", "--format", "github", "-v"]);
+    let verbose = String::from_utf8(loud.stdout).unwrap();
+    assert!(
+        verbose.contains("::notice file=notes.md,title=OComment skipped file::"),
+        "-v lost the walked skip:\n{verbose}"
+    );
+
+    let named = run(
+        directory.path(),
+        &["check", "notes.md", "--format", "github"],
+    );
+    let explicit = String::from_utf8(named.stdout).unwrap();
+    assert!(
+        explicit.contains("::notice file=notes.md,title=OComment skipped file::"),
+        "a path the caller named lost its annotation:\n{explicit}"
+    );
+
+    let missing = run(
+        directory.path(),
+        &["check", "gone.rs", "--format", "github"],
+    );
+    let failure = String::from_utf8(missing.stdout).unwrap();
+    assert!(
+        failure.contains("::error file=gone.rs,title=OComment I/O error::"),
+        "an I/O error lost its annotation:\n{failure}"
+    );
+}
+
+/// The `regex` crate writes a parse error over several lines, with a caret
+/// under the byte it stopped at. The caret means nothing once the pattern is
+/// folded, but the sentence after it is the whole answer, so the report keeps
+/// every word of it and puts the lot on the one line an error is.
+#[test]
+fn an_invalid_policy_regex_is_reported_whole_on_one_line() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        "version = 1\n[policy]\nkeep_regex = [\"[\\u001Ba-\"]\n",
+    )
+    .unwrap();
+
+    let output = run(directory.path(), &["check"]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(
+        !output.stderr.contains(&0x1b),
+        "an escape byte reached the terminal: {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let error = String::from_utf8(output.stderr).unwrap();
+    assert_eq!(
+        error.trim_end().lines().count(),
+        1,
+        "the parse error spilled over more than one line:\n{error}"
+    );
+    assert!(
+        error.contains(
+            "invalid comment policy regex `[\u{fffd}a-`: \
+             regex parse error: [\u{fffd}a- ^ error: unclosed character class"
+        ),
+        "the parse error was not folded, or was cut short of the reason:\n{error}"
     );
 }
 
@@ -2874,8 +3180,8 @@ fn run_closed_pipe(directory: &Path, arguments: &[&str], head: usize) -> (ExitSt
     if head > 0 {
         output.read_exact(&mut taken).unwrap();
     }
-    // The reader has what it wanted; from here every write the run attempts
-    // fails with EPIPE.
+    /* NOTE: The reader has what it wanted; from here every write the run attempts
+     * fails with EPIPE. */
     drop(output);
     let mut message = String::new();
     child
@@ -3014,14 +3320,14 @@ fn a_broken_pipe_from_git_hash_object_fails_the_staged_fix() {
     use std::os::unix::fs::PermissionsExt;
 
     let directory = repository();
-    // What travels down the pipe is the blob with the comments already taken
-    // out, so it is that which has to outgrow the pipe buffer — 64 KiB on
-    // Linux — for the write to still be in flight when the fake
-    // `git hash-object` drops the reading end. Half again as much is margin
-    // enough. The file is therefore sized by the bytes that survive the fix
-    // rather than by its own length, and it carries them on a few long lines
-    // instead of many short ones: the run costs time per comment, and this
-    // test needs bytes.
+    /* NOTE: What travels down the pipe is the blob with the comments already taken
+     * out, so it is that which has to outgrow the pipe buffer — 64 KiB on
+     * Linux — for the write to still be in flight when the fake
+     * `git hash-object` drops the reading end. Half again as much is margin
+     * enough. The file is therefore sized by the bytes that survive the fix
+     * rather than by its own length, and it carries them on a few long lines
+     * instead of many short ones: the run costs time per comment, and this
+     * test needs bytes. */
     let padding = "x".repeat(200);
     let mut source = String::new();
     let mut stripped = 0;
@@ -3037,8 +3343,8 @@ fn a_broken_pipe_from_git_hash_object_fails_the_staged_fix() {
     git(directory.path(), &["add", "wide.rs"]);
     let staged_before = git(directory.path(), &["show", ":wide.rs"]);
 
-    // Every invocation reaches the real Git except `hash-object`, which closes
-    // its standard input and fails without reading a byte.
+    /* NOTE: Every invocation reaches the real Git except `hash-object`, which closes
+     * its standard input and fails without reading a byte. */
     let fake = tempfile::tempdir().unwrap();
     let script = fake.path().join("git");
     fs::write(
@@ -3077,9 +3383,9 @@ fn a_broken_pipe_from_git_hash_object_fails_the_staged_fix() {
         stderr.contains("git hash-object"),
         "the report does not say which write failed:\n{stderr}"
     );
-    // `hash-object` also exits non-zero, and that failure carries the same
-    // name. This is the test for the broken pipe, so the blob must have been
-    // in flight when the reader went away, not sitting whole in the buffer.
+    /* NOTE: `hash-object` also exits non-zero, and that failure carries the same
+     * name. This is the test for the broken pipe, so the blob must have been
+     * in flight when the reader went away, not sitting whole in the buffer. */
     assert!(
         stderr.contains("cannot write the rewritten blob"),
         "the run failed before the blob was ever written, so the broken pipe \
@@ -3150,9 +3456,9 @@ fn progress_clears_the_counter_only_when_one_was_drawn() {
 fn an_empty_run_summarizes_itself_in_the_vocabulary_of_its_command() {
     let directory = tempfile::tempdir().unwrap();
     fs::write(directory.path().join("notes.md"), b"# notes\n").unwrap();
-    // `fix --dry-run` keeps its standard output for the patch, so the named
-    // skip it met stands on standard error directly above the summary this
-    // test is about; every other command reports the skip elsewhere.
+    /* NOTE: `fix --dry-run` keeps its standard output for the patch, so the named
+     * skip it met stands on standard error directly above the summary this
+     * test is about; every other command reports the skip elsewhere. */
     let skip = format!("notes.md: skipped: {NO_LANGUAGE}\n");
     for (arguments, expected) in [
         (vec!["check", "notes.md"], "Nothing to check.\n".to_owned()),
@@ -3325,8 +3631,8 @@ fn a_locked_git_index_says_what_to_do_about_the_lock() {
 #[test]
 fn a_missing_plugin_tool_names_it_its_purpose_and_doctor() {
     let directory = tempfile::tempdir().unwrap();
-    // Pin the project root: without a configuration the walk upwards can find
-    // a repository marker above the temporary directory and install there.
+    /* NOTE: Pin the project root: without a configuration the walk upwards can find
+     * a repository marker above the temporary directory and install there. */
     fs::write(directory.path().join(".ocomment.toml"), b"version = 1\n").unwrap();
     let empty = tempfile::tempdir().unwrap();
     for (source, expected) in [
@@ -3552,8 +3858,8 @@ fn doctor_reports_the_environment_it_resolved() {
         command
             .current_dir(directory.path())
             .env("PATH", "/usr/bin:/bin")
-            // Pin the user layer away from whoever is running the tests: the
-            // trace this reports has to be the one this run resolved.
+            /* NOTE: Pin the user layer away from whoever is running the tests: the
+             * trace this reports has to be the one this run resolved. */
             .env("XDG_CONFIG_HOME", empty.path())
             .arg("doctor");
         match no_color {
@@ -3584,8 +3890,8 @@ fn doctor_reports_the_environment_it_resolved() {
         report.contains("config: built-in defaults"),
         "doctor never traced the configuration it merged:\n{report}"
     );
-    // The report is read through a pipe, so the decoration it describes is the
-    // decoration this very run chose.
+    /* NOTE: The report is read through a pipe, so the decoration it describes is the
+     * decoration this very run chose. */
     assert!(
         report.contains("stdout: not a terminal"),
         "doctor never said whether its output is a terminal:\n{report}"
@@ -3623,15 +3929,15 @@ fn doctor_reports_the_environment_it_resolved() {
 #[cfg(unix)]
 #[test]
 fn doctor_sanitises_the_directories_it_reports_without_cutting_them_short() {
-    // Long enough that a preview-width cap would have to cut it, and carrying
-    // the escape that would let a directory name repaint the report.
+    /* NOTE: Long enough that a preview-width cap would have to cut it, and carrying
+     * the escape that would let a directory name repaint the report. */
     let name = format!("ocomment\u{1b}{}", "a".repeat(90));
     let directory = tempfile::Builder::new()
         .prefix(&name)
         .tempdir()
         .expect("a directory name may carry an escape on this platform");
-    // A project file of its own makes this directory the root as well, so both
-    // rows name it and both are pinned by one run.
+    /* NOTE: A project file of its own makes this directory the root as well, so both
+     * rows name it and both are pinned by one run. */
     fs::write(directory.path().join(".ocomment.toml"), b"version = 1\n").unwrap();
     let empty = tempfile::tempdir().unwrap();
     let output = Command::new(binary())
@@ -3664,7 +3970,7 @@ fn doctor_sanitises_the_directories_it_reports_without_cutting_them_short() {
             named.contains(&sanitised),
             "the `{row}` row lost the directory it names:\n{report}"
         );
-        // A version line may be cut to the preview width; a path may not.
+        // NOTE: A version line may be cut to the preview width; a path may not.
         assert!(
             !named.contains('\u{2026}'),
             "the `{row}` row was cut to the preview width:\n{report}"
@@ -3721,7 +4027,7 @@ fn policy_all_says_how_to_remove_a_kept_preamble() {
         "`--policy all` never explained the comment it kept:\n{stderr}"
     );
 
-    // Nothing is protected any more, so there is nothing to explain.
+    // NOTE: Nothing is protected any more, so there is nothing to explain.
     let forced = run(
         directory.path(),
         &["check", "--policy", "all", "--force-protected", "a.py"],
@@ -3732,8 +4038,8 @@ fn policy_all_says_how_to_remove_a_kept_preamble() {
         "the hint outlived the flag that answers it:\n{stderr}"
     );
 
-    // Under `safe` the preamble is one of many deliberate keeps; singling it
-    // out would be noise on every run.
+    /* NOTE: Under `safe` the preamble is one of many deliberate keeps; singling it
+     * out would be noise on every run. */
     let safe = run(directory.path(), &["check", "a.py"]);
     let stderr = String::from_utf8(safe.stderr).unwrap();
     assert!(
@@ -3741,7 +4047,7 @@ fn policy_all_says_how_to_remove_a_kept_preamble() {
         "a policy that keeps much more than preambles advertised the flag:\n{stderr}"
     );
 
-    // A file with no preamble at all never mentions it.
+    // NOTE: A file with no preamble at all never mentions it.
     fs::write(directory.path().join("b.py"), b"# note\nx = 1\n").unwrap();
     let plain = run(directory.path(), &["check", "--policy", "all", "b.py"]);
     let stderr = String::from_utf8(plain.stderr).unwrap();
@@ -3750,8 +4056,8 @@ fn policy_all_says_how_to_remove_a_kept_preamble() {
         "a run that kept no preamble advertised the flag anyway:\n{stderr}"
     );
 
-    // The hint counts what it kept, so its pronoun has to agree with the
-    // count: one preamble is removed with "it", several with "them".
+    /* NOTE: The hint counts what it kept, so its pronoun has to agree with the
+     * count: one preamble is removed with "it", several with "them". */
     fs::write(
         directory.path().join("c.py"),
         b"#!/usr/bin/env python3\nx = 2\n",
@@ -3837,8 +4143,8 @@ fn the_manual_page_documents_every_long_flag() {
         flags.len() >= 20,
         "the help walk stopped finding flags, so this test proves nothing: {flags:?}"
     );
-    // A walk that stopped at the root would still collect enough flags to look
-    // healthy, so it is pinned to one flag from each depth it has to reach.
+    /* NOTE: A walk that stopped at the root would still collect enough flags to look
+     * healthy, so it is pinned to one flag from each depth it has to reach. */
     for reached in ["--dry-run", "--sha256"] {
         assert!(
             flags.contains(reached),
@@ -3949,10 +4255,10 @@ fn check_explain_names_the_override_and_the_pattern_that_kept_a_comment() {
         "gen/b.rs:1:1: kept block comment: /* generated */",
         "kept: matched keep_regex #1 `(?i)generated` ([[overrides]] #0, paths = [\"gen/**\"])",
         "gen/b.rs:2:12: removable line comment: // TODO",
-        // Nothing set `[policy] mode`, so the reader is told it is a default
-        // rather than sent to a file that never mentions it. The pattern the
-        // same file does set is named with the file, spelled the way the reader
-        // typed their way into the directory.
+        /* NOTE: Nothing set `[policy] mode`, so the reader is told it is a default
+         * rather than sent to a file that never mentions it. The pattern the
+         * same file does set is named with the file, spelled the way the reader
+         * typed their way into the directory. */
         "removed: policy `safe` removes ordinary comments (built-in defaults)",
         "a.rs:1:1: kept line comment: // API stays",
         "kept: matched keep_regex #0 `(?i)^// api` ([policy] in .ocomment.toml)",
@@ -4119,7 +4425,7 @@ fn explain_is_refused_by_the_commands_that_write_no_report() {
         !directory.path().join(".ocomment.toml").exists(),
         "a refused `init` wrote its starter file anyway"
     );
-    // The two commands the flag is for still take it.
+    // NOTE: The two commands the flag is for still take it.
     for command in ["check", "scan"] {
         let output = run(directory.path(), &[command, "--explain"]);
         assert!(

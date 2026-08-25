@@ -38,9 +38,9 @@ fn main() -> ExitCode {
         Ok(code) => ExitCode::from(code),
         Err(error) if output_pipe_closed(&error) => ExitCode::SUCCESS,
         Err(error) => {
-            // Nothing is left to try if even the report cannot be written, and
-            // `eprintln!` would panic there — an abort under the release
-            // profile — so the failure of the last write is dropped.
+            /* NOTE: Nothing is left to try if even the report cannot be written, and
+             * `eprintln!` would panic there — an abort under the release
+             * profile — so the failure of the last write is dropped. */
             let _ = writeln!(io::stderr(), "ocomment: {error:#}");
             ExitCode::from(2)
         }

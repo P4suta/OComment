@@ -51,3 +51,25 @@ updates:
         update-types:
           - minor
           - patch
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "10:00"
+      timezone: Asia/Tokyo
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - "area: ci"
+    commit-message:
+      prefix: "chore(deps)"
+    ignore:
+      # The builder stage is pinned to the MSRV toolchain on purpose; a major
+      # or minor Rust bump is a deliberate change, not a dependency update.
+      - dependency-name: rust
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor

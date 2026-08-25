@@ -146,13 +146,13 @@ impl IncrementalDocument {
         let safe_start = if !can_reuse {
             0
         } else {
-            // The checkpoints belong to the *previous* revision, and a
-            // checkpoint is only a restart point while the bytes around it
-            // still allow one: an edit that turns line 2 into a Python encoding
-            // declaration, or that splices two C lines together, withdraws that
-            // permission. Every candidate is therefore re-asked against the
-            // edited document, falling back to an earlier checkpoint and
-            // ultimately to a full scan.
+            /* INVARIANT: The checkpoints belong to the *previous* revision, and a
+             * checkpoint is only a restart point while the bytes around it
+             * still allow one: an edit that turns line 2 into a Python encoding
+             * declaration, or that splices two C lines together, withdraws that
+             * permission. Every candidate is therefore re-asked against the
+             * edited document, falling back to an earlier checkpoint and
+             * ultimately to a full scan. */
             let rules = RestartRules::of(&next, self.language);
             let usable = self
                 .safe_checkpoints
@@ -165,12 +165,12 @@ impl IncrementalDocument {
                 .unwrap_or(0)
         };
         let old_convergence = if can_reuse {
-            // Converging keeps the previous revision's report for every byte
-            // past the convergence point, shifted by the edit's length delta —
-            // including each comment's kind. Only the preamble rules care where
-            // a comment sits, so the tail may be reused exactly while it lies
-            // past the preamble both where it was and where the edit moves it;
-            // otherwise the scan runs on to the first checkpoint that does.
+            /* INVARIANT: Converging keeps the previous revision's report for every byte
+             * past the convergence point, shifted by the edit's length delta —
+             * including each comment's kind. Only the preamble rules care where
+             * a comment sits, so the tail may be reused exactly while it lies
+             * past the preamble both where it was and where the edit moves it;
+             * otherwise the scan runs on to the first checkpoint that does. */
             self.safe_checkpoints.iter().copied().find(|point| {
                 *point >= old_tail_start.max(safe_start)
                     && preamble_is_settled(&self.source, *point)
@@ -183,10 +183,10 @@ impl IncrementalDocument {
         let mut partial = None;
         if let Some(old_convergence) = old_convergence {
             let new_convergence = new_tail_start + old_convergence - old_tail_start;
-            // The scanner is handed the whole suffix, never a slice cut at the
-            // convergence point: lexical lookahead that reaches past the cut
-            // would otherwise decide differently than it does in the real
-            // document and the rescan would lose comments or diagnostics.
+            /* INVARIANT: The scanner is handed the whole suffix, never a slice cut at the
+             * convergence point: lexical lookahead that reaches past the cut
+             * would otherwise decide differently than it does in the real
+             * document and the rescan would lose comments or diagnostics. */
             let (report, checkpoints, converged) = scan_until_checkpoint(
                 &next[safe_start..],
                 self.language,
@@ -198,8 +198,8 @@ impl IncrementalDocument {
                 reused_tail = Some((old_convergence, new_convergence));
                 partial = Some((report, checkpoints, new_convergence));
             } else {
-                // Lexical state diverged, so the scan already ran to the end of
-                // the suffix; that report is exactly the fallback.
+                /* NOTE: Lexical state diverged, so the scan already ran to the end of
+                 * the suffix; that report is exactly the fallback. */
                 partial = Some((report, checkpoints, next.len()));
             }
         }
@@ -484,8 +484,8 @@ mod tests {
     }
 
     proptest! {
-        // Unit-test proptests cannot persist regressions next to `src`, so the
-        // shrunk counterexample is reported inline instead.
+        /* NOTE: Unit-test proptests cannot persist regressions next to `src`, so the
+         * shrunk counterexample is reported inline instead. */
         #![proptest_config(ProptestConfig { failure_persistence: None, ..ProptestConfig::default() })]
 
         /// Every safe checkpoint must be a restart point: scanning the suffix

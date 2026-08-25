@@ -96,10 +96,10 @@ value_enum_wrapper!(LayoutArg, Layout, |value| match value {
     Layout::Compact => "Drop the comment bytes and keep only the newlines it spanned",
 });
 
-// The CLI is deliberately stricter than the core `FromStr`, which folds case,
-// dashes, and underscores away before it looks a name up: only the canonical
-// spelling, the pinned aliases, and their underscore variants are registered
-// here, so `--language r-u-s-t` stays an error even though the core accepts it.
+/* NOTE: The CLI is deliberately stricter than the core `FromStr`, which folds case,
+ * dashes, and underscores away before it looks a name up: only the canonical
+ * spelling, the pinned aliases, and their underscore variants are registered
+ * here, so `--language r-u-s-t` stays an error even though the core accepts it. */
 value_enum_wrapper!(LanguageArg, Language, |value| match value {
     Language::Rust => "Rust source files",
     Language::Ocaml => "OCaml implementation and interface files",

@@ -80,7 +80,7 @@ fn every_write_to_standard_output_goes_through_wrote() {
          that closed the pipe would surface as an unrecognizable I/O failure: \
          {bare:?}"
     );
-    // A scan that matches nothing would pass this test forever.
+    // NOTE: A scan that matches nothing would pass this test forever.
     assert!(
         wrapped >= 30,
         "the guard recognized only {wrapped} writes to standard output, far \

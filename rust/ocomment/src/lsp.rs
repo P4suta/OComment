@@ -1155,7 +1155,7 @@ fn progress_percentage(completed: usize, total: usize) -> u32 {
 }
 
 fn stable_text_hash(bytes: &[u8]) -> u64 {
-    // FNV-1a is sufficient for an opaque, session-local LSP result identifier.
+    // NOTE: FNV-1a is sufficient for an opaque, session-local LSP result identifier.
     bytes.iter().fold(0xcbf29ce484222325, |hash, byte| {
         (hash ^ u64::from(*byte)).wrapping_mul(0x100000001b3)
     })

@@ -265,12 +265,12 @@ impl PolicyTrace {
             DispositionExplanation::RemovedByRegex { index, .. } => {
                 (self.remove_regex.get(*index)?, "remove_regex")
             }
-            // Every one of these is the policy having the last word, whether it
-            // took the comment out or protected it.
+            /* NOTE: Every one of these is the policy having the last word, whether it
+             * took the comment out or protected it. */
             DispositionExplanation::RemovedByPolicy(_)
             | DispositionExplanation::RemovedByDefault(_)
             | DispositionExplanation::KeptLicense { .. } => (&self.policy, "mode"),
-            // A built-in rule, decided by no setting at all.
+            // NOTE: A built-in rule, decided by no setting at all.
             DispositionExplanation::ProtectedPreamble
             | DispositionExplanation::KeptHtml
             | DispositionExplanation::KeptDirective { .. } => return None,
@@ -380,8 +380,8 @@ impl ResolvedConfig {
     /// root-relative spelling at all, so it keeps its absolute one and only an
     /// absolute glob can match it.
     pub fn relative_to_root(&self, path: &Path) -> String {
-        // Standard input has no place on disk. The pseudo-path is what the
-        // renderers print, so it is also what the globs are shown.
+        /* NOTE: Standard input has no place on disk. The pseudo-path is what the
+         * renderers print, so it is also what the globs are shown. */
         if path.as_os_str() == crate::files::STDIN_PATH {
             return crate::files::STDIN_PATH.to_owned();
         }
@@ -476,8 +476,8 @@ impl ResolvedConfig {
         let (chosen_language, options) = self.for_path(path, language, dialect);
         let normalized = self.relative_to_root(path);
         let mut layers = Vec::new();
-        // `for_path` looks the language table up under the language it was
-        // handed, not under the one an override may have changed it to.
+        /* NOTE: `for_path` looks the language table up under the language it was
+         * handed, not under the one an override may have changed it to. */
         if let Some(config) = self.config.languages.get(language.as_str()) {
             layers.push(TracedLayer {
                 source: Source::Language(language.as_str().to_owned()),
@@ -543,14 +543,14 @@ impl ResolvedConfig {
                 "--remove-kind",
                 &remove_kinds,
             ),
-            // No flag supplies a pattern, so no entry of either list can have
-            // come from the command line.
+            /* NOTE: No flag supplies a pattern, so no entry of either list can have
+             * come from the command line. */
             keep_regex: attribute(&self.config.policy.keep_regex, None, "", &keep_patterns),
             remove_regex: attribute(&self.config.policy.remove_regex, None, "", &remove_patterns),
             origins: self.origins.clone(),
         };
-        // A single-valued setting is not merged but replaced, so the last layer
-        // that names it is the one that decided it.
+        /* NOTE: A single-valued setting is not merged but replaced, so the last layer
+         * that names it is the one that decided it. */
         for layer in &layers {
             if layer.policy.is_some() {
                 trace.policy = layer.source.clone();
@@ -746,15 +746,18 @@ fn validate_policy_regexes(config: &Config) -> Result<()> {
         );
     for pattern in patterns {
         regex::bytes::Regex::new(pattern).map_err(|error| {
-            // Both halves of this line came out of a file in the project: the
-            // pattern the caller wrote, and a parse error that quotes that
-            // same pattern back with a caret under it. Neither may reach a
-            // terminal verbatim, so both are folded onto one control-free
-            // line the way a comment preview is.
+            /* INVARIANT: Both halves of this line came out of a file in the project: the
+             * pattern the caller wrote, and a parse error that quotes that
+             * same pattern back with a caret under it. Neither may reach a
+             * terminal verbatim, and the line stays one line. The pattern
+             * keeps the spacing it was written with, because a reader who is
+             * shown something else cannot find it in the file; the parse
+             * error, which `regex` spreads over four lines, is folded onto
+             * this one and kept whole. */
             anyhow!(
                 "invalid comment policy regex `{}`: {}",
                 crate::output::sanitize_path(pattern),
-                crate::output::sanitize_path(&error.to_string())
+                crate::output::sanitize_message(&error.to_string())
             )
         })?;
     }
@@ -774,9 +777,9 @@ fn parse_layer(path: &Path, require_version: bool) -> Result<toml::Value> {
         )
     })?;
     if require_version && config.version != Some(1) {
-        // The path is repeated deliberately: the first half is the verdict on
-        // a file the reader may not have opened, the second is the edit that
-        // settles it, and an editor is opened on the second one.
+        /* NOTE: The path is repeated deliberately: the first half is the verdict on
+         * a file the reader may not have opened, the second is the edit that
+         * settles it, and an editor is opened on the second one. */
         let path = path.display();
         bail!("{path} must contain `version = 1` (add `version = 1` at the top of {path})");
     }
@@ -976,8 +979,8 @@ mod tests {
         config.overrides = vec![PathOverride {
             paths: vec!["nested/**".to_owned()],
             policy: Some(Policy::All),
-            // The duplicate is dropped by the merge, so the trace must not
-            // record a source for it either.
+            /* NOTE: The duplicate is dropped by the merge, so the trace must not
+             * record a source for it either. */
             keep_regex: vec!["override".to_owned(), "global".to_owned()],
             ..PathOverride::default()
         }];

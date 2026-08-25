@@ -15,10 +15,17 @@ let check_string () =
   let report = scan (Bytes.of_string "\"// no\" // yes") JavaScript default_scan_options in
   Alcotest.(check int) "only real comment" 1 (List.length report.comments)
 
+let check_rust_multiline_string () =
+  let report =
+    scan (Bytes.of_string "let s = \"a\n// no\nb\"; // yes") Rust default_scan_options in
+  Alcotest.(check bool) "valid" true report.valid;
+  Alcotest.(check int) "only real comment" 1 (List.length report.comments)
+
 let () = Alcotest.run "ocomment-ref" [
   "core", [
     Alcotest.test_case "transform" `Quick check_transform;
     Alcotest.test_case "nested" `Quick check_nested;
     Alcotest.test_case "string" `Quick check_string;
+    Alcotest.test_case "rust-multiline-string" `Quick check_rust_multiline_string;
   ]
 ]

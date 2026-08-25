@@ -319,9 +319,9 @@ struct GitArgs {
 
 #[derive(Args)]
 struct FixArgs {
-    // `fix` rewrites files in place and refuses the `-` that stands for
-    // standard input, so its PATH list is not the one every other command
-    // takes and does not borrow that command's help line.
+    /* NOTE: `fix` rewrites files in place and refuses the `-` that stands for
+     * standard input, so its PATH list is not the one every other command
+     * takes and does not borrow that command's help line. */
     /// Files or directories to rewrite (default: current directory).
     #[arg(value_name = "PATH")]
     paths: Vec<PathBuf>,
@@ -464,19 +464,19 @@ impl RunFlags {
 pub fn run() -> Result<u8> {
     let cli = Cli::parse();
     let common = cli.common;
-    // The machine formats are schemas rather than prose, and none of them has
-    // a place to put an explanation; the JSON one is closed to extension by
-    // design. So the combination is refused instead of quietly doing nothing.
+    /* NOTE: The machine formats are schemas rather than prose, and none of them has
+     * a place to put an explanation; the JSON one is closed to extension by
+     * design. So the combination is refused instead of quietly doing nothing. */
     if common.output.explain && common.output.format != OutputFormat::Human {
         bail!("--explain is only available with --format human");
     }
-    // The flag annotates a report of comments, and only `check`, `scan` and
-    // the implicit command write one: `fix` reports the files it rewrote,
-    // `diff` writes a patch, `strip` writes the stripped source, and the rest
-    // of the commands answer a question that is not about comments at all.
-    // `--explain` is global, so it is named as an allow-list — a command added
-    // later has to opt in — and everything else is refused rather than
-    // quietly doing nothing.
+    /* NOTE: The flag annotates a report of comments, and only `check`, `scan` and
+     * the implicit command write one: `fix` reports the files it rewrote,
+     * `diff` writes a patch, `strip` writes the stripped source, and the rest
+     * of the commands answer a question that is not about comments at all.
+     * `--explain` is global, so it is named as an allow-list — a command added
+     * later has to opt in — and everything else is refused rather than
+     * quietly doing nothing. */
     if common.output.explain
         && !matches!(
             cli.command,
@@ -496,23 +496,23 @@ pub fn run() -> Result<u8> {
             RunFlags::NONE,
         ),
         Some(Command::Check(args)) => run_target(Operation::Check, args, &common, RunFlags::NONE),
-        // `--dry-run` runs the diff and reports it in fix vocabulary: the two
-        // commands must agree on the patch, so only the wording differs.
+        /* NOTE: `--dry-run` runs the diff and reports it in fix vocabulary: the two
+         * commands must agree on the patch, so only the wording differs. */
         Some(Command::Fix(args)) if args.dry_run => {
             run_target(Operation::Diff, args.target(), &common, RunFlags::DRY_RUN)
         }
         Some(Command::Fix(args)) if args.interactive => {
-            // The prompt is prose on a terminal and the answers come back the
-            // same way; a machine format has nowhere to put either, so the
-            // combination is refused rather than one of the two flags being
-            // quietly dropped. It is refused before the terminal is looked at,
-            // because the pair is wrong however the run was started.
+            /* NOTE: The prompt is prose on a terminal and the answers come back the
+             * same way; a machine format has nowhere to put either, so the
+             * combination is refused rather than one of the two flags being
+             * quietly dropped. It is refused before the terminal is looked at,
+             * because the pair is wrong however the run was started. */
             if common.output.format != OutputFormat::Human {
                 bail!("--interactive is only available with --format human");
             }
-            // Without somebody there to answer, the questions would be read out
-            // of whatever the pipe happened to carry and files would be
-            // rewritten from it. Nothing is scanned, let alone written.
+            /* NOTE: Without somebody there to answer, the questions would be read out
+             * of whatever the pipe happened to carry and files would be
+             * rewritten from it. Nothing is scanned, let alone written. */
             if !io::stdin().is_terminal() || !io::stdout().is_terminal() {
                 bail!("--interactive needs a terminal; run without -i or use `ocomment diff`");
             }
@@ -551,8 +551,8 @@ fn run_target(
     let plugin_host = plugin::PluginHost::load(&resolved.root, &resolved.config.plugins)?;
     let presentation = presentation(common);
     let verbosity = common.verbosity();
-    // The trace is part of the human report; a machine format keeps standard
-    // error empty however loud the run was asked to be.
+    /* NOTE: The trace is part of the human report; a machine format keeps standard
+     * error empty however loud the run was asked to be. */
     if verbosity == Verbosity::Verbose && common.output.format == OutputFormat::Human {
         trace_run(&resolved, &args.paths)?;
     }
@@ -561,20 +561,20 @@ fn run_target(
     if operation == Operation::Fix && !staged && args.paths.is_empty() {
         note_fix_scope(&resolved, common)?;
     }
-    // `git` names a staged path relative to the repository root rather than to
-    // the working directory, so a staged run measures its paths against the
-    // root from there. Every other run measures them from where it was typed.
+    /* NOTE: `git` names a staged path relative to the repository root rather than to
+     * the working directory, so a staged run measures its paths against the
+     * root from there. Every other run measures them from where it was typed. */
     if staged && let Some(repository) = config::locate_repository(&resolved.cwd) {
         resolved.cwd = repository;
     }
-    // `fix --dry-run` writes nothing, but it is still the command whose job is
-    // to rewrite files in place, and standard input cannot be rewritten.
+    /* NOTE: `fix --dry-run` writes nothing, but it is still the command whose job is
+     * to rewrite files in place, and standard input cannot be rewritten. */
     let rewrites = operation == Operation::Fix || flags.dry_run;
     let (paths, stdin) = target_paths(&args.paths, rewrites, staged)?;
     if staged {
-        // A staged run reports index blobs through a path that carries no
-        // policy trace, so it says so rather than printing a listing with
-        // every explanation quietly missing.
+        /* NOTE: A staged run reports index blobs through a path that carries no
+         * policy trace, so it says so rather than printing a listing with
+         * every explanation quietly missing. */
         if common.output.explain {
             bail!(
                 "--explain is not available with --staged; explain the working tree with \
@@ -604,8 +604,8 @@ fn run_target(
         .files
         .par_iter()
         .map(|file| {
-            // Only an explaining run pays for the trace; every other one takes
-            // the hot path it always took.
+            /* NOTE: Only an explaining run pays for the trace; every other one takes
+             * the hot path it always took. */
             let (mut language, mut options, trace) = if explain {
                 let (language, options, trace) =
                     resolved.for_path_traced(&file.path, file.language, file.dialect);
@@ -622,9 +622,9 @@ fn run_target(
                 config::validate_dialect(language, value)?;
                 options.scan.dialect = value;
             }
-            // Recorded as the scan is about to run with them, `--language` and
-            // `--dialect` included, so an explanation accounts for the run that
-            // actually happened.
+            /* NOTE: Recorded as the scan is about to run with them, `--language` and
+             * `--dialect` included, so an explanation accounts for the run that
+             * actually happened. */
             let material = trace.map(|trace| FileExplanation {
                 options: options.scan.clone(),
                 trace,
@@ -660,9 +660,9 @@ fn run_target(
     if progress {
         counter.clear();
     }
-    // The explanations travel beside the files rather than inside them: a
-    // staged run reports the same `ProcessedFile` and has no trace to put in
-    // one, and the path is what the renderer looks each file up by anyway.
+    /* NOTE: The explanations travel beside the files rather than inside them: a
+     * staged run reports the same `ProcessedFile` and has no trace to put in
+     * one, and the path is what the renderer looks each file up by anyway. */
     let processed = processed?;
     let mut explanations = Explanations::new();
     let mut files = Vec::with_capacity(processed.len());
@@ -677,10 +677,10 @@ fn run_target(
     let io_invalid = discovery.skipped.iter().any(|item| item.error);
     let invalid = report_invalid || io_invalid;
     let may_fix = !io_invalid && (!report_invalid || resolved.config.policy.force_invalid);
-    // An interactive run replaces the whole `fix` report: what it wrote is the
-    // answers it was given, and the ordinary summary counts what the run
-    // *could* have removed. A run the invalid-file gate has already stopped
-    // falls through instead, so that report says why nothing was written.
+    /* NOTE: An interactive run replaces the whole `fix` report: what it wrote is the
+     * answers it was given, and the ordinary summary counts what the run
+     * *could* have removed. A run the invalid-file gate has already stopped
+     * falls through instead, so that report says why nothing was written. */
     if flags.interactive && may_fix {
         return run_interactive(&files, &discovery.skipped, invalid, presentation, verbosity);
     }
@@ -742,9 +742,9 @@ fn run_interactive(
         let mut answers = stdin.lock();
         let mut questions = output::stdout();
         let selection = interactive::select(files, &mut answers, &mut questions, &presentation)?;
-        // The conversation is on standard output and the verdict that follows
-        // is on standard error; a terminal sees both, so the buffer is emptied
-        // first to keep them in the order they were written.
+        /* NOTE: The conversation is on standard output and the verdict that follows
+         * is on standard error; a terminal sees both, so the buffer is emptied
+         * first to keep them in the order they were written. */
         output::finish(&mut questions)?;
         selection
     };
@@ -765,9 +765,9 @@ fn run_interactive(
         output::note(&mut report, "Aborted; nothing was written.")?;
         return Ok(0);
     }
-    // A skipped path can be the whole answer to a run that was never asked a
-    // question, so the one command that writes no report of its own still says
-    // why it passed a file over.
+    /* NOTE: A skipped path can be the whole answer to a run that was never asked a
+     * question, so the one command that writes no report of its own still says
+     * why it passed a file over. */
     for line in output::skip_lines(skipped, presentation, verbosity) {
         output::note(&mut report, &line)?;
     }
@@ -785,8 +785,8 @@ fn target_paths(paths: &[PathBuf], rewrites: bool, staged: bool) -> Result<(Vec<
     match paths.iter().filter(|path| is_stdin(path)).count() {
         0 => return Ok((paths.to_vec(), false)),
         1 => {}
-        // A pipe is consumed once; a second `-` would silently report the same
-        // bytes twice or nothing at all.
+        /* NOTE: A pipe is consumed once; a second `-` would silently report the same
+         * bytes twice or nothing at all. */
         _ => bail!("cannot read standard input twice; `-` may appear only once"),
     }
     if rewrites {
@@ -817,8 +817,8 @@ fn read_targets(
     if !stdin {
         return files::discover(paths, resolved, common.language(), common.dialect());
     }
-    // An empty list means "the whole repository" only when no target was named
-    // at all; `-` on its own is a target, and walking would ignore it.
+    /* NOTE: An empty list means "the whole repository" only when no target was named
+     * at all; `-` on its own is a target, and walking would ignore it. */
     let mut discovery = if paths.is_empty() {
         files::Discovery::default()
     } else {
@@ -831,8 +831,8 @@ fn read_targets(
         .context("cannot read standard input")?;
     match files::stdin_source(bytes, resolved, common.language(), common.dialect()) {
         Ok(file) => discovery.files.push(file),
-        // A skip that cannot be reported per file — nothing was named to skip
-        // — is a usage error the run must not swallow.
+        /* NOTE: A skip that cannot be reported per file — nothing was named to skip
+         * — is a usage error the run must not swallow. */
         Err(skipped) if skipped.error => {
             let reason = skipped.reason;
             bail!("{reason}")
@@ -910,8 +910,8 @@ fn apply_cli_overrides(resolved: &mut config::ResolvedConfig, common: &CommonArg
         overrides.layout = true;
     }
     if !policy.keep_kind.is_empty() {
-        // The flag adds to the configured list rather than replacing it, so
-        // the boundary is what tells the two apart afterwards.
+        /* NOTE: The flag adds to the configured list rather than replacing it, so
+         * the boundary is what tells the two apart afterwards. */
         overrides.keep_kind_from = Some(config.policy.keep_kind.len());
         config
             .policy
@@ -957,10 +957,10 @@ fn command_options(command: &clap::Command, path: &str, page: &mut String) -> Re
             continue;
         }
         let name = format!("{path} {}", subcommand.get_name());
-        // The global arguments already have one entry each under OPTIONS,
-        // POLICY, and OUTPUT, and `--help` is on every command by definition.
-        // Repeating them here would bury the few arguments this section is
-        // for. Hiding is how `clap_mangen` is told to skip an argument.
+        /* NOTE: The global arguments already have one entry each under OPTIONS,
+         * POLICY, and OUTPUT, and `--help` is on every command by definition.
+         * Repeating them here would bury the few arguments this section is
+         * for. Hiding is how `clap_mangen` is told to skip an argument. */
         let mut own = subcommand.clone();
         let inherited: Vec<clap::Id> = own
             .get_arguments()
@@ -980,8 +980,8 @@ fn command_options(command: &clap::Command, path: &str, page: &mut String) -> Re
             .context("cannot render the manual page")?;
         let mut rendered = String::new();
         append_fragment(&mut rendered, &fragment)?;
-        // A command with nothing of its own renders an empty fragment, and an
-        // empty heading would claim otherwise.
+        /* NOTE: A command with nothing of its own renders an empty fragment, and an
+         * empty heading would claim otherwise. */
         if let Some(body) = rendered.strip_prefix(".SH OPTIONS\n")
             && !body.is_empty()
         {
@@ -994,20 +994,20 @@ fn command_options(command: &clap::Command, path: &str, page: &mut String) -> Re
 
 /// Render the roff manual page from the parser definition itself.
 fn run_man() -> Result<u8> {
-    // `clap_mangen` renders `after_long_help` as one opaque `.SH EXTRA` body,
-    // so the page is built without it and the same content is appended below
-    // as real roff sections. It is assembled section by section rather than
-    // through `render`, because the per-command options belong next to the
-    // command list and `render` puts VERSION after it.
-    //
-    // The `.TH` date is left blank on purpose: stamping the build date would
-    // make two reproducible builds of the same source disagree.
+    /* NOTE: `clap_mangen` renders `after_long_help` as one opaque `.SH EXTRA` body,
+     * so the page is built without it and the same content is appended below
+     * as real roff sections. It is assembled section by section rather than
+     * through `render`, because the per-command options belong next to the
+     * command list and `render` puts VERSION after it.
+     *
+     * The `.TH` date is left blank on purpose: stamping the build date would
+     * make two reproducible builds of the same source disagree. */
     let man = clap_mangen::Man::new(Cli::command().after_long_help(None))
         .title("OCOMMENT")
         .manual("User Commands");
     let mut page = String::new();
     let mut fragment = Vec::new();
-    // The title fragment keeps the apostrophe definition the whole page needs.
+    // NOTE: The title fragment keeps the apostrophe definition the whole page needs.
     man.render_title(&mut fragment)
         .context("cannot render the manual page")?;
     page.push_str(std::str::from_utf8(&fragment).context("the manual page is not valid UTF-8")?);
@@ -1025,8 +1025,8 @@ fn run_man() -> Result<u8> {
     }
     let mut per_command = String::new();
     let mut root = Cli::command();
-    // Building propagates the global arguments into every subcommand, which is
-    // what makes them recognizable as inherited below.
+    /* NOTE: Building propagates the global arguments into every subcommand, which is
+     * what makes them recognizable as inherited below. */
     root.build();
     command_options(&root, "ocomment", &mut per_command)?;
     if !per_command.is_empty() {
@@ -1062,8 +1062,8 @@ fn run_completions(shell: Shell) -> Result<u8> {
 }
 
 fn run_init(args: InitArgs) -> Result<u8> {
-    // Writing the file is only the first half of the task, so each template
-    // carries the step that finishes it.
+    /* NOTE: Writing the file is only the first half of the task, so each template
+     * carries the step that finishes it. */
     let (path, contents, next_step) = match args.kind {
         InitKind::Config => (
             config::CONFIG_FILE,
@@ -1085,18 +1085,18 @@ fn run_init(args: InitArgs) -> Result<u8> {
     };
     let mut stdout = output::stdout();
     if args.stdout {
-        // Nothing is created, so nothing is said about creating it: the
-        // template alone is on standard output, ready to be redirected.
+        /* NOTE: Nothing is created, so nothing is said about creating it: the
+         * template alone is on standard output, ready to be redirected. */
         output::wrote(write!(stdout, "{contents}"))?;
         output::finish(&mut stdout)?;
         return Ok(0);
     }
     write_template(&mut stdout, path, &contents, args.force, next_step)?;
-    // The note is advice about the file that now exists, so it follows the
-    // line that reports it — and a refused `init` never reaches it, because
-    // there is no new file for an inherited configuration to layer under.
-    // Standard output is flushed first so a terminal reading both streams sees
-    // the creation before the note about it.
+    /* NOTE: The note is advice about the file that now exists, so it follows the
+     * line that reports it — and a refused `init` never reaches it, because
+     * there is no new file for an inherited configuration to layer under.
+     * Standard output is flushed first so a terminal reading both streams sees
+     * the creation before the note about it. */
     output::finish(&mut stdout)?;
     note_inherited_config()?;
     Ok(0)
@@ -1358,8 +1358,8 @@ fn version_line(bytes: &[u8]) -> Option<String> {
 }
 
 fn run_doctor(common: &CommonArgs) -> Result<u8> {
-    // Asked before standard output is locked for the report, so the answer is
-    // about the same handle the report is written to.
+    /* NOTE: Asked before standard output is locked for the report, so the answer is
+     * about the same handle the report is written to. */
     let stdout_tty = io::stdout().is_terminal();
     let mut stdout = output::stdout();
     output::wrote(writeln!(stdout, "ocomment {}", env!("CARGO_PKG_VERSION")))?;
@@ -1382,8 +1382,8 @@ fn run_doctor(common: &CommonArgs) -> Result<u8> {
         "languages: {} built in",
         Language::ALL.len()
     ))?;
-    // Whether the report is decorated is the first thing a reader piping it
-    // somewhere wants explained, and both halves of that answer are here.
+    /* NOTE: Whether the report is decorated is the first thing a reader piping it
+     * somewhere wants explained, and both halves of that answer are here. */
     output::wrote(writeln!(
         stdout,
         "stdout: {}",
@@ -1568,8 +1568,8 @@ fn config_trace(trace: &config::ConfigTrace) -> Vec<String> {
     ]
     .into_iter()
     .filter_map(|(label, path)| {
-        // The row carries a directory name OComment did not choose, so it is
-        // sanitised for the same reason a `root` row is.
+        /* INVARIANT: The row carries a directory name OComment did not choose, so it is
+         * sanitised for the same reason a `root` row is. */
         path.as_ref()
             .map(|path| format!("{label} {}", output::sanitize_path(&path.to_string_lossy())))
     })

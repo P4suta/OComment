@@ -49,6 +49,22 @@ All notable changes to OComment will be documented here. The project follows
   is left with the flag that would overrule it. The machine formats refuse the
   flag rather than ignoring it, and so does every command that writes no report
   of comments for it to annotate.
+- The repository checks itself. `.ocomment.toml` runs the `legal` policy with
+  `doc-line` and `doc-block` kept and protects any comment headed `NOTE`,
+  `SAFETY`, `INVARIANT`, `PERF`, `TODO`, `FIXME`, or `HACK`, so an explanatory
+  comment that says why it is there survives and one that only restates the
+  line below it does not. Every such comment in `rust/` and `ocaml/` carries
+  its tag, as does every one in the Python and shell tooling and in the
+  `Dockerfile`; the only paths left out of the gate are vendored crates,
+  fixture bytes, and packaging and benchmark scratch. `SAFETY` is reserved for
+  its Rust-wide meaning — justifying an `unsafe` block — and a rationale about
+  bytes or spoofing is an `INVARIANT`. `lefthook.yml` runs `ocomment check
+  --staged` before each commit, and the `dogfood` CI job runs a bare `ocomment`
+  over the tree, reports the environment through `doctor` and `config explain`,
+  and then strips every comment out of a copy of the sources with `fix --policy
+  all --force-protected` and rebuilds it: the Rust workspace builds and
+  `ocomment-core` still passes its tests, and the `reference` job does the same
+  for the OCaml reference. `CONTRIBUTING.md` documents the tags.
 
 ### Changed
 
@@ -85,6 +101,20 @@ All notable changes to OComment will be documented here. The project follows
 
 ### Fixed
 
+- `--staged` honours `files.include` and `files.exclude`. It read every path
+  `git diff --cached` named, so a commit that touched an excluded tree — a
+  vendored crate, generated tooling — was reported by the pre-commit hook, and
+  `fix --staged` rewrote its index blob. A staged path is a walked path rather
+  than a named one: it is measured against the project root exactly as a walk
+  measures one, from whichever directory the command was typed in.
+- A Rust string or byte-string literal may carry a bare newline, so a scan no
+  longer ends one at the end of its line. `ocomment` reported its own
+  `rust/ocomment/src/cli.rs` as invalid — two `unterminated-string`
+  diagnostics for a multi-line `&str` constant — and then read the rest of the
+  literal as source, finding comments inside it and refusing to write anything
+  for the file. A Rust character literal still ends at the line, which is what
+  keeps a lifetime from swallowing the rest of the source, and C, C++, Go, and
+  Java literals are unchanged. The OCaml reference agrees.
 - A walk never descends into `.git`, whatever lifted the hidden-file rule.
   Naming a directory does lift it, and so does `files.hidden`, so `ocomment fix
   .` in a fresh repository used to rewrite the sample hooks git had just
@@ -100,6 +130,20 @@ All notable changes to OComment will be documented here. The project follows
   given no base id has nothing to resolve the path against. An absolute path, a
   path that climbs out of the tree through `..`, and the `<stdin>` pseudo-path
   carry no base id, because none of them is under the source root.
+- `# syntax=` and `# hadolint ignore=` are directives. A Dockerfile is scanned
+  as shell, and both lines are read by a tool rather than by a person: removing
+  the first changes which Dockerfile frontend builds the image, and removing
+  the second turns a linter rule back on. The OCaml reference agrees, and the
+  differential harness carries the case.
+- `--format github` folds a walked skip away unless `-v` asks for it, the way
+  the human report already did. A run over a repository annotated every file it
+  had no scanner for, so the checks tab filled with notices about Markdown and
+  YAML. An I/O error and a path the caller named are still always annotated.
+- An invalid `[policy]` regex is reported on one line and in full. The `regex`
+  crate writes a parse error over four lines with a caret under the byte it
+  stopped at; the report replaced the newlines with U+FFFD instead of folding
+  them, so a single failure arrived as one unreadable line of replacement
+  characters.
 - `tools/release_manifests.py` defaults `--repository` to `P4suta/OComment`.
   The release workflow passes `$GITHUB_REPOSITORY`, so the old default only
   ever reached someone generating the definitions by hand — and pointed the

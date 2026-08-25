@@ -81,7 +81,7 @@ pub fn select(
             continue;
         }
         let mut accepted: Vec<Edit> = Vec::new();
-        // The answer `a` or `d` left standing for the rest of this file.
+        // NOTE: The answer `a` or `d` left standing for the rest of this file.
         let mut standing: Option<bool> = None;
         for (index, item) in items.iter().enumerate() {
             let (comment, edit) = *item;
@@ -111,8 +111,8 @@ pub fn select(
                             stopped = true;
                             break;
                         }
-                        // Everything accepted so far goes with it: `x` is the
-                        // answer for a run that should never have started.
+                        /* NOTE: Everything accepted so far goes with it: `x` is the
+                         * answer for a run that should never have started. */
                         Answer::Abort => {
                             return Ok(Selection {
                                 aborted: true,
@@ -208,8 +208,8 @@ fn hunk(source: &[u8], edit: &Edit, presentation: &Presentation) -> Vec<String> 
     let begin = edit.span.start.min(length);
     let finish = edit.span.end.clamp(begin, length);
     let start = line_start(source, begin);
-    // The last byte the span covers, so a span that ends exactly on a line
-    // break does not drag the following line into the hunk.
+    /* NOTE: The last byte the span covers, so a span that ends exactly on a line
+     * break does not drag the following line into the hunk. */
     let inner = if finish > begin { finish - 1 } else { begin };
     let end = line_end(source, inner);
     let after = apply_edits(source, std::slice::from_ref(edit));
@@ -342,8 +342,8 @@ fn preceding(source: &[u8], start: usize, count: usize) -> Vec<&[u8]> {
     let mut lines = Vec::new();
     let mut at = start;
     while lines.len() < count && at > 0 {
-        // `at` is a line start, so the byte before it is the terminator of the
-        // line being collected.
+        /* NOTE: `at` is a line start, so the byte before it is the terminator of the
+         * line being collected. */
         let end = at - 1;
         let begin = line_start(source, end);
         lines.push(&source[begin..end]);
@@ -358,8 +358,8 @@ fn following(source: &[u8], end: usize, count: usize) -> Vec<&[u8]> {
     let mut lines = Vec::new();
     let mut at = end;
     while lines.len() < count && at < source.len() {
-        // Step over the terminator `end` stopped in front of. A file whose last
-        // line ends in one has nothing after it, and the loop ends here.
+        /* NOTE: Step over the terminator `end` stopped in front of. A file whose last
+         * line ends in one has nothing after it, and the loop ends here. */
         at += 1;
         if at >= source.len() {
             break;
@@ -397,12 +397,12 @@ fn ask(
 ) -> Result<Answer> {
     loop {
         wrote(write!(output, "{PROMPT}"))?;
-        // The question ends without a newline, so it has to be pushed out by
-        // hand before the run blocks waiting for the answer to it.
+        /* NOTE: The question ends without a newline, so it has to be pushed out by
+         * hand before the run blocks waiting for the answer to it. */
         wrote(output.flush())?;
         let mut line = Vec::new();
-        // Nothing left to read is a reader who is no longer there to answer,
-        // which is the one answer that must not be guessed at.
+        /* NOTE: Nothing left to read is a reader who is no longer there to answer,
+         * which is the one answer that must not be guessed at. */
         if input.read_until(b'\n', &mut line)? == 0 {
             return Ok(Answer::Abort);
         }

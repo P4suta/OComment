@@ -700,8 +700,8 @@ pub fn update(output: &mut impl Write, root: &Path, selected: Option<&str>) -> R
         if !is_remote_source(&plugin.source) {
             add(output, root, &plugin.source, Some(&name), None, None)?;
         } else {
-            // The existing signature identity authorizes a freshly fetched
-            // artifact. Its new digest is then written to the lockfile.
+            /* INVARIANT: The existing signature identity authorizes a freshly fetched
+             * artifact. Its new digest is then written to the lockfile. */
             install(
                 output,
                 root,

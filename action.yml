@@ -68,7 +68,7 @@ outputs:
     description: Release tag that was downloaded, or the version the supplied binary reported.
     value: ${{ steps.resolve.outputs.version }}
   sarif-file:
-    description: Absolute path of the SARIF file, empty when format is not sarif.
+    description: Absolute path of the SARIF file in the runner's own spelling, empty when format is not sarif.
     value: ${{ steps.run.outputs.sarif-file }}
 
 runs:
@@ -187,7 +187,15 @@ runs:
         fi
 
         if [ "${extension}" = "zip" ]; then
-          unzip -q -o "${archive}"
+          # A zip archive is only built for Windows, and a Windows runner is
+          # not guaranteed an unzip -- but it is guaranteed a PowerShell, the
+          # way a macOS runner without sha256sum is guaranteed shasum.
+          if command -v unzip >/dev/null 2>&1; then
+            unzip -q -o "${archive}"
+          else
+            powershell -NoProfile -NonInteractive -Command \
+              "Expand-Archive -LiteralPath '${archive}' -DestinationPath '.' -Force"
+          fi
         else
           tar -xzf "${archive}"
         fi
@@ -265,10 +273,21 @@ runs:
         code=$?
         set -e
 
+        # The redirection above was bash's, so the path stays bash's until it
+        # leaves the step. What reads the output is not bash: the upload step
+        # is a Node action, and a caller's own step may be pwsh. On Windows a
+        # `/d/a/repo/ocomment.sarif` names nothing to either of them, so the
+        # value is handed over as `D:\a\repo\ocomment.sarif` wherever cygpath
+        # is there to say so, and unchanged everywhere else.
+        sarif_output="${sarif_file}"
+        if [ -n "${sarif_output}" ] && command -v cygpath >/dev/null 2>&1; then
+          sarif_output="$(cygpath -w "${sarif_file}")"
+        fi
+
         echo "ocomment exited ${code}"
         {
           echo "exit-code=${code}"
-          echo "sarif-file=${sarif_file}"
+          echo "sarif-file=${sarif_output}"
         } >>"${GITHUB_OUTPUT}"
 
     - name: Upload SARIF results

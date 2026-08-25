@@ -373,16 +373,43 @@ pub(crate) fn sanitize_line(text: &str) -> String {
     truncate(fold(text), PREVIEW_COLUMNS)
 }
 
-/// The same treatment for a line that must not be cut short.
+/// The same treatment for a message that must not be cut short.
+///
+/// A comment preview is commentary and can be trusted to a fixed width, but a
+/// diagnostic is the whole answer to a run that produced nothing else. The
+/// `regex` crate writes a parse error over several lines, with a caret under
+/// the byte it stopped at; the caret means nothing once the lines are joined,
+/// yet the sentence after it names what is actually wrong with the pattern. So
+/// this one folds — one line, no control characters — and keeps every word.
+pub(crate) fn sanitize_message(text: &str) -> String {
+    fold(text)
+}
+
+/// The same treatment for a name that must not be cut short — or reworded.
 ///
 /// A directory name is chosen by whoever made the directory, so the rows
 /// `doctor` prints one on are untrusted for the same reason a version line is.
 /// What they are not is commentary: an absolute path is easily longer than a
 /// comment preview may be, and a row that ends in an ellipsis where the reader
-/// was looking for the rest of the path answers nothing. Only the width cap is
-/// dropped; every control character is still replaced.
+/// was looking for the rest of the path answers nothing.
+///
+/// Neither is the whitespace in a path commentary, which is why this does not
+/// borrow [`fold`]: a name may begin with a space or carry a tab, and a reader
+/// who is shown neither cannot type the name back, nor find it in a checkout
+/// that has it. So the spacing is left exactly as it was given and every
+/// control character — the tab among them — is replaced with U+FFFD, which
+/// keeps the promise `fold` was borrowed for in the first place: whatever the
+/// name holds, the row stays one row.
 pub(crate) fn sanitize_path(text: &str) -> String {
-    fold(text)
+    text.chars()
+        .map(|character| {
+            if is_control(character) {
+                '\u{fffd}'
+            } else {
+                character
+            }
+        })
+        .collect()
 }
 
 /// The same treatment for a line of source a prompt has to show as code.
@@ -424,8 +451,8 @@ fn fold(text: &str) -> String {
     let mut pending_space = false;
     for character in text.chars() {
         if matches!(character, ' ' | '\t' | '\r' | '\n' | '\u{c}') {
-            // Leading whitespace is dropped, and a run only becomes a space
-            // once something else follows it, so the tail is trimmed too.
+            /* NOTE: Leading whitespace is dropped, and a run only becomes a space
+             * once something else follows it, so the tail is trimmed too. */
             pending_space = !folded.is_empty();
             continue;
         }
@@ -616,7 +643,7 @@ pub fn render_explained(
         OutputFormat::Json => render_json(&mut output, files, skipped),
         OutputFormat::Jsonl => render_jsonl(&mut output, files, skipped),
         OutputFormat::Sarif => render_sarif(&mut output, files, skipped),
-        OutputFormat::Github => render_github(&mut output, files, skipped),
+        OutputFormat::Github => render_github(&mut output, files, skipped, options.verbosity),
     }?;
     finish(&mut output)
 }
@@ -634,8 +661,8 @@ fn render_human(
     let verbose = options.verbosity == Verbosity::Verbose;
     for file in files {
         if operation == Operation::Diff && file.source != file.result.output {
-            // The patch is the product of `diff`, so `-q` keeps it and drops
-            // only the summary that follows on standard error.
+            /* NOTE: The patch is the product of `diff`, so `-q` keeps it and drops
+             * only the summary that follows on standard error. */
             wrote(write!(
                 output,
                 "{}",
@@ -663,7 +690,7 @@ fn render_human(
             .map(Explainer::new);
         let explainer = explainer.as_ref();
         if operation == Operation::Scan {
-            // The listing is the product of `scan`; `-q` keeps it too.
+            // NOTE: The listing is the product of `scan`; `-q` keeps it too.
             for comment in &file.result.report.comments {
                 let (line, column) = line_column(&file.source, comment.span.start);
                 wrote(writeln!(
@@ -690,9 +717,9 @@ fn render_human(
                 ))?;
             }
         } else {
-            // `check` reports what it would remove. Asked to explain itself it
-            // reports the rest too, because a comment it left alone is exactly
-            // the one the reader is asking about.
+            /* NOTE: `check` reports what it would remove. Asked to explain itself it
+             * reports the rest too, because a comment it left alone is exactly
+             * the one the reader is asking about. */
             for comment in &file.result.report.comments {
                 let removable = comment.disposition.is_remove();
                 if !options.explain && !removable {
@@ -720,21 +747,21 @@ fn render_human(
         }
     }
     let skips = skip_lines(skipped, presentation, options.verbosity);
-    // `diff` keeps standard output for the patch alone, so the skips it met
-    // are left to standard error. `fix --dry-run` is that same `diff` speaking
-    // for the `fix` it stands in for: a skipped path can be the whole answer
-    // to the run, so the preview still owes the reader the reason — but beside
-    // the summary that counts it, because what the preview promises on
-    // standard output is a patch that has to survive being piped into `git
-    // apply`. A plain `fix` writes no patch and keeps its skips there.
+    /* NOTE: `diff` keeps standard output for the patch alone, so the skips it met
+     * are left to standard error. `fix --dry-run` is that same `diff` speaking
+     * for the `fix` it stands in for: a skipped path can be the whole answer
+     * to the run, so the preview still owes the reader the reason — but beside
+     * the summary that counts it, because what the preview promises on
+     * standard output is a patch that has to survive being piped into `git
+     * apply`. A plain `fix` writes no patch and keeps its skips there. */
     if operation != Operation::Diff {
         for line in &skips {
             wrote(writeln!(output, "{line}"))?;
         }
     }
-    // The findings are on standard output and the commentary that follows is
-    // on standard error; a terminal sees both, so the buffer is emptied first
-    // to keep the report in the order it was written.
+    /* NOTE: The findings are on standard output and the commentary that follows is
+     * on standard error; a terminal sees both, so the buffer is emptied first
+     * to keep the report in the order it was written. */
     finish(output)?;
     let stderr = io::stderr();
     let mut report = stderr.lock();
@@ -752,14 +779,14 @@ fn render_human(
         note(&mut report, &line)?;
     }
     note(&mut report, &summary_report(&summary, options, folded))?;
-    // Under any other policy a kept preamble is one of many deliberate keeps
-    // and saying so every run would be noise. `all` said it would take
-    // everything, so what it left behind is the surprise worth a line.
+    /* NOTE: Under any other policy a kept preamble is one of many deliberate keeps
+     * and saying so every run would be noise. `all` said it would take
+     * everything, so what it left behind is the surprise worth a line. */
     if options.policy == Policy::All {
         let protected = protected_preambles(files);
         if protected > 0 {
-            // The line counts what it kept, so the pronoun that stands for it
-            // has to agree with that count.
+            /* NOTE: The line counts what it kept, so the pronoun that stands for it
+             * has to agree with that count. */
             let pronoun = if protected == 1 { "it" } else { "them" };
             note(
                 &mut report,
@@ -794,16 +821,27 @@ fn render_human(
 ///
 /// Shared with `fix --interactive`, which writes no report of its own and would
 /// otherwise be the one command that never says why it passed a file over.
+/// Whether a skip is worth a line of the report, in human and in GitHub form.
+///
+/// An I/O error decides the exit code, so it is said however quietly the run
+/// was asked to speak. A path the caller named is answered on a line of its
+/// own, because they asked about that path. What a walk merely wandered past
+/// is neither: one unscannable file is a skip, forty of them are noise, and
+/// the end-of-run summary counts those instead — `-v` is how a reader asks for
+/// the list. Both renderers share this so the two cannot drift apart.
+pub(crate) fn skip_is_visible(item: &SkippedFile, verbosity: Verbosity) -> bool {
+    item.error
+        || (verbosity != Verbosity::Quiet && (item.explicit || verbosity == Verbosity::Verbose))
+}
+
 pub(crate) fn skip_lines(
     skipped: &[SkippedFile],
     presentation: Presentation,
     verbosity: Verbosity,
 ) -> Vec<String> {
-    let quiet = verbosity == Verbosity::Quiet;
-    let verbose = verbosity == Verbosity::Verbose;
     skipped
         .iter()
-        .filter(|item| item.error || (!quiet && (item.explicit || verbose)))
+        .filter(|item| skip_is_visible(item, verbosity))
         .map(|item| {
             format!(
                 "{}: {}: {}",
@@ -874,8 +912,8 @@ fn summary_report(summary: &Summary, options: &RenderOptions, folded: bool) -> S
     let mut report = if summary.files_scanned > 0 {
         format!("{}{skips}", summary_line(summary, options))
     } else if !skips.is_empty() {
-        // Nothing was scanned, so the verdict would count zero files; what the
-        // run actually did was pass every candidate over.
+        /* NOTE: Nothing was scanned, so the verdict would count zero files; what the
+         * run actually did was pass every candidate over. */
         format!("Nothing to {nothing}:{skips}")
     } else if summary.named_skips > 0 {
         format!("Nothing to {nothing}.")
@@ -912,8 +950,8 @@ fn summary_line(summary: &Summary, options: &RenderOptions) -> String {
         )
     };
     match options.operation {
-        // `fix --dry-run` is the diff of a fix: it counts what a real run would
-        // take out and points back at the run that would write it.
+        /* NOTE: `fix --dry-run` is the diff of a fix: it counts what a real run would
+         * take out and points back at the run that would write it. */
         Operation::Diff if options.dry_run => {
             if summary.removable_comments == 0 {
                 return format!("Nothing to fix in {scanned}.");
@@ -947,8 +985,8 @@ fn summary_line(summary: &Summary, options: &RenderOptions) -> String {
             } else if summary.removable_comments == 0 {
                 format!("Nothing to fix in {scanned}.")
             } else {
-                // The transaction never reached the disk; report what is still
-                // there rather than claiming a removal.
+                /* NOTE: The transaction never reached the disk; report what is still
+                 * there rather than claiming a removal. */
                 found()
             }
         }
@@ -1025,22 +1063,53 @@ pub(crate) fn color(code: &'static str, enabled: bool) -> &'static str {
 /// A file name is chosen by whoever made the file, so the shown half is
 /// untrusted input on its way to a terminal exactly like the preview beside
 /// it, and gets `sanitize_path`'s treatment: one line, no control characters,
-/// and no width cap, because a path cut to an ellipsis names no file. The
-/// link *target* is a URL rather than terminal text and keeps the
-/// percent-encoding it has always had.
+/// and no width cap, because a path cut to an ellipsis names no file.
+///
+/// The link *target* is untrusted for the same reason and by the same route —
+/// the frame around it is written in escape bytes, so a name carrying one of
+/// its own would close the frame early and the rest of the name would be read
+/// as terminal instructions. A URL cannot carry a byte it has no spelling for
+/// anyway, so the target is encoded outright rather than patched up for the
+/// three characters somebody thought of first.
 fn display_path(path: &Path, hyperlinks: bool) -> String {
     let display = sanitize_path(&path.display().to_string());
     if !hyperlinks {
         return display;
     }
     let absolute = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-    let target = absolute
-        .to_string_lossy()
-        .replace('%', "%25")
-        .replace(' ', "%20")
-        .replace('#', "%23");
+    let target = percent_encode(&absolute.to_string_lossy());
     format!("\x1b]8;;file://{target}\x1b\\{display}\x1b]8;;\x1b\\")
 }
+
+/// The path half of a `file://` URL, with every byte a URL may not carry
+/// spelled as the `%XX` a reader of the URL puts back.
+///
+/// The unreserved set of RFC 3986 is kept as it stands, and so is the `/` that
+/// separates one path segment from the next; everything else — the space and
+/// the `#` that used to be special-cased here, the `%` that makes an encoding
+/// an encoding, and every control byte — is encoded. A path is bytes rather
+/// than characters, so the encoding is done over the UTF-8 the name is spelled
+/// in: a `%XX` pair is defined as a byte, and half an encoded character is not
+/// a character a terminal can put back together.
+fn percent_encode(path: &str) -> String {
+    let mut encoded = String::with_capacity(path.len());
+    for byte in path.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~' | b'/') {
+            encoded.push(char::from(byte));
+        } else {
+            encoded.push('%');
+            encoded.push(HEX[usize::from(byte >> 4)]);
+            encoded.push(HEX[usize::from(byte & 0xf)]);
+        }
+    }
+    encoded
+}
+
+/// The digits a percent-encoded byte is spelled with. RFC 3986 asks for the
+/// upper-case ones.
+const HEX: [char; 16] = [
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F',
+];
 
 fn render_json(
     output: &mut impl Write,
@@ -1124,8 +1193,8 @@ fn report_uri(path: &Path) -> String {
     let text = path.to_string_lossy().replace('\\', "/");
     let trimmed: Vec<&str> = text.split('/').filter(|segment| *segment != ".").collect();
     if trimmed.is_empty() {
-        // The path was `.` (or `./`) and naming nothing at all would be worse
-        // than naming the directory.
+        /* NOTE: The path was `.` (or `./`) and naming nothing at all would be worse
+         * than naming the directory. */
         return text;
     }
     trimmed.join("/")
@@ -1359,6 +1428,7 @@ fn render_github(
     output: &mut impl Write,
     files: &[ProcessedFile],
     skipped: &[SkippedFile],
+    verbosity: Verbosity,
 ) -> Result<()> {
     for file in files {
         for comment in file
@@ -1387,7 +1457,14 @@ fn render_github(
             ))?;
         }
     }
-    for item in skipped {
+    /* NOTE: An annotation costs the reader a line of the checks tab, so a walked
+     * skip is folded away here exactly as it is in the human report: a run
+     * over a repository with forty Markdown files in it must not post forty
+     * notices about them. */
+    for item in skipped
+        .iter()
+        .filter(|item| skip_is_visible(item, verbosity))
+    {
         wrote(writeln!(
             output,
             "::{} file={},title={}::{}",
@@ -1485,6 +1562,37 @@ fn _span(_: ByteSpan) -> Value {
 mod tests {
     use super::*;
 
+    /// The frame around a hyperlink target is written in escape bytes, so a
+    /// name carrying one of its own would close the frame early and be read as
+    /// terminal instructions from there on. Nor may a URL carry the `%` that
+    /// makes an encoding an encoding, the space that ends a URL, or the `#`
+    /// that starts a fragment.
+    #[test]
+    fn a_hyperlink_target_encodes_every_byte_a_url_may_not_carry() {
+        assert_eq!(
+            percent_encode("/tmp/plain-file_name.rs~"),
+            "/tmp/plain-file_name.rs~"
+        );
+        assert_eq!(percent_encode("/tmp/a b#c%d.rs"), "/tmp/a%20b%23c%25d.rs");
+        assert_eq!(
+            percent_encode("/tmp/evil\u{1b}[2Jname.rs"),
+            "/tmp/evil%1B%5B2Jname.rs"
+        );
+        /* NOTE: A path is bytes, and one character is as many `%XX` pairs as it
+         * takes to spell it. */
+        assert_eq!(percent_encode("/tmp/\u{e9}.rs"), "/tmp/%C3%A9.rs");
+    }
+
+    /// A name is shown to be typed back, so its own spacing survives; what
+    /// does not is anything that would drive the terminal or break the row.
+    #[test]
+    fn a_sanitized_path_keeps_its_spacing_and_loses_its_controls() {
+        assert_eq!(sanitize_path(" lead.rs "), " lead.rs ");
+        assert_eq!(sanitize_path("ta\tb.rs"), "ta\u{fffd}b.rs");
+        assert_eq!(sanitize_path("two  spaces.rs"), "two  spaces.rs");
+        assert_eq!(sanitize_path("a\nb\u{1b}c.rs"), "a\u{fffd}b\u{fffd}c.rs");
+    }
+
     /// The reported path is read by a machine that has to find the file again:
     /// GitHub matches an annotation by `file=`, and a SARIF reader resolves
     /// `artifactLocation.uri` against the checkout. A Windows separator and a
@@ -1496,13 +1604,13 @@ mod tests {
         assert_eq!(report_uri(Path::new("./sub/./doc.rs")), "sub/doc.rs");
         assert_eq!(report_uri(Path::new(r"sub\doc.rs")), "sub/doc.rs");
         assert_eq!(report_uri(Path::new(r".\sub\.\doc.rs")), "sub/doc.rs");
-        // A path that leaves the tree, an absolute one, and standard input are
-        // all left as they are; only the separators are normalised.
+        /* NOTE: A path that leaves the tree, an absolute one, and standard input are
+         * all left as they are; only the separators are normalised. */
         assert_eq!(report_uri(Path::new("../sibling/a.rs")), "../sibling/a.rs");
         assert_eq!(report_uri(Path::new("/tmp/a.rs")), "/tmp/a.rs");
         assert_eq!(report_uri(Path::new(r"C:\src\a.rs")), "C:/src/a.rs");
         assert_eq!(report_uri(Path::new(STDIN_PATH)), STDIN_PATH);
-        // Naming the working directory as nothing at all would be worse.
+        // NOTE: Naming the working directory as nothing at all would be worse.
         assert_eq!(report_uri(Path::new(".")), ".");
     }
 

@@ -87,8 +87,8 @@ pub fn stdin_source(
         path: PathBuf::from(STDIN_PATH),
         reason: reason.to_owned(),
         error,
-        // Standard input was named on the command line, so its skip is always
-        // reported on its own line rather than folded into the summary.
+        /* NOTE: Standard input was named on the command line, so its skip is always
+         * reported on its own line rather than folded into the summary. */
         explicit: true,
     };
     if bytes.iter().take(8192).any(|byte| *byte == 0) {
@@ -157,9 +157,9 @@ pub fn discover(
     forced_dialect: Option<Dialect>,
 ) -> Result<Discovery> {
     let implicit = [PathBuf::from(DEFAULT_TARGET)];
-    // The substituted target stands in for an argument nobody typed, so it is
-    // walked with the ordinary limits: only a path the caller actually named
-    // is a request to look past the hidden-file and size rules.
+    /* NOTE: The substituted target stands in for an argument nobody typed, so it is
+     * walked with the ordinary limits: only a path the caller actually named
+     * is a request to look past the hidden-file and size rules. */
     let (paths, explicit) = if paths.is_empty() {
         (&implicit[..], false)
     } else {
@@ -184,8 +184,8 @@ fn discover_with_scope(
     let include = compile_globs(&resolved.config.files.include)?;
     let exclude = compile_globs(&resolved.config.files.exclude)?;
     let mut discovery = Discovery::default();
-    // Only an editor asking for its workspace arrives here without a target;
-    // `discover` gives a command line the current directory instead.
+    /* NOTE: Only an editor asking for its workspace arrives here without a target;
+     * `discover` gives a command line the current directory instead. */
     let targets: Vec<_> = if paths.is_empty() {
         vec![(resolved.root.clone(), false)]
     } else {
@@ -218,8 +218,8 @@ fn discover_with_scope(
             builder
                 .follow_links(resolved.config.files.follow_symlinks)
                 .standard_filters(ignore)
-                // `standard_filters` also resets the hidden-file flag, so this
-                // must come afterwards for explicitly named directories.
+                /* NOTE: `standard_filters` also resets the hidden-file flag, so this
+                 * must come afterwards for explicitly named directories. */
                 .hidden(!explicit_scope && !resolved.config.files.hidden)
                 .git_ignore(ignore)
                 .git_global(ignore)
@@ -229,9 +229,9 @@ fn discover_with_scope(
             if ignore {
                 builder.add_custom_ignore_filename(".ocommentignore");
             }
-            // The filter is never asked about the walk root, so a caller who
-            // names a path inside `.git` — or `.git` itself — is still
-            // answered; only what a walk *wanders* into is excluded.
+            /* NOTE: The filter is never asked about the walk root, so a caller who
+             * names a path inside `.git` — or `.git` itself — is still
+             * answered; only what a walk *wanders* into is excluded. */
             builder.filter_entry(|entry| entry.file_name() != GIT_DIRECTORY);
             for entry in builder.build() {
                 match entry {
@@ -272,9 +272,23 @@ fn discover_with_scope(
     discovery
         .files
         .dedup_by(|left, right| left.path == right.path);
+    /* INVARIANT: A path is reached twice whenever it is named beside a directory holding
+     * it, and it is one file either way: `files` says so with the sort and the
+     * dedup above, and a skip is one file just as much — a report that
+     * annotates the same path twice reads as two problems with it. Which of
+     * the two entries survives is not arbitrary. An error decides the exit
+     * code, and a path the caller actually typed is answered on a line of its
+     * own rather than folded into the summary, so the entry that says the most
+     * is sorted to the front of its path and is the one the dedup keeps. */
+    discovery.skipped.sort_by(|left, right| {
+        left.path
+            .cmp(&right.path)
+            .then(right.error.cmp(&left.error))
+            .then(right.explicit.cmp(&left.explicit))
+    });
     discovery
         .skipped
-        .sort_by(|left, right| left.path.cmp(&right.path));
+        .dedup_by(|left, right| left.path == right.path);
     Ok(discovery)
 }
 
@@ -305,9 +319,9 @@ fn load_one(
     discovery: &mut Discovery,
 ) {
     let path = &reported_path(path);
-    // The globs are written relative to the root; the path was typed — or
-    // walked — relative to the working directory, so it is measured against
-    // the root before either set is asked about it.
+    /* NOTE: The globs are written relative to the root; the path was typed — or
+     * walked — relative to the working directory, so it is measured against
+     * the root before either set is asked about it. */
     let relative = resolved.relative_to_root(path);
     if (!include.is_empty() && !include.is_match(&relative)) || exclude.is_match(&relative) {
         return;
@@ -340,7 +354,8 @@ fn load_one(
     } else {
         link_metadata
     };
-    // Every path under an explicitly named directory is explicit for hidden and size handling.
+    /* NOTE: Every path under an explicitly named directory is explicit for hidden and
+     * size handling. */
     if !explicit_scope && metadata.len() > resolved.config.files.max_size {
         discovery.skipped.push(SkippedFile {
             path: path.to_path_buf(),
@@ -453,7 +468,12 @@ pub fn profile_for_path(path: &Path, resolved: &ResolvedConfig) -> Option<Declar
         .cloned()
 }
 
-fn compile_globs(patterns: &[String]) -> Result<GlobSet> {
+/// Compile one of the `[files]` glob lists.
+///
+/// A walk asks for these in `discover_with_scope` and a staged run asks for
+/// them in `git::run_staged`; both measure a path against the project root
+/// first, so both get the same answer for the same path.
+pub(crate) fn compile_globs(patterns: &[String]) -> Result<GlobSet> {
     let mut builder = GlobSetBuilder::new();
     for pattern in patterns {
         builder.add(Glob::new(pattern).with_context(|| format!("invalid file glob `{pattern}`"))?);

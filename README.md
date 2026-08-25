@@ -29,6 +29,10 @@ ocomment fix src
 printf '%s\n' 'let x = 1; // remove' | ocomment strip --language rust
 ```
 
+Or install nothing: `docker run --rm -v "$PWD:/src"
+ghcr.io/p4suta/ocomment:0.1.0 check` runs the same CLI from the
+[container image](docs/docker.md).
+
 A command that names no path checks the current directory, so running it from
 a subdirectory checks that subdirectory; a bare `ocomment` run from the
 repository root already checks the whole repository, under the ordinary walk
@@ -89,9 +93,9 @@ path, or the flag on the command line. A comment no setting decided is left
 with the flag that would overrule the built-in rule instead. `--explain`
 annotates a report of comments, so it belongs to the two commands that write
 one and to the one format with room for prose: asking for it with `--format
-json`, or any other machine format, or with `fix`, `diff`, or `strip`, is a
-usage error rather than a flag that quietly does nothing, and `-q` silences
-`check` altogether, explanations included.
+json`, or any other machine format, or with any command that writes no report
+of comments, is a usage error rather than a flag that quietly does nothing,
+and `-q` silences `check` altogether, explanations included.
 
 `check` exits 0 when clean, 1 when removable comments exist, and 2 for an
 invalid source, configuration, plugin, or I/O failure. `diff` and

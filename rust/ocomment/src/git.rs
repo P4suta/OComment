@@ -60,7 +60,7 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
         dry_run,
     } = request;
     let root = repository_root()?;
-    let names = staged_paths(&root, paths)?;
+    let names = configured_paths(staged_paths(&root, paths)?, resolved)?;
     let mut entries = Vec::new();
     for path in names {
         let source = index_blob(&root, &path)?;
@@ -239,8 +239,8 @@ fn fix_index(root: &Path, entries: &[IndexEntry], index_only: bool) -> Result<()
     temporary_index.write_all(&original_index)?;
     temporary_index.flush()?;
     temporary_index.as_file_mut().sync_all()?;
-    // Close the file before Git replaces it through `<path>.lock`; retaining an
-    // open NamedTempFile handle makes this update fail on Windows.
+    /* NOTE: Close the file before Git replaces it through `<path>.lock`; retaining an
+     * open NamedTempFile handle makes this update fail on Windows. */
     let temporary_path = temporary_index.into_temp_path();
 
     for entry in &changed {
@@ -282,8 +282,8 @@ fn fix_index(root: &Path, entries: &[IndexEntry], index_only: bool) -> Result<()
             });
         }
     }
-    // Treat the index itself as the last journaled file. The shared transaction
-    // rolls working-tree files and index back together on any rename failure.
+    /* INVARIANT: Treat the index itself as the last journaled file. The shared transaction
+     * rolls working-tree files and index back together on any rename failure. */
     plans.push(WritePlan {
         path: index_path,
         original: original_index,
@@ -328,8 +328,8 @@ fn map_edits_uniquely(index: &[u8], working: &[u8], edits: &[Edit]) -> Result<Ve
 fn repository_root() -> Result<PathBuf> {
     let mut output = command_output(
         Command::new("git").args(["rev-parse", "--show-toplevel"]),
-        // Git's own words follow: they name the directory it searched from,
-        // which is the difference between "wrong directory" and "no repository".
+        /* NOTE: Git's own words follow: they name the directory it searched from,
+         * which is the difference between "wrong directory" and "no repository". */
         "--staged needs a Git repository",
     )?;
     trim_line_ending(&mut output);
@@ -356,6 +356,31 @@ fn staged_paths(root: &Path, filters: &[PathBuf]) -> Result<Vec<PathBuf>> {
     paths.sort();
     paths.dedup();
     Ok(paths)
+}
+
+/// Drop the staged paths `[files]` puts out of bounds.
+///
+/// `git diff --cached` answers with every path the commit carries, which is a
+/// different question from the one `files.include` and `files.exclude` answer:
+/// a vendored tree the project excludes is still staged on the commit that
+/// updates it. A walk applies the two globs in `files::load_one`, so a staged
+/// run applies them here, and to the same root-relative spelling — `git` names
+/// a staged path relative to the repository root, and `run_target` has already
+/// pointed `resolved.cwd` there for exactly this reason.
+///
+/// A staged path is a walked path rather than a named one: nobody typed it, so
+/// it never carries the licence an explicit argument does to look past the
+/// project's own limits.
+fn configured_paths(paths: Vec<PathBuf>, resolved: &ResolvedConfig) -> Result<Vec<PathBuf>> {
+    let include = crate::files::compile_globs(&resolved.config.files.include)?;
+    let exclude = crate::files::compile_globs(&resolved.config.files.exclude)?;
+    Ok(paths
+        .into_iter()
+        .filter(|path| {
+            let relative = resolved.relative_to_root(path);
+            (include.is_empty() || include.is_match(&relative)) && !exclude.is_match(&relative)
+        })
+        .collect())
 }
 
 fn index_blob(root: &Path, path: &Path) -> Result<Vec<u8>> {

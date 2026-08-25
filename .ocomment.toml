@@ -1,0 +1,20 @@
+# OComment checks its own repository. `ocomment` from the root is the gate the
+# `dogfood` CI job runs, and Lefthook runs `ocomment check --staged` before every
+# commit; see CONTRIBUTING.md for the tag convention this configuration enforces.
+version = 1
+
+[files]
+exclude = [
+  # Vendored crates, fixture bytes, and packaging or benchmark scratch are not
+  # ours to rewrite: fixture comments are the test input itself.
+  "rust/vendor/**",
+  "spec/fixtures/**",
+  "release-extras/**",
+  "benchmarks/**",
+]
+
+[policy]
+mode = "legal"
+layout = "lines"
+keep_kind = ["doc-line", "doc-block"]
+keep_regex = ['^(//|\(\*|/\*|#)\s*(NOTE|SAFETY|INVARIANT|PERF|TODO|FIXME|HACK)\b']

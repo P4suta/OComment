@@ -1,0 +1,11 @@
+# The image reads only the Rust workspace and the two licences, so deny
+# everything and re-admit exactly those. A narrow context also keeps
+# `rust/target` — gigabytes on a developer machine — out of the build.
+*
+
+!rust
+rust/target
+rust/vendor/*/target
+
+!LICENSE-APACHE
+!LICENSE-MIT

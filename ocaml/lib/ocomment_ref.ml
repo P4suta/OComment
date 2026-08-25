@@ -225,7 +225,8 @@ let is_directive language text raw =
   | C | Cpp -> String.starts_with ~prefix:"pragma" compact || String.starts_with ~prefix:"line " compact
   | Python -> List.exists (fun prefix -> String.starts_with ~prefix compact)
       ["pyright:"; "mypy:"; "ruff:"; "fmt:"]
-  | Shell -> String.starts_with ~prefix:"shellcheck" compact
+  | Shell -> List.exists (fun prefix -> String.starts_with ~prefix compact)
+      ["shellcheck"; "syntax="; "hadolint"]
   | _ -> false
 
 let within_first_two_lines source finish =
@@ -560,7 +561,11 @@ let scan_slash_unmapped source language options accumulator =
         end else if language = Kotlin && character = '"' then begin
           loop (scan_kotlin_string source options accumulator index false 0)
         end else if character = '"' || character = '\'' then begin
-          let finish, closed = quoted_end source index (language = Css) in
+          (* INVARIANT: a Rust string or byte-string literal carries a bare
+             newline as content, so only its closing quote or the end of the
+             file ends one; a Rust character literal still ends at the line. *)
+          let multiline = language = Css || (language = Rust && character = '"') in
+          let finish, closed = quoted_end source index multiline in
           if not closed then add_error accumulator "unterminated-string" "unterminated literal" index finish;
           loop finish
         end else loop (index + 1)
@@ -1677,10 +1682,10 @@ let prepended_concatenation_mark value =
   value = 0x0890 || value = 0x0891 || value = 0x08e2 || value = 0x110bd ||
   value = 0x110cd
 
-(* Keep this character-level policy aligned with unicode-width's documented
-   Unicode 17 rules.  Uucp's tty_width_hint deliberately follows the much
-   simpler historical wcwidth heuristic and, in particular, gives decomposed
-   Hangul vowel/trailing jamo a width of one. *)
+(* INVARIANT: Keep this character-level policy aligned with unicode-width's
+   documented Unicode 17 rules.  Uucp's tty_width_hint deliberately follows the
+   much simpler historical wcwidth heuristic and, in particular, gives
+   decomposed Hangul vowel/trailing jamo a width of one. *)
 let unicode_width value =
   let character = Uchar.of_int value in
   if value < 0x20 || (value >= 0x7f && value < 0xa0) then 0
@@ -1751,7 +1756,7 @@ let replacement source layout kind span =
       not (ascii_whitespace (Bytes.get source span.finish))
     then Bytes.of_string " " else Bytes.empty
 
-(*
+(* PERF:
    Column state is threaded between edits so every source byte is inspected at
    most once.  This also reflects an explicitly removed HTML comment: because
    that edit emits no bytes, its original newlines do not affect later edits.

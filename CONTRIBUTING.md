@@ -23,7 +23,16 @@ also requires OCaml 5.5, opam, Dune 3.24.2, Python 3, and the dependencies from
 ```sh
 opam install ./ocaml/ocomment-ref.opam --deps-only --with-test
 cargo build --manifest-path rust/Cargo.toml --workspace --locked
+lefthook install
 ```
+
+`lefthook install` wires up `lefthook.yml`, whose `pre-commit` hook runs
+`ocomment check --staged` and `cargo fmt --check`. The hook reads the staged
+blobs rather than the working tree, so a partially staged file is judged by the
+bytes the commit will carry, and it reports rather than rewrites: `fix --staged`
+under Lefthook would need `stage_fixed`, which stages the whole working-tree
+file and destroys partial staging. It prefers an `ocomment` on `PATH` and falls
+back to the workspace copy, so a fresh clone needs no `cargo install` first.
 
 The repository is intentionally split into independent implementations:
 
@@ -49,13 +58,65 @@ python3 tools/check_embedded_specs.py
 python3 tools/check_hooks.py
 python3 tools/validate_schemas.py
 ./tools/package-list.sh
+ocomment
 actionlint
+lefthook validate
 ```
+
+A bare `ocomment` from the repository root is the gate CI runs; see
+[comments carry a tag](#comments-carry-a-tag).
 
 When behavior changes, add the smallest fixture that proves the lexical edge
 case. Keep byte spans half-open, edits sorted and non-overlapping, and output
 deterministic. Update both implementations and their differential expectations
 when the shared contract changes.
+
+## Comments carry a tag
+
+OComment checks its own repository. `.ocomment.toml` runs the `legal` policy
+with `doc-line` and `doc-block` kept, so documentation is never at risk, and it
+keeps any comment whose first word is one of these tags:
+
+| Tag | What it introduces |
+| --- | --- |
+| `NOTE` | Why the code is the way it is, where the code cannot say so itself. |
+| `SAFETY` | Why an `unsafe` block upholds what the compiler cannot check. It is reserved for that Rust-wide meaning; the workspace has no `unsafe` today. |
+| `INVARIANT` | A property the surrounding code must preserve for the next reader to be able to change it — why an operation cannot lose a user's bytes or be spoofed included. |
+| `PERF` | A measurement or a hot path that explains a shape which would otherwise look convoluted. |
+| `TODO` / `FIXME` / `HACK` | Work that is known to be left, in decreasing order of how deliberate it was. |
+
+An untagged explanatory comment fails the `dogfood` CI job and the pre-commit
+hook. The rule is not that comments are unwelcome — it is that a comment worth
+keeping is worth saying *why* it is there, and a comment that cannot be given
+one of these tags is usually restating what the line below it already says.
+
+The tag is matched against the head of a single comment token, so a rationale
+that runs past one line is one block comment rather than a run of `//` lines:
+
+```rust
+/* INVARIANT: a Rust string literal carries a bare newline as content, unlike
+ * its C, Go, and Java cousins, so only the closing quote or the end of the
+ * file ends one. */
+```
+
+Keep the continuation lines on ` * `; `rustfmt` reflows the other block-comment
+shapes. In OCaml the same rationale is `(* INVARIANT: ... *)`.
+
+A language whose only comment is `#` — shell, Python, the Dockerfile — has no
+block form to run a rationale through, and every `#` line is a comment token of
+its own, so every one of them carries the tag:
+
+```dockerfile
+# NOTE: musl-dev is deliberately unpinned: the version that matters is the one
+# NOTE: the pinned `rust:1.88-alpine` tag resolves to, and pinning a package
+# NOTE: version on top of that only breaks the build when the base image moves.
+```
+
+Prose that documents a Python object belongs in its docstring instead, which is
+not a comment at all.
+
+`ocomment config explain` names the setting behind each of these rules, and
+`ocomment --explain` names the rule that decided any one comment.
 
 ## CLI output conventions
 

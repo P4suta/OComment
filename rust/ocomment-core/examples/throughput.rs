@@ -54,9 +54,9 @@ fn run() -> Result<(), String> {
             Dialect::Standard,
         ),
     };
-    // Keep comment allocation realistic: one span per 4 KiB rather than one
-    // span per source line. The filler still exercises each language's string
-    // and other lexically sensitive states.
+    /* PERF: Keep comment allocation realistic: one span per 4 KiB rather than one
+     * span per source line. The filler still exercises each language's string
+     * and other lexically sensitive states. */
     let mut fragment = Vec::with_capacity(4096 + filler.len());
     while fragment.len() + filler.len() + comment.len() <= 4096 {
         fragment.extend_from_slice(filler);

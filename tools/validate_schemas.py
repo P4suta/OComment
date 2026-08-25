@@ -15,10 +15,69 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 SARIF_SCHEMA = "https://json.schemastore.org/sarif-2.1.0.json"
 SARIF_LEVELS = frozenset({"none", "note", "warning", "error"})
-# What a repository-relative artifact URI is measured from, and the pseudo-path
-# a run over standard input reports, which is measured from nothing.
+# NOTE: What a repository-relative artifact URI is measured from, and the
+# NOTE: pseudo-path a run over standard input reports, measured from nothing.
 SARIF_SRCROOT = "%SRCROOT%"
 SARIF_STDIN_URI = "<stdin>"
+
+
+# INVARIANT: Every artifact URI the CLI emits, and the base id each one is owed.
+# INVARIANT: The two halves of this rule live apart -- `output::artifact_location`
+# INVARIANT: writes them and this validates them -- so the cases are pinned here
+# INVARIANT: and checked by `--self-test`: a validator that disagrees with the
+# INVARIANT: emitter fails a document that is perfectly good, or passes one no
+# INVARIANT: code-scanning UI can resolve.
+SARIF_URI_CASES: tuple[tuple[str, str | None, bool], ...] = (
+    # NOTE: A path inside the checkout is resolved against the source root.
+    ("a.rs", SARIF_SRCROOT, True),
+    ("sub/doc.rs", SARIF_SRCROOT, True),
+    # NOTE: A path that names no place inside it is under no base at all.
+    (SARIF_STDIN_URI, None, True),
+    ("/tmp/a.rs", None, True),
+    ("C:/src/a.rs", None, True),
+    ("../sibling/a.rs", None, True),
+    ("sub/../../sibling/a.rs", None, True),
+    # NOTE: A relative URI with no base resolves against nothing, and a base
+    # NOTE: on a URI that has left the checkout claims a place it is not in.
+    ("a.rs", None, False),
+    ("../sibling/a.rs", SARIF_SRCROOT, False),
+    ("sub/../../sibling/a.rs", SARIF_SRCROOT, False),
+    ("/tmp/a.rs", SARIF_SRCROOT, False),
+    ("C:/src/a.rs", SARIF_SRCROOT, False),
+    (SARIF_STDIN_URI, SARIF_SRCROOT, False),
+    # NOTE: Neither a `.` segment nor a backslash names a file a checkout has.
+    ("./a.rs", SARIF_SRCROOT, False),
+    ("sub/./doc.rs", SARIF_SRCROOT, False),
+    ("sub\\doc.rs", SARIF_SRCROOT, False),
+    # NOTE: A first segment of one letter and a colon is read as a drive letter
+    # NOTE: wherever it turns up, and a POSIX checkout may hold a directory
+    # NOTE: named `c:`. A Linux run over `c:/a.rs` really does emit
+    # NOTE: `{"uri": "c:/a.rs", "uriBaseId": "%SRCROOT%"}`, which this rule then
+    # NOTE: turns down; the pair below pins the limitation rather than leaving
+    # NOTE: it to be met for the first time on a failing CI job.
+    ("c:/a.rs", SARIF_SRCROOT, False),
+    ("c:/a.rs", None, True),
+)
+
+
+def self_test() -> int:
+    """Check the artifact-URI rule against the cases the CLI actually emits."""
+    broken: list[str] = []
+    for uri, base, valid in SARIF_URI_CASES:
+        location: dict[str, object] = {"uri": uri}
+        if base is not None:
+            location["uriBaseId"] = base
+        failures: list[str] = []
+        check_sarif_uri(location, "self-test", failures)
+        if valid and failures:
+            broken.append(f"{location!r} is emitted by the CLI but rejected: {failures}")
+        elif not valid and not failures:
+            broken.append(f"{location!r} is accepted, but no reader can resolve it")
+    if broken:
+        print("tools/validate_schemas.py --self-test:")
+        print("\n".join(f"  {failure}" for failure in broken))
+        return 1
+    return 0
 
 
 def check_sarif_region(region: object, where: str, failures: list[str]) -> None:
@@ -35,6 +94,24 @@ def check_sarif_region(region: object, where: str, failures: list[str]) -> None:
         failures.append(f"{where} ends on line {end_line} before line {start_line}")
 
 
+def sarif_uri_is_absolute(uri: str) -> bool:
+    """Whether a URI already says where it starts, so no base id may.
+
+    A POSIX path starts at the root and a Windows one starts at a drive
+    letter; the emitter turns the separators of the second around but leaves
+    the drive where it found it, so `C:/src/a.rs` is what arrives here.
+
+    The drive is recognised by shape rather than by platform: any first segment
+    of a single letter and a colon counts, which a POSIX checkout is free to
+    spell as an ordinary directory name. A file at `c:/a.rs` on Linux is
+    emitted under `%SRCROOT%` -- correctly, since that resolves -- and read
+    here as a path that already says where it starts, so the two disagree
+    about it. `SARIF_URI_CASES` pins that one case.
+    """
+    head = uri.split("/", 1)[0]
+    return uri.startswith("/") or (len(head) == 2 and head[1] == ":" and head[0].isalpha())
+
+
 def check_sarif_uri(location: object, where: str, failures: list[str]) -> None:
     if not isinstance(location, dict):
         failures.append(f"{where} is not an object")
@@ -44,18 +121,27 @@ def check_sarif_uri(location: object, where: str, failures: list[str]) -> None:
     if not isinstance(uri, str) or not uri:
         failures.append(f"{where}.uri is not a non-empty string: {uri!r}")
         return
-    if uri.startswith("/") or "://" in uri:
-        failures.append(f"{where}.uri is not repository-relative: {uri!r}")
+    # NOTE: A path is what the emitter reports; a URL with a scheme in front
+    # NOTE: of it is something else entirely, and no checkout holds one.
+    if "://" in uri:
+        failures.append(f"{where}.uri is a URL rather than a path: {uri!r}")
         return
-    # A code-scanning UI matches the URI against the paths the checkout uses,
-    # and neither a backslash nor a `.` segment names a file any checkout has.
+    # NOTE: A code-scanning UI matches the URI against the paths the checkout
+    # NOTE: uses, and neither a backslash nor a `.` segment names a file any
+    # NOTE: checkout has.
     if "\\" in uri:
         failures.append(f"{where}.uri uses a backslash separator: {uri!r}")
     if uri.startswith("./") or "/./" in uri:
         failures.append(f"{where}.uri keeps a `.` segment: {uri!r}")
-    # A relative URI resolves against a base id; standard input and a path that
-    # climbs out of the tree are under no base at all.
-    if uri == SARIF_STDIN_URI or uri.startswith("../"):
+    # INVARIANT: A relative URI resolves against a base id. Standard input is
+    # INVARIANT: not a file, an absolute path already says where it starts, and
+    # INVARIANT: a path that climbs out through `..` has left the tree the base
+    # INVARIANT: id would measure it from -- the emitter leaves the base off all
+    # INVARIANT: three, so demanding one here would fail a document that is
+    # INVARIANT: right. The climb is looked for as a path segment rather than a
+    # INVARIANT: prefix: `sub/../../sibling/a.rs` leaves the tree just as surely
+    # INVARIANT: as `../sibling/a.rs`, and `..pending/a.rs` does not leave it.
+    if uri == SARIF_STDIN_URI or sarif_uri_is_absolute(uri) or ".." in uri.split("/"):
         if base is not None:
             failures.append(f"{where}.uriBaseId is {base!r}, but {uri!r} is under no base")
     elif base != SARIF_SRCROOT:
@@ -240,7 +326,21 @@ def main() -> int:
         type=pathlib.Path,
         help="validate this `--format sarif` document instead of the canonical schemas",
     )
+    parser.add_argument(
+        "--self-test",
+        action="store_true",
+        help="check the artifact-URI rule against the URIs the CLI emits, and stop",
+    )
     args = parser.parse_args()
+    # INVARIANT: The rule is checked wherever this script runs: on the schema
+    # INVARIANT: job that takes no arguments, and on the three-operating-system
+    # INVARIANT: job that hands it a SARIF document. Neither has to remember to
+    # INVARIANT: ask for it.
+    if self_test() != 0:
+        return 1
+    if args.self_test:
+        print(f"{len(SARIF_URI_CASES)} artifact URI cases agree with the emitter")
+        return 0
     if args.sarif is not None:
         return check_sarif(args.sarif)
 

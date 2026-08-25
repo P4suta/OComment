@@ -3,7 +3,8 @@ version = 1
 protected = [
   "shebang", "encoding", "go:", "+build", "triple-slash-reference",
   "sourceMappingURL", "sourceURL", "#__PURE__", "@__PURE__",
-  "lint-and-formatter", "type-checker", "optimizer-hint", "version-comment"
+  "lint-and-formatter", "type-checker", "optimizer-hint", "version-comment",
+  "syntax=", "hadolint"
 ]
 
 [policy.safe]

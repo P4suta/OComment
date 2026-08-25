@@ -46,6 +46,32 @@ fn rust_raw_c_strings_hide_comment_delimiters() {
 }
 
 #[test]
+fn rust_string_literals_may_span_lines() {
+    let source = b"const HELP: &str = \"first\n// opaque\nlast\"; // remove\n";
+    let report = scan(source, Language::Rust, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1);
+    assert_eq!(
+        report.comments[0].span.start,
+        source.len() - b"// remove\n".len()
+    );
+}
+
+#[test]
+fn rust_string_literals_must_still_terminate() {
+    let source = b"const HELP: &str = \"first\n// opaque\n";
+    let report = scan(source, Language::Rust, ScanOptions::default());
+    assert!(!report.valid);
+    assert!(
+        report
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "unterminated-string")
+    );
+    assert!(report.comments.is_empty());
+}
+
+#[test]
 fn ocaml_nested_comments_and_quoted_strings() {
     let source = br#"{tag| (* string *) |tag} (* outer "*)" (* inner *) *)"#;
     let report = scan(source, Language::Ocaml, ScanOptions::default());
@@ -318,6 +344,29 @@ fn shell_heredocs_and_here_strings_are_not_comments() {
     let report = scan(quoted_words, Language::Shell, options(Dialect::Bash53));
     assert!(report.valid);
     assert_eq!(report.comments.len(), 1);
+}
+
+/// A Dockerfile is scanned as shell today, and two of its lines are addressed
+/// to a tool rather than to a reader: the `# syntax=` parser directive BuildKit
+/// reads before it reads anything else, and `# hadolint ignore=`, which turns
+/// one rule of the Dockerfile linter off for the instruction below it. Removing
+/// either changes what a build does, so neither is explanatory text.
+#[test]
+fn dockerfile_parser_and_linter_directives_are_protected() {
+    let source = b"# syntax=docker/dockerfile:1\n# explanatory\n# hadolint ignore=DL3018\nRUN apk add --no-cache musl-dev\n# shellcheck disable=SC2086\n";
+    let report = scan(source, Language::Shell, ScanOptions::default());
+    assert!(report.valid);
+    let kinds: Vec<_> = report.comments.iter().map(|comment| comment.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            CommentKind::Directive,
+            CommentKind::Line,
+            CommentKind::Directive,
+            CommentKind::Directive,
+        ]
+    );
+    assert_eq!(removable(&report), 1);
 }
 
 #[test]

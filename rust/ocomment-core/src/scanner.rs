@@ -233,10 +233,10 @@ impl<'a> Scanner<'a> {
     }
 
     fn scan_c_family(&mut self) {
-        // Translation phase 2 line splicing is significant to C-family lexical
-        // input. The remapped copy is scanned by a child, which tracks no
-        // checkpoints — that is the document-wide half of the restart rules, and
-        // it is the same answer the incremental engine gets from them.
+        /* INVARIANT: Translation phase 2 line splicing is significant to C-family lexical
+         * input. The remapped copy is scanned by a child, which tracks no
+         * checkpoints — that is the document-wide half of the restart rules, and
+         * it is the same answer the incremental engine gets from them. */
         if !self.restart_rules.splicing_permits_restarts {
             let mapped = MappedBytes::without_c_line_splices(self.source);
             let mut child = Scanner::child(&mapped.bytes, self.language, self.options.clone(), 0);
@@ -316,7 +316,13 @@ impl<'a> Scanner<'a> {
                     } else {
                         index
                     };
-                    return Some(self.quoted_or_error(quote, false, "string"));
+                    /* INVARIANT: a Rust string or byte-string literal carries a
+                     * bare newline as content, unlike its C, Go, and Java
+                     * cousins, so only the closing quote or the end of the file
+                     * ends one. A character literal below still ends at the
+                     * line, which is what keeps a lifetime from swallowing the
+                     * rest of the source. */
+                    return Some(self.quoted_or_error(quote, true, "string"));
                 }
                 if bytes[index] == b'\'' && rust_char_start(bytes, index) {
                     return Some(self.quoted_or_error(index, false, "character literal"));
@@ -1299,9 +1305,9 @@ impl<'a> Scanner<'a> {
                     _ => {}
                 }
             }
-            // Annex B HTML-like comments are uncommon.  Guard both delimiter
-            // checks by their first byte so the ordinary JavaScript hot path
-            // does not perform two slice comparisons for every source byte.
+            /* PERF: Annex B HTML-like comments are uncommon.  Guard both delimiter
+             * checks by their first byte so the ordinary JavaScript hot path
+             * does not perform two slice comparisons for every source byte. */
             if (bytes[index] == b'<' && starts(bytes, index, b"<!--"))
                 || (bytes[index] == b'-' && js_html_close_comment(bytes, index))
             {
@@ -2163,7 +2169,13 @@ fn directive_name(text: &str, language: Language, raw: &[u8]) -> Option<&'static
         Language::Python => ["pyright:", "mypy:", "ruff:", "fmt:"]
             .into_iter()
             .find(|prefix| compact.starts_with(prefix)),
-        Language::Shell => compact.starts_with("shellcheck").then_some("shellcheck"),
+        /* NOTE: A Dockerfile is detected as shell, and two of its comment lines are
+         * addressed to a tool: `# syntax=` is the parser directive BuildKit
+         * reads before it reads the file, and `# hadolint ignore=` turns one
+         * rule of the Dockerfile linter off for the instruction below it. */
+        Language::Shell => ["shellcheck", "syntax=", "hadolint"]
+            .into_iter()
+            .find(|prefix| compact.starts_with(prefix)),
         _ => None,
     }
 }
@@ -2891,9 +2903,9 @@ impl MappedBytes {
                                 origins.push(ByteSpan::new(index, cursor + 4));
                             }
                         } else {
-                            // Java Unicode escapes are UTF-16 code units, so a
-                            // lone surrogate is lexically valid even though it
-                            // has no standalone UTF-8 representation.
+                            /* NOTE: Java Unicode escapes are UTF-16 code units, so a
+                             * lone surrogate is lexically valid even though it
+                             * has no standalone UTF-8 representation. */
                             bytes.push(0x80);
                             origins.push(ByteSpan::new(index, cursor + 4));
                         }

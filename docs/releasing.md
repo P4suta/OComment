@@ -32,6 +32,28 @@ upstream submission is pending. The CLI crate contains explicit
 `cargo-binstall` URL, archive-format, and in-archive binary metadata for the
 same target-qualified archives.
 
+## The container image
+
+`publish-container` pushes `ghcr.io/p4suta/ocomment` for `linux/amd64` and
+`linux/arm64` after the GitHub release exists. It does not rebuild the tag: it
+downloads the two `*-unknown-linux-musl` archives the matrix already produced
+and feeds them to the Dockerfile through the buildx named context `builder`, so
+the image and the archives contain the same bytes. The image is tagged
+`MAJOR.MINOR.PATCH`, `MAJOR.MINOR`, and `latest`, signed with cosign, and given
+a build-provenance attestation pushed to the registry.
+
+A GHCR package is private when it is first created, and the visibility setting
+belongs to the package rather than the repository, so nothing in this
+repository can set it. **After the first release, open the package page and set
+its visibility to public once.** Until that is done every `docker pull` fails
+with an authentication error even though the workflow succeeded. Later releases
+inherit the setting.
+
+Renaming the image, dropping an architecture, or moving the `builder` context
+layout — `out/amd64/ocomment` and `out/arm64/ocomment` — breaks pinned pulls
+and the Dockerfile respectively, so treat both as part of the released
+contract, exactly like the archive layout.
+
 ## The published GitHub Action
 
 `action.yml` at the repository root is released with the source, so

@@ -147,7 +147,7 @@ fn replacement(source: &[u8], span: ByteSpan, layout: Layout) -> Vec<u8> {
             if output.is_empty() && has_non_whitespace_neighbors(source, span) {
                 output.push(b' ');
             } else if !output.is_empty() && needs_leading_separator(source, span) {
-                // A newline is already a lexical separator; no extra byte is needed.
+                // NOTE: A newline is already a lexical separator; no extra byte is needed.
             }
             output
         }
@@ -224,7 +224,7 @@ fn column_replacement(source: &[u8], span: ByteSpan, mut column: usize) -> (Vec<
                     column += width;
                     index += length;
                 } else {
-                    // Invalid source bytes each occupy one conservative display column.
+                    // NOTE: Invalid source bytes each occupy one conservative display column.
                     output.push(b' ');
                     column += 1;
                     index += 1;

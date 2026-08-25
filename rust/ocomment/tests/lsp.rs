@@ -302,7 +302,7 @@ fn protocol_supports_utf8_pull_workspace_actions_and_stale_versions() {
     }));
     assert!(client.response(6)["result"].is_null());
 
-    // A stale update must not replace the current document snapshot.
+    // NOTE: A stale update must not replace the current document snapshot.
     client.send(json!({
         "jsonrpc": "2.0", "method": "textDocument/didChange",
         "params": {

@@ -13,10 +13,16 @@ OCAML = ROOT / "ocaml/_build/default/bin/main.exe"
 
 CORPUS = json.loads((ROOT / "spec/fixtures/v1/builtins.json").read_text(encoding="utf-8"))
 assert CORPUS["version"] == 1
+# INVARIANT: `builtins.json` carries one case per language and is loaded into a
+# INVARIANT: dict keyed by that language, so a second case for a language the
+# INVARIANT: corpus already covers would silently replace the first rather than
+# INVARIANT: be run. The assertion below is what says so out loud; anything past
+# INVARIANT: the first case for a language belongs in SPECIAL_FIXTURES.
 FIXTURES = {
     case["language"]: case["source_utf8"].encode("utf-8")
     for case in CORPUS["cases"]
 }
+assert len(FIXTURES) == len(CORPUS["cases"]), "builtins.json holds one case per language"
 
 UNICODE_COLUMN_SAMPLE = "".join(
     chr(value)
@@ -28,6 +34,7 @@ UNICODE_COLUMN_SAMPLE = "".join(
 SPECIAL_FIXTURES = [
     ("rust-nested-raw", "rust", br'r#"// opaque"# /* outer /* inner */ end */\n// rustfmt::skip\n', {}),
     ("rust-raw-c-string", "rust", b'cr#"inner " // opaque"#; // remove\n', {}),
+    ("rust-multiline-string", "rust", b'const A: &str = "a\n// opaque\nb"; // remove\n', {}),
     ("ocaml-nested-quoted", "ocaml", br'{tag| (* opaque *) |tag} (* outer "*)" (* inner *) *)', {}),
     ("ocaml-comment-quoted", "ocaml", br'(* outer {tag| *) opaque |tag} end *)', {}),
     ("ocaml-long-quoted-id", "ocaml", b"{" + b"a" * 80 + b"|(* opaque *)|" + b"a" * 80 + b"} (* remove *)", {}),
@@ -69,6 +76,7 @@ value = f'''literal # opaque {(
     ("shell-quoted-heredoc-and-ansi", "shell", b"cat <<E\"OF\"\n# opaque\nEOF\ncat <<\\DONE\n# opaque\nDONE\nvalue=$'it\\'s # opaque'\n# remove\n", {"dialect": "bash53"}),
     ("shell-command-substitutions", "shell", b'value="$(printf ok # nested\n)"\nold=`printf ok # legacy\n`\ntext="# opaque"\n# remove\n', {"dialect": "bash53"}),
     ("shell-logical-word-boundaries", "shell", b"value=word\\\n#suffix\njoined=$(printf x)#suffix\nprintf ok \\\n# remove\n$(printf x);# remove\n", {}),
+    ("dockerfile-directives", "shell", b"# syntax=docker/dockerfile:1\n# remove\n# hadolint ignore=DL3018\nRUN apk add --no-cache musl-dev\n", {}),
     ("shell-case-command-substitution", "shell", b"value=$(case x in\n  a) # remove\n    printf '%s' '# opaque' ;;\n  *) printf ok ;;\nesac\n)#suffix\n# remove\n", {}),
     ("sql-postgres", "sql", br'select $tag$-- opaque /* opaque */$tag$; /* outer /* nested */ end */ -- remove', {"dialect": "postgresql"}),
     ("sql-standard-backslash", "sql", b"select '\\'; -- remove\n", {}),

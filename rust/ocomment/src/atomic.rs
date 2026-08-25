@@ -54,9 +54,9 @@ pub fn apply_transaction(plans: Vec<WritePlan>) -> Result<()> {
             std::process::id()
         ));
         if backup.exists() {
-            // The journal holds the file as it was before the interrupted
-            // run, so deleting it unread can be the loss the rollback existed
-            // to prevent.
+            /* INVARIANT: The journal holds the file as it was before the interrupted
+             * run, so deleting it unread can be the loss the rollback existed
+             * to prevent. */
             bail!(
                 "rollback path {} already exists; a previous ocomment run may have been \
                  interrupted — inspect and delete it before retrying",
@@ -73,8 +73,8 @@ pub fn apply_transaction(plans: Vec<WritePlan>) -> Result<()> {
     for index in 0..prepared.len() {
         if let Err(error) = commit_one(&mut prepared[index]) {
             let failed_path = prepared[index].plan.path.clone();
-            // Include the failing item: a rename may have created its backup
-            // before installing or syncing the replacement failed.
+            /* INVARIANT: Include the failing item: a rename may have created its backup
+             * before installing or syncing the replacement failed. */
             let rollback_error = rollback(&prepared[..=index]);
             return Err(match rollback_error {
                 Ok(()) => anyhow!(

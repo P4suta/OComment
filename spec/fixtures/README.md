@@ -6,6 +6,12 @@ then compared by the normalized JSONL protocol. The harness runs both `safe`
 and `all` policies for every built-in language and adds binary, dialect,
 malformed-input, external-span, and declarative-profile cases.
 
+One case per language. The runner loads the corpus into a dict keyed by the
+`language` field, so a second case for a language already listed would replace
+the first instead of being run; `tools/differential.py` asserts the two counts
+agree. Extra cases for a language go in that file's `SPECIAL_FIXTURES`, which
+is a list and keeps every entry.
+
 Fixture changes are specification changes. Add the corresponding official
 lexical-spec reference and expected behavior to the case note before changing a
 source form.
