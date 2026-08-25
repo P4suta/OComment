@@ -51,5 +51,5 @@ wasmi_runtime_layer.workspace = true
 
 [dev-dependencies]
 wat = "1.252.0"
-wit-component = "0.19.1"
+wit-component = "0.257.1"
 wit-parser = "0.13.2"
