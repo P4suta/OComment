@@ -31,6 +31,7 @@ jobs:
       - run: cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets --locked -- -D warnings
       - run: cargo test --manifest-path rust/Cargo.toml --workspace --all-targets --locked
       - run: python3 tools/check_embedded_specs.py
+      - run: python3 tools/check_hooks.py
       - run: python3 -m pip install --disable-pip-version-check jsonschema==4.25.1
       - run: cargo build --manifest-path rust/Cargo.toml --locked -p ocomment
       - run: python3 tools/validate_schemas.py
@@ -84,3 +85,56 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: '& rust/target/release/ocomment.exe --version'
+
+  action-smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - run: cargo build --manifest-path rust/Cargo.toml --locked -p ocomment
+      - name: Create the action fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p action-fixture
+          printf 'fn main() {\n    let value = 1; // removable\n}\n' >action-fixture/sample.rs
+          printf 'def sample():\n    return 1  # removable\n' >action-fixture/sample.py
+      - name: Run the composite action against the fixture
+        id: smoke
+        uses: ./
+        with:
+          command: check
+          paths: action-fixture
+          format: sarif
+          sarif-file: ocomment.sarif
+          upload-sarif: "false"
+          fail-on-findings: "false"
+          verify-attestation: "false"
+          binary-path: rust/target/debug/ocomment
+      - name: Validate the SARIF the action produced
+        shell: bash
+        env:
+          SMOKE_EXIT_CODE: ${{ steps.smoke.outputs.exit-code }}
+          SMOKE_SARIF_FILE: ${{ steps.smoke.outputs.sarif-file }}
+          SMOKE_VERSION: ${{ steps.smoke.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "${SMOKE_EXIT_CODE}" != "1" ]; then
+            echo "::error::the fixture has removable comments, so the action should report exit code 1, not ${SMOKE_EXIT_CODE}"
+            exit 1
+          fi
+          if [ -z "${SMOKE_VERSION}" ]; then
+            echo "::error::the action reported no version"
+            exit 1
+          fi
+          python=python3
+          command -v python3 >/dev/null 2>&1 || python=python
+          "${python}" tools/validate_schemas.py --sarif "${SMOKE_SARIF_FILE}" | tee sarif-report.txt
+          grep -q 'with 2 ocomment results' sarif-report.txt

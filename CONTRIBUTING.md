@@ -46,6 +46,7 @@ cargo test --manifest-path rust/Cargo.toml --workspace --all-targets --locked
 opam exec -- dune runtest --root ocaml
 opam exec -- ./tools/differential.sh
 python3 tools/check_embedded_specs.py
+python3 tools/check_hooks.py
 python3 tools/validate_schemas.py
 ./tools/package-list.sh
 actionlint
@@ -76,6 +77,11 @@ JSONL, SARIF, and GitHub output. All user-facing text is English.
 - Add tests for observable behavior and update user-facing documentation.
 - Regenerate checked-in schemas, WIT, man pages, or completions when their source
   changes; `tools/check_embedded_specs.py` checks shared embedded assets.
+- Adding a language to `spec/languages.toml` also changes the published
+  pre-commit hooks; `tools/check_hooks.py --print-pattern` regenerates the
+  `files:` regex that `.pre-commit-hooks.yaml` must carry.
+- A new CI job must be added to `.github/rulesets/main.json` in the same change,
+  and every `uses:` must be SHA-pinned with a version comment.
 - Do not include build output, credentials, or unrelated formatting changes.
 
 The repository uses squash merges. By submitting a contribution, you agree that

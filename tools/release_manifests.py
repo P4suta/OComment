@@ -143,7 +143,10 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--release-dir", required=True, type=pathlib.Path)
     parser.add_argument("--version", required=True)
-    parser.add_argument("--repository", default="ocomment/ocomment")
+    # The release workflow passes $GITHUB_REPOSITORY; the default is for a
+    # person generating the definitions by hand, and it has to name the
+    # repository the archives are actually published from.
+    parser.add_argument("--repository", default="P4suta/OComment")
     args = parser.parse_args()
 
     version = args.version.removeprefix("v")

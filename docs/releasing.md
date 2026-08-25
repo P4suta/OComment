@@ -31,3 +31,29 @@ bucket, and WinGet repository; they can also be installed directly while an
 upstream submission is pending. The CLI crate contains explicit
 `cargo-binstall` URL, archive-format, and in-archive binary metadata for the
 same target-qualified archives.
+
+## The published GitHub Action
+
+`action.yml` at the repository root is released with the source, so
+`P4suta/OComment@vMAJOR.MINOR.PATCH` resolves as soon as the tag exists; no
+extra publishing step is needed for it to work in a workflow.
+
+Listing it on the GitHub Marketplace is separate and manual. The first time,
+open the release in the GitHub UI and tick **Publish this Action to the GitHub
+Marketplace** before publishing the release; the checkbox appears only when
+`action.yml` is present at the repository root with a `name`, `description`,
+and `branding` block. Later releases inherit the listing, and the Marketplace
+version list follows the tags.
+
+Recommend full-version pins such as `P4suta/OComment@v0.1.0` in every example.
+The release-tag ruleset forbids deleting or force-moving `v*`, so a published
+tag never changes underneath a workflow, and there is deliberately no moving
+`v0` or `v0.1` tag to maintain. A release that changes the action's inputs,
+outputs, or verdict rules is therefore a version bump like any other, and
+`docs/ci.md` documents the surface those pins are buying.
+
+The action downloads `ocomment-<target>.tar.gz` (or the Windows `.zip`), the
+combined `SHA256SUMS`, and — when `gh` is on the runner — the build-provenance
+attestation. Renaming a release asset, dropping a musl target, or changing the
+`ocomment-<target>/` leading directory breaks every pinned workflow, so treat
+the archive layout as part of the released contract.

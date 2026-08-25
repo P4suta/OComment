@@ -136,6 +136,20 @@ pub fn stdin_source(
 /// they did not mean to rewrite — into the run.
 pub const DEFAULT_TARGET: &str = ".";
 
+/// The one name a walk never offers, whatever else was asked for.
+///
+/// `.git` is git's own storage rather than source, and `git` itself never
+/// treats it as a candidate for anything. Neither may a tool that rewrites
+/// files in place: `ocomment fix .` in a fresh repository would otherwise
+/// rewrite every sample hook git had just written into `.git/hooks`. Naming
+/// a directory lifts the hidden-file rule and so does `files.hidden`, so the
+/// exclusion cannot hang off either of them.
+///
+/// A submodule or a linked worktree keeps its `.git` as a *file* pointing at
+/// the storage instead of holding it, which is why the name is matched rather
+/// than the file type.
+const GIT_DIRECTORY: &str = ".git";
+
 pub fn discover(
     paths: &[PathBuf],
     resolved: &ResolvedConfig,
@@ -215,6 +229,10 @@ fn discover_with_scope(
             if ignore {
                 builder.add_custom_ignore_filename(".ocommentignore");
             }
+            // The filter is never asked about the walk root, so a caller who
+            // names a path inside `.git` — or `.git` itself — is still
+            // answered; only what a walk *wanders* into is excluded.
+            builder.filter_entry(|entry| entry.file_name() != GIT_DIRECTORY);
             for entry in builder.build() {
                 match entry {
                     Ok(entry) if entry.file_type().is_some_and(|kind| kind.is_file()) => {

@@ -470,14 +470,17 @@ pub fn run() -> Result<u8> {
     if common.output.explain && common.output.format != OutputFormat::Human {
         bail!("--explain is only available with --format human");
     }
-    // The flag annotates a report of comments, and only `check` and `scan`
-    // write one: `fix` reports the files it rewrote, `diff` writes a patch,
-    // and `strip` writes the stripped source. `--explain` is global, so the
-    // combination is refused rather than quietly doing nothing.
+    // The flag annotates a report of comments, and only `check`, `scan` and
+    // the implicit command write one: `fix` reports the files it rewrote,
+    // `diff` writes a patch, `strip` writes the stripped source, and the rest
+    // of the commands answer a question that is not about comments at all.
+    // `--explain` is global, so it is named as an allow-list — a command added
+    // later has to opt in — and everything else is refused rather than
+    // quietly doing nothing.
     if common.output.explain
-        && matches!(
+        && !matches!(
             cli.command,
-            Some(Command::Fix(_) | Command::Diff(_) | Command::Strip)
+            None | Some(Command::Check(_) | Command::Scan(_))
         )
     {
         bail!("--explain is only available with `check` and `scan`");

@@ -124,7 +124,8 @@ repository above it — however deep in the tree the command is run from.
 
 Run `ocomment init config` for the complete default file or `ocomment config
 schema` for its JSON Schema. See [configuration](docs/configuration.md),
-[editor/LSP setup](docs/editors.md), and [plugins](docs/plugins.md).
+[editor/LSP setup](docs/editors.md), [plugins](docs/plugins.md), and
+[hooks and CI](docs/ci.md).
 
 ## Partially staged changes
 
@@ -141,6 +142,41 @@ lefthook install
 The generated hook deliberately does not use Lefthook `stage_fixed`, because
 that setting would add the complete working-tree file and destroy partial
 staging.
+
+## Hooks and CI
+
+`.pre-commit-hooks.yaml` publishes `ocomment-check` and `ocomment-fix` for
+[pre-commit](https://pre-commit.com). The hooks are `language: system`, so
+install the CLI first, then point a `.pre-commit-config.yaml` at this
+repository:
+
+```yaml
+repos:
+  - repo: https://github.com/P4suta/OComment
+    rev: v0.1.0
+    hooks:
+      - id: ocomment-check
+```
+
+`ocomment-check` exits 1 and blocks the commit while a staged file still has a
+removable comment. `args: ["--staged"]` judges the index blobs rather than the
+working tree, which is what a partially staged file needs.
+
+`action.yml` is a composite GitHub Action. It downloads the release archive for
+the runner, verifies its SHA-256 and its build-provenance attestation, and
+annotates the pull request:
+
+```yaml
+      - uses: P4suta/OComment@v0.1.0
+        with:
+          paths: src tests
+```
+
+`format: sarif` with `upload-sarif: "true"` sends the findings to code scanning
+instead, and `fail-on-findings: "false"` leaves the verdict to a later step
+reading the `exit-code` output. [docs/ci.md](docs/ci.md) documents every input
+and output, the `--staged` caveats, and how to run the action where no release
+archive is published.
 
 ## Library
 

@@ -1,0 +1,305 @@
+name: OComment
+description: Report or diff removable comments with the OComment CLI, with optional SARIF upload to code scanning.
+author: P4suta
+
+branding:
+  icon: scissors
+  color: purple
+
+inputs:
+  version:
+    description: Release tag to download, such as v0.1.0. Empty resolves to the tag this action was referenced by when that looks like a version, and otherwise to the latest release.
+    required: false
+    default: ""
+  args:
+    description: Extra arguments appended to the command, split on whitespace. Quoting is not interpreted.
+    required: false
+    default: ""
+  policy:
+    description: Value for --policy (safe, legal, all). Empty leaves the configured policy alone.
+    required: false
+    default: ""
+  format:
+    description: Value for --format (human, json, jsonl, sarif, github).
+    required: false
+    default: github
+  paths:
+    description: Files or directories to process, split on whitespace. Empty checks the working directory.
+    required: false
+    default: ""
+  command:
+    description: Which OComment command to run, check or diff.
+    required: false
+    default: check
+  fail-on-findings:
+    description: Fail the step when OComment exits 1 because removable comments exist. Exit 2 always fails.
+    required: false
+    default: "true"
+  upload-sarif:
+    description: Upload the SARIF file to GitHub code scanning. Requires format sarif and the security-events write permission.
+    required: false
+    default: "false"
+  sarif-file:
+    description: Where to write SARIF output when format is sarif.
+    required: false
+    default: ocomment.sarif
+  verify-attestation:
+    description: Verify the downloaded archive's build provenance with `gh attestation verify` when the gh CLI is available.
+    required: false
+    default: "true"
+  binary-path:
+    description: Use this already-built ocomment binary and download nothing. A missing path is retried with an .exe suffix.
+    required: false
+    default: ""
+  working-directory:
+    description: Directory the command runs in. Relative paths and SARIF output resolve against it.
+    required: false
+    default: "."
+  token:
+    description: Token used to resolve the latest release and verify attestations.
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  exit-code:
+    description: Exit code of the OComment run; 0 clean, 1 removable comments, 2 failure.
+    value: ${{ steps.run.outputs.exit-code }}
+  version:
+    description: Release tag that was downloaded, or the version the supplied binary reported.
+    value: ${{ steps.resolve.outputs.version }}
+  sarif-file:
+    description: Absolute path of the SARIF file, empty when format is not sarif.
+    value: ${{ steps.run.outputs.sarif-file }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve the OComment version
+      id: resolve
+      shell: bash
+      env:
+        INPUT_BINARY_PATH: ${{ inputs.binary-path }}
+        INPUT_VERSION: ${{ inputs.version }}
+        ACTION_REF: ${{ github.action_ref }}
+        OCOMMENT_REPO: P4suta/OComment
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        set -euo pipefail
+
+        if [ -n "${INPUT_BINARY_PATH}" ]; then
+          binary="${INPUT_BINARY_PATH}"
+          if [ ! -f "${binary}" ] && [ -f "${binary}.exe" ]; then
+            binary="${binary}.exe"
+          fi
+          if [ ! -f "${binary}" ]; then
+            echo "::error::binary-path does not name a file: ${INPUT_BINARY_PATH}"
+            exit 2
+          fi
+          binary="$(cd "$(dirname "${binary}")" && pwd)/$(basename "${binary}")"
+          chmod +x "${binary}" 2>/dev/null || true
+          version="$("${binary}" --version | awk 'NR == 1 {print $NF}')"
+          echo "Using the supplied binary ${binary} (ocomment ${version})"
+          {
+            echo "binary=${binary}"
+            echo "version=${version}"
+            echo "download=false"
+          } >>"${GITHUB_OUTPUT}"
+          exit 0
+        fi
+
+        version="${INPUT_VERSION}"
+        if [ -z "${version}" ] && [[ "${ACTION_REF}" == v* ]]; then
+          version="${ACTION_REF}"
+        fi
+        if [ -z "${version}" ]; then
+          version="$(gh release view --repo "${OCOMMENT_REPO}" --json tagName --jq .tagName)"
+        fi
+        case "${version}" in
+          v*) ;;
+          *) version="v${version}" ;;
+        esac
+        echo "Resolved OComment ${version}"
+        {
+          echo "binary=ocomment"
+          echo "version=${version}"
+          echo "download=true"
+        } >>"${GITHUB_OUTPUT}"
+
+    - name: Download the OComment release archive
+      id: download
+      if: steps.resolve.outputs.download == 'true'
+      shell: bash
+      env:
+        OCOMMENT_VERSION: ${{ steps.resolve.outputs.version }}
+        VERIFY_ATTESTATION: ${{ inputs.verify-attestation }}
+        RUNNER_OS_NAME: ${{ runner.os }}
+        RUNNER_ARCH_NAME: ${{ runner.arch }}
+        OCOMMENT_REPO: P4suta/OComment
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        set -euo pipefail
+
+        case "${RUNNER_OS_NAME}/${RUNNER_ARCH_NAME}" in
+          Linux/X64) target=x86_64-unknown-linux-musl; extension=tar.gz ;;
+          Linux/ARM64) target=aarch64-unknown-linux-musl; extension=tar.gz ;;
+          macOS/X64) target=x86_64-apple-darwin; extension=tar.gz ;;
+          macOS/ARM64) target=aarch64-apple-darwin; extension=tar.gz ;;
+          Windows/X64) target=x86_64-pc-windows-msvc; extension=zip ;;
+          *)
+            echo "::error::no OComment release archive for ${RUNNER_OS_NAME}/${RUNNER_ARCH_NAME}; build the CLI and pass binary-path instead"
+            exit 2
+            ;;
+        esac
+
+        archive="ocomment-${target}.${extension}"
+        base="https://github.com/${OCOMMENT_REPO}/releases/download/${OCOMMENT_VERSION}"
+        install_dir="${RUNNER_TEMP}/ocomment-${OCOMMENT_VERSION}"
+        mkdir -p "${install_dir}"
+        cd "${install_dir}"
+
+        curl --fail --silent --show-error --location --retry 3 --retry-all-errors \
+          --output "${archive}" "${base}/${archive}"
+        curl --fail --silent --show-error --location --retry 3 --retry-all-errors \
+          --output SHA256SUMS "${base}/SHA256SUMS"
+
+        expected="$(awk -v name="${archive}" '$2 == name || $2 == "*" name {print $1}' SHA256SUMS)"
+        if [ -z "${expected}" ]; then
+          echo "::error::${archive} is not listed in the release SHA256SUMS"
+          exit 2
+        fi
+        if command -v sha256sum >/dev/null 2>&1; then
+          actual="$(sha256sum "${archive}" | awk '{print $1}')"
+        else
+          actual="$(shasum -a 256 "${archive}" | awk '{print $1}')"
+        fi
+        if [ "${expected}" != "${actual}" ]; then
+          echo "::error::SHA-256 mismatch for ${archive}: expected ${expected}, got ${actual}"
+          exit 2
+        fi
+        echo "Verified ${archive} against the release SHA256SUMS"
+
+        if [ "${VERIFY_ATTESTATION}" = "true" ]; then
+          if command -v gh >/dev/null 2>&1; then
+            gh attestation verify "${archive}" --repo "${OCOMMENT_REPO}"
+          else
+            echo "::warning::the gh CLI is not installed on this runner; skipping attestation verification"
+          fi
+        fi
+
+        if [ "${extension}" = "zip" ]; then
+          unzip -q -o "${archive}"
+        else
+          tar -xzf "${archive}"
+        fi
+
+        binary_dir="${install_dir}/ocomment-${target}"
+        binary="${binary_dir}/ocomment"
+        if [ ! -f "${binary}" ] && [ -f "${binary}.exe" ]; then
+          binary="${binary}.exe"
+        fi
+        if [ ! -f "${binary}" ]; then
+          echo "::error::${archive} does not contain ocomment-${target}/ocomment"
+          exit 2
+        fi
+        chmod +x "${binary}" 2>/dev/null || true
+        echo "${binary_dir}" >>"${GITHUB_PATH}"
+        echo "binary=${binary}" >>"${GITHUB_OUTPUT}"
+
+    - name: Run OComment
+      id: run
+      shell: bash
+      env:
+        OCOMMENT_BIN: ${{ steps.download.outputs.binary || steps.resolve.outputs.binary }}
+        INPUT_COMMAND: ${{ inputs.command }}
+        INPUT_FORMAT: ${{ inputs.format }}
+        INPUT_POLICY: ${{ inputs.policy }}
+        INPUT_PATHS: ${{ inputs.paths }}
+        INPUT_ARGS: ${{ inputs.args }}
+        INPUT_SARIF_FILE: ${{ inputs.sarif-file }}
+        INPUT_UPLOAD_SARIF: ${{ inputs.upload-sarif }}
+        INPUT_WORKING_DIRECTORY: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+
+        case "${INPUT_COMMAND}" in
+          check|diff) ;;
+          *)
+            echo "::error::command must be check or diff, got ${INPUT_COMMAND}"
+            exit 2
+            ;;
+        esac
+        if [ "${INPUT_UPLOAD_SARIF}" = "true" ] && [ "${INPUT_FORMAT}" != "sarif" ]; then
+          echo "::error::upload-sarif needs format sarif, got ${INPUT_FORMAT}"
+          exit 2
+        fi
+        cd "${INPUT_WORKING_DIRECTORY}"
+
+        set -f
+        # shellcheck disable=SC2206 # paths and args are documented as whitespace-separated.
+        arguments=("${INPUT_COMMAND}" ${INPUT_PATHS})
+        arguments+=(--format "${INPUT_FORMAT}")
+        if [ -n "${INPUT_POLICY}" ]; then
+          arguments+=(--policy "${INPUT_POLICY}")
+        fi
+        # shellcheck disable=SC2206 # paths and args are documented as whitespace-separated.
+        arguments+=(${INPUT_ARGS})
+        set +f
+
+        sarif_file=""
+        if [ "${INPUT_FORMAT}" = "sarif" ]; then
+          mkdir -p "$(dirname "${INPUT_SARIF_FILE}")"
+          : >"${INPUT_SARIF_FILE}"
+          sarif_file="$(cd "$(dirname "${INPUT_SARIF_FILE}")" && pwd)/$(basename "${INPUT_SARIF_FILE}")"
+        fi
+
+        printf 'Running: ocomment'
+        printf ' %s' "${arguments[@]}"
+        printf '\n'
+
+        set +e
+        if [ -n "${sarif_file}" ]; then
+          "${OCOMMENT_BIN}" "${arguments[@]}" >"${sarif_file}"
+        else
+          "${OCOMMENT_BIN}" "${arguments[@]}"
+        fi
+        code=$?
+        set -e
+
+        echo "ocomment exited ${code}"
+        {
+          echo "exit-code=${code}"
+          echo "sarif-file=${sarif_file}"
+        } >>"${GITHUB_OUTPUT}"
+
+    - name: Upload SARIF results
+      if: ${{ inputs.upload-sarif == 'true' && steps.run.outputs.sarif-file != '' }}
+      uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
+      with:
+        sarif_file: ${{ steps.run.outputs.sarif-file }}
+        category: ocomment
+
+    - name: Report the OComment verdict
+      shell: bash
+      env:
+        EXIT_CODE: ${{ steps.run.outputs.exit-code }}
+        FAIL_ON_FINDINGS: ${{ inputs.fail-on-findings }}
+      run: |
+        set -euo pipefail
+
+        code="${EXIT_CODE:-2}"
+        case "${code}" in
+          0)
+            echo "OComment found no removable comments."
+            ;;
+          1)
+            if [ "${FAIL_ON_FINDINGS}" = "true" ]; then
+              echo "::error::OComment reported removable comments (exit 1)."
+              exit 1
+            fi
+            echo "::notice::OComment reported removable comments (exit 1); fail-on-findings is false."
+            ;;
+          *)
+            echo "::error::OComment failed with exit code ${code}."
+            exit "${code}"
+            ;;
+        esac

@@ -745,8 +745,18 @@ fn validate_policy_regexes(config: &Config) -> Result<()> {
                 .flat_map(|item| item.keep_regex.iter().chain(&item.remove_regex)),
         );
     for pattern in patterns {
-        regex::bytes::Regex::new(pattern)
-            .with_context(|| format!("invalid comment policy regex `{pattern}`"))?;
+        regex::bytes::Regex::new(pattern).map_err(|error| {
+            // Both halves of this line came out of a file in the project: the
+            // pattern the caller wrote, and a parse error that quotes that
+            // same pattern back with a caret under it. Neither may reach a
+            // terminal verbatim, so both are folded onto one control-free
+            // line the way a comment preview is.
+            anyhow!(
+                "invalid comment policy regex `{}`: {}",
+                crate::output::sanitize_path(pattern),
+                crate::output::sanitize_path(&error.to_string())
+            )
+        })?;
     }
     Ok(())
 }

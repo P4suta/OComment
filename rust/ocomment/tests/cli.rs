@@ -892,6 +892,87 @@ fn a_bare_run_never_reaches_into_the_git_directory() {
     );
 }
 
+/// Naming the directory lifts the hidden-file rule, and so does `files.hidden`;
+/// neither may lift the one that keeps git's own storage out of a walk. `git`
+/// itself never offers `.git` as a candidate for anything, and a tool that
+/// rewrites files in place may do so least of all: `ocomment fix .` in a fresh
+/// repository would otherwise rewrite every sample hook git had just written.
+#[test]
+fn a_named_directory_never_reaches_into_the_git_directory() {
+    for configuration in ["version = 1\n", "version = 1\n[files]\nhidden = true\n"] {
+        let directory = tempfile::tempdir().unwrap();
+        git(directory.path(), &["init", "-q"]);
+        fs::write(directory.path().join(".ocomment.toml"), configuration).unwrap();
+        let hook = directory.path().join(".git/hooks/x.sample");
+        fs::write(&hook, b"#!/bin/sh\necho hi # sample hook comment\n").unwrap();
+        let before = fs::read(&hook).unwrap();
+        // A submodule or a linked worktree keeps its `.git` as a *file*; it
+        // points at git's storage and is no more a candidate than the
+        // directory it stands in for.
+        fs::create_dir(directory.path().join("vendor")).unwrap();
+        fs::write(
+            directory.path().join("vendor/.git"),
+            b"gitdir: ../.git/modules/vendor\n",
+        )
+        .unwrap();
+        fs::write(directory.path().join("a.rs"), b"let a = 1; // remove me\n").unwrap();
+
+        let checked = run(directory.path(), &["check", "-v", "."]);
+        let listing = format!(
+            "{}{}",
+            String::from_utf8_lossy(&checked.stdout),
+            String::from_utf8_lossy(&checked.stderr)
+        );
+        assert!(
+            !listing.contains(".git"),
+            "`check .` under {configuration:?} reached into git's storage:\n{listing}"
+        );
+        assert!(
+            listing.contains("a.rs:1:12: removable line comment"),
+            "`check .` under {configuration:?} missed the project file:\n{listing}"
+        );
+
+        let fixed = run(directory.path(), &["fix", "."]);
+        let report = format!(
+            "{}{}",
+            String::from_utf8_lossy(&fixed.stdout),
+            String::from_utf8_lossy(&fixed.stderr)
+        );
+        assert!(
+            !report.contains(".git"),
+            "`fix .` under {configuration:?} reported something under .git:\n{report}"
+        );
+        assert_eq!(
+            fs::read(&hook).unwrap(),
+            before,
+            "`fix .` under {configuration:?} rewrote a file under .git"
+        );
+    }
+}
+
+/// The exclusion is about where a walk may wander, not about what a caller may
+/// ask for. A path typed on the command line is a request, so a hook the
+/// caller pointed at is still reported.
+#[test]
+fn a_path_named_inside_the_git_directory_is_still_honoured() {
+    let directory = tempfile::tempdir().unwrap();
+    git(directory.path(), &["init", "-q"]);
+    let hook = directory.path().join(".git/hooks/x.sample");
+    fs::write(&hook, b"#!/bin/sh\necho hi # sample hook comment\n").unwrap();
+
+    let output = run(directory.path(), &["check", ".git/hooks/x.sample"]);
+    let listing = String::from_utf8_lossy(&output.stdout).into_owned();
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "a named hook was not reported:\n{listing}"
+    );
+    assert!(
+        listing.contains(".git/hooks/x.sample:2:9: removable line comment"),
+        "a named hook was not reported:\n{listing}"
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn symlink_following_is_explicitly_configurable() {
@@ -1305,6 +1386,294 @@ fn sarif_keeps_kebab_rule_ids_and_canonical_messages() {
     assert_eq!(result["ruleId"], "removable-doc-block");
     assert_eq!(result["message"]["text"], "removable doc-block comment");
     assert_no_debug_leak("SARIF report", &String::from_utf8(output.stdout).unwrap());
+}
+
+/// Every comment kind a rule id can name, in the spelling `CommentKind`
+/// serialises. A kind added without a rule to describe it fails this test.
+const SARIF_KINDS: [&str; 11] = [
+    "line",
+    "block",
+    "doc-line",
+    "doc-block",
+    "directive",
+    "license",
+    "html-comment",
+    "shebang",
+    "encoding",
+    "optimizer-hint",
+    "version-comment",
+];
+
+/// The SARIF failure levels OComment reports at. `none` is a level too, but
+/// nothing OComment writes uses it.
+const SARIF_LEVELS: [&str; 3] = ["error", "warning", "note"];
+
+/// A code-scanning UI shows a finding through the rule it names: the title, the
+/// sentence under it, and the link it offers all come from
+/// `tool.driver.rules`, which a result reaches by `ruleIndex`. A rule the tool
+/// never describes leaves the finding with nothing but its id, so every id a
+/// run can emit is described and every result points at its own description.
+#[test]
+fn sarif_describes_every_rule_it_reports() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(directory.path().join("a.rs"), b"let value = 1; // remove\n").unwrap();
+    fs::write(directory.path().join("bad.rs"), b"/* never ends\n").unwrap();
+    fs::write(directory.path().join("plain.txt"), b"nothing to scan\n").unwrap();
+    let output = run(
+        directory.path(),
+        &["check", "a.rs", "bad.rs", "plain.txt", "--format", "sarif"],
+    );
+    assert_eq!(output.status.code(), Some(2));
+    let report = String::from_utf8(output.stdout).unwrap();
+    let document: serde_json::Value = serde_json::from_str(&report).unwrap();
+    let driver = &document["runs"][0]["tool"]["driver"];
+    assert_eq!(driver["name"], "ocomment");
+    assert_eq!(
+        driver["version"],
+        env!("CARGO_PKG_VERSION"),
+        "the driver does not report the version that produced the run:\n{report}"
+    );
+    assert_eq!(
+        driver["informationUri"],
+        "https://github.com/P4suta/OComment"
+    );
+
+    let rules = driver["rules"]
+        .as_array()
+        .unwrap_or_else(|| panic!("tool.driver.rules is not an array:\n{report}"));
+    let mut described = BTreeSet::new();
+    for rule in rules {
+        let id = rule["id"]
+            .as_str()
+            .unwrap_or_else(|| panic!("a rule has no string id:\n{report}"));
+        assert!(described.insert(id.to_owned()), "`{id}` is described twice");
+        for field in ["shortDescription", "fullDescription"] {
+            let text = rule[field]["text"].as_str().unwrap_or_default();
+            assert!(!text.is_empty(), "rule `{id}` has no {field}:\n{report}");
+        }
+        let help = rule["helpUri"].as_str().unwrap_or_default();
+        assert!(
+            help.starts_with("https://"),
+            "rule `{id}` links nowhere: {help:?}"
+        );
+        let level = rule["defaultConfiguration"]["level"]
+            .as_str()
+            .unwrap_or_default();
+        assert!(
+            SARIF_LEVELS.contains(&level),
+            "rule `{id}` defaults to {level:?}, which is not a SARIF level"
+        );
+    }
+    let removable: BTreeSet<String> = described
+        .iter()
+        .filter(|id| id.starts_with("removable-"))
+        .cloned()
+        .collect();
+    let expected: BTreeSet<String> = SARIF_KINDS
+        .iter()
+        .map(|kind| format!("removable-{kind}"))
+        .collect();
+    assert_eq!(
+        removable, expected,
+        "the rules do not describe exactly one removable kind each"
+    );
+    let doc_block = rules
+        .iter()
+        .find(|rule| rule["id"] == "removable-doc-block")
+        .expect("`removable-doc-block` is described");
+    assert_eq!(
+        doc_block["shortDescription"]["text"],
+        "Removable doc-block comment"
+    );
+    assert_eq!(doc_block["defaultConfiguration"]["level"], "note");
+
+    let results = document["runs"][0]["results"].as_array().unwrap();
+    let mut reported = BTreeSet::new();
+    for result in results {
+        let id = result["ruleId"]
+            .as_str()
+            .unwrap_or_else(|| panic!("a result has no ruleId:\n{report}"));
+        let index = result["ruleIndex"]
+            .as_u64()
+            .unwrap_or_else(|| panic!("the `{id}` result has no ruleIndex:\n{report}"));
+        assert_eq!(
+            rules[index as usize]["id"], id,
+            "the `{id}` result points at rule {index}, which describes something else"
+        );
+        let level = result["level"].as_str().unwrap_or_default();
+        assert!(
+            SARIF_LEVELS.contains(&level),
+            "the `{id}` result is at level {level:?}, which is not a SARIF level"
+        );
+        reported.insert(id.to_owned());
+    }
+    for id in [
+        "removable-line",
+        "removable-block",
+        "unterminated-comment",
+        "skipped-file",
+    ] {
+        assert!(
+            reported.contains(id),
+            "the run reported no `{id}` result:\n{report}"
+        );
+    }
+    assert_no_debug_leak("SARIF report", &report);
+}
+
+/// A file OComment cannot read is reported as a result too, and it names a rule
+/// like any other finding.
+#[cfg(unix)]
+#[test]
+fn sarif_describes_the_io_error_rule_when_it_reports_one() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let directory = tempfile::tempdir().unwrap();
+    let unreadable = directory.path().join("locked.rs");
+    fs::write(&unreadable, b"let value = 1; // remove\n").unwrap();
+    fs::set_permissions(&unreadable, fs::Permissions::from_mode(0o000)).unwrap();
+    let output = run(
+        directory.path(),
+        &["check", "locked.rs", "--format", "sarif"],
+    );
+    assert_eq!(output.status.code(), Some(2));
+    let report = String::from_utf8(output.stdout).unwrap();
+    let document: serde_json::Value = serde_json::from_str(&report).unwrap();
+    let result = &document["runs"][0]["results"][0];
+    assert_eq!(result["ruleId"], "io-error");
+    assert_eq!(result["level"], "error");
+    let index = result["ruleIndex"]
+        .as_u64()
+        .unwrap_or_else(|| panic!("the io-error result has no ruleIndex:\n{report}"));
+    let rule = &document["runs"][0]["tool"]["driver"]["rules"][index as usize];
+    assert_eq!(rule["id"], "io-error");
+    assert_eq!(rule["defaultConfiguration"]["level"], "error");
+}
+
+/// A code-scanning UI resolves `artifactLocation.uri` against the checkout, so
+/// a reported path has to be spelled the way the repository spells it: forward
+/// slashes, no `./` standing in for the directory the run started in, and
+/// `%SRCROOT%` saying what the rest is relative to. Every location in the
+/// document is read that way, the ones under `fixes` included.
+#[test]
+fn sarif_locates_reported_files_under_the_source_root() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::create_dir(directory.path().join("sub")).unwrap();
+    fs::write(
+        directory.path().join("sub/doc.rs"),
+        b"/** doc */\nfn main() {}\n",
+    )
+    .unwrap();
+    let output = run(
+        directory.path(),
+        &["check", "sub/./doc.rs", "--format", "sarif"],
+    );
+    assert_eq!(output.status.code(), Some(1));
+    let report = String::from_utf8(output.stdout).unwrap();
+    let document: serde_json::Value = serde_json::from_str(&report).unwrap();
+    let locations = artifact_locations(&document);
+    assert!(
+        !locations.is_empty(),
+        "the report locates nothing:\n{report}"
+    );
+    for location in &locations {
+        let uri = location["uri"].as_str().unwrap_or_default();
+        assert_eq!(uri, "sub/doc.rs", "a location is spelled {uri:?}");
+        assert_eq!(
+            location["uriBaseId"], "%SRCROOT%",
+            "a relative location says nothing about what it is relative to:\n{report}"
+        );
+    }
+}
+
+/// A path the user typed as an absolute one is not under the checkout, so it
+/// keeps its absolute spelling and names no base id — a base id would say it is
+/// relative to the source root, which it is not.
+#[test]
+fn sarif_leaves_an_absolute_path_absolute_and_unbased() {
+    let directory = tempfile::tempdir().unwrap();
+    let absolute = directory.path().join("a.rs");
+    fs::write(&absolute, b"let value = 1; // remove\n").unwrap();
+    let output = run(
+        directory.path(),
+        &["check", absolute.to_str().unwrap(), "--format", "sarif"],
+    );
+    assert_eq!(output.status.code(), Some(1));
+    let report = String::from_utf8(output.stdout).unwrap();
+    let document: serde_json::Value = serde_json::from_str(&report).unwrap();
+    let expected = absolute.to_string_lossy().replace('\\', "/");
+    for location in artifact_locations(&document) {
+        assert_eq!(location["uri"], expected);
+        assert!(
+            location.get("uriBaseId").is_none(),
+            "an absolute location claims a base id:\n{report}"
+        );
+    }
+}
+
+/// Standard input has no place in the checkout either, so the pseudo-path it is
+/// reported under is left alone rather than resolved against the source root.
+#[test]
+fn sarif_leaves_the_stdin_pseudo_path_unbased() {
+    let directory = tempfile::tempdir().unwrap();
+    let output = run_stdin(
+        directory.path(),
+        &["check", "-", "--language", "rust", "--format", "sarif"],
+        b"let value = 1; // remove\n",
+    );
+    assert_eq!(output.status.code(), Some(1));
+    let report = String::from_utf8(output.stdout).unwrap();
+    let document: serde_json::Value = serde_json::from_str(&report).unwrap();
+    for location in artifact_locations(&document) {
+        assert_eq!(location["uri"], "<stdin>");
+        assert!(
+            location.get("uriBaseId").is_none(),
+            "the standard-input pseudo-path claims a base id:\n{report}"
+        );
+    }
+}
+
+/// Every `artifactLocation` in a SARIF document, from the locations a result
+/// reports and from the changes its fix would make.
+fn artifact_locations(document: &serde_json::Value) -> Vec<serde_json::Value> {
+    let mut found = Vec::new();
+    for run in document["runs"].as_array().into_iter().flatten() {
+        for result in run["results"].as_array().into_iter().flatten() {
+            for location in result["locations"].as_array().into_iter().flatten() {
+                found.push(location["physicalLocation"]["artifactLocation"].clone());
+            }
+            for fix in result["fixes"].as_array().into_iter().flatten() {
+                for change in fix["artifactChanges"].as_array().into_iter().flatten() {
+                    found.push(change["artifactLocation"].clone());
+                }
+            }
+        }
+    }
+    found
+}
+
+/// GitHub matches an annotation to a line of the diff by the path in `file=`,
+/// and matches it against the paths the repository uses. A `./` the walk left
+/// behind is enough to lose the annotation.
+#[test]
+fn github_annotations_report_repository_paths() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::create_dir(directory.path().join("sub")).unwrap();
+    fs::write(
+        directory.path().join("sub/doc.rs"),
+        b"/** doc */\nfn main() {}\n",
+    )
+    .unwrap();
+    let output = run(
+        directory.path(),
+        &["check", "sub/./doc.rs", "--format", "github"],
+    );
+    assert_eq!(output.status.code(), Some(1));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(
+        stdout,
+        "::notice file=sub/doc.rs,line=1,col=1::removable doc-block comment\n"
+    );
 }
 
 #[test]
@@ -1858,6 +2227,81 @@ fn a_previewed_comment_cannot_inject_escape_sequences() {
     assert!(
         stdout.contains("// \u{fffd}[31mred\u{fffd}[0m boom"),
         "check output is:\n{stdout:?}"
+    );
+}
+
+/// A file name is chosen by whoever made the file, so the half of a report
+/// line that shows a path is untrusted input on its way to a terminal exactly
+/// like the preview beside it. It gets the same treatment, and is cut nowhere:
+/// a path ending in an ellipsis names no file.
+#[cfg(unix)]
+#[test]
+fn a_reported_path_cannot_inject_escape_sequences() {
+    use std::os::unix::ffi::OsStringExt;
+
+    let directory = tempfile::tempdir().unwrap();
+    let name = std::ffi::OsString::from_vec(b"evil\x1b[2Jname.rs".to_vec());
+    fs::write(directory.path().join(&name), b"let x = 1; // remove me\n").unwrap();
+    let unreadable = std::ffi::OsString::from_vec(b"evil\x1b[2Jskip.bin".to_vec());
+    fs::write(directory.path().join(&unreadable), b"\x00\x01binary\n").unwrap();
+
+    let output = run(directory.path(), &["check", "-v", "."]);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        !output.stdout.contains(&0x1b),
+        "an escape byte reached the report: {:?}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    assert!(
+        !output.stderr.contains(&0x1b),
+        "an escape byte reached the summary: {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("evil\u{fffd}[2Jname.rs:1:12: removable line comment"),
+        "the report lost the file it names:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("evil\u{fffd}[2Jskip.bin: skipped: binary file"),
+        "the skip lost the file it names:\n{stdout}"
+    );
+}
+
+/// A configuration file is read from the project, and the pattern in it is
+/// echoed back on the line that rejects it. That makes it untrusted input on
+/// its way to a terminal, and it is folded like every other one.
+#[test]
+fn an_invalid_policy_regex_cannot_inject_escape_sequences() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(directory.path().join("a.rs"), b"let x = 1; // remove me\n").unwrap();
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        "version = 1\n[policy]\nkeep_regex = [\"\\u001B[2J(\"]\n",
+    )
+    .unwrap();
+
+    let output = run(directory.path(), &["check", "a.rs"]);
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "an invalid regex was accepted:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        !output.stderr.contains(&0x1b),
+        "an escape byte reached the terminal: {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let error = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        error.contains("invalid comment policy regex `\u{fffd}[2J(`"),
+        "the error lost the pattern it rejects:\n{error}"
     );
 }
 
@@ -3624,18 +4068,27 @@ fn explain_is_refused_by_every_machine_format() {
 }
 
 /// `--explain` annotates a report of comments, and only `check` and `scan`
-/// write one: `fix` reports the files it rewrote, `diff` writes a patch, and
-/// `strip` writes the stripped source. The flag is global, so asking for it
-/// there is a usage error rather than a flag that quietly does nothing.
+/// write one: `fix` reports the files it rewrote, `diff` writes a patch,
+/// `strip` writes the stripped source, and the rest of the commands are not
+/// about comments at all. The flag is global, so asking for it anywhere else
+/// is a usage error rather than a flag that quietly does nothing.
 #[test]
 fn explain_is_refused_by_the_commands_that_write_no_report() {
     let directory = tempfile::tempdir().unwrap();
     fs::write(directory.path().join("a.rs"), b"let x = 1; // TODO\n").unwrap();
-    let refused: [&[&str]; 4] = [
+    let refused: [&[&str]; 12] = [
         &["fix", "--explain", "--dry-run"],
         &["fix", "--explain"],
         &["diff", "--explain"],
         &["strip", "--explain", "--language", "rust"],
+        &["lsp", "--explain"],
+        &["init", "--explain"],
+        &["config", "--explain"],
+        &["languages", "--explain"],
+        &["plugin", "--explain", "list"],
+        &["completions", "--explain", "bash"],
+        &["doctor", "--explain"],
+        &["man", "--explain"],
     ];
     for arguments in refused {
         let output = run_stdin(directory.path(), arguments, b"let x = 1; // TODO\n");
@@ -3661,6 +4114,10 @@ fn explain_is_refused_by_the_commands_that_write_no_report() {
         fs::read(directory.path().join("a.rs")).unwrap(),
         b"let x = 1; // TODO\n",
         "a refused run rewrote the file anyway"
+    );
+    assert!(
+        !directory.path().join(".ocomment.toml").exists(),
+        "a refused `init` wrote its starter file anyway"
     );
     // The two commands the flag is for still take it.
     for command in ["check", "scan"] {

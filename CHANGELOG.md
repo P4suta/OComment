@@ -47,8 +47,8 @@ All notable changes to OComment will be documented here. The project follows
   `[languages.<name>]` table, the `[[overrides]]` entry whose globs matched, the
   command-line flag, or the built-in default. A comment a built-in rule decided
   is left with the flag that would overrule it. The machine formats refuse the
-  flag rather than ignoring it, and so do `fix`, `diff`, and `strip`, which
-  write no report for it to annotate.
+  flag rather than ignoring it, and so does every command that writes no report
+  of comments for it to annotate.
 
 ### Changed
 
@@ -75,3 +75,33 @@ All notable changes to OComment will be documented here. The project follows
 - Failures say what to do next: how to add `version = 1`, which flag forces a
   language, how to clear a stale `.git/index.lock`, and which missing tool
   `ocomment doctor` diagnoses.
+- `--format sarif` describes the rules it reports. `tool.driver` names the
+  version that produced the run and carries a `rules` array: one entry for
+  every comment kind — a title, a sentence, a link, and a default level — plus
+  an entry for each scan diagnostic, skipped file, and unreadable file the run
+  actually met. Every result points at its own entry through `ruleIndex`. A
+  code-scanning UI titles a finding, describes it, and links out of it through
+  that entry, so a finding used to arrive as a bare rule id and nothing else.
+
+### Fixed
+
+- A walk never descends into `.git`, whatever lifted the hidden-file rule.
+  Naming a directory does lift it, and so does `files.hidden`, so `ocomment fix
+  .` in a fresh repository used to rewrite the sample hooks git had just
+  written into `.git/hooks`. The exclusion covers the `.git` *file* a submodule
+  or a linked worktree keeps in place of the directory. A path named inside
+  `.git` is still a request and is still answered.
+- SARIF and GitHub annotations spell a reported path the way the checkout
+  spells it: forward slashes on every platform, and none of the `.` segments a
+  typed target leaves behind — `ocomment check sub/./doc.rs` reported
+  `sub/./doc.rs`, which matches no file in any repository, so the annotation
+  landed on nothing and the SARIF result located nothing. A relative
+  `artifactLocation` now also carries `uriBaseId: "%SRCROOT%"`; a SARIF reader
+  given no base id has nothing to resolve the path against. An absolute path, a
+  path that climbs out of the tree through `..`, and the `<stdin>` pseudo-path
+  carry no base id, because none of them is under the source root.
+- `tools/release_manifests.py` defaults `--repository` to `P4suta/OComment`.
+  The release workflow passes `$GITHUB_REPOSITORY`, so the old default only
+  ever reached someone generating the definitions by hand — and pointed the
+  Homebrew formula, the Scoop manifest, and the WinGet manifest it wrote at a
+  repository that is not this one.

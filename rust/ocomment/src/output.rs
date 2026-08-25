@@ -1,6 +1,6 @@
 use crate::{
     config::PolicyTrace,
-    files::{NO_LANGUAGE, SkippedFile},
+    files::{NO_LANGUAGE, STDIN_PATH, SkippedFile},
 };
 use anyhow::Result;
 use clap::ValueEnum;
@@ -14,7 +14,7 @@ use similar::{ChangeTag, TextDiff};
 use std::{
     collections::BTreeMap,
     io::{self, BufWriter, Write},
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
 };
 use unicode_width::UnicodeWidthChar;
 
@@ -842,6 +842,11 @@ pub(crate) struct InteractiveOutcome {
 /// actually asked, and says how many it never got to: measuring the acceptances
 /// against every comment the run *could* have offered would read as a pile of
 /// refusals nobody made.
+///
+/// Either way the verdict closes on the `(N files scanned)` every other summary
+/// ends with. Answering questions about three files says nothing about how many
+/// were opened to find them, and that is the number a reader checks a run
+/// against.
 pub(crate) fn interactive_summary(outcome: InteractiveOutcome) -> String {
     if outcome.offered == 0 {
         return format!("Nothing to fix in {}.", plural(outcome.scanned, "file"));
@@ -853,10 +858,11 @@ pub(crate) fn interactive_summary(outcome: InteractiveOutcome) -> String {
         format!(" ({} not reviewed)", comments(unreviewed, ""))
     };
     format!(
-        "Removed {} of {} in {}{tail}.",
+        "Removed {} of {} in {}{tail} ({} scanned).",
         outcome.removed,
         comments(outcome.reviewed, ""),
-        plural(outcome.changed, "file")
+        plural(outcome.changed, "file"),
+        plural(outcome.scanned, "file")
     )
 }
 
@@ -1014,8 +1020,16 @@ pub(crate) fn color(code: &'static str, enabled: bool) -> &'static str {
     if enabled { code } else { "" }
 }
 
+/// The path half of a report line, and the hyperlink wrapped around it.
+///
+/// A file name is chosen by whoever made the file, so the shown half is
+/// untrusted input on its way to a terminal exactly like the preview beside
+/// it, and gets `sanitize_path`'s treatment: one line, no control characters,
+/// and no width cap, because a path cut to an ellipsis names no file. The
+/// link *target* is a URL rather than terminal text and keeps the
+/// percent-encoding it has always had.
 fn display_path(path: &Path, hyperlinks: bool) -> String {
-    let display = path.display().to_string();
+    let display = sanitize_path(&path.display().to_string());
     if !hyperlinks {
         return display;
     }
@@ -1080,13 +1094,155 @@ fn json_file(file: &ProcessedFile) -> JsonFile<'_> {
     }
 }
 
+/// Where a SARIF reader is sent to learn what the tool itself is.
+const TOOL_INFORMATION_URI: &str = "https://github.com/P4suta/OComment";
+
+/// Where a rule about a comment sends a reader asking why that comment is
+/// reported — and why the one beside it is not.
+const KIND_HELP_URI: &str = "https://github.com/P4suta/OComment#why-was-this-comment-kept";
+
+/// The base id a path under the directory the run walked is reported against.
+/// SARIF readers, GitHub code scanning among them, resolve `%SRCROOT%` to the
+/// root of the checkout.
+const SRCROOT: &str = "%SRCROOT%";
+
+/// The one sentence every scan diagnostic is described by. The codes are as
+/// varied as the languages that raise them, and the result carries the message
+/// that says what was actually met.
+const DIAGNOSTIC_DESCRIPTION: &str =
+    "A problem OComment met while scanning the file; the message on the result says what it was.";
+
+/// The spelling a machine format reports a path under.
+///
+/// A SARIF `artifactLocation.uri` and the `file=` of a GitHub annotation are
+/// both matched against the paths the repository uses, so a reported path is
+/// spelled the way the repository spells it: forward slashes on every
+/// platform, and none of the `.` segments a walk root or a typed target leaves
+/// behind — `sub/./doc.rs` names a file no checkout has. What a relative path
+/// is measured *from* is said separately, by [`artifact_location`].
+fn report_uri(path: &Path) -> String {
+    let text = path.to_string_lossy().replace('\\', "/");
+    let trimmed: Vec<&str> = text.split('/').filter(|segment| *segment != ".").collect();
+    if trimmed.is_empty() {
+        // The path was `.` (or `./`) and naming nothing at all would be worse
+        // than naming the directory.
+        return text;
+    }
+    trimmed.join("/")
+}
+
+/// The SARIF `artifactLocation` for a reported path.
+///
+/// A path under the directory the run started in is reported against
+/// `%SRCROOT%`: SARIF resolves a relative URI against a base id, and a reader
+/// given none has nothing to resolve it against, so the finding lands on no
+/// file. An absolute path is not under the checkout as far as the run can
+/// tell, one that climbs out through `..` has left it, and the pseudo-path
+/// standard input is reported under is not a file at all — each of those is
+/// reported as it stands, with no base id claiming otherwise.
+fn artifact_location(path: &Path) -> Value {
+    let uri = report_uri(path);
+    if under_source_root(path) {
+        json!({"uri": uri, "uriBaseId": SRCROOT})
+    } else {
+        json!({"uri": uri})
+    }
+}
+
+fn under_source_root(path: &Path) -> bool {
+    path != Path::new(STDIN_PATH)
+        && path
+            .components()
+            .all(|component| matches!(component, Component::Normal(_) | Component::CurDir))
+        && path
+            .components()
+            .any(|component| matches!(component, Component::Normal(_)))
+}
+
+/// The rules of one SARIF run, and the index each result points at.
+///
+/// A result names its rule twice: by `ruleId`, and by the position of that
+/// rule's description in `tool.driver.rules`. A code-scanning UI shows a
+/// finding through that description — its title, the sentence under it, and
+/// the link it offers — so handing out the id and the index together is what
+/// keeps a result from pointing at a description that is not there.
+///
+/// Every comment kind is described whether or not the run met one, because the
+/// rules a tool reports are also read as the list of what it can find. The
+/// rest — a scan diagnostic, a skipped file, a file that could not be read —
+/// are described as the run meets them.
+struct SarifRules {
+    entries: Vec<Value>,
+    indices: BTreeMap<String, usize>,
+}
+
+impl SarifRules {
+    fn new() -> Self {
+        let mut rules = Self {
+            entries: Vec::new(),
+            indices: BTreeMap::new(),
+        };
+        for kind in CommentKind::ALL {
+            rules.describe(
+                &format!("removable-{kind}"),
+                "note",
+                &format!("Removable {kind} comment"),
+                &format!(
+                    "A {kind} comment OComment can remove without changing what the file does."
+                ),
+                KIND_HELP_URI,
+            );
+        }
+        rules
+    }
+
+    /// The index of the rule `id`, describing it first if this run has not
+    /// reported it before.
+    fn describe(&mut self, id: &str, level: &str, short: &str, full: &str, help: &str) -> usize {
+        if let Some(&index) = self.indices.get(id) {
+            return index;
+        }
+        let index = self.entries.len();
+        self.entries.push(json!({
+            "id": id,
+            "shortDescription": {"text": short},
+            "fullDescription": {"text": full},
+            "helpUri": help,
+            "defaultConfiguration": {"level": level},
+        }));
+        self.indices.insert(id.to_owned(), index);
+        index
+    }
+
+    fn kind(&mut self, kind: CommentKind) -> usize {
+        let id = format!("removable-{kind}");
+        *self
+            .indices
+            .get(&id)
+            .expect("every comment kind is described")
+    }
+}
+
+/// A kebab-cased code read back as the title of a rule:
+/// `unterminated-comment` is `Unterminated comment`.
+fn sentence_case(code: &str) -> String {
+    let spelled = code.replace('-', " ");
+    let mut characters = spelled.chars();
+    match characters.next() {
+        Some(first) => first.to_uppercase().collect::<String>() + characters.as_str(),
+        None => spelled,
+    }
+}
+
 fn render_sarif(
     output: &mut impl Write,
     files: &[ProcessedFile],
     skipped: &[SkippedFile],
 ) -> Result<()> {
+    let mut rules = SarifRules::new();
     let mut results = Vec::new();
     for file in files {
+        let location = artifact_location(&file.path);
         for comment in file
             .result
             .report
@@ -1097,19 +1253,21 @@ fn render_sarif(
             let (line, column) = line_column(&file.source, comment.span.start);
             let (end_line, end_column) = line_column(&file.source, comment.span.end);
             let kind = comment.kind.as_str();
+            let index = rules.kind(comment.kind);
             results.push(json!({
                 "ruleId": format!("removable-{kind}"),
+                "ruleIndex": index,
                 "level": "note",
                 "message": {"text": removable_label(comment.kind)},
                 "locations": [{"physicalLocation": {
-                    "artifactLocation": {"uri": file.path.to_string_lossy()},
+                    "artifactLocation": location.clone(),
                     "region": {"startLine": line, "startColumn": column,
                         "endLine": end_line, "endColumn": end_column}
                 }}],
                 "fixes": [{
                     "description": {"text": "Remove comment with OComment"},
                     "artifactChanges": [{
-                        "artifactLocation": {"uri": file.path.to_string_lossy()},
+                        "artifactLocation": location.clone(),
                         "replacements": [{"deletedRegion": {
                             "startLine": line, "startColumn": column,
                             "endLine": end_line, "endColumn": end_column
@@ -1126,12 +1284,20 @@ fn render_sarif(
                 ocomment_core::Severity::Warning => "warning",
                 ocomment_core::Severity::Info | ocomment_core::Severity::Hint => "note",
             };
+            let index = rules.describe(
+                &diagnostic.code,
+                level,
+                &sentence_case(&diagnostic.code),
+                DIAGNOSTIC_DESCRIPTION,
+                TOOL_INFORMATION_URI,
+            );
             results.push(json!({
                 "ruleId": diagnostic.code,
+                "ruleIndex": index,
                 "level": level,
                 "message": {"text": diagnostic.message},
                 "locations": [{"physicalLocation": {
-                    "artifactLocation": {"uri": file.path.to_string_lossy()},
+                    "artifactLocation": location.clone(),
                     "region": {"startLine": line, "startColumn": column,
                         "endLine": end_line, "endColumn": end_column}
                 }}]
@@ -1139,19 +1305,41 @@ fn render_sarif(
         }
     }
     for item in skipped {
+        let (id, level, short, full) = if item.error {
+            (
+                "io-error",
+                "error",
+                "File could not be read",
+                "A file OComment could not read or write; the message on the result carries the operating-system error.",
+            )
+        } else {
+            (
+                "skipped-file",
+                "note",
+                "Skipped file",
+                "A file OComment did not scan; the message on the result says why it was left alone.",
+            )
+        };
+        let index = rules.describe(id, level, short, full, TOOL_INFORMATION_URI);
         results.push(json!({
-            "ruleId": if item.error { "io-error" } else { "skipped-file" },
-            "level": if item.error { "error" } else { "note" },
+            "ruleId": id,
+            "ruleIndex": index,
+            "level": level,
             "message": {"text": item.reason},
             "locations": [{"physicalLocation": {
-                "artifactLocation": {"uri": item.path.to_string_lossy()}
+                "artifactLocation": artifact_location(&item.path)
             }}]
         }));
     }
     let sarif = json!({
         "version": "2.1.0",
         "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
-        "runs": [{"tool": {"driver": {"name": "ocomment", "informationUri": "https://github.com/P4suta/OComment"}}, "results": results}]
+        "runs": [{"tool": {"driver": {
+            "name": "ocomment",
+            "version": env!("CARGO_PKG_VERSION"),
+            "informationUri": TOOL_INFORMATION_URI,
+            "rules": rules.entries
+        }}, "results": results}]
     });
     serde_json::to_writer_pretty(&mut *output, &sarif).map_err(write_error)?;
     wrote(writeln!(output))?;
@@ -1184,7 +1372,7 @@ fn render_github(
             wrote(writeln!(
                 output,
                 "::notice file={},line={line},col={column}::{}",
-                github_escape(&file.path.to_string_lossy()),
+                github_escape(&report_uri(&file.path)),
                 removable_label(comment.kind)
             ))?;
         }
@@ -1193,7 +1381,7 @@ fn render_github(
             wrote(writeln!(
                 output,
                 "::error file={},line={line},col={column},title={}::{}",
-                github_escape(&file.path.to_string_lossy()),
+                github_escape(&report_uri(&file.path)),
                 github_escape(&diagnostic.code),
                 github_escape(&diagnostic.message)
             ))?;
@@ -1204,7 +1392,7 @@ fn render_github(
             output,
             "::{} file={},title={}::{}",
             if item.error { "error" } else { "notice" },
-            github_escape(&item.path.to_string_lossy()),
+            github_escape(&report_uri(&item.path)),
             if item.error {
                 "OComment I/O error"
             } else {
@@ -1296,6 +1484,76 @@ fn _span(_: ByteSpan) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The reported path is read by a machine that has to find the file again:
+    /// GitHub matches an annotation by `file=`, and a SARIF reader resolves
+    /// `artifactLocation.uri` against the checkout. A Windows separator and a
+    /// `.` segment both name a file no checkout has.
+    #[test]
+    fn report_uri_spells_a_path_the_way_a_repository_does() {
+        assert_eq!(report_uri(Path::new("./a.rs")), "a.rs");
+        assert_eq!(report_uri(Path::new("sub/./doc.rs")), "sub/doc.rs");
+        assert_eq!(report_uri(Path::new("./sub/./doc.rs")), "sub/doc.rs");
+        assert_eq!(report_uri(Path::new(r"sub\doc.rs")), "sub/doc.rs");
+        assert_eq!(report_uri(Path::new(r".\sub\.\doc.rs")), "sub/doc.rs");
+        // A path that leaves the tree, an absolute one, and standard input are
+        // all left as they are; only the separators are normalised.
+        assert_eq!(report_uri(Path::new("../sibling/a.rs")), "../sibling/a.rs");
+        assert_eq!(report_uri(Path::new("/tmp/a.rs")), "/tmp/a.rs");
+        assert_eq!(report_uri(Path::new(r"C:\src\a.rs")), "C:/src/a.rs");
+        assert_eq!(report_uri(Path::new(STDIN_PATH)), STDIN_PATH);
+        // Naming the working directory as nothing at all would be worse.
+        assert_eq!(report_uri(Path::new(".")), ".");
+    }
+
+    /// `%SRCROOT%` says the path is measured from the root of the checkout, so
+    /// it is claimed only for the paths that are.
+    #[test]
+    fn only_a_path_inside_the_tree_is_reported_against_the_source_root() {
+        for inside in ["a.rs", "sub/doc.rs", "./sub/doc.rs"] {
+            assert_eq!(
+                artifact_location(Path::new(inside))["uriBaseId"],
+                json!(SRCROOT),
+                "`{inside}` is not reported against the source root"
+            );
+        }
+        for outside in ["../sibling/a.rs", "/tmp/a.rs", STDIN_PATH] {
+            let location = artifact_location(Path::new(outside));
+            assert_eq!(
+                location.get("uriBaseId"),
+                None,
+                "`{outside}` claims to be under the source root"
+            );
+        }
+    }
+
+    /// Every result points into the rules by index, so the two orders have to
+    /// be the same one.
+    #[test]
+    fn a_rule_is_described_once_and_keeps_its_index() {
+        let mut rules = SarifRules::new();
+        assert_eq!(rules.entries.len(), CommentKind::ALL.len());
+        assert_eq!(rules.kind(CommentKind::Line), 0);
+        let first = rules.describe("io-error", "error", "short", "full", TOOL_INFORMATION_URI);
+        assert_eq!(first, CommentKind::ALL.len());
+        let again = rules.describe("io-error", "note", "other", "other", TOOL_INFORMATION_URI);
+        assert_eq!(first, again, "a second sighting described the rule twice");
+        assert_eq!(
+            rules.entries[first]["defaultConfiguration"]["level"],
+            "error"
+        );
+        assert_eq!(rules.entries.len(), CommentKind::ALL.len() + 1);
+    }
+
+    #[test]
+    fn a_diagnostic_code_reads_back_as_a_title() {
+        assert_eq!(
+            sentence_case("unterminated-comment"),
+            "Unterminated comment"
+        );
+        assert_eq!(sentence_case("nesting-limit"), "Nesting limit");
+        assert_eq!(sentence_case(""), "");
+    }
 
     fn preview_of(source: &[u8], max_columns: usize) -> String {
         preview(source, ByteSpan::new(0, source.len()), max_columns)
@@ -1412,7 +1670,9 @@ mod tests {
     }
 
     /// The interactive verdict counts answers, and every noun agrees with the
-    /// number in front of it.
+    /// number in front of it. It closes on the same `(N files scanned)` the
+    /// plain `fix` summary ends with: the reader still has to be told how much
+    /// was looked at to reach the answers.
     #[test]
     fn the_interactive_summary_pluralizes_both_of_its_nouns() {
         assert_eq!(
@@ -1423,7 +1683,7 @@ mod tests {
                 changed: 1,
                 scanned: 1,
             }),
-            "Removed 1 of 1 comment in 1 file."
+            "Removed 1 of 1 comment in 1 file (1 file scanned)."
         );
         assert_eq!(
             interactive_summary(InteractiveOutcome {
@@ -1433,7 +1693,7 @@ mod tests {
                 changed: 3,
                 scanned: 4,
             }),
-            "Removed 2 of 5 comments in 3 files."
+            "Removed 2 of 5 comments in 3 files (4 files scanned)."
         );
     }
 
@@ -1472,7 +1732,7 @@ mod tests {
                 changed: 1,
                 scanned: 4,
             }),
-            "Removed 1 of 2 comments in 1 file (7 comments not reviewed)."
+            "Removed 1 of 2 comments in 1 file (7 comments not reviewed) (4 files scanned)."
         );
         assert_eq!(
             interactive_summary(InteractiveOutcome {
@@ -1482,7 +1742,7 @@ mod tests {
                 changed: 0,
                 scanned: 1,
             }),
-            "Removed 0 of 1 comment in 0 files (1 comment not reviewed)."
+            "Removed 0 of 1 comment in 0 files (1 comment not reviewed) (1 file scanned)."
         );
     }
 
