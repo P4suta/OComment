@@ -5,7 +5,9 @@ imported from the repository rules settings page or sent to the repository
 rulesets REST endpoint.
 
 - `main.json` requires pull requests, immutable linear history, signed commits,
-  resolved review threads, and every portable CI job.
+  resolved review threads, every portable CI job, and every advanced CodeQL
+  language analysis. CodeQL errors and high-or-higher security alerts block
+  merges.
 - `release-tags.json` makes version tags immutable and requires their target
   commits to be signed.
 

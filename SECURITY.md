@@ -27,3 +27,7 @@ Security-sensitive areas include unsafe file replacement, Git index corruption,
 scanner confusion that changes program meaning, path traversal, plugin sandbox
 escape or resource-limit bypass, signature verification bypass, and LSP edits
 outside the requested document.
+
+The repository's advanced CodeQL workflow analyzes Rust, Python tooling, and
+GitHub Actions with the `security-extended` query suite on pull requests, main
+branch updates, and a weekly schedule.
