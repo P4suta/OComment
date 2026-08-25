@@ -13,3 +13,7 @@ and compatibility consequences before implementation.
 Contributors can earn broader maintenance responsibility through sustained,
 high-quality review and implementation work. Changes to governance will be made
 through a pull request so the history remains public.
+
+The active default-branch and release-tag protections are mirrored under
+`.github/rulesets/`. `main` requires the portable CI matrix and squash merging;
+the fixed-runner performance gate remains opt-in while that runner is offline.
