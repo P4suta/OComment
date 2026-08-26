@@ -56,7 +56,18 @@ fn lexical_byte() -> impl Strategy<Value = u8> {
 /// Lua's long brackets are the same state behind four bytes rather than three,
 /// and the levelled forms are here because a closing bracket of the wrong level
 /// is content: without them a generated source that opens one practically never
-/// closes it.
+/// closes it. The eight YAML fragments after them are block scalar headers and
+/// the indented line that follows one — a body is the state a YAML restart must
+/// never land inside, and the bytes that open one have to arrive in that order.
+/// Three of the eight put the owner of that body on an earlier line than its
+/// header: a line ending in `:` or in a bare `-`, and the node properties that
+/// may stand between the two. That owner is the one thing a YAML line does not
+/// say about itself, so it is the one thing a restart at a line start has to be
+/// refused over. The `|+` header is the keep-chomped body whose trailing blank
+/// lines are content. The five PHP fragments at the end are its two tags, an
+/// attribute, and a heredoc header with the line that closes one: PHP mode is
+/// the state a restart must never land inside, and only a whole `<?php` opens
+/// it.
 fn lexical_fragment() -> impl Strategy<Value = Vec<u8>> {
     prop_oneof![
         8 => lexical_byte().prop_map(|byte| vec![byte]),
@@ -74,6 +85,19 @@ fn lexical_fragment() -> impl Strategy<Value = Vec<u8>> {
         1 => Just(b"--[=[".to_vec()),
         1 => Just(b"]]".to_vec()),
         1 => Just(b"]=]".to_vec()),
+        1 => Just(b": |\n".to_vec()),
+        1 => Just(b"- >2\n".to_vec()),
+        1 => Just(b"|+\n".to_vec()),
+        1 => Just(b"\n  # ".to_vec()),
+        1 => Just(b"k:\n".to_vec()),
+        1 => Just(b"\n-\n".to_vec()),
+        1 => Just(b"!!str ".to_vec()),
+        1 => Just(b"&a ".to_vec()),
+        1 => Just(b"<?php ".to_vec()),
+        1 => Just(b"<?=".to_vec()),
+        1 => Just(b"#[".to_vec()),
+        1 => Just(b"<<<E\n".to_vec()),
+        1 => Just(b"\nE;\n".to_vec()),
     ]
 }
 

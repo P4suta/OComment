@@ -24,4 +24,12 @@ exclude = [
 mode = "legal"
 layout = "lines"
 keep_kind = ["doc-line", "doc-block"]
-keep_regex = ['^(//|\(\*|/\*|#)\s*(NOTE|SAFETY|INVARIANT|PERF|TODO|FIXME|HACK)\b']
+keep_regex = [
+  '^(//|\(\*|/\*|#)\s*(NOTE|SAFETY|INVARIANT|PERF|TODO|FIXME|HACK)\b',
+  # NOTE: The version beside a SHA-pinned action, now that YAML is scanned.
+  # NOTE: CONTRIBUTING.md requires every `uses:` to carry one and Dependabot
+  # NOTE: rewrites it when it moves the pin, so it is read by a machine rather
+  # NOTE: than by a reader and has no rationale to tag. The pattern is the whole
+  # NOTE: comment, so prose that merely opens with a version is still prose.
+  '^#\s*v[0-9]+(\.[0-9]+)*$',
+]

@@ -165,8 +165,12 @@ impl IncrementalDocument {
     }
     /// The bytes a removal would write, from the report already in hand.
     ///
-    /// No rescanning: this is the current report run through the same layout
-    /// and source-map engine [`transform`](crate::transform) uses.
+    /// No comment is scanned again: this is the current report run through the
+    /// same layout and source-map engine [`transform`](crate::transform) uses.
+    /// A YAML document does get one extra lexical pass in there, because where
+    /// a block scalar body ends decides which comment lines a removal has to
+    /// take whole and no report carries that; it is linear, like the edit walk
+    /// beside it, and every other language skips it on the language check.
     pub fn transform(&self, layout: Layout) -> TransformResult {
         transform_report(
             &self.source,
@@ -519,7 +523,7 @@ fn line_checkpoints(source: &[u8]) -> Vec<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::scanner::scan_with_checkpoints;
+    use crate::{Disposition, scanner::scan_with_checkpoints};
     use proptest::prelude::*;
 
     /// Bytes that exercise every built-in scanner's string, comment, heredoc
@@ -561,6 +565,11 @@ mod tests {
     /// preamble and directive rules only fire on whole words, so without these
     /// the generated sources never reach the code paths that make a checkpoint
     /// depend on the bytes in front of it.
+    ///
+    /// The last three are YAML block scalar headers and the indented line that
+    /// follows one. A block scalar body is a state a restart must never land
+    /// inside, and the four bytes that open one have to arrive in that order to
+    /// open it at all, which a per-byte alphabet reaches only by coincidence.
     fn lexical_fragment() -> impl Strategy<Value = Vec<u8>> {
         prop_oneof![
             8 => lexical_byte().prop_map(|byte| vec![byte]),
@@ -572,6 +581,9 @@ mod tests {
             1 => Just(b"/*#__PURE__*/".to_vec()),
             1 => Just(b"<!--".to_vec()),
             1 => Just(b"r#\"".to_vec()),
+            1 => Just(b": |\n".to_vec()),
+            1 => Just(b"- >2\n".to_vec()),
+            1 => Just(b"\n  # ".to_vec()),
         ]
     }
 
@@ -937,6 +949,148 @@ mod tests {
         assert_eq!(document.report().comments, expected.comments);
         assert_eq!(document.report(), &expected);
         assert_eq!(document.safe_checkpoints(), expected_checkpoints);
+    }
+
+    /// Regression: how far a YAML block scalar body reaches is decided by the
+    /// lines below it, so an edit under one can swallow an offset the previous
+    /// revision recorded as a line start — appending a line to a document that
+    /// ended inside a body is enough, and a restart there would read the
+    /// content of a scalar as YAML. No body begins before its own header, so
+    /// the checkpoints a YAML document offers stop at the first one, and a
+    /// document that opens none offers every line start as before.
+    #[test]
+    fn a_yaml_block_scalar_ends_the_checkpoints_of_the_document_it_opens() {
+        let plain = IncrementalDocument::new(
+            b"a: 1\nb: 2 # note\n".to_vec(),
+            Language::Yaml,
+            ScanOptions::default(),
+            1,
+        );
+        assert_eq!(plain.safe_checkpoints(), [0, 5, 17]);
+
+        let mut document = IncrementalDocument::new(
+            b"key: |\n  body # content\n".to_vec(),
+            Language::Yaml,
+            ScanOptions::default(),
+            1,
+        );
+        assert_eq!(document.safe_checkpoints(), [0]);
+        document
+            .apply_changes(
+                &[DocumentChange {
+                    span: ByteSpan::new(24, 24),
+                    replacement: b"  more # content\n".to_vec(),
+                }],
+                2,
+            )
+            .unwrap();
+        let (expected, expected_checkpoints) =
+            scan_with_checkpoints(document.source(), Language::Yaml, ScanOptions::default(), 0);
+        assert_eq!(document.report(), &expected);
+        assert_eq!(document.safe_checkpoints(), expected_checkpoints);
+        assert!(
+            document.report().comments.is_empty(),
+            "the body swallowed both lines: {:?}",
+            document.report().comments
+        );
+    }
+
+    /// The keep a block scalar's trail decides is a property of the whole
+    /// document, so a rescan that reuses a tail has to reach the same one. The
+    /// checkpoints a YAML document offers stop at its first block scalar, which
+    /// puts every trail inside the suffix a rescan reads or inside the tail it
+    /// carries over untouched; either way the answer is the full scan's.
+    #[test]
+    fn a_yaml_structural_trail_keep_survives_an_incremental_rescan() {
+        let source = b"a: 1
+k: |
+  x
+# ends the block
+  # yamllint disable
+z: 1
+";
+        let mut document =
+            IncrementalDocument::new(source.to_vec(), Language::Yaml, ScanOptions::default(), 1);
+        assert_eq!(
+            document.report().comments[0].disposition,
+            Disposition::Keep {
+                reason: "structural in a YAML block scalar trail".to_owned()
+            },
+        );
+        /* NOTE: Deepening the body past the directive under it takes the value
+         * away from that directive, and the comment above it stops being
+         * structure the moment it does. */
+        let deepen = source
+            .windows(4)
+            .position(|window| window == b"\n  x")
+            .expect("the body line");
+        document
+            .apply_changes(
+                &[DocumentChange {
+                    span: ByteSpan::new(deepen + 1, deepen + 1),
+                    replacement: b"  ".to_vec(),
+                }],
+                2,
+            )
+            .unwrap();
+        let (expected, expected_checkpoints) =
+            scan_with_checkpoints(document.source(), Language::Yaml, ScanOptions::default(), 0);
+        assert_eq!(document.report(), &expected);
+        assert_eq!(document.safe_checkpoints(), expected_checkpoints);
+        assert!(
+            document.report().comments[0].disposition.is_remove(),
+            "the directive is outside the deeper body: {:?}",
+            document.report().comments,
+        );
+    }
+
+    /// PHP mode is document state rather than line state: whether the `#` at a
+    /// line start opens a comment depends on whether an unclosed `<?php` sits
+    /// above it, and the bytes of the line itself say nothing about that. Only
+    /// a line break the scanner meets in inline HTML is a restart point, so a
+    /// file that is all PHP offers offset 0 and nothing else and a template
+    /// offers the line starts of its HTML.
+    #[test]
+    fn a_php_line_start_is_a_restart_point_only_in_inline_html() {
+        let html = IncrementalDocument::new(
+            b"<p>a</p>\n<p>b</p>\n".to_vec(),
+            Language::Php,
+            ScanOptions::default(),
+            1,
+        );
+        assert_eq!(html.safe_checkpoints(), [0, 9, 18]);
+
+        let code = IncrementalDocument::new(
+            b"<?php\n$a = 1;\n$b = 2;\n".to_vec(),
+            Language::Php,
+            ScanOptions::default(),
+            1,
+        );
+        assert_eq!(code.safe_checkpoints(), [0]);
+
+        /* NOTE: The line break behind a `?>` belongs to the tag, so the byte
+         * after it is the start of the first inline-HTML line and a restart
+         * point like any other. */
+        let mut template = IncrementalDocument::new(
+            b"<?php $a = 1; ?>\n<p>x</p>\n".to_vec(),
+            Language::Php,
+            ScanOptions::default(),
+            1,
+        );
+        assert_eq!(template.safe_checkpoints(), [0, 17, 26]);
+        template
+            .apply_changes(
+                &[DocumentChange {
+                    span: ByteSpan::new(26, 26),
+                    replacement: b"<?php # note\n".to_vec(),
+                }],
+                2,
+            )
+            .unwrap();
+        let (expected, expected_checkpoints) =
+            scan_with_checkpoints(template.source(), Language::Php, ScanOptions::default(), 0);
+        assert_eq!(template.report(), &expected);
+        assert_eq!(template.safe_checkpoints(), expected_checkpoints);
     }
 
     /// Regression: a checkpoint sits immediately after a line terminator, and

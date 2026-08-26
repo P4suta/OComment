@@ -6,7 +6,7 @@ use anyhow::Result;
 use clap::ValueEnum;
 use ocomment_core::{
     ByteSpan, Comment, CommentKind, Disposition, DispositionExplanation, DispositionPatterns,
-    Language, Policy, ScanOptions, TransformResult, explain_disposition_with,
+    Language, Policy, ScanOptions, TransformResult, explain_comment_with,
 };
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -293,9 +293,9 @@ fn explanation_line(
     let material = explainer.material;
     let start = comment.span.start.min(file.source.len());
     let end = comment.span.end.clamp(start, file.source.len());
-    let verdict = explain_disposition_with(
+    let verdict = explain_comment_with(
         &explainer.patterns,
-        comment.kind,
+        comment,
         &file.source[start..end],
         file.language,
         &material.options,
@@ -314,7 +314,7 @@ fn explanation_line(
 
 /// Write that line under the comment it is about, when the run has the
 /// material to account for it.
-fn explain_comment(
+fn write_explanation(
     output: &mut impl Write,
     file: &ProcessedFile,
     comment: &Comment,
@@ -344,6 +344,12 @@ fn next_step(verdict: &DispositionExplanation) -> String {
         ),
         DispositionExplanation::KeptDirective { kind, .. } => {
             format!("; use --remove-kind {kind} or --policy all to remove it")
+        }
+        /* NOTE: The one keep with no flag behind it. `--policy all` does not
+         * reach it either: what holds the body open is whatever comment is
+         * still standing under this one, so that is the line to take first. */
+        DispositionExplanation::KeptStructural { .. } => {
+            "; the comment under it has to go first".to_owned()
         }
         _ => String::new(),
     }
@@ -707,7 +713,7 @@ fn render_human(
                     comment.span.end,
                     preview_suffix(&file.source, comment.span, options)
                 ))?;
-                explain_comment(output, file, comment, explainer, options)?;
+                write_explanation(output, file, comment, explainer, options)?;
             }
         } else if quiet {
             continue;
@@ -746,7 +752,7 @@ fn render_human(
                     color("\x1b[0m", presentation.color),
                     preview_suffix(&file.source, comment.span, options)
                 ))?;
-                explain_comment(output, file, comment, explainer, options)?;
+                write_explanation(output, file, comment, explainer, options)?;
             }
         }
     }

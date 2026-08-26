@@ -119,6 +119,8 @@ value_enum_wrapper!(LanguageArg, Language, |value| match value {
     Language::Kotlin => "Kotlin source and script files",
     Language::Toml => "TOML documents, including the lock files written in it",
     Language::Lua => "Lua chunks and LuaRocks rockspecs",
+    Language::Yaml => "YAML documents, including the tool configurations written in it",
+    Language::Php => "PHP scripts and templates; the inline HTML around the tags is content",
     Language::Unknown => "An undetected language",
 });
 

@@ -69,7 +69,7 @@ macro_rules! check_stable_names {
 #[test]
 fn language_names_are_stable() {
     let seen = check_stable_names!(Language);
-    assert_eq!(Language::ALL.len(), 17);
+    assert_eq!(Language::ALL.len(), 19);
     assert!(
         !seen.contains("unknown"),
         "Unknown must stay out of the parseable set"
@@ -148,6 +148,9 @@ fn language_aliases_are_pinned() {
         ("kts", Language::Kotlin),
         ("toml", Language::Toml),
         ("lua", Language::Lua),
+        ("yaml", Language::Yaml),
+        ("yml", Language::Yaml),
+        ("php", Language::Php),
     ];
     for (text, expected) in cases {
         assert_eq!(Language::from_str(text), Ok(expected), "`{text}`");
@@ -322,71 +325,113 @@ fn disposition_serde_shape_is_frozen() {
     );
 }
 
-/// The differential protocol freezes these five strings; the OCaml reference
+/// The differential protocol freezes these six strings; the OCaml reference
 /// compares them byte-for-byte.
-const KEEP_REASONS: [&str; 5] = [
+const KEEP_REASONS: [&str; 6] = [
     "kept by kind or regex override",
     "required source preamble",
     "HTML comments are DOM-observable",
     "tool or language directive",
     "legal policy",
+    "structural in a YAML block scalar trail",
 ];
+
+/// One fixture for `keep_reasons_are_observable_through_scan`: a source, how it
+/// is scanned, how many comments it holds, and which of them carries the frozen
+/// reason under test. The count is pinned per fixture so a scanner that started
+/// finding a comment more or fewer fails here rather than sliding the index.
+struct ReasonFixture {
+    source: &'static [u8],
+    language: Language,
+    options: ScanOptions,
+    comments: usize,
+    index: usize,
+    reason: &'static str,
+}
 
 #[test]
 fn keep_reasons_are_observable_through_scan() {
-    let cases: [(&[u8], Language, ScanOptions, &str); 5] = [
-        (
-            b"// keep me\n",
-            Language::Rust,
-            ScanOptions {
+    let cases = [
+        ReasonFixture {
+            source: b"// keep me\n",
+            language: Language::Rust,
+            options: ScanOptions {
                 keep_kinds: vec![CommentKind::Line],
                 ..Default::default()
             },
-            "kept by kind or regex override",
-        ),
-        (
-            b"#!/bin/sh\n",
-            Language::Shell,
-            ScanOptions::default(),
-            "required source preamble",
-        ),
-        (
-            b"<!-- note -->\n",
-            Language::Html,
-            ScanOptions::default(),
-            "HTML comments are DOM-observable",
-        ),
-        (
-            b"// rustfmt::skip\n",
-            Language::Rust,
-            ScanOptions::default(),
-            "tool or language directive",
-        ),
-        (
-            b"// Copyright 2026 Example\n",
-            Language::Rust,
-            ScanOptions {
+            comments: 1,
+            index: 0,
+            reason: "kept by kind or regex override",
+        },
+        ReasonFixture {
+            source: b"#!/bin/sh\n",
+            language: Language::Shell,
+            options: ScanOptions::default(),
+            comments: 1,
+            index: 0,
+            reason: "required source preamble",
+        },
+        ReasonFixture {
+            source: b"<!-- note -->\n",
+            language: Language::Html,
+            options: ScanOptions::default(),
+            comments: 1,
+            index: 0,
+            reason: "HTML comments are DOM-observable",
+        },
+        ReasonFixture {
+            source: b"// rustfmt::skip\n",
+            language: Language::Rust,
+            options: ScanOptions::default(),
+            comments: 1,
+            index: 0,
+            reason: "tool or language directive",
+        },
+        ReasonFixture {
+            source: b"// Copyright 2026 Example\n",
+            language: Language::Rust,
+            options: ScanOptions {
                 policy: Policy::Legal,
                 ..Default::default()
             },
-            "legal policy",
-        ),
+            comments: 1,
+            index: 0,
+            reason: "legal policy",
+        },
+        /* NOTE: The one reason that needs a second comment to exist at all: the
+         * block scalar leans on the first comment only because the directive
+         * below it survives and is indented into the body. */
+        ReasonFixture {
+            source: b"k: |\n  a\n# ends the block\n  # yamllint disable\nz: 1\n",
+            language: Language::Yaml,
+            options: ScanOptions::default(),
+            comments: 2,
+            index: 0,
+            reason: "structural in a YAML block scalar trail",
+        },
     ];
     let mut observed = BTreeSet::new();
-    for (source, language, options, expected) in cases {
-        observed.insert(expected);
-        let report = scan(source, language, options);
-        assert_eq!(report.comments.len(), 1, "`{expected}` fixture");
+    for case in cases {
+        observed.insert(case.reason);
+        let report = scan(case.source, case.language, case.options);
         assert_eq!(
-            report.comments[0].disposition,
-            Disposition::Keep {
-                reason: expected.to_owned()
-            },
-            "`{expected}` fixture"
+            report.comments.len(),
+            case.comments,
+            "`{}` fixture found {:?}",
+            case.reason,
+            report.comments
         );
         assert_eq!(
-            report.comments[0].disposition.to_string(),
-            format!("keep ({expected})")
+            report.comments[case.index].disposition,
+            Disposition::Keep {
+                reason: case.reason.to_owned()
+            },
+            "`{}` fixture",
+            case.reason
+        );
+        assert_eq!(
+            report.comments[case.index].disposition.to_string(),
+            format!("keep ({})", case.reason)
         );
     }
     assert_eq!(

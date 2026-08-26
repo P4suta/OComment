@@ -3201,6 +3201,3045 @@
         "diagnostics": [],
         "output_utf8": "x = 1\ny = 2\n"
       }
+    },
+    {
+      "id": "parity-unterminated-message-rust",
+      "language": "rust",
+      "operation": "scan",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "let s = \"unclosed // not a comment\n",
+      "note": "Rust Reference, Tokens (string literals): a `\"` literal carries a bare newline as content, so this one is closed by nothing and the `//` inside it is never a comment. The diagnostic names the construct that was left open -- `unterminated string` -- rather than saying `literal`, and the two implementations must spell the message the same way, because a message is what a user reads. The recorded block pins the code and the span; the byte-for-byte comparison in `tools/differential.py` is what pins the text.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 8,
+            "end": 35
+          }
+        ]
+      }
+    },
+    {
+      "id": "parity-unterminated-message-go",
+      "language": "go",
+      "operation": "scan",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "s := \"unclosed // not a comment\n",
+      "note": "Go specification, String literals: an interpreted string literal may not contain a newline, so this one ends unterminated at the line break. Go spells one diagnostic for both of its quoted forms -- `unterminated string or rune literal` -- because `\"` and `'` are the same failure to a reader scanning the line.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 5,
+            "end": 31
+          }
+        ]
+      }
+    },
+    {
+      "id": "parity-unterminated-message-go-rune",
+      "language": "go",
+      "operation": "scan",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "r := 'x // not a comment\n",
+      "note": "Go specification, Rune literals: a rune literal may not contain a newline either, and it carries the same message as the string literal above, so the pair cannot drift apart.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 5,
+            "end": 24
+          }
+        ]
+      }
+    },
+    {
+      "id": "parity-unterminated-message-css",
+      "language": "css",
+      "operation": "scan",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "a::before { content: \"unclosed\n",
+      "note": "CSS Syntax Module Level 3, 4.3.5: consuming a string that reaches the end of input is a parse error. The diagnostic names the language as well as the construct -- `unterminated CSS string` -- because a CSS string is also what an HTML `<style>` element hands this scanner.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 21,
+            "end": 31
+          }
+        ]
+      }
+    },
+    {
+      "id": "parity-unterminated-message-css-apostrophe",
+      "language": "css",
+      "operation": "scan",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "a::before { content: 'unclosed\n",
+      "note": "CSS Syntax Module Level 3, 4.3.5: `'` and `\"` open the same token, so an unclosed one carries the same `unterminated CSS string` message whichever quote wrote it.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 21,
+            "end": 31
+          }
+        ]
+      }
+    },
+    {
+      "id": "parity-unterminated-message-jsonc",
+      "language": "jsonc",
+      "operation": "scan",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "{ \"key: 1 }\n",
+      "note": "JSON5 4.4 and RFC 8259 7: a string ends at its closing quote, and a newline is not one, so this key is never closed. The diagnostic names the construct as JSON sees it -- `unterminated JSON string` -- for both of the quotes JSON5 allows.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 2,
+            "end": 11
+          }
+        ]
+      }
+    },
+    {
+      "id": "parity-unterminated-message-kotlin",
+      "language": "kotlin",
+      "operation": "scan",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "val c = 'x // not a comment\n",
+      "note": "Kotlin language specification, Character literals: a character literal is one character between apostrophes and may not span a line. The diagnostic names it `unterminated Kotlin character literal`, which is what tells it from the `unterminated Kotlin string` a `\"` literal reports.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 8,
+            "end": 27
+          }
+        ]
+      }
+    },
+    {
+      "id": "parity-rust-lifetime-is-not-a-literal",
+      "language": "rust",
+      "operation": "scan",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "let r: &'a str = s; // remove\n",
+      "note": "Rust Reference, Tokens (Lifetimes and loop labels): `'` followed by an identifier and *not* closed by a second `'` is a lifetime, not the opening of a character literal. It therefore opens nothing, and the line comment that follows on the same line is an ordinary comment rather than string content.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 20,
+            "end": 29,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "parity-rust-quote-without-character-literal",
+      "language": "rust",
+      "operation": "scan",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "'//'\n",
+      "note": "Rust Reference, Tokens: a character literal holds exactly one character before its closing `'`, so `'` followed by `/` and then another `/` cannot be one. The apostrophe lexes as a lifetime opener and consumes nothing, which leaves the `//` after it opening a line comment -- the reading that removes a comment rather than the one that hides the rest of the file inside a literal.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 1,
+            "end": 4,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "parity-rust-unterminated-character-literal",
+      "language": "rust",
+      "operation": "scan",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "let c = 'ä\n';\n",
+      "note": "Rust Reference, Tokens (character literals): a character literal holds one character and ends at the line, so this one is never closed. It is also the shape that tells a literal from a lifetime -- a non-ASCII character with an apostrophe close enough behind it to be the closing quote -- which is why the diagnostic here is `unterminated character literal` and `parity-rust-lifetime-is-not-a-literal` reports nothing at all.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 8,
+            "end": 11
+          }
+        ]
+      }
+    },
+    {
+      "id": "parity-jsonc-single-quoted-string",
+      "language": "jsonc",
+      "operation": "scan",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "{ 'note': '// not a comment' }\n",
+      "note": "JSON5 specification, 4.4 (Strings): a JSON5 string may be written with apostrophes, and this repository's `jsonc` language is documented as `JSON with comments, including JSON5` and claims the `.json5` extension. So `'` opens a string here exactly as `\"` does, and a `//` inside one is content.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "parity-jsonc-single-quote-unterminated",
+      "language": "jsonc",
+      "operation": "scan",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "{ 'key: 1 }\n",
+      "note": "JSON5 specification, 4.4: a single-quoted string ends at its closing apostrophe, and a newline is not one. The failure is the same one a `\"` string reports, under the same `unterminated JSON string` message.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 2,
+            "end": 11
+          }
+        ]
+      }
+    },
+    {
+      "id": "parity-rust-unterminated-raw-string",
+      "language": "rust",
+      "operation": "scan",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "let s = r\"unclosed\n",
+      "note": "Rust Reference, Tokens (raw string literals): `r\"` ends only at the matching `\"` and takes no escapes, so a raw string with no closing quote runs to the end of the file and is an error. The diagnostic spans the literal from its `r` to the end of the source, which is the extent the lexer consumed.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 8,
+            "end": 19
+          }
+        ]
+      }
+    },
+    {
+      "id": "parity-rust-unterminated-raw-string-hashes",
+      "language": "rust",
+      "operation": "scan",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "let s = r#\"unclosed // not a comment\n",
+      "note": "Rust Reference, Tokens: a hashed raw string closes at `\"#` for the same number of hashes it opened with. Without that closer the literal reaches the end of the file, the `//` inside it is content rather than a comment, and the source is reported invalid.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 8,
+            "end": 37
+          }
+        ]
+      }
+    },
+    {
+      "id": "parity-vertical-tab-python",
+      "language": "python",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "compact"
+      },
+      "source_base64": "CyMgbm90ZQp4ID0gMQo=",
+      "note": "Layout `compact` drops a line that held nothing but a removed comment. What counts as nothing is ASCII whitespace as `u8::is_ascii_whitespace` defines it -- space, tab, line feed, form feed, carriage return -- and the vertical tab (U+000B) is deliberately not in that set, the same set Lua's own `isspace` is documented to differ from in `lua_is_space`. So the line here is not blank, the vertical tab survives the removal, and only the comment goes.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 1,
+            "end": 7,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_base64": "Cwp4ID0gMQo="
+      }
+    },
+    {
+      "id": "parity-vertical-tab-rust",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "compact"
+      },
+      "source_base64": "Cy8vIG5vdGUKeCA9IDEK",
+      "note": "The same layout rule as `parity-vertical-tab-python`, in a language whose comment opener is two bytes: a vertical tab before the comment is content, not blank, so `compact` cannot swallow the line it sits on.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 1,
+            "end": 8,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_base64": "Cwp4ID0gMQo="
+      }
+    },
+    {
+      "id": "parity-vertical-tab-lua",
+      "language": "lua",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "compact"
+      },
+      "source_base64": "Cy0tIG5vdGUKeCA9IDEK",
+      "note": "The same layout rule again in Lua, where the vertical tab *is* whitespace to the language's own lexer (`lua_is_space`) and still is not whitespace to the layout arithmetic. The two are different questions: one asks what the chunk means, the other asks what the file looks like.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 1,
+            "end": 8,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_base64": "Cwp4ID0gMQo="
+      }
+    },
+    {
+      "id": "parity-unicode-space-directive-rust",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_base64": "Ly/igKhyZWdpb24K",
+      "note": "`classify_comment` trims the comment body before it looks for a directive word, and it trims Unicode whitespace -- every scalar with the White_Space property, which U+2028 LINE SEPARATOR has -- and not only the ASCII five. A line separator in front of `region` therefore still leaves the folding-region directive an editor reads, and `safe` keeps it. Keeping is also the conservative half of the disagreement: the alternative deletes a directive because of an invisible character.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 11,
+            "kind": "directive",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_base64": "Ly/igKhyZWdpb24K"
+      }
+    },
+    {
+      "id": "parity-unicode-space-directive-python",
+      "language": "python",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_base64": "I+KAqHJlZ2lvbgo=",
+      "note": "The same trim in a `#` comment: U+2028 is whitespace to the classifier, so the `region` behind it is still the directive.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 10,
+            "kind": "directive",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_base64": "I+KAqHJlZ2lvbgo="
+      }
+    },
+    {
+      "id": "parity-unicode-space-directive-go",
+      "language": "go",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_base64": "Ly/CoHJlZ2lvbgo=",
+      "note": "U+00A0 NO-BREAK SPACE also carries White_Space, and it is the one a word processor is most likely to have put there, so a `region` marker written with one is still a directive.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 10,
+            "kind": "directive",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "// region\n"
+      }
+    },
+    {
+      "id": "parity-unicode-space-directive-c",
+      "language": "c",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_base64": "LyrigKhyZWdpb24qLwo=",
+      "note": "The same rule for a block comment, where the trim has to run past the closing marker `strip_comment_markers` removed as well as the opening one.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 13,
+            "kind": "directive",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_base64": "LyrigKhyZWdpb24qLwo="
+      }
+    },
+    {
+      "id": "bom-shebang-shell",
+      "language": "shell",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_base64": "77u/IyEvYmluL3NoCmVjaG8gMQo=",
+      "note": "POSIX Shell Command Language, 2.3 Token Recognition: `#` opens a comment only where a word does not already begin. A UTF-8 BOM is ordinary word bytes to a shell -- `bash` reads `\\ufeff#!/bin/sh` as a command name and reports it not found -- and `execve` requires `#!` at byte 0 as well, so a BOM in front of a shebang line leaves neither a comment nor a preamble. Nothing is removed because nothing was found.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "diagnostics": [],
+        "output_base64": "77u/IyEvYmluL3NoCmVjaG8gMQo="
+      }
+    },
+    {
+      "id": "bom-shebang-python",
+      "language": "python",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_base64": "77u/IyEvdXNyL2Jpbi9lbnYgcHl0aG9uMwp4ID0gMQo=",
+      "note": "CPython `tokenizer.c`, `check_bom`: a UTF-8 BOM is consumed before the first line is read, so the `#!` line is still the first line of the program. The shebang rule in `classify_comment` skips the same three bytes, reads a shebang, and `safe` keeps it -- the same three bytes `is_python_encoding_declaration` already skips when it looks for a `coding:` line.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 3,
+            "end": 25,
+            "kind": "shebang",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_base64": "77u/IyEvdXNyL2Jpbi9lbnYgcHl0aG9uMwp4ID0gMQo="
+      }
+    },
+    {
+      "id": "bom-shebang-lua",
+      "language": "lua",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_base64": "77u/IyEvdXNyL2Jpbi9sdWEKeCA9IDEK",
+      "note": "Lua 5.4 `lauxlib.c`: `skipcomment` calls `skipBOM` before it tests the first byte for `#`, so a BOM in front of a `#!` line still leaves the loader skipping that whole line. The scanner skips the same three bytes before it applies the first-line rule, and the line is then a kept shebang.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 3,
+            "end": 17,
+            "kind": "shebang",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_base64": "77u/IyEvdXNyL2Jpbi9sdWEKeCA9IDEK"
+      }
+    },
+    {
+      "id": "bom-lua-hash-first-line",
+      "language": "lua",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_base64": "77u/IyBub3QgYSBzaGViYW5nCnggPSAxCg==",
+      "note": "Lua 5.4 `lauxlib.c`, `skipcomment`: the byte the loader looks for after the BOM is `#`, not `#!`, so any first line opening with it is skipped. Without the second byte it is no preamble, only a line comment, and `safe` removes it -- the BOM-carrying twin of `lua-hash-first-line`.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 3,
+            "end": 18,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_base64": "77u/CnggPSAxCg=="
+      }
+    },
+    {
+      "id": "toml-schema-directive-without-argument",
+      "language": "toml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "#:schema\nkey = 1\n",
+      "note": "Taplo reads `#:schema` as the directive naming the JSON schema the file is validated against. The keyword ends at a boundary so that prose running letters on past it is not mistaken for the directive, and the end of the comment is such a boundary: `#:schema` with its URL still to be typed is the directive it is about to be, and protecting it costs one line that a formatter would have rewritten anyway. The same reading protects a bare `# shellcheck` and a bare `# hadolint`.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 8,
+            "kind": "directive",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "#:schema\nkey = 1\n"
+      }
+    },
+    {
+      "id": "toml-schema-directive-runs-on",
+      "language": "toml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "#:schemata are plural\nkey = 1\n",
+      "note": "The other half of the boundary: letters running on past `:schema` are prose about schemas rather than Taplo's directive, so this comment is removed. Protecting the bare keyword above must not protect this.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 21,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\nkey = 1\n"
+      }
+    },
+    {
+      "id": "shell-shellcheck-without-argument",
+      "language": "shell",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "# shellcheck\ncat x\n",
+      "note": "ShellCheck answers to its own name and takes its argument after whitespace, so the keyword ends at a boundary. A directive whose argument is missing is still the directive -- the same end-of-comment boundary `toml-schema-directive-without-argument` records -- while `# shellcheckish note` stays prose.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 12,
+            "kind": "directive",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "# shellcheck\ncat x\n"
+      }
+    },
+    {
+      "id": "parity-cpp-raw-string-needs-a-boundary",
+      "language": "cpp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "aR\"(x)\" // remove\n",
+      "note": "C++ [lex.string] with [lex.token]: `R\"` opens a raw string literal only where it opens a token. Letters running into it do not -- maximal munch reads `aR` as an identifier and `\"(x)\"` as an ordinary string literal -- so the raw string rules do not apply and the trailing line comment is a comment. The boundary is the same one `parity-rust-unterminated-raw-string` needs for Rust's `r\"`.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 8,
+            "end": 17,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "aR\"(x)\" \n"
+      }
+    },
+    {
+      "id": "parity-cpp-raw-string-delimiter-rejects-a-vertical-tab",
+      "language": "cpp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_base64": "UiJhC2IoeAp5KWELYiIgLy8gcmVtb3ZlCg==",
+      "note": "C++ [lex.string]: a d-char is any member of the basic source character set except space, `(`, `)`, `\\`, and the control characters horizontal tab, vertical tab, form feed and new-line. A vertical tab in the delimiter therefore makes this no raw string at all: the `\"` opens an ordinary literal, which a newline leaves unterminated. Asking `is_ascii_whitespace` instead would read the raw string, because that predicate leaves the vertical tab out.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 1,
+            "end": 7
+          },
+          {
+            "code": "unterminated-string",
+            "start": 13,
+            "end": 24
+          }
+        ],
+        "output_base64": "UiJhC2IoeAp5KWELYiIgLy8gcmVtb3ZlCg=="
+      }
+    },
+    {
+      "id": "parity-javascript-vertical-tab-is-whitespace",
+      "language": "javascript",
+      "dialect": "jsx",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_base64": "bGV0IG9rID0gYQs8YjsgLy8gcmVtb3ZlCg==",
+      "note": "ECMA-262 12.2: <VT> U+000B is `WhiteSpace`. So the `<` after it is still preceded by an identifier, which makes it the relational operator and not the opening of a JSX element; the line comment at the end is then an ordinary comment. `u8::is_ascii_whitespace` leaves the vertical tab out, which is why this rule is asked of a predicate of its own.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 15,
+            "end": 24,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_base64": "bGV0IG9rID0gYQs8YjsgCg=="
+      }
+    },
+    {
+      "id": "parity-typescript-vertical-tab-is-whitespace",
+      "language": "typescript",
+      "dialect": "tsx",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_base64": "bGV0IG9rID0gYQs8YjsgLy8gcmVtb3ZlCg==",
+      "note": "The same ECMA-262 12.2 rule under the `tsx` dialect, where a mis-read `<` would start a JSX element and swallow the rest of the file.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 15,
+            "end": 24,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_base64": "bGV0IG9rID0gYQs8YjsgCg=="
+      }
+    },
+    {
+      "id": "parity-javascript-html-close-comment-after-a-vertical-tab",
+      "language": "javascript",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_base64": "Cy0tPiByZW1vdmUKbGV0IHggPSAxOwo=",
+      "note": "ECMA-262 B.1.3: the single-line HTML-like close comment `-->` opens a comment only where nothing but whitespace precedes it on the line. <VT> is whitespace there for the same reason it is everywhere else in the grammar, so this `-->` opens a comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 1,
+            "end": 11,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_base64": "CwpsZXQgeCA9IDE7Cg=="
+      }
+    },
+    {
+      "id": "parity-ocaml-scan-continues-past-an-unterminated-literal",
+      "language": "ocaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "let c = '\\\r\n' ^ \"x\" (* remove *)\n",
+      "note": "OCaml manual, 11.1 (Lexical conventions): a character literal is one character between apostrophes and does not span a line, so this one is never closed. The rest of the file is still a file: the scan resumes where the literal stopped and finds the block comment further on, rather than treating one bad literal as the end of what can be read.",
+      "expect": {
+        "valid": false,
+        "comments": [
+          {
+            "start": 20,
+            "end": 32,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 8,
+            "end": 11
+          }
+        ],
+        "output_utf8": "let c = '\\\r\n' ^ \"x\" (* remove *)\n"
+      }
+    },
+    {
+      "id": "parity-shell-vertical-tab-opens-a-word",
+      "language": "shell",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_base64": "CyMgbm90IGEgY29tbWVudAo=",
+      "note": "POSIX Shell Command Language, 2.3: `#` opens a comment only where the current character is not part of a word. <blank> is space and tab, and a vertical tab is neither, so it begins a word and the `#` behind it is an ordinary word character. Nothing is a comment and nothing is removed.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "diagnostics": [],
+        "output_base64": "CyMgbm90IGEgY29tbWVudAo="
+      }
+    },
+    {
+      "id": "parity-shell-nul-opens-a-word",
+      "language": "shell",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_base64": "ACMgbm90IGEgY29tbWVudAo=",
+      "note": "The same rule for a byte that is not whitespace at all. A NUL is an ordinary word character to the token recogniser, so it opens a word and the `#` behind it opens no comment. Reading every byte below space as a blank -- which is the tempting shortcut -- would delete this line.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "diagnostics": [],
+        "output_base64": "ACMgbm90IGEgY29tbWVudAo="
+      }
+    },
+    {
+      "id": "parity-shell-heredoc-delimiter-ends-at-a-redirection",
+      "language": "shell",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "cat <<EOF>out\ndata\nEOF\n# remove\n",
+      "note": "POSIX Shell Command Language, 2.7.4: the here-document delimiter is a word, and a word ends at an unquoted operator character. `>` is one, so this is a here-document named `EOF` and a redirection to `out`, not a here-document named `EOF>out` that would swallow the rest of the file and leave the comment unfound.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 23,
+            "end": 31,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "cat <<EOF>out\ndata\nEOF\n\n"
+      }
+    },
+    {
+      "id": "parity-html-tag-name-ends-at-ascii-whitespace",
+      "language": "html",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_base64": "PHNjcmlwdAs+eC8veTwvc2NyaXB0Pgo=",
+      "note": "HTML Standard, 13.2.5.8 (Tag name state): a tag name ends at ASCII whitespace -- tab, line feed, form feed, carriage return, space -- or at `/` or `>`. A vertical tab is none of those, so this element is named `script\\u{b}` and is not the raw-text `script` element; the `//` inside it is text rather than an embedded JavaScript comment.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "diagnostics": [],
+        "output_base64": "PHNjcmlwdAs+eC8veTwvc2NyaXB0Pgo="
+      }
+    },
+    {
+      "id": "parity-profile-boundary-is-ascii-whitespace",
+      "language": "c",
+      "operation": "transform-profile",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "profile": {
+        "name": "boundary",
+        "extensions": [
+          "boundary"
+        ],
+        "line_comments": [
+          {
+            "start": "REM",
+            "kind": "line",
+            "requires_boundary": true
+          }
+        ],
+        "block_comments": [],
+        "strings": []
+      },
+      "source_base64": "eAtSRU0gbm90IGEgY29tbWVudApSRU0gcmVtb3ZlCg==",
+      "note": "A declarative profile's `requires_boundary` asks that the delimiter open a token rather than continue one, and the byte before it decides. The question is the engine's own rather than any language's, and the engine's answer is ASCII whitespace: a vertical tab is not a boundary and a line feed is, so the first `REM` here is not a comment and the second is.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 20,
+            "end": 30,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_base64": "eAtSRU0gbm90IGEgY29tbWVudAoK"
+      }
+    },
+    {
+      "id": "parity-html-script-hashbang-is-not-a-preamble",
+      "language": "html",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "<script>#!x</script>\n<!-- remove -->\n",
+      "note": "ECMA-262 12.5: a hashbang comment opens a Script or a Module and nothing else, and OComment reads that as `a file`: a preamble is a preamble at absolute offset 0. The content of a `<script>` element begins after the tag that opened it, so the `#!` here is not the page's preamble -- no page has one -- and no comment is found inside the element at all. The HTML comment on the next line is still found, and `safe` keeps it, which is what says the scan of the element did not swallow the rest of the file.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 21,
+            "end": 36,
+            "kind": "html-comment",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "<script>#!x</script>\n<!-- remove -->\n"
+      }
+    },
+    {
+      "id": "yaml-hash-in-plain-scalar",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "url: http://example.test/page#fragment\nname: a#b\ndone: 1 # remove\n",
+      "note": "YAML 1.2.2, 6.6 (Comment): a comment must be separated from other tokens by white space, so the `#` of a URL fragment and the one inside the plain scalar `a#b` are content of those scalars and only the `#` behind a space opens a comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 57,
+            "end": 65,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "url: http://example.test/page#fragment\nname: a#b\ndone: 1 \n"
+      }
+    },
+    {
+      "id": "yaml-hash-after-space",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "key: value # remove\nother: 2\t# remove too\n# a whole line\n",
+      "note": "YAML 1.2.2, 6.6 with 6.1 (Indentation Spaces): a space or a tab is the white space that separates a comment from the token in front of it, and a comment may also be the whole of a line.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 11,
+            "end": 19,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 29,
+            "end": 41,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 42,
+            "end": 56,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "key: value \nother: 2\t\n\n"
+      }
+    },
+    {
+      "id": "yaml-double-quoted-multiline-hash",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "key: \"first # not a comment\n  second # still not\"\ndone: 1 # remove\n",
+      "note": "YAML 1.2.2, 7.3.1 (Double-Quoted Style): a double-quoted scalar folds over a line break, so it runs on to its closing quote and every `#` between the two is content.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 58,
+            "end": 66,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "key: \"first # not a comment\n  second # still not\"\ndone: 1 \n"
+      }
+    },
+    {
+      "id": "yaml-single-quoted-escape",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "key: 'it''s # not a comment'\nplain: it's fine # remove\n",
+      "note": "YAML 1.2.2, 7.3.2 (Single-Quoted Style): `''` is how a single-quoted scalar carries a quote of its own, so the first of the pair does not close it. An apostrophe inside a plain scalar (7.3.3) opens no scalar at all, which is what leaves the comment after `it's fine` a comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 46,
+            "end": 54,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "key: 'it''s # not a comment'\nplain: it's fine \n"
+      }
+    },
+    {
+      "id": "yaml-block-literal-body-hash",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "script: |\n  # not a comment\n  echo hi\ndone: 1 # remove\n",
+      "note": "YAML 1.2.2, 8.1.2 (Literal Style): the content of a literal scalar is the following lines indented past the node it hangs off, carried verbatim, so a `#` on one of them is one of its bytes.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 46,
+            "end": 54,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "script: |\n  # not a comment\n  echo hi\ndone: 1 \n"
+      }
+    },
+    {
+      "id": "yaml-block-folded-indent-indicator",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "text: >2\n   # not a comment\n  still folded\ndone: 1 # remove\n",
+      "note": "YAML 1.2.2, 8.1.1.1 (Block Indentation Indicator): the indicator states the content indentation explicitly, counted from the parent node, so a body line one space deeper than that is still body and the `#` on it is content.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 51,
+            "end": 59,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "text: >2\n   # not a comment\n  still folded\ndone: 1 \n"
+      }
+    },
+    {
+      "id": "yaml-block-header-comment",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "script: |- # remove\n  # not a comment\ndone: 1\n",
+      "note": "YAML 1.2.2, 8.1.1 (Block Header): the header takes its indicators and then, behind white space, a comment of its own, so the `#` on the header line is a comment where the `#` on the body line below it is content.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 11,
+            "end": 19,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "script: |- \n  # not a comment\ndone: 1\n"
+      }
+    },
+    {
+      "id": "yaml-sequence-item-block-scalar",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "steps:\n  - run: |\n      echo hi # not a comment\n  - run: echo bye # remove\n",
+      "note": "YAML 1.2.2, 8.2.1 (Block Sequences) with 8.1: the block scalar of a sequence entry hangs off the key inside that entry, so its body is what is indented past that key and the next entry, which is not, ends it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 66,
+            "end": 74,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "steps:\n  - run: |\n      echo hi # not a comment\n  - run: echo bye \n"
+      }
+    },
+    {
+      "id": "yaml-block-ends-at-document-marker",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "|\n  a # not a comment\n---\n# remove\n",
+      "note": "YAML 1.2.2, 9.1.2 (Document Markers) with 8.1: a block scalar that is the whole document has no parent indentation to fall short of, so what ends its body is `---` in column zero -- and the comment on the line after that is a comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 34,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "|\n  a # not a comment\n---\n\n"
+      }
+    },
+    {
+      "id": "yaml-empty-lines-in-body",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "script: |\n  first\n\n  # not a comment\n\ndone: 1 # remove\n",
+      "note": "YAML 1.2.2, 8.1.2: literal content is a run of empty lines followed by an indented line, so an empty line does not end the scalar and the `#` below one is still content.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 46,
+            "end": 54,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "script: |\n  first\n\n  # not a comment\n\ndone: 1 \n"
+      }
+    },
+    {
+      "id": "yaml-flow-collection-comment",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "flow: [a,\"b # no\", 'c # no'] # remove\nmap: {x: 1} # remove too\n",
+      "note": "YAML 1.2.2, 7.4 (Flow Collection Styles): entries are separated by `,` and need no white space around it, so a quote right behind one still opens a scalar; the comment rule of 6.6 is the same inside a flow collection as outside it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 29,
+            "end": 37,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 50,
+            "end": 62,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "flow: [a,\"b # no\", 'c # no'] \nmap: {x: 1} \n"
+      }
+    },
+    {
+      "id": "yaml-directive-lines",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "%YAML 1.2\n%TAG !e! tag:example.test,2000:app/\n---\nkey: 1 # remove\n",
+      "note": "YAML 1.2.2, 6.8 (Directives): a `%` directive line is not a comment, and neither is the `---` that ends the directives of a document; only the `#` on the last line opens one.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 57,
+            "end": 65,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "%YAML 1.2\n%TAG !e! tag:example.test,2000:app/\n---\nkey: 1 \n"
+      }
+    },
+    {
+      "id": "yaml-language-server-directive",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "# yaml-language-server: $schema=https://example.test/schema.json\n# renovate: datasource=docker depName=alpine\nkey: 1 # remove\n",
+      "note": "The editor's YAML language server reads the schema out of `# yaml-language-server:` and Renovate reads the datasource out of `# renovate:`. Both are instructions to a tool, both are protected by `spec/directives.toml`, and the ordinary comment beside them is what a `safe` run removes.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 64,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 65,
+            "end": 109,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 117,
+            "end": 125,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "# yaml-language-server: $schema=https://example.test/schema.json\n# renovate: datasource=docker depName=alpine\nkey: 1 \n"
+      }
+    },
+    {
+      "id": "yaml-yamllint-directive",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "# yamllint disable-line rule:line-length\n# checkov:skip=CKV_AWS_20:public by design\n# @schema type: string\nkey: 1 # remove\n",
+      "note": "yamllint suppresses a rule for the next line, Checkov skips a policy for the resource below, and the Helm schema generator reads `# @schema` as the type of the value it annotates. All three are protected; the ordinary comment beside them is not.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 40,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 41,
+            "end": 83,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 84,
+            "end": 106,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 114,
+            "end": 122,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "# yamllint disable-line rule:line-length\n# checkov:skip=CKV_AWS_20:public by design\n# @schema type: string\nkey: 1 \n"
+      }
+    },
+    {
+      "id": "yaml-crlf",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "key: \"first # no\r\n  second\"\r\nscript: |\r\n  # no\r\ndone: 1 # remove\r\n",
+      "note": "YAML 1.2.2, 5.4 (Line Break Characters): a CRLF pair is one line break, so a folded double-quoted scalar and a block scalar body each read it as one and the line endings come back unchanged.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 56,
+            "end": 64,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "key: \"first # no\r\n  second\"\r\nscript: |\r\n  # no\r\ndone: 1 \r\n"
+      }
+    },
+    {
+      "id": "yaml-tabs",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "script: |\n  \t# not a comment\n  text\ndone: 1\t# remove\n",
+      "note": "YAML 1.2.2, 6.1 (Indentation Spaces): indentation is spaces alone and a tab is never part of it, so a tab behind the indentation of a body line is content of that body; 6.6 still counts a tab as the white space that separates a comment from a token.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 44,
+            "end": 52,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "script: |\n  \t# not a comment\n  text\ndone: 1\t\n"
+      }
+    },
+    {
+      "id": "yaml-unterminated-double-quote",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "key: \"unclosed # not a comment\nother: 1 # not one either\n",
+      "note": "YAML 1.2.2, 7.3.1: nothing but the closing quote ends a double-quoted scalar, so the end of the file leaves this one unterminated, no `#` after it opens a comment, and the source is not edited.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 5,
+            "end": 57
+          }
+        ],
+        "output_utf8": "key: \"unclosed # not a comment\nother: 1 # not one either\n"
+      }
+    },
+    {
+      "id": "yaml-columns-layout",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "columns"
+      },
+      "source_utf8": "key: 1 # remove\nnext: 2\n",
+      "note": "YAML 1.2.2, 6.6: a comment runs to the end of the line, and the `columns` layout pads what it removes so the following columns do not shift.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 7,
+            "end": 15,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "key: 1         \nnext: 2\n"
+      }
+    },
+    {
+      "id": "yaml-compact-layout",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "compact"
+      },
+      "source_utf8": "# alone\nkey: 1 # trailing\nnext: 2\n",
+      "note": "YAML 1.2.2, 6.6: the `compact` layout drops a line that held only a removed comment, and the whitespace a trailing one left behind.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 7,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 15,
+            "end": 25,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "key: 1\nnext: 2\n"
+      }
+    },
+    {
+      "id": "yaml-block-scalar-sequence-entry",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "- |\n  # a\n  b\n",
+      "note": "YAML 1.2.2, 8.1.1.1: the body of `- |` hangs off the sequence, whose indentation is the column of the `-`, so both lines under the header are content and the `#` is a byte of the scalar.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "diagnostics": [],
+        "output_utf8": "- |\n  # a\n  b\n"
+      }
+    },
+    {
+      "id": "yaml-block-scalar-tag",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "key: !!str |\n  # a\n",
+      "note": "YAML 1.2.2, 6.9: a tag is a node property standing in front of the node rather than being one, so the `|` behind it is still a block scalar header and the line under it is content.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "diagnostics": [],
+        "output_utf8": "key: !!str |\n  # a\n"
+      }
+    },
+    {
+      "id": "yaml-block-scalar-anchor",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "key: &x |\n  # a\n",
+      "note": "An anchor is a node property like a tag (6.9): the header behind it opens a block scalar whose body is content, not a plain scalar holding a `|`.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "diagnostics": [],
+        "output_utf8": "key: &x |\n  # a\n"
+      }
+    },
+    {
+      "id": "yaml-block-scalar-explicit-key",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "? |\n  # a\n: v\n",
+      "note": "YAML 1.2.2, 8.2.2: an explicit key `?` names the column its node hangs off exactly as `-` does, so the body under the header is content and the `: v` at column zero is the first line that ends it.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "diagnostics": [],
+        "output_utf8": "? |\n  # a\n: v\n"
+      }
+    },
+    {
+      "id": "yaml-block-scalar-nested-sequence",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "- - |\n    # a\n",
+      "note": "The owner is the inner `-`, so the body is what is indented past that column rather than past the outer one.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "diagnostics": [],
+        "output_utf8": "- - |\n    # a\n"
+      }
+    },
+    {
+      "id": "yaml-block-scalar-owner-depth",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "k:\n  - |\n    # a\n   # still body\n  # end\n",
+      "note": "The body ends at the first non-empty line that is not indented past the owner. The `-` sits at column 2, so column 3 is still body and column 2 is the comment that ends the scalar -- and that comment is the line the body would swallow back if a removal left anything on it, so every layout takes the whole line. Under `columns` the two spaces the line already had plus the five the comment was wide reach column 7, well past the body floor at column 3.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 35,
+            "end": 40,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "k:\n  - |\n    # a\n   # still body\n"
+      }
+    },
+    {
+      "id": "yaml-block-scalar-indentation-indicator",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "k: |2\n   # body\n",
+      "note": "YAML 1.2.2, 8.1.1.1: an explicit indentation indicator counts from the owner, so `|2` under a key at column zero puts the content floor at column 2 and the line at column 3 is content.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "diagnostics": [],
+        "output_utf8": "k: |2\n   # body\n"
+      }
+    },
+    {
+      "id": "yaml-block-scalar-document-root",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "|\n # body\n",
+      "note": "A block scalar that is the whole document hangs off the root, one short of column zero, so every line under it is content whatever its indentation.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "diagnostics": [],
+        "output_utf8": "|\n # body\n"
+      }
+    },
+    {
+      "id": "yaml-block-scalar-header-own-line",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "key:\n    |\n  # a\n",
+      "note": "YAML 1.2.2, 8.2.2 with 8.1.1.1: the header may sit on the line under the key that owns it, as deep as it likes. The body is measured from the key, so a body shallower than the header's own column is still content.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "diagnostics": [],
+        "output_utf8": "key:\n    |\n  # a\n"
+      }
+    },
+    {
+      "id": "yaml-block-scalar-properties-previous-line",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "key: !!str\n  |\n  # a\n",
+      "note": "A node property may be separated from its node by a line break (6.9), so the owner carried across that break is still the key and the body under the header is content.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "diagnostics": [],
+        "output_utf8": "key: !!str\n  |\n  # a\n"
+      }
+    },
+    {
+      "id": "yaml-block-scalar-root-properties",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "!!str |\n # a\n",
+      "note": "A tag in front of the document's own node leaves the header a header, and the body it opens still hangs off the root.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "diagnostics": [],
+        "output_utf8": "!!str |\n # a\n"
+      }
+    },
+    {
+      "id": "yaml-keep-chomp-comment-after-body-lines",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "k: |+\n  body\n\n# after\nnext: 1 # yes\n",
+      "note": "YAML 1.2.2, 8.1.1.2: `|+` keeps every empty line trailing a block scalar as part of its value, while the comment line under that body is `l-trail-comments` and is not. Blanking the comment would hand the `+` a line of content it did not have, so the removal takes the whole line, its terminator included, which is the one hole `lines` does not leave open.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 14,
+            "end": 21,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 30,
+            "end": 35,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "k: |+\n  body\n\nnext: 1 \n"
+      }
+    },
+    {
+      "id": "yaml-keep-chomp-comment-after-body-columns",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "columns"
+      },
+      "source_utf8": "k: |+\n  body\n\n# after\nnext: 1 # yes\n",
+      "note": "YAML 1.2.2, 8.1.1.2: `|+` keeps every empty line trailing a block scalar as part of its value, while the comment line under that body is `l-trail-comments` and is not. Blanking the comment would hand the `+` a line of content it did not have, so the removal takes the whole line, its terminator included. `columns` gives up that one line rather than the value: a line of spaces where the comment was is content of a keep-chomped scalar just as a blank one is.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 14,
+            "end": 21,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 30,
+            "end": 35,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "k: |+\n  body\n\nnext: 1      \n"
+      }
+    },
+    {
+      "id": "yaml-keep-chomp-comment-after-body-compact",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "compact"
+      },
+      "source_utf8": "k: |+\n  body\n\n# after\nnext: 1 # yes\n",
+      "note": "YAML 1.2.2, 8.1.1.2: `|+` keeps every empty line trailing a block scalar as part of its value, while the comment line under that body is `l-trail-comments` and is not. Blanking the comment would hand the `+` a line of content it did not have, so the removal takes the whole line, its terminator included, which is the line `compact` takes for every comment that was alone on one.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 14,
+            "end": 21,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 30,
+            "end": 35,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "k: |+\n  body\n\nnext: 1\n"
+      }
+    },
+    {
+      "id": "yaml-keep-chomp-trail-swallows-sheltered-blanks-lines",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "k: |+\n  a\n# c\n\nz: 1\n",
+      "note": "YAML 1.2.2, 8.1.1.2: `l-keep-empty` is the empty lines trailing a body followed by `l-trail-comments`, so the blank line under this comment is separation while the comment is there and content of the `|+` once it is gone. Taking the comment's line alone would grow the scalar from `a\\n` to `a\\n\\n`; the removal takes the run of empty lines the comment was sheltering with it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 10,
+            "end": 13,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "k: |+\n  a\nz: 1\n"
+      }
+    },
+    {
+      "id": "yaml-keep-chomp-trail-swallows-sheltered-blanks-columns",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "columns"
+      },
+      "source_utf8": "k: |+\n  a\n# c\n\nz: 1\n",
+      "note": "YAML 1.2.2, 8.1.1.2: `l-keep-empty` is the empty lines trailing a body followed by `l-trail-comments`, so the blank line under this comment is separation while the comment is there and content of the `|+` once it is gone. Taking the comment's line alone would grow the scalar from `a\\n` to `a\\n\\n`; the removal takes the run of empty lines the comment was sheltering with it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 10,
+            "end": 13,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "k: |+\n  a\nz: 1\n"
+      }
+    },
+    {
+      "id": "yaml-keep-chomp-trail-swallows-sheltered-blanks-compact",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "compact"
+      },
+      "source_utf8": "k: |+\n  a\n# c\n\nz: 1\n",
+      "note": "YAML 1.2.2, 8.1.1.2: `l-keep-empty` is the empty lines trailing a body followed by `l-trail-comments`, so the blank line under this comment is separation while the comment is there and content of the `|+` once it is gone. Taking the comment's line alone would grow the scalar from `a\\n` to `a\\n\\n`; the removal takes the run of empty lines the comment was sheltering with it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 10,
+            "end": 13,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "k: |+\n  a\nz: 1\n"
+      }
+    },
+    {
+      "id": "yaml-keep-chomp-blank-above-the-trail-stays-lines",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "k: |+\n  a\n\n# c\n\nz: 1\n",
+      "note": "The other half of the same rule. The empty line *above* the first trail comment is already `l-keep-empty` content of the `|+` -- the value is `a\\n\\n` before the removal and has to stay `a\\n\\n` after it -- so a removal takes what the comment was sheltering below it and never reaches back over what it was not.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 11,
+            "end": 14,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "k: |+\n  a\n\nz: 1\n"
+      }
+    },
+    {
+      "id": "yaml-keep-chomp-blank-above-the-trail-stays-columns",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "columns"
+      },
+      "source_utf8": "k: |+\n  a\n\n# c\n\nz: 1\n",
+      "note": "The other half of the same rule. The empty line *above* the first trail comment is already `l-keep-empty` content of the `|+` -- the value is `a\\n\\n` before the removal and has to stay `a\\n\\n` after it -- so a removal takes what the comment was sheltering below it and never reaches back over what it was not.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 11,
+            "end": 14,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "k: |+\n  a\n\nz: 1\n"
+      }
+    },
+    {
+      "id": "yaml-keep-chomp-blank-above-the-trail-stays-compact",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "compact"
+      },
+      "source_utf8": "k: |+\n  a\n\n# c\n\nz: 1\n",
+      "note": "The other half of the same rule. The empty line *above* the first trail comment is already `l-keep-empty` content of the `|+` -- the value is `a\\n\\n` before the removal and has to stay `a\\n\\n` after it -- so a removal takes what the comment was sheltering below it and never reaches back over what it was not.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 11,
+            "end": 14,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "k: |+\n  a\n\nz: 1\n"
+      }
+    },
+    {
+      "id": "yaml-clip-chomp-trail-comment-takes-its-line-lines",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "k: |\n  a\n# c\n\nz: 1\n",
+      "note": "Clip chomping drops the empty lines trailing a body, so the blank line `lines` would leave here changes nothing -- but the line of spaces `columns` would leave is indented to column 3, past the body floor at column 2, and is body content. One rule covers both: a whole-line comment under any block scalar body goes with its line under every layout, and the blank line below it stays because nothing was sheltering it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 9,
+            "end": 12,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "k: |\n  a\n\nz: 1\n"
+      }
+    },
+    {
+      "id": "yaml-clip-chomp-trail-comment-takes-its-line-columns",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "columns"
+      },
+      "source_utf8": "k: |\n  a\n# c\n\nz: 1\n",
+      "note": "Clip chomping drops the empty lines trailing a body, so the blank line `lines` would leave here changes nothing -- but the line of spaces `columns` would leave is indented to column 3, past the body floor at column 2, and is body content. One rule covers both: a whole-line comment under any block scalar body goes with its line under every layout, and the blank line below it stays because nothing was sheltering it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 9,
+            "end": 12,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "k: |\n  a\n\nz: 1\n"
+      }
+    },
+    {
+      "id": "yaml-clip-chomp-trail-comment-takes-its-line-compact",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "compact"
+      },
+      "source_utf8": "k: |\n  a\n# c\n\nz: 1\n",
+      "note": "Clip chomping drops the empty lines trailing a body, so the blank line `lines` would leave here changes nothing -- but the line of spaces `columns` would leave is indented to column 3, past the body floor at column 2, and is body content. One rule covers both: a whole-line comment under any block scalar body goes with its line under every layout, and the blank line below it stays because nothing was sheltering it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 9,
+            "end": 12,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "k: |\n  a\n\nz: 1\n"
+      }
+    },
+    {
+      "id": "yaml-plain-scalar-pipe-opens-no-trail-lines",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "k: a |+\n# c\n\nz: 1\n",
+      "note": "YAML 1.2.2, 8.1.1: a block scalar header opens a node, and no node begins after the `a` of a plain scalar, so these two bytes are content and there is no body below them. Reading them as a header would hang a keep-chomped trail off a line that has none and take the line of a comment sheltering nothing, so the comment is removed the ordinary way and keeps its line.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 8,
+            "end": 11,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "k: a |+\n\n\nz: 1\n"
+      }
+    },
+    {
+      "id": "yaml-plain-scalar-pipe-opens-no-trail-columns",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "columns"
+      },
+      "source_utf8": "k: a |+\n# c\n\nz: 1\n",
+      "note": "YAML 1.2.2, 8.1.1: a block scalar header opens a node, and no node begins after the `a` of a plain scalar, so these two bytes are content and there is no body below them. Reading them as a header would hang a keep-chomped trail off a line that has none and take the line of a comment sheltering nothing, so the comment is removed the ordinary way and keeps its line.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 8,
+            "end": 11,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "k: a |+\n   \n\nz: 1\n"
+      }
+    },
+    {
+      "id": "yaml-plain-scalar-pipe-opens-no-trail-compact",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "compact"
+      },
+      "source_utf8": "k: a |+\n# c\n\nz: 1\n",
+      "note": "YAML 1.2.2, 8.1.1: a block scalar header opens a node, and no node begins after the `a` of a plain scalar, so these two bytes are content and there is no body below them. Reading them as a header would hang a keep-chomped trail off a line that has none and take the line of a comment sheltering nothing, so the comment is removed the ordinary way and keeps its line.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 8,
+            "end": 11,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "k: a |+\n\nz: 1\n"
+      }
+    },
+    {
+      "id": "yaml-keep-chomp-surviving-comment-shelters-the-rest-lines",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "k: |+\n  a\n# c\n\n# yamllint disable\n\nz: 1\n",
+      "note": "`safe` keeps the linter directive, so it stays as `l-trail-comments` and goes on sheltering the empty line below it. The removed comment above it still takes the empty line it was sheltering: without that the directive's own line would move down onto a blank the `+` had already claimed, and the value would grow from `a\\n` to `a\\n\\n`.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 10,
+            "end": 13,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 15,
+            "end": 33,
+            "kind": "directive",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "k: |+\n  a\n# yamllint disable\n\nz: 1\n"
+      }
+    },
+    {
+      "id": "yaml-keep-chomp-surviving-comment-shelters-the-rest-columns",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "columns"
+      },
+      "source_utf8": "k: |+\n  a\n# c\n\n# yamllint disable\n\nz: 1\n",
+      "note": "`safe` keeps the linter directive, so it stays as `l-trail-comments` and goes on sheltering the empty line below it. The removed comment above it still takes the empty line it was sheltering: without that the directive's own line would move down onto a blank the `+` had already claimed, and the value would grow from `a\\n` to `a\\n\\n`.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 10,
+            "end": 13,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 15,
+            "end": 33,
+            "kind": "directive",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "k: |+\n  a\n# yamllint disable\n\nz: 1\n"
+      }
+    },
+    {
+      "id": "yaml-keep-chomp-surviving-comment-shelters-the-rest-compact",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "compact"
+      },
+      "source_utf8": "k: |+\n  a\n# c\n\n# yamllint disable\n\nz: 1\n",
+      "note": "`safe` keeps the linter directive, so it stays as `l-trail-comments` and goes on sheltering the empty line below it. The removed comment above it still takes the empty line it was sheltering: without that the directive's own line would move down onto a blank the `+` had already claimed, and the value would grow from `a\\n` to `a\\n\\n`.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 10,
+            "end": 13,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 15,
+            "end": 33,
+            "kind": "directive",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "k: |+\n  a\n# yamllint disable\n\nz: 1\n"
+      }
+    },
+    {
+      "id": "parity-js-html-close-behind-a-byte-order-mark",
+      "language": "javascript",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_base64": "Cu+7vy0tPiBjb21tZW50CnggLS0+IG5vdCBvbmUK",
+      "note": "ECMA-262 12.2 lists <ZWNBSP> U+FEFF among WhiteSpace and 12.5 makes a `-->` that nothing but white space precedes on its line a SingleLineHTMLCloseComment, so a byte order mark in front of one leaves it a comment. On the line below a token precedes the `-->`, which is a decrement and a comparison there and opens nothing.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 4,
+            "end": 15,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_base64": "Cu+7vwp4IC0tPiBub3Qgb25lCg=="
+      }
+    },
+    {
+      "id": "parity-js-html-close-behind-a-mark-that-is-not-the-first-byte",
+      "language": "javascript",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_base64": "CiDvu78tLT4gY29tbWVudAo=",
+      "note": "U+FEFF is white space wherever it sits, not only at the first byte of a file or of a line, so a space in front of the mark does not stop the `-->` behind it from closing a comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 5,
+            "end": 16,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_base64": "CiDvu78K"
+      }
+    },
+    {
+      "id": "parity-ocaml-comment-character-literal-shape",
+      "language": "ocaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "(*'\\cr#\"</div>]'*)\n",
+      "note": "OCaml manual, Lexical conventions: a comment lexes the string and character literals inside it, and a character literal is an apostrophe, one character or one escape sequence, and a closing apostrophe. `\\c` is no escape sequence and no apostrophe closes it, so the apostrophe here is a byte of the comment's text -- which leaves the `\"` behind it opening a string that never terminates, and the comment unterminated with it. Nothing is edited.",
+      "expect": {
+        "valid": false,
+        "comments": [
+          {
+            "start": 0,
+            "end": 19,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [
+          {
+            "code": "unterminated-comment",
+            "start": 0,
+            "end": 19
+          }
+        ],
+        "output_utf8": "(*'\\cr#\"</div>]'*)\n"
+      }
+    },
+    {
+      "id": "php-html-then-php",
+      "language": "php",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "<p>#not a comment</p>\n<?php echo 1; // remove\n",
+      "note": "PHP manual, Basic syntax (Escaping from HTML): a file opens in inline-HTML mode, where every byte is output verbatim and nothing opens a comment, and `<?php` with white space behind it enters PHP mode, where `//` does.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 36,
+            "end": 45,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "<p>#not a comment</p>\n<?php echo 1; \n"
+      }
+    },
+    {
+      "id": "php-short-echo-tag",
+      "language": "php",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "<?= $name // remove\n?>\n",
+      "note": "PHP manual, Basic syntax: `<?=` is the short echo tag, is always available whatever `short_open_tag` says, and needs nothing behind it, so it enters PHP mode on its own three bytes.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 10,
+            "end": 19,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "<?= $name \n?>\n"
+      }
+    },
+    {
+      "id": "php-xml-decl-not-open-tag",
+      "language": "php",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "<?xml version=\"1.0\"?>\n<?phpinfo();\n<?php // remove\n",
+      "note": "PHP manual, Basic syntax: `short_open_tag` is off by default, so a bare `<?` opens nothing and `<?php` is an opening tag only with white space or the end of the file behind it. An XML declaration and `<?phpinfo()` are inline text.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 41,
+            "end": 50,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "<?xml version=\"1.0\"?>\n<?phpinfo();\n<?php \n"
+      }
+    },
+    {
+      "id": "php-close-tag-ends-line-comment",
+      "language": "php",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "<?php // remove ?><p>kept</p>\n",
+      "note": "PHP manual, Comments: a one-line comment ends at the end of the line or at the closing tag, whichever comes first, and the `?>` is not part of it, so the markup behind it is inline HTML again rather than more comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 6,
+            "end": 16,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "<?php ?><p>kept</p>\n"
+      }
+    },
+    {
+      "id": "php-close-tag-swallows-newline",
+      "language": "php",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "<?php // remove\n?>\n#!/usr/bin/env php\n<?php // remove too\n",
+      "note": "PHP manual, Basic syntax (Instruction separation): the closing tag carries one line break away with it, so the byte after it starts a line of inline HTML. A `#!` line there is inline text, not the preamble it would be at offset 0.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 6,
+            "end": 15,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 44,
+            "end": 57,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "<?php \n?>\n#!/usr/bin/env php\n<?php \n"
+      }
+    },
+    {
+      "id": "php-attribute-not-comment",
+      "language": "php",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "<?php\n#[Attribute]\nfunction f() {}\n# remove\n",
+      "note": "PHP manual, Attributes (Attribute syntax): PHP 8.0 gave `#[` to attributes, so those two bytes open no comment; a `#` with anything else behind it is still a one-line comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 35,
+            "end": 43,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "<?php\n#[Attribute]\nfunction f() {}\n\n"
+      }
+    },
+    {
+      "id": "php-docblock",
+      "language": "php",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "<?php\n/** doc */\n/**/\n/*! not doxygen */\n// line\n",
+      "note": "The tokenizer's rule is `\"/*\"|\"/**\"{WHITESPACE}` and only the longer alternative sets `T_DOC_COMMENT`, so `/**` is documentation only with white space behind it: `/**/` is an ordinary block comment, and PHP has no Doxygen `/*!` form of its own.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 6,
+            "end": 16,
+            "kind": "doc-block",
+            "action": "remove"
+          },
+          {
+            "start": 17,
+            "end": 21,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 22,
+            "end": 40,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 41,
+            "end": 48,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "<?php\n\n\n\n\n"
+      }
+    },
+    {
+      "id": "php-single-quoted-escapes",
+      "language": "php",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "<?php $a = 'it\\'s // not a comment'; $b = 'trailing \\\\'; // remove\n",
+      "note": "PHP manual, Strings (Single quoted): only `\\'` and `\\\\` are escapes, so the quote behind a backslash does not close the string and the backslash of `\\\\` does not escape the quote that closes it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 57,
+            "end": 66,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "<?php $a = 'it\\'s // not a comment'; $b = 'trailing \\\\'; \n"
+      }
+    },
+    {
+      "id": "php-double-quoted-interpolation-braces",
+      "language": "php",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "<?php $a = \"x # no {$b['}'] /* nor this */} y\"; // remove\n",
+      "note": "PHP manual, Strings (Complex (curly) syntax): `{$` opens an expression inside a double-quoted string, and the two things inside one that can carry a brace of their own are a nested string and a comment. v1 balances the braces past both rather than lexing the expression, so the interpolation ends where PHP ends it and the comment written inside it stays content of the string.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 48,
+            "end": 57,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "<?php $a = \"x # no {$b['}'] /* nor this */} y\"; \n"
+      }
+    },
+    {
+      "id": "php-backtick",
+      "language": "php",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "<?php $out = `ls -l // not a comment`; // remove\n",
+      "note": "PHP manual, Execution operators: backticks are a string form of their own, equivalent to `shell_exec()`, so a `//` between them is content.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 39,
+            "end": 48,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "<?php $out = `ls -l // not a comment`; \n"
+      }
+    },
+    {
+      "id": "php-heredoc-indented-close",
+      "language": "php",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "<?php\n$a = <<<EOT\n  # not a comment\n  EOT;\n// remove\n",
+      "note": "PHP manual, Strings (Heredoc text): since PHP 7.3 the closing identifier may be indented and may be followed by `;`. Every byte of the body between the header line and that identifier is content.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 43,
+            "end": 52,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "<?php\n$a = <<<EOT\n  # not a comment\n  EOT;\n\n"
+      }
+    },
+    {
+      "id": "php-nowdoc",
+      "language": "php",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "<?php\n$a = <<<'NOW'\n// not a comment {$x}\nNOW;\n// remove\n",
+      "note": "PHP manual, Strings (Nowdoc text): the identifier is quoted with apostrophes and the body is taken verbatim with no interpolation at all, so both the `//` and the `{$x}` are content.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 47,
+            "end": 56,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "<?php\n$a = <<<'NOW'\n// not a comment {$x}\nNOW;\n\n"
+      }
+    },
+    {
+      "id": "php-heredoc-close-followed-by-paren",
+      "language": "php",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "<?php\nf(<<<EOT\nEOTX // not the end\nEOT);\n// remove\n",
+      "note": "PHP manual, Strings (Heredoc text): the closing identifier ends the body only where the byte behind it cannot continue a label, so `EOTX` is body and `EOT)` closes -- which is what lets a heredoc be an argument.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 41,
+            "end": 50,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "<?php\nf(<<<EOT\nEOTX // not the end\nEOT);\n\n"
+      }
+    },
+    {
+      "id": "php-close-tag-inside-string",
+      "language": "php",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "<?php $a = \"?> not html\"; $b = '?>'; // remove\n",
+      "note": "A `?>` between the quotes of either string form is bytes of that string; only one the scanner meets in code leaves PHP mode, so the file never returns to inline HTML here.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 37,
+            "end": 46,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "<?php $a = \"?> not html\"; $b = '?>'; \n"
+      }
+    },
+    {
+      "id": "php-shebang",
+      "language": "php",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "#!/usr/bin/env php\n<?php // remove\n",
+      "note": "The CLI strips a `#!` line from the very first line of a script before the engine sees it, so that line is a required preamble the `safe` policy keeps, while the rest of the file still opens as inline HTML.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 18,
+            "kind": "shebang",
+            "action": "keep"
+          },
+          {
+            "start": 25,
+            "end": 34,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "#!/usr/bin/env php\n<?php \n"
+      }
+    },
+    {
+      "id": "php-phpcs-directive",
+      "language": "php",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "<?php\n// phpcs:ignore Squiz.Commenting.FunctionComment\n// remove\n",
+      "note": "PHP_CodeSniffer reads `phpcs:ignore`, `phpcs:disable`, `phpcs:enable` and `phpcs:ignoreFile` out of a comment, so the whole `phpcs:` namespace is a directive the `safe` policy keeps.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 6,
+            "end": 54,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 55,
+            "end": 64,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "<?php\n// phpcs:ignore Squiz.Commenting.FunctionComment\n\n"
+      }
+    },
+    {
+      "id": "php-phpstan-directive",
+      "language": "php",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "<?php\n// @phpstan-ignore-next-line\n/** @psalm-suppress InvalidReturnType */\n// @codeCoverageIgnoreStart\n// remove\n",
+      "note": "PHPStan, Psalm and PHPUnit each read an annotation out of a PHP comment, and all three are spelled with the `@` that tells them from prose about the tool, so each is a directive the `safe` policy keeps.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 6,
+            "end": 34,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 35,
+            "end": 75,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 76,
+            "end": 103,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 104,
+            "end": 113,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "<?php\n// @phpstan-ignore-next-line\n/** @psalm-suppress InvalidReturnType */\n// @codeCoverageIgnoreStart\n\n"
+      }
+    },
+    {
+      "id": "php-crlf",
+      "language": "php",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "<?php // note\r\n/* multi\r\nline */\r\n$s = <<<EOT\r\n// body\r\nEOT;\r\n?>\r\n<p>x</p>\r\n",
+      "note": "Every construct that runs over a line break reads a CRLF pair as the one line ending it is: the one-line comment stops in front of it, the block comment carries it, the heredoc header and terminator recognise it, and the closing tag takes the pair away as a single break.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 6,
+            "end": 13,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 15,
+            "end": 32,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "<?php \r\n\r\n\r\n$s = <<<EOT\r\n// body\r\nEOT;\r\n?>\r\n<p>x</p>\r\n"
+      }
+    },
+    {
+      "id": "php-unterminated-heredoc",
+      "language": "php",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "<?php\n$a = <<<EOT\n// not a comment\n",
+      "note": "PHP manual, Strings (Heredoc text): a heredoc no line closes runs to the end of the file, so the scan is invalid and nothing is edited -- the `//` inside the body stays a byte of it.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 11,
+            "end": 35
+          }
+        ],
+        "output_utf8": "<?php\n$a = <<<EOT\n// not a comment\n"
+      }
+    },
+    {
+      "id": "php-unterminated-block-comment",
+      "language": "php",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "<?php /* unclosed // not a comment\n",
+      "note": "PHP manual, Comments: a block comment no `*/` ends runs to the end of the file, so the scan is invalid and nothing is edited.",
+      "expect": {
+        "valid": false,
+        "comments": [
+          {
+            "start": 6,
+            "end": 35,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [
+          {
+            "code": "unterminated-comment",
+            "start": 6,
+            "end": 35
+          }
+        ],
+        "output_utf8": "<?php /* unclosed // not a comment\n"
+      }
+    },
+    {
+      "id": "php-columns-layout",
+      "language": "php",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "columns"
+      },
+      "source_utf8": "<?php\n$x = 1; // remove\n",
+      "note": "The `columns` layout pads a removed comment to the display width it had, so the columns of everything after it on the line do not shift.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 14,
+            "end": 23,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "<?php\n$x = 1;          \n"
+      }
+    },
+    {
+      "id": "php-compact-layout",
+      "language": "php",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "compact"
+      },
+      "source_utf8": "<?php\n// alone\n$x = 1;\n",
+      "note": "The `compact` layout drops a line that held nothing but a removed comment, together with the whitespace it left behind.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 6,
+            "end": 14,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "<?php\n$x = 1;\n"
+      }
+    },
+    {
+      "id": "yaml-structural-trail-comment-lines",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "k: |\n  a\n# ends the block\n  # yamllint disable\nz: 1\n",
+      "note": "YAML 1.2.2, 8.1.1 and 8.1.1.1: `# ends the block` is `l-trail-comments` and is what terminates the body, because it is shallower than the content the body detected from `  a`. `safe` keeps the linter directive under it, and that directive is indented to the content depth -- so removing the line above it would hand it back to the scalar and grow the value from `a\\n` to `a\\n# yamllint disable\\n`. No removal preserves the value, so the comment that ends the body is kept and says so.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 9,
+            "end": 25,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 28,
+            "end": 46,
+            "kind": "directive",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "k: |\n  a\n# ends the block\n  # yamllint disable\nz: 1\n"
+      }
+    },
+    {
+      "id": "yaml-structural-trail-comment-columns",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "columns"
+      },
+      "source_utf8": "k: |\n  a\n# ends the block\n  # yamllint disable\nz: 1\n",
+      "note": "YAML 1.2.2, 8.1.1 and 8.1.1.1: `# ends the block` is `l-trail-comments` and is what terminates the body, because it is shallower than the content the body detected from `  a`. `safe` keeps the linter directive under it, and that directive is indented to the content depth -- so removing the line above it would hand it back to the scalar and grow the value from `a\\n` to `a\\n# yamllint disable\\n`. No removal preserves the value, so the comment that ends the body is kept and says so.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 9,
+            "end": 25,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 28,
+            "end": 46,
+            "kind": "directive",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "k: |\n  a\n# ends the block\n  # yamllint disable\nz: 1\n"
+      }
+    },
+    {
+      "id": "yaml-structural-trail-comment-compact",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "compact"
+      },
+      "source_utf8": "k: |\n  a\n# ends the block\n  # yamllint disable\nz: 1\n",
+      "note": "YAML 1.2.2, 8.1.1 and 8.1.1.1: `# ends the block` is `l-trail-comments` and is what terminates the body, because it is shallower than the content the body detected from `  a`. `safe` keeps the linter directive under it, and that directive is indented to the content depth -- so removing the line above it would hand it back to the scalar and grow the value from `a\\n` to `a\\n# yamllint disable\\n`. No removal preserves the value, so the comment that ends the body is kept and says so.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 9,
+            "end": 25,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 28,
+            "end": 46,
+            "kind": "directive",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "k: |\n  a\n# ends the block\n  # yamllint disable\nz: 1\n"
+      }
+    },
+    {
+      "id": "yaml-structural-trail-removable-neighbour-lines",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "k: |\n  a\n# ends the block\n  # ordinary\nz: 1\n",
+      "note": "The same shape with nothing left standing under the body: both comments are ordinary, both go, and each takes its whole line the way every trail removal does (YAML 1.2.2, 8.1.1). The keep in `yaml-structural-trail-comment` is about the survivor below, not about the shape of the trail.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 9,
+            "end": 25,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 28,
+            "end": 38,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "k: |\n  a\nz: 1\n"
+      }
+    },
+    {
+      "id": "yaml-structural-trail-removable-neighbour-columns",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "columns"
+      },
+      "source_utf8": "k: |\n  a\n# ends the block\n  # ordinary\nz: 1\n",
+      "note": "The same shape with nothing left standing under the body: both comments are ordinary, both go, and each takes its whole line the way every trail removal does (YAML 1.2.2, 8.1.1). The keep in `yaml-structural-trail-comment` is about the survivor below, not about the shape of the trail.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 9,
+            "end": 25,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 28,
+            "end": 38,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "k: |\n  a\nz: 1\n"
+      }
+    },
+    {
+      "id": "yaml-structural-trail-removable-neighbour-compact",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "compact"
+      },
+      "source_utf8": "k: |\n  a\n# ends the block\n  # ordinary\nz: 1\n",
+      "note": "The same shape with nothing left standing under the body: both comments are ordinary, both go, and each takes its whole line the way every trail removal does (YAML 1.2.2, 8.1.1). The keep in `yaml-structural-trail-comment` is about the survivor below, not about the shape of the trail.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 9,
+            "end": 25,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 28,
+            "end": 38,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "k: |\n  a\nz: 1\n"
+      }
+    },
+    {
+      "id": "yaml-structural-trail-below-the-content-indent-lines",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "k: |\n    a\n# ends the block\n  # yamllint disable\nz: 1\n",
+      "note": "The body's content is four deep (YAML 1.2.2, 8.1.1.1: detection reads the first non-empty line), so the directive two deep is outside the scalar before the removal and outside it after. The comment above it is ordinary and goes; reading the floor a body line has to clear -- one, the owner's column -- instead of the content depth would keep a comment no value leans on.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 11,
+            "end": 27,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 30,
+            "end": 48,
+            "kind": "directive",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "k: |\n    a\n  # yamllint disable\nz: 1\n"
+      }
+    },
+    {
+      "id": "yaml-structural-trail-below-the-content-indent-columns",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "columns"
+      },
+      "source_utf8": "k: |\n    a\n# ends the block\n  # yamllint disable\nz: 1\n",
+      "note": "The body's content is four deep (YAML 1.2.2, 8.1.1.1: detection reads the first non-empty line), so the directive two deep is outside the scalar before the removal and outside it after. The comment above it is ordinary and goes; reading the floor a body line has to clear -- one, the owner's column -- instead of the content depth would keep a comment no value leans on.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 11,
+            "end": 27,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 30,
+            "end": 48,
+            "kind": "directive",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "k: |\n    a\n  # yamllint disable\nz: 1\n"
+      }
+    },
+    {
+      "id": "yaml-structural-trail-below-the-content-indent-compact",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "compact"
+      },
+      "source_utf8": "k: |\n    a\n# ends the block\n  # yamllint disable\nz: 1\n",
+      "note": "The body's content is four deep (YAML 1.2.2, 8.1.1.1: detection reads the first non-empty line), so the directive two deep is outside the scalar before the removal and outside it after. The comment above it is ordinary and goes; reading the floor a body line has to clear -- one, the owner's column -- instead of the content depth would keep a comment no value leans on.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 11,
+            "end": 27,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 30,
+            "end": 48,
+            "kind": "directive",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "k: |\n    a\n  # yamllint disable\nz: 1\n"
+      }
     }
   ]
 }

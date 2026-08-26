@@ -158,6 +158,48 @@ fn a_toml_lock_file_is_scanned_under_its_reserved_name() {
     assert_eq!(fs::read(&path).unwrap(), b"\nname = \"# opaque\" \n");
 }
 
+/* NOTE: A `.clang-format` file is YAML with no extension for the detector to go
+ * on and a hidden name besides, so naming it is what gets it scanned at all:
+ * the whole name reaches the detector, and an explicitly named path lifts the
+ * hidden-file rule the walk applies on its own. */
+#[test]
+fn a_yaml_configuration_is_scanned_under_its_reserved_name() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join(".clang-format");
+    fs::write(
+        &path,
+        b"# yamllint disable-line rule:line-length\nColumnLimit: 100 # remove\n",
+    )
+    .unwrap();
+
+    let scanned = run(
+        directory.path(),
+        &["scan", ".clang-format", "--format", "json"],
+    );
+    assert_eq!(
+        scanned.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&scanned.stderr)
+    );
+    let document: serde_json::Value = serde_json::from_slice(&scanned.stdout).unwrap();
+    let report = &document["files"][0]["report"];
+    assert_eq!(report["language"], "yaml");
+    assert_eq!(report["comments"].as_array().unwrap().len(), 2);
+
+    let fixed = run(directory.path(), &["fix", ".clang-format"]);
+    assert_eq!(
+        fixed.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&fixed.stderr)
+    );
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        b"# yamllint disable-line rule:line-length\nColumnLimit: 100 \n"
+    );
+}
+
 /* NOTE: A Lua script installed as a command carries no extension at all, so the
  * `#!` line is the only evidence the run has; this is the path from the file
  * name through the detector and out the other side as a Lua scan. */
@@ -193,6 +235,47 @@ fn a_lua_script_is_scanned_from_its_shebang_alone() {
     assert_eq!(
         fs::read(&path).unwrap(),
         b"#!/usr/bin/env lua\nprint(\"-- opaque\") \n"
+    );
+}
+
+/* NOTE: A PHP template is two languages in one file and only the code half is
+ * scanned: the inline HTML around the tags is content, so the `<!-- -->` comment
+ * in it survives a run that removes the `//` comment inside them. */
+#[test]
+fn a_php_template_is_scanned_only_inside_its_tags() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("page.phtml");
+    fs::write(
+        &path,
+        b"<!-- inline html -->\n<?php // remove\necho \"# opaque\";\n?>\n",
+    )
+    .unwrap();
+
+    let scanned = run(
+        directory.path(),
+        &["scan", "page.phtml", "--format", "json"],
+    );
+    assert_eq!(
+        scanned.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&scanned.stderr)
+    );
+    let document: serde_json::Value = serde_json::from_slice(&scanned.stdout).unwrap();
+    let report = &document["files"][0]["report"];
+    assert_eq!(report["language"], "php");
+    assert_eq!(report["comments"].as_array().unwrap().len(), 1);
+
+    let fixed = run(directory.path(), &["fix", "page.phtml"]);
+    assert_eq!(
+        fixed.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&fixed.stderr)
+    );
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        b"<!-- inline html -->\n<?php \necho \"# opaque\";\n?>\n"
     );
 }
 
@@ -5102,6 +5185,47 @@ fn check_explain_says_what_would_remove_a_preamble_or_a_directive() {
             "`check --explain` lacks {needle:?}:\n{report}"
         );
     }
+}
+
+/// The one keep no setting decided and no flag overrules: a YAML block scalar
+/// ends at the comment above the directive it would otherwise swallow. The
+/// explanation names the block scalar and the line that has to go first, and
+/// the run reports nothing removable at all.
+#[test]
+fn check_explain_names_the_block_scalar_a_kept_comment_separates() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join("values.yaml"),
+        b"k: |\n  a\n# ends the block\n  # yamllint disable\nz: 1\n",
+    )
+    .unwrap();
+
+    let output = run(directory.path(), &["check", "--explain"]);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report = String::from_utf8(output.stdout).unwrap();
+    for needle in [
+        "values.yaml:3:1: kept line comment: # ends the block",
+        "kept: it separates a `yaml` block scalar from the kept comment below \
+         it; the comment under it has to go first",
+    ] {
+        assert!(
+            report.contains(needle),
+            "`check --explain` lacks {needle:?}:\n{report}"
+        );
+    }
+    /* NOTE: `all` takes the directive out, and with nothing left standing under
+     * the body the comment above it is ordinary again. */
+    let widened = run(directory.path(), &["check", "--explain", "--policy", "all"]);
+    let widened = String::from_utf8(widened.stdout).unwrap();
+    assert!(
+        widened.contains("values.yaml:3:1: removable line comment"),
+        "`--policy all` still kept it:\n{widened}"
+    );
 }
 
 /// A setting the command line supplied is named as the command line, not as

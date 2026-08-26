@@ -133,3 +133,21 @@ extensions = ["lua", "rockspec"]
 dialects = ["standard"]
 shebangs = ["lua", "luajit"]
 notes = "Lua 5.4 lexical forms"
+
+[[languages]]
+name = "yaml"
+extensions = ["yml", "yaml"]
+dialects = ["standard"]
+reserved_names = [
+    ".clang-format",
+    ".clang-tidy",
+    ".yamllint",
+]
+notes = "YAML 1.2.2 lexical forms"
+
+[[languages]]
+name = "php"
+extensions = ["php", "phtml", "phpt"]
+dialects = ["standard"]
+shebangs = ["php"]
+notes = "PHP 8 lexical forms; the inline HTML around the tags is opaque"

@@ -6,10 +6,17 @@
 //! a branch. The targeted cases then pin which branch each explanation names,
 //! because agreeing on keep-or-remove is worthless if the stated reason is the
 //! wrong one.
+//!
+//! The sweep asks `explain_comment`, not `explain_disposition`: one rule is
+//! decided by where a comment sits rather than by what it says, and the
+//! bytes-only entry point cannot see it. Every other comment gets the same
+//! answer from both, which `the_two_entry_points_agree_away_from_the_one_rule`
+//! is what states.
 
 use ocomment_core::{
     Action, CommentKind, DispositionExplanation, DispositionPatterns, Language, Policy,
-    ScanOptions, explain_disposition, explain_disposition_with, scan,
+    ScanOptions, explain_comment, explain_comment_with, explain_disposition,
+    explain_disposition_with, scan,
 };
 use std::collections::BTreeSet;
 
@@ -35,6 +42,12 @@ fn fixtures() -> Vec<(Language, &'static [u8])> {
         (
             Language::Sql,
             b"/*+ INDEX(t idx) */\n/*!40000 ALTER TABLE t */\n-- ordinary\n".as_slice(),
+        ),
+        /* NOTE: A block scalar leaning on the comment that ends it, which is
+         * the one verdict a comment's own bytes cannot reach. */
+        (
+            Language::Yaml,
+            b"k: |\n  a\n# ends the block\n  # yamllint disable\nz: 1\n".as_slice(),
         ),
     ]
 }
@@ -111,6 +124,13 @@ fn the_precompiled_explanation_equals_the_convenience_wrapper() {
                     comment.kind,
                     String::from_utf8_lossy(raw),
                 );
+                assert_eq!(
+                    explain_comment_with(&patterns, comment, raw, language, &options),
+                    explain_comment(comment, raw, language, &options),
+                    "{language} {} `{}` under {options:?}",
+                    comment.kind,
+                    String::from_utf8_lossy(raw),
+                );
             }
         }
     }
@@ -160,7 +180,7 @@ fn explanations_agree_with_the_scanner_over_the_whole_branch_table() {
             let report = scan(source, language, options.clone());
             for comment in &report.comments {
                 let raw = &source[comment.span.start..comment.span.end];
-                let explanation = explain_disposition(comment.kind, raw, language, &options);
+                let explanation = explain_comment(comment, raw, language, &options);
                 assert_eq!(
                     explanation.action().is_remove(),
                     comment.disposition.is_remove(),
@@ -172,6 +192,77 @@ fn explanations_agree_with_the_scanner_over_the_whole_branch_table() {
             }
         }
     }
+}
+
+/// The bytes-only entry point is the whole answer for every comment but the one
+/// the file around it decided, and this is what says which comments those are.
+#[test]
+fn the_two_entry_points_agree_away_from_the_one_rule() {
+    let mut structural = 0;
+    for options in option_variants() {
+        for (language, source) in fixtures() {
+            let report = scan(source, language, options.clone());
+            for comment in &report.comments {
+                let raw = &source[comment.span.start..comment.span.end];
+                let scanned = explain_comment(comment, raw, language, &options);
+                let bytes_alone = explain_disposition(comment.kind, raw, language, &options);
+                match scanned {
+                    DispositionExplanation::KeptStructural { language: named } => {
+                        structural += 1;
+                        assert_eq!(named, language);
+                        assert_eq!(language, Language::Yaml);
+                        assert!(
+                            bytes_alone.action().is_remove(),
+                            "the bytes alone would have removed it: {bytes_alone}"
+                        );
+                    }
+                    other => assert_eq!(
+                        other,
+                        bytes_alone,
+                        "{language} {} `{}` under {options:?}",
+                        comment.kind,
+                        String::from_utf8_lossy(raw),
+                    ),
+                }
+            }
+        }
+    }
+    assert!(
+        structural > 0,
+        "the fixtures no longer reach the positional rule"
+    );
+}
+
+/// The sentence the new verdict writes, and the fact that no option reaches it:
+/// `all` removes the directive under the comment and the question with it, but
+/// an override that keeps that directive leaves this comment load-bearing.
+#[test]
+fn a_structural_keep_names_the_block_scalar_under_it() {
+    let source = b"k: |\n  a\n# ends the block\n  # KEEPME\nz: 1\n";
+    let options = ScanOptions {
+        policy: Policy::All,
+        keep_regex: vec!["KEEPME".into()],
+        ..Default::default()
+    };
+    let report = scan(source, Language::Yaml, options.clone());
+    let comment = &report.comments[0];
+    let explanation = explain_comment(
+        comment,
+        &source[comment.span.start..comment.span.end],
+        Language::Yaml,
+        &options,
+    );
+    assert_eq!(
+        explanation,
+        DispositionExplanation::KeptStructural {
+            language: Language::Yaml
+        }
+    );
+    assert_eq!(explanation.action(), Action::Keep);
+    let sentence = explanation.to_string();
+    assert!(sentence.starts_with("kept:"), "{sentence}");
+    assert!(sentence.contains("block scalar"), "{sentence}");
+    assert!(sentence.contains("yaml"), "{sentence}");
 }
 
 #[test]

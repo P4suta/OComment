@@ -90,7 +90,10 @@
 //! [`explain_disposition`] answers *why* for one comment, naming the rule that
 //! applied rather than summarising it, so a caller can quote the pattern, kind,
 //! or directive back to a user. [`explain_disposition_with`] takes pattern sets
-//! compiled once for a whole file.
+//! compiled once for a whole file. [`explain_comment`] answers it for a comment
+//! a scan produced, which is the same answer plus the one rule a comment's own
+//! bytes cannot account for: a YAML block scalar leaning on the comment that
+//! ends it keeps that comment because of where it sits.
 //!
 //! # Scanners this crate does not have
 //!
@@ -155,6 +158,9 @@ pub use profile::{
     BlockDelimiter, DeclarativeProfile, LineDelimiter, ProfileError, ProtectedPattern,
     StringDelimiter, scan_profile, transform_profile, validate_profile,
 };
-pub use scanner::{DispositionPatterns, explain_disposition, explain_disposition_with, scan};
+pub use scanner::{
+    DispositionPatterns, explain_comment, explain_comment_with, explain_disposition,
+    explain_disposition_with, scan,
+};
 pub use transform::{apply_edits, transform, transform_spans};
 pub use types::*;

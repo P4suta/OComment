@@ -36,12 +36,13 @@ impl Detection {
 /// on disk would be read as POSIX shell. `luajit` contains `lua` and is listed
 /// before it under the same convention, though that one pair names the same
 /// language whichever of the two is met first.
-const SHEBANGS: [(&str, Language, Dialect); 8] = [
+const SHEBANGS: [(&str, Language, Dialect); 9] = [
     ("python", Language::Python, Dialect::Standard),
     ("bash", Language::Shell, Dialect::Bash53),
     ("zsh", Language::Shell, Dialect::Zsh),
     ("luajit", Language::Lua, Dialect::Standard),
     ("lua", Language::Lua, Dialect::Standard),
+    ("php", Language::Php, Dialect::Standard),
     ("sh", Language::Shell, Dialect::PosixSh),
     ("node", Language::JavaScript, Dialect::Standard),
     ("deno", Language::JavaScript, Dialect::Standard),
@@ -144,6 +145,12 @@ pub fn detect_language(path: Option<&Path>, source: &[u8]) -> Option<Detection> 
             "kt" | "kts" => Some((Language::Kotlin, Dialect::Standard)),
             "toml" => Some((Language::Toml, Dialect::Standard)),
             "lua" | "rockspec" => Some((Language::Lua, Dialect::Standard)),
+            "yml" | "yaml" => Some((Language::Yaml, Dialect::Standard)),
+            /* NOTE: `.php5` and `.inc` are deliberately absent: the first is a
+             * migration-era suffix no supported PHP version installs a handler
+             * for, and the second names a file included by another language
+             * quite as often as by PHP. */
+            "php" | "phtml" | "phpt" => Some((Language::Php, Dialect::Standard)),
             _ => None,
         };
         if let Some((language, dialect)) = by_extension {
@@ -161,6 +168,14 @@ pub fn detect_language(path: Option<&Path>, source: &[u8]) -> Option<Detection> 
              * JSON and is deliberately absent. */
             "cargo.lock" | "pipfile" | "poetry.lock" | "uv.lock" | "pdm.lock" => {
                 Some((Language::Toml, Dialect::Standard))
+            }
+            /* NOTE: YAML owns two extensions, so only the configuration files
+             * written with none at all are named here. `.clang-format` and
+             * `.clang-tidy` are YAML documents that the LLVM tools read, and
+             * `.yamllint` is the linter's own; `.pre-commit-config.yaml` and
+             * `.gitlab-ci.yml` carry an extension and are detected by it. */
+            ".clang-format" | ".clang-tidy" | ".yamllint" => {
+                Some((Language::Yaml, Dialect::Standard))
             }
             _ => None,
         };

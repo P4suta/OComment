@@ -15,14 +15,14 @@ job you have.
 | --- | --- | --- | --- | --- | --- |
 | What it is | A comment checker and remover | A Node.js library and CLI for stripping comments | A Node.js library for stripping comments | A line counter, with a comment-stripping side output | A C preprocessor |
 | Built to | Report, gate, and remove comments under a policy | Strip comments from JavaScript-style source | Strip comments while preserving string literals | Count lines of code | Preprocess C-family translation units |
-| Language coverage | [16 languages and 16 dialects](languages.md), plus declarative profiles and WebAssembly plugins | JavaScript and other C-style syntaxes | JavaScript, JSON, CSS, HTML | Very broad, from its own per-language comment table | C, C++, Objective-C, and their preprocessed inputs |
+| Language coverage | [19 languages and 16 dialects](languages.md), plus declarative profiles and WebAssembly plugins | JavaScript and other C-style syntaxes | JavaScript, JSON, CSS, HTML | Very broad, from its own per-language comment table | C, C++, Objective-C, and their preprocessed inputs |
 | Keeps tool directives by default | Yes — shebangs, encoding preambles, `//go:build`, lint controls, optimiser hints, MySQL versioned comments | Documents an option for keeping `/*!` "protected" comments | Documents an option for keeping `/*!` "protected" comments | Not a stated goal | Not a stated goal |
 | Configurable per path | Yes, `[[overrides]]` globs in `.ocomment.toml` | Through the calling program | Through the calling program | No | No |
 | Check-only mode with a CI exit code | Yes, `ocomment check` | No | No | No | No |
 | Machine-readable report | JSON, JSONL, SARIF, GitHub annotations | No | No | Counts, in several formats | No |
 | Rewrites files in place | Yes, as one rollback-backed transaction | Through the calling program | Through the calling program | Writes a stripped copy of each file | Writes to standard output |
 | Non-UTF-8 input | Scanned and preserved byte for byte | Not stated | Not stated | Not stated | Set by `-finput-charset` |
-| Keeps line numbers | Yes, every layout | Not stated | Not stated | Not stated | Rewrites line structure, and emits line markers |
+| Keeps line numbers | Yes under `lines` and `columns`, but for the one YAML line a block scalar would read back; `compact` gives them up by design | Not stated | Not stated | Not stated | Rewrites line structure, and emits line markers |
 | Editor integration | LSP 3.18 server, VS Code extension | No | No | No | Not applicable |
 | Independent cross-check | An OCaml reference implementation compared on every fixture | — | — | — | — |
 | Installs as | A single static binary, or a crate | An npm package | An npm package | A Perl script or package | Part of a C toolchain |

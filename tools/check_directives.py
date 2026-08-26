@@ -317,6 +317,132 @@ SAMPLES: dict[str, Sample] = {
         f"-- luacov{NEGATIVE_SUFFIX}",
         KEPT_AS_DIRECTIVE,
     ),
+    "yaml-language-server:": Sample(
+        "yaml",
+        None,
+        f"{SLOT}\n# control\n",
+        "# yaml-language-server: $schema=https://example.test/schema.json",
+        # NOTE: The colon is the marker's own boundary, so letters run on past
+        # NOTE: it are still an instruction to the editor's YAML server. What is
+        # NOTE: left to get wrong is the front of it, which is what a comment
+        # NOTE: merely mentioning the server takes away.
+        "# a note about yaml-language-server: $schema",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "yamllint": Sample(
+        "yaml",
+        None,
+        f"{SLOT}\n# control\n",
+        "# yamllint disable-line rule:line-length",
+        f"# yamllint{NEGATIVE_SUFFIX}",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "renovate:": Sample(
+        "yaml",
+        None,
+        f"{SLOT}\n# control\n",
+        "# renovate: datasource=docker depName=alpine",
+        "# a note about renovate: datasource",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "checkov:skip": Sample(
+        "yaml",
+        None,
+        f"{SLOT}\n# control\n",
+        "# checkov:skip=CKV_AWS_20:public by design",
+        # NOTE: Checkov writes the rule straight after the `=`, so the marker
+        # NOTE: carries its own boundary and what is left to get wrong is again
+        # NOTE: whether it opens the comment.
+        "# a note about checkov:skip=CKV_AWS_20",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "trivy:ignore": Sample(
+        "yaml",
+        None,
+        f"{SLOT}\n# control\n",
+        "# trivy:ignore:AVD-AWS-0089",
+        "# a note about trivy:ignore:AVD-AWS-0089",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "nosec": Sample(
+        "yaml",
+        None,
+        f"{SLOT}\n# control\n",
+        "# nosec",
+        f"# nosec{NEGATIVE_SUFFIX}",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "kics-scan": Sample(
+        "yaml",
+        None,
+        f"{SLOT}\n# control\n",
+        "# kics-scan ignore-line",
+        f"# kics-scan{NEGATIVE_SUFFIX}",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "phpcs:": Sample(
+        "php",
+        None,
+        f"<?php\n{SLOT}\n// control\n",
+        "// phpcs:ignore Squiz.Commenting.FunctionComment",
+        # NOTE: The colon is the marker's own boundary and the whole namespace
+        # NOTE: is addressed with it -- `ignore`, `disable`, `enable`,
+        # NOTE: `ignoreFile` -- so what is left to get wrong is the front of it,
+        # NOTE: which is what running letters on past `phpcs` takes away.
+        f"// phpcs{NEGATIVE_SUFFIX}",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "@phpstan-ignore": Sample(
+        "php",
+        None,
+        f"<?php\n{SLOT}\n// control\n",
+        "// @phpstan-ignore-next-line",
+        # NOTE: `@phpstan-ignore` is a namespace: `-line`, `-next-line`, and the
+        # NOTE: bare form with an identifier behind it are all spelled by
+        # NOTE: running letters on past it, so protecting `@phpstan-ignoreish`
+        # NOTE: is right. What the marker still promises is the `@` and that it
+        # NOTE: opens the comment, so the near-miss mentions it instead.
+        "// a note about @phpstan-ignore-next-line",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "@psalm-suppress": Sample(
+        "php",
+        None,
+        f"<?php\n{SLOT}\n// control\n",
+        "/** @psalm-suppress InvalidReturnType */",
+        # NOTE: Psalm writes the issue it silences after whitespace, so the
+        # NOTE: marker ends at a boundary and prose that runs letters on past it
+        # NOTE: is a note about the checker rather than an instruction to it.
+        # NOTE: The near-miss drops one star, because a documentation comment is
+        # NOTE: kept by this repository's own configuration for a reason that has
+        # NOTE: nothing to do with the marker under test.
+        f"/* @psalm-suppress{NEGATIVE_SUFFIX} */",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "@codeCoverageIgnore": Sample(
+        "php",
+        None,
+        f"<?php\n{SLOT}\n// control\n",
+        "// @codeCoverageIgnoreStart",
+        # NOTE: The three forms PHPUnit reads differ only in what runs on past
+        # NOTE: the marker -- nothing, `Start`, `End` -- so a suffix is still the
+        # NOTE: shape of one and the near-miss is again the comment that talks
+        # NOTE: about the annotation instead of being it.
+        "// a note about @codeCoverageIgnoreStart",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "@schema": Sample(
+        "yaml",
+        None,
+        f"{SLOT}\n# control\n",
+        "# @schema type: string",
+        # NOTE: The `@` is what tells the annotation from prose: `schema` on its
+        # NOTE: own is a word any comment about a schema opens with, so the
+        # NOTE: near-miss is the comment that mentions the annotation instead of
+        # NOTE: being one.
+        "# a note about @schema type",
+        KEPT_AS_DIRECTIVE,
+    ),
 }
 
 

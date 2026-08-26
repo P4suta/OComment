@@ -4,6 +4,7 @@ use crate::{
 };
 use memchr::{memchr, memchr2, memchr3, memmem};
 use regex::bytes::RegexSet;
+use std::cmp::Ordering;
 
 /// Find every comment in `source` and decide what happens to each.
 ///
@@ -92,6 +93,8 @@ fn scan_internal(
         Language::Sql => scanner.scan_sql(),
         Language::Toml => scanner.scan_toml(),
         Language::Lua => scanner.scan_lua(),
+        Language::Yaml => scanner.scan_yaml(),
+        Language::Php => scanner.scan_php(),
         Language::Unknown => scanner.error(
             "unknown-language",
             "a language is required",
@@ -131,6 +134,10 @@ struct Scanner<'a> {
     stop: Option<usize>,
     stopped: bool,
     restart_rules: RestartRules,
+    /// Every YAML block scalar the scan walked over, in source order. Empty
+    /// for every other language, and for the YAML documents — nearly all of
+    /// them — that hold no block scalar at all.
+    yaml_blocks: Vec<YamlBlockScalar>,
 }
 
 impl<'a> Scanner<'a> {
@@ -161,6 +168,7 @@ impl<'a> Scanner<'a> {
             stop,
             stopped: false,
             restart_rules: RestartRules::of(source, language),
+            yaml_blocks: Vec::new(),
         };
         if let Some(error) = pattern_error {
             scanner.error(
@@ -188,6 +196,7 @@ impl<'a> Scanner<'a> {
             stop: None,
             stopped: false,
             restart_rules: RestartRules::of(source, language),
+            yaml_blocks: Vec::new(),
         }
     }
 
@@ -229,8 +238,13 @@ impl<'a> Scanner<'a> {
     /// construction — its source starts mid-document, so the offset-sensitive
     /// rules cannot fire for it, and the engine validates the offset it
     /// restarts *from* against the whole edited document instead.
+    ///
+    /// The block scalar rule is asked of a suffix scan as well, because it is
+    /// not about where the offset sits in a document: it is about what the
+    /// bytes it is being asked of hold, and the suffix holds its own.
     fn checkpoint_is_restartable(&self, local: usize) -> bool {
-        self.offset > 0 || self.restart_rules.permit_restart_at(self.source, local)
+        local <= self.restart_rules.first_block_scalar
+            && (self.offset > 0 || self.restart_rules.permit_restart_at(self.source, local))
     }
 
     fn add_safe_checkpoint(&mut self, local: usize) {
@@ -407,7 +421,14 @@ impl<'a> Scanner<'a> {
                 }
             }
             Language::Jsonc => {
-                if bytes[index] == b'"' {
+                /* NOTE: JSON5 4.4 writes a string with either quote, and this
+                 * language is `JSON with comments, including JSON5` — it owns
+                 * `.json5` as well as `.jsonc`. An apostrophe is already
+                 * invalid in the stricter dialect, so reading one as a string
+                 * only hides a `//` that the dialect could not have meant as a
+                 * comment. Both quotes report the one construct a reader
+                 * recognises, a JSON string. */
+                if matches!(bytes[index], b'"' | b'\'') {
                     return Some(self.quoted_or_error(index, false, "JSON string"));
                 }
             }
@@ -972,12 +993,15 @@ impl<'a> Scanner<'a> {
         /* NOTE: The loader skips a first line that opens with `#` before it lexes
          * anything (`lauxlib.c`, `skipcomment`), which is what lets a chunk
          * carry a `#!` line. It is that one byte at that one offset: `#` is the
-         * length operator everywhere else. The `self.offset` test is what keeps
-         * a suffix scan out of the rule, and no checkpoint of a full scan falls
-         * inside the first line, so the two answers cannot disagree. */
-        if self.offset == 0 && bytes.first() == Some(&b'#') {
-            let end = line_end(bytes, 1);
-            self.add_comment(0, end, CommentKind::Line);
+         * length operator everywhere else. `skipcomment` calls `skipBOM` first,
+         * so the offset is behind a UTF-8 byte order mark when the file carries
+         * one. The `self.offset` test is what keeps a suffix scan out of the
+         * rule, and no checkpoint of a full scan falls inside the first line, so
+         * the two answers cannot disagree. */
+        let preamble = byte_order_mark_width(bytes);
+        if self.offset == 0 && bytes.get(preamble) == Some(&b'#') {
+            let end = line_end(bytes, preamble + 1);
+            self.add_comment(preamble, end, CommentKind::Line);
             index = end;
         }
         while index < bytes.len() && !self.stopped {
@@ -1085,6 +1109,445 @@ impl<'a> Scanner<'a> {
             ByteSpan::new(start, index),
         );
         index
+    }
+
+    /// One YAML stream (YAML 1.2.2 specification).
+    ///
+    /// The scanner is line-local but for one answer: `#` opens a comment only
+    /// where white space separates it from the token in front of it (6.6), the
+    /// two quoted styles (7.3.1, 7.3.2) may run over a line break and carry
+    /// every `#` inside them as content, and a block scalar (8.1) swallows
+    /// every following line that is more indented than the node it hangs off.
+    /// That last depth is the exception: a `|` may sit on the line under the
+    /// `key:` or the `-` that owns it, or behind node properties (6.9), so the
+    /// owner's indentation is carried across the line break rather than read
+    /// off the header's own column.
+    ///
+    /// That is what makes the start of a line a restart point — but only a
+    /// line outside a quoted scalar, outside a block scalar body, and with no
+    /// owner carried into it, because in each of those the same bytes mean
+    /// something else. None of the three emits a checkpoint: a quoted scalar
+    /// consumes its line breaks without offering one, the body of a block
+    /// scalar is consumed by [`yaml_block_body_end`], which reports where it
+    /// ended and whether that offset is the start of a line at all, and a line
+    /// under a live carry is skipped outright. Where a body ends is decided by
+    /// the lines *below* it, which an edit can move, so
+    /// [`first_yaml_block_scalar`] withdraws every checkpoint past the first
+    /// header a document opens: what this function offers is what those rules
+    /// then hold it to.
+    ///
+    /// `valid` is a lexical answer here and nothing more. YAML has shapes a
+    /// lexer cannot rule out and a parser rejects, and removing a comment can
+    /// walk a file from one to the other: a comment line inside a multi-line
+    /// plain scalar is a parse error while it is there, and taking it away
+    /// leaves a scalar that parses and folds the two halves into one value.
+    /// A comment line under a block scalar body is the same hazard read the
+    /// other way — see [`lines_a_removal_must_swallow`], which is what stops
+    /// the hole a removal leaves from being read back as content of the body
+    /// above it. Every block scalar this walks over is recorded in
+    /// [`Self::yaml_blocks`] for exactly that question.
+    fn scan_yaml(&mut self) {
+        let bytes = self.source;
+        let mut index = 0;
+        let mut line_start = 0;
+        /* INVARIANT: `separated` is whether a `#` at `index` would be separated from
+         * what precedes it, which is the whole of the comment rule; `node_start`
+         * is whether a node may begin here, which is what tells the block scalar
+         * indicator `key: >` from the `>` inside the plain scalar `key: a > b`;
+         * `token_column` is where the token being read began, so that a `: `
+         * behind it can name the column the value hangs off; and `owner_column`
+         * is that column once one is known. The first three are reset by the
+         * line break; `owner_column` survives it while the node it names is
+         * still owed one, which is the only state a restart at a line start
+         * cannot reproduce — so no checkpoint is offered while it is set. */
+        let mut separated = true;
+        let mut node_start = true;
+        let mut token_column = None;
+        let mut owner_column = None;
+        while index < bytes.len() && !self.stopped {
+            match bytes[index] {
+                b'#' if separated => {
+                    let end = line_end(bytes, index + 1);
+                    self.add_comment(index, end, CommentKind::Line);
+                    index = end;
+                }
+                b'\r' | b'\n' => {
+                    index = consume_newline(bytes, index);
+                    line_start = index;
+                    separated = true;
+                    /* NOTE: A line that ends while a node is still owed — `key:`,
+                     * a bare `-`, a property whose node has not come yet, and
+                     * the blank and comment lines a separation may hold (6.9,
+                     * 8.2.2) — hands the owner's indentation to the line below,
+                     * because the `|` of the block scalar it introduces may be
+                     * down there. A line that put a node on itself hands over
+                     * nothing. */
+                    if !node_start {
+                        owner_column = None;
+                    }
+                    node_start = true;
+                    token_column = None;
+                    if owner_column.is_none() {
+                        self.add_safe_checkpoint(index);
+                    }
+                }
+                b' ' | b'\t' => {
+                    index += 1;
+                    separated = true;
+                }
+                b'|' | b'>'
+                    if node_start && separated && yaml_block_header(bytes, index).is_some() =>
+                {
+                    let (indicator, chomping, comment, header_end) =
+                        yaml_block_header(bytes, index).expect("the guard read the header");
+                    if let Some(start) = comment {
+                        self.add_comment(start, header_end, CommentKind::Line);
+                    }
+                    /* NOTE: The body is indented past the node the scalar hangs off
+                     * (8.1.1.1). For `key: |` that node is the mapping, whose
+                     * indentation is the column of the key; for `- |` it is the
+                     * sequence, whose indentation is the column of the `-`. The
+                     * header itself may sit anywhere past that owner — on a
+                     * line of its own, or behind an anchor or a tag — so its
+                     * own column says nothing about how deep a body line has to
+                     * be, and reading it as the floor would take a body
+                     * indented less than the header for the end of the scalar
+                     * and its `#` lines for comments. With no owner at all the
+                     * scalar is the whole document, whose indentation is one
+                     * short of column zero, which leaves every line under it
+                     * body. An explicit indentation indicator counts from that
+                     * same owner, which is why it replaces the detected depth
+                     * rather than adding to it. Detection proper reads the
+                     * first non-empty line instead, and a line shallower than
+                     * that but still past the owner is content of neither
+                     * reading; taking it for body is the one that leaves bytes
+                     * alone. */
+                    let base = owner_column.map_or(0, |column| column + 1);
+                    let floor = base + indicator.unwrap_or(1) - 1;
+                    let (end, boundary, detected) = yaml_block_body_end(bytes, header_end, floor);
+                    /* NOTE: Where this body stopped, on what terms it keeps its
+                     * trailing empty lines, and how deep its content is are the
+                     * whole of what `lines_a_removal_must_swallow` and
+                     * `yaml_structural_trail_keeps` need from a scan: the lines
+                     * under a body are the only place in YAML where the hole a
+                     * removal leaves carries meaning. Recorded here rather than
+                     * re-derived, because only the scan knows the column of the
+                     * node the header hangs off. An explicit indicator *is* the
+                     * content depth (8.1.1.1); without one the depth is
+                     * detected from the first non-empty line, and a body with
+                     * no non-empty line at all has none to detect, so the floor
+                     * stands in for it — which is the depth the next line the
+                     * scalar could take would set. */
+                    self.yaml_blocks.push(YamlBlockScalar {
+                        body_end: end + self.offset,
+                        content_indent: indicator.map_or(detected, |_| floor),
+                        chomping,
+                    });
+                    index = end;
+                    line_start = index;
+                    separated = true;
+                    node_start = true;
+                    token_column = None;
+                    owner_column = None;
+                    if boundary {
+                        self.add_safe_checkpoint(index);
+                    }
+                }
+                /* NOTE: An anchor `&name` and a tag `!tag` are node properties
+                 * (6.9): they stand in front of the node they decorate rather
+                 * than being one, so a node may still begin after them. That is
+                 * what leaves the `|` of `key: !!str |` a block scalar header
+                 * instead of a byte of a plain scalar. A property belongs to
+                 * the node it decorates, so it is that node's first token and
+                 * names the column a `: ` behind it hangs off. */
+                b'!' | b'&' if node_start && separated => {
+                    if token_column.is_none() {
+                        token_column = Some(index - line_start);
+                    }
+                    index = yaml_property_end(bytes, index);
+                    separated = false;
+                }
+                b'"' | b'\'' if separated || yaml_flow_opener(bytes, index) => {
+                    if node_start && token_column.is_none() {
+                        token_column = Some(index - line_start);
+                    }
+                    index = self.scan_yaml_quoted(index);
+                    separated = false;
+                    node_start = false;
+                }
+                /* NOTE: `-` is a sequence entry and `?` an explicit key only when
+                 * white space or the line ends them (6.9 and 8.2): `-x` is a
+                 * plain scalar, and so is `?x`. Either leaves the position a
+                 * node may begin at, one column further in. */
+                b'-' | b'?'
+                    if node_start
+                        && bytes
+                            .get(index + 1)
+                            .is_none_or(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n')) =>
+                {
+                    owner_column = Some(index - line_start);
+                    token_column = None;
+                    index += 1;
+                    separated = false;
+                }
+                /* NOTE: A `:` ends a key only where white space or the line follows
+                 * it (7.2), which is what leaves the `:` of `http://x` inside
+                 * the plain scalar it belongs to. */
+                b':' if bytes
+                    .get(index + 1)
+                    .is_none_or(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n')) =>
+                {
+                    owner_column = token_column.or(owner_column);
+                    token_column = None;
+                    node_start = true;
+                    index += 1;
+                    separated = false;
+                }
+                _ => {
+                    if node_start {
+                        if token_column.is_none() {
+                            token_column = Some(index - line_start);
+                        }
+                        node_start = false;
+                    }
+                    index += 1;
+                    separated = false;
+                }
+            }
+        }
+        /* NOTE: One rule needs the whole file rather than the byte in front of
+         * it, so it runs once the trails are all there to read: a comment that
+         * is the only thing holding a block scalar out of the kept comment
+         * under it is not commentary and is kept. A scan that stopped early is
+         * a partial answer the incremental engine completes from the previous
+         * revision's tail, and the trail it would read is truncated, so it is
+         * left alone — no checkpoint a YAML scan offers sits past the first
+         * block scalar, which is what leaves the tail's own answer intact. */
+        if !self.stopped && !self.yaml_blocks.is_empty() {
+            let keeps = yaml_structural_trail_keeps(
+                self.source,
+                self.offset,
+                &self.yaml_blocks,
+                &self.comments,
+            );
+            for index in keeps {
+                self.comments[index].disposition = Disposition::Keep {
+                    reason: YAML_STRUCTURAL_TRAIL.to_owned(),
+                };
+            }
+        }
+    }
+
+    /// One quoted scalar beginning at its own quote.
+    ///
+    /// A double-quoted scalar takes `\` escapes (YAML 1.2.2, 7.3.1) and a
+    /// single-quoted one takes none, where `''` is the one way to write a
+    /// quote of its own (7.3.2), so a backslash inside the second is a byte of
+    /// it. Both fold over a line break, which makes the end of the file the
+    /// only thing that leaves one unterminated.
+    fn scan_yaml_quoted(&mut self, start: usize) -> usize {
+        let bytes = self.source;
+        let quote = bytes[start];
+        let mut index = start + 1;
+        while index < bytes.len() {
+            if quote == b'"' && bytes[index] == b'\\' {
+                index = (index + 2).min(bytes.len());
+            } else if bytes[index] != quote {
+                index += 1;
+            } else if quote == b'\'' && bytes.get(index + 1) == Some(&b'\'') {
+                index += 2;
+            } else {
+                return index + 1;
+            }
+        }
+        self.error(
+            "unterminated-string",
+            if quote == b'"' {
+                "unterminated YAML double-quoted scalar"
+            } else {
+                "unterminated YAML single-quoted scalar"
+            },
+            ByteSpan::new(start, index),
+        );
+        index
+    }
+
+    /// One PHP file (PHP manual, Language Reference: Basic syntax, Comments,
+    /// Strings, and Heredoc text).
+    ///
+    /// A PHP file is two languages at once. It opens in inline-HTML mode,
+    /// where every byte is output verbatim and nothing is a comment; `<?php`
+    /// with white space or the end of the file behind it, and the short echo
+    /// tag `<?=`, enter PHP mode, and `?>` returns to inline HTML. With the
+    /// default `short_open_tag=Off` a bare `<?` opens nothing at all, which is
+    /// what leaves an XML declaration inline text.
+    ///
+    /// Inline HTML is opaque in v1: an HTML `<!-- ... -->` comment in a PHP
+    /// file is not reported. Reading it would mean scanning the inline halves
+    /// as HTML, which is a change of what the language *is* rather than a
+    /// missing arm here, so v1 leaves those bytes alone — the direction that
+    /// can only keep a comment, never remove one.
+    ///
+    /// Which mode a byte sits in is decided entirely by the bytes in front of
+    /// it, and no lexical state PHP opens is ended by anything except its own
+    /// closer, so a restart in inline HTML reproduces the rest of a full scan.
+    /// That is the only place a checkpoint is offered: a line break met in PHP
+    /// mode is not a restart point, because the same line at the same offset
+    /// means something else with an unclosed `<?php` above it. A file that is
+    /// all PHP therefore rescans from the top.
+    fn scan_php(&mut self) {
+        let bytes = self.source;
+        let mut index = 0;
+        /* NOTE: The CLI strips a `#!` line from the first line of a script before
+         * the engine sees it (`php_cli.c`, which tests the first two bytes), so
+         * that line is a preamble rather than the inline HTML the rest of the
+         * file opens as. Unlike CPython and Lua, PHP skips no byte order mark
+         * first, and neither does the kernel, so a mark in front of the `#!`
+         * leaves it ordinary inline HTML — the same reason a shell script has.
+         * The `self.offset` test is what keeps a suffix scan out of the rule,
+         * and no checkpoint of a full scan falls inside the first line, so the
+         * two answers cannot disagree. */
+        if self.offset == 0 && starts(bytes, 0, b"#!") {
+            let end = line_end(bytes, 2);
+            self.add_comment(0, end, CommentKind::Line);
+            index = end;
+        }
+        while index < bytes.len() && !self.stopped {
+            match bytes[index] {
+                b'<' => match php_open_tag(bytes, index) {
+                    Some(code) => index = self.scan_php_code(code),
+                    None => index += 1,
+                },
+                b'\r' | b'\n' => {
+                    index = consume_newline(bytes, index);
+                    self.add_safe_checkpoint(index);
+                }
+                _ => index += 1,
+            }
+        }
+    }
+
+    /// PHP mode, from the byte after the opening tag that entered it.
+    ///
+    /// Returns where inline HTML resumes: past a `?>` and the one line break
+    /// it carries away with it, or the end of the file.
+    fn scan_php_code(&mut self, mut index: usize) -> usize {
+        let bytes = self.source;
+        while index < bytes.len() {
+            match bytes[index] {
+                b'?' if starts(bytes, index, b"?>") => {
+                    let end = index + 2;
+                    /* NOTE: The closing tag token carries one line break with it
+                     * (`zend_language_scanner.l`: `"?>"{NEWLINE}?`), which is
+                     * what keeps a template from emitting a blank line for
+                     * every block of code it holds. A CRLF pair is that one
+                     * break. The byte after it starts a line of inline HTML,
+                     * so it is a restart point like any other line start. */
+                    if matches!(bytes.get(end), Some(b'\r' | b'\n')) {
+                        let next = consume_newline(bytes, end);
+                        self.add_safe_checkpoint(next);
+                        return next;
+                    }
+                    return end;
+                }
+                b'/' if starts(bytes, index, b"//") => {
+                    let end = php_line_comment_end(bytes, index + 2);
+                    self.add_comment(index, end, CommentKind::Line);
+                    index = end;
+                }
+                b'/' if starts(bytes, index, b"/*") => {
+                    let (end, closed) = block_end(bytes, index, b"/*", b"*/", false);
+                    self.add_comment(index, end, php_block_kind(bytes, index));
+                    if !closed {
+                        self.error(
+                            "unterminated-comment",
+                            "unterminated PHP block comment",
+                            ByteSpan::new(index, end),
+                        );
+                    }
+                    index = end;
+                }
+                /* NOTE: PHP 8.0 gave `#[` to attributes (Attributes, Attribute
+                 * syntax), so a `#` with a bracket behind it opens no comment
+                 * and what follows is ordinary code. */
+                b'#' if bytes.get(index + 1) == Some(&b'[') => index += 1,
+                b'#' => {
+                    let end = php_line_comment_end(bytes, index + 1);
+                    self.add_comment(index, end, CommentKind::Line);
+                    index = end;
+                }
+                b'\'' | b'"' | b'`' => index = self.scan_php_quoted(index),
+                b'<' if starts(bytes, index, b"<<<") => index = self.scan_php_heredoc(index),
+                _ => index += 1,
+            }
+        }
+        index
+    }
+
+    /// One PHP string beginning at its delimiter: `'`, `"`, or the backtick of
+    /// the execution operator.
+    ///
+    /// A single-quoted string escapes only `\'` and `\\`, and every other
+    /// backslash is a byte of it — but the byte after a backslash can never be
+    /// the closing quote unless the pair *is* the `\'` escape, so skipping two
+    /// finds the same closer either way. A double-quoted or backtick string
+    /// takes the full escape set and interpolates: `{$...}` and `${...}` hold
+    /// an expression, which [`php_interpolation_end`] skips by balancing
+    /// braces, so a comment written inside one stays content. None of the
+    /// three ends at a line break, so only the end of the file leaves one
+    /// unterminated.
+    fn scan_php_quoted(&mut self, start: usize) -> usize {
+        let bytes = self.source;
+        let quote = bytes[start];
+        let interpolates = quote != b'\'';
+        let mut index = start + 1;
+        while index < bytes.len() {
+            if bytes[index] == b'\\' {
+                index = (index + 2).min(bytes.len());
+            } else if bytes[index] == quote {
+                return index + 1;
+            } else if interpolates && bytes[index] == b'{' && bytes.get(index + 1) == Some(&b'$') {
+                index = php_interpolation_end(bytes, index);
+            } else if interpolates && bytes[index] == b'$' && bytes.get(index + 1) == Some(&b'{') {
+                index = php_interpolation_end(bytes, index + 1);
+            } else {
+                index += 1;
+            }
+        }
+        self.error(
+            "unterminated-string",
+            match quote {
+                b'\'' => "unterminated PHP single-quoted string",
+                b'"' => "unterminated PHP double-quoted string",
+                _ => "unterminated PHP backtick string",
+            },
+            ByteSpan::new(start, index),
+        );
+        index
+    }
+
+    /// One heredoc or nowdoc beginning at its `<<<`, or `start + 1` when those
+    /// three bytes head no header at all — `$a <<< 1` is two shift operators
+    /// and a number, and the conservative reading of anything the header
+    /// grammar refuses is that it opened nothing.
+    fn scan_php_heredoc(&mut self, start: usize) -> usize {
+        let bytes = self.source;
+        let Some((label, body, nowdoc)) = php_heredoc_header(bytes, start) else {
+            return start + 1;
+        };
+        if let Some(end) = php_heredoc_end(bytes, body, label) {
+            return end;
+        }
+        self.error(
+            "unterminated-string",
+            if nowdoc {
+                "unterminated PHP nowdoc"
+            } else {
+                "unterminated PHP heredoc"
+            },
+            ByteSpan::new(start, bytes.len()),
+        );
+        bytes.len()
     }
 
     fn scan_shell(&mut self) {
@@ -1685,7 +2148,7 @@ impl<'a> Scanner<'a> {
                         self.add_safe_checkpoint(index);
                     }
                 }
-                byte if byte.is_ascii_whitespace() => index += 1,
+                byte if js_is_space(byte) => index += 1,
                 b'=' if bytes.get(index + 1) == Some(&b'>') => {
                     index += 2;
                     regex_allowed = true;
@@ -1779,7 +2242,7 @@ impl<'a> Scanner<'a> {
                     }
                     b'>' => {
                         let mut previous = cursor;
-                        while previous > index && bytes[previous - 1].is_ascii_whitespace() {
+                        while previous > index && js_is_space(bytes[previous - 1]) {
                             previous -= 1;
                         }
                         self_closing = previous > index && bytes[previous - 1] == b'/';
@@ -2122,6 +2585,65 @@ pub fn explain_disposition_with(
     DispositionExplanation::RemovedByDefault(options.policy)
 }
 
+/// Name the rule that decided the fate of a comment a scan actually found.
+///
+/// [`explain_disposition`] accounts for every rule a comment's own bytes can
+/// trigger. One rule is not one of those: a YAML block scalar leaning on the
+/// comment that ends it keeps that comment because of where it sits, and no
+/// amount of reading its bytes could say so. This is that answer, and for every
+/// other comment it is exactly [`explain_disposition`].
+///
+/// `comment` must be one the scan of `raw`'s file produced, and `raw` its
+/// complete bytes as [`Comment::span`](crate::Comment::span) delimits them.
+///
+/// # Examples
+///
+/// ```
+/// use ocomment_core::{
+///     Action, DispositionExplanation, Language, ScanOptions, explain_comment, scan,
+/// };
+///
+/// let source = b"k: |\n  a\n# ends the block\n  # yamllint disable\nz: 1\n";
+/// let report = scan(source, Language::Yaml, ScanOptions::default());
+/// let comment = &report.comments[0];
+/// let why = explain_comment(
+///     comment,
+///     &source[comment.span.start..comment.span.end],
+///     Language::Yaml,
+///     &ScanOptions::default(),
+/// );
+/// assert_eq!(why.action(), Action::Keep);
+/// assert!(matches!(
+///     why,
+///     DispositionExplanation::KeptStructural { language: Language::Yaml }
+/// ));
+/// ```
+pub fn explain_comment(
+    comment: &Comment,
+    raw: &[u8],
+    language: Language,
+    options: &ScanOptions,
+) -> DispositionExplanation {
+    let patterns =
+        DispositionPatterns::compile(options).unwrap_or_else(|_| DispositionPatterns::empty());
+    explain_comment_with(&patterns, comment, raw, language, options)
+}
+
+/// The same answer, against pattern sets the caller already compiled, as
+/// [`explain_disposition_with`] is to [`explain_disposition`].
+pub fn explain_comment_with(
+    patterns: &DispositionPatterns,
+    comment: &Comment,
+    raw: &[u8],
+    language: Language,
+    options: &ScanOptions,
+) -> DispositionExplanation {
+    if is_yaml_structural_trail(&comment.disposition) {
+        return DispositionExplanation::KeptStructural { language };
+    }
+    explain_disposition_with(patterns, comment.kind, raw, language, options)
+}
+
 fn java_text_block_end(source: &[u8], start: usize) -> (usize, bool) {
     let mut index = start.saturating_add(3);
     while index + 2 < source.len() {
@@ -2141,6 +2663,21 @@ fn java_text_block_end(source: &[u8], start: usize) -> (usize, bool) {
     (source.len(), false)
 }
 
+/// How many bytes of UTF-8 byte order mark `source` opens with: three, or none.
+///
+/// A BOM is consumed before the first line is read — CPython's `check_bom`,
+/// Lua's `skipBOM` — so the line behind one is still the first line, and a
+/// preamble rule that asked for byte 0 alone would miss it. The bytes stay
+/// where they are; only the question `is this the first line?` skips them.
+/// [`is_python_encoding_declaration`] has always skipped the same three.
+fn byte_order_mark_width(source: &[u8]) -> usize {
+    if source.starts_with(b"\xef\xbb\xbf") {
+        3
+    } else {
+        0
+    }
+}
+
 fn classify_comment(
     source: &[u8],
     language: Language,
@@ -2153,7 +2690,7 @@ fn classify_comment(
     let body = strip_comment_markers(raw);
     let lower = String::from_utf8_lossy(body).to_ascii_lowercase();
     let trimmed = lower.trim();
-    if offset == 0 && start == 0 && raw.starts_with(b"#!") {
+    if offset == 0 && start == byte_order_mark_width(source) && raw.starts_with(b"#!") {
         return CommentKind::Shebang;
     }
     if offset == 0
@@ -2183,6 +2720,42 @@ fn classify_comment(
 /// document offers no restart point beyond offset 0.
 fn line_splicing_permits_restarts(source: &[u8], language: Language) -> bool {
     !matches!(language, Language::C | Language::Cpp) || !contains_line_splice(source)
+}
+
+/// The offset of the first byte in `source` that could head a YAML block
+/// scalar, or [`usize::MAX`] when there is none — and for every other language,
+/// which has no such construct.
+///
+/// This is the one lexical state whose *end* is decided by the bytes that come
+/// after it: a body runs while the lines below stay indented past the node it
+/// hangs off, so an edit that indents the line under a body, or appends one to
+/// a document that ended with it, swallows an offset a previous revision
+/// recorded as a line start. Restarting there would read the content of a
+/// scalar as YAML and remove a `#` that is one of its bytes. No body can begin
+/// before its own header, so every line start up to the first one is safe from
+/// that whatever an edit does below it — and past it, nothing is.
+///
+/// The test is deliberately looser than [`Scanner::scan_yaml`]'s: any `|` or
+/// `>` with the shape of a header counts, whether or not a node may begin
+/// there. Refusing a restart costs a rescan; permitting a wrong one loses a
+/// user's bytes.
+///
+/// One pass, not one per candidate: [`yaml_block_header`] reads the comment on
+/// a header line to its end, but a comment is enough to make the bytes a
+/// header, so that read happens at most once before this returns.
+fn first_yaml_block_scalar(source: &[u8], language: Language) -> usize {
+    if language != Language::Yaml {
+        return usize::MAX;
+    }
+    let mut index = 0;
+    while let Some(relative) = memchr2(b'|', b'>', &source[index..]) {
+        let candidate = index + relative;
+        if yaml_block_header(source, candidate).is_some() {
+            return candidate;
+        }
+        index = candidate + 1;
+    }
+    usize::MAX
 }
 
 /// A checkpoint sits immediately after a line terminator, and a CRLF pair is a
@@ -2220,6 +2793,7 @@ fn the_preamble_permits_a_restart(source: &[u8], language: Language, offset: usi
 pub(crate) struct RestartRules {
     language: Language,
     splicing_permits_restarts: bool,
+    first_block_scalar: usize,
 }
 
 impl RestartRules {
@@ -2227,6 +2801,7 @@ impl RestartRules {
         Self {
             language,
             splicing_permits_restarts: line_splicing_permits_restarts(source, language),
+            first_block_scalar: first_yaml_block_scalar(source, language),
         }
     }
 
@@ -2234,6 +2809,7 @@ impl RestartRules {
     /// from — at `offset` reproduces the rest of a full scan of it.
     pub(crate) fn permit_restart_at(&self, source: &[u8], offset: usize) -> bool {
         self.splicing_permits_restarts
+            && offset <= self.first_block_scalar
             && the_line_ending_permits_a_restart(source, offset)
             && the_preamble_permits_a_restart(source, self.language, offset)
     }
@@ -2466,6 +3042,51 @@ fn directive_name(text: &str, language: Language, raw: &[u8]) -> Option<&'static
                 .into_iter()
                 .find(|prefix| compact.starts_with(prefix))
         }
+        /* NOTE: `@schema` is asked of `text` rather than of `compact`, because
+         * `compact` is what takes the `@` off: the annotation the Helm schema
+         * generator reads is spelled with it, and `schema` on its own is a
+         * word any comment about a schema opens with. The three keywords below
+         * it are the whole word their tool answers to and end at a boundary;
+         * the four prefixes carry their own in a colon. */
+        Language::Yaml => {
+            if opens_with_keyword(text, "@schema") {
+                return Some("@schema");
+            }
+            for keyword in ["yamllint", "nosec", "kics-scan"] {
+                if opens_with_keyword(compact, keyword) {
+                    return Some(keyword);
+                }
+            }
+            [
+                "yaml-language-server:",
+                "renovate:",
+                "checkov:skip",
+                "trivy:ignore",
+            ]
+            .into_iter()
+            .find(|prefix| compact.starts_with(prefix))
+        }
+        /* NOTE: Three of the four are asked of `text` rather than of `compact`,
+         * because `compact` is what takes the `@` off, and the `@` is what
+         * tells the annotation from prose about it. `@psalm-suppress` is
+         * followed by the issue it silences after whitespace, so it ends at a
+         * boundary; `@phpstan-ignore` and `@codeCoverageIgnore` are namespaces
+         * whose members differ only in what runs on past them —
+         * `-next-line`, `Start`, `End` — so a prefix is the whole rule there.
+         * `phpcs:` carries its own boundary in the colon and covers `ignore`,
+         * `disable`, `enable`, and `ignoreFile` alike. */
+        Language::Php => {
+            if opens_with_keyword(text, "@psalm-suppress") {
+                return Some("@psalm-suppress");
+            }
+            if text.starts_with("@phpstan-ignore") {
+                return Some("@phpstan-ignore");
+            }
+            if text.starts_with("@codecoverageignore") {
+                return Some("@codeCoverageIgnore");
+            }
+            compact.starts_with("phpcs:").then_some("phpcs:")
+        }
         _ => None,
     }
 }
@@ -2479,9 +3100,15 @@ fn directive_name(text: &str, language: Language, raw: &[u8]) -> Option<&'static
 /// a space. Matching the bare prefix instead would read prose that merely opens
 /// with those letters — `# shellcheckish note` — as an instruction as well, and
 /// protect a comment that is only *about* the tool.
+///
+/// The end of the comment ends the keyword too. `#:schema` with its URL still
+/// to be typed is the directive it is about to be, and `text` arrives trimmed,
+/// so `#:schema ` reaches here as the bare word in any case: refusing the empty
+/// remainder would protect the directive or not depending on a trailing space.
 fn opens_with_keyword(text: &str, keyword: &str) -> bool {
-    text.strip_prefix(keyword)
-        .is_some_and(|rest| rest.starts_with(|character: char| character.is_ascii_whitespace()))
+    text.strip_prefix(keyword).is_some_and(|rest| {
+        rest.is_empty() || rest.starts_with(|character: char| character.is_ascii_whitespace())
+    })
 }
 
 /// The kind of a Java line comment.
@@ -2584,6 +3211,16 @@ fn long_bracket_end(bytes: &[u8], content: usize, level: usize) -> (usize, bool)
     (bytes.len(), false)
 }
 
+/// Whether `byte` is ECMAScript `WhiteSpace` or a `LineTerminator`, as far as
+/// one byte can say (ECMA-262 12.2, 12.3). <VT> is whitespace to JavaScript and
+/// is exactly what [`u8::is_ascii_whitespace`] leaves out, so asking that
+/// instead reads `a\u{b}<div>` as a JSX element where the language sees a
+/// comparison. The non-ASCII members — U+00A0, U+FEFF, and the `Zs` category —
+/// take more than one byte and are not decided here.
+fn js_is_space(byte: u8) -> bool {
+    matches!(byte, b'\t' | b'\n' | 0x0b | 0x0c | b'\r' | b' ')
+}
+
 /// Whether `byte` is whitespace to Lua's lexer, which is what `\z` skips. It is
 /// C's `isspace` in the default locale, and so takes the vertical tab that
 /// [`u8::is_ascii_whitespace`] leaves out.
@@ -2610,6 +3247,491 @@ fn toml_quote_run(bytes: &[u8], start: usize, quote: u8) -> usize {
         index += 1;
     }
     index - start
+}
+
+/// Whether a quote at `index` follows a flow indicator, which is the other
+/// place a scalar may begin: the quote of `[a,"b # c"]` opens one although no
+/// white space precedes it (YAML 1.2.2, 7.4). Everywhere else an apostrophe or
+/// a quote behind an ordinary byte is content of the plain scalar it sits in,
+/// which is what keeps the one in `note: it's fine` from opening a literal
+/// that would swallow the rest of the file.
+fn yaml_flow_opener(bytes: &[u8], index: usize) -> bool {
+    index > 0 && matches!(bytes[index - 1], b',' | b'[' | b'{')
+}
+
+/// Which trailing line breaks a block scalar keeps (YAML 1.2.2, 8.1.1.2).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Chomping {
+    /// `-`: the final line break and every empty line behind it are dropped.
+    Strip,
+    /// No indicator, and the default: the final line break stays and the empty
+    /// lines behind it are dropped.
+    Clip,
+    /// `+`: the final line break and every empty line behind it are content,
+    /// which is what makes a blank line under such a body change its value.
+    Keep,
+}
+
+/// Where the node property beginning at `index` ends.
+///
+/// An anchor `&name` and a tag `!tag` run to the white space, the line, or the
+/// flow indicator that ends them (YAML 1.2.2, 6.9 and 7.4); nothing else may
+/// close one, which is what keeps `!!str` a single token.
+fn yaml_property_end(bytes: &[u8], index: usize) -> usize {
+    let mut cursor = index + 1;
+    while cursor < bytes.len()
+        && !matches!(
+            bytes[cursor],
+            b' ' | b'\t' | b'\r' | b'\n' | b',' | b'[' | b']' | b'{' | b'}'
+        )
+    {
+        cursor += 1;
+    }
+    cursor
+}
+
+/// The block scalar header at `index`, which is its `|` or `>`: the explicit
+/// indentation indicator, `None` where the header spells none out and the body
+/// detects its own; the chomping indicator; where a comment on the header line
+/// begins; and where that line ends.
+///
+/// The two readings of a missing indicator are not the same answer. The floor a
+/// body line has to clear is the owner's column either way — an absent
+/// indicator behaves as `1` for that — but the depth the body's *content* sits
+/// at is written on the header only when the indicator is, and is otherwise
+/// whatever the first non-empty line turns out to be.
+///
+/// `None` means the bytes are not a header at all and the indicator is content
+/// of a plain scalar. That is the whole of what tells `key: >` from `key: a >
+/// b`: a header is followed by its indicators, then white space, then at most
+/// a comment, and then the line ends (YAML 1.2.2, 8.1.1). The comment needs
+/// that white space in front of it like any other (6.6), so `key: |#c` is no
+/// header either.
+fn yaml_block_header(
+    bytes: &[u8],
+    index: usize,
+) -> Option<(Option<usize>, Chomping, Option<usize>, usize)> {
+    let mut cursor = index + 1;
+    let mut indentation = None;
+    let mut chomping = None;
+    while let Some(byte) = bytes.get(cursor).copied() {
+        match byte {
+            b'1'..=b'9' if indentation.is_none() => indentation = Some(usize::from(byte - b'0')),
+            b'+' if chomping.is_none() => chomping = Some(Chomping::Keep),
+            b'-' if chomping.is_none() => chomping = Some(Chomping::Strip),
+            _ => break,
+        }
+        cursor += 1;
+    }
+    let mut spaced = false;
+    while matches!(bytes.get(cursor), Some(b' ' | b'\t')) {
+        spaced = true;
+        cursor += 1;
+    }
+    let comment = (spaced && bytes.get(cursor) == Some(&b'#')).then_some(cursor);
+    if comment.is_some() {
+        cursor = line_end(bytes, cursor);
+    }
+    bytes
+        .get(cursor)
+        .is_none_or(|byte| matches!(byte, b'\r' | b'\n'))
+        .then(|| {
+            (
+                indentation,
+                chomping.unwrap_or(Chomping::Clip),
+                comment,
+                cursor,
+            )
+        })
+}
+
+/// Where the body of the block scalar whose header line ends at `header_end`
+/// ends, whether that offset is the start of a line, and how deep its content
+/// turned out to sit.
+///
+/// A line belongs to the body while it is empty — an empty line is content of
+/// the scalar (YAML 1.2.2, 8.1.1.2) whatever its indentation — or indented to
+/// at least `body_min`. The first line that is neither ends it, and so does a
+/// document marker in column zero (9.1.2, 9.1.3), which is what ends the body
+/// of a scalar that is the whole document and therefore has no indentation to
+/// fall short of.
+///
+/// The second of the three answers is what the caller turns into a checkpoint:
+/// a body that ran out of file in the middle of a line ends nowhere a scan
+/// could resume.
+///
+/// The third is the *detected* content indentation (8.1.1.1): the indentation
+/// of the first non-empty line, which is what a parser measures every later
+/// line against, and `body_min` when the body holds no non-empty line to
+/// measure. It is never less than `body_min`, because a line shallower than
+/// that would have ended the body instead of opening it.
+fn yaml_block_body_end(bytes: &[u8], header_end: usize, body_min: usize) -> (usize, bool, usize) {
+    if header_end >= bytes.len() {
+        return (bytes.len(), false, body_min);
+    }
+    let mut index = consume_newline(bytes, header_end);
+    let mut content = None;
+    while index < bytes.len() {
+        let (indent, blank, end) = yaml_line_shape(bytes, index);
+        if !blank && (indent < body_min || yaml_document_marker(bytes, index)) {
+            break;
+        }
+        if !blank && content.is_none() {
+            content = Some(indent);
+        }
+        if end >= bytes.len() {
+            return (bytes.len(), false, content.unwrap_or(body_min));
+        }
+        index = consume_newline(bytes, end);
+    }
+    (index, true, content.unwrap_or(body_min))
+}
+
+/// The indentation of the line beginning at `start`, whether it is empty, and
+/// where it ends.
+///
+/// Indentation is spaces alone: a tab may not indent a line (YAML 1.2.2, 6.1),
+/// so the first one ends the indentation and is content of whatever follows
+/// it. A line of nothing but white space is empty even so, which is what keeps
+/// a blank line inside a block scalar body from ending it.
+fn yaml_line_shape(bytes: &[u8], start: usize) -> (usize, bool, usize) {
+    let mut index = start;
+    while bytes.get(index) == Some(&b' ') {
+        index += 1;
+    }
+    let indent = index - start;
+    let mut cursor = index;
+    while matches!(bytes.get(cursor), Some(b' ' | b'\t')) {
+        cursor += 1;
+    }
+    let blank = bytes
+        .get(cursor)
+        .is_none_or(|byte| matches!(byte, b'\r' | b'\n'));
+    (indent, blank, line_end(bytes, cursor))
+}
+
+/// Whether the line beginning at `line_start` is a document marker: `---` or
+/// `...` with the line or white space behind it. Both are read in column zero
+/// alone, which is what `line_start` carries — a line with any indentation at
+/// all begins with a space and matches neither.
+fn yaml_document_marker(bytes: &[u8], line_start: usize) -> bool {
+    (starts(bytes, line_start, b"---") || starts(bytes, line_start, b"..."))
+        && bytes
+            .get(line_start + 3)
+            .is_none_or(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n'))
+}
+
+/// The one comment that is all its line holds, as an index into `comments`.
+///
+/// `None` when the line holds none, holds one with something else on it, or
+/// holds a comment that does not run to the end of the line — in each of those
+/// the line survives a removal whatever else is decided about it.
+fn comment_alone_on_line(
+    source: &[u8],
+    offset: usize,
+    comments: &[Comment],
+    line_start: usize,
+    line_end: usize,
+) -> Option<usize> {
+    /* NOTE: `source` may be a suffix the scan was handed, so its indices run
+     * `offset` behind the absolute spans a comment carries. Everything below
+     * compares in the absolute frame and slices in the local one. */
+    let (start, end) = (line_start + offset, line_end + offset);
+    let index = comments
+        .binary_search_by(|comment| {
+            if comment.span.start < start {
+                Ordering::Less
+            } else if comment.span.start >= end {
+                Ordering::Greater
+            } else {
+                Ordering::Equal
+            }
+        })
+        .ok()?;
+    let span = comments[index].span;
+    (span.end == end
+        && source[line_start..span.start - offset]
+            .iter()
+            .all(|byte| matches!(byte, b' ' | b'\t')))
+    .then_some(index)
+}
+
+/// One YAML block scalar, as the two things the lines below it depend on.
+///
+/// Where a body ends is decided by the column of the node the header hangs
+/// off, which is not written on the header's own line — `key:` on one line and
+/// `|` on the next is the same scalar as `key: |`. Only a scan knows that
+/// column, so this is recorded while one runs rather than re-derived from the
+/// bytes afterwards.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct YamlBlockScalar {
+    /// The first byte past the body: the start of the first line that is not
+    /// part of it, or the end of the source.
+    body_end: usize,
+    /// How deep the body's content sits: the explicit indentation indicator
+    /// counted from the owner, or the indentation of the first non-empty line
+    /// where the header spelled none out (YAML 1.2.2, 8.1.1.1). A line under
+    /// the body that reaches this depth is content of it; one that does not is
+    /// outside it whatever else is true, which is the difference between a
+    /// trail comment a removal may take and one it may not.
+    content_indent: usize,
+    /// Which trailing line breaks the header asked to keep.
+    chomping: Chomping,
+}
+
+/// The keep reason the scanner writes for a comment a YAML block scalar leans
+/// on, and the one keep no option can overrule.
+///
+/// Frozen: the differential protocol compares this string byte for byte, and
+/// `--explain` recognises the rule by it.
+pub(crate) const YAML_STRUCTURAL_TRAIL: &str = "structural in a YAML block scalar trail";
+
+/// Whether `disposition` is the keep [`YAML_STRUCTURAL_TRAIL`] names.
+pub(crate) fn is_yaml_structural_trail(disposition: &Disposition) -> bool {
+    matches!(disposition, Disposition::Keep { reason } if reason == YAML_STRUCTURAL_TRAIL)
+}
+
+/// Which comments in the trails of `blocks` no removal may take, as indices
+/// into `comments`.
+///
+/// A block scalar body ends at the first line under it that is shallower than
+/// its content (YAML 1.2.2, 8.1.1), and in a trail of whole-line comments that
+/// line is a comment. Removing it — and a removal there takes the whole line,
+/// which is the least a removal can leave — hands the lines under it back to
+/// the body, and a line that reaches the content depth is content again. When
+/// what comes back up is a comment the run keeps, no removal preserves the
+/// value: the comment above it is not commentary but the thing that closes the
+/// scalar, and it is kept.
+///
+/// Only the *first* comment of a trail can do that work, and it always can.
+/// The line a body ended at is shallower than the floor and so shallower than
+/// the content, so keeping it closes the scalar there and leaves everything
+/// below outside — which is why one keep per block is both necessary and
+/// enough, and why the deeper comments of the trail stay removable. Keeping a
+/// deeper one instead would be no fix at all: it reaches the content depth
+/// itself, so the body would swallow the survivor.
+///
+/// A trail whose every comment is removable needs none of this: with nothing
+/// left standing under the body there is nothing for it to take back.
+fn yaml_structural_trail_keeps(
+    source: &[u8],
+    offset: usize,
+    blocks: &[YamlBlockScalar],
+    comments: &[Comment],
+) -> Vec<usize> {
+    let mut keeps = Vec::new();
+    for block in blocks {
+        let Some(mut probe) = block.body_end.checked_sub(offset) else {
+            continue;
+        };
+        /* INVARIANT: `shield` is the trail's first removable comment shallower
+         * than the content — the one keep that would close the body — and is
+         * set before any deeper line can be reached, because the line a body
+         * ends at is shallower than the content by construction. */
+        let mut shield = None;
+        while probe < source.len() {
+            let (indent, blank, end) = yaml_line_shape(source, probe);
+            if blank {
+                /* NOTE: An empty line is content of the body above whatever its
+                 * indentation (8.1.1.2), so it neither ends the trail nor
+                 * shields anything under it. */
+                probe = past_terminator(source, end);
+                continue;
+            }
+            let Some(found) = comment_alone_on_line(source, offset, comments, probe, end) else {
+                /* NOTE: The first line with anything else on it is the next
+                 * node, and it is not a line any removal here can move. */
+                break;
+            };
+            if comments[found].disposition.is_remove() {
+                if shield.is_none() && indent < block.content_indent {
+                    shield = Some(found);
+                }
+            } else if indent < block.content_indent {
+                /* NOTE: A surviving line shallower than the content closes the
+                 * body on its own, so nothing above it is load-bearing. */
+                break;
+            } else {
+                keeps.extend(shield);
+                break;
+            }
+            probe = past_terminator(source, end);
+        }
+    }
+    keeps
+}
+
+/// Apply [`yaml_structural_trail_keeps`] to comments that did not come from a
+/// scan of this crate's own, which is the external hand-off of
+/// [`transform_spans`](crate::transform_spans).
+///
+/// A scan reaches the same answer from the blocks it already walked over; this
+/// is the same answer re-derived from the bytes, so the two paths cannot
+/// disagree about a value.
+pub(crate) fn keep_yaml_structural_trails(
+    source: &[u8],
+    language: Language,
+    comments: &mut [Comment],
+) {
+    /* PERF: The same two answers `lines_a_removal_must_swallow` opens with: no
+     * `|` and no `>` is no block scalar, and a file whose comments all trail
+     * something has no whole-line comment to weigh. */
+    if language != Language::Yaml || comments.is_empty() || memchr2(b'|', b'>', source).is_none() {
+        return;
+    }
+    if !comments.iter().any(|comment| {
+        comment.disposition.is_remove() && starts_its_line(source, comment.span.start)
+    }) {
+        return;
+    }
+    let blocks = yaml_block_scalars(source);
+    for index in yaml_structural_trail_keeps(source, 0, &blocks, comments) {
+        comments[index].disposition = Disposition::Keep {
+            reason: YAML_STRUCTURAL_TRAIL.to_owned(),
+        };
+    }
+}
+
+/// Every block scalar in a YAML source, in order.
+///
+/// A scan of its own, so that the answer stays a function of the bytes alone
+/// and an incremental rescan or an external hand-off reaches the same one with
+/// no state to carry. It is the *scanner's* reading of a header, not the loose
+/// one [`first_yaml_block_scalar`] uses: `key: a |+` ends a plain scalar with
+/// two characters that look like a header, and reading it as one would hang a
+/// phantom keep-chomped tail off a line that has no body at all.
+fn yaml_block_scalars(source: &[u8]) -> Vec<YamlBlockScalar> {
+    let mut scanner = Scanner::with_offset(
+        source,
+        Language::Yaml,
+        ScanOptions::default(),
+        0,
+        false,
+        None,
+    );
+    scanner.scan_yaml();
+    scanner.yaml_blocks
+}
+
+/// Whether nothing but indentation stands between `start` and the beginning of
+/// its line, which is the whole of what makes a comment a candidate for being
+/// swallowed whole.
+fn starts_its_line(source: &[u8], start: usize) -> bool {
+    source[..start]
+        .iter()
+        .copied()
+        .rev()
+        .find(|byte| !matches!(byte, b' ' | b'\t'))
+        .is_none_or(|byte| matches!(byte, b'\r' | b'\n'))
+}
+
+/// Where a line under a block scalar ends once its terminator is taken with it.
+fn past_terminator(source: &[u8], line_end: usize) -> usize {
+    if line_end >= source.len() {
+        line_end
+    } else {
+        consume_newline(source, line_end)
+    }
+}
+
+/// For each comment, the line a removal has to take whole — its terminator
+/// included — instead of leaving the ordinary hole on it, or `None` where the
+/// ordinary hole is right. An empty answer stands for all-`None`, which is
+/// every language but YAML and nearly every YAML file.
+///
+/// YAML is the one language where the hole itself carries meaning, and the
+/// reason is that a block scalar decides where its body ends from the lines
+/// *below* it (YAML 1.2.2, 8.1.1). A whole-line comment under a body is
+/// `l-trail-comments` and is not part of the value, but the hole left in its
+/// place is read as one of two things:
+///
+/// * a line of spaces as wide as the comment, which `columns` writes, is
+///   indented at least as deep as the body whenever the comment was wide
+///   enough — and a line indented that deep *is* body content, so the scalar
+///   silently grows a line;
+/// * an empty line, which `lines` writes, is content under `|+` and `>+`,
+///   where every empty line trailing a body is kept (8.1.1.2).
+///
+/// So every whole-line comment whose own line sits in the run of empty and
+/// comment lines under a body is removed by taking the line, terminator and
+/// all, under every layout — which is the line `compact` takes already. That
+/// costs those lines their numbering under `lines` and their columns under
+/// `columns`; the alternative costs the reader's value, and no indentation a
+/// padded line could be given is safe, because the depth that would put it
+/// outside one body is the depth that puts it inside the mapping the body
+/// belongs to.
+///
+/// Under `|+` and `>+` the line is not enough on its own. The empty lines
+/// *between* a removed comment and the next line are `l-comment` while the
+/// comment shelters them and `l-keep-empty` once it is gone (8.1.1.2), so the
+/// swallow runs on through them. The empty lines *above* the first comment are
+/// already content and are left exactly where they are: a removal takes what
+/// the comment was sheltering and nothing else.
+///
+/// The answer is a function of the source and the comments alone, so an
+/// incremental rescan and an external hand-off reach the same one with no
+/// state to carry.
+pub(crate) fn lines_a_removal_must_swallow(
+    source: &[u8],
+    language: Language,
+    comments: &[Comment],
+) -> Vec<Option<ByteSpan>> {
+    if language != Language::Yaml || comments.is_empty() {
+        return Vec::new();
+    }
+    /* PERF: Two answers that cost almost nothing, in front of a scan of the
+     * whole source. A file with no `|` and no `>` in it has no block scalar at
+     * all; and a comment a body could swallow is one that is alone on its
+     * line, which is a walk back over that line's indentation and no further —
+     * the `# note` of `key: value # note` stops on the byte behind it. A YAML
+     * file whose comments all trail something therefore never pays for the
+     * scan below. */
+    if memchr2(b'|', b'>', source).is_none() {
+        return Vec::new();
+    }
+    if !comments.iter().any(|comment| {
+        comment.disposition.is_remove() && starts_its_line(source, comment.span.start)
+    }) {
+        return Vec::new();
+    }
+    let blocks = yaml_block_scalars(source);
+    if blocks.is_empty() {
+        return Vec::new();
+    }
+    let mut answers = vec![None; comments.len()];
+    for block in blocks {
+        let mut probe = block.body_end;
+        while probe < source.len() {
+            let (_, blank, end) = yaml_line_shape(source, probe);
+            if blank {
+                /* NOTE: An empty line neither ends the run nor is taken on its
+                 * own: it is content of the body above until a comment below
+                 * it is removed, and only that removal may take it. */
+                probe = past_terminator(source, end);
+                continue;
+            }
+            let Some(found) = comment_alone_on_line(source, 0, comments, probe, end) else {
+                /* NOTE: The first line with anything else on it is the next
+                 * node, and the comments under *it* are that node's. */
+                break;
+            };
+            if comments[found].disposition.is_remove() {
+                let mut taken = past_terminator(source, end);
+                if block.chomping == Chomping::Keep {
+                    while taken < source.len() {
+                        let (_, blank, run_end) = yaml_line_shape(source, taken);
+                        if !blank {
+                            break;
+                        }
+                        taken = past_terminator(source, run_end);
+                    }
+                }
+                answers[found] = Some(ByteSpan::new(probe, taken));
+            }
+            probe = past_terminator(source, end);
+        }
+    }
+    answers
 }
 
 fn starts(bytes: &[u8], index: usize, needle: &[u8]) -> bool {
@@ -2723,10 +3845,17 @@ fn cpp_raw_string(bytes: &[u8], index: usize) -> Option<(usize, bool)> {
         .iter()
         .position(|byte| *byte == b'(')?
         + delimiter_start;
+    /* NOTE: [lex.string]: a d-char is any member of the basic source character
+     * set except space, `(`, `)`, `\`, and the control characters horizontal
+     * tab, vertical tab, form feed and new-line. The vertical tab is in that
+     * list and is not in `u8::is_ascii_whitespace`, so it is named here. */
     if open - delimiter_start > 16
-        || bytes[delimiter_start..open]
-            .iter()
-            .any(|byte| byte.is_ascii_whitespace() || matches!(byte, b'\\' | b')'))
+        || bytes[delimiter_start..open].iter().any(|byte| {
+            matches!(
+                byte,
+                b' ' | b'(' | b')' | b'\\' | b'\t' | 0x0b | 0x0c | b'\n' | b'\r'
+            )
+        })
     {
         return None;
     }
@@ -2933,7 +4062,13 @@ fn parse_heredoc(bytes: &[u8], index: usize) -> Option<(Heredoc, usize)> {
             }
             continue;
         }
-        if byte.is_ascii_whitespace() || matches!(byte, b';' | b'|' | b'&' | b'(' | b')' | b'<') {
+        /* NOTE: The delimiter is a word (POSIX Shell Command Language, 2.7.4),
+         * and a word ends at an unquoted operator character. `>` is one:
+         * `cat <<EOF>out` is a here-document named `EOF` and a redirection,
+         * not a here-document named `EOF>out`. */
+        if byte.is_ascii_whitespace()
+            || matches!(byte, b';' | b'|' | b'&' | b'(' | b')' | b'<' | b'>')
+        {
             break;
         }
         match byte {
@@ -3078,19 +4213,31 @@ fn oracle_q_quote_end(bytes: &[u8], start: usize) -> Option<(usize, bool)> {
     })
 }
 
+/// Whether the `-->` at `index` closes an HTML-like comment: ECMA-262 12.5
+/// makes one of a `-->` that nothing but white space precedes on its line.
+///
+/// U+FEFF is `<ZWNBSP>`, which 12.2 lists among `WhiteSpace` wherever it sits
+/// and however many of it there are — the start of a file is only the most
+/// common place to meet one. It takes three bytes, which is why the prefix is
+/// walked rather than handed to [`js_is_space`] byte by byte.
 fn js_html_close_comment(bytes: &[u8], index: usize) -> bool {
     if !starts(bytes, index, b"-->") {
         return false;
     }
-    let line_start = bytes[..index]
+    let mut cursor = bytes[..index]
         .iter()
         .rposition(|byte| matches!(byte, b'\r' | b'\n'))
         .map_or(0, |position| position + 1);
-    let line_prefix = &bytes[line_start..index];
-    let prefix = line_prefix
-        .strip_prefix(b"\xef\xbb\xbf")
-        .unwrap_or(line_prefix);
-    prefix.iter().all(u8::is_ascii_whitespace)
+    while cursor < index {
+        if starts(bytes, cursor, b"\xef\xbb\xbf") {
+            cursor += 3;
+        } else if js_is_space(bytes[cursor]) {
+            cursor += 1;
+        } else {
+            return false;
+        }
+    }
+    true
 }
 
 fn js_regex_end(bytes: &[u8], start: usize) -> Option<usize> {
@@ -3207,6 +4354,202 @@ fn find_html_close(bytes: &[u8], content_start: usize, name: &[u8]) -> Option<us
     None
 }
 
+/// The offset PHP mode begins at when an opening tag starts at `index`, or
+/// `None` when none does.
+///
+/// `<?php` is matched without regard to case and has to be followed by white
+/// space or the end of the file (`zend_language_scanner.l`:
+/// `"<?php"([ \t]|{NEWLINE})`), so `<?phpinfo()` is inline text. `<?=` is the
+/// short echo tag and needs nothing behind it. A bare `<?` opens nothing,
+/// because `short_open_tag` is off by default — which is what leaves `<?xml`
+/// an XML declaration in the output rather than the start of a program.
+fn php_open_tag(bytes: &[u8], index: usize) -> Option<usize> {
+    if starts(bytes, index, b"<?=") {
+        return Some(index + 3);
+    }
+    let rest = bytes.get(index..)?;
+    if starts_ascii_case(rest, b"<?php")
+        && rest
+            .get(5)
+            .is_none_or(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n'))
+    {
+        return Some(index + 5);
+    }
+    None
+}
+
+/// Where a PHP `//` or `#` comment ends: at the line break, or at a closing
+/// tag, whichever comes first (PHP manual, Comments — "the closing tag breaks
+/// out of PHP mode"). The `?>` is not part of the comment.
+fn php_line_comment_end(bytes: &[u8], mut index: usize) -> usize {
+    while index < bytes.len()
+        && !matches!(bytes[index], b'\r' | b'\n')
+        && !starts(bytes, index, b"?>")
+    {
+        index += 1;
+    }
+    index
+}
+
+/// The kind of a PHP block comment.
+///
+/// The tokenizer makes a documentation comment of `/**` only when white space
+/// follows it — its rule is `"/*"|"/**"{WHITESPACE}`, and the longer
+/// alternative is what sets `T_DOC_COMMENT` — so `/**/` and `/**text*/` are
+/// ordinary block comments. `/*!` is Doxygen's marker and means nothing to
+/// PHP's own tooling, so it is an ordinary comment too.
+fn php_block_kind(bytes: &[u8], index: usize) -> CommentKind {
+    if starts(bytes, index, b"/**")
+        && bytes
+            .get(index + 3)
+            .is_some_and(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n'))
+    {
+        CommentKind::DocBlock
+    } else {
+        CommentKind::Block
+    }
+}
+
+/// The offset just past the `}` that closes the interpolation opening at
+/// `brace`, or the end of the file when none does.
+///
+/// The complex syntax `{$...}` holds a PHP expression, which the engine lexes
+/// as ordinary code. This balances its braces instead, skipping over the two
+/// things inside one that can carry a brace of their own — a nested string and
+/// a comment — so `"{$a['}']}"` ends where PHP ends it. Nothing else in an
+/// expression can, which is what makes the count right rather than merely
+/// close.
+///
+/// What it does *not* do is report the comment it skipped: reading one out of a
+/// string would mean running the whole lexer inside one, and v1 leaves those
+/// bytes alone instead.
+fn php_interpolation_end(bytes: &[u8], brace: usize) -> usize {
+    let mut depth = 1usize;
+    let mut index = brace + 1;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'{' => depth += 1,
+            b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return index + 1;
+                }
+            }
+            quote @ (b'\'' | b'"' | b'`') => {
+                index += 1;
+                while index < bytes.len() && bytes[index] != quote {
+                    index = if bytes[index] == b'\\' {
+                        (index + 2).min(bytes.len())
+                    } else {
+                        index + 1
+                    };
+                }
+            }
+            b'/' if starts(bytes, index, b"/*") => {
+                index = block_end(bytes, index, b"/*", b"*/", false).0;
+                continue;
+            }
+            b'/' if starts(bytes, index, b"//") => {
+                index = php_line_comment_end(bytes, index + 2);
+                continue;
+            }
+            b'#' if bytes.get(index + 1) != Some(&b'[') => {
+                index = php_line_comment_end(bytes, index + 1);
+                continue;
+            }
+            _ => {}
+        }
+        index += 1;
+    }
+    index.min(bytes.len())
+}
+
+/// Whether `byte` may open a PHP label: a letter, `_`, or any byte from `0x80`
+/// up (PHP manual, Variables — the label grammar is byte-oriented and takes
+/// the whole upper half of the range).
+fn php_label_start(byte: u8) -> bool {
+    byte.is_ascii_alphabetic() || byte == b'_' || byte >= 0x80
+}
+
+/// Whether `byte` may continue a PHP label: [`php_label_start`] and the
+/// digits.
+fn php_label_continue(byte: u8) -> bool {
+    php_label_start(byte) || byte.is_ascii_digit()
+}
+
+/// The label, the offset its body starts at, and whether it is a nowdoc, for
+/// the heredoc header opening at `start`; `None` when those three bytes head
+/// no header.
+///
+/// The header is `<<<`, blanks, the label — bare, or quoted with `'` for a
+/// nowdoc or `"` for a heredoc — and then the line break, with nothing else
+/// allowed in between (`zend_language_scanner.l`:
+/// `"<<<"{TABS_AND_SPACES}({LABEL}|(['"]{LABEL}['"])){NEWLINE}`). The body
+/// begins on the next line.
+fn php_heredoc_header(bytes: &[u8], start: usize) -> Option<(&[u8], usize, bool)> {
+    let mut cursor = start + 3;
+    while matches!(bytes.get(cursor), Some(b' ' | b'\t')) {
+        cursor += 1;
+    }
+    let quote = match bytes.get(cursor) {
+        Some(byte @ (b'\'' | b'"')) => Some(*byte),
+        _ => None,
+    };
+    if quote.is_some() {
+        cursor += 1;
+    }
+    let label_start = cursor;
+    if !bytes.get(cursor).is_some_and(|byte| php_label_start(*byte)) {
+        return None;
+    }
+    while bytes
+        .get(cursor)
+        .is_some_and(|byte| php_label_continue(*byte))
+    {
+        cursor += 1;
+    }
+    let label = &bytes[label_start..cursor];
+    if let Some(quote) = quote {
+        if bytes.get(cursor) != Some(&quote) {
+            return None;
+        }
+        cursor += 1;
+    }
+    if !matches!(bytes.get(cursor), Some(b'\r' | b'\n')) {
+        return None;
+    }
+    Some((label, consume_newline(bytes, cursor), quote == Some(b'\'')))
+}
+
+/// The offset just past the closing label of the body starting at `index`, or
+/// `None` when no line closes it.
+///
+/// Since PHP 7.3 the closing label may be indented by blanks and may be
+/// followed by anything that cannot continue a label — `;`, `,`, `)`, an
+/// operator, the line break, or the end of the file (PHP manual, Heredoc
+/// text). A byte that *can* continue one leaves the line ordinary body, which
+/// is what keeps `EOTX` from ending an `EOT`.
+fn php_heredoc_end(bytes: &[u8], mut index: usize, label: &[u8]) -> Option<usize> {
+    loop {
+        let mut cursor = index;
+        while matches!(bytes.get(cursor), Some(b' ' | b'\t')) {
+            cursor += 1;
+        }
+        if starts(bytes, cursor, label)
+            && !bytes
+                .get(cursor + label.len())
+                .is_some_and(|byte| php_label_continue(*byte))
+        {
+            return Some(cursor + label.len());
+        }
+        let end = line_end(bytes, index);
+        if end >= bytes.len() {
+            return None;
+        }
+        index = consume_newline(bytes, end);
+    }
+}
+
 fn starts_ascii_case(haystack: &[u8], needle: &[u8]) -> bool {
     haystack
         .get(..needle.len())
@@ -3238,13 +4581,9 @@ fn contains_line_splice(bytes: &[u8]) -> bool {
 fn next_c_family_trigger(bytes: &[u8], start: usize, language: Language) -> Option<usize> {
     let remaining = bytes.get(start..)?;
     let primary = match language {
-        Language::Jsonc => memchr2(b'/', b'"', remaining),
         Language::Go => remaining
             .iter()
             .position(|byte| matches!(byte, b'/' | b'"' | b'\'' | b'`')),
-        Language::Css | Language::Kotlin | Language::Rust | Language::C | Language::Cpp => {
-            memchr3(b'/', b'"', b'\'', remaining)
-        }
         _ => memchr3(b'/', b'"', b'\'', remaining),
     }?;
     Some(start + primary)

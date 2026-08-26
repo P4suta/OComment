@@ -7,7 +7,7 @@ All notable changes to OComment will be documented here. The project follows
 
 ### Added
 
-- Byte-oriented scanners and transformations for 17 built-in languages and the
+- Byte-oriented scanners and transformations for 19 built-in languages and the
   documented dialects.
 - CLI, staged Git fixes, LSP 3.18 server, declarative profiles, and sandboxed
   WASM component plugins.
@@ -67,23 +67,24 @@ All notable changes to OComment will be documented here. The project follows
   for the OCaml reference. `CONTRIBUTING.md` documents the tags.
 - An official VS Code extension, `P4suta.ocomment`, under `editors/vscode`. It
   is a client only: it launches the separately installed `ocomment lsp`,
-  attaches it to the twenty language identifiers OComment scans, and exposes
-  the server's quick fixes, `source.fixAll.ocomment`, code lens, and pull
-  diagnostics, plus `OComment: Remove comments in file`, `... in workspace`,
-  `OComment: Restart server`, `OComment: Show output`, and a status bar count.
-  `ocomment.path` resolves a relative path against the workspace and expands a
-  leading `~`; a missing binary is a notification pointing at the install
-  instructions rather than a silent failure. The extension is disabled in
-  untrusted workspaces, because that setting names an executable it launches.
-  The extension version is the crate version, checked by the extension's own
-  suite on every pull request and against the tag before `publish-vscode` can
-  upload anything. A `vscode` CI job lints, compiles, builds the binary the
-  extension launches, and drives a real VS Code under `xvfb-run`;
-  `publish-vscode` signs the `.vsix` with cosign, attaches it to the release,
-  and publishes to the Marketplace and Open VSX. The extension holds one file
-  system watcher for its lifetime rather than one per start, and every start,
-  stop, and restart is queued behind the last, so a settings change during a
-  restart cannot leave a second server running with nothing holding it.
+  attaches it to the twenty-four language identifiers OComment scans, and
+  exposes the server's quick fixes, `source.fixAll.ocomment`, code lens, and
+  pull diagnostics, plus `OComment: Remove comments in file`, `... in
+  workspace`, `OComment: Restart server`, `OComment: Show output`, and a status
+  bar count. `ocomment.path` resolves a relative path against the workspace and
+  expands a leading `~`; a missing binary is a notification pointing at the
+  install instructions rather than a silent failure. The extension is disabled
+  in untrusted workspaces, because that setting names an executable it
+  launches. The extension version is the crate version, checked by the
+  extension's own suite on every pull request and against the tag before
+  `publish-vscode` can upload anything. A `vscode` CI job lints, compiles,
+  builds the binary the extension launches, and drives a real VS Code under
+  `xvfb-run`; `publish-vscode` signs the `.vsix` with cosign, attaches it to
+  the release, and publishes to the Marketplace and Open VSX. The extension
+  holds one file system watcher for its lifetime rather than one per start, and
+  every start, stop, and restart is queued behind the last, so a settings
+  change during a restart cannot leave a second server running with nothing
+  holding it.
 - Item-by-item documentation for `ocomment-core` and `ocomment-plugin-sdk`,
   and a gate that keeps it. `missing_docs` is denied through
   `[workspace.lints]` for both library crates, so a public type, field,
@@ -140,6 +141,57 @@ All notable changes to OComment will be documented here. The project follows
   `-- luacheck:`, `-- selene:`, `-- stylua:` and `-- luacov:` lines. `.lua` and
   `.rockspec` select it, as does a `lua` or `luajit` `#!` line — which, like any
   first line that opens with `#`, the loader skips.
+- YAML is a built-in language, scanned by a lexer of its own. `#` opens the
+  only comment form there is, and only where white space separates it from the
+  token in front of it, so the `#` of a URL fragment and the one inside a plain
+  `a#b` are content. Both quoted styles hide it, over a line break included,
+  and so does a block scalar: `|` and `>` with their indentation and chomping
+  indicators take a comment on the header line and then swallow every following
+  line more indented than the node they hang off, empty lines and document
+  markers decided in column zero. `.yml` and `.yaml` select it, as do the
+  configuration files written in YAML that carry no extension of their own
+  (`.clang-format`, `.clang-tidy`, `.yamllint`). The `# yaml-language-server:`,
+  `# yamllint`, `# renovate:`, `# checkov:skip`, `# trivy:ignore`, `# nosec`,
+  `# kics-scan` and `# @schema` lines are directives a removal keeps.
+- PHP is a built-in language, scanned by a lexer of its own. A PHP file is two
+  languages at once: it opens in inline HTML, where every byte is output
+  verbatim and nothing is a comment, and `<?php` with white space behind it or
+  the short echo tag `<?=` enters PHP mode, which `?>` leaves again — carrying
+  one line break away with it. A bare `<?` opens nothing, because
+  `short_open_tag` is off by default, so an XML declaration stays inline text.
+  In code, `//` and `#` open a one-line comment that ends at the line break or
+  at the closing tag, whichever comes first; `#[` is an attribute rather than a
+  comment; `/* */` is a block comment and `/**` with white space behind it is a
+  PHPDoc block, as the tokenizer decides it. Single-quoted, double-quoted and
+  backtick strings, heredocs and nowdocs hide every comment opener inside them,
+  including a closing tag, and the braces of `{$...}` are opaque. `.php`,
+  `.phtml` and `.phpt` select it, as does a `php` `#!` line — which the CLI
+  strips, so it is a preamble a removal keeps. The `phpcs:`,
+  `@phpstan-ignore`, `@psalm-suppress` and `@codeCoverageIgnore` markers are
+  directives a removal keeps. Inline HTML is opaque in v1: an HTML
+  `<!-- ... -->` comment in a PHP file is not reported, which
+  `docs/languages.md` says out loud. It is also the only place an editor may
+  restart a scan from, because which mode a byte sits in is decided by
+  everything above it, so a file that is all PHP is rescanned from the top.
+- `tools/fuzz_differential.py`, an on-demand cross-implementation fuzz. It
+  builds random sources out of the delimiters, escapes, quotes and directive
+  words the built-in scanners care about, asks both implementations across
+  every language, dialect, policy and layout, and collapses whatever disagreed
+  into one line per *kind* of disagreement — the fields that differ, not the
+  source that reached them — with a shrunken repro beside each. `--seed` and
+  `--cases` size the sweep; the language list comes from `spec/languages.toml`,
+  so it cannot fall behind a language someone adds. It is not a CI gate and
+  `CONTRIBUTING.md` says why: what it finds belongs in
+  `spec/fixtures/v1/hazards.json` as a named case, which is what turns a run
+  someone remembers into a gate.
+- Every written-out count of languages, and of the editor language identifiers
+  the VS Code extension attaches to, is checked against `Language::ALL` and
+  against the extension's own selector. Six sentences across the documentation,
+  the changelogs, and the Marketplace description said a number nothing
+  verified; three of them were already wrong. The claims are matched with the
+  file's line wrapping collapsed, so re-flowing a paragraph is not a failure
+  and changing what it says is. The extension's `activationEvents` are checked
+  against the languages it attaches the server to as well.
 
 ### Changed
 
@@ -188,6 +240,39 @@ All notable changes to OComment will be documented here. The project follows
   keeps its terminator. `lines` and `columns` are unchanged byte for byte, and
   fourteen `compact-*` cases in the shared fixture corpus pin the new bytes in
   both implementations.
+- An apostrophe opens a string in `jsonc`. That language is documented as `JSON
+  with comments, including JSON5` and owns `.json5`, and JSON5 4.4 writes a
+  string with either quote, so `{ 'note': '// not a comment' }` holds no
+  comment. An apostrophe is already invalid in the stricter dialect, so the
+  only thing the change hides is a `//` that dialect could not have meant as a
+  comment.
+- A directive named after the tool that reads it survives a missing argument.
+  The keyword ends at a boundary so that prose merely opening with those
+  letters is not protected, and the end of the comment is now such a boundary:
+  a bare `#:schema`, `# shellcheck`, or `# hadolint` is the instruction it is
+  about to be. The comment text arrives trimmed, so refusing the empty
+  remainder protected the directive or not depending on a trailing space.
+  `#:schemata are plural` is still prose.
+- A UTF-8 byte order mark no longer hides the first line. CPython's `check_bom`
+  and Lua's `skipBOM` both run before the first line is read, so a `#!` line
+  behind a mark is still a preamble, and Lua's loader still skips a first line
+  opening with `#`. `is_python_encoding_declaration` had always skipped the same
+  three bytes; now the shebang rule does too. A shell is deliberately not
+  included: `#` opens a comment only where no word has begun, and the mark's
+  bytes begin one — `bash` reads the whole line as a command name, and the
+  kernel does not honour the shebang either.
+- A here-document delimiter ends at `>`. POSIX Shell Command Language 2.7.4
+  makes the delimiter a word, and a word ends at an unquoted operator
+  character, so `cat <<EOF>out` is a here-document named `EOF` and a
+  redirection. It read as a delimiter `EOF>out` that no line ever matches,
+  which swallowed the rest of the file.
+- The vertical tab is whitespace to JavaScript and is not whitespace to the C++
+  raw string delimiter. ECMA-262 12.2 lists <VT> as `WhiteSpace`, so
+  `a\u{b}<div>` is a comparison rather than the start of a JSX element that
+  would swallow the file; C++ [lex.string] excludes it from the d-chars, so
+  `R"a\u{b}b(...)a\u{b}b"` is no raw string at all. Both had been asked of
+  `u8::is_ascii_whitespace`, which answers neither question: it is the set that
+  leaves the vertical tab out.
 
 ### Fixed
 
@@ -316,3 +401,95 @@ All notable changes to OComment will be documented here. The project follows
   ever reached someone generating the definitions by hand — and pointed the
   Homebrew formula, the Scoop manifest, and the WinGet manifest it wrote at a
   repository that is not this one.
+- Eleven ways the OCaml reference and the Rust engine disagreed, each now a
+  named case in `spec/fixtures/v1/hazards.json`. The reference gave one generic
+  `unterminated literal` message where the engine names the construct per
+  language; read every `'` as a literal opener, where Rust Reference,
+  *Lifetimes and loop labels* makes `'a` a lifetime that opens nothing;
+  consumed an unterminated `r"` raw string to the end of the file in silence;
+  took a vertical tab for layout whitespace, where `u8::is_ascii_whitespace`
+  does not; trimmed only ASCII whitespace before looking for a directive word,
+  so a `region` marker behind U+00A0 or U+2028 was removed rather than kept;
+  read a C++ `R"` in the middle of an identifier as a raw string opener; gave
+  up on a whole OCaml file at the first unterminated character literal; called
+  every byte below space a shell blank, an HTML tag-name terminator, and a
+  profile boundary; and read a `#!` at the start of an embedded `<script>` as
+  the page's preamble. `tools/fuzz_differential.py` found the last seven; the
+  first four came from the fuzz the Lua and TOML work ran.
+- Two more, from the fuzz the YAML work ran. A `-->` behind a byte order mark
+  closed an HTML-like comment in one implementation and not in the other, where
+  ECMA-262 12.2 lists U+FEFF among `WhiteSpace` wherever it sits: both now walk
+  the line in front of a `-->` treating the mark as the white space it is, so a
+  space before it no longer hides the comment either. And the reference read
+  `'\c` inside an OCaml comment as a character literal, where the manual makes
+  one only of an apostrophe, a character or an escape sequence, and a closing
+  apostrophe: the string that followed it was swallowed rather than left
+  unterminated, and a comment that never closes came back valid. The comment
+  scan now asks the same question the top-level scan already asked.
+- A YAML block scalar body is measured from the node it hangs off, never from
+  the column its own `|` or `>` sits in (YAML 1.2.2, 8.1.1.1). The header may
+  stand anywhere past that owner: `key: !!str |` and `key: &x |` put node
+  properties (6.9) in front of it, and `key:` may leave the indicator for the
+  line below, indented as deeply as it likes. Reading the header's own column
+  as the floor took a body indented less than the header for the end of the
+  scalar, so every `#` line in it was reported as a comment and `ocomment fix`
+  deleted the body under the default policy — and a `|` behind a tag or an
+  anchor was not read as a header at all, which lost the whole body. Both
+  implementations now carry the owner's indentation across the line break and
+  read a property as the node property it is. A restart at the start of a line
+  under a live carry is refused, because that owner is the one thing such a
+  line does not say about itself. Eleven cases in
+  `spec/fixtures/v1/hazards.json` pin the shapes.
+- Removing comments from a YAML document never changes what it parses to, under
+  any layout. A block scalar decides where its body ends from the lines *below*
+  it (YAML 1.2.2, 8.1.1), which makes the lines under a body the one place in
+  any language where the hole a removal leaves carries meaning — and it carried
+  it in three ways. A line of spaces as wide as the comment, which `columns`
+  writes, is indented at least as deep as the body it was terminating and is
+  read back as content of it, whatever the header chomps. An empty line, which
+  `lines` writes, is content under `|+` and `>+`, which keep the empty lines
+  trailing a body (8.1.1.2). And the empty lines *between* a removed comment
+  and the next line are `l-comment` only while the comment shelters them: once
+  it is gone the `+` claims them too. So a whole-line comment sitting in the run
+  of blank and comment lines under a block scalar body now goes with its whole
+  line, terminator and all, under every layout and every chomping indicator, and
+  under `|+`/`>+` it takes the blank run it was sheltering with it — never the
+  blank lines above it, which were content already. `lines` gives up those
+  lines' numbers and `columns` their columns rather than give up the value; it
+  is the one exception either layout makes, and `docs/languages.md` states it.
+  A phantom header is gone with it: `key: a |+` ends a plain scalar, and the
+  trail is now hung off the headers the scanner itself recognises rather than
+  off any `|` or `>` that ends a line. Sixteen cases in
+  `spec/fixtures/v1/hazards.json` pin the shapes, and `tools/yaml_roundtrip.py`
+  holds the invariant to PyYAML over thousands of generated documents.
+- The other half of that invariant: the trail comment a block scalar leans on is
+  now *kept*, because no removal there preserves the value. The line a body ends
+  at is a comment shallower than the body's content (YAML 1.2.2, 8.1.1), and
+  taking it — whole line and all, which is the least a removal can take — hands
+  the lines under it back to the body. When one of those is a comment the run
+  keeps and it is indented to the content depth, the body swallows it and the
+  value grows a line; blanking the line instead is no better, since an empty
+  line is content of the scalar whatever its indentation (8.1.1.2). Both
+  implementations now weigh a block scalar's trail after the scan and give that
+  one comment a sixth frozen keep reason, `structural in a YAML block scalar
+  trail`, which `--explain` renders as a sentence naming the block scalar under
+  the comment and the line that has to go before this one can. It is the one
+  keep no setting reaches: `--policy all` removes the comment below it and the
+  question with it, but a `keep_regex` that spares that comment leaves this one
+  load-bearing. The depth is the body's *content* indentation — the
+  explicit indentation indicator, or the first non-empty line's column
+  (8.1.1.1) — not the floor a body line has to clear, so a surviving comment
+  shallower than the content keeps nothing above it and the comment above it is
+  removed as before. `DispositionExplanation::KeptStructural` and
+  `explain_comment` name the rule for a library caller. Nine cases in
+  `spec/fixtures/v1/hazards.json` pin the shapes, and `tools/yaml_roundtrip.py`
+  gained a sweep of trails written on both sides of the body's own indentation —
+  the old generator capped a trail comment one column short of it, so this whole
+  half of the hazard was ungenerated.
+- `tools/yaml_roundtrip.py` runs its layout and policy passes together instead
+  of one after another. A pass costs one `fsync` per rewritten file, which is
+  latency rather than work, so overlapping them is what pays: the full sweep now
+  covers three policies rather than two and a third more documents in under half
+  the wall time. CI runs the corpus and both enumerated sweeps in full and cuts
+  only the pseudo-random set, whose cost is linear and whose value is not; the
+  whole 2400 is one command away.

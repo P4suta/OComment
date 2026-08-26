@@ -81,6 +81,13 @@ all if the file stopped there without one. Being alone on a line is judged from
 the original bytes, so a line holding two comments and nothing else keeps its
 terminator: neither of them was alone on it.
 
+YAML has one exception, and it is the only one in any language: a block scalar
+decides where its body ends from the lines *below* it, so a whole-line comment
+under a body is what terminates it and anything a removal writes on that line is
+read back as part of the value. There every layout takes the whole line —
+`lines` gives up that line's number and `columns` its columns rather than give
+up the value. [Languages](languages.md#anything-else) states the rule in full.
+
 [Policies and layouts](policies.md) shows all three on one sample.
 
 ## Declarative language profiles

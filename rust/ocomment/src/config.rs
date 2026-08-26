@@ -273,7 +273,8 @@ impl PolicyTrace {
             // NOTE: A built-in rule, decided by no setting at all.
             DispositionExplanation::ProtectedPreamble
             | DispositionExplanation::KeptHtml
-            | DispositionExplanation::KeptDirective { .. } => return None,
+            | DispositionExplanation::KeptDirective { .. }
+            | DispositionExplanation::KeptStructural { .. } => return None,
         };
         Some(source.describe(self.origins.get(key).map(PathBuf::as_path)))
     }

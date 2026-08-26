@@ -23,8 +23,8 @@ $ ocomment strip --language rust --dialect mysql
 ocomment: unsupported dialect `mysql` for rust; supported: standard
 ```
 
-OComment has 17 built-in languages covering
-45 file extensions and 16 named dialects.
+OComment has 19 built-in languages covering
+50 file extensions and 16 named dialects.
 
 | Language | Extensions | Dialects |
 | --- | --- | --- |
@@ -45,6 +45,8 @@ OComment has 17 built-in languages covering
 | `kotlin` | `.kt`, `.kts` | `standard` |
 | `toml` | `.toml` | `standard` |
 | `lua` | `.lua`, `.rockspec` | `standard` |
+| `yaml` | `.yml`, `.yaml` | `standard` |
+| `php` | `.php`, `.phtml`, `.phpt` | `standard` |
 
 ## Detected without an extension
 
@@ -61,12 +63,71 @@ interpreter name appears anywhere on the line.
 | `jsonc` | `tsconfig.json`, `jsconfig.json` | — |
 | `toml` | `Cargo.lock`, `Pipfile`, `poetry.lock`, `uv.lock`, `pdm.lock` | — |
 | `lua` | — | `lua`, `luajit` |
+| `yaml` | `.clang-format`, `.clang-tidy`, `.yamllint` | — |
+| `php` | — | `php` |
 
 ## Anything else
 
 HTML is scanned recursively: the contents of a `<script>` element are
 scanned as JavaScript and the contents of a `<style>` element as CSS,
 each with the comment forms of that language rather than of HTML.
+
+PHP is scanned in the code half of the file only. What sits between
+`<?php` (or `<?=`) and `?>` is scanned for PHP comments; the inline
+HTML around those tags is content, so an HTML `<!-- ... -->` comment
+in a PHP file is not reported and is never removed. Which mode a byte
+sits in is decided by everything above it, so only a line break in
+inline HTML is a point an editor may rescan a PHP file from: a file
+that is all PHP is rescanned from the top.
+
+YAML is scanned lexically, and `valid` is a lexical answer: the
+shapes a YAML *parser* rejects are not all shapes a lexer can see.
+A comment line inside a multi-line plain scalar makes the file a
+parse error while it is there, and taking it away leaves a scalar
+that parses and folds the two halves into one value; that comment
+is reported and removed like any other.
+
+The block scalar is the other way round, and it is the one place
+in any language where the *hole* a removal leaves carries meaning.
+A block scalar decides where its body ends from the lines below it
+(YAML 1.2.2, 8.1.1), so a whole-line comment under a body is what
+terminates it -- and whatever a removal writes on that line is read
+back as part of the value. A line of spaces as wide as the comment,
+which `columns` writes, is indented at least as deep as the body
+whenever the comment was wide enough. An empty line, which `lines`
+writes, is content under `|+` and `>+`, which keep every empty line
+trailing a body (8.1.1.2).
+
+So the rule is one rule, and it holds whatever the block scalar
+chomps: **a whole-line comment sitting in the run of blank and
+comment lines under a block scalar body is removed by taking its
+whole line, terminator and all, under every layout.** Those lines
+are the one place `lines` does not keep a line's number and
+`columns` does not keep a column's -- both give that up rather than
+give up the value. Under `|+` and `>+` the removal also takes the
+blank lines the comment was sheltering, which become content the
+moment it is gone; the blank lines *above* the first comment were
+content already and are left exactly where they were.
+
+There is one comment that rule cannot reach, and it is kept instead.
+The line a body ends at is a comment shallower than the body's own
+content; take it away and the lines under it are read against the body
+again. When one of those is a comment the run *keeps*, and it is
+indented to the content depth, the body swallows it and the value
+grows a line. No removal preserves the value there, so the comment
+that ends the body is kept, with the reason `structural in a YAML
+block scalar trail` -- the one keep `--policy all` does not overrule.
+
+The depth this is measured at is the body's *content* indentation:
+the explicit indentation indicator when the header spells one out, and
+otherwise the indentation of the body's first non-empty line (YAML
+1.2.2, 8.1.1.1). A surviving comment shallower than that is outside
+the scalar before and after the removal, so nothing above it is kept.
+
+`tools/yaml_roundtrip.py` is what holds this to its word: it strips
+thousands of generated YAML documents under every layout and every
+policy and asserts that PyYAML reads the same value out of each one
+before and after.
 
 A delimiter-based syntax that is not in the table above can be described
 declaratively as a profile in `.ocomment.toml`, which needs no code; see

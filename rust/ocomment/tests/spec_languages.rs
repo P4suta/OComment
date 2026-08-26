@@ -32,6 +32,18 @@ const EMBEDDED: &str = include_str!("../assets/languages.toml");
 /// in, since nothing enumerates it at run time.
 const DETECT: &str = include_str!("../../ocomment-core/src/detect.rs");
 
+/// The prose that states, in words or in figures, how many languages OComment
+/// scans or how many editor language identifiers the extension attaches to.
+/// Nothing derives these sentences, so nothing but a test stops the next
+/// language from leaving them behind — and a description that undercounts is
+/// read by everyone who installs the extension.
+const COMPARISON: &str = include_str!("../../../docs/comparison.md");
+const EDITORS: &str = include_str!("../../../docs/editors.md");
+const CHANGELOG: &str = include_str!("../../../CHANGELOG.md");
+const VSCODE_PACKAGE: &str = include_str!("../../../editors/vscode/package.json");
+const VSCODE_README: &str = include_str!("../../../editors/vscode/README.md");
+const VSCODE_CHANGELOG: &str = include_str!("../../../editors/vscode/CHANGELOG.md");
+
 /// The extensions `detect_language` knows that `spec/languages.toml` does not
 /// publish. There are none: an extension the detector answers to is one the
 /// hooks match, the documentation lists and `ocomment languages` prints.
@@ -544,4 +556,158 @@ fn the_detector_knows_no_unrecorded_file_name() {
         known, published,
         "the detector and spec/languages.toml disagree about which file names are reserved"
     );
+}
+
+/// The English word for a small number, so a count written out in prose can be
+/// checked against the number it means. The list stops where the prose does: a
+/// repository with more than thirty-nine languages needs another entry here,
+/// which is the same edit as the sentence it guards.
+fn number_word(value: usize) -> String {
+    const UNITS: [&str; 20] = [
+        "zero",
+        "one",
+        "two",
+        "three",
+        "four",
+        "five",
+        "six",
+        "seven",
+        "eight",
+        "nine",
+        "ten",
+        "eleven",
+        "twelve",
+        "thirteen",
+        "fourteen",
+        "fifteen",
+        "sixteen",
+        "seventeen",
+        "eighteen",
+        "nineteen",
+    ];
+    const TENS: [&str; 4] = ["twenty", "thirty", "forty", "fifty"];
+    if value < UNITS.len() {
+        return UNITS[value].to_owned();
+    }
+    let tens = TENS
+        .get(value / 10 - 2)
+        .unwrap_or_else(|| panic!("no English word for {value}"));
+    match value % 10 {
+        0 => (*tens).to_owned(),
+        unit => format!("{tens}-{}", UNITS[unit]),
+    }
+}
+
+/// One text with its runs of whitespace collapsed, so a claim can be searched
+/// for without the line wrapping of the file it lives in being part of the
+/// assertion.
+fn unwrapped(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// The VS Code language identifiers the extension attaches to, taken from the
+/// default of its `ocomment.languages` setting.
+fn vscode_language_identifiers() -> Vec<String> {
+    let manifest: Value = serde_json::from_str(VSCODE_PACKAGE).expect("package.json parses");
+    manifest["contributes"]["configuration"]["properties"]["ocomment.languages"]["default"]
+        .as_array()
+        .expect("`ocomment.languages` has an array default")
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .expect("a language identifier is a string")
+                .to_owned()
+        })
+        .collect()
+}
+
+/// The extension activates on exactly the identifiers it attaches the server
+/// to, in the same order. The two lists sit in one file and are read by
+/// different parts of VS Code, so an identifier added to one alone is an
+/// extension that either never wakes up for a language or wakes up for one it
+/// then ignores.
+#[test]
+fn the_vscode_activation_events_are_the_languages_it_attaches_to() {
+    let manifest: Value = serde_json::from_str(VSCODE_PACKAGE).expect("package.json parses");
+    let activated: Vec<String> = manifest["activationEvents"]
+        .as_array()
+        .expect("`activationEvents` is an array")
+        .iter()
+        .filter_map(|value| value.as_str()?.strip_prefix("onLanguage:"))
+        .map(ToOwned::to_owned)
+        .collect();
+    assert_eq!(
+        activated,
+        vscode_language_identifiers(),
+        "editors/vscode/package.json activates on a different set of languages than it attaches to"
+    );
+}
+
+/// Every written-out count of languages or of editor language identifiers is
+/// the count it claims to be. `Language::ALL` and the extension's own selector
+/// are the two things being counted, so adding a language cannot leave a
+/// sentence, a Marketplace description, or a changelog entry quietly wrong.
+///
+/// The claims are searched for in the file with its line wrapping collapsed,
+/// so re-flowing a paragraph is not a failure and changing what it says is.
+#[test]
+fn every_written_language_count_matches_what_it_counts() {
+    let languages = Language::ALL.len();
+    let dialects = Dialect::ALL.len();
+    let identifiers = vscode_language_identifiers().len();
+    let claims = [
+        (
+            "docs/comparison.md",
+            COMPARISON,
+            format!("[{languages} languages and {dialects} dialects](languages.md)"),
+        ),
+        (
+            "editors/vscode/package.json",
+            VSCODE_PACKAGE,
+            format!("comment checker and remover for {languages} languages."),
+        ),
+        (
+            "editors/vscode/README.md",
+            VSCODE_README,
+            format!("the {identifiers} identifiers above"),
+        ),
+        (
+            "docs/editors.md",
+            EDITORS,
+            format!(
+                "It attaches to {} language identifiers",
+                number_word(identifiers)
+            ),
+        ),
+        (
+            "editors/vscode/CHANGELOG.md",
+            VSCODE_CHANGELOG,
+            format!(
+                "attaches it to the {} language identifiers OComment scans",
+                number_word(identifiers)
+            ),
+        ),
+        (
+            "CHANGELOG.md",
+            CHANGELOG,
+            format!(
+                "attaches it to the {} language identifiers OComment scans",
+                number_word(identifiers)
+            ),
+        ),
+        (
+            "CHANGELOG.md",
+            CHANGELOG,
+            format!("transformations for {languages} built-in languages"),
+        ),
+    ];
+    for (name, text, claim) in claims {
+        assert!(
+            unwrapped(text).contains(&claim),
+            "{name} does not say `{claim}`; \
+             {languages} language(s) and {identifiers} editor language identifier(s) are what \
+             `Language::ALL` and editors/vscode/package.json hold"
+        );
+    }
 }

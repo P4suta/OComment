@@ -23,7 +23,7 @@ use std::{collections::BTreeSet, fs, path::PathBuf, str::FromStr};
 // INVARIANT: The floor `tools/differential.py` enforces with `MINIMUM_CASES`,
 // INVARIANT: repeated here so a case deleted from the corpus fails the Rust
 // INVARIANT: test suite too, on a machine with no OCaml toolchain.
-const MINIMUM_CASES: usize = 109;
+const MINIMUM_CASES: usize = 269;
 
 // INVARIANT: How many cases must carry a recorded `expect` block. A case with
 // INVARIANT: none is still held to the structural promises below, so this floor
@@ -31,7 +31,7 @@ const MINIMUM_CASES: usize = 109;
 // INVARIANT: check. Deleting a block to re-record it is the documented way to
 // INVARIANT: change a recorded behaviour, and `differential.py --record` puts it
 // INVARIANT: back before this test is meant to run again.
-const MINIMUM_EXPECTATIONS: usize = 109;
+const MINIMUM_EXPECTATIONS: usize = 269;
 
 /// One comment as an `expect` block records it, and as the checks compare it.
 #[derive(Debug, Eq, PartialEq)]

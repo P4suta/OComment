@@ -132,7 +132,7 @@
       }
     },
     "language": {
-      "enum": ["rust", "ocaml", "c", "cpp", "go", "java", "javascript", "typescript", "python", "shell", "html", "css", "jsonc", "sql", "kotlin", "toml", "lua", "unknown"]
+      "enum": ["rust", "ocaml", "c", "cpp", "go", "java", "javascript", "typescript", "python", "shell", "html", "css", "jsonc", "sql", "kotlin", "toml", "lua", "yaml", "php", "unknown"]
     },
     "kind": {
       "enum": ["line", "block", "doc-line", "doc-block", "directive", "license", "html-comment", "shebang", "encoding", "optimizer-hint", "version-comment"]

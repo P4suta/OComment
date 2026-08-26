@@ -1,7 +1,10 @@
 use crate::{
     ByteSpan, Comment, CommentKind, Edit, ExternalSpanError, Language, Layout, ScanReport,
     SourceMap, TransformOptions, TransformResult, scan,
-    scanner::{DispositionPatterns, disposition, unicode_line_terminator_width},
+    scanner::{
+        DispositionPatterns, disposition, keep_yaml_structural_trails,
+        lines_a_removal_must_swallow, unicode_line_terminator_width,
+    },
 };
 use unicode_width::UnicodeWidthChar;
 
@@ -120,6 +123,12 @@ pub fn transform_spans(
             ),
         });
     }
+    /* NOTE: The one verdict a comment's own bytes cannot reach, so it is
+     * applied to the hand-off as a built-in scan applies it: a YAML block
+     * scalar leaning on the comment that ends it keeps that comment, whoever
+     * found it. Without this the report would promise a removal that
+     * `lines_a_removal_must_swallow` cannot make safe. */
+    keep_yaml_structural_trails(source, language, &mut comments);
     Ok(transform_report(
         source,
         ScanReport {
@@ -138,10 +147,15 @@ pub(crate) fn transform_report(
     options: TransformOptions,
 ) -> TransformResult {
     let edits = if report.valid || options.scan.force_invalid {
+        /* NOTE: The one hole whose own bytes carry meaning, so every layout has
+         * to be told where not to leave one. `compact` takes the line already;
+         * what it does not know on its own is how far past the line to go
+         * under a `|+` body. */
+        let swallow = lines_a_removal_must_swallow(source, report.language, &report.comments);
         match options.layout {
-            Layout::Lines => line_edits(source, &report.comments),
-            Layout::Columns => column_edits(source, &report.comments),
-            Layout::Compact => compact_edits(source, &report.comments),
+            Layout::Lines => line_edits(source, &report.comments, &swallow),
+            Layout::Columns => column_edits(source, &report.comments, &swallow),
+            Layout::Compact => compact_edits(source, &report.comments, &swallow),
         }
     } else {
         Vec::new()
@@ -208,26 +222,36 @@ pub fn apply_edits(source: &[u8], edits: &[Edit]) -> Vec<u8> {
     output
 }
 
-/// The removable comments of a report, in source order.
-fn removable(comments: &[Comment]) -> impl Iterator<Item = &Comment> {
-    comments
-        .iter()
-        .filter(|comment| comment.disposition.is_remove())
-}
-
 /// The edits [`Layout::Lines`] makes: one per removed comment, over exactly
-/// the bytes that comment covers.
-fn line_edits(source: &[u8], comments: &[Comment]) -> Vec<Edit> {
-    removable(comments)
-        .map(|comment| Edit {
-            span: comment.span,
-            replacement: if comment.kind == CommentKind::HtmlComment {
-                Vec::new()
-            } else {
-                line_replacement(source, comment.span)
+/// the bytes that comment covers — save where `swallow` names a whole line,
+/// because there the hole itself would say something (see
+/// [`lines_a_removal_must_swallow`]). This is the layout that promises line
+/// numbers and those lines are the one place it cannot keep that promise.
+fn line_edits(source: &[u8], comments: &[Comment], swallow: &[Option<ByteSpan>]) -> Vec<Edit> {
+    let mut edits = Vec::new();
+    let mut floor = 0usize;
+    for (index, comment) in comments.iter().enumerate() {
+        if !comment.disposition.is_remove() {
+            continue;
+        }
+        let edit = match swallow.get(index).copied().flatten() {
+            Some(line) => Edit {
+                span: ByteSpan::new(line.start.max(floor), line.end),
+                replacement: Vec::new(),
             },
-        })
-        .collect()
+            None => Edit {
+                span: comment.span,
+                replacement: if comment.kind == CommentKind::HtmlComment {
+                    Vec::new()
+                } else {
+                    line_replacement(source, comment.span)
+                },
+            },
+        };
+        floor = edit.span.end;
+        edits.push(edit);
+    }
+    edits
 }
 
 /// What [`Layout::Lines`] leaves in place of a removed comment: the line
@@ -243,17 +267,37 @@ fn line_replacement(source: &[u8], span: ByteSpan) -> Vec<u8> {
     output
 }
 
-/// The edits [`Layout::Columns`] makes.
+/// The edits [`Layout::Columns`] makes: one per removed comment, of spaces as
+/// wide as the comment was — save where `swallow` names a line, because a line
+/// of spaces under a YAML block scalar body is indented into it (see
+/// [`lines_a_removal_must_swallow`]). This is the layout that promises columns
+/// and those lines are the one place it cannot keep that promise.
 ///
 /// The display column is threaded from one edit to the next so every source
 /// byte is inspected at most once. It also reflects an explicitly removed HTML
 /// comment: because that edit emits no bytes, the newlines it covered do not
 /// move the column the edits after it are measured from.
-fn column_edits(source: &[u8], comments: &[Comment]) -> Vec<Edit> {
+fn column_edits(source: &[u8], comments: &[Comment], swallow: &[Option<ByteSpan>]) -> Vec<Edit> {
     let mut edits = Vec::new();
     let mut cursor = 0usize;
     let mut column = 0usize;
-    for comment in removable(comments) {
+    for (index, comment) in comments.iter().enumerate() {
+        if !comment.disposition.is_remove() {
+            continue;
+        }
+        /* NOTE: A swallowed line takes its terminator with it, so what follows
+         * starts a line of its own in the output as it did in the source and
+         * the column count begins again there. */
+        if let Some(line) = swallow.get(index).copied().flatten() {
+            let span = ByteSpan::new(line.start.max(cursor), line.end);
+            cursor = span.end;
+            column = 0;
+            edits.push(Edit {
+                span,
+                replacement: Vec::new(),
+            });
+            continue;
+        }
         column = advance_display_column(source, cursor, comment.span.start, column);
         let (replacement, next) = if comment.kind == CommentKind::HtmlComment {
             (Vec::new(), column)
@@ -281,13 +325,30 @@ fn column_edits(source: &[u8], comments: &[Comment]) -> Vec<Edit> {
 /// The start of the current line is tracked forward through the whole source,
 /// comment bodies included, so a comment beginning on a line that an earlier
 /// comment ended is still measured from that line's real beginning.
-fn compact_edits(source: &[u8], comments: &[Comment]) -> Vec<Edit> {
+///
+/// `swallow` names the lines whose hole would carry meaning, and it reaches
+/// further than a line: under a `|+` body it takes the empty lines the comment
+/// was sheltering too (see [`lines_a_removal_must_swallow`]). Taking the line
+/// is what `compact` does anyway, so this only ever widens what it takes, and
+/// it is what keeps all three layouts writing the same bytes there.
+fn compact_edits(source: &[u8], comments: &[Comment], swallow: &[Option<ByteSpan>]) -> Vec<Edit> {
     let mut edits = Vec::new();
     let mut scan = 0usize;
     let mut line_start = 0usize;
     let mut floor = 0usize;
     for (index, comment) in comments.iter().enumerate() {
         if !comment.disposition.is_remove() {
+            continue;
+        }
+        if let Some(line) = swallow.get(index).copied().flatten() {
+            let span = ByteSpan::new(line.start.max(floor), line.end.max(floor));
+            floor = span.end;
+            scan = span.end;
+            line_start = span.end;
+            edits.push(Edit {
+                span,
+                replacement: Vec::new(),
+            });
             continue;
         }
         while scan < comment.span.start {

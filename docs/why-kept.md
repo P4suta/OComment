@@ -115,11 +115,57 @@ this page, so the table cannot claim a protection that is not there.
 | `selene:` | `lua` | `-- selene: allow(unused_variable)` | `directive` | tool or language directive |
 | `stylua:` | `lua` | `-- stylua: ignore` | `directive` | tool or language directive |
 | `luacov:` | `lua` | `-- luacov: disable` | `directive` | tool or language directive |
+| `yaml-language-server:` | `yaml` | `# yaml-language-server: $schema=https://example.test/schema.json` | `directive` | tool or language directive |
+| `yamllint` | `yaml` | `# yamllint disable-line rule:line-length` | `directive` | tool or language directive |
+| `renovate:` | `yaml` | `# renovate: datasource=docker depName=alpine` | `directive` | tool or language directive |
+| `checkov:skip` | `yaml` | `# checkov:skip=CKV_AWS_20:public by design` | `directive` | tool or language directive |
+| `trivy:ignore` | `yaml` | `# trivy:ignore:AVD-AWS-0089` | `directive` | tool or language directive |
+| `nosec` | `yaml` | `# nosec` | `directive` | tool or language directive |
+| `kics-scan` | `yaml` | `# kics-scan ignore-line` | `directive` | tool or language directive |
+| `@schema` | `yaml` | `# @schema type: string` | `directive` | tool or language directive |
+| `phpcs:` | `php` | `// phpcs:ignore Squiz.Commenting.FunctionComment` | `directive` | tool or language directive |
+| `@phpstan-ignore` | `php` | `// @phpstan-ignore-next-line` | `directive` | tool or language directive |
+| `@psalm-suppress` | `php` | `/** @psalm-suppress InvalidReturnType */` | `directive` | tool or language directive |
+| `@codeCoverageIgnore` | `php` | `// @codeCoverageIgnoreStart` | `directive` | tool or language directive |
 
 `--remove-kind directive` or `--policy all` removes a directive anyway.
 A shebang and an encoding preamble need `--force-protected` on top of
 `--policy all`, because removing one changes how the file is executed
 or decoded rather than how it reads.
+
+## The one keep no setting reaches
+
+Every rule above is about what a comment *says*. One is about where it
+sits, and it is the only keep no flag overrules:
+
+```yaml
+k: |
+  a
+# ends the block
+  # yamllint disable
+z: 1
+```
+
+A YAML block scalar decides where its body ends from the lines below
+it, so `# ends the block` is not commentary: it is what terminates the
+body, and the directive under it is indented deep enough to be content
+of that body. Remove the terminating line -- and a removal there takes
+the whole line, which is the least it can take -- and the directive
+rejoins the scalar, so `k` changes from `a` to two lines. No removal
+preserves the value, so the comment stays, and `--explain` writes the
+reason under it:
+
+```text
+k.yaml:3:1: kept line comment: # ends the block
+    kept: it separates a `yaml` block scalar from the kept comment below it; the comment under it has to go first
+```
+
+`--policy all` is not a way out: it removes the directive as well, and
+with nothing left standing under the body both comments go. What holds
+the first one in place is whatever comment survives *under* it, so that
+is the line to take first. A surviving comment shallower than the
+body's own content ends the scalar on its own and keeps nothing above
+it -- see [Languages](languages.md) for the depth this is measured at.
 
 ## Keeping more
 

@@ -1,16 +1,17 @@
-# Git hooks for this repository. Install them once with `lefthook install`.
-#
-# `ocomment check --staged` reads the staged blobs rather than the working tree,
-# so a partially staged file is judged by the bytes the commit will actually
-# carry. It reports rather than rewrites: `fix --staged` would need Lefthook's
-# `stage_fixed`, and that setting stages the whole working-tree file and
-# destroys partial staging.
+# NOTE: Git hooks for this repository. Install them once with `lefthook
+# NOTE: install`.
+# NOTE:
+# NOTE: `ocomment check --staged` reads the staged blobs rather than the working
+# NOTE: tree, so a partially staged file is judged by the bytes the commit will
+# NOTE: actually carry. It reports rather than rewrites: `fix --staged` would
+# NOTE: need Lefthook's `stage_fixed`, and that setting stages the whole
+# NOTE: working-tree file and destroys partial staging.
 pre-commit:
   parallel: true
   commands:
     ocomment:
-      # Prefer an installed CLI; fall back to the workspace copy so a fresh
-      # clone gets the same gate without `cargo install` first.
+      # NOTE: Prefer an installed CLI; fall back to the workspace copy so a
+      # NOTE: fresh clone gets the same gate without `cargo install` first.
       run: |
         if command -v ocomment >/dev/null 2>&1; then
           ocomment check --staged

@@ -900,6 +900,126 @@
         "diagnostics": [],
         "output_utf8": "\nprint([[-- opaque]]) \n"
       }
+    },
+    {
+      "id": "yaml-builtin-safe",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "# yamllint disable-line rule:line-length\nkey: \"# opaque\" # remove\n",
+      "note": "YAML 1.2.2, 6.6 (Comment) and 7.3.1 (Double-Quoted Style): a `#` between the quotes of a double-quoted scalar is one of its bytes, and a comment needs white space in front of it, so only the `#` outside the quotes opens one. The `# yamllint` line is a directive `safe` keeps and `all` removes.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 40,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 57,
+            "end": 65,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "# yamllint disable-line rule:line-length\nkey: \"# opaque\" \n"
+      }
+    },
+    {
+      "id": "yaml-builtin-all",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "# yamllint disable-line rule:line-length\nkey: \"# opaque\" # remove\n",
+      "note": "YAML 1.2.2, 6.6 (Comment) and 7.3.1 (Double-Quoted Style): a `#` between the quotes of a double-quoted scalar is one of its bytes, and a comment needs white space in front of it, so only the `#` outside the quotes opens one. The `# yamllint` line is a directive `safe` keeps and `all` removes.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 40,
+            "kind": "directive",
+            "action": "remove"
+          },
+          {
+            "start": 57,
+            "end": 65,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\nkey: \"# opaque\" \n"
+      }
+    },
+    {
+      "id": "php-builtin-safe",
+      "language": "php",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "<?php // phpcs:disable\r\n$s = '// opaque'; // remove\r\n?>\r\n<p># html</p>\r\n",
+      "note": "PHP manual, Basic syntax and Comments: the inline HTML behind the closing tag is output verbatim and holds no comment, a `//` inside a single-quoted string is one of its bytes, and `phpcs:disable` is a directive `safe` keeps and `all` removes. The CRLF endings survive the transformation.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 6,
+            "end": 22,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 42,
+            "end": 51,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "<?php // phpcs:disable\r\n$s = '// opaque'; \r\n?>\r\n<p># html</p>\r\n"
+      }
+    },
+    {
+      "id": "php-builtin-all",
+      "language": "php",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "<?php // phpcs:disable\r\n$s = '// opaque'; // remove\r\n?>\r\n<p># html</p>\r\n",
+      "note": "PHP manual, Basic syntax and Comments: the inline HTML behind the closing tag is output verbatim and holds no comment, a `//` inside a single-quoted string is one of its bytes, and `phpcs:disable` is a directive `safe` keeps and `all` removes. The CRLF endings survive the transformation.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 6,
+            "end": 22,
+            "kind": "directive",
+            "action": "remove"
+          },
+          {
+            "start": 42,
+            "end": 51,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "<?php \r\n$s = '// opaque'; \r\n?>\r\n<p># html</p>\r\n"
+      }
     }
   ]
 }

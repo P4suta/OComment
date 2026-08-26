@@ -5,7 +5,9 @@ protected = [
   "sourceMappingURL", "sourceURL", "#__PURE__", "@__PURE__",
   "lint-and-formatter", "type-checker", "optimizer-hint", "version-comment",
   "syntax=", "hadolint", ":schema", "taplo:", "---@diagnostic", "luacheck:",
-  "selene:", "stylua:", "luacov:"
+  "selene:", "stylua:", "luacov:", "yaml-language-server:", "yamllint",
+  "renovate:", "checkov:skip", "trivy:ignore", "nosec", "kics-scan", "@schema",
+  "phpcs:", "@phpstan-ignore", "@psalm-suppress", "@codeCoverageIgnore"
 ]
 
 [policy.safe]

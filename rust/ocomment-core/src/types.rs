@@ -115,6 +115,12 @@ pub enum Language {
     /// Lua, detected from `.lua` and `.rockspec`, and from a `lua` or
     /// `luajit` `#!` line.
     Lua,
+    /// YAML, detected from `.yml` and `.yaml`, and from the extensionless
+    /// configuration names written in it, such as `.clang-format`.
+    Yaml,
+    /// PHP, detected from `.php`, `.phtml` and `.phpt`, and from a `php` `#!`
+    /// line. The inline HTML around the `<?php ... ?>` tags is content.
+    Php,
     /// No built-in scanner, and the default.
     ///
     /// Scanning it yields no comments and one `unknown-language` error
@@ -127,7 +133,7 @@ pub enum Language {
 
 impl Language {
     /// Every CLI-visible language; `Unknown` is deliberately excluded.
-    pub const ALL: [Self; 17] = [
+    pub const ALL: [Self; 19] = [
         Self::Rust,
         Self::Ocaml,
         Self::C,
@@ -145,6 +151,8 @@ impl Language {
         Self::Kotlin,
         Self::Toml,
         Self::Lua,
+        Self::Yaml,
+        Self::Php,
     ];
 
     /// The canonical name, identical to the serde representation.
@@ -167,6 +175,8 @@ impl Language {
             Self::Kotlin => "kotlin",
             Self::Toml => "toml",
             Self::Lua => "lua",
+            Self::Yaml => "yaml",
+            Self::Php => "php",
             Self::Unknown => "unknown",
         }
     }
@@ -183,6 +193,7 @@ impl Language {
             | Self::Sql
             | Self::Toml
             | Self::Lua
+            | Self::Php
             | Self::Unknown => &[],
             Self::Cpp => &["c++", "cxx"],
             Self::Go => &["golang"],
@@ -193,6 +204,7 @@ impl Language {
             Self::Html => &["htm"],
             Self::Jsonc => &["json5"],
             Self::Kotlin => &["kt", "kts"],
+            Self::Yaml => &["yml"],
         }
     }
 }
@@ -529,6 +541,11 @@ impl fmt::Display for Action {
 ///
 /// Regex indices are zero-based positions in [`ScanOptions::keep_regex`] and
 /// [`ScanOptions::remove_regex`], and `pattern` is that entry verbatim.
+///
+/// One rule is not about the comment's bytes at all and so is not a branch of
+/// that table: [`Self::KeptStructural`] is decided by where the comment sits in
+/// the file, is tested after every other rule, and is the answer only
+/// [`explain_comment`](crate::explain_comment) can give.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DispositionExplanation {
     /// The kind is listed in [`ScanOptions::keep_kinds`].
@@ -570,6 +587,18 @@ pub enum DispositionExplanation {
     RemovedByPolicy(Policy),
     /// Nothing protected an ordinary comment, so the policy default removed it.
     RemovedByDefault(Policy),
+    /// A comment every rule above would have removed, kept because a block
+    /// scalar's body ends at it and a comment the run keeps sits below it,
+    /// deep enough that the body would take that comment back.
+    ///
+    /// No option overrules this one: `--policy all` removes the comment below
+    /// it and the question with it, but a comment an override still keeps
+    /// leaves the value depending on this line.
+    KeptStructural {
+        /// The language whose layout rule decided it, which is
+        /// [`Language::Yaml`] wherever this is returned today.
+        language: Language,
+    },
 }
 
 impl DispositionExplanation {
@@ -582,7 +611,8 @@ impl DispositionExplanation {
             | Self::ProtectedPreamble
             | Self::KeptHtml
             | Self::KeptDirective { .. }
-            | Self::KeptLicense { .. } => Action::Keep,
+            | Self::KeptLicense { .. }
+            | Self::KeptStructural { .. } => Action::Keep,
             Self::RemovedByKind(_)
             | Self::RemovedByRegex { .. }
             | Self::RemovedByPolicy(_)
@@ -630,6 +660,10 @@ impl fmt::Display for DispositionExplanation {
             Self::RemovedByDefault(policy) => {
                 write!(f, "removed: policy `{policy}` removes ordinary comments")
             }
+            Self::KeptStructural { language } => write!(
+                f,
+                "kept: it separates a `{language}` block scalar from the kept comment below it"
+            ),
         }
     }
 }
@@ -823,19 +857,39 @@ impl FromStr for Policy {
 
 /// What a removal leaves behind in place of the comment.
 ///
-/// No layout ever moves a byte the comment did not cover, so the choice is
-/// only about the hole.
+/// The choice is only about the hole: no layout moves a byte the comment did
+/// not cover, except where the hole itself would say something. That happens
+/// in one place, and it is YAML.
+///
+/// A block scalar decides where its body ends from the lines *below* it
+/// (YAML 1.2.2, 8.1.1), so a whole-line comment under a body is what
+/// terminates it — and the hole a removal would leave on that line is read
+/// back as content. A line of spaces as wide as the comment, which `columns`
+/// writes, is indented at least as deep as the body whenever the comment was
+/// wide enough; an empty line, which `lines` writes, is content under `|+` and
+/// `>+`, which keep every empty line trailing a body (8.1.1.2). So in YAML a
+/// whole-line comment sitting in the run of blank and comment lines under a
+/// block scalar body is removed by taking its whole line, terminator and all,
+/// under **every** layout: `lines` gives up that line's number and `columns`
+/// its columns, rather than give up the value. Under `|+` and `>+` the removal
+/// also takes the blank lines the comment was sheltering — they are content
+/// the moment it is gone — and never the blank lines above the first comment,
+/// which were content already.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Layout {
     /// The default. The line terminators inside the comment are kept, so
     /// every following line keeps its number, and a comment with code on
-    /// both sides leaves a single space so the two tokens stay apart.
+    /// both sides leaves a single space so the two tokens stay apart. The YAML
+    /// exception above is the one place a line does not keep its number.
     #[default]
     Lines,
     /// As [`Self::Lines`], but the comment is replaced by spaces of the same
     /// display width, so every following column on the line keeps its number
-    /// as well. Tabs are expanded to the next multiple of eight.
+    /// as well. Tabs are expanded to the next multiple of eight. A line of
+    /// spaces under a YAML block scalar body is indented into it, so the YAML
+    /// exception above applies here too — and reaches further, because it
+    /// applies whatever the block scalar chomps.
     Columns,
     /// As [`Self::Lines`], except that a line which held nothing but a
     /// removed comment goes away instead of staying behind as a blank one,

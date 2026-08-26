@@ -46,7 +46,13 @@ test("every language the extension attaches to also activates it", () => {
 		"ocomment.languages"
 	].default as string[];
 	assert.deepEqual([...activated].sort(), [...configured].sort());
-	assert.equal(configured.length, 20);
+	// NOTE: The literal is the count, so dropping an identifier fails here rather
+	// NOTE: than shrinking the set the extension attaches to in silence. Every
+	// NOTE: written-out count of it -- the Marketplace description, the README,
+	// NOTE: docs/editors.md, both changelogs -- is checked against this same list
+	// NOTE: by `every_written_language_count_matches_what_it_counts` in
+	// NOTE: rust/ocomment/tests/spec_languages.rs.
+	assert.equal(configured.length, 24);
 	// NOTE: A workspace can hold a configuration file and no open editor, and
 	// NOTE: the status bar and the workspace fix have to work there too.
 	assert.ok(

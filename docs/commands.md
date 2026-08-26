@@ -119,6 +119,8 @@ Policy:
           - kotlin:     Kotlin source and script files
           - toml:       TOML documents, including the lock files written in it
           - lua:        Lua chunks and LuaRocks rockspecs
+          - yaml:       YAML documents, including the tool configurations written in it
+          - php:        PHP scripts and templates; the inline HTML around the tags is content
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -303,6 +305,8 @@ Policy:
           - kotlin:     Kotlin source and script files
           - toml:       TOML documents, including the lock files written in it
           - lua:        Lua chunks and LuaRocks rockspecs
+          - yaml:       YAML documents, including the tool configurations written in it
+          - php:        PHP scripts and templates; the inline HTML around the tags is content
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -472,6 +476,8 @@ Policy:
           - kotlin:     Kotlin source and script files
           - toml:       TOML documents, including the lock files written in it
           - lua:        Lua chunks and LuaRocks rockspecs
+          - yaml:       YAML documents, including the tool configurations written in it
+          - php:        PHP scripts and templates; the inline HTML around the tags is content
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -633,6 +639,8 @@ Policy:
           - kotlin:     Kotlin source and script files
           - toml:       TOML documents, including the lock files written in it
           - lua:        Lua chunks and LuaRocks rockspecs
+          - yaml:       YAML documents, including the tool configurations written in it
+          - php:        PHP scripts and templates; the inline HTML around the tags is content
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -794,6 +802,8 @@ Policy:
           - kotlin:     Kotlin source and script files
           - toml:       TOML documents, including the lock files written in it
           - lua:        Lua chunks and LuaRocks rockspecs
+          - yaml:       YAML documents, including the tool configurations written in it
+          - php:        PHP scripts and templates; the inline HTML around the tags is content
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -945,6 +955,8 @@ Policy:
           - kotlin:     Kotlin source and script files
           - toml:       TOML documents, including the lock files written in it
           - lua:        Lua chunks and LuaRocks rockspecs
+          - yaml:       YAML documents, including the tool configurations written in it
+          - php:        PHP scripts and templates; the inline HTML around the tags is content
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1096,6 +1108,8 @@ Policy:
           - kotlin:     Kotlin source and script files
           - toml:       TOML documents, including the lock files written in it
           - lua:        Lua chunks and LuaRocks rockspecs
+          - yaml:       YAML documents, including the tool configurations written in it
+          - php:        PHP scripts and templates; the inline HTML around the tags is content
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1263,6 +1277,8 @@ Policy:
           - kotlin:     Kotlin source and script files
           - toml:       TOML documents, including the lock files written in it
           - lua:        Lua chunks and LuaRocks rockspecs
+          - yaml:       YAML documents, including the tool configurations written in it
+          - php:        PHP scripts and templates; the inline HTML around the tags is content
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1421,6 +1437,8 @@ Policy:
           - kotlin:     Kotlin source and script files
           - toml:       TOML documents, including the lock files written in it
           - lua:        Lua chunks and LuaRocks rockspecs
+          - yaml:       YAML documents, including the tool configurations written in it
+          - php:        PHP scripts and templates; the inline HTML around the tags is content
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1572,6 +1590,8 @@ Policy:
           - kotlin:     Kotlin source and script files
           - toml:       TOML documents, including the lock files written in it
           - lua:        Lua chunks and LuaRocks rockspecs
+          - yaml:       YAML documents, including the tool configurations written in it
+          - php:        PHP scripts and templates; the inline HTML around the tags is content
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1732,6 +1752,8 @@ Policy:
           - kotlin:     Kotlin source and script files
           - toml:       TOML documents, including the lock files written in it
           - lua:        Lua chunks and LuaRocks rockspecs
+          - yaml:       YAML documents, including the tool configurations written in it
+          - php:        PHP scripts and templates; the inline HTML around the tags is content
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1896,6 +1918,8 @@ Policy:
           - kotlin:     Kotlin source and script files
           - toml:       TOML documents, including the lock files written in it
           - lua:        Lua chunks and LuaRocks rockspecs
+          - yaml:       YAML documents, including the tool configurations written in it
+          - php:        PHP scripts and templates; the inline HTML around the tags is content
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2051,6 +2075,8 @@ Policy:
           - kotlin:     Kotlin source and script files
           - toml:       TOML documents, including the lock files written in it
           - lua:        Lua chunks and LuaRocks rockspecs
+          - yaml:       YAML documents, including the tool configurations written in it
+          - php:        PHP scripts and templates; the inline HTML around the tags is content
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2202,6 +2228,8 @@ Policy:
           - kotlin:     Kotlin source and script files
           - toml:       TOML documents, including the lock files written in it
           - lua:        Lua chunks and LuaRocks rockspecs
+          - yaml:       YAML documents, including the tool configurations written in it
+          - php:        PHP scripts and templates; the inline HTML around the tags is content
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2357,6 +2385,8 @@ Policy:
           - kotlin:     Kotlin source and script files
           - toml:       TOML documents, including the lock files written in it
           - lua:        Lua chunks and LuaRocks rockspecs
+          - yaml:       YAML documents, including the tool configurations written in it
+          - php:        PHP scripts and templates; the inline HTML around the tags is content
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2512,6 +2542,8 @@ Policy:
           - kotlin:     Kotlin source and script files
           - toml:       TOML documents, including the lock files written in it
           - lua:        Lua chunks and LuaRocks rockspecs
+          - yaml:       YAML documents, including the tool configurations written in it
+          - php:        PHP scripts and templates; the inline HTML around the tags is content
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2667,6 +2699,8 @@ Policy:
           - kotlin:     Kotlin source and script files
           - toml:       TOML documents, including the lock files written in it
           - lua:        Lua chunks and LuaRocks rockspecs
+          - yaml:       YAML documents, including the tool configurations written in it
+          - php:        PHP scripts and templates; the inline HTML around the tags is content
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2824,6 +2858,8 @@ Policy:
           - kotlin:     Kotlin source and script files
           - toml:       TOML documents, including the lock files written in it
           - lua:        Lua chunks and LuaRocks rockspecs
+          - yaml:       YAML documents, including the tool configurations written in it
+          - php:        PHP scripts and templates; the inline HTML around the tags is content
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2975,6 +3011,8 @@ Policy:
           - kotlin:     Kotlin source and script files
           - toml:       TOML documents, including the lock files written in it
           - lua:        Lua chunks and LuaRocks rockspecs
+          - yaml:       YAML documents, including the tool configurations written in it
+          - php:        PHP scripts and templates; the inline HTML around the tags is content
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -3126,6 +3164,8 @@ Policy:
           - kotlin:     Kotlin source and script files
           - toml:       TOML documents, including the lock files written in it
           - lua:        Lua chunks and LuaRocks rockspecs
+          - yaml:       YAML documents, including the tool configurations written in it
+          - php:        PHP scripts and templates; the inline HTML around the tags is content
 
       --dialect <DIALECT>
           Force this dialect of the selected language

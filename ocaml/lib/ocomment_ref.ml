@@ -1,6 +1,6 @@
 type language =
   | Rust | Ocaml | C | Cpp | Go | Java | JavaScript | TypeScript | Python
-  | Shell | Html | Css | Jsonc | Sql | Kotlin | Toml | Lua | Unknown
+  | Shell | Html | Css | Jsonc | Sql | Kotlin | Toml | Lua | Yaml | Php | Unknown
 
 type dialect =
   | Standard | Jsx | Tsx | ObjectiveC | ObjectiveCpp | GnuC | GnuCpp | Cuda
@@ -86,6 +86,7 @@ let language_of_string value =
   | "shell" | "sh" | "bash" | "zsh" -> Ok Shell | "html" | "htm" -> Ok Html
   | "css" -> Ok Css | "jsonc" | "json5" -> Ok Jsonc | "sql" -> Ok Sql
   | "kotlin" | "kt" | "kts" -> Ok Kotlin | "toml" -> Ok Toml | "lua" -> Ok Lua
+  | "yaml" | "yml" -> Ok Yaml | "php" -> Ok Php
   | other -> Error ("unsupported language `" ^ other ^ "`")
 
 let string_of_language = function
@@ -93,7 +94,7 @@ let string_of_language = function
   | Java -> "java" | JavaScript -> "javascript" | TypeScript -> "typescript"
   | Python -> "python" | Shell -> "shell" | Html -> "html" | Css -> "css"
   | Jsonc -> "jsonc" | Sql -> "sql" | Kotlin -> "kotlin" | Toml -> "toml"
-  | Lua -> "lua" | Unknown -> "unknown"
+  | Lua -> "lua" | Yaml -> "yaml" | Php -> "php" | Unknown -> "unknown"
 
 let string_of_comment_kind = function
   | Line -> "line" | Block -> "block" | DocLine -> "doc-line" | DocBlock -> "doc-block"
@@ -147,6 +148,29 @@ let line_end source index =
     match Bytes.get source cursor with '\r' | '\n' -> cursor | _ -> loop (cursor + 1)
   in loop index
 
+(* NOTE: ASCII whitespace as `u8::is_ascii_whitespace` defines it: space, tab,
+   line feed, form feed, carriage return.  The vertical tab is deliberately not
+   in it, which is what several rules below turn on. *)
+let ascii_whitespace = function
+  | ' ' | '\t' | '\n' | '\r' | '\012' -> true
+  | _ -> false
+
+(* NOTE: ECMAScript WhiteSpace and LineTerminator, as far as one byte can say
+   (ECMA-262 12.2, 12.3).  <VT> is whitespace to JavaScript, so a comparison
+   written `a<VT><div>` is a comparison and not a JSX element.  The non-ASCII
+   members -- U+00A0, U+FEFF, and the Zs category -- take more than one byte and
+   are not decided here. *)
+let js_is_space = function
+  | ' ' | '\t' | '\n' | '\011' | '\012' | '\r' -> true
+  | _ -> false
+
+let js_identifier_start character =
+  (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') ||
+  character = '_' || character = '$' || Char.code character land 0x80 <> 0
+
+let js_identifier_continue character =
+  js_identifier_start character || (character >= '0' && character <= '9')
+
 let mem_kind kind kinds = List.exists (( = ) kind) kinds
 
 let compile_policy_regex pattern =
@@ -194,6 +218,53 @@ let contains text needle =
     (String.sub text index needle_length = needle || loop (index + 1))
   in needle_length = 0 || loop 0
 
+(* NOTE: The scalars Unicode gives the White_Space property.  Rust's
+   `str::trim` removes every one of them and OCaml's `String.trim` removes five
+   ASCII bytes, so a comment whose body opens with a no-break space or a line
+   separator would classify differently on the two sides: `region` behind one is
+   still the folding directive an editor reads, and keeping it is the
+   conservative half of that disagreement. *)
+let unicode_whitespace = function
+  | 0x09 | 0x0a | 0x0b | 0x0c | 0x0d | 0x20 | 0x85 | 0xa0 | 0x1680
+  | 0x2028 | 0x2029 | 0x202f | 0x205f | 0x3000 -> true
+  | value -> value >= 0x2000 && value <= 0x200a
+
+(* NOTE: One UTF-8 scalar at `index`, as (scalar, width).  A byte that opens no
+   well-formed sequence comes back on its own as U+FFFD, which is what
+   `String.from_utf8_lossy` hands the Rust trim; the widths the two assign to a
+   malformed run may differ, and cannot matter, because neither side calls
+   U+FFFD whitespace.  Overlong encodings and surrogates are rejected for the
+   same reason: `\xc0\xa0` is not a space to either lexer. *)
+let utf8_decode text index =
+  let length = String.length text in
+  let byte offset = Char.code (String.get text (index + offset)) in
+  let continuation offset = index + offset < length && byte offset land 0xc0 = 0x80 in
+  let head = byte 0 in
+  if head < 0x80 then (head, 1)
+  else if head land 0xe0 = 0xc0 && head >= 0xc2 && continuation 1 then
+    (((head land 0x1f) lsl 6) lor (byte 1 land 0x3f), 2)
+  else if head land 0xf0 = 0xe0 && continuation 1 && continuation 2 then
+    let scalar = ((head land 0x0f) lsl 12) lor ((byte 1 land 0x3f) lsl 6) lor (byte 2 land 0x3f) in
+    if scalar < 0x800 || (scalar >= 0xd800 && scalar <= 0xdfff) then (0xfffd, 1) else (scalar, 3)
+  else if head land 0xf8 = 0xf0 && continuation 1 && continuation 2 && continuation 3 then
+    let scalar = ((head land 0x07) lsl 18) lor ((byte 1 land 0x3f) lsl 12) lor
+      ((byte 2 land 0x3f) lsl 6) lor (byte 3 land 0x3f) in
+    if scalar < 0x10000 || scalar > 0x10ffff then (0xfffd, 1) else (scalar, 4)
+  else (0xfffd, 1)
+
+let unicode_trim text =
+  let length = String.length text in
+  let rec front index =
+    if index >= length then index
+    else let scalar, width = utf8_decode text index in
+      if unicode_whitespace scalar then front (index + width) else index in
+  let start = front 0 in
+  let rec back index finish =
+    if index >= length then finish
+    else let scalar, width = utf8_decode text index in
+      back (index + width) (if unicode_whitespace scalar then finish else index + width) in
+  String.sub text start (back start start - start)
+
 let trim_markers raw =
   let markers = ["<!--"; "///"; "//!"; "//"; "/**"; "/*"; "(*"; "--"; "#"] in
   let endings = ["-->"; "*/"; "*)"] in
@@ -201,7 +272,7 @@ let trim_markers raw =
     | Some marker -> String.length marker | None -> 0 in
   let finish = match List.find_opt (fun marker -> String.ends_with ~suffix:marker raw) endings with
     | Some marker -> String.length raw - String.length marker | None -> String.length raw in
-  String.sub raw start (max 0 (finish - start)) |> String.trim |> lowercase
+  String.sub raw start (max 0 (finish - start)) |> unicode_trim |> lowercase
 
 let is_legal text =
   List.exists (contains text) ["spdx-license-identifier"; "copyright"; "licensed under";
@@ -211,14 +282,19 @@ let is_legal text =
    argument that tool takes, and whitespace of the writer's choosing separates
    the two, so the keyword ends at a boundary rather than at one particular
    byte. Matching the bare prefix would read prose that merely opens with those
-   letters -- "# shellcheckish note" -- as an instruction as well. *)
+   letters -- "# shellcheckish note" -- as an instruction as well.
+
+   The end of the comment ends the keyword too: "#:schema" with its URL still to
+   be typed is the directive it is about to be, and the text arrives trimmed, so
+   refusing the empty remainder would protect the directive or not depending on
+   a trailing space. *)
 let opens_with_keyword compact keyword =
   let length = String.length keyword in
   String.starts_with ~prefix:keyword compact &&
-  String.length compact > length &&
-  (match compact.[length] with
-   | ' ' | '\t' | '\n' | '\012' | '\r' -> true
-   | _ -> false)
+  (String.length compact = length ||
+   (match compact.[length] with
+    | ' ' | '\t' | '\n' | '\012' | '\r' -> true
+    | _ -> false))
 
 (* NOTE: trim_markers takes the "--" off a Lua comment and leaves the third dash
    of "---@diagnostic" behind, which this is what removes. *)
@@ -229,7 +305,7 @@ let trim_dashes text =
   String.sub text start (length - start)
 
 let is_directive language text raw =
-  let compact = String.trim text |> String.to_seq |>
+  let compact = text |> String.to_seq |>
     Seq.drop_while (fun character -> String.contains "!/*#@ " character) |> String.of_seq in
   let prefixes = ["sourcemappingurl="; "sourceurl="; "#__pure__"; "@__pure__";
     "__pure__"; "#__no_side_effects__"; "__no_side_effects__"; "ts-ignore";
@@ -261,6 +337,28 @@ let is_directive language text raw =
       String.starts_with ~prefix:"@diagnostic" (trim_dashes text)) ||
       List.exists (fun prefix -> String.starts_with ~prefix compact)
         ["luacheck:"; "selene:"; "stylua:"; "luacov:"]
+  (* NOTE: "@schema" is asked of the trimmed text rather than of "compact",
+     because "compact" is what takes the "@" off: the annotation the Helm schema
+     generator reads is spelled with it, and "schema" on its own is a word any
+     comment about a schema opens with.  The three keywords after it are the
+     whole word their tool answers to and end at a boundary; the four prefixes
+     carry their own in a colon. *)
+  | Yaml -> opens_with_keyword text "@schema" ||
+      List.exists (opens_with_keyword compact) ["yamllint"; "nosec"; "kics-scan"] ||
+      List.exists (fun prefix -> String.starts_with ~prefix compact)
+        ["yaml-language-server:"; "renovate:"; "checkov:skip"; "trivy:ignore"]
+  (* NOTE: Three of the four are asked of the trimmed text rather than of
+     "compact", because "compact" is what takes the "@" off, and the "@" is what
+     tells the annotation from prose about it.  "@psalm-suppress" is followed by
+     the issue it silences after whitespace, so it ends at a boundary;
+     "@phpstan-ignore" and "@codeCoverageIgnore" are namespaces whose members
+     differ only in what runs on past them, so a prefix is the whole rule there.
+     "phpcs:" carries its own boundary in the colon and covers "ignore",
+     "disable", "enable" and "ignoreFile" alike. *)
+  | Php -> opens_with_keyword text "@psalm-suppress" ||
+      String.starts_with ~prefix:"@phpstan-ignore" text ||
+      String.starts_with ~prefix:"@codecoverageignore" text ||
+      String.starts_with ~prefix:"phpcs:" compact
   | _ -> false
 
 let within_first_two_lines source finish =
@@ -276,6 +374,14 @@ let within_first_two_lines source finish =
     else loop (index + 1) line_breaks
   in loop 0 0
 
+(* NOTE: How many bytes of UTF-8 byte order mark the source opens with: three,
+   or none.  A BOM is consumed before the first line is read -- CPython's
+   `check_bom`, Lua's `skipBOM` -- so the line behind one is still the first
+   line, and a preamble rule that asked for byte 0 alone would miss it.  The
+   bytes stay where they are; only the question "is this the first line?" skips
+   them. *)
+let byte_order_mark_width source = if starts source 0 "\xef\xbb\xbf" then 3 else 0
+
 let python_encoding_declaration source start raw =
   if not (within_first_two_lines source start) || not (String.starts_with ~prefix:"#" raw)
   then false else
@@ -284,7 +390,7 @@ let python_encoding_declaration source start raw =
     else if Bytes.get source (index - 1) = '\r' || Bytes.get source (index - 1) = '\n'
     then index else find_line_start (index - 1) in
   let line_start = find_line_start start in
-  let prefix_start = if line_start = 0 && starts source 0 "\xef\xbb\xbf" then 3 else line_start in
+  let prefix_start = if line_start = 0 then byte_order_mark_width source else line_start in
   let rec prefix_is_space index =
     index >= start || match Bytes.get source index with
       | ' ' | '\t' | '\x0c' -> prefix_is_space (index + 1)
@@ -313,13 +419,32 @@ let python_encoding_declaration source start raw =
 let classify source language lexical start finish =
   let raw = Bytes.sub_string source start (finish - start) in
   let text = trim_markers raw in
-  if start = 0 && String.starts_with ~prefix:"#!" raw then Shebang
+  if start = byte_order_mark_width source && String.starts_with ~prefix:"#!" raw then Shebang
   else if language = Python && python_encoding_declaration source start raw then Encoding
   else if language = Sql && String.starts_with ~prefix:"/*+" raw then OptimizerHint
   else if language = Sql && String.starts_with ~prefix:"/*!" raw then VersionComment
   else if is_legal text then License else if is_directive language text raw then Directive else lexical
 
-type accumulator = { mutable comments_rev : comment list; mutable diagnostics_rev : diagnostic list }
+(* NOTE: One YAML block scalar, as the two things the lines below it depend on:
+   where its body stopped, and whether its header asked to keep the empty lines
+   trailing it.  Where a body ends is decided by the column of the node the
+   header hangs off, which is not written on the header's own line -- "key:" on
+   one line and "|" on the next is the same scalar as "key: |" -- so only a scan
+   knows it.  The chomping indicator is carried as a bool rather than as the
+   "chomping" type, which the YAML section further down defines: "keep" is the
+   only one of the three these lines can tell apart.  The content indentation is
+   the other half a trail needs: the explicit indication indicator counted from
+   the owner, or the indentation of the first non-empty line where the header
+   spelled none out (8.1.1.1).  A line under the body that reaches that depth is
+   content of it and one that does not is outside it, which is the difference
+   between a trail comment a removal may take and one it may not. *)
+type yaml_block_scalar = { body_end : int; content_indent : int; keeps_empties : bool }
+
+type accumulator = {
+  mutable comments_rev : comment list;
+  mutable diagnostics_rev : diagnostic list;
+  mutable yaml_blocks_rev : yaml_block_scalar list;
+}
 
 let add_comment accumulator source language options lexical start finish =
   let kind = classify source language lexical start finish in
@@ -454,13 +579,29 @@ let cpp_raw_end source index =
     | None -> None
     | Some opening ->
       let delimiter = Bytes.sub_string source delimiter_start (opening - delimiter_start) in
+      (* NOTE: [lex.string]: a d-char is any member of the basic source
+         character set except space, "(", ")", "\\", and the control characters
+         horizontal tab, vertical tab, form feed and new-line. *)
       if String.length delimiter > 16 || String.exists
-        (fun character -> Char.code character <= 32 || character = '\\' || character = ')') delimiter
+        (fun character -> String.contains " ()\\\t\011\012\n\r" character) delimiter
       then None
       else let closing = ")" ^ delimiter ^ "\"" in
         match find_from source (opening + 1) closing with
         | Some finish -> Some (finish + String.length closing, true)
         | None -> Some (Bytes.length source, false))
+
+(* NOTE: The C++ raw string literal a '"' opens, as the offset of its prefix, or
+   None when the quote opens an ordinary one.  The question is asked at the
+   quote and answered backwards, because a prefix is only a prefix where no
+   identifier runs into it: `aR"(x)"` is the identifier `aR` and then a plain
+   string, not a raw string beginning in the middle of a name. *)
+let cpp_raw_start_at_quote source quote =
+  let prefixes = ["R\""; "u8R\""; "uR\""; "UR\""; "LR\""] in
+  List.find_map (fun prefix ->
+    let start = quote - String.length prefix + 1 in
+    if start >= 0 && starts source start prefix &&
+      (start = 0 || not (js_identifier_continue (Bytes.get source (start - 1))))
+    then Some start else None) prefixes
 
 let c_quote_start source index =
   let length = Bytes.length source in
@@ -472,17 +613,51 @@ let c_quote_start source index =
   else if (starts source index "u8\"" || starts source index "u8'") then Some (index + 2)
   else None
 
-let rust_raw_end source start =
-  let cursor = ref start in
-  if !cursor < Bytes.length source &&
-    (Bytes.get source !cursor = 'b' || Bytes.get source !cursor = 'c') then incr cursor;
-  if !cursor >= Bytes.length source || Bytes.get source !cursor <> 'r' then None else begin
-    incr cursor; let hashes = ref 0 in
-    while !cursor < Bytes.length source && Bytes.get source !cursor = '#' do incr cursor; incr hashes done;
-    if !cursor >= Bytes.length source || Bytes.get source !cursor <> '"' then None else
-    let ending = "\"" ^ String.make !hashes '#' in
-    match find_from source (!cursor + 1) ending with Some close -> Some (close + String.length ending) | None -> Some (Bytes.length source)
+(* NOTE: The raw string literal a '"' closes the opener of, as (start, hashes),
+   or None when the quote opens an ordinary one.  The question is asked at the
+   quote and answered backwards, because that is where the lexer stands: the
+   run of '#' before it, then the 'r', then an optional 'b' or 'c' prefix, and
+   then a byte that must not continue an identifier -- `bar"x"` is a call on a
+   string, not a raw string starting in the middle of a name. *)
+let rust_raw_start_at_quote source quote =
+  let cursor = ref quote in
+  while !cursor > 0 && Bytes.get source (!cursor - 1) = '#' do decr cursor done;
+  let hashes = quote - !cursor in
+  if !cursor = 0 || Bytes.get source (!cursor - 1) <> 'r' then None
+  else begin
+    let start = ref (!cursor - 1) in
+    if !start > 0 && (Bytes.get source (!start - 1) = 'b' || Bytes.get source (!start - 1) = 'c')
+    then decr start;
+    if !start > 0 && js_identifier_continue (Bytes.get source (!start - 1)) then None
+    else Some (!start, hashes)
   end
+
+(* NOTE: Rust Reference, Lifetimes and loop labels: an apostrophe followed by an
+   identifier that no second apostrophe closes is a lifetime, so it opens no
+   literal at all and a `//` behind it on the same line is a comment.  What
+   tells the two apart is the shape after the quote: an escape closed four bytes
+   on, a single byte closed two bytes on, or a non-ASCII character with a quote
+   near enough behind it to be the closing one. *)
+let rust_char_start source index =
+  let length = Bytes.length source in
+  index + 1 < length &&
+  let next = Bytes.get source (index + 1) in
+  if next = '\\' then index + 3 < length && Bytes.get source (index + 3) = '\''
+  else if index + 2 < length && Bytes.get source (index + 2) = '\'' then true
+  else Char.code next land 0x80 <> 0 &&
+    (let limit = min length (index + 6) in
+     let rec loop cursor = cursor < limit && (Bytes.get source cursor = '\'' || loop (cursor + 1)) in
+     loop (index + 1))
+
+(* NOTE: One quoted literal, with the diagnostic the language spells for it when
+   nothing closes it.  The construct is named -- "unterminated Rust raw string",
+   "unterminated string or rune literal" -- because the message is what a user
+   reads, and "literal" tells them nothing they did not already know. *)
+let quoted_or_error source accumulator start multiline name =
+  let finish, closed = quoted_end source start multiline in
+  if not closed then
+    add_error accumulator "unterminated-string" ("unterminated " ^ name) start finish;
+  finish
 
 let rec scan_kotlin_string source options accumulator start triple depth =
   if depth > 256 then begin
@@ -562,47 +737,67 @@ let scan_slash_unmapped source language options accumulator =
       add_comment accumulator source language options kind index finish;
       if not closed then add_error accumulator "unterminated-comment" "unterminated block comment" index finish;
       loop finish
-    end else match if language = Rust then rust_raw_end source index else None with
-      | Some finish -> loop finish
-      | None ->
-        let character = Bytes.get source index in
-        if language = Cpp then begin
-          match cpp_raw_end source index with
-          | Some (finish, closed) ->
-            if not closed then add_error accumulator "unterminated-string"
-              "unterminated C++ raw string" index finish;
-            loop finish
-          | None -> (match c_quote_start source index with
-            | Some quote ->
-              let finish, closed = quoted_end source quote false in
-              if not closed then add_error accumulator "unterminated-string"
-                "unterminated string or character literal" quote finish;
-              loop finish
-            | None -> loop (index + 1))
-        end else if language = C then begin
-          match c_quote_start source index with
-          | Some quote ->
-            let finish, closed = quoted_end source quote false in
-            if not closed then add_error accumulator "unterminated-string"
-              "unterminated string or character literal" quote finish;
-            loop finish
-          | None -> loop (index + 1)
-        end else if language = Go && character = '`' then begin
-          match find_from source (index + 1) "`" with Some finish -> loop (finish + 1)
-          | None -> add_error accumulator "unterminated-string" "unterminated raw string" index (Bytes.length source)
-        end else if language = Kotlin && starts source index "\"\"\"" then begin
-          loop (scan_kotlin_string source options accumulator index true 0)
-        end else if language = Kotlin && character = '"' then begin
-          loop (scan_kotlin_string source options accumulator index false 0)
-        end else if character = '"' || character = '\'' then begin
-          (* INVARIANT: a Rust string or byte-string literal carries a bare
-             newline as content, so only its closing quote or the end of the
-             file ends one; a Rust character literal still ends at the line. *)
-          let multiline = language = Css || (language = Rust && character = '"') in
-          let finish, closed = quoted_end source index multiline in
-          if not closed then add_error accumulator "unterminated-string" "unterminated literal" index finish;
+    end else
+      let character = Bytes.get source index in
+      match language with
+      | Rust when character = '"' ->
+        (match rust_raw_start_at_quote source index with
+        | Some (raw_start, hashes) ->
+          let ending = "\"" ^ String.make hashes '#' in
+          (match find_from source (index + 1) ending with
+          | Some close -> loop (close + String.length ending)
+          | None ->
+            add_error accumulator "unterminated-string" "unterminated Rust raw string"
+              raw_start (Bytes.length source))
+        (* INVARIANT: a Rust string or byte-string literal carries a bare
+           newline as content, so only its closing quote or the end of the file
+           ends one; a Rust character literal still ends at the line. *)
+        | None -> loop (quoted_or_error source accumulator index true "string"))
+      | Rust when character = '\'' && rust_char_start source index ->
+        loop (quoted_or_error source accumulator index false "character literal")
+      (* NOTE: A raw string prefix is only a prefix where no identifier runs
+         into it and the delimiter is made of d-chars, so both questions are
+         asked before the quote is read as one; otherwise it opens an ordinary
+         literal, exactly as `c_quote_start` says. *)
+      | C | Cpp ->
+        let raw =
+          if language = Cpp && character = '"' then
+            Option.bind (cpp_raw_start_at_quote source index) (fun start ->
+              Option.map (fun (finish, closed) -> (start, finish, closed))
+                (cpp_raw_end source start))
+          else None in
+        (match raw with
+        | Some (start, finish, closed) ->
+          if not closed then add_error accumulator "unterminated-string"
+            "unterminated C++ raw string" start finish;
           loop finish
-        end else loop (index + 1)
+        | None -> (match c_quote_start source index with
+          | Some quote ->
+            loop (quoted_or_error source accumulator quote false "string or character literal")
+          | None -> loop (index + 1)))
+      | Go when character = '`' ->
+        (match find_from source (index + 1) "`" with
+        | Some finish -> loop (finish + 1)
+        | None -> add_error accumulator "unterminated-string" "unterminated raw string"
+            index (Bytes.length source))
+      | Go when character = '"' || character = '\'' ->
+        loop (quoted_or_error source accumulator index false "string or rune literal")
+      | Kotlin when starts source index "\"\"\"" ->
+        loop (scan_kotlin_string source options accumulator index true 0)
+      | Kotlin when character = '"' ->
+        loop (scan_kotlin_string source options accumulator index false 0)
+      | Kotlin when character = '\'' ->
+        loop (quoted_or_error source accumulator index false "Kotlin character literal")
+      (* NOTE: JSON5 4.4 writes a string with either quote, and this language is
+         "JSON with comments, including JSON5" -- it owns ".json5" as well as
+         ".jsonc".  An apostrophe is already invalid in the stricter dialect, so
+         reading one as a string only hides a "//" that dialect could not have
+         meant as a comment. *)
+      | Jsonc when character = '"' || character = '\'' ->
+        loop (quoted_or_error source accumulator index false "JSON string")
+      | Css when character = '"' || character = '\'' ->
+        loop (quoted_or_error source accumulator index true "CSS string")
+      | _ -> loop (index + 1)
   in loop 0
 
 let scan_slash source language options accumulator =
@@ -610,7 +805,7 @@ let scan_slash source language options accumulator =
     (find_from source 0 "\\\n" <> None || find_from source 0 "\\\r\n" <> None)
   then begin
     let mapping = without_c_line_splices source in
-    let child = { comments_rev = []; diagnostics_rev = [] } in
+    let child = { comments_rev = []; diagnostics_rev = []; yaml_blocks_rev = [] } in
     scan_slash_unmapped mapping.mapped language options child;
     let comments = List.rev child.comments_rev and diagnostics = List.rev child.diagnostics_rev in
     merge_mapped accumulator
@@ -637,7 +832,7 @@ let scan_java source language options accumulator =
   let mapping, invalid_unicode = java_unicode source in
   List.iter (fun span -> add_error accumulator "invalid-unicode-escape"
     "invalid Java Unicode escape" span.start span.finish) invalid_unicode;
-  let mapped = mapping.mapped and child = { comments_rev = []; diagnostics_rev = [] } in
+  let mapped = mapping.mapped and child = { comments_rev = []; diagnostics_rev = []; yaml_blocks_rev = [] } in
   let rec loop index =
     if index >= Bytes.length mapped then ()
     else if starts mapped index "//" then begin
@@ -668,13 +863,6 @@ let scan_java source language options accumulator =
       valid = not (List.exists (fun diagnostic -> diagnostic.severity = Error) diagnostics) }
     mapping
 
-let js_identifier_start character =
-  (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') ||
-  character = '_' || character = '$' || Char.code character land 0x80 <> 0
-
-let js_identifier_continue character =
-  js_identifier_start character || (character >= '0' && character <= '9')
-
 let unicode_line_terminator_width source index =
   if starts source index "\r\n" then Some 2
   else if index < Bytes.length source &&
@@ -704,6 +892,12 @@ let js_quoted_end source start =
     else loop (index + 1)
   in loop (start + 1)
 
+(* NOTE: ECMA-262 12.5 makes a SingleLineHTMLCloseComment of a "-->" that
+   nothing but white space precedes on its line.  U+FEFF is <ZWNBSP>, which 12.2
+   lists among WhiteSpace wherever it sits and however many of it there are --
+   the start of a file is only the most common place to meet one -- and it takes
+   three bytes, which is why the prefix is walked rather than handed to
+   js_is_space byte by byte. *)
 let js_html_close_comment source index =
   starts source index "-->" &&
   let rec line_start cursor =
@@ -711,12 +905,11 @@ let js_html_close_comment source index =
     match Bytes.get source (cursor - 1) with
     | '\r' | '\n' -> cursor
     | _ -> line_start (cursor - 1) in
-  let start = line_start index in
-  let start = if start = 0 && starts source start "\xef\xbb\xbf" then 3 else start in
   let rec whitespace cursor =
-    cursor = index ||
-    (String.contains " \t\011\012" (Bytes.get source cursor) && whitespace (cursor + 1)) in
-  whitespace start
+    cursor >= index ||
+    (if starts source cursor "\xef\xbb\xbf" then whitespace (cursor + 3)
+     else js_is_space (Bytes.get source cursor) && whitespace (cursor + 1)) in
+  whitespace (line_start index)
 
 let js_regex_end source start =
   let rec loop index in_class =
@@ -759,11 +952,6 @@ let rec scan_js_code source language options accumulator index stop_brace depth 
         "unterminated-template-expression" "unterminated JavaScript template expression"
         index index | None -> ());
       index
-    end else if index = 0 && starts source index "#!" then begin
-      let finish = js_line_end source (index + 2) in
-      add_comment accumulator source language options Line index finish;
-      loop finish brace_depth regex_allowed control_parentheses pending_control
-        brace_blocks statement_start pending_block
     end else if starts source index "//" then begin
       let finish = js_line_end source (index + 2) in
       add_comment accumulator source language options
@@ -842,7 +1030,7 @@ let rec scan_js_code source language options accumulator index stop_brace depth 
         Bytes.get source (index + 1) = character ->
       loop (index + 2) brace_depth false control_parentheses false
         brace_blocks false false
-    | character when Char.code character <= 32 ->
+    | character when js_is_space character ->
       loop (index + 1) brace_depth regex_allowed control_parentheses pending_control
         brace_blocks statement_start pending_block
     | '=' when index + 1 < Bytes.length source && Bytes.get source (index + 1) = '>' ->
@@ -905,7 +1093,7 @@ and scan_jsx_element source language options accumulator start depth =
                 (Some 1) (depth + 1)) None
             | '>' ->
               let rec previous value =
-                if value > index && Char.code (Bytes.get source (value - 1)) <= 32
+                if value > index && js_is_space (Bytes.get source (value - 1))
                 then previous (value - 1) else value in
               let before = previous cursor in
               Some (cursor + 1, before > index && Bytes.get source (before - 1) = '/')
@@ -923,8 +1111,20 @@ and scan_jsx_element source language options accumulator start depth =
           else if element_depth = 0 then finish else loop finish element_depth
   in loop start 0
 
-let scan_javascript source language options accumulator =
-  ignore (scan_js_code source language options accumulator 0 None 0)
+(* NOTE: ECMA-262 12.5: a hashbang comment opens a Script or a Module and
+   nothing else, and OComment reads "a Script" as "a file": a preamble is a
+   preamble at absolute offset 0.  The embedded scan of a <script> element is
+   handed a slice that begins at its own 0, so `offset` is what tells that slice
+   from a file.  Without it a "#!" inside a page reads as the page's preamble,
+   which no page has. *)
+let scan_javascript ?(offset = 0) source language options accumulator =
+  let start =
+    if offset = 0 && starts source 0 "#!" then begin
+      let finish = js_line_end source 2 in
+      add_comment accumulator source language options Line 0 finish;
+      finish
+    end else 0 in
+  ignore (scan_js_code source language options accumulator start None 0)
 
 let ocaml_quoted_end source index =
   if Bytes.get source index <> '{' then None else
@@ -943,6 +1143,22 @@ let ocaml_quoted_end source index =
     | None -> Some (Bytes.length source, false))
   | _ -> None
 
+(* NOTE: A character literal is an apostrophe, one character or one escape
+   sequence, and a closing apostrophe (OCaml manual, Lexical conventions).  The
+   shape is what decides it: the second apostrophe two bytes on, or a backslash
+   and an apostrophe close enough behind it to close the longest escape there
+   is.  Anything else leaves the apostrophe an ordinary byte -- of a type
+   variable outside a comment, and of the comment's own text inside one, where
+   the string that follows it still has to terminate. *)
+let ocaml_char_start source index =
+  let length = Bytes.length source in
+  (index + 2 < length && Bytes.get source (index + 2) = '\'') ||
+  (index + 1 < length && Bytes.get source (index + 1) = '\\' &&
+    let rec has_quote cursor remaining =
+      remaining > 0 && cursor < length &&
+      (Bytes.get source cursor = '\'' || has_quote (cursor + 1) (remaining - 1)) in
+    has_quote (index + 2) 6)
+
 let scan_ocaml source language options accumulator =
   let rec comment_end index depth =
     if index >= Bytes.length source then (index, false)
@@ -954,8 +1170,7 @@ let scan_ocaml source language options accumulator =
       (match ocaml_quoted_end source index with
       | Some (finish, _) -> comment_end finish depth
       | None -> comment_end (index + 1) depth)
-    else if Bytes.get source index = '\'' && index + 2 < Bytes.length source &&
-      (Bytes.get source (index + 2) = '\'' || Bytes.get source (index + 1) = '\\') then
+    else if Bytes.get source index = '\'' && ocaml_char_start source index then
       let finish, _ = quoted_end source index false in comment_end finish depth
     else comment_end (index + 1) depth in
   let rec loop index =
@@ -965,22 +1180,27 @@ let scan_ocaml source language options accumulator =
       add_comment accumulator source language options (if starts source index "(**" then DocBlock else Block) index finish;
       if not closed then add_error accumulator "unterminated-comment" "unterminated OCaml comment" index finish;
       loop finish
-    end else if Bytes.get source index = '"' then let finish, closed = quoted_end source index true in
-      if closed then loop finish else add_error accumulator "unterminated-string" "unterminated OCaml string" index finish
-    else if Bytes.get source index = '\'' && index + 2 < Bytes.length source &&
-      (Bytes.get source (index + 2) = '\'' ||
-        (Bytes.get source (index + 1) = '\\' &&
-          let rec has_quote cursor remaining = remaining > 0 && cursor < Bytes.length source &&
-            (Bytes.get source cursor = '\'' || has_quote (cursor + 1) (remaining - 1)) in
-          has_quote (index + 2) 6))
-    then let finish, closed = quoted_end source index false in
-      if closed then loop finish else add_error accumulator "unterminated-string"
-        "unterminated OCaml character literal" index finish
+    end else if Bytes.get source index = '"' then begin
+      let finish, closed = quoted_end source index true in
+      if not closed then add_error accumulator "unterminated-string"
+        "unterminated OCaml string" index finish;
+      loop finish
+    end
+    else if Bytes.get source index = '\'' && ocaml_char_start source index then begin
+      (* NOTE: A literal nothing closed ends at the line, not at the file: the
+         rest of the source still holds comments, so the scan goes on from where
+         the literal stopped rather than giving up on the file. *)
+      let finish, closed = quoted_end source index false in
+      if not closed then add_error accumulator "unterminated-string"
+        "unterminated OCaml character literal" index finish;
+      loop finish
+    end
     else if Bytes.get source index = '{' then
       (match ocaml_quoted_end source index with
-      | Some (finish, true) -> loop finish
-      | Some (finish, false) -> add_error accumulator "unterminated-string"
-          "unterminated OCaml quoted string" index finish
+      | Some (finish, closed) ->
+        if not closed then add_error accumulator "unterminated-string"
+          "unterminated OCaml quoted string" index finish;
+        loop finish
       | None -> loop (index + 1))
     else loop (index + 1)
   in loop 0
@@ -1251,9 +1471,14 @@ let scan_lua source language options accumulator =
       | '[' -> loop (scan_lua_long_string source accumulator index)
       | _ -> loop (index + 1)
   in
-  if length > 0 && Bytes.get source 0 = '#' then begin
-    let finish = line_end source 1 in
-    add_comment accumulator source language options Line 0 finish;
+  (* NOTE: `skipcomment` (lauxlib.c) calls `skipBOM` before it tests the first
+     byte for '#', so a chunk behind a byte order mark still has its first line
+     skipped.  It is that one byte at that one offset: '#' is the length
+     operator everywhere else. *)
+  let preamble = byte_order_mark_width source in
+  if length > preamble && Bytes.get source preamble = '#' then begin
+    let finish = line_end source (preamble + 1) in
+    add_comment accumulator source language options Line preamble finish;
     loop finish
   end else loop 0
 
@@ -1262,10 +1487,390 @@ type heredoc = { operator : int; delimiter : bytes; strip_tabs : bool }
 let consume_newline source index =
   if starts source index "\r\n" then index + 2 else index + 1
 
+(* NOTE: A quote opens a scalar only where a scalar may begin: at the start of a
+   line, behind white space, or behind one of the flow indicators "," "[" "{"
+   (YAML 1.2.2, 7.4).  Anywhere else it is content of the plain scalar it sits
+   in, which is what keeps the apostrophe of "it's" from opening a literal that
+   would swallow the rest of the file. *)
+let yaml_flow_opener source index =
+  index > 0 && (match Bytes.get source (index - 1) with
+    | ',' | '[' | '{' -> true
+    | _ -> false)
+
+(* NOTE: Which trailing line breaks a block scalar keeps (YAML 1.2.2, 8.1.1.2):
+   "-" drops the final break and every empty line behind it, no indicator keeps
+   the final break alone, and "+" makes both content -- which is what lets a
+   blank line under such a body change its value. *)
+type chomping = Chomp_strip | Chomp_clip | Chomp_keep
+
+(* NOTE: A block scalar header is its "|" or ">", then its indicators, then
+   white space, then at most a comment, and then the end of the line (YAML
+   1.2.2, 8.1.1).  Anything else leaves the indicator a byte of a plain scalar,
+   which is the whole of what tells "key: >" from "key: a > b".  The comment
+   needs that white space in front of it like any other (6.6), so "key: |#c" is
+   no header either.  The answer carries the explicit indentation indicator --
+   None where the header spells none out and the body detects its own -- the
+   chomping indicator, where a comment begins, and where the line ends.  The two
+   readings of a missing indicator are not one answer: the floor a body line has
+   to clear is the owner's column either way, and an absent indicator behaves as
+   1 for that, but the depth the body's content sits at is written on the header
+   only when the indicator is. *)
+let yaml_block_header source index =
+  let length = Bytes.length source in
+  let rec indicators cursor indentation chomping =
+    if cursor >= length then (cursor, indentation, chomping)
+    else match Bytes.get source cursor with
+      | '1' .. '9' when indentation = None ->
+        indicators (cursor + 1)
+          (Some (Char.code (Bytes.get source cursor) - Char.code '0')) chomping
+      | '+' when chomping = None -> indicators (cursor + 1) indentation (Some Chomp_keep)
+      | '-' when chomping = None -> indicators (cursor + 1) indentation (Some Chomp_strip)
+      | _ -> (cursor, indentation, chomping) in
+  let cursor, indentation, chomping = indicators (index + 1) None None in
+  let rec white cursor spaced =
+    if cursor < length && (Bytes.get source cursor = ' ' || Bytes.get source cursor = '\t')
+    then white (cursor + 1) true else (cursor, spaced) in
+  let cursor, spaced = white cursor false in
+  let comment =
+    if spaced && cursor < length && Bytes.get source cursor = '#' then Some cursor else None in
+  let cursor = match comment with Some start -> line_end source start | None -> cursor in
+  if cursor >= length || Bytes.get source cursor = '\r' || Bytes.get source cursor = '\n'
+  then Some (indentation,
+             (match chomping with Some value -> value | None -> Chomp_clip),
+             comment, cursor)
+  else None
+
+(* NOTE: Where the node property beginning at `index` ends.  An anchor "&name"
+   and a tag "!tag" run to the white space, the line, or the flow indicator that
+   ends them (YAML 1.2.2, 6.9 and 7.4); nothing else may close one, which is
+   what keeps "!!str" a single token. *)
+let yaml_property_end source index =
+  let length = Bytes.length source in
+  let rec loop cursor =
+    if cursor >= length then cursor
+    else match Bytes.get source cursor with
+      | ' ' | '\t' | '\r' | '\n' | ',' | '[' | ']' | '{' | '}' -> cursor
+      | _ -> loop (cursor + 1)
+  in loop (index + 1)
+
+(* NOTE: Indentation is spaces alone: a tab may not indent a line (YAML 1.2.2,
+   6.1), so the first one ends the indentation and is content of whatever
+   follows it.  A line of nothing but white space is empty even so, which is
+   what keeps a blank line inside a block scalar body from ending it. *)
+let yaml_line_shape source start =
+  let length = Bytes.length source in
+  let rec spaces index =
+    if index < length && Bytes.get source index = ' ' then spaces (index + 1) else index in
+  let content = spaces start in
+  let rec white index =
+    if index < length && (Bytes.get source index = ' ' || Bytes.get source index = '\t')
+    then white (index + 1) else index in
+  let cursor = white content in
+  let blank =
+    cursor >= length || Bytes.get source cursor = '\r' || Bytes.get source cursor = '\n' in
+  (content - start, blank, line_end source cursor)
+
+(* NOTE: "---" and "..." are read in column zero alone, which is what the line
+   start carries here: a line with any indentation at all begins with a space
+   and matches neither (YAML 1.2.2, 9.1.2 and 9.1.3). *)
+let yaml_document_marker source line_start =
+  (starts source line_start "---" || starts source line_start "...") &&
+  (line_start + 3 >= Bytes.length source ||
+   match Bytes.get source (line_start + 3) with
+   | ' ' | '\t' | '\r' | '\n' -> true
+   | _ -> false)
+
+(* NOTE: A line belongs to the body of a block scalar while it is empty -- an
+   empty line is content of the scalar whatever its indentation (YAML 1.2.2,
+   8.1.2) -- or indented to at least the content indentation.  The first line
+   that is neither ends it, and so does a document marker in column zero, which
+   is what ends the body of a scalar that is the whole document and therefore
+   has no parent indentation to fall short of.
+
+   The second half of the answer is the detected content indentation (8.1.1.1):
+   the indentation of the first non-empty line, which is what a parser measures
+   every later line against, and `body_min` when the body holds no non-empty
+   line to measure.  It is never less than `body_min`, because a line shallower
+   than that would have ended the body instead of opening it. *)
+let yaml_block_body_end source header_end body_min =
+  let length = Bytes.length source in
+  if header_end >= length then (length, body_min)
+  else
+    let rec loop index content =
+      if index >= length then (index, content)
+      else
+        let indent, blank, finish = yaml_line_shape source index in
+        if (not blank) && (indent < body_min || yaml_document_marker source index) then (index, content)
+        else
+          let content = if blank || content <> None then content else Some indent in
+          if finish >= length then (length, content)
+          else loop (consume_newline source finish) content
+    in
+    let finish, content = loop (consume_newline source header_end) None in
+    (finish, match content with Some value -> value | None -> body_min)
+
+let rec only_blanks source index finish =
+  index >= finish ||
+  ((match Bytes.get source index with ' ' | '\t' -> true | _ -> false) &&
+   only_blanks source (index + 1) finish)
+
+(* NOTE: The one comment that is all its line holds, as an index into the array.
+   None when the line holds none, holds one with something else on it, or holds
+   a comment that does not run to the end of the line -- in each of those the
+   line survives a removal whatever else is decided about it. *)
+let comment_alone_on_line source comments line_start line_finish =
+  let rec loop index =
+    if index >= Array.length comments then None
+    else
+      let span = (comments.(index) : comment).span in
+      if span.start >= line_finish then None
+      else if span.start < line_start then loop (index + 1)
+      else if span.finish = line_finish && only_blanks source line_start span.start
+      then Some index else None
+  in loop 0
+
+(* NOTE: Where a line under a block scalar ends once its terminator is taken with
+   it. *)
+let past_terminator source line_finish =
+  if line_finish >= Bytes.length source then line_finish
+  else consume_newline source line_finish
+
+(* NOTE: The keep reason the scanner writes for a comment a YAML block scalar
+   leans on, and the one keep no option can overrule.  Frozen: the differential
+   protocol compares this string byte for byte. *)
+let yaml_structural_trail = "structural in a YAML block scalar trail"
+
+(* NOTE: Which comments in the trails of `blocks` no removal may take, as indices
+   into `comments`.
+
+   A block scalar body ends at the first line under it that is shallower than its
+   content (YAML 1.2.2, 8.1.1), and in a trail of whole-line comments that line
+   is a comment.  Removing it -- and a removal there takes the whole line, which
+   is the least a removal can leave -- hands the lines under it back to the body,
+   and a line that reaches the content depth is content again.  When what comes
+   back up is a comment the run keeps, no removal preserves the value: the
+   comment above it is not commentary but the thing that closes the scalar, and
+   it is kept.
+
+   Only the first comment of a trail can do that work, and it always can.  The
+   line a body ended at is shallower than the floor and so shallower than the
+   content, so keeping it closes the scalar there and leaves everything below
+   outside -- which is why one keep per block is both necessary and enough, and
+   why the deeper comments of the trail stay removable.  Keeping a deeper one
+   instead would be no fix at all: it reaches the content depth itself, so the
+   body would swallow the survivor.
+
+   A trail whose every comment is removable needs none of this: with nothing left
+   standing under the body there is nothing for it to take back. *)
+let yaml_structural_trail_keeps source blocks comments =
+  let length = Bytes.length source in
+  let keeps = ref [] in
+  List.iter (fun block ->
+    (* INVARIANT: `shield` is the trail's first removable comment shallower than
+       the content -- the one keep that would close the body -- and is set before
+       any deeper line can be reached, because the line a body ends at is
+       shallower than the content by construction. *)
+    let rec loop probe shield =
+      if probe >= length then ()
+      else
+        let indent, blank, finish = yaml_line_shape source probe in
+        if blank then
+          (* NOTE: An empty line is content of the body above whatever its
+             indentation (8.1.1.2), so it neither ends the trail nor shields
+             anything under it. *)
+          loop (past_terminator source finish) shield
+        else
+          match comment_alone_on_line source comments probe finish with
+          (* NOTE: The first line with anything else on it is the next node, and
+             it is not a line any removal here can move. *)
+          | None -> ()
+          | Some found ->
+            if (comments.(found) : comment).disposition = Remove then
+              let shield =
+                if shield = None && indent < block.content_indent then Some found else shield in
+              loop (past_terminator source finish) shield
+            else if indent < block.content_indent then
+              (* NOTE: A surviving line shallower than the content closes the
+                 body on its own, so nothing above it is load-bearing. *)
+              ()
+            else match shield with
+              | Some index -> keeps := index :: !keeps
+              | None -> ()
+    in loop block.body_end None) blocks;
+  !keeps
+
+(* NOTE: A double-quoted scalar takes backslash escapes (YAML 1.2.2, 7.3.1) and
+   a single-quoted one takes none, where "''" is the one way to write a quote of
+   its own (7.3.2), so a backslash inside the second is a byte of it.  Both fold
+   over a line break, which leaves the end of the file the only thing that can
+   leave one unterminated. *)
+let scan_yaml_quoted source accumulator start =
+  let length = Bytes.length source in
+  let quote = Bytes.get source start in
+  let rec loop index =
+    if index >= length then begin
+      add_error accumulator "unterminated-string"
+        (if quote = '"' then "unterminated YAML double-quoted scalar"
+          else "unterminated YAML single-quoted scalar") start index;
+      index
+    end
+    else if quote = '"' && Bytes.get source index = '\\' then loop (min length (index + 2))
+    else if Bytes.get source index <> quote then loop (index + 1)
+    else if quote = '\'' && index + 1 < length && Bytes.get source (index + 1) = '\''
+    then loop (index + 2)
+    else index + 1
+  in loop (start + 1)
+
+(* NOTE: One YAML stream (YAML 1.2.2).  The scanner is line-local: everything it
+   needs to decide what a byte is comes from the line that byte sits on.  "#"
+   opens a comment only where white space separates it from the token in front
+   of it (6.6), the two quoted styles may run over a line break and carry every
+   "#" inside them as content, and a block scalar (8.1) swallows every following
+   line more indented than the node it hangs off.
+
+   "separated" is whether a "#" here would be separated from what precedes it;
+   "node_start" is whether a node may begin here, which is what tells the block
+   scalar indicator of "key: >" from the ">" inside the plain scalar
+   "key: a > b"; "token_column" is where the token being read began, so that a
+   ": " behind it can name the column its value hangs off; and "owner_column" is
+   that column once one is known.  The first three are reset by the line break;
+   "owner_column" survives it while the node it names is still owed one, because
+   the "|" of a block scalar may sit on the line under the "key:" or the "-"
+   that owns it, or behind node properties (6.9).  The Rust scanner carries two
+   more answers -- whether a block scalar body ended at the start of a line, and
+   that a line under a live carry offers no restart point -- which is
+   bookkeeping for the incremental checkpoints this reference has no engine for.
+
+   "valid" is a lexical answer here and nothing more.  YAML has shapes a lexer
+   cannot rule out and a parser rejects, and removing a comment can walk a file
+   from one to the other: a comment line inside a multi-line plain scalar is a
+   parse error while it is there, and taking it away leaves a scalar that parses
+   and folds the two halves into one value. *)
+let scan_yaml source language options accumulator =
+  let length = Bytes.length source in
+  let boundary index =
+    index >= length ||
+    (match Bytes.get source index with ' ' | '\t' | '\r' | '\n' -> true | _ -> false) in
+  let rec loop index line_start separated node_start token_column owner_column =
+    if index >= length then ()
+    else
+      let byte = Bytes.get source index in
+      if byte = '#' && separated then begin
+        let finish = line_end source (index + 1) in
+        add_comment accumulator source language options Line index finish;
+        loop finish line_start separated node_start token_column owner_column
+      end
+      else if byte = '\r' || byte = '\n' then
+        (* NOTE: A line that ends while a node is still owed -- "key:", a bare
+           "-", a property whose node has not come yet, and the blank and comment
+           lines a separation may hold (6.9, 8.2.2) -- hands the owner's
+           indentation to the line below, because the "|" of the block scalar it
+           introduces may be down there.  A line that put a node on itself hands
+           over nothing. *)
+        let next = consume_newline source index in
+        loop next next true true None (if node_start then owner_column else None)
+      else if byte = ' ' || byte = '\t' then
+        loop (index + 1) line_start true node_start token_column owner_column
+      else if (byte = '|' || byte = '>') && node_start && separated then
+        (match yaml_block_header source index with
+        | Some (indicator, chomping, comment, header_end) ->
+          (match comment with
+          | Some start -> add_comment accumulator source language options Line start header_end
+          | None -> ());
+          (* NOTE: The body is indented past the node the scalar hangs off
+             (8.1.1.1).  For "key: |" that node is the mapping, whose indentation
+             is the column of the key; for "- |" it is the sequence, whose
+             indentation is the column of the "-".  The header itself may sit
+             anywhere past that owner -- on a line of its own, or behind an
+             anchor or a tag -- so its own column says nothing about how deep a
+             body line has to be, and reading it as the floor would take a body
+             indented less than the header for the end of the scalar and its "#"
+             lines for comments.  With no owner at all the scalar is the whole
+             document, whose indentation is one short of column zero, which
+             leaves every line under it body.  An explicit indentation indicator
+             counts from that same owner, which is why it replaces the detected
+             depth rather than adding to it.  Detection proper reads the first
+             non-empty line instead, and a line shallower than that but still
+             past the owner is content of neither reading; taking it for body is
+             the one that leaves bytes alone. *)
+          let base = match owner_column with Some column -> column + 1 | None -> 0 in
+          let floor = base + (match indicator with Some value -> value | None -> 1) - 1 in
+          let finish, detected = yaml_block_body_end source header_end floor in
+          (* NOTE: Where this body stopped, on what terms it keeps its trailing
+             empty lines, and how deep its content is are the whole of what
+             `lines_a_removal_must_swallow` and `yaml_structural_trail_keeps`
+             need from a scan: the lines under a body are the only place in YAML
+             where the hole a removal leaves carries meaning.  Recorded here
+             rather than re-derived, because only the scan knows the column of
+             the node the header hangs off.  An explicit indicator is the content
+             depth (8.1.1.1); without one the depth is detected from the first
+             non-empty line, and a body with no non-empty line at all has none to
+             detect, so the floor stands in for it -- which is the depth the next
+             line the scalar could take would set. *)
+          accumulator.yaml_blocks_rev <-
+            { body_end = finish;
+              content_indent = (match indicator with Some _ -> floor | None -> detected);
+              keeps_empties = chomping = Chomp_keep }
+            :: accumulator.yaml_blocks_rev;
+          loop finish finish true true None None
+        | None ->
+          let token_column =
+            match token_column with Some _ -> token_column | None -> Some (index - line_start) in
+          loop (index + 1) line_start false false token_column owner_column)
+      (* NOTE: An anchor "&name" and a tag "!tag" are node properties (6.9): they
+         stand in front of the node they decorate rather than being one, so a
+         node may still begin after them.  That is what leaves the "|" of
+         "key: !!str |" a block scalar header instead of a byte of a plain
+         scalar.  A property belongs to the node it decorates, so it is that
+         node's first token and names the column a ": " behind it hangs off. *)
+      else if (byte = '!' || byte = '&') && node_start && separated then
+        let token_column =
+          match token_column with Some _ -> token_column | None -> Some (index - line_start) in
+        loop (yaml_property_end source index) line_start false node_start token_column owner_column
+      else if (byte = '"' || byte = '\'') && (separated || yaml_flow_opener source index) then
+        let token_column =
+          match token_column with
+          | Some _ -> token_column
+          | None -> if node_start then Some (index - line_start) else None in
+        let finish = scan_yaml_quoted source accumulator index in
+        loop finish line_start false false token_column owner_column
+      (* NOTE: "-" is a sequence entry and "?" an explicit key only when white
+         space or the line ends them (6.9 and 8.2): "-x" is a plain scalar, and
+         so is "?x".  Either leaves the position a node may begin at, one column
+         further in. *)
+      else if (byte = '-' || byte = '?') && node_start && boundary (index + 1) then
+        loop (index + 1) line_start false true None (Some (index - line_start))
+      (* NOTE: A ":" ends a key only where white space or the line follows it
+         (7.2), which is what leaves the ":" of "http://x" inside the plain
+         scalar it belongs to. *)
+      else if byte = ':' && boundary (index + 1) then
+        let owner = match token_column with Some _ -> token_column | None -> owner_column in
+        loop (index + 1) line_start false true None owner
+      else
+        let token_column =
+          match token_column with
+          | Some _ -> token_column
+          | None -> if node_start then Some (index - line_start) else None in
+        loop (index + 1) line_start false false token_column owner_column
+  in
+  loop 0 0 true true None None;
+  (* NOTE: One rule needs the whole file rather than the byte in front of it, so
+     it runs once the trails are all there to read: a comment that is the only
+     thing holding a block scalar out of the kept comment under it is not
+     commentary and is kept. *)
+  if accumulator.yaml_blocks_rev <> [] then begin
+    let comments = Array.of_list (List.rev accumulator.comments_rev) in
+    let blocks = List.rev accumulator.yaml_blocks_rev in
+    List.iter (fun index ->
+      comments.(index) <- { (comments.(index)) with disposition = Keep yaml_structural_trail })
+      (yaml_structural_trail_keeps source blocks comments);
+    accumulator.comments_rev <- List.rev (Array.to_list comments)
+  end
+
 let parse_heredoc source index =
   let strip_tabs = index + 2 < Bytes.length source && Bytes.get source (index + 2) = '-' in
   let cursor = ref (index + if strip_tabs then 3 else 2) in
-  while !cursor < Bytes.length source && Char.code (Bytes.get source !cursor) <= 32 &&
+  while !cursor < Bytes.length source && ascii_whitespace (Bytes.get source !cursor) &&
     Bytes.get source !cursor <> '\r' && Bytes.get source !cursor <> '\n' do incr cursor done;
   let delimiter = Buffer.create 16 in
   let quote = ref None and saw_word = ref false and invalid = ref false in
@@ -1288,8 +1893,10 @@ let parse_heredoc source index =
   while !cursor < Bytes.length source && not !invalid &&
     (match !quote with
     | Some _ -> true
+    (* NOTE: The delimiter is a word (POSIX Shell Command Language, 2.7.4), and
+       a word ends at a blank or at an unquoted operator character. *)
     | None -> let byte = Bytes.get source !cursor in
-      Char.code byte > 32 && not (String.contains ";|&()<>" byte))
+      not (ascii_whitespace byte) && not (String.contains ";|&()<>" byte))
   do
     let byte = Bytes.get source !cursor in
     match !quote with
@@ -1451,7 +2058,7 @@ let scan_shell source language options accumulator =
     end
     else if String.contains "<>" (Bytes.get source index) then
       loop (index + 1) heredocs parentheses false
-    else if Char.code (Bytes.get source index) <= 32 then
+    else if ascii_whitespace (Bytes.get source index) then
       loop (index + 1) heredocs parentheses false
     else if Bytes.get source index = '\\' then
       if starts source index "\\\r\n" then
@@ -1479,7 +2086,7 @@ let scan_shell source language options accumulator =
       let finish = word_end (index + 1) in
       let boundary = finish = Bytes.length source ||
         let character = Bytes.get source finish in
-        Char.code character <= 32 || String.contains ";&|()<>" character in
+        ascii_whitespace character || String.contains ";&|()<>" character in
       let token = Bytes.sub_string source index (finish - index) in
       if boundary && token = "case" && !command_position then begin
         case_states := CaseAwaitIn :: !case_states;
@@ -1641,9 +2248,251 @@ let ascii_case_find source index token =
     else if ascii_case_starts source cursor token then Some cursor else loop (cursor + 1)
   in loop index
 
+(* NOTE: An opening tag is "<?php" without regard to case, followed by white
+   space or the end of the file (zend_language_scanner.l:
+   "<?php"([ \t]|{NEWLINE})), so "<?phpinfo()" is inline text; "<?=" is the
+   short echo tag and needs nothing behind it.  A bare "<?" opens nothing at
+   all, because short_open_tag is off by default, which is what leaves "<?xml"
+   an XML declaration in the output rather than the start of a program. *)
+let php_open_tag source index =
+  let length = Bytes.length source in
+  if starts source index "<?=" then Some (index + 3)
+  else if ascii_case_starts source index "<?php" &&
+    (index + 5 >= length ||
+     match Bytes.get source (index + 5) with
+     | ' ' | '\t' | '\r' | '\n' -> true
+     | _ -> false)
+  then Some (index + 5) else None
+
+(* NOTE: A PHP "//" or "#" comment ends at the line break or at a closing tag,
+   whichever comes first (PHP manual, Comments -- "the closing tag breaks out of
+   PHP mode").  The "?>" is not part of the comment. *)
+let php_line_comment_end source index =
+  let length = Bytes.length source in
+  let rec loop cursor =
+    if cursor >= length then cursor
+    else match Bytes.get source cursor with
+      | '\r' | '\n' -> cursor
+      | _ -> if starts source cursor "?>" then cursor else loop (cursor + 1)
+  in loop index
+
+(* NOTE: The tokenizer makes a documentation comment of "/**" only when white
+   space follows it -- its rule is "/*"|"/**"{WHITESPACE}, and the longer
+   alternative is what sets T_DOC_COMMENT -- so "/**/" and "/**text*/" are
+   ordinary block comments.  "/*!" is Doxygen's marker and means nothing to
+   PHP's own tooling, so it is an ordinary comment too. *)
+let php_block_kind source index =
+  if starts source index "/**" && index + 3 < Bytes.length source &&
+    (match Bytes.get source (index + 3) with
+     | ' ' | '\t' | '\r' | '\n' -> true
+     | _ -> false)
+  then DocBlock else Block
+
+(* NOTE: The complex syntax "{$...}" holds a PHP expression, which the engine
+   lexes as ordinary code.  This balances its braces instead, skipping over the
+   two things inside one that can carry a brace of their own -- a nested string
+   and a comment -- so "{$a['}']}" ends where PHP ends it.  Nothing else in an
+   expression can.  What it does not do is report the comment it skipped:
+   reading one out of a string would mean running the whole lexer inside one,
+   and v1 leaves those bytes alone instead. *)
+let php_interpolation_end source brace =
+  let length = Bytes.length source in
+  let rec literal index quote =
+    if index >= length || Bytes.get source index = quote then index
+    else if Bytes.get source index = '\\' then literal (min length (index + 2)) quote
+    else literal (index + 1) quote in
+  let rec loop index depth =
+    if index >= length then length
+    else match Bytes.get source index with
+      | '{' -> loop (index + 1) (depth + 1)
+      | '}' -> if depth = 1 then index + 1 else loop (index + 1) (depth - 1)
+      | ('\'' | '"' | '`') as quote -> loop (min length (literal (index + 1) quote + 1)) depth
+      | '/' when starts source index "/*" ->
+        let finish, _ = block_end source index false in loop finish depth
+      | '/' when starts source index "//" ->
+        loop (php_line_comment_end source (index + 2)) depth
+      | '#' when not (starts source index "#[") ->
+        loop (php_line_comment_end source (index + 1)) depth
+      | _ -> loop (index + 1) depth
+  in loop (brace + 1) 1
+
+(* NOTE: A PHP label opens with a letter, "_", or any byte from 0x80 up, and
+   continues with those and the digits (PHP manual, Variables). *)
+let php_label_start character =
+  (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') ||
+  character = '_' || Char.code character >= 0x80
+
+let php_label_continue character =
+  php_label_start character || (character >= '0' && character <= '9')
+
+(* NOTE: The header is "<<<", blanks, the label -- bare, or quoted with "'" for
+   a nowdoc or with a double quote for a heredoc -- and then the line break,
+   with nothing else allowed in between (zend_language_scanner.l).  The body
+   begins on the next line.  Anything the grammar refuses opened nothing, which
+   is the conservative reading of "$a <<< 1". *)
+let php_heredoc_header source start =
+  let length = Bytes.length source in
+  let rec blanks cursor =
+    if cursor < length && (Bytes.get source cursor = ' ' || Bytes.get source cursor = '\t')
+    then blanks (cursor + 1) else cursor in
+  let opened = blanks (start + 3) in
+  let quote =
+    if opened < length && (Bytes.get source opened = '\'' || Bytes.get source opened = '"')
+    then Some (Bytes.get source opened) else None in
+  let label_start = match quote with Some _ -> opened + 1 | None -> opened in
+  if label_start >= length || not (php_label_start (Bytes.get source label_start)) then None
+  else
+    let rec label cursor =
+      if cursor < length && php_label_continue (Bytes.get source cursor)
+      then label (cursor + 1) else cursor in
+    let label_end = label label_start in
+    let name = Bytes.sub_string source label_start (label_end - label_start) in
+    let after = match quote with
+      | None -> Some label_end
+      | Some quote ->
+        if label_end < length && Bytes.get source label_end = quote
+        then Some (label_end + 1) else None in
+    match after with
+    | None -> None
+    | Some after ->
+      if after < length && (Bytes.get source after = '\r' || Bytes.get source after = '\n')
+      then Some (name, consume_newline source after, quote = Some '\'')
+      else None
+
+(* NOTE: Since PHP 7.3 the closing label may be indented by blanks and may be
+   followed by anything that cannot continue a label -- ";", ",", ")", an
+   operator, the line break, or the end of the file (PHP manual, Heredoc text).
+   A byte that can continue one leaves the line ordinary body, which is what
+   keeps "EOTX" from ending an "EOT". *)
+let php_heredoc_end source body name =
+  let length = Bytes.length source in
+  let width = String.length name in
+  let rec line index =
+    let rec blanks cursor =
+      if cursor < length && (Bytes.get source cursor = ' ' || Bytes.get source cursor = '\t')
+      then blanks (cursor + 1) else cursor in
+    let cursor = blanks index in
+    if starts source cursor name &&
+      (cursor + width >= length || not (php_label_continue (Bytes.get source (cursor + width))))
+    then Some (cursor + width)
+    else
+      let finish = line_end source index in
+      if finish >= length then None else line (consume_newline source finish)
+  in line body
+
+(* NOTE: A single-quoted string escapes only "\'" and "\\", and every other
+   backslash is a byte of it -- but the byte after a backslash can never be the
+   closing quote unless the pair is that escape, so skipping two finds the same
+   closer either way.  A double-quoted or backtick string takes the full escape
+   set and interpolates.  None of the three ends at a line break, so only the
+   end of the file leaves one unterminated. *)
+let scan_php_quoted source accumulator start =
+  let length = Bytes.length source in
+  let quote = Bytes.get source start in
+  let interpolates = quote <> '\'' in
+  let rec loop index =
+    if index >= length then begin
+      add_error accumulator "unterminated-string"
+        (match quote with
+         | '\'' -> "unterminated PHP single-quoted string"
+         | '"' -> "unterminated PHP double-quoted string"
+         | _ -> "unterminated PHP backtick string") start index;
+      index
+    end
+    else if Bytes.get source index = '\\' then loop (min length (index + 2))
+    else if Bytes.get source index = quote then index + 1
+    else if interpolates && Bytes.get source index = '{' &&
+      index + 1 < length && Bytes.get source (index + 1) = '$'
+    then loop (php_interpolation_end source index)
+    else if interpolates && Bytes.get source index = '$' &&
+      index + 1 < length && Bytes.get source (index + 1) = '{'
+    then loop (php_interpolation_end source (index + 1))
+    else loop (index + 1)
+  in loop (start + 1)
+
+let scan_php_heredoc source accumulator start =
+  match php_heredoc_header source start with
+  | None -> start + 1
+  | Some (name, body, nowdoc) ->
+    (match php_heredoc_end source body name with
+     | Some finish -> finish
+     | None ->
+       add_error accumulator "unterminated-string"
+         (if nowdoc then "unterminated PHP nowdoc" else "unterminated PHP heredoc")
+         start (Bytes.length source);
+       Bytes.length source)
+
+(* NOTE: PHP mode, from the byte after the opening tag that entered it.  The
+   answer is where inline HTML resumes: past a "?>" and the one line break it
+   carries away with it (zend_language_scanner.l: "?>"{NEWLINE}?), which is what
+   keeps a template from emitting a blank line for every block of code it holds,
+   or the end of the file.  PHP 8.0 gave "#[" to attributes, so a "#" with a
+   bracket behind it opens no comment. *)
+let scan_php_code source language options accumulator start =
+  let length = Bytes.length source in
+  let rec loop index =
+    if index >= length then index
+    else if starts source index "?>" then
+      let finish = index + 2 in
+      if finish < length && (Bytes.get source finish = '\r' || Bytes.get source finish = '\n')
+      then consume_newline source finish else finish
+    else if starts source index "//" then
+      let finish = php_line_comment_end source (index + 2) in
+      add_comment accumulator source language options Line index finish;
+      loop finish
+    else if starts source index "/*" then begin
+      let finish, closed = block_end source index false in
+      add_comment accumulator source language options (php_block_kind source index) index finish;
+      if not closed then
+        add_error accumulator "unterminated-comment" "unterminated PHP block comment" index finish;
+      loop finish
+    end
+    else if starts source index "#[" then loop (index + 1)
+    else if Bytes.get source index = '#' then
+      let finish = php_line_comment_end source (index + 1) in
+      add_comment accumulator source language options Line index finish;
+      loop finish
+    else match Bytes.get source index with
+      | '\'' | '"' | '`' -> loop (scan_php_quoted source accumulator index)
+      | '<' when starts source index "<<<" ->
+        loop (scan_php_heredoc source accumulator index)
+      | _ -> loop (index + 1)
+  in loop start
+
+(* NOTE: One PHP file (PHP manual, Basic syntax, Comments, Strings, Heredoc
+   text).  A file opens in inline-HTML mode, where every byte is output verbatim
+   and nothing is a comment; an opening tag enters PHP mode and "?>" returns.
+   Inline HTML is opaque in v1, so an HTML comment in a PHP file is not
+   reported: reading it would mean scanning the inline halves as HTML, which is
+   a change of what the language is rather than a missing arm here.
+
+   The CLI strips a "#!" line from the very first line of a script before the
+   engine sees it (php_cli.c, which tests the first two bytes).  Unlike CPython
+   and Lua, PHP skips no byte order mark first, and neither does the kernel, so
+   a mark in front of the "#!" leaves it ordinary inline HTML.  The Rust scanner
+   carries one more answer out of the closing tag -- whether it ended at the
+   start of a line -- which is bookkeeping for the incremental checkpoints this
+   reference has no engine for. *)
+let scan_php source language options accumulator =
+  let length = Bytes.length source in
+  let rec html index =
+    if index >= length then ()
+    else match Bytes.get source index with
+      | '<' -> (match php_open_tag source index with
+        | Some code -> html (scan_php_code source language options accumulator code)
+        | None -> html (index + 1))
+      | '\r' | '\n' -> html (consume_newline source index)
+      | _ -> html (index + 1)
+  in
+  if starts source 0 "#!" then begin
+    let finish = line_end source 2 in
+    add_comment accumulator source language options Line 0 finish;
+    html finish
+  end else html 0
+
 let rec scan_html source language options accumulator =
   let tag_boundary = function None -> true | Some character ->
-    Char.code character <= 32 || character = '>' || character = '/' in
+    ascii_whitespace character || character = '>' || character = '/' in
   let rec tag_end index quote =
     if index >= Bytes.length source then None else
     let character = Bytes.get source index in
@@ -1693,7 +2542,12 @@ let rec scan_html source language options accumulator =
         let closing = find_close content_start name in
         let content_finish = match closing with Some value -> value | None -> Bytes.length source in
         let child_source = Bytes.sub source content_start (content_finish - content_start) in
-        merge content_start (scan child_source embedded options);
+        let child = { comments_rev = []; diagnostics_rev = []; yaml_blocks_rev = [] } in
+        if embedded = JavaScript
+        then scan_javascript ~offset:content_start child_source embedded options child
+        else scan_slash child_source embedded options child;
+        merge content_start { language = embedded; comments = List.rev child.comments_rev;
+          diagnostics = List.rev child.diagnostics_rev; valid = true };
         (match closing with
         | None -> add_error accumulator "unterminated-embedded-language"
             "unterminated HTML script or style element" index (Bytes.length source)
@@ -1710,7 +2564,7 @@ let rec scan_html source language options accumulator =
   in loop 0
 
 and scan source language options =
-  let accumulator = { comments_rev = []; diagnostics_rev = [] } in
+  let accumulator = { comments_rev = []; diagnostics_rev = []; yaml_blocks_rev = [] } in
   (match language with
   | Rust | C | Cpp | Go | Kotlin | Css | Jsonc -> scan_slash source language options accumulator
   | Java -> scan_java source language options accumulator
@@ -1721,6 +2575,8 @@ and scan source language options =
   | Sql -> scan_sql source language options accumulator
   | Toml -> scan_toml source language options accumulator
   | Lua -> scan_lua source language options accumulator
+  | Yaml -> scan_yaml source language options accumulator
+  | Php -> scan_php source language options accumulator
   | Html -> scan_html source language options accumulator
   | Unknown -> add_error accumulator "unknown-language" "a language is required" 0 0);
   let comments = List.rev accumulator.comments_rev in
@@ -1798,7 +2654,7 @@ let scan_profile source profile options =
   match validate_profile profile with
   | Result.Error _ as error -> error
   | Result.Ok () ->
-    let accumulator = { comments_rev = []; diagnostics_rev = [] } in
+    let accumulator = { comments_rev = []; diagnostics_rev = []; yaml_blocks_rev = [] } in
     let rec scan_string token_start delimiter index =
       if index >= Bytes.length source then (index, false)
       else if starts source index delimiter.string_end then
@@ -1831,7 +2687,7 @@ let scan_profile source profile options =
         loop finish
       | None -> match List.find_opt (fun delimiter -> starts source index delimiter.line_start &&
           (not delimiter.requires_boundary || index = 0 ||
-            Char.code (Bytes.get source (index - 1)) <= 32)) profile.line_comments with
+            ascii_whitespace (Bytes.get source (index - 1)))) profile.line_comments with
         | Some delimiter ->
           let finish = line_end source (index + String.length delimiter.line_start) in
           accumulator.comments_rev <- profile_comment source profile options index finish
@@ -1951,10 +2807,11 @@ let column_replacement source span initial_column =
       | None -> Buffer.add_char output ' '; loop (index + 1) (column + 1))
   in loop span.start initial_column
 
-let ascii_whitespace = function
-  | ' ' | '\t' | '\n' | '\r' | '\011' | '\012' -> true
-  | _ -> false
-
+(* NOTE: The layout arithmetic calls a byte blank when `ascii_whitespace` does,
+   which leaves the vertical tab out, so a line carrying one is not blank and
+   survives `compact`.  Lua's own lexer disagrees -- see `lua_is_space` -- and
+   that is a different question: one asks what the chunk means, this one asks
+   what the file looks like. *)
 let has_non_whitespace_neighbors source span =
   span.start > 0 && span.finish < Bytes.length source &&
   not (ascii_whitespace (Bytes.get source (span.start - 1))) &&
@@ -2062,12 +2919,22 @@ let compact_edit source (comment : comment) line_start floor ceiling =
    The start of the current line is tracked forward through the whole source,
    comment bodies included, so a comment beginning on a line that an earlier
    comment ended is still measured from that line's real beginning. *)
-let compact_edits source comments =
-  let rec loop scan line_start floor edits = function
+(* NOTE: `swallowed` names the lines whose hole would carry meaning, and it
+   reaches further than a line: under a "|+" body it takes the empty lines the
+   comment was sheltering too (see `lines_a_removal_must_swallow`).  Taking the
+   line is what `compact` does anyway, so this only ever widens what it takes,
+   and it is what keeps all three layouts writing the same bytes there. *)
+let compact_edits source comments swallowed =
+  let rec loop index scan line_start floor edits = function
     | [] -> List.rev edits
     | (comment : comment) :: tail -> match comment.disposition with
-      | Keep _ -> loop scan line_start floor edits tail
-      | Remove ->
+      | Keep _ -> loop (index + 1) scan line_start floor edits tail
+      | Remove -> match swallowed index with
+      | Some (line : byte_span) ->
+        let span = { start = max line.start floor; finish = max line.finish floor } in
+        loop (index + 1) span.finish span.finish span.finish
+          ({ span; replacement = Bytes.empty } :: edits) tail
+      | None ->
         let rec advance scan line_start =
           if scan >= comment.span.start then (scan, line_start)
           else match unicode_line_terminator_width source scan with
@@ -2080,8 +2947,8 @@ let compact_edits source comments =
         let ceiling = max comment.span.finish
           (match tail with next :: _ -> next.span.start | [] -> Bytes.length source) in
         let edit = compact_edit source comment line_start floor ceiling in
-        loop scan line_start edit.span.finish (edit :: edits) tail
-  in loop 0 0 0 [] comments
+        loop (index + 1) scan line_start edit.span.finish (edit :: edits) tail
+  in loop 0 0 0 0 [] comments
 
 (* PERF:
    Column state is threaded between edits so every source byte is inspected at
@@ -2126,24 +2993,185 @@ let source_map source_length edits =
         ({ original = edit.span; output = { start = output; finish = replacement_finish }; exact = false } :: segments) tail
   in loop 0 0 [] edits
 
+(* NOTE: Every block scalar in a YAML source, in order.
+
+   A scan of its own, so that the answer stays a function of the bytes alone and
+   an incremental rescan or an external hand-off reaches the same one with no
+   state to carry.  It is the scanner's reading of a header, not a loose one:
+   "key: a |+" ends a plain scalar with two characters that look like a header,
+   and reading it as one would hang a phantom keep-chomped tail off a line that
+   has no body at all. *)
+let yaml_block_scalars source =
+  let accumulator = { comments_rev = []; diagnostics_rev = []; yaml_blocks_rev = [] } in
+  scan_yaml source Yaml default_scan_options accumulator;
+  List.rev accumulator.yaml_blocks_rev
+
+(* NOTE: Whether nothing but indentation stands between "start" and the beginning
+   of its line, which is the whole of what makes a comment a candidate for being
+   swallowed whole. *)
+let starts_its_line source start =
+  let rec loop index =
+    if index <= 0 then true
+    else match Bytes.get source (index - 1) with
+      | ' ' | '\t' -> loop (index - 1)
+      | '\r' | '\n' -> true
+      | _ -> false
+  in loop start
+
+(* NOTE: Whether the source holds a byte that could head a block scalar at all. *)
+let holds_a_block_indicator source =
+  let length = Bytes.length source in
+  let rec loop index =
+    index < length &&
+    (match Bytes.get source index with '|' | '>' -> true | _ -> loop (index + 1))
+  in loop 0
+
+(* NOTE: For each comment, the line a removal has to take whole -- its
+   terminator included -- instead of leaving the ordinary hole on it, or None
+   where the ordinary hole is right.  An empty answer stands for all-None, which
+   is every language but YAML and nearly every YAML file.
+
+   YAML is the one language where the hole itself carries meaning, and the reason
+   is that a block scalar decides where its body ends from the lines below it
+   (YAML 1.2.2, 8.1.1).  A whole-line comment under a body is
+   "l-trail-comments" and is not part of the value, but the hole left in its
+   place is read as one of two things: a line of spaces as wide as the comment,
+   which `columns` writes, is indented at least as deep as the body whenever the
+   comment was wide enough -- and a line indented that deep is body content, so
+   the scalar silently grows a line; and an empty line, which `lines` writes, is
+   content under "|+" and ">+", where every empty line trailing a body is kept
+   (8.1.1.2).
+
+   So every whole-line comment whose own line sits in the run of empty and
+   comment lines under a body is removed by taking the line, terminator and all,
+   under every layout -- which is the line `compact` takes already.  That costs
+   those lines their numbering under `lines` and their columns under `columns`;
+   the alternative costs the reader's value, and no indentation a padded line
+   could be given is safe, because the depth that would put it outside one body
+   is the depth that puts it inside the mapping the body belongs to.
+
+   Under "|+" and ">+" the line is not enough on its own.  The empty lines
+   between a removed comment and the next line are "l-comment" while the comment
+   shelters them and "l-keep-empty" once it is gone (8.1.1.2), so the swallow
+   runs on through them.  The empty lines above the first comment are already
+   content and are left exactly where they are: a removal takes what the comment
+   was sheltering and nothing else.
+
+   The answer is a function of the source and the comments alone, so an
+   incremental rescan and an external hand-off reach the same one with no state
+   to carry. *)
+let lines_a_removal_must_swallow source language comments =
+  if language <> Yaml || comments = [] then [||]
+  (* PERF: Two answers that cost almost nothing, in front of a scan of the whole
+     source.  A file with no "|" and no ">" in it has no block scalar at all; and
+     a comment a body could swallow is one that is alone on its line, which is a
+     walk back over that line's indentation and no further -- the "# note" of
+     "key: value # note" stops on the byte behind it.  A YAML file whose comments
+     all trail something therefore never pays for the scan below. *)
+  else if not (holds_a_block_indicator source) then [||]
+  else if not (List.exists (fun (comment : comment) ->
+    comment.disposition = Remove && starts_its_line source comment.span.start) comments)
+  then [||]
+  else
+    let blocks = yaml_block_scalars source in
+    if blocks = [] then [||]
+    else begin
+      let comments = Array.of_list comments in
+      let answers = Array.make (Array.length comments) None in
+      let length = Bytes.length source in
+      List.iter (fun block ->
+        let rec loop probe =
+          if probe >= length then ()
+          else
+            let _, blank, finish = yaml_line_shape source probe in
+            if blank then
+              (* NOTE: An empty line neither ends the run nor is taken on its
+                 own: it is content of the body above until a comment below it is
+                 removed, and only that removal may take it. *)
+              loop (past_terminator source finish)
+            else
+              match comment_alone_on_line source comments probe finish with
+              (* NOTE: The first line with anything else on it is the next node,
+                 and the comments under it are that node's. *)
+              | None -> ()
+              | Some found ->
+                (if (comments.(found) : comment).disposition = Remove then begin
+                   let rec run taken =
+                     if not block.keeps_empties || taken >= length then taken
+                     else
+                       let _, blank, run_finish = yaml_line_shape source taken in
+                       if blank then run (past_terminator source run_finish) else taken in
+                   let taken = run (past_terminator source finish) in
+                   answers.(found) <- Some { start = probe; finish = taken }
+                 end);
+                loop (past_terminator source finish)
+        in loop block.body_end) blocks;
+      answers
+    end
+
+(* NOTE: Apply `yaml_structural_trail_keeps` to comments that did not come from a
+   scan of this reference's own, which is the external hand-off of
+   `transform_spans`.  A scan reaches the same answer from the blocks it already
+   walked over; this is that answer re-derived from the bytes, so the two paths
+   cannot disagree about a value. *)
+let keep_yaml_structural_trails source language comments =
+  (* PERF: The same two answers `lines_a_removal_must_swallow` opens with: no "|"
+     and no ">" is no block scalar, and a file whose comments all trail something
+     has no whole-line comment to weigh. *)
+  if language <> Yaml || comments = [] then comments
+  else if not (holds_a_block_indicator source) then comments
+  else if not (List.exists (fun (comment : comment) ->
+    comment.disposition = Remove && starts_its_line source comment.span.start) comments)
+  then comments
+  else
+    let comments = Array.of_list comments in
+    List.iter (fun index ->
+      comments.(index) <- { (comments.(index)) with disposition = Keep yaml_structural_trail })
+      (yaml_structural_trail_keeps source (yaml_block_scalars source) comments);
+    Array.to_list comments
+
 let transform_report source report options =
   let edits =
     if not report.valid && not options.scan.force_invalid then []
-    else match options.layout with
+    else
+    (* NOTE: The one hole whose own bytes carry meaning, so the layouts that
+       leave a line behind have to be told where not to.  `compact` takes the
+       line already. *)
+    let swallow = lines_a_removal_must_swallow source report.language report.comments in
+    let swallowed index = if index < Array.length swallow then swallow.(index) else None in
+    match options.layout with
     | Columns ->
-      let rec loop cursor column edits = function
+      let rec loop index cursor column edits = function
         | [] -> List.rev edits
-        | comment :: tail -> (match comment.disposition with
-          | Keep _ -> loop cursor column edits tail
-          | Remove ->
-            let edit, column = column_edit source cursor column comment in
-            loop comment.span.finish column (edit :: edits) tail)
-      in loop 0 0 [] report.comments
+        | (comment : comment) :: tail -> (match comment.disposition with
+          | Keep _ -> loop (index + 1) cursor column edits tail
+          | Remove -> match swallowed index with
+            (* NOTE: A swallowed line takes its terminator with it, so what
+               follows starts a line of its own in the output as it did in the
+               source and the column count begins again there. *)
+            | Some line ->
+              let span = { start = max line.start cursor; finish = line.finish } in
+              loop (index + 1) span.finish 0 ({ span; replacement = Bytes.empty } :: edits) tail
+            | None ->
+              let edit, column = column_edit source cursor column comment in
+              loop (index + 1) comment.span.finish column (edit :: edits) tail)
+      in loop 0 0 0 [] report.comments
     | Lines ->
-      List.filter_map (fun comment -> match comment.disposition with Keep _ -> None | Remove ->
-        Some { span = comment.span;
-          replacement = line_replacement source comment.kind comment.span }) report.comments
-    | Compact -> compact_edits source report.comments
+      let rec loop index floor edits = function
+        | [] -> List.rev edits
+        | (comment : comment) :: tail -> (match comment.disposition with
+          | Keep _ -> loop (index + 1) floor edits tail
+          | Remove ->
+            let edit = match swallowed index with
+              | Some line ->
+                { span = { start = max line.start floor; finish = line.finish };
+                  replacement = Bytes.empty }
+              | None ->
+                { span = comment.span;
+                  replacement = line_replacement source comment.kind comment.span } in
+            loop (index + 1) edit.span.finish (edit :: edits) tail)
+      in loop 0 0 [] report.comments
+    | Compact -> compact_edits source report.comments swallowed
   in
   { output = apply_edits source edits; edits; report; source_map = source_map (Bytes.length source) edits }
 
@@ -2172,5 +3200,12 @@ let transform_spans source language spans options =
   in
   match validate 0 0 [] spans with
   | Result.Error _ as error -> error
-  | Result.Ok comments -> Result.Ok (transform_report source
+  | Result.Ok comments ->
+    (* NOTE: The one verdict a comment's own bytes cannot reach, so it is applied
+       to the hand-off as a built-in scan applies it: a YAML block scalar leaning
+       on the comment that ends it keeps that comment, whoever found it.  Without
+       this the report would promise a removal that
+       `lines_a_removal_must_swallow` cannot make safe. *)
+    let comments = keep_yaml_structural_trails source language comments in
+    Result.Ok (transform_report source
       { language; comments; diagnostics = []; valid = true } options)
