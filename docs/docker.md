@@ -29,7 +29,7 @@ docker run --rm -v "$PWD:/src" ghcr.io/p4suta/ocomment:0.1.0 check --format sari
 The working directory is `/src` and the default command is `check`, so a bare
 run checks whatever was mounted there. Exit codes, `--format`, and the
 `.ocomment.toml` discovery rules are the ones
-[the CLI documents](../README.md): a config file inside the mounted tree is
+[the CLI documents](configuration.md): a config file inside the mounted tree is
 found exactly as it would be on the host.
 
 ## Writing files back

@@ -13,9 +13,7 @@ This extension is a client for the `ocomment` language server; it does not
 bundle one. Install the binary and make sure it is on your `PATH`:
 
 ```sh
-cargo install ocomment
-# or: brew install ocomment
-# or: scoop install ocomment
+cargo install ocomment --locked
 # or: docker pull ghcr.io/p4suta/ocomment
 ```
 

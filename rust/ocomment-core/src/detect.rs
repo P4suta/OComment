@@ -1,10 +1,16 @@
 use crate::{Dialect, Language};
 use std::path::Path;
 
+/// What [`detect_language`] concluded about a file, and on what evidence.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Detection {
+    /// The language to scan the file as.
     pub language: Language,
+    /// The dialect that goes with it, [`Dialect::Standard`] unless the
+    /// evidence named a more specific one.
     pub dialect: Dialect,
+    /// What decided it: `extension`, `reserved-filename`, `shebang`, or
+    /// `content`.
     pub reason: &'static str,
 }
 
@@ -19,6 +25,31 @@ impl Detection {
 }
 
 /// Detect a built-in language from filename, shebang, then conservative content hints.
+///
+/// The evidence is weighed in that order and the first answer wins, so a
+/// `.py` file whose first line says `#!/bin/sh` is still Python. `path` is
+/// optional because a buffer in an editor may have no name yet; with no path
+/// and no shebang, only a handful of unmistakable content hints are left, and
+/// `None` means the caller has to name the language itself.
+///
+/// # Examples
+///
+/// ```
+/// use std::path::Path;
+/// use ocomment_core::{Dialect, Language, detect_language};
+///
+/// let found = detect_language(Some(Path::new("src/app.tsx")), b"").unwrap();
+/// assert_eq!(found.language, Language::TypeScript);
+/// assert_eq!(found.dialect, Dialect::Tsx);
+/// assert_eq!(found.reason, "extension");
+///
+/// // No name, so the shebang decides.
+/// let piped = detect_language(None, b"#!/usr/bin/env python3\n").unwrap();
+/// assert_eq!(piped.language, Language::Python);
+///
+/// // Nothing to go on.
+/// assert!(detect_language(None, b"x = 1\n").is_none());
+/// ```
 pub fn detect_language(path: Option<&Path>, source: &[u8]) -> Option<Detection> {
     if let Some(path) = path {
         let name = path

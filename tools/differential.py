@@ -76,7 +76,7 @@ value = f'''literal # opaque {(
     ("shell-quoted-heredoc-and-ansi", "shell", b"cat <<E\"OF\"\n# opaque\nEOF\ncat <<\\DONE\n# opaque\nDONE\nvalue=$'it\\'s # opaque'\n# remove\n", {"dialect": "bash53"}),
     ("shell-command-substitutions", "shell", b'value="$(printf ok # nested\n)"\nold=`printf ok # legacy\n`\ntext="# opaque"\n# remove\n', {"dialect": "bash53"}),
     ("shell-logical-word-boundaries", "shell", b"value=word\\\n#suffix\njoined=$(printf x)#suffix\nprintf ok \\\n# remove\n$(printf x);# remove\n", {}),
-    ("dockerfile-directives", "shell", b"# syntax=docker/dockerfile:1\n# remove\n# hadolint ignore=DL3018\n# hadolintish note\nRUN apk add --no-cache musl-dev\n", {}),
+    ("dockerfile-directives", "shell", b"# syntax=docker/dockerfile:1\n# remove\n# hadolint ignore=DL3018\n# hadolint\tignore=DL3019\n# hadolintish note\nRUN apk add --no-cache musl-dev\n# shellcheck disable=SC2086\n# shellcheck\tdisable=SC2087\n# shellcheckish note\n", {}),
     ("shell-case-command-substitution", "shell", b"value=$(case x in\n  a) # remove\n    printf '%s' '# opaque' ;;\n  *) printf ok ;;\nesac\n)#suffix\n# remove\n", {}),
     ("sql-postgres", "sql", br'select $tag$-- opaque /* opaque */$tag$; /* outer /* nested */ end */ -- remove', {"dialect": "postgresql"}),
     ("sql-standard-backslash", "sql", b"select '\\'; -- remove\n", {}),

@@ -206,18 +206,32 @@ let is_legal text =
   List.exists (contains text) ["spdx-license-identifier"; "copyright"; "licensed under";
     "permission is hereby granted"; "all rights reserved"]
 
+(* NOTE: A directive named after the tool that reads it is followed by the
+   argument that tool takes, and whitespace of the writer's choosing separates
+   the two, so the keyword ends at a boundary rather than at one particular
+   byte. Matching the bare prefix would read prose that merely opens with those
+   letters -- "# shellcheckish note" -- as an instruction as well. *)
+let opens_with_keyword compact keyword =
+  let length = String.length keyword in
+  String.starts_with ~prefix:keyword compact &&
+  String.length compact > length &&
+  (match compact.[length] with
+   | ' ' | '\t' | '\n' | '\012' | '\r' -> true
+   | _ -> false)
+
 let is_directive language text raw =
   let compact = String.trim text |> String.to_seq |>
     Seq.drop_while (fun character -> String.contains "!/*#@ " character) |> String.of_seq in
   let prefixes = ["sourcemappingurl="; "sourceurl="; "#__pure__"; "@__pure__";
     "__pure__"; "#__no_side_effects__"; "__no_side_effects__"; "ts-ignore";
     "ts-expect-error"; "ts-nocheck"; "ts-check"; "eslint"; "prettier-ignore";
-    "stylelint"; "shellcheck";
+    "stylelint";
     "noinspection"; "nolint"; "noqa"; "type: ignore"; "fmt:"; "rustfmt::";
     "clang-format"; "spotless:"; "ktlint-disable"; "ktlint-enable"; "detekt:";
     "istanbul ignore"; "c8 ignore"; "coverage:";
     "ocomment:"; "region"; "endregion"] in
   List.exists (fun prefix -> String.starts_with ~prefix compact) prefixes ||
+  opens_with_keyword compact "shellcheck" ||
   match language with
   | Go -> String.starts_with ~prefix:"go:" compact || String.starts_with ~prefix:"+build" compact ||
       String.starts_with ~prefix:"line " compact
@@ -225,8 +239,8 @@ let is_directive language text raw =
   | C | Cpp -> String.starts_with ~prefix:"pragma" compact || String.starts_with ~prefix:"line " compact
   | Python -> List.exists (fun prefix -> String.starts_with ~prefix compact)
       ["pyright:"; "mypy:"; "ruff:"; "fmt:"]
-  | Shell -> List.exists (fun prefix -> String.starts_with ~prefix compact)
-      ["shellcheck"; "syntax="; "hadolint "]
+  | Shell -> opens_with_keyword compact "hadolint" ||
+      String.starts_with ~prefix:"syntax=" compact
   | _ -> false
 
 let within_first_two_lines source finish =

@@ -30,11 +30,20 @@ jobs:
       - run: cargo fmt --all --manifest-path rust/Cargo.toml -- --check
       - run: cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets --locked -- -D warnings
       - run: cargo test --manifest-path rust/Cargo.toml --workspace --all-targets --locked
+      # `--all-targets` above builds every target but silently drops the
+      # doctests, so the examples in the library rustdoc are only ever
+      # compiled and run by this step.
+      - run: cargo test --manifest-path rust/Cargo.toml --doc --workspace --locked
+      - name: The library documentation builds with no broken links
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --manifest-path rust/Cargo.toml --no-deps -p ocomment-core -p ocomment-plugin-sdk --locked
       - run: python3 tools/check_embedded_specs.py
       - run: python3 tools/check_hooks.py
       - run: python3 -m pip install --disable-pip-version-check jsonschema==4.25.1
       - run: cargo build --manifest-path rust/Cargo.toml --locked -p ocomment
       - run: python3 tools/check_directives.py
+      - run: python3 tools/gen_docs.py --check
       - run: python3 tools/validate_schemas.py
       - name: Check publishable file sets
         run: ./tools/package-list.sh

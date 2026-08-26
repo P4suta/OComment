@@ -5,6 +5,7 @@
 [![MSRV 1.88](https://img.shields.io/badge/MSRV-1.88-93450a.svg)](rust/Cargo.toml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 [![VS Code extension](https://img.shields.io/visual-studio-marketplace/v/P4suta.ocomment?label=VS%20Code&color=0066b8)](https://marketplace.visualstudio.com/items?itemName=P4suta.ocomment)
+[![Documentation](https://img.shields.io/badge/docs-p4suta.github.io%2FOComment-informational.svg)](https://p4suta.github.io/OComment/)
 
 OComment is a fast, byte-preserving comment checker and remover. The production
 tool is the Rust `ocomment` binary and the public `ocomment-core` library.
@@ -16,6 +17,11 @@ Shell, HTML, CSS, JSONC, SQL, and Kotlin. JSX/TSX, Objective-C/C++, GNU C/C++,
 CUDA, POSIX sh, Bash 5.3, zsh, PostgreSQL, MySQL, SQLite, T-SQL, and Oracle are
 explicit dialects. HTML `<script>` and `<style>` contents are scanned
 recursively.
+
+The complete documentation is at <https://p4suta.github.io/OComment/>. It is
+built from the Markdown in [`docs/`](docs/), which GitHub renders directly, so
+every documentation link below has a working source in this repository even
+before the site is published.
 
 ## Quick start
 
@@ -32,7 +38,7 @@ printf '%s\n' 'let x = 1; // remove' | ocomment strip --language rust
 
 Or install nothing: `docker run --rm -v "$PWD:/src"
 ghcr.io/p4suta/ocomment:0.1.0 check` runs the same CLI from the
-[container image](docs/docker.md).
+[container image](https://p4suta.github.io/OComment/docker.html).
 
 A command that names no path checks the current directory, so running it from
 a subdirectory checks that subdirectory; a bare `ocomment` run from the
@@ -40,7 +46,8 @@ repository root already checks the whole repository, under the ordinary walk
 limits — `cd "$(git rev-parse --show-toplevel)"` gets there from anywhere
 inside it. Naming a path explicitly (`ocomment .`, `ocomment src`) is a request
 rather than a default, so it bypasses the hidden-file and size limits, as
-[configuration](docs/configuration.md) describes.
+[configuration](https://p4suta.github.io/OComment/configuration.html)
+describes.
 
 A human run previews each removable comment and closes with a summary:
 
@@ -128,9 +135,11 @@ relative to the project root — the directory holding `.ocomment.toml`, or the
 repository above it — however deep in the tree the command is run from.
 
 Run `ocomment init config` for the complete default file or `ocomment config
-schema` for its JSON Schema. See [configuration](docs/configuration.md),
-[editor/LSP setup](docs/editors.md), [plugins](docs/plugins.md), and
-[hooks and CI](docs/ci.md).
+schema` for its JSON Schema. See
+[configuration](https://p4suta.github.io/OComment/configuration.html),
+[editor/LSP setup](https://p4suta.github.io/OComment/editors.html),
+[plugins](https://p4suta.github.io/OComment/plugins.html), and
+[hooks and CI](https://p4suta.github.io/OComment/ci.html).
 
 The official VS Code extension is `P4suta.ocomment`; it launches this binary,
 so install both. Its source is in [`editors/vscode`](editors/vscode/README.md).
@@ -182,7 +191,7 @@ annotates the pull request:
 
 `format: sarif` with `upload-sarif: "true"` sends the findings to code scanning
 instead, and `fail-on-findings: "false"` leaves the verdict to a later step
-reading the `exit-code` output. [docs/ci.md](docs/ci.md) documents every input
+reading the `exit-code` output. [CI and hooks](https://p4suta.github.io/OComment/ci.html) documents every input
 and output, the `--staged` caveats, and how to run the action where no release
 archive is published.
 
@@ -222,7 +231,7 @@ python3 tools/check_embedded_specs.py
 ```
 
 The release process and performance gates are documented in
-[docs/releasing.md](docs/releasing.md).
+[Releasing](https://p4suta.github.io/OComment/releasing.html).
 
 ## Contributing and support
 

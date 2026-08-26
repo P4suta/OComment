@@ -5,6 +5,36 @@ use crate::{
 };
 use unicode_width::UnicodeWidthChar;
 
+/// Scan `source` and produce the bytes a removal would write.
+///
+/// This is [`scan`] followed by the edits its report calls for. Nothing is
+/// written anywhere: the caller gets the new bytes, the edits that made them,
+/// the report they were decided from, and a
+/// [`SourceMap`](crate::SourceMap) between the two.
+///
+/// A source the scanner reported invalid — an unterminated comment or string —
+/// is returned byte for byte with no edits at all, unless
+/// [`ScanOptions::force_invalid`](crate::ScanOptions::force_invalid) is set.
+///
+/// # Examples
+///
+/// ```
+/// use ocomment_core::{Language, TransformOptions, transform};
+///
+/// let result = transform(
+///     b"let x = 1; // note\n",
+///     Language::Rust,
+///     TransformOptions::default(),
+/// );
+/// assert_eq!(result.output, b"let x = 1; \n");
+/// assert_eq!(result.report.comments.len(), 1);
+/// assert_eq!(result.edits.len(), 1);
+///
+/// // An unterminated comment leaves the file alone.
+/// let broken = transform(b"x /* no end", Language::C, TransformOptions::default());
+/// assert!(!broken.report.valid);
+/// assert_eq!(broken.output, b"x /* no end");
+/// ```
 pub fn transform(source: &[u8], language: Language, options: TransformOptions) -> TransformResult {
     let report = scan(source, language, options.scan.clone());
     transform_report(source, report, options)
@@ -15,6 +45,46 @@ pub fn transform(source: &[u8], language: Language, options: TransformOptions) -
 ///
 /// This is the safe hand-off point for declarative or WASM scanners. Spans
 /// must be non-empty, sorted, non-overlapping, and contained in `source`.
+///
+/// The report that comes back carries no diagnostics and is always valid: the
+/// external scanner, not this crate, judged whether the source lexed.
+///
+/// # Errors
+///
+/// Returns [`ExternalSpanError`] naming the first span that reaches past the
+/// end of `source`, covers no bytes, or starts before its predecessor ends,
+/// or reporting a `keep_regex`/`remove_regex` entry that would not compile.
+/// Nothing is transformed when validation fails.
+///
+/// # Examples
+///
+/// ```
+/// use ocomment_core::{
+///     ByteSpan, CommentKind, ExternalSpanError, Language, TransformOptions, transform_spans,
+/// };
+///
+/// let source = b"a/* ordinary */b/* directive */";
+/// let result = transform_spans(
+///     source,
+///     Language::Unknown,
+///     &[
+///         (ByteSpan::new(1, 15), CommentKind::Block),
+///         (ByteSpan::new(16, source.len()), CommentKind::Directive),
+///     ],
+///     TransformOptions::default(),
+/// )
+/// .unwrap();
+/// // The same policy the built-in scanners get: the directive is kept.
+/// assert_eq!(result.output, b"a b/* directive */");
+///
+/// let bad = transform_spans(
+///     source,
+///     Language::Unknown,
+///     &[(ByteSpan::new(2, source.len() + 1), CommentKind::Block)],
+///     TransformOptions::default(),
+/// );
+/// assert!(matches!(bad, Err(ExternalSpanError::OutOfBounds { .. })));
+/// ```
 pub fn transform_spans(
     source: &[u8],
     language: Language,
@@ -114,7 +184,33 @@ pub(crate) fn transform_report(
 
 /// Apply sorted, non-overlapping half-open edits.
 ///
-/// Panics if an edit violates the public edit contract or lies outside `source`.
+/// The bytes outside the edited spans are copied through untouched, which is
+/// what makes a transformation byte-preserving: a BOM, CRLF line endings, a
+/// missing final newline, and bytes that are not UTF-8 at all all survive.
+///
+/// # Panics
+///
+/// Panics if an edit has `start > end`, starts before its predecessor ends, or
+/// reaches past the end of `source`. The edits of a
+/// [`TransformResult`] always satisfy that contract; edits assembled by hand
+/// have to be sorted first.
+///
+/// # Examples
+///
+/// ```
+/// use ocomment_core::{ByteSpan, Edit, Language, TransformOptions, apply_edits, transform};
+///
+/// let edits = [Edit {
+///     span: ByteSpan::new(3, 8),
+///     replacement: b"there".to_vec(),
+/// }];
+/// assert_eq!(apply_edits(b"hi world", &edits), b"hi there");
+///
+/// // Re-applying a transformation's own edits reproduces its output.
+/// let source = b"let x = 1; // note\n";
+/// let result = transform(source, Language::Rust, TransformOptions::default());
+/// assert_eq!(apply_edits(source, &result.edits), result.output);
+/// ```
 pub fn apply_edits(source: &[u8], edits: &[Edit]) -> Vec<u8> {
     let mut cursor = 0;
     let output_len = edits.iter().fold(source.len(), |length, edit| {

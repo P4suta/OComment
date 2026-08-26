@@ -769,10 +769,18 @@ fn parse_layer(path: &Path, require_version: bool) -> Result<toml::Value> {
         fs::read_to_string(path).with_context(|| format!("cannot read {}", path.display()))?;
     let config: Config = toml::from_str(&text).map_err(|error| {
         let message = error.to_string();
+        /* INVARIANT: `toml` quotes the line it stopped on, with a caret under the byte
+         * that is wrong with it, so the whole of that line — bytes a project
+         * file chose, an escape sequence among them — is on its way to a
+         * terminal over four lines of diagram. It is folded onto the one line
+         * an error is and kept whole, the way an invalid `[policy]` regex is:
+         * the caret means nothing once the lines are joined, and the sentence
+         * after it is the entire answer. The hint reads the unfolded message
+         * because it quotes nothing back — only a key it found in the schema. */
         anyhow!(
             "invalid configuration {}: {}{}",
             path.display(),
-            message,
+            crate::output::sanitize_message(&message),
             unknown_key_hint(&message)
         )
     })?;

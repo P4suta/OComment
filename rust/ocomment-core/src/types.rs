@@ -4,23 +4,31 @@ use std::{fmt, str::FromStr};
 /// A half-open byte range `[start, end)`.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct ByteSpan {
+    /// The first byte of the range.
     pub start: usize,
+    /// One byte past the last byte of the range.
     pub end: usize,
 }
 
 impl ByteSpan {
+    /// The span running from `start` up to, but not including, `end`.
     pub const fn new(start: usize, end: usize) -> Self {
         Self { start, end }
     }
+    /// The number of bytes covered, or `0` when `end` precedes `start`.
     pub const fn len(self) -> usize {
         self.end.saturating_sub(self.start)
     }
+    /// Whether the span covers no bytes at all.
     pub const fn is_empty(self) -> bool {
         self.start == self.end
     }
+    /// Whether `offset` falls inside the span. The `end` offset does not.
     pub const fn contains(self, offset: usize) -> bool {
         self.start <= offset && offset < self.end
     }
+    /// Whether the two spans overlap: each starts before the other ends.
+    /// For two non-empty spans that is exactly sharing at least one byte.
     pub const fn intersects(self, other: Self) -> bool {
         self.start < other.end && other.start < self.end
     }
@@ -53,26 +61,60 @@ fn lookup<T: Copy>(
         .find(|value| name(*value) == folded || aliases(*value).contains(&folded))
 }
 
+/// A language OComment has a built-in scanner for.
+///
+/// The serde representation is the canonical name [`Self::as_str`] returns.
+/// [`FromStr`] accepts that name and every spelling in [`Self::aliases`],
+/// case-folded and with `-` and `_` ignored, so `C++`, `cxx` and `cpp` all
+/// name [`Self::Cpp`].
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Language {
+    /// Rust, detected from `.rs`.
     Rust,
+    /// OCaml, detected from `.ml` and `.mli`.
     Ocaml,
+    /// C, detected from `.c` and `.h`; `.m` selects [`Dialect::ObjectiveC`].
     C,
+    /// C++, detected from `.cpp` and its siblings; `.mm` and `.cu` select
+    /// [`Dialect::ObjectiveCpp`] and [`Dialect::Cuda`].
     Cpp,
+    /// Go, detected from `.go`.
     Go,
+    /// Java, detected from `.java`.
     Java,
+    /// JavaScript, detected from `.js`, `.mjs` and `.cjs`; `.jsx` selects
+    /// [`Dialect::Jsx`].
     #[serde(rename = "javascript")]
     JavaScript,
+    /// TypeScript, detected from `.ts`, `.mts` and `.cts`; `.tsx` selects
+    /// [`Dialect::Tsx`].
     #[serde(rename = "typescript")]
     TypeScript,
+    /// Python, detected from `.py`, `.pyw` and `.pyi`.
     Python,
+    /// Shell, detected from `.sh`, `.bash` and `.zsh`, and from a `Dockerfile`
+    /// or `Makefile` name.
     Shell,
+    /// HTML, detected from `.html` and its siblings. `<script>` and `<style>`
+    /// bodies are scanned as JavaScript and CSS.
     Html,
+    /// CSS, detected from `.css`.
     Css,
+    /// JSON with comments, detected from `.jsonc`, `.json5`, and from a
+    /// `tsconfig.json` or `jsconfig.json` name.
     Jsonc,
+    /// SQL, detected from `.sql`. The [`Dialect`] decides the string and
+    /// comment rules.
     Sql,
+    /// Kotlin, detected from `.kt` and `.kts`.
     Kotlin,
+    /// No built-in scanner, and the default.
+    ///
+    /// Scanning it yields no comments and one `unknown-language` error
+    /// diagnostic. A syntax with no built-in scanner is handled by a
+    /// [`DeclarativeProfile`](crate::DeclarativeProfile) or by
+    /// [`transform_spans`](crate::transform_spans) instead.
     #[default]
     Unknown,
 }
@@ -158,34 +200,59 @@ impl FromStr for Language {
     }
 }
 
+/// A vendor or extension variant of a [`Language`]'s lexical rules.
+///
+/// A dialect never changes the file type: [`Self::MySql`] is still
+/// [`Language::Sql`]. It changes what counts as a string, an identifier, or a
+/// comment while scanning. Naming one a language does not support is an error
+/// rather than a silent fallback.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Dialect {
+    /// The language's own rules, with no vendor extension. The default.
     #[default]
     Standard,
+    /// JavaScript with JSX syntax enabled.
     Jsx,
+    /// TypeScript with TSX syntax enabled.
     Tsx,
+    /// Objective-C. The comment rules are C's; the dialect records the
+    /// flavour of the file.
     #[serde(rename = "objective-c")]
     ObjectiveC,
+    /// Objective-C++. The comment rules are C++'s.
     #[serde(rename = "objective-cpp")]
     ObjectiveCpp,
+    /// C with the GNU extensions. The comment rules are C's.
     #[serde(rename = "gnu-c")]
     GnuC,
+    /// C++ with the GNU extensions. The comment rules are C++'s.
     #[serde(rename = "gnu-cpp")]
     GnuCpp,
+    /// CUDA C++. The comment rules are C++'s.
     Cuda,
+    /// POSIX `sh`, which has no `$'...'` ANSI-C quoted strings.
     #[serde(rename = "posix-sh")]
     PosixSh,
+    /// Bash 5.3, which adds `$'...'` ANSI-C quoted strings.
     #[serde(rename = "bash53")]
     Bash53,
+    /// Zsh, which also has `$'...'` ANSI-C quoted strings.
     Zsh,
+    /// PostgreSQL: nested `/* ... */`, `$tag$ ... $tag$` dollar-quoted
+    /// strings, and backslash escapes inside `E'...'`.
     #[serde(rename = "postgresql")]
     PostgreSql,
+    /// MySQL: `#` line comments, `--` only when a boundary follows, strings
+    /// in double quotes, and backslash escapes.
     #[serde(rename = "mysql")]
     MySql,
+    /// SQLite, which uses the standard SQL rules.
     Sqlite,
+    /// Transact-SQL: nested `/* ... */` and `[bracketed]` identifiers.
     #[serde(rename = "t-sql")]
     TSql,
+    /// Oracle, which adds `q'[...]'` quoted literals.
     Oracle,
 }
 
@@ -270,20 +337,41 @@ impl FromStr for Dialect {
     }
 }
 
+/// What a comment is, which is what a [`Policy`] decides against.
+///
+/// The kind is lexical to begin with and then refined by the comment's own
+/// bytes and position: a `//` token is [`Self::Line`] until it turns out to
+/// carry an SPDX identifier ([`Self::License`]) or a build tag
+/// ([`Self::Directive`]).
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum CommentKind {
+    /// An ordinary one-line comment: `// ...`, `# ...`, `-- ...`.
     #[default]
     Line,
+    /// An ordinary delimited comment: `/* ... */`, `(* ... *)`.
     Block,
+    /// A one-line documentation comment, such as Rust's `///` and `//!`.
     DocLine,
+    /// A delimited documentation comment, such as `/** ... */`.
     DocBlock,
+    /// A comment addressed to a tool or to the compiler: a build tag, a
+    /// linter suppression, a type-checker pragma. `spec/directives.toml` is
+    /// the catalogue.
     Directive,
+    /// A license or copyright notice, such as an SPDX identifier. Only
+    /// [`Policy::Legal`] keeps one.
     License,
+    /// An HTML `<!-- ... -->` comment, which the DOM exposes to scripts.
     HtmlComment,
+    /// A `#!` interpreter line at the very start of the file.
     Shebang,
+    /// A Python source-encoding declaration in the first two lines.
     Encoding,
+    /// A SQL optimizer hint, `/*+ ... */`, which the planner reads.
     OptimizerHint,
+    /// A SQL version-gated comment, `/*! ... */`, whose body the server
+    /// executes.
     VersionComment,
 }
 
@@ -353,14 +441,21 @@ impl FromStr for CommentKind {
     }
 }
 
+/// What the policy decided about one comment.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "action", rename_all = "kebab-case")]
 pub enum Disposition {
+    /// The comment is removed.
     Remove,
-    Keep { reason: String },
+    /// The comment stays, and `reason` says in a few words why.
+    Keep {
+        /// Which rule protected the comment, phrased for a human.
+        reason: String,
+    },
 }
 
 impl Disposition {
+    /// Whether this is [`Self::Remove`].
     pub const fn is_remove(&self) -> bool {
         matches!(self, Self::Remove)
     }
@@ -379,7 +474,9 @@ impl fmt::Display for Disposition {
 /// keep-or-remove verdict on its own.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Action {
+    /// The comment stays.
     Keep,
+    /// The comment goes.
     Remove,
 }
 
@@ -393,6 +490,7 @@ impl Action {
         }
     }
 
+    /// Whether this is [`Self::Remove`].
     pub const fn is_remove(self) -> bool {
         matches!(self, Self::Remove)
     }
@@ -420,7 +518,12 @@ pub enum DispositionExplanation {
     /// The kind is listed in [`ScanOptions::keep_kinds`].
     KeptByKind(CommentKind),
     /// A [`ScanOptions::keep_regex`] entry matched the whole comment token.
-    KeptByRegex { index: usize, pattern: String },
+    KeptByRegex {
+        /// Position of the entry in [`ScanOptions::keep_regex`].
+        index: usize,
+        /// That entry, verbatim.
+        pattern: String,
+    },
     /// A shebang or encoding declaration the source needs to keep working;
     /// only [`ScanOptions::force_protected`] gives it up.
     ProtectedPreamble,
@@ -428,15 +531,25 @@ pub enum DispositionExplanation {
     KeptHtml,
     /// A directive addressed to a tool or to the compiler.
     KeptDirective {
+        /// The kind that was classified as a directive.
         kind: CommentKind,
+        /// The directive's name, when the catalogue could name it.
         name: Option<&'static str>,
     },
     /// A license or copyright notice under [`Policy::Legal`].
-    KeptLicense { marker: Option<&'static str> },
+    KeptLicense {
+        /// The marker that identified it, such as `spdx-license-identifier`.
+        marker: Option<&'static str>,
+    },
     /// The kind is listed in [`ScanOptions::remove_kinds`].
     RemovedByKind(CommentKind),
     /// A [`ScanOptions::remove_regex`] entry matched the whole comment token.
-    RemovedByRegex { index: usize, pattern: String },
+    RemovedByRegex {
+        /// Position of the entry in [`ScanOptions::remove_regex`].
+        index: usize,
+        /// That entry, verbatim.
+        pattern: String,
+    },
     /// The policy removes every comment it is offered.
     RemovedByPolicy(Policy),
     /// Nothing protected an ordinary comment, so the policy default removed it.
@@ -505,20 +618,33 @@ impl fmt::Display for DispositionExplanation {
     }
 }
 
+/// One comment the scanner found, and what the policy decided about it.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Comment {
+    /// Where the comment's bytes are, delimiters included.
     pub span: ByteSpan,
+    /// What the comment turned out to be.
     pub kind: CommentKind,
+    /// Whether it is removed, and why if it is not.
     pub disposition: Disposition,
 }
 
+/// How serious a [`Diagnostic`] is.
+///
+/// Only [`Self::Error`] changes what a transformation writes: it makes
+/// [`ScanReport::valid`] false, and nothing is edited unless
+/// [`ScanOptions::force_invalid`] is set.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Severity {
+    /// The source could not be lexed: an unterminated comment or string.
     Error,
+    /// Something the caller should look at, which still lexed.
     Warning,
+    /// Ordinary information, and the default.
     #[default]
     Info,
+    /// The mildest note.
     Hint,
 }
 
@@ -556,25 +682,42 @@ impl FromStr for Severity {
     }
 }
 
+/// Something the scanner has to say about the source it was given.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Diagnostic {
+    /// A stable machine identifier, such as `unterminated-string`.
     pub code: String,
+    /// The human sentence.
     pub message: String,
+    /// How serious it is.
     pub severity: Severity,
+    /// The bytes it is about.
     pub span: ByteSpan,
 }
 
+/// Everything a scan found.
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ScanReport {
+    /// The language it was scanned as.
     pub language: Language,
+    /// Every comment, in source order, non-overlapping.
     pub comments: Vec<Comment>,
+    /// Everything the scanner had to say about the source.
     pub diagnostics: Vec<Diagnostic>,
+    /// False when any diagnostic is a [`Severity::Error`].
     pub valid: bool,
 }
 
+/// One replacement of a byte range.
+///
+/// The edits of a [`TransformResult`] are sorted and non-overlapping, so
+/// [`apply_edits`](crate::apply_edits) can walk them once.
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Edit {
+    /// The bytes to replace.
     pub span: ByteSpan,
+    /// The bytes to put there, empty to delete. Serde renders these as a
+    /// lossy UTF-8 string.
     #[serde(with = "bytes_serde")]
     pub replacement: Vec<u8>,
 }
@@ -582,22 +725,50 @@ pub struct Edit {
 /// Validation failure for comments supplied by an external scanner.
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum ExternalSpanError {
+    /// A span reaches past the end of the source.
     #[error("external comment #{index} is outside the {source_len}-byte source")]
-    OutOfBounds { index: usize, source_len: usize },
+    OutOfBounds {
+        /// Position of the offending comment in the slice handed over.
+        index: usize,
+        /// The length of the source it had to fit in.
+        source_len: usize,
+    },
+    /// A span covers no bytes.
     #[error("external comment #{index} has an empty span")]
-    Empty { index: usize },
+    Empty {
+        /// Position of the offending comment in the slice handed over.
+        index: usize,
+    },
+    /// A span starts before its predecessor ends.
     #[error("external comment #{index} is out of order or overlaps its predecessor")]
-    OrderOrOverlap { index: usize },
+    OrderOrOverlap {
+        /// Position of the offending comment in the slice handed over.
+        index: usize,
+    },
+    /// A `keep_regex` or `remove_regex` entry would not compile.
     #[error("invalid external-scan policy regex: {0}")]
     InvalidPattern(String),
 }
 
+/// Which comments survive by default.
+///
+/// A policy is the last word, not the first: [`ScanOptions::keep_kinds`],
+/// [`ScanOptions::keep_regex`], [`ScanOptions::remove_kinds`] and
+/// [`ScanOptions::remove_regex`] are all tested before it. The full table of
+/// policy against [`CommentKind`] is in the crate documentation.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Policy {
+    /// The default. Removes ordinary, documentation, and license comments;
+    /// keeps directives, HTML comments, SQL hints and version comments, and
+    /// the shebang or encoding preamble.
     #[default]
     Safe,
+    /// As [`Self::Safe`], but license and copyright notices are kept too.
     Legal,
+    /// Removes every comment, directives and HTML comments included. The
+    /// shebang and encoding preamble still survive unless
+    /// [`ScanOptions::force_protected`] is set.
     All,
 }
 
@@ -634,12 +805,24 @@ impl FromStr for Policy {
     }
 }
 
+/// What a removal leaves behind in place of the comment.
+///
+/// No layout ever moves a byte the comment did not cover, so the choice is
+/// only about the hole.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Layout {
+    /// The default. The line terminators inside the comment are kept, so
+    /// every following line keeps its number, and a comment with code on
+    /// both sides leaves a single space so the two tokens stay apart.
     #[default]
     Lines,
+    /// As [`Self::Lines`], but the comment is replaced by spaces of the same
+    /// display width, so every following column on the line keeps its number
+    /// as well. Tabs are expanded to the next multiple of eight.
     Columns,
+    /// The comment goes and the hole is closed up. On the bytes the engine
+    /// writes today that is what [`Self::Lines`] already does.
     Compact,
 }
 
@@ -676,14 +859,25 @@ impl FromStr for Layout {
     }
 }
 
+/// Everything that decides what a scan finds and what it does with it.
+///
+/// [`Self::default`] is the [`Policy::Safe`] policy with no overrides.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ScanOptions {
+    /// Which kinds survive by default.
     pub policy: Policy,
+    /// The vendor rules to lex with. It must be one the language supports.
     pub dialect: Dialect,
+    /// Edit even a source the scanner reported invalid. Without it a file
+    /// with an unterminated comment or string comes back byte for byte.
     pub force_invalid: bool,
+    /// Remove the shebang and encoding preamble as well. Nothing else
+    /// protects them.
     pub force_protected: bool,
+    /// Kinds kept whatever the policy says. Tested before everything else.
     pub keep_kinds: Vec<CommentKind>,
+    /// Kinds removed unless a keep rule claimed them first.
     pub remove_kinds: Vec<CommentKind>,
     /// Byte-regexes that protect matching complete comment tokens.
     pub keep_regex: Vec<String>,
@@ -706,10 +900,13 @@ impl Default for ScanOptions {
     }
 }
 
+/// A [`ScanOptions`] and what to leave behind in place of each removal.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct TransformOptions {
+    /// What to find and what to decide about it.
     pub scan: ScanOptions,
+    /// What a removal leaves behind.
     pub layout: Layout,
 }
 
@@ -725,18 +922,51 @@ impl Default for TransformOptions {
 /// One unchanged or replaced source-map section.
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SourceMapSegment {
+    /// The bytes in the original source.
     pub original: ByteSpan,
+    /// The bytes they became in the output.
     pub output: ByteSpan,
+    /// True when the section is unchanged, so an offset maps through it
+    /// byte for byte; false for a replaced section, where every original
+    /// offset maps to the start of the replacement.
     pub exact: bool,
 }
 
+/// Where each byte of the original source ended up in the output.
+///
+/// This is what lets an editor keep a cursor, a diagnostic, or a breakpoint
+/// pointing at the right place after a removal.
+///
+/// # Examples
+///
+/// ```
+/// use ocomment_core::{Language, TransformOptions, transform};
+///
+/// let source = b"let x = 1; // note\nlet y = 2;\n";
+/// let result = transform(source, Language::Rust, TransformOptions::default());
+/// let map = &result.source_map;
+///
+/// // The `let y` on the second line survived, at a lower offset.
+/// let original = source.windows(5).position(|w| w == b"let y").unwrap();
+/// let moved = map.original_to_output(original).unwrap();
+/// assert_eq!(&result.output[moved..moved + 5], b"let y");
+/// assert_eq!(map.output_to_original(moved), Some(original));
+/// ```
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SourceMap {
+    /// The sections, in order, covering the whole of both sides.
     pub segments: Vec<SourceMapSegment>,
 }
 
 impl SourceMap {
     /// Build a byte source map for sorted, non-overlapping edits.
+    ///
+    /// # Panics
+    ///
+    /// Panics if an edit has `start > end`, starts before its predecessor
+    /// ends, or reaches past `source_len` — the same contract
+    /// [`apply_edits`](crate::apply_edits) enforces, so a map is never built
+    /// for edits that could not be applied.
     pub fn from_edits(source_len: usize, edits: &[Edit]) -> Self {
         let mut original = 0;
         let mut output = 0;
@@ -778,6 +1008,11 @@ impl SourceMap {
         Self { segments }
     }
 
+    /// Where an original offset landed in the output.
+    ///
+    /// An offset inside a replaced section maps to the start of that
+    /// replacement, and the end of the source maps to the end of the output.
+    /// `None` when `offset` is past the end of the original.
     pub fn original_to_output(&self, offset: usize) -> Option<usize> {
         for segment in &self.segments {
             if segment.original.contains(offset) {
@@ -793,6 +1028,10 @@ impl SourceMap {
             .and_then(|segment| (offset == segment.original.end).then_some(segment.output.end))
     }
 
+    /// Where an output offset came from in the original.
+    ///
+    /// The mirror of [`Self::original_to_output`], with the same rule for
+    /// replaced sections and the same `None` past the end.
     pub fn output_to_original(&self, offset: usize) -> Option<usize> {
         for segment in &self.segments {
             if segment.output.contains(offset) {
@@ -809,12 +1048,18 @@ impl SourceMap {
     }
 }
 
+/// The bytes a transformation would write, and the account of how.
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct TransformResult {
+    /// The transformed source. Serde renders it as a lossy UTF-8 string.
     #[serde(with = "bytes_serde")]
     pub output: Vec<u8>,
+    /// The edits that turned the source into [`Self::output`], sorted and
+    /// non-overlapping.
     pub edits: Vec<Edit>,
+    /// The scan those edits were decided from.
     pub report: ScanReport,
+    /// Where every byte of the source ended up.
     pub source_map: SourceMap,
 }
 

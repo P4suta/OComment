@@ -80,7 +80,29 @@ All notable changes to OComment will be documented here. The project follows
   upload anything. A `vscode` CI job lints, compiles, builds the binary the
   extension launches, and drives a real VS Code under `xvfb-run`;
   `publish-vscode` signs the `.vsix` with cosign, attaches it to the release,
-  and publishes to the Marketplace and Open VSX.
+  and publishes to the Marketplace and Open VSX. The extension holds one file
+  system watcher for its lifetime rather than one per start, and every start,
+  stop, and restart is queued behind the last, so a settings change during a
+  restart cannot leave a second server running with nothing holding it.
+- Item-by-item documentation for `ocomment-core` and `ocomment-plugin-sdk`,
+  and a gate that keeps it. `missing_docs` is denied through
+  `[workspace.lints]` for both library crates, so a public type, field,
+  variant, or method added without a doc comment fails `cargo clippy`. The
+  crate documentation states what byte-preserving means, that spans are
+  half-open and edits sorted and non-overlapping, and gives the policy
+  against comment-kind table; `scan`, `transform`, `transform_spans`,
+  `apply_edits`, `detect_language`, `explain_disposition`,
+  `DeclarativeProfile`, `SourceMap` and `IncrementalDocument` each carry a
+  runnable example, and `# Errors` and `# Panics` sections say what a call
+  refuses and what it asserts. CI now runs `cargo test --doc` — which
+  `--all-targets` silently skips — and `cargo doc` with `-D warnings`, so an
+  example that stops compiling or a broken intra-doc link fails the build.
+  `IncrementalError`, `LineDelimiter`, `BlockDelimiter`, `StringDelimiter`
+  and `ProtectedPattern` are exported from the crate root: each appeared in a
+  public signature that no downstream caller could name. Four runnable
+  examples under `rust/ocomment-core/examples` — `strip`, `external_spans`,
+  `incremental`, `profile` — and both library crates carry
+  `[package.metadata.docs.rs]`.
 
 ### Changed
 
@@ -157,8 +179,31 @@ All notable changes to OComment will be documented here. The project follows
 - `# syntax=` and `# hadolint ignore=` are directives. A Dockerfile is scanned
   as shell, and both lines are read by a tool rather than by a person: removing
   the first changes which Dockerfile frontend builds the image, and removing
-  the second turns a linter rule back on. The OCaml reference agrees, and the
-  differential harness carries the case.
+  the second turns a linter rule back on. `hadolint` and `shellcheck` are whole
+  words, so each ends at a boundary rather than at one particular byte:
+  `# hadolint\tignore=DL3018` is the directive written with a tab and is kept,
+  while `# hadolintish note` and `# shellcheckish note` are prose about the
+  tool and stay removable. The OCaml reference agrees, and the differential
+  harness carries the case.
+- `tools/check_directives.py` gives every marker in `spec/directives.toml` a
+  near-miss derived from its own name — `hadolint` against `hadolintish note` —
+  which the scanner has to remove. The check proved that each marker is
+  protected; nothing proved it protects no more than itself. It also runs from
+  `tools/release-check.sh` now, against the release binary.
+- A staged path the caller names is checked whatever `files.hidden` and
+  `files.max_size` say about it, the way a named path is on a walk.
+  `ocomment check --staged .hidden/x.rs` answered about zero files, which reads
+  as a clean file rather than as a path outside the project's bounds; a path
+  nobody named is still bounded by both.
+- A staged blob with no built-in language, and one that turns out to be binary,
+  are counted in the end-of-run summary — `2 files skipped (binary: 1, unknown
+  language: 1)` — and listed by `-v`, exactly as a walk reports them. A hook
+  that staged a PNG beside its source passed both over without a word.
+- An invalid `.ocomment.toml` is reported on one line and in full. `toml`
+  quotes the line it stopped on, with a caret under the byte that is wrong with
+  it, so a control character in a project file reached the terminal verbatim
+  over four lines of diagram; the verdict is folded onto one line and every
+  byte of it is printable, as an invalid `[policy]` regex already was.
 - `--format github` folds a walked skip away unless `-v` asks for it, the way
   the human report already did. A run over a repository annotated every file it
   had no scanner for, so the checks tab filled with notices about Markdown and

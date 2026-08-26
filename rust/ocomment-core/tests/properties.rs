@@ -1,3 +1,8 @@
+//! Randomised properties the engine holds for every input.
+//!
+//! The generators favour the bytes that open and close lexical states, so
+//! the cases are unlikely rather than merely random.
+
 use ocomment_core::{
     ByteSpan, DocumentChange, IncrementalDocument, Language, Layout, ScanOptions, TransformOptions,
     scan, transform,

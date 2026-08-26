@@ -36,6 +36,7 @@
           {"context": "docker"},
           {"context": "dogfood"},
           {"context": "vscode"},
+          {"context": "docs"},
           {"context": "host-smoke (ubuntu-latest)"},
           {"context": "host-smoke (macos-15)"},
           {"context": "host-smoke (windows-2025)"},

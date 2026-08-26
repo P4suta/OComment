@@ -1,3 +1,11 @@
+//! Per-language and per-dialect lexing, one test per lexical hazard.
+//!
+//! Each case names the construct it protects — a raw string, a nested
+//! comment, a heredoc, a regex literal — and asserts on the comments found
+//! and on the bytes a transformation leaves behind, so a scanner that starts
+//! reading a delimiter inside a string fails here rather than in a user's
+//! repository.
+
 use ocomment_core::{
     ByteSpan, CommentKind, Dialect, Disposition, Language, Layout, Policy, ScanOptions,
     TransformOptions, scan, transform,
@@ -352,13 +360,15 @@ fn shell_heredocs_and_here_strings_are_not_comments() {
 /// one rule of the Dockerfile linter off for the instruction below it. Removing
 /// either changes what a build does, so neither is explanatory text.
 ///
-/// `hadolint` is the whole word the linter answers to, so the prefix carries
-/// the space that ends it. Prose that merely opens with those letters —
-/// `# hadolintish note` — is a comment about the linter rather than an
+/// `hadolint` and `shellcheck` are whole words the two tools answer to, so
+/// what ends either of them is a word boundary rather than one particular
+/// byte: `# hadolint\tignore=` is the directive written with a tab, and prose
+/// that merely opens with those letters — `# hadolintish note`,
+/// `# shellcheckish note` — is a comment *about* the tool rather than an
 /// instruction to it, and stays removable.
 #[test]
 fn dockerfile_parser_and_linter_directives_are_protected() {
-    let source = b"# syntax=docker/dockerfile:1\n# explanatory\n# hadolint ignore=DL3018\n# hadolintish note\nRUN apk add --no-cache musl-dev\n# shellcheck disable=SC2086\n";
+    let source = b"# syntax=docker/dockerfile:1\n# explanatory\n# hadolint ignore=DL3018\n# hadolint\tignore=DL3019\n# hadolintish note\nRUN apk add --no-cache musl-dev\n# shellcheck disable=SC2086\n# shellcheck\tdisable=SC2087\n# shellcheckish note\n";
     let report = scan(source, Language::Shell, ScanOptions::default());
     assert!(report.valid);
     let kinds: Vec<_> = report.comments.iter().map(|comment| comment.kind).collect();
@@ -368,11 +378,14 @@ fn dockerfile_parser_and_linter_directives_are_protected() {
             CommentKind::Directive,
             CommentKind::Line,
             CommentKind::Directive,
+            CommentKind::Directive,
             CommentKind::Line,
             CommentKind::Directive,
+            CommentKind::Directive,
+            CommentKind::Line,
         ]
     );
-    assert_eq!(removable(&report), 2);
+    assert_eq!(removable(&report), 3);
 }
 
 #[test]

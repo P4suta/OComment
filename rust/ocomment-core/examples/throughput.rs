@@ -1,3 +1,8 @@
+//! Test tooling: a scanning throughput measurement.
+//!
+//! It exists to catch a performance regression in CI, not to demonstrate the
+//! API; `strip.rs` is the example to read.
+
 use ocomment_core::{Dialect, Language, ScanOptions, scan};
 use std::{env, hint::black_box, process::ExitCode, time::Instant};
 

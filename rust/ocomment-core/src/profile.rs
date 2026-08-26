@@ -7,85 +7,199 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// A deliberately limited scanner profile for unambiguous comment syntaxes.
+///
+/// A profile describes a syntax whose comments and strings are literal
+/// delimiters and nothing more, so that one byte-oriented pass can find them
+/// with no grammar and no backtracking. That is the whole of what it can
+/// express, and the limits are enforced rather than assumed:
+///
+/// - Every delimiter is a literal token. It must not be empty and must not
+///   contain a line terminator.
+/// - No comment delimiter may be a prefix of another comment delimiter, no
+///   string delimiter of another string delimiter, and no comment delimiter of
+///   a string delimiter or the reverse. One position therefore never has two
+///   readings, which is what makes the single pass correct.
+/// - A nested block needs a start and an end that are distinct and neither
+///   contained in the other, so the depth count cannot be fooled.
+/// - A comment's [`CommentKind`] is whatever the delimiter declares. There is
+///   no classification by content the way a built-in scanner does it: a
+///   profile finds no shebang, no encoding line, and no license notice unless
+///   a [`ProtectedPattern`] says so.
+///
+/// A syntax that needs more than this — a regex literal, a heredoc, an
+/// indentation rule — needs a scanner plugin instead.
+///
+/// # Examples
+///
+/// ```
+/// use ocomment_core::{
+///     CommentKind, DeclarativeProfile, LineDelimiter, StringDelimiter, TransformOptions,
+///     transform_profile,
+/// };
+///
+/// let profile = DeclarativeProfile {
+///     name: "lisp".into(),
+///     extensions: vec!["lisp".into()],
+///     line_comments: vec![LineDelimiter {
+///         start: ";;".into(),
+///         requires_boundary: false,
+///         kind: CommentKind::Line,
+///     }],
+///     strings: vec![StringDelimiter {
+///         start: "\"".into(),
+///         end: "\"".into(),
+///         escape: Some("\\".into()),
+///         multiline: false,
+///     }],
+///     ..Default::default()
+/// };
+///
+/// let source = b"(print \";; not a comment\") ;; a comment\n";
+/// let result = transform_profile(source, &profile, TransformOptions::default()).unwrap();
+/// assert_eq!(result.output, b"(print \";; not a comment\") \n");
+/// ```
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct DeclarativeProfile {
+    /// What to call the profile in a diagnostic. It must not be blank.
     pub name: String,
+    /// The file extensions this profile claims, with or without the leading
+    /// dot and matched case-insensitively. The scanner never reads this; it
+    /// is for whoever picks a profile for a path.
     #[serde(default)]
     pub extensions: Vec<String>,
+    /// Tokens that open a comment running to the end of the line.
     #[serde(default)]
     pub line_comments: Vec<LineDelimiter>,
+    /// Tokens that open a comment running to a closing token.
     #[serde(default)]
     pub block_comments: Vec<BlockDelimiter>,
+    /// String forms to skip, so a comment token inside one is only text.
     #[serde(default)]
     pub strings: Vec<StringDelimiter>,
+    /// Substrings that turn a comment into a kept directive.
     #[serde(default)]
     pub protected_patterns: Vec<ProtectedPattern>,
 }
 
+/// A token that opens a comment running to the end of the line.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LineDelimiter {
+    /// The opening token.
     pub start: String,
+    /// Only open a comment at the start of the source or after ASCII
+    /// whitespace, so a token that also occurs inside an identifier does not
+    /// swallow the rest of the line.
     #[serde(default)]
     pub requires_boundary: bool,
+    /// The kind to record, which is what the policy then judges.
     #[serde(default)]
     pub kind: CommentKind,
 }
 
+/// A token pair that opens and closes a delimited comment.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BlockDelimiter {
+    /// The opening token.
     pub start: String,
+    /// The closing token.
     pub end: String,
+    /// Count nesting, so an inner `start` needs its own `end`. Requires a
+    /// `start` and `end` that are distinct and neither contained in the other.
     #[serde(default)]
     pub nested: bool,
+    /// The kind to record, which is what the policy then judges.
     #[serde(default)]
     pub kind: CommentKind,
 }
 
+/// A string form the scan skips over, so a comment token inside one is text.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StringDelimiter {
+    /// The opening token.
     pub start: String,
+    /// The closing token, which may be the same as `start`.
     pub end: String,
+    /// A token that protects the byte after it, such as `\\`.
     #[serde(default)]
     pub escape: Option<String>,
+    /// Whether the string may cross a line terminator. When it may not, a
+    /// line terminator ends it and an `unterminated-profile-string`
+    /// diagnostic is raised.
     #[serde(default)]
     pub multiline: bool,
 }
 
+/// A substring that makes a comment a kept directive.
+///
+/// A comment whose text contains it is recorded as a
+/// [`CommentKind::Directive`], which every policy but
+/// [`Policy::All`](crate::Policy::All) keeps, and `reason` becomes the reason
+/// on its [`Disposition::Keep`](crate::Disposition::Keep).
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProtectedPattern {
+    /// The substring to look for, compared against the comment's text as
+    /// lossy UTF-8.
     pub contains: String,
+    /// Why such a comment is kept, phrased for a human. It must not be blank.
     pub reason: String,
 }
 
+/// Why a [`DeclarativeProfile`] cannot be interpreted.
+///
+/// Every variant is a limit of the single-pass design rather than a passing
+/// problem with the input, so the same profile always fails the same way.
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
 pub enum ProfileError {
+    /// The profile has no name to put in a diagnostic.
     #[error("profile name must not be empty")]
     EmptyName,
+    /// The profile declares neither a line nor a block comment.
     #[error("profile must define at least one comment delimiter")]
     NoCommentDelimiter,
+    /// The named token is the empty string, which would match everywhere.
     #[error("delimiter `{0}` must not be empty")]
     EmptyDelimiter(&'static str),
+    /// Two comment delimiters where one is a prefix of the other.
     #[error("ambiguous delimiter prefix: `{0}` and `{1}`")]
     AmbiguousDelimiter(String, String),
+    /// Two string delimiters where one is a prefix of the other.
     #[error("ambiguous string delimiter prefix: `{0}` and `{1}`")]
     AmbiguousStringDelimiter(String, String),
+    /// A comment delimiter and a string delimiter where one is a prefix of
+    /// the other, so one position could open either.
     #[error("ambiguous comment/string delimiter prefix: `{0}` and `{1}`")]
     CommentStringCollision(String, String),
+    /// A nested block whose start and end are equal or overlap, which no
+    /// depth count can read.
     #[error("nested block delimiters require distinct non-overlapping start and end tokens")]
     InvalidNesting,
+    /// A delimiter spanning a line terminator, which a one-line token cannot.
     #[error("delimiter contains a newline")]
     NewlineDelimiter,
+    /// A [`ProtectedPattern`] with nothing to look for or no reason to give.
     #[error("protected patterns need non-empty `contains` and `reason` values")]
     EmptyProtectedPattern,
+    /// A `keep_regex` or `remove_regex` entry of the [`ScanOptions`] would not
+    /// compile.
     #[error("invalid policy regex: {0}")]
     InvalidPolicyRegex(String),
 }
 
+/// Check that a profile is one the single-pass interpreter can read.
+///
+/// [`scan_profile`] calls this first, so validating separately is only worth
+/// it to report a bad configuration before any file is opened.
+///
+/// # Errors
+///
+/// Returns the first [`ProfileError`] the profile runs into. The checks are
+/// on the profile alone and never on a source, so the answer is the same
+/// every time.
 pub fn validate_profile(profile: &DeclarativeProfile) -> Result<(), ProfileError> {
     if profile.name.trim().is_empty() {
         return Err(ProfileError::EmptyName);
@@ -159,6 +273,18 @@ pub fn validate_profile(profile: &DeclarativeProfile) -> Result<(), ProfileError
 }
 
 /// Interpret a validated declarative profile with a single byte-oriented pass.
+///
+/// Strings are matched first, then line comments, then block comments, so a
+/// comment token inside a string is never a comment. The report names
+/// [`Language::Unknown`] — a profile is not one of the built-in languages —
+/// and an unterminated string or block raises an
+/// `unterminated-profile-string` or `unterminated-profile-comment`
+/// diagnostic, which makes the report invalid.
+///
+/// # Errors
+///
+/// Returns a [`ProfileError`] when the profile itself is unreadable, which
+/// is checked before the source is touched.
 pub fn scan_profile(
     source: &[u8],
     profile: &DeclarativeProfile,
@@ -280,6 +406,15 @@ pub fn scan_profile(
     })
 }
 
+/// Scan under a profile and produce the bytes a removal would write.
+///
+/// [`scan_profile`] followed by the same layout, edit validation, and
+/// source-map engine the built-in languages go through, so the guarantees
+/// of [`transform`](crate::transform) hold here too.
+///
+/// # Errors
+///
+/// Returns a [`ProfileError`] when the profile itself is unreadable.
 pub fn transform_profile(
     source: &[u8],
     profile: &DeclarativeProfile,

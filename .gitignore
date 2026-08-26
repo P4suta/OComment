@@ -1,6 +1,7 @@
 /rust/target/
 /ocaml/_build/
 target/
+/target/book/
 /.ocomment.lock.tmp
 __pycache__/
 *.py[cod]

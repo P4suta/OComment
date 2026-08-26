@@ -61,11 +61,17 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
         dry_run,
     } = request;
     let root = repository_root()?;
-    let (names, skipped) = configured_paths(&root, staged_paths(&root, paths)?, resolved)?;
+    let (names, mut skipped) =
+        configured_paths(&root, staged_paths(&root, paths)?, paths, resolved)?;
     let mut entries = Vec::new();
     for path in names {
         let source = index_blob(&root, &path)?;
         if source.iter().take(8192).any(|byte| *byte == 0) {
+            /* NOTE: A walk says why it passed a file over, and so does this: a hook
+             * that stages a PNG beside its source has to read as one file
+             * scanned and one passed over, not as two files with nothing
+             * to say about them. */
+            skipped.push(skipped_blob(path, "binary file (NUL byte)".to_owned()));
             continue;
         }
         let detection = forced_language
@@ -83,6 +89,7 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
             .then(|| crate::files::plugin_for_path(&path, resolved))
             .flatten();
         if detection.is_none() && profile.is_none() && routed_plugin.is_none() {
+            skipped.push(skipped_blob(path, crate::files::NO_LANGUAGE.to_owned()));
             continue;
         }
         let language = detection
@@ -172,6 +179,10 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
         });
     }
     entries.sort_by(|left, right| left.path.cmp(&right.path));
+    /* NOTE: The size skips were found before the blobs were read and the rest while
+     * reading them, so the two arrive interleaved by nothing at all; a
+     * machine format publishes this list, which owes its reader one order. */
+    skipped.sort_by(|left, right| left.path.cmp(&right.path));
     let files: Vec<_> = entries
         .iter()
         .map(|entry| entry.processed.clone())
@@ -370,38 +381,53 @@ fn staged_paths(root: &Path, filters: &[PathBuf]) -> Result<Vec<PathBuf>> {
 /// staged path relative to the repository root, and `run_target` has already
 /// pointed `resolved.cwd` there for exactly this reason.
 ///
-/// A staged path is a walked path rather than a named one: nobody typed it, so
-/// it never carries the licence an explicit argument does to look past the
-/// project's own limits. That is the whole of `[files]` and not just its two
-/// glob lists — `hidden` decides whether a dot-directory is looked into at all
-/// and `max_size` decides how much of a file is worth reading, and a hook that
-/// applied neither would put through a commit exactly what a walk would never
-/// have reached.
+/// A staged path nobody named is a walked path: it never carries the licence
+/// an explicit argument does to look past the project's own limits. That is the
+/// whole of `[files]` and not just its two glob lists — `hidden` decides
+/// whether a dot-directory is looked into at all and `max_size` decides how
+/// much of a file is worth reading, and a hook that applied neither would put
+/// through a commit exactly what a walk would never have reached.
 ///
-/// The two limits answer differently because they mean differently. A hidden
-/// path was never a candidate, so it leaves no trace; an oversized blob is a
-/// file the run *met* and declined, so it comes back as the same folded "too
-/// large" skip a walk reports, counted in the summary rather than annotated
-/// once per file.
+/// A path the caller *did* name is the other case, and `given` is what tells
+/// the two apart. `ocomment check --staged .hidden/x.rs` is a request about
+/// that file, so answering "0 files" because the project does not walk into
+/// dot-directories reads as a clean file rather than as a path out of bounds —
+/// which is why a walk lifts both limits for an explicit argument, and why this
+/// lifts them for the same argument spelled as a pathspec.
+///
+/// The two limits answer differently when they do apply, because they mean
+/// differently. A hidden path was never a candidate, so it leaves no trace; an
+/// oversized blob is a file the run *met* and declined, so it comes back as the
+/// same folded "too large" skip a walk reports, counted in the summary rather
+/// than annotated once per file.
 fn configured_paths(
     root: &Path,
     paths: Vec<PathBuf>,
+    given: &[PathBuf],
     resolved: &ResolvedConfig,
 ) -> Result<(Vec<PathBuf>, Vec<SkippedFile>)> {
     let include = crate::files::compile_globs(&resolved.config.files.include)?;
     let exclude = crate::files::compile_globs(&resolved.config.files.exclude)?;
     let max_size = resolved.config.files.max_size;
+    let named: Vec<PathBuf> = given
+        .iter()
+        .map(|pathspec| directory_form(pathspec))
+        .collect();
     let mut kept = Vec::new();
     let mut skipped = Vec::new();
     for path in paths {
         let relative = resolved.relative_to_root(&path);
+        /* NOTE: The glob lists bound a named path too — a walk asks them about every
+         * candidate before it asks anything else, and `load_one` asks them of
+         * an explicit argument exactly as it asks them of a walked one. */
         if (!include.is_empty() && !include.is_match(&relative)) || exclude.is_match(&relative) {
             continue;
         }
-        if !resolved.config.files.hidden && has_hidden_component(&path) {
+        let explicit = was_named(&path, &named);
+        if !explicit && !resolved.config.files.hidden && has_hidden_component(&path) {
             continue;
         }
-        if index_blob_size(root, &path)? > max_size {
+        if !explicit && index_blob_size(root, &path)? > max_size {
             skipped.push(SkippedFile {
                 path,
                 reason: format!("larger than {max_size} bytes"),
@@ -415,6 +441,50 @@ fn configured_paths(
         kept.push(path);
     }
     Ok((kept, skipped))
+}
+
+/// A staged blob that was met and declined, folded into the summary.
+///
+/// Neither reason depends on what the caller typed — a PNG is not text and a
+/// `.md` file has no scanner however it got into the commit — so both are
+/// counted in the end-of-run summary under the short label
+/// [`crate::output::skip_label`] gives them, and listed per file only when `-v`
+/// asks for the list.
+fn skipped_blob(path: PathBuf, reason: String) -> SkippedFile {
+    SkippedFile {
+        path,
+        reason,
+        error: false,
+        explicit: false,
+    }
+}
+
+/// A pathspec as the prefix of the paths it covers.
+///
+/// `git` answers with a path relative to the repository root, and the
+/// pathspecs went to `git diff --cached` from that same root, so the two are
+/// comparable as they stand — once the `.` segments a typed target leaves
+/// behind are gone. A bare `.` normalizes to nothing, which is the right
+/// answer: it names the whole tree.
+fn directory_form(pathspec: &Path) -> PathBuf {
+    pathspec
+        .components()
+        .filter(|component| !matches!(component, Component::CurDir))
+        .collect()
+}
+
+/// Whether the caller named this staged path, directly or by naming a
+/// directory above it.
+///
+/// `Path::starts_with` compares whole components, so `big` does not name
+/// `big.rs` and `.hidden` names everything under `.hidden/`. A pathspec `git`
+/// resolves rather than compares — a wildcard, an absolute path, `git`'s own
+/// `:(magic)` — matches nothing here and the path stays a walked one, which is
+/// the safe direction: the project's limits go on applying to it.
+fn was_named(path: &Path, named: &[PathBuf]) -> bool {
+    named
+        .iter()
+        .any(|pathspec| pathspec.as_os_str().is_empty() || path.starts_with(pathspec))
 }
 
 /// Whether any component of a staged path is a hidden name.

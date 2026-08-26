@@ -8,6 +8,7 @@ import {
 } from "vscode-languageclient/node";
 
 import { probe } from "./binary";
+import { Serial } from "./serial";
 import { CommentStatus, type ServerState } from "./status";
 
 const SECTION = "ocomment";
@@ -18,7 +19,11 @@ class OComment {
 	private readonly output: vscode.LogOutputChannel;
 	private readonly item: vscode.StatusBarItem;
 	private readonly status: CommentStatus;
+	private readonly watcher: vscode.FileSystemWatcher;
 	private readonly disposables: vscode.Disposable[] = [];
+	/* NOTE: Every start and stop goes through this, so a settings change during a
+	 * restart cannot leave a second server running with nothing holding it. */
+	private readonly lifecycle = new Serial();
 	private client: LanguageClient | undefined;
 	private clientState: vscode.Disposable | undefined;
 	private state: ServerState = "stopped";
@@ -32,7 +37,15 @@ class OComment {
 			0,
 		);
 		this.status = new CommentStatus(this.item);
-		this.disposables.push(this.output, this.item);
+		/* NOTE: One watcher for the life of the extension. It was created per start
+		 * before, which leaked one file watcher for every restart: the client
+		 * only ever disposes the listeners it hooked onto the watcher it was
+		 * handed, never the watcher itself, which is what makes handing the
+		 * same one to each successive client safe. */
+		this.watcher = vscode.workspace.createFileSystemWatcher(
+			"**/.ocomment.{toml,lock}",
+		);
+		this.disposables.push(this.output, this.item, this.watcher);
 
 		this.register("ocomment.fixActiveDocument", () => this.fixActiveDocument());
 		this.register("ocomment.restartServer", () => this.restart());
@@ -82,9 +95,20 @@ class OComment {
 		this.refresh();
 	}
 
-	/** Resolve the binary, then start the server against it. */
+	/** Stop whatever is running, then start the server, one request at a time. */
 	async start(): Promise<void> {
-		await this.stop();
+		/* INVARIANT: `launch` and `shutdown` are the bodies, and neither may reach for
+		 * the queue itself: work queued from inside the queue waits for the
+		 * work that queued it, which never finishes. Every public entry
+		 * point queues exactly once, here or in `stop`. */
+		return this.lifecycle.run(async () => {
+			await this.shutdown();
+			await this.launch();
+		});
+	}
+
+	/** Resolve the binary, then start the server against it. */
+	private async launch(): Promise<void> {
 		const configuration = this.configuration();
 		if (!configuration.get<boolean>("enable", true)) {
 			this.output.info("ocomment.enable is off; the server is stopped.");
@@ -126,9 +150,7 @@ class OComment {
 				 * when the client advertises dynamic registration. This one is
 				 * the fallback for the same files, so a configuration change is
 				 * picked up either way. */
-				fileEvents: vscode.workspace.createFileSystemWatcher(
-					"**/.ocomment.{toml,lock}",
-				),
+				fileEvents: this.watcher,
 			},
 			/* NOTE: The server advertises `workspaceDiagnostics`, and the client
 			 * drives that pull on its own; the two flags below are the ones for
@@ -164,6 +186,11 @@ class OComment {
 	}
 
 	async stop(): Promise<void> {
+		return this.lifecycle.run(() => this.shutdown());
+	}
+
+	/** Take down the client, if there is one, and forget it. */
+	private async shutdown(): Promise<void> {
 		const client = this.client;
 		this.client = undefined;
 		this.clientState?.dispose();

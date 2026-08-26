@@ -5,6 +5,33 @@ use crate::{
 use memchr::{memchr, memchr2, memchr3, memmem};
 use regex::bytes::RegexSet;
 
+/// Find every comment in `source` and decide what happens to each.
+///
+/// One pass over the bytes, with the source never decoded as a whole: the
+/// spans that come back are byte offsets into `source`, which does not have
+/// to be valid UTF-8. Nothing is written and no output is built — that is
+/// [`transform`](crate::transform).
+///
+/// A source that will not lex, such as one with an unterminated comment or
+/// string, comes back with a [`Severity::Error`](crate::Severity::Error)
+/// diagnostic and [`ScanReport::valid`] false.
+///
+/// # Examples
+///
+/// ```
+/// use ocomment_core::{CommentKind, Language, ScanOptions, scan};
+///
+/// let report = scan(b"let x = 1; // note\n", Language::Rust, ScanOptions::default());
+/// assert!(report.valid);
+/// assert_eq!(report.comments.len(), 1);
+/// assert_eq!(report.comments[0].kind, CommentKind::Line);
+/// assert!(report.comments[0].disposition.is_remove());
+///
+/// // A build tag is a directive, and the default policy keeps one.
+/// let tagged = scan(b"//go:build linux\n", Language::Go, ScanOptions::default());
+/// assert_eq!(tagged.comments[0].kind, CommentKind::Directive);
+/// assert!(!tagged.comments[0].disposition.is_remove());
+/// ```
 pub fn scan(source: &[u8], language: Language, options: ScanOptions) -> ScanReport {
     scan_internal(source, language, options, 0, false, None).0
 }
@@ -1801,6 +1828,29 @@ fn legal_marker_of(raw: &[u8]) -> Option<&'static str> {
 /// `disposition(..).is_remove()` for the same comment and options. An
 /// unparseable pattern list is ignored here as the scanner ignores it, which
 /// keeps the two in step even on input the scanner has already flagged.
+///
+/// `raw` is the comment's complete bytes, delimiters included, exactly as
+/// [`Comment::span`](crate::Comment::span) delimits them.
+///
+/// # Examples
+///
+/// ```
+/// use ocomment_core::{
+///     Action, CommentKind, DispositionExplanation, Language, Policy, ScanOptions,
+///     explain_disposition,
+/// };
+///
+/// let mut options = ScanOptions::default();
+/// let why = explain_disposition(CommentKind::Line, b"// note", Language::Rust, &options);
+/// assert_eq!(why.action(), Action::Remove);
+/// assert!(matches!(why, DispositionExplanation::RemovedByDefault(Policy::Safe)));
+///
+/// options.keep_regex.push(r"^//\s*NOTE\b".into());
+/// let kept = explain_disposition(CommentKind::Line, b"// NOTE: why", Language::Rust, &options);
+/// assert_eq!(kept.action(), Action::Keep);
+/// assert!(matches!(kept, DispositionExplanation::KeptByRegex { index: 0, .. }));
+/// assert_eq!(kept.to_string(), r"kept: matched keep_regex #0 `^//\s*NOTE\b`");
+/// ```
 pub fn explain_disposition(
     kind: CommentKind,
     raw: &[u8],
@@ -2131,7 +2181,6 @@ fn directive_name(text: &str, language: Language, raw: &[u8]) -> Option<&'static
         "eslint",
         "prettier-ignore",
         "stylelint",
-        "shellcheck",
         "noinspection",
         "nolint",
         "noqa",
@@ -2156,6 +2205,14 @@ fn directive_name(text: &str, language: Language, raw: &[u8]) -> Option<&'static
     {
         return Some(name);
     }
+    /* NOTE: `shellcheck` is out of the list above for one reason: it is the whole
+     * word the tool answers to rather than the head of a longer one, so it
+     * ends at a boundary instead of at a byte. Every language is still asked
+     * about it, because a shell fragment is embedded in more than one of
+     * them. */
+    if opens_with_keyword(compact, "shellcheck") {
+        return Some("shellcheck");
+    }
     match language {
         Language::Go => ["go:", "+build", "line "]
             .into_iter()
@@ -2173,14 +2230,28 @@ fn directive_name(text: &str, language: Language, raw: &[u8]) -> Option<&'static
          * addressed to a tool: `# syntax=` is the parser directive BuildKit
          * reads before it reads the file, and `# hadolint ignore=` turns one
          * rule of the Dockerfile linter off for the instruction below it.
-         * `hadolint` is the whole word the linter answers to, so the prefix
-         * carries the space that ends it: `# hadolintish note` is prose about
-         * the linter rather than an instruction to it, and stays removable. */
-        Language::Shell => ["shellcheck", "syntax=", "hadolint "]
-            .into_iter()
-            .find(|prefix| compact.starts_with(prefix)),
+         * `hadolint` is a whole word and `syntax=` is not — the frontend
+         * reference follows the `=` with no space at all — so only the first
+         * of the two is matched with a boundary after it. */
+        Language::Shell => opens_with_keyword(compact, "hadolint")
+            .then_some("hadolint")
+            .or_else(|| compact.starts_with("syntax=").then_some("syntax=")),
         _ => None,
     }
+}
+
+/// Whether `text` opens with `keyword` and then ends it.
+///
+/// A directive named after the tool that reads it — `shellcheck`, `hadolint` —
+/// is followed by the argument that tool takes, and what separates the two is
+/// whitespace of the writer's choosing rather than one particular byte:
+/// `# hadolint\tignore=DL3018` is the same instruction as the one written with
+/// a space. Matching the bare prefix instead would read prose that merely opens
+/// with those letters — `# shellcheckish note` — as an instruction as well, and
+/// protect a comment that is only *about* the tool.
+fn opens_with_keyword(text: &str, keyword: &str) -> bool {
+    text.strip_prefix(keyword)
+        .is_some_and(|rest| rest.starts_with(|character: char| character.is_ascii_whitespace()))
 }
 
 fn line_kind(bytes: &[u8], index: usize) -> CommentKind {

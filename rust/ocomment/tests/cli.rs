@@ -658,6 +658,112 @@ fn staged_runs_honour_the_hidden_and_size_limits() {
     );
 }
 
+/// The other half of the same rule. `[files]` bounds what a run *finds*, and
+/// a path the caller typed was never found: they named it, so it is checked
+/// whatever `hidden` and `max_size` would have said about it. A walk has said
+/// so since `discover_with_scope`, and a staged run says it about the same two
+/// settings — otherwise `ocomment check --staged .hidden/x.rs` answers about
+/// nothing at all, which reads as a clean file rather than as a path outside
+/// the project's bounds.
+#[test]
+fn staged_paths_the_caller_names_bypass_the_hidden_and_size_limits() {
+    let directory = repository();
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        b"version = 1\n\n[files]\nmax_size = 20\n",
+    )
+    .unwrap();
+    fs::create_dir(directory.path().join(".hidden")).unwrap();
+    fs::write(directory.path().join(".hidden/x.rs"), b"let a = 1; // x\n").unwrap();
+    fs::write(
+        directory.path().join("big.rs"),
+        b"let big = 3; // past the limit\n",
+    )
+    .unwrap();
+    git(directory.path(), &["add", ".hidden/x.rs", "big.rs"]);
+
+    for named in [".hidden/x.rs", "big.rs"] {
+        let checked = run(directory.path(), &["check", "--staged", named]);
+        let report = String::from_utf8(checked.stdout).unwrap();
+        assert_eq!(
+            checked.status.code(),
+            Some(1),
+            "`check --staged {named}` said:\n{report}{}",
+            String::from_utf8_lossy(&checked.stderr)
+        );
+        assert!(
+            report.contains(named),
+            "the caller named {named} and it was filtered out anyway:\n{report}"
+        );
+    }
+
+    /* NOTE: A named directory carries the same licence to everything under it,
+     * exactly as an explicitly walked directory does. */
+    let named_directory = run(directory.path(), &["check", "--staged", ".hidden"]);
+    let report = String::from_utf8(named_directory.stdout).unwrap();
+    assert_eq!(named_directory.status.code(), Some(1), "{report}");
+    assert!(
+        report.contains(".hidden/x.rs"),
+        "a staged path under a named directory was filtered out:\n{report}"
+    );
+
+    /* NOTE: Nobody named anything here, so both limits apply again. */
+    let bare = run(directory.path(), &["check", "--staged"]);
+    let report = String::from_utf8(bare.stdout).unwrap();
+    assert_eq!(
+        bare.status.code(),
+        Some(0),
+        "a bare staged run reported a hidden or oversized path:\n{report}"
+    );
+    assert!(!report.contains(".hidden/x.rs"), "{report}");
+    assert!(!report.contains("big.rs"), "{report}");
+}
+
+/// A staged blob OComment has no scanner for is passed over, and a run says so
+/// the way a walk says it: folded onto the end-of-run summary under the same
+/// short label, rather than dropped without a word. A pre-commit hook that
+/// stages a PNG and a Markdown file is otherwise indistinguishable from one
+/// that scanned them and found nothing.
+#[test]
+fn staged_blobs_without_a_scanner_are_counted_in_the_summary() {
+    let directory = repository();
+    fs::write(directory.path().join("notes.md"), b"# notes\n").unwrap();
+    fs::write(directory.path().join("image.dat"), b"\x89PNG\0\r\n").unwrap();
+    fs::write(directory.path().join("y.rs"), b"let b = 2; // ours\n").unwrap();
+    git(directory.path(), &["add", "notes.md", "image.dat", "y.rs"]);
+
+    let checked = run(directory.path(), &["check", "--staged"]);
+    let report = String::from_utf8(checked.stdout).unwrap();
+    let summary = String::from_utf8(checked.stderr).unwrap();
+    assert_eq!(
+        checked.status.code(),
+        Some(1),
+        "`check --staged` said:\n{report}{summary}"
+    );
+    assert!(report.contains("y.rs"), "{report}");
+    assert!(
+        summary.contains("2 files skipped (binary: 1, unknown language: 1"),
+        "the staged blobs nothing could read were passed over silently:\n{summary}"
+    );
+    /* NOTE: Nobody typed either path, so neither is annotated on a line of its
+     * own until `-v` asks for the list. */
+    assert!(
+        !report.contains("notes.md") && !report.contains("image.dat"),
+        "a folded skip was reported per file:\n{report}"
+    );
+
+    let verbose = run(directory.path(), &["check", "--staged", "-v"]);
+    let listed = String::from_utf8(verbose.stdout).unwrap();
+    assert!(
+        listed.contains(&format!("notes.md: skipped: {NO_LANGUAGE}")),
+        "-v did not list the staged path with no language:\n{listed}"
+    );
+    assert!(
+        listed.contains("image.dat: skipped: binary file (NUL byte)"),
+        "-v did not list the staged binary blob:\n{listed}"
+    );
+}
+
 #[test]
 fn staged_fix_stops_on_existing_block_comment_interior() {
     let directory = repository();
@@ -2817,6 +2923,47 @@ fn an_invalid_policy_regex_is_reported_whole_on_one_line() {
              regex parse error: [\u{fffd}a- ^ error: unclosed character class"
         ),
         "the parse error was not folded, or was cut short of the reason:\n{error}"
+    );
+}
+
+/// The same rule for the file as a whole. A `toml` parse error quotes the
+/// line it stopped on, and that line came out of a project file, so it carries
+/// whatever bytes the file carries — an escape sequence among them — over four
+/// lines of caret diagram. The verdict is one line, and every byte of it is
+/// printable.
+#[test]
+fn an_invalid_configuration_is_reported_whole_on_one_line() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        b"version = 1\n\n[files]\ninclude = [\"a\x07 b\"]\n",
+    )
+    .unwrap();
+
+    let output = run(directory.path(), &["check"]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(
+        !output.stderr.contains(&0x07),
+        "a control byte reached the terminal: {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let error = String::from_utf8(output.stderr).unwrap();
+    assert_eq!(
+        error.trim_end().lines().count(),
+        1,
+        "the parse error spilled over more than one line:\n{error}"
+    );
+    assert!(
+        error.contains("invalid configuration "),
+        "the error lost the file it rejects:\n{error}"
+    );
+    assert!(
+        error.contains("include = [\"a\u{fffd} b\"]"),
+        "the quoted line was not folded, or lost the byte that is wrong with it:\n{error}"
+    );
+    assert!(
+        error.contains("invalid basic string"),
+        "the error was cut short of the reason:\n{error}"
     );
 }
 

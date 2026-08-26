@@ -85,7 +85,7 @@ the open files.
 
 `[lsp].on_save = true` in `.ocomment.toml` does the same thing for everyone
 working in the repository, rather than for one editor. The source is under
-[`editors/vscode`](../editors/vscode/README.md).
+[`editors/vscode`](https://github.com/P4suta/OComment/blob/main/editors/vscode/README.md).
 
 The extension is disabled in untrusted workspaces, because `ocomment.path`
 names an executable it launches. Run `ocomment doctor` in the same environment

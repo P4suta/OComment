@@ -56,6 +56,7 @@ opam exec -- dune runtest --root ocaml
 opam exec -- ./tools/differential.sh
 python3 tools/check_embedded_specs.py
 python3 tools/check_hooks.py
+python3 tools/check_directives.py
 python3 tools/validate_schemas.py
 ./tools/package-list.sh
 ocomment
@@ -141,6 +142,9 @@ JSONL, SARIF, and GitHub output. All user-facing text is English.
 - Adding a language to `spec/languages.toml` also changes the published
   pre-commit hooks; `tools/check_hooks.py --print-pattern` regenerates the
   `files:` regex that `.pre-commit-hooks.yaml` must carry.
+- Adding a marker to `spec/directives.toml` needs a sample in
+  `tools/check_directives.py`, which proves the scanner protects it — and,
+  through a near-miss derived from the name, that it protects nothing more.
 - A new CI job must be added to `.github/rulesets/main.json` in the same change,
   and every `uses:` must be SHA-pinned with a version comment.
 - Do not include build output, credentials, or unrelated formatting changes.

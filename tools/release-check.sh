@@ -10,6 +10,7 @@ python3 tools/check_embedded_specs.py
 cargo build --manifest-path rust/Cargo.toml --release --locked -p ocomment
 cargo build --manifest-path rust/Cargo.toml --release --locked -p ocomment-core --example throughput
 python3 tools/validate_schemas.py --binary rust/target/release/ocomment
+python3 tools/check_directives.py --binary rust/target/release/ocomment
 python3 tools/release_gate.py
 
 # NOTE: The VS Code extension carries the crate version, and `publish-vscode`

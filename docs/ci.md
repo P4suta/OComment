@@ -275,3 +275,29 @@ Version tags are immutable under the repository's release-tag ruleset, so
 `P4suta/OComment@v0.1.0` is a stable reference and there is no moving `v0` tag
 to follow. Pin to a full version, or to a commit SHA with a version comment if
 your policy requires it.
+
+## Keeping the protected directives honest
+
+`spec/directives.toml` publishes the markers that take a comment out of reach
+of a `remove` policy — `# syntax=`, `//go:build`, `# hadolint ignore=`, and the
+rest — so a consumer can read the contract without reading the scanner.
+`tools/check_directives.py` is what keeps the two the same thing. It feeds
+every name to the built binary as the comment a project would really write, and
+the answer has to be a `keep` with the reason that says why; a name in the spec
+with no sample fails, and so does a sample the spec does not list.
+
+Each sample carries two comments the scanner has to remove: an ordinary one,
+which catches a run that protected the whole file, and a near-miss derived from
+the name — `hadolint` against `hadolintish note` — which catches a marker
+matched so loosely that prose merely opening with those letters is protected
+too.
+
+```sh
+cargo build --manifest-path rust/Cargo.toml --locked -p ocomment
+python3 tools/check_directives.py
+python3 tools/check_directives.py --binary rust/target/release/ocomment
+```
+
+The `rust` CI job runs it next to `tools/check_hooks.py` and
+`tools/check_embedded_specs.py`, and `tools/release-check.sh` runs it again
+against the release binary before a tag is pushed.

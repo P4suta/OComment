@@ -6,20 +6,88 @@ use crate::{
 };
 use thiserror::Error;
 
+/// The units a client counts a position's `character` in.
+///
+/// This is the LSP `positionEncoding` capability. The engine's own
+/// coordinates are always byte offsets; an encoding only says how to read
+/// the numbers a client sends.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum PositionEncoding {
+    /// UTF-8 code units, which are the bytes themselves.
     Utf8,
+    /// UTF-16 code units, the LSP default and this one too.
     #[default]
     Utf16,
+    /// Unicode scalar values, one per character.
     Utf32,
 }
 
+/// One edit a client made to a document.
+///
+/// The spans of a batch address the document as it stands *before* the
+/// batch, so a client never has to compensate for its own earlier changes.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DocumentChange {
+    /// The bytes to replace, empty to insert at that offset.
     pub span: ByteSpan,
+    /// The bytes to put there, empty to delete.
     pub replacement: Vec<u8>,
 }
 
+/// A document that rescans only what an edit disturbed.
+///
+/// This is the path an editor takes, where a full scan on every keystroke
+/// would be wasted work. The document keeps the previous revision's report
+/// and its restart points, and an edit is answered by scanning from the last
+/// safe point before it up to the first point where the new scan converges
+/// with the old one; everything outside that window is reused, with the spans
+/// past the edit shifted by its length delta.
+///
+/// The result is byte-for-byte the report [`scan`](crate::scan) would have
+/// produced for the same bytes — a restart point is only used while the
+/// bytes around it still permit one, and a scan that fails to converge
+/// simply runs to the end. [`Self::last_rescan_span`] says how much of the
+/// document the last edit actually cost.
+///
+/// # Examples
+///
+/// ```
+/// use ocomment_core::{
+///     ByteSpan, DocumentChange, IncrementalDocument, IncrementalError, Language, ScanOptions,
+/// };
+///
+/// let mut document = IncrementalDocument::new(
+///     b"let x = 1; // note\nlet y = 2;\n".to_vec(),
+///     Language::Rust,
+///     ScanOptions::default(),
+///     1,
+/// );
+/// assert_eq!(document.report().comments.len(), 1);
+///
+/// // Type a second comment onto the end of the second line.
+/// let end = document.source().len() - 1;
+/// let report = document
+///     .apply_changes(
+///         &[DocumentChange {
+///             span: ByteSpan::new(end, end),
+///             replacement: b" // more".to_vec(),
+///         }],
+///         2,
+///     )
+///     .unwrap();
+/// assert_eq!(report.comments.len(), 2);
+///
+/// // A batch that fails validation changes nothing, the version included.
+/// assert_eq!(
+///     document.apply_changes(&[], 2),
+///     Err(IncrementalError::StaleVersion {
+///         received: 2,
+///         current: 2,
+///     }),
+/// );
+/// assert_eq!(document.version(), 2);
+/// assert_eq!(document.report().comments.len(), 2);
+/// ```
 #[derive(Clone, Debug)]
 pub struct IncrementalDocument {
     source: Vec<u8>,
@@ -32,17 +100,36 @@ pub struct IncrementalDocument {
     last_rescan: ByteSpan,
 }
 
+/// Why an edit or a position was refused.
+///
+/// Every one of these is raised before the document is touched, so a refused
+/// call leaves the previous revision intact.
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
 pub enum IncrementalError {
+    /// The batch's version does not advance on the current one, so it
+    /// describes a revision that has already been overtaken.
     #[error("stale document version {received}; current version is {current}")]
-    StaleVersion { received: i64, current: i64 },
+    StaleVersion {
+        /// The version the batch claimed.
+        received: i64,
+        /// The version the document is already at.
+        current: i64,
+    },
+    /// A change is inverted, starts before its predecessor ends, or reaches
+    /// past the end of the document.
     #[error("change span lies outside the document")]
     InvalidSpan,
+    /// The line does not exist, or `character` does not land on a boundary of
+    /// the encoding it was counted in.
     #[error("position does not lie on a valid encoding boundary")]
     InvalidPosition,
 }
 
 impl IncrementalDocument {
+    /// Scan `source` once and hold on to what it takes to rescan cheaply.
+    ///
+    /// `version` is the client's revision number for these bytes; every later
+    /// [`Self::apply_changes`] has to advance on it.
     pub fn new(source: Vec<u8>, language: Language, options: ScanOptions, version: i64) -> Self {
         let (report, safe_checkpoints) =
             scan_with_checkpoints(&source, language, options.clone(), 0);
@@ -60,18 +147,26 @@ impl IncrementalDocument {
         }
     }
 
+    /// The current bytes of the document.
     pub fn source(&self) -> &[u8] {
         &self.source
     }
+    /// The scan of the current bytes.
     pub fn report(&self) -> &ScanReport {
         &self.report
     }
+    /// The language the document is scanned as, fixed when it was created.
     pub const fn language(&self) -> Language {
         self.language
     }
+    /// The options the document is scanned under, fixed when it was created.
     pub fn scan_options(&self) -> &ScanOptions {
         &self.options
     }
+    /// The bytes a removal would write, from the report already in hand.
+    ///
+    /// No rescanning: this is the current report run through the same layout
+    /// and source-map engine [`transform`](crate::transform) uses.
     pub fn transform(&self, layout: Layout) -> TransformResult {
         transform_report(
             &self.source,
@@ -82,15 +177,30 @@ impl IncrementalDocument {
             },
         )
     }
+    /// The revision number of the current bytes.
     pub const fn version(&self) -> i64 {
         self.version
     }
+    /// The stretch of the current bytes the last edit had to rescan.
+    ///
+    /// A fresh document reports the whole source. An edit that reused both
+    /// ends reports only the window between them, which is what makes the
+    /// saving measurable rather than assumed.
     pub const fn last_rescan_span(&self) -> ByteSpan {
         self.last_rescan
     }
+    /// The byte offset each line starts at, `0` first.
+    ///
+    /// A CRLF pair counts as one terminator, so `checkpoints()[n]` is where
+    /// line `n` begins for [`Self::byte_offset`].
     pub fn checkpoints(&self) -> &[usize] {
         &self.checkpoints
     }
+    /// The offsets a rescan may restart from and still reproduce a full scan.
+    ///
+    /// Far fewer than [`Self::checkpoints`]: a line start only qualifies while
+    /// the scanner is in a clean top-level state there and the bytes around it
+    /// keep it that way.
     pub fn safe_checkpoints(&self) -> &[usize] {
         &self.safe_checkpoints
     }
@@ -98,6 +208,20 @@ impl IncrementalDocument {
     /// Apply a sorted, non-overlapping batch whose spans refer to the current
     /// document snapshot. Validation is transactional: an invalid batch does
     /// not alter the source, report, checkpoints, or version.
+    ///
+    /// An empty batch is accepted and only advances the version, which is what
+    /// a client that saved without typing sends.
+    ///
+    /// # Errors
+    ///
+    /// [`IncrementalError::StaleVersion`] when `version` does not advance on
+    /// the current one, and [`IncrementalError::InvalidSpan`] when a change is
+    /// inverted, starts before its predecessor ends, or reaches past the end
+    /// of the document. Both are raised before anything is written.
+    ///
+    /// # Examples
+    ///
+    /// See [`IncrementalDocument`] for a worked edit.
     pub fn apply_changes(
         &mut self,
         changes: &[DocumentChange],
@@ -293,6 +417,18 @@ impl IncrementalDocument {
         Ok(&self.report)
     }
 
+    /// The byte offset of a line-and-character position.
+    ///
+    /// `line` is zero-based, and `character` is a zero-based offset into that
+    /// line counted in the units `encoding` names. The end of a line is a
+    /// valid position; the terminator itself is not part of the line.
+    ///
+    /// # Errors
+    ///
+    /// [`IncrementalError::InvalidPosition`] when the line does not exist,
+    /// when `character` reaches past the end of the line, or when it lands
+    /// inside a character instead of on a boundary. A line whose bytes are
+    /// not valid UTF-8 has no UTF-16 or UTF-32 positions at all.
     pub fn byte_offset(
         &self,
         line: u32,
