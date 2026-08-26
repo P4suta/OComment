@@ -2,79 +2,784 @@
   "version": 1,
   "cases": [
     {
+      "id": "rust-builtin-safe",
       "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
       "source_utf8": "r#\"// string\"# /* block */\r\n// line\r\n",
-      "note": "raw string, block and line comments, CRLF"
+      "note": "Rust Reference, Tokens and Comments: a raw string hides the comment delimiters inside it, a block comment and a line comment are found beside it, and the CRLF endings survive the transformation.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 15,
+            "end": 26,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 28,
+            "end": 35,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "r#\"// string\"# \r\n\r\n"
+      }
     },
     {
+      "id": "rust-builtin-all",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "r#\"// string\"# /* block */\r\n// line\r\n",
+      "note": "Rust Reference, Tokens and Comments: a raw string hides the comment delimiters inside it, a block comment and a line comment are found beside it, and the CRLF endings survive the transformation.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 15,
+            "end": 26,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 28,
+            "end": 35,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "r#\"// string\"# \r\n\r\n"
+      }
+    },
+    {
+      "id": "ocaml-builtin-safe",
       "language": "ocaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
       "source_utf8": "\"(* string *)\" (* outer (* nested *) end *)\n",
-      "note": "string opacity and nested comments"
+      "note": "OCaml manual, Lexical conventions: a string literal hides `(*`, and comments nest, so the outer comment closes once.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 15,
+            "end": 43,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\"(* string *)\" \n"
+      }
     },
     {
+      "id": "ocaml-builtin-all",
+      "language": "ocaml",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "\"(* string *)\" (* outer (* nested *) end *)\n",
+      "note": "OCaml manual, Lexical conventions: a string literal hides `(*`, and comments nest, so the outer comment closes once.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 15,
+            "end": 43,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\"(* string *)\" \n"
+      }
+    },
+    {
+      "id": "c-builtin-safe",
       "language": "c",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
       "source_utf8": "char *s = \"// string\"; /* block */\n// line\n",
-      "note": "quoted delimiter opacity"
+      "note": "ISO C17 6.4.5 string literals and 6.4.9 comments: the `//` inside the literal is opaque, and both comment forms beside it are found.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 23,
+            "end": 34,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 35,
+            "end": 42,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "char *s = \"// string\"; \n\n"
+      }
     },
     {
+      "id": "c-builtin-all",
+      "language": "c",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "char *s = \"// string\"; /* block */\n// line\n",
+      "note": "ISO C17 6.4.5 string literals and 6.4.9 comments: the `//` inside the literal is opaque, and both comment forms beside it are found.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 23,
+            "end": 34,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 35,
+            "end": 42,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "char *s = \"// string\"; \n\n"
+      }
+    },
+    {
+      "id": "cpp-builtin-safe",
       "language": "cpp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
       "source_utf8": "auto s = \"/* string */\"; // line\n",
-      "note": "quoted delimiter opacity"
+      "note": "ISO C++ [lex.string] and [lex.comment]: the `/* */` inside the literal is opaque, and the line comment beside it is found.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 25,
+            "end": 32,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "auto s = \"/* string */\"; \n"
+      }
     },
     {
+      "id": "cpp-builtin-all",
+      "language": "cpp",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "auto s = \"/* string */\"; // line\n",
+      "note": "ISO C++ [lex.string] and [lex.comment]: the `/* */` inside the literal is opaque, and the line comment beside it is found.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 25,
+            "end": 32,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "auto s = \"/* string */\"; \n"
+      }
+    },
+    {
+      "id": "go-builtin-safe",
       "language": "go",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
       "source_utf8": "var s = `// raw`; /* block */\n",
-      "note": "raw string opacity"
+      "note": "Go specification, raw string literals: a back-quoted string takes no escapes and hides `//`; the block comment beside it is found.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 18,
+            "end": 29,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "var s = `// raw`; \n"
+      }
     },
     {
+      "id": "go-builtin-all",
+      "language": "go",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "var s = `// raw`; /* block */\n",
+      "note": "Go specification, raw string literals: a back-quoted string takes no escapes and hides `//`; the block comment beside it is found.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 18,
+            "end": 29,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "var s = `// raw`; \n"
+      }
+    },
+    {
+      "id": "java-builtin-safe",
       "language": "java",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
       "source_utf8": "String s = \"// raw\"; // line\n",
-      "note": "string opacity"
+      "note": "JLS 3.10.5 string literals and 3.7 comments: the `//` inside the literal is opaque, and the line comment beside it is found.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 21,
+            "end": 28,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "String s = \"// raw\"; \n"
+      }
     },
     {
+      "id": "java-builtin-all",
+      "language": "java",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "String s = \"// raw\"; // line\n",
+      "note": "JLS 3.10.5 string literals and 3.7 comments: the `//` inside the literal is opaque, and the line comment beside it is found.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 21,
+            "end": 28,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "String s = \"// raw\"; \n"
+      }
+    },
+    {
+      "id": "javascript-builtin-safe",
       "language": "javascript",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
       "source_utf8": "const s = \"// raw\"; /* block */\n",
-      "note": "string opacity"
+      "note": "ECMA-262 string literals and comments: the `//` inside the literal is opaque, and the block comment beside it is found.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 20,
+            "end": 31,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "const s = \"// raw\"; \n"
+      }
     },
     {
+      "id": "javascript-builtin-all",
+      "language": "javascript",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "const s = \"// raw\"; /* block */\n",
+      "note": "ECMA-262 string literals and comments: the `//` inside the literal is opaque, and the block comment beside it is found.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 20,
+            "end": 31,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "const s = \"// raw\"; \n"
+      }
+    },
+    {
+      "id": "typescript-builtin-safe",
       "language": "typescript",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
       "source_utf8": "const s: string = \"// raw\"; // line\n",
-      "note": "typed source and string opacity"
+      "note": "TypeScript inherits the ECMA-262 lexical grammar: a type annotation changes nothing, the `//` inside the literal is opaque, and the line comment is found.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 28,
+            "end": 35,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "const s: string = \"// raw\"; \n"
+      }
     },
     {
+      "id": "typescript-builtin-all",
+      "language": "typescript",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "const s: string = \"// raw\"; // line\n",
+      "note": "TypeScript inherits the ECMA-262 lexical grammar: a type annotation changes nothing, the `//` inside the literal is opaque, and the line comment is found.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 28,
+            "end": 35,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "const s: string = \"// raw\"; \n"
+      }
+    },
+    {
+      "id": "python-builtin-safe",
       "language": "python",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
       "source_utf8": "s = \"# raw\"  # line\n",
-      "note": "string opacity"
+      "note": "Python Reference 2.1.3 comments: a `#` inside a string literal is not a comment, and the trailing one is.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 13,
+            "end": 19,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "s = \"# raw\"  \n"
+      }
     },
     {
+      "id": "python-builtin-all",
+      "language": "python",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "s = \"# raw\"  # line\n",
+      "note": "Python Reference 2.1.3 comments: a `#` inside a string literal is not a comment, and the trailing one is.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 13,
+            "end": 19,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "s = \"# raw\"  \n"
+      }
+    },
+    {
+      "id": "shell-builtin-safe",
       "language": "shell",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
       "source_utf8": "s='# raw' # line\n",
-      "note": "single quote opacity and token boundary"
+      "note": "POSIX 2.2.2 single quotes and 2.3 token recognition: `#` inside single quotes is text, and the one starting a word is a comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 10,
+            "end": 16,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "s='# raw' \n"
+      }
     },
     {
+      "id": "shell-builtin-all",
+      "language": "shell",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "s='# raw' # line\n",
+      "note": "POSIX 2.2.2 single quotes and 2.3 token recognition: `#` inside single quotes is text, and the one starting a word is a comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 10,
+            "end": 16,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "s='# raw' \n"
+      }
+    },
+    {
+      "id": "html-builtin-safe",
       "language": "html",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
       "source_utf8": "<!-- visible --><script>let x=1;// line\n</script>",
-      "note": "DOM-observable HTML comment and recursive script"
+      "note": "HTML Standard 13.1.6 comments and 13.2.5 script data: a `<!-- -->` comment is exposed to scripts through the DOM, and a `<script>` body is scanned as JavaScript.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 16,
+            "kind": "html-comment",
+            "action": "keep"
+          },
+          {
+            "start": 32,
+            "end": 39,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "<!-- visible --><script>let x=1;\n</script>"
+      }
     },
     {
+      "id": "html-builtin-all",
+      "language": "html",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "<!-- visible --><script>let x=1;// line\n</script>",
+      "note": "HTML Standard 13.1.6 comments and 13.2.5 script data: a `<!-- -->` comment is exposed to scripts through the DOM, and a `<script>` body is scanned as JavaScript.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 16,
+            "kind": "html-comment",
+            "action": "remove"
+          },
+          {
+            "start": 32,
+            "end": 39,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "<script>let x=1;\n</script>"
+      }
+    },
+    {
+      "id": "css-builtin-safe",
       "language": "css",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
       "source_utf8": "a{content:\"/* raw */\";/* block */}\n",
-      "note": "string opacity"
+      "note": "CSS Syntax Level 3, 4.3.1 consume a token: a `/* */` inside a string is opaque, and the one beside it is a comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 22,
+            "end": 33,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "a{content:\"/* raw */\"; }\n"
+      }
     },
     {
+      "id": "css-builtin-all",
+      "language": "css",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "a{content:\"/* raw */\";/* block */}\n",
+      "note": "CSS Syntax Level 3, 4.3.1 consume a token: a `/* */` inside a string is opaque, and the one beside it is a comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 22,
+            "end": 33,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "a{content:\"/* raw */\"; }\n"
+      }
+    },
+    {
+      "id": "jsonc-builtin-safe",
       "language": "jsonc",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
       "source_utf8": "{\"x\":\"// raw\" // line\n}\n",
-      "note": "JSON string opacity"
+      "note": "JSON with comments: a JSON string hides `//`, and the comment after the value is found.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 14,
+            "end": 21,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "{\"x\":\"// raw\" \n}\n"
+      }
     },
     {
+      "id": "jsonc-builtin-all",
+      "language": "jsonc",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "{\"x\":\"// raw\" // line\n}\n",
+      "note": "JSON with comments: a JSON string hides `//`, and the comment after the value is found.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 14,
+            "end": 21,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "{\"x\":\"// raw\" \n}\n"
+      }
+    },
+    {
+      "id": "sql-builtin-safe",
       "language": "sql",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
       "source_utf8": "select '-- raw'; -- line\n/* block */\n",
-      "note": "SQL string opacity and both comment forms"
+      "note": "SQL standard string literals and both comment forms: `--` inside a literal is opaque, and the `--` and `/* */` beside it are comments.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 17,
+            "end": 24,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 25,
+            "end": 36,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "select '-- raw'; \n\n"
+      }
     },
     {
+      "id": "sql-builtin-all",
+      "language": "sql",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "select '-- raw'; -- line\n/* block */\n",
+      "note": "SQL standard string literals and both comment forms: `--` inside a literal is opaque, and the `--` and `/* */` beside it are comments.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 17,
+            "end": 24,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 25,
+            "end": 36,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "select '-- raw'; \n\n"
+      }
+    },
+    {
+      "id": "kotlin-builtin-safe",
       "language": "kotlin",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
       "source_utf8": "val s = \"// raw\" // line\n/* outer /* nested */ end */",
-      "note": "string opacity and nested comments"
+      "note": "Kotlin specification, string literals and comments: the `//` inside the literal is opaque, the line comment is found, and block comments nest.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 17,
+            "end": 24,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 25,
+            "end": 53,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "val s = \"// raw\" \n"
+      }
+    },
+    {
+      "id": "kotlin-builtin-all",
+      "language": "kotlin",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "val s = \"// raw\" // line\n/* outer /* nested */ end */",
+      "note": "Kotlin specification, string literals and comments: the `//` inside the literal is opaque, the line comment is found, and block comments nest.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 17,
+            "end": 24,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 25,
+            "end": 53,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "val s = \"// raw\" \n"
+      }
     }
   ]
 }

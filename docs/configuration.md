@@ -61,6 +61,28 @@ rather than a default, so it bypasses the hidden-file and size limits.
 relative to the project root — the directory holding `.ocomment.toml`, or the
 repository above it — however deep in the tree the command is run from.
 
+## Layouts
+
+`layout` decides what a removal leaves behind. It moves bytes, never decisions:
+no comment is kept or removed because of it.
+
+| Layout | What a removal leaves in place of the comment |
+| --- | --- |
+| `lines` | The default. The line terminators the comment spanned, so every following line keeps its number, and a single space where the comment was all that kept two tokens apart. |
+| `columns` | As `lines`, plus spaces of the comment's own display width, so every following column keeps its number as well. A tab counts to the next multiple of eight. |
+| `compact` | As `lines`, except that a line which held nothing but a removed comment goes away with it, terminator included, and the whitespace a removal would leave at the end of a line is trimmed. |
+
+`compact` never touches a line that code survives on. Such a line keeps its
+terminator and its CRLF or LF style, and a comment running across several lines
+with code before or after it closes up to a single line rather than joining two
+statements. A surviving line keeps the ending it had in the source — the same
+LF or CRLF, from inside the comment if that is where it was — or no ending at
+all if the file stopped there without one. Being alone on a line is judged from
+the original bytes, so a line holding two comments and nothing else keeps its
+terminator: neither of them was alone on it.
+
+[Policies and layouts](policies.md) shows all three on one sample.
+
 ## Declarative language profiles
 
 Profiles cover unambiguous delimiter-based syntaxes. Ambiguous or empty

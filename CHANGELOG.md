@@ -103,6 +103,22 @@ All notable changes to OComment will be documented here. The project follows
   examples under `rust/ocomment-core/examples` — `strip`, `external_spans`,
   `incremental`, `profile` — and both library crates carry
   `[package.metadata.docs.rs]`.
+- `ocomment languages` is generated from `spec/languages.toml`, which the
+  binary now embeds, and `--format json` writes that table as an array of
+  objects: `name`, `extensions`, `dialects`, and, where a row has them,
+  `extension_dialects`, `reserved_names`, `shebangs`, and `notes`. The shared
+  table now records the dialect an extension selects — `.m` is Objective-C,
+  `.mm` Objective-C++, `.cu` CUDA — the whole file names that carry no
+  extension at all (`Dockerfile`, `Containerfile`, `Makefile`, `GNUmakefile`,
+  `.profile`, `.bashrc`, `.zshrc`, `tsconfig.json`, `jsconfig.json`), and the
+  interpreter names a `#!` line is read for, and `docs/languages.md` is
+  generated with them. `tools/check_embedded_specs.py` holds the embedded copy
+  to the canonical file, and `rust/ocomment/tests/spec_languages.rs` checks
+  every claim the table makes against the code that has to honour it: each
+  extension, reserved name, and shebang against `detect_language`, each row of
+  dialects against the list the binary prints when it refuses one, the schema
+  enumerations against the same vocabulary, and both listings against the table
+  itself.
 
 ### Changed
 
@@ -136,9 +152,32 @@ All notable changes to OComment will be documented here. The project follows
   actually met. Every result points at its own entry through `ruleIndex`. A
   code-scanning UI titles a finding, describes it, and links out of it through
   that entry, so a finding used to arrive as a bare rule id and nothing else.
+- `layout = "compact"` is a layout of its own. A line that held nothing but a
+  removed comment now goes away with it, terminator included, and the
+  whitespace a removal would leave at the end of a line is trimmed, so a run of
+  whole-line comments disappears instead of becoming a run of blank lines;
+  until now `compact` produced exactly what `lines` produces, on every input.
+  Code keeps its own lines: a line that code survives on keeps its terminator
+  and its CRLF or LF style, a comment running across several lines with code
+  before or after it closes up to a single line rather than joining two
+  statements, and a surviving line keeps the ending it had in the source — the
+  same LF or CRLF, from inside the comment if that is where it was, or none at
+  all if the file stopped there without one. Being alone on a line is judged
+  from the original bytes, so a line holding two comments and nothing else
+  keeps its terminator. `lines` and `columns` are unchanged byte for byte, and
+  fourteen `compact-*` cases in the shared fixture corpus pin the new bytes in
+  both implementations.
 
 ### Fixed
 
+- `ocomment languages` lists every extension the detector knows. The listing was
+  a table written by hand beside the detector rather than generated from the
+  shared spec, so `.m`, `.mm`, `.cu`, and `.xhtml` were scanned but never
+  listed, and `--format json` was accepted and quietly answered with the human
+  table; the machine formats that have nowhere to put a language table are now
+  refused. `spec/languages.toml` was itself missing `standard` from the shell
+  dialects, and listed C's and C++'s in an order the binary does not use, so a
+  dialect the binary accepts read as unsupported.
 - The LSP server places the `shellscript` and `cuda-cpp` language identifiers.
   Neither parses as an OComment language name, so a buffer the editor called
   either of them fell back to detection by path and bytes, and one that carried
@@ -186,24 +225,60 @@ All notable changes to OComment will be documented here. The project follows
   tool and stay removable. The OCaml reference agrees, and the differential
   harness carries the case.
 - `tools/check_directives.py` gives every marker in `spec/directives.toml` a
-  near-miss derived from its own name — `hadolint` against `hadolintish note` —
-  which the scanner has to remove. The check proved that each marker is
-  protected; nothing proved it protects no more than itself. It also runs from
+  near-miss the scanner has to remove. The check proved that each marker is
+  protected; nothing proved it protects no more than itself. The near-miss is
+  written from the marker's own text — `# hadolint ignore=DL3018` against
+  `# hadolintish note` — rather than from the name the spec files it under,
+  which for seven of the fifteen was a word appearing nowhere in the marker and
+  so tested nothing about it. It is also scanned in the marker's own place
+  rather than appended below it, because a shebang is a shebang only at the
+  first byte of the first line and an Oracle hint only when its `+` touches the
+  `/*`: a near-miss further down the file could never have been protected
+  whatever it said. Feeding each marker back in as its own near-miss now fails
+  for all fifteen, where five of them used to pass. It also runs from
   `tools/release-check.sh` now, against the release binary.
 - A staged path the caller names is checked whatever `files.hidden` and
   `files.max_size` say about it, the way a named path is on a walk.
   `ocomment check --staged .hidden/x.rs` answered about zero files, which reads
   as a clean file rather than as a path outside the project's bounds; a path
   nobody named is still bounded by both.
+- A staged pathspec is put to `git` rather than compared as text, so it names
+  the paths it covers however it is written. An absolute path and a wildcard
+  `git` expands matched nothing against the root-relative path
+  `git diff --cached` answers with, so `ocomment check --staged .hidden/*.rs`
+  was read as naming no path at all and the file it named stayed bounded by the
+  limits a named path lifts. A relative pathspec is also resolved where it was
+  typed, so `--staged .` from `src/` means that subtree, as `ocomment check .`
+  does — it reached the whole repository. The one pathspec that names nothing
+  in particular is the one that covers everything: `--staged .` from the top is
+  the bare run it looks like, `[files]` limits included, where it used to lift
+  `hidden` and `max_size` from the whole tree at once.
 - A staged blob with no built-in language, and one that turns out to be binary,
   are counted in the end-of-run summary — `2 files skipped (binary: 1, unknown
   language: 1)` — and listed by `-v`, exactly as a walk reports them. A hook
-  that staged a PNG beside its source passed both over without a word.
+  that staged a PNG beside its source passed both over without a word. One the
+  caller named is answered on its own line instead, the way a walk answers a
+  named path: `ocomment check --staged notes.md` that says only "nothing to
+  check" reads as a clean file rather than as a file nothing could read.
 - An invalid `.ocomment.toml` is reported on one line and in full. `toml`
   quotes the line it stopped on, with a caret under the byte that is wrong with
   it, so a control character in a project file reached the terminal verbatim
   over four lines of diagram; the verdict is folded onto one line and every
-  byte of it is printable, as an invalid `[policy]` regex already was.
+  byte of it is printable, as an invalid `[policy]` regex already was. The path
+  in front of the colon is held to the same rule and for the same reason: it
+  names a directory the project chose, so a `\x07` in that name rang the
+  terminal's bell on the way past.
+- Every example on the library page is compiled and run. `docs/library.md` says
+  it is, but the page is hand-written prose and `cargo test --doc` reads only
+  what is in the crate sources, so nothing had checked it since it was written;
+  CI hands the page to `rustdoc --test` against the built `ocomment-core`. The
+  docs job also pins mdBook, so the published HTML changes only when a commit
+  changes it.
+- The README links to the Markdown under `docs/`, which GitHub renders, rather
+  than to a Pages site that is not published yet; one line names the site and
+  says so. `docs/verify.md` says which version its examples pin, the way
+  `docs/installation.md` does — the tag inside a signing identity is part of
+  what the check proves.
 - `--format github` folds a walked skip away unless `-v` asks for it, the way
   the human report already did. A run over a repository annotated every file it
   had no scanner for, so the checks tab filled with notices about Markdown and

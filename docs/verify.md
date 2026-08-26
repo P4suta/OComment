@@ -15,6 +15,10 @@ A digest alone proves nothing about origin: whoever could replace the archive
 could replace the digest beside it. The signature and the attestation are what
 tie the file to `P4suta/OComment` and to the tag it claims to come from.
 
+Examples pin `0.1.0` — use the version you want, and change it in every line of
+a command: the tag inside a signing identity is part of what the check proves,
+not a detail of the example.
+
 ## Download
 
 ```sh

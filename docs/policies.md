@@ -133,27 +133,29 @@ pub fn add(a: u32, b: u32) -> u32 {
 
 ```text
 
-
 // rustfmt::skip
-
 pub fn add(a: u32, b: u32) -> u32 {
-    let total = a +  b; 
-    
-
-
+    let total = a +  b;
     total
 }
 ```
 
-On this sample `lines` and `compact` leave the same bytes.
+`lines` and `columns` keep the line count of the file: a comment that
+spanned three lines is replaced by something that still spans three
+lines, so a line number in a stack trace or a `git blame` still points
+at the same statement. `columns` additionally keeps every following
+column in place by padding with spaces, which is what a table of
+aligned initialisers or a column-sensitive language wants, at the cost
+of trailing whitespace that a formatter may then remove.
 
-Every layout keeps the line count of the file: a comment that spanned
-three lines is replaced by something that still spans three lines, so
-a line number in a stack trace or a `git blame` still points at the
-same statement. `columns` additionally keeps every following column in
-place by padding with spaces, which is what a table of aligned
-initialisers or a column-sensitive language wants, at the cost of
-trailing whitespace that a formatter may then remove.
+`compact` is the layout that gives line numbers up. A line that held
+nothing but a removed comment goes away with it, terminator included,
+and the whitespace a removal would leave at the end of a line is
+trimmed. Code keeps its own lines: a comment sharing a line with code
+leaves that line, its terminator and its CRLF or LF style as they
+were. A surviving line keeps the ending it had in the source - the
+same LF or CRLF, from inside the comment if that is where it was - or
+no ending at all if the file stopped there without one.
 
 ## Where they are set
 

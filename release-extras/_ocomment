@@ -21,7 +21,7 @@ legal\:"Like safe, and keep licence and copyright comments as well"
 all\:"Remove every comment that no keep override protects"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -109,7 +109,7 @@ legal\:"Like safe, and keep licence and copyright comments as well"
 all\:"Remove every comment that no keep override protects"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -190,7 +190,7 @@ legal\:"Like safe, and keep licence and copyright comments as well"
 all\:"Remove every comment that no keep override protects"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -274,7 +274,7 @@ legal\:"Like safe, and keep licence and copyright comments as well"
 all\:"Remove every comment that no keep override protects"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -355,7 +355,7 @@ legal\:"Like safe, and keep licence and copyright comments as well"
 all\:"Remove every comment that no keep override protects"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -436,7 +436,7 @@ legal\:"Like safe, and keep licence and copyright comments as well"
 all\:"Remove every comment that no keep override protects"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -514,7 +514,7 @@ legal\:"Like safe, and keep licence and copyright comments as well"
 all\:"Remove every comment that no keep override protects"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -592,7 +592,7 @@ legal\:"Like safe, and keep licence and copyright comments as well"
 all\:"Remove every comment that no keep override protects"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -674,7 +674,7 @@ legal\:"Like safe, and keep licence and copyright comments as well"
 all\:"Remove every comment that no keep override protects"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -753,7 +753,7 @@ legal\:"Like safe, and keep licence and copyright comments as well"
 all\:"Remove every comment that no keep override protects"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -831,7 +831,7 @@ legal\:"Like safe, and keep licence and copyright comments as well"
 all\:"Remove every comment that no keep override protects"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -920,7 +920,7 @@ legal\:"Like safe, and keep licence and copyright comments as well"
 all\:"Remove every comment that no keep override protects"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -999,7 +999,7 @@ legal\:"Like safe, and keep licence and copyright comments as well"
 all\:"Remove every comment that no keep override protects"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1078,7 +1078,7 @@ legal\:"Like safe, and keep licence and copyright comments as well"
 all\:"Remove every comment that no keep override protects"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1156,7 +1156,7 @@ legal\:"Like safe, and keep licence and copyright comments as well"
 all\:"Remove every comment that no keep override protects"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1235,7 +1235,7 @@ legal\:"Like safe, and keep licence and copyright comments as well"
 all\:"Remove every comment that no keep override protects"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1314,7 +1314,7 @@ legal\:"Like safe, and keep licence and copyright comments as well"
 all\:"Remove every comment that no keep override protects"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1441,7 +1441,7 @@ legal\:"Like safe, and keep licence and copyright comments as well"
 all\:"Remove every comment that no keep override protects"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1520,7 +1520,7 @@ legal\:"Like safe, and keep licence and copyright comments as well"
 all\:"Remove every comment that no keep override protects"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1598,7 +1598,7 @@ legal\:"Like safe, and keep licence and copyright comments as well"
 all\:"Remove every comment that no keep override protects"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop the comment bytes and keep only the newlines it spanned"))' \
+compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"

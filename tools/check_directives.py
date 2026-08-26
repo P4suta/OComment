@@ -9,17 +9,29 @@ by `ocomment fix`.
 
 So every name is fed to the built binary as the one-line comment a project
 would really write it as, and the answer has to be `keep` with the reason that
-says why. Each sample carries two more comments the scanner has to be willing
-to remove:
+says why. Two more comments have to come back removable:
 
-* an ordinary comment, which catches a run that kept everything and would
-  otherwise pass this check while removing nothing at all; and
-* a negative control derived from the name itself -- `hadolint` against
-  `hadolintish note` -- which catches the opposite mistake, a marker matched so
-  loosely that prose merely opening with those letters is protected too. Where
-  the name is a namespace rather than a word, and everything after it is by
-  design part of the directive, the derived text would still be a directive and
-  the sample names its own near-miss instead.
+* an ordinary comment beside the marker, which catches a run that kept
+  everything and would otherwise pass this check while removing nothing at all;
+  and
+* a near-miss, which catches the opposite mistake -- a marker matched so
+  loosely that a comment merely *about* the tool is protected too.
+
+The near-miss is written from the marker's own text rather than from the name
+`spec/directives.toml` files it under: `# hadolintish note` says something
+about `# hadolint ignore=`, where `# lint-and-formatterish note` would say
+nothing about `// eslint-disable-next-line`. It is also scanned in the marker's
+own place -- the same file with the marker line swapped out -- because half of
+these markers are protected by where they sit as much as by what they say. A
+shebang is a shebang only on the first line at the first byte, and an Oracle
+hint only when its `+` touches the `/*`, so a near-miss appended to the end of
+the file could never have been protected and would prove nothing about either
+rule.
+
+Where every way of running letters on past a marker is still that marker --
+`//go:` is a namespace, and `//go:ish` is exactly the shape of a Go directive
+-- the near-miss mentions the marker instead of opening with it, which is the
+one thing the scanner still has to be able to tell apart.
 
 Only the standard library is used, because this runs next to
 `tools/check_hooks.py` in a job that installs nothing.
@@ -31,6 +43,7 @@ import argparse
 import dataclasses
 import json
 import pathlib
+import re
 import subprocess
 import tomllib
 
@@ -44,9 +57,13 @@ DIRECTIVES = ROOT / "spec/directives.toml"
 KEPT_AS_PREAMBLE = "required source preamble"
 KEPT_AS_DIRECTIVE = "tool or language directive"
 
-# NOTE: What a negative control is: the protected name with letters run straight
-# NOTE: on past it, which is prose about the tool rather than an instruction to
-# NOTE: it. A marker matched as a bare prefix keeps this by mistake.
+# NOTE: Where the marker goes in a sample's template. It is substituted rather
+# NOTE: than formatted, so a sample is free to contain braces of its own.
+SLOT = "{}"
+
+# NOTE: What a near-miss usually is: the marker with letters run straight on
+# NOTE: past it, which is prose about the tool rather than an instruction to it.
+# NOTE: A marker matched as a bare prefix keeps this by mistake.
 NEGATIVE_SUFFIX = "ish note"
 
 
@@ -54,18 +71,23 @@ NEGATIVE_SUFFIX = "ish note"
 class Sample:
     """One protected marker as a project would write it, and its controls.
 
-    `source` opens with the marker and carries an ordinary comment after it.
-    `comment` is how one more line comment is written in this language, which
-    is what the negative control is appended as. `negative` overrides the text
-    derived from the name for the markers that have no word boundary to test.
+    `template` is the file both scans are built from: `SLOT` is where the
+    comment under test goes, and the ordinary comment after it is the one the
+    scanner has to be willing to remove either way. `marker` is the directive
+    itself and `near_miss` is the comment that must not be protected, which
+    takes the marker's place so that the two differ in nothing but their text.
     """
 
     language: str
     dialect: str | None
-    source: bytes
+    template: str
+    marker: str
+    near_miss: str
     reason: str
-    comment: str
-    negative: str | None = None
+
+    def source(self, comment: str) -> bytes:
+        """The sample as a file, with `comment` where the marker goes."""
+        return self.template.replace(SLOT, comment, 1).encode()
 
 
 # INVARIANT: One sample for each name in `spec/directives.toml`, and one name
@@ -73,123 +95,156 @@ class Sample:
 # INVARIANT: the shared spec fails here until a sample proves the scanner knows
 # INVARIANT: it. A name is a category (`shebang`, `lint-and-formatter`) as often
 # INVARIANT: as it is a literal prefix, which is why the sample is written out
-# INVARIANT: rather than derived from the name.
+# INVARIANT: rather than derived from the name -- and why the near-miss beside
+# INVARIANT: it is written from the marker rather than from the name too.
 SAMPLES: dict[str, Sample] = {
     "shebang": Sample(
-        "shell", None, b"#!/bin/sh\n# control\n", KEPT_AS_PREAMBLE, "# {}"
+        "shell",
+        None,
+        f"{SLOT}\n# control\n",
+        "#!/bin/sh",
+        # NOTE: Every `#!` line at the first byte is a shebang, whatever
+        # NOTE: interpreter follows, so running letters on past `/bin/sh` would
+        # NOTE: still be one. What the rule also promises is that the `!`
+        # NOTE: touches the `#`, and that is what the near-miss takes away.
+        "# !/bin/shish note",
+        KEPT_AS_PREAMBLE,
     ),
     "encoding": Sample(
         "python",
         None,
-        b"# -*- coding: utf-8 -*-\n# control\n",
+        f"{SLOT}\n# control\n",
+        "# -*- coding: utf-8 -*-",
+        "# -*- codingish: utf-8 -*-",
         KEPT_AS_PREAMBLE,
-        "# {}",
     ),
     "go:": Sample(
         "go",
         None,
-        b"//go:build linux\n// control\n",
-        KEPT_AS_DIRECTIVE,
-        "// {}",
+        f"{SLOT}\n// control\n",
+        "//go:build linux",
         # NOTE: `//go:` is a namespace: every Go directive is spelled
         # NOTE: `//go:<name>`, so `//go:ish` is exactly the shape of one and
         # NOTE: protecting it is right. What the marker still promises is that
         # NOTE: it opens the comment, so the near-miss mentions it instead.
-        negative="a note about go:build linux",
+        "// a note about go:build linux",
+        KEPT_AS_DIRECTIVE,
     ),
     "+build": Sample(
         "go",
         None,
-        b"// +build linux\n// control\n",
+        f"{SLOT}\n// control\n",
+        "// +build linux",
+        "// a note about +build linux",
         KEPT_AS_DIRECTIVE,
-        "// {}",
-        negative="a note about +build linux",
     ),
     "triple-slash-reference": Sample(
         "typescript",
         None,
-        b'/// <reference path="types.d.ts" />\n// control\n',
+        f"{SLOT}\n// control\n",
+        '/// <reference path="types.d.ts" />',
+        # NOTE: The marker is a shape rather than a word: a `///` comment
+        # NOTE: opening with `<` is a reference whatever element follows, so
+        # NOTE: the boundary left to get wrong is the opener. Two slashes are
+        # NOTE: an ordinary comment that happens to quote the directive.
+        '// <reference path="types.d.ts" />',
         KEPT_AS_DIRECTIVE,
-        "// {}",
     ),
     "sourceMappingURL": Sample(
         "javascript",
         None,
-        b"//# sourceMappingURL=bundle.js.map\n// control\n",
+        f"{SLOT}\n// control\n",
+        "//# sourceMappingURL=bundle.js.map",
+        f"//# sourceMappingURL{NEGATIVE_SUFFIX}",
         KEPT_AS_DIRECTIVE,
-        "// {}",
     ),
     "sourceURL": Sample(
         "javascript",
         None,
-        b"//# sourceURL=bundle.js\n// control\n",
+        f"{SLOT}\n// control\n",
+        "//# sourceURL=bundle.js",
+        f"//# sourceURL{NEGATIVE_SUFFIX}",
         KEPT_AS_DIRECTIVE,
-        "// {}",
     ),
     "#__PURE__": Sample(
         "javascript",
         None,
-        b"const value = /*#__PURE__*/ factory();\n// control\n",
-        KEPT_AS_DIRECTIVE,
-        "// {}",
+        f"const value = {SLOT} factory();\n// control\n",
+        "/*#__PURE__*/",
         # NOTE: The annotation ends in its own delimiter, so there is no word
         # NOTE: boundary after it to get wrong; `#__PURE__ish` is still the
         # NOTE: bundler's marker with rubbish appended.
-        negative="a note about #__PURE__ elsewhere",
+        "/* a note about #__PURE__ elsewhere */",
+        KEPT_AS_DIRECTIVE,
     ),
     "@__PURE__": Sample(
         "javascript",
         None,
-        b"const value = /*@__PURE__*/ factory();\n// control\n",
+        f"const value = {SLOT} factory();\n// control\n",
+        "/*@__PURE__*/",
+        "/* a note about @__PURE__ elsewhere */",
         KEPT_AS_DIRECTIVE,
-        "// {}",
-        negative="a note about @__PURE__ elsewhere",
     ),
     "lint-and-formatter": Sample(
         "javascript",
         None,
-        b"// eslint-disable-next-line no-eval\n// control\n",
+        f"{SLOT}\n// control\n",
+        "// eslint-disable-next-line no-eval",
+        # NOTE: `eslint` is a namespace as much as `go:` is -- every rule of
+        # NOTE: it is spelled `eslint-<something>` -- so the near-miss is again
+        # NOTE: the comment that talks about the directive instead of being it.
+        "// a note about eslint-disable-next-line",
         KEPT_AS_DIRECTIVE,
-        "// {}",
     ),
     "type-checker": Sample(
         "python",
         None,
-        b"value = 1  # type: ignore\n# control\n",
+        f"value = 1  {SLOT}\n# control\n",
+        "# type: ignore",
+        # NOTE: The marker is matched as a bare prefix, so what is left to get
+        # NOTE: wrong is its front: `type: ignore` ends where the checker's own
+        # NOTE: word ends, and prose that runs on past it is not addressed to
+        # NOTE: the checker at all.
+        "# typeish: ignore",
         KEPT_AS_DIRECTIVE,
-        "# {}",
     ),
     "optimizer-hint": Sample(
         "sql",
         "oracle",
-        b"select /*+ index(t) */ 1 from dual; -- control\n",
+        f"select {SLOT} 1 from dual; -- control\n",
+        "/*+ index(t) */",
+        # NOTE: The `+` has to touch the `/*`, which is the whole of what makes
+        # NOTE: a hint a hint; a block comment that merely opens with one is an
+        # NOTE: ordinary comment about the index.
+        "/* + index(t) */",
         KEPT_AS_DIRECTIVE,
-        "-- {}",
     ),
     "version-comment": Sample(
         "sql",
         "mysql",
-        b"/*!40101 SET NAMES utf8 */ -- control\n",
+        f"{SLOT} -- control\n",
+        "/*!40101 SET NAMES utf8 */",
+        "/* !40101 SET NAMES utf8 */",
         KEPT_AS_DIRECTIVE,
-        "-- {}",
     ),
     "syntax=": Sample(
         "shell",
         None,
-        b"# syntax=docker/dockerfile:1\n# control\n",
-        KEPT_AS_DIRECTIVE,
-        "# {}",
+        f"{SLOT}\n# control\n",
+        "# syntax=docker/dockerfile:1",
         # NOTE: BuildKit writes the frontend straight after the `=`, so the
         # NOTE: marker carries its own boundary and `syntax=ish` is the
         # NOTE: directive naming a frontend that does not exist.
-        negative="a note about syntax=docker/dockerfile:1",
+        "# a note about syntax=docker/dockerfile:1",
+        KEPT_AS_DIRECTIVE,
     ),
     "hadolint": Sample(
         "shell",
         None,
-        b"# hadolint ignore=DL3018\n# control\n",
+        f"{SLOT}\n# control\n",
+        "# hadolint ignore=DL3018",
+        f"# hadolint{NEGATIVE_SUFFIX}",
         KEPT_AS_DIRECTIVE,
-        "# {}",
     ),
 }
 
@@ -204,18 +259,26 @@ def protected_names() -> list[str]:
     return names
 
 
-def negative_control(name: str, sample: Sample) -> str:
-    """The near-miss text this sample's marker must not protect."""
-    return sample.negative if sample.negative is not None else f"{name}{NEGATIVE_SUFFIX}"
+def marker_word(marker: str) -> str:
+    """The first word of a marker, past whatever punctuation opens it.
+
+    `sourceMappingURL` of `//# sourceMappingURL=bundle.js.map`, `bin` of
+    `#!/bin/sh`, `coding` of `# -*- coding: utf-8 -*-`. A near-miss is checked
+    to have kept it, so one with nothing of the marker left in it -- the
+    `lint-and-formatterish note` this file used to derive from the category
+    name -- is refused rather than left to go on proving nothing.
+    """
+    match = re.search(r"[A-Za-z_][A-Za-z_0-9-]*", marker)
+    return match.group() if match else ""
 
 
-def scan(binary: pathlib.Path, language: str, dialect: str | None, source: bytes) -> list[dict]:
-    """Every comment the binary reports for one sample, in source order."""
-    arguments = [str(binary), "scan", "--format", "json", "--language", language]
-    if dialect is not None:
-        arguments += ["--dialect", dialect]
+def scan(binary: pathlib.Path, sample: Sample, comment: str) -> list[dict]:
+    """Every comment the binary reports for one built sample, in source order."""
+    arguments = [str(binary), "scan", "--format", "json", "--language", sample.language]
+    if sample.dialect is not None:
+        arguments += ["--dialect", sample.dialect]
     completed = subprocess.run(
-        arguments + ["-"], input=source, check=True, capture_output=True
+        arguments + ["-"], input=sample.source(comment), check=True, capture_output=True
     )
     document = json.loads(completed.stdout)
     return document["files"][0]["report"]["comments"]
@@ -225,29 +288,44 @@ def check_sample(binary: pathlib.Path, name: str, failures: list[str]) -> None:
     """Run one sample and record what the binary said if it is not protection."""
     sample = SAMPLES[name]
     where = f"`{name}` ({sample.language})"
-    negative = negative_control(name, sample)
-    source = sample.source + (sample.comment.format(negative) + "\n").encode()
-    comments = scan(binary, sample.language, sample.dialect, source)
-    if len(comments) != 3:
-        failures.append(f"{where}: {len(comments)} comments found, expected 3: {source!r}")
+    word = marker_word(sample.marker)
+    if word and word.lower() not in sample.near_miss.lower():
+        failures.append(
+            f"{where}: the near-miss `{sample.near_miss}` keeps no word of"
+            f" `{sample.marker}`, so it tests nothing about that marker"
+        )
+    comments = scan(binary, sample, sample.marker)
+    if len(comments) != 2:
+        failures.append(
+            f"{where}: {len(comments)} comments found, expected 2:"
+            f" {sample.source(sample.marker)!r}"
+        )
         return
-    protected, control, near_miss = comments
+    protected, control = comments
     disposition = protected["disposition"]
     if disposition.get("action") != "keep":
-        failures.append(f"{where}: {source!r} is {disposition}, expected a keep")
+        failures.append(f"{where}: `{sample.marker}` is {disposition}, expected a keep")
     elif disposition.get("reason") != sample.reason:
         failures.append(
             f"{where}: kept as {disposition.get('reason')!r}, expected {sample.reason!r}"
         )
     if control["disposition"].get("action") != "remove":
         failures.append(
-            f"{where}: the ordinary comment after it was kept too,"
+            f"{where}: the ordinary comment beside it was kept too,"
             " so the run protected the file rather than the marker"
         )
-    if near_miss["disposition"].get("action") != "remove":
+    near_miss = scan(binary, sample, sample.near_miss)
+    if len(near_miss) != 2:
         failures.append(
-            f"{where}: `{negative}` was kept, so the marker is matched as a bare"
-            " prefix and protects prose that merely opens with it"
+            f"{where}: {len(near_miss)} comments found in the near-miss, expected 2:"
+            f" {sample.source(sample.near_miss)!r}"
+        )
+        return
+    if near_miss[0]["disposition"].get("action") != "remove":
+        failures.append(
+            f"{where}: `{sample.near_miss}` was kept in the marker's own place,"
+            " so the marker is matched loosely enough to protect a comment that"
+            " is only about it"
         )
 
 
@@ -283,7 +361,7 @@ def main() -> int:
         return 1
     print(
         f"{len(names)} protected directives in spec/directives.toml are recognised,"
-        " and none of them protects its near-miss"
+        " and none of them protects the near-miss written in its place"
     )
     return 0
 

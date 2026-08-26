@@ -226,7 +226,8 @@ LANGUAGES_INTRO = """\
 `spec/languages.toml` is the canonical table. The `files:` pattern of the
 published pre-commit hooks is generated from it, `tools/check_hooks.py` fails
 when the two drift apart, and the table below is generated from the same file.
-`ocomment languages` prints a shorter summary of it; this is the complete one.
+The binary embeds that same file, so `ocomment languages` prints these rows in
+columns and `ocomment languages --format json` prints them as JSON.
 
 A dialect changes the lexical rules rather than the file type: `--dialect
 mysql` is still SQL, and only that dialect treats `/*!40101 ... */` as
@@ -243,6 +244,13 @@ $ ocomment strip --language rust --dialect mysql
 ocomment: unsupported dialect `mysql` for rust; supported: standard
 ```
 """
+
+
+NAMED_INTRO = """\
+A file whose extension decides nothing is looked up by its whole name, and a
+file with no name at all — a script on standard input — is read from its `#!`
+line. A name is matched without regard to case, and a shebang matches when the
+interpreter name appears anywhere on the line."""
 
 
 def languages_page() -> str:
@@ -264,9 +272,24 @@ def languages_page() -> str:
         "| --- | --- | --- |",
     ]
     for entry in entries:
-        suffixes = ", ".join(f"`.{item}`" for item in entry["extensions"])
+        dialect_of = entry.get("extension_dialects", {})
+        suffixes = ", ".join(
+            f"`.{item}` (`{dialect_of[item]}`)" if item in dialect_of else f"`.{item}`"
+            for item in entry["extensions"]
+        )
         forms = ", ".join(f"`{item}`" for item in entry["dialects"])
         lines.append(f"| `{cell(entry['name'])}` | {cell(suffixes)} | {cell(forms)} |")
+    lines.extend(["", "## Detected without an extension", ""])
+    lines.extend(NAMED_INTRO.splitlines())
+    lines.extend(["", "| Language | File names | Shebangs |", "| --- | --- | --- |"])
+    for entry in entries:
+        names = ", ".join(f"`{item}`" for item in entry.get("reserved_names", ()))
+        shebangs = ", ".join(f"`{item}`" for item in entry.get("shebangs", ()))
+        if not names and not shebangs:
+            continue
+        lines.append(
+            f"| `{cell(entry['name'])}` | {cell(names) or '—'} | {cell(shebangs) or '—'} |"
+        )
     lines.extend(
         [
             "",
@@ -381,18 +404,26 @@ def policies_page(cli: Cli, workspace: pathlib.Path) -> str:
             cwd=workspace,
         )
         lines.extend(["", f"### `{layout}`", "", fence("text", outputs[layout])])
-    # INVARIANT: the paragraph below tells the reader that every layout keeps the
-    # INVARIANT: line count of the file, which is the property that keeps a line
-    # INVARIANT: number in a stack trace pointing at the same statement. A layout
-    # INVARIANT: that stopped doing it has to fail here rather than ship a page
-    # INVARIANT: that says it still does.
+    # INVARIANT: the paragraph below tells the reader that `lines` and `columns`
+    # INVARIANT: keep the line count of the file, which is the property that keeps
+    # INVARIANT: a line number in a stack trace pointing at the same statement, and
+    # INVARIANT: that `compact` is the one layout that gives it up. A layout that
+    # INVARIANT: stopped doing either has to fail here rather than ship a page that
+    # INVARIANT: says it still does.
     expected_lines = POLICY_SAMPLE.count(chr(10))
     for layout, output in outputs.items():
-        if output.count(chr(10)) != expected_lines:
+        counted = output.count(chr(10))
+        if layout == "compact":
+            if counted >= expected_lines:
+                raise SystemExit(
+                    f"layout `compact` left all {expected_lines} lines standing;"
+                    " docs/policies.md claims it drops the lines a removed comment"
+                    " had to itself"
+                )
+        elif counted != expected_lines:
             raise SystemExit(
                 f"layout `{layout}` turned {expected_lines} lines into"
-                f" {output.count(chr(10))}; docs/policies.md claims the line count"
-                " is preserved"
+                f" {counted}; docs/policies.md claims the line count is preserved"
             )
     same = [
         f"`{first}` and `{second}`"
@@ -409,13 +440,22 @@ def policies_page(cli: Cli, workspace: pathlib.Path) -> str:
         )
     lines.extend(
         [
-            "Every layout keeps the line count of the file: a comment that spanned",
-            "three lines is replaced by something that still spans three lines, so",
-            "a line number in a stack trace or a `git blame` still points at the",
-            "same statement. `columns` additionally keeps every following column in",
-            "place by padding with spaces, which is what a table of aligned",
-            "initialisers or a column-sensitive language wants, at the cost of",
-            "trailing whitespace that a formatter may then remove.",
+            "`lines` and `columns` keep the line count of the file: a comment that",
+            "spanned three lines is replaced by something that still spans three",
+            "lines, so a line number in a stack trace or a `git blame` still points",
+            "at the same statement. `columns` additionally keeps every following",
+            "column in place by padding with spaces, which is what a table of",
+            "aligned initialisers or a column-sensitive language wants, at the cost",
+            "of trailing whitespace that a formatter may then remove.",
+            "",
+            "`compact` is the layout that gives line numbers up. A line that held",
+            "nothing but a removed comment goes away with it, terminator included,",
+            "and the whitespace a removal would leave at the end of a line is",
+            "trimmed. Code keeps its own lines: a comment sharing a line with code",
+            "leaves that line, its terminator and its CRLF or LF style as they",
+            "were. A surviving line keeps the ending it had in the source - the",
+            "same LF or CRLF, from inside the comment if that is where it was - or",
+            "no ending at all if the file stopped there without one.",
             "",
             "## Where they are set",
             "",

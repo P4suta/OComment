@@ -719,6 +719,183 @@ fn staged_paths_the_caller_names_bypass_the_hidden_and_size_limits() {
     assert!(!report.contains("big.rs"), "{report}");
 }
 
+/// A pathspec is not always the prefix of the path `git` answers with.
+///
+/// `git diff --cached` names a staged path relative to the repository root,
+/// while the pathspec beside it is written however the caller found it
+/// convenient: as an absolute path, or with a wildcard `git` expands itself.
+/// Comparing the two as text answers "nobody named this" for both spellings,
+/// and the project's limits then hide the very file the caller asked about, so
+/// the question goes to `git` instead — the only party that knows what a
+/// pathspec covers.
+#[test]
+fn a_staged_pathspec_names_its_paths_however_it_is_spelled() {
+    let directory = repository();
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        b"version = 1\n\n[files]\nmax_size = 20\n",
+    )
+    .unwrap();
+    fs::create_dir(directory.path().join(".hidden")).unwrap();
+    fs::write(directory.path().join(".hidden/x.rs"), b"let a = 1; // x\n").unwrap();
+    git(directory.path(), &["add", ".hidden/x.rs"]);
+
+    let absolute = directory.path().join(".hidden/x.rs");
+    let named = run(
+        directory.path(),
+        &["check", "--staged", absolute.to_str().unwrap()],
+    );
+    let report = String::from_utf8(named.stdout).unwrap();
+    assert_eq!(
+        named.status.code(),
+        Some(1),
+        "an absolute staged pathspec named nothing:\n{report}"
+    );
+    assert!(report.contains(".hidden/x.rs"), "{report}");
+
+    let expanded = run(directory.path(), &["check", "--staged", ".hidden/*.rs"]);
+    let report = String::from_utf8(expanded.stdout).unwrap();
+    assert_eq!(
+        expanded.status.code(),
+        Some(1),
+        "a wildcard staged pathspec named nothing:\n{report}"
+    );
+    assert!(report.contains(".hidden/x.rs"), "{report}");
+}
+
+/// A repository whose staged paths sit on both sides of every `[files]` limit:
+/// one hidden, one oversized at the top, one oversized under `src`, and one
+/// ordinary file `src` is scanned for.
+fn repository_with_limits() -> TempDir {
+    let directory = repository();
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        b"version = 1\n\n[files]\nmax_size = 20\n",
+    )
+    .unwrap();
+    fs::create_dir(directory.path().join(".hidden")).unwrap();
+    fs::create_dir(directory.path().join("src")).unwrap();
+    fs::write(directory.path().join(".hidden/x.rs"), b"let a = 1; // x\n").unwrap();
+    fs::write(
+        directory.path().join("wide.rs"),
+        b"let wide = 3; // past the limit\n",
+    )
+    .unwrap();
+    fs::write(directory.path().join("src/y.rs"), b"let b = 2; // ours\n").unwrap();
+    fs::write(
+        directory.path().join("src/tall.rs"),
+        b"let tall = 4; // past the limit\n",
+    )
+    .unwrap();
+    git(
+        directory.path(),
+        &["add", ".hidden/x.rs", "wide.rs", "src/y.rs", "src/tall.rs"],
+    );
+    directory
+}
+
+/// Where a pathspec was typed decides what it covers.
+///
+/// `ocomment check .` from `src/` walks `src/`, so `--staged .` from the same
+/// directory has to mean the same subtree — and to mean it in both directions:
+/// what sits above `src` is no business of the run, and what sits under it was
+/// named, so the project's limits are lifted from it exactly as a walk lifts
+/// them from a directory the caller pointed at.
+#[test]
+fn a_staged_pathspec_is_resolved_where_it_was_typed() {
+    let directory = repository_with_limits();
+
+    let checked = run(&directory.path().join("src"), &["check", "--staged", "."]);
+    let report = String::from_utf8(checked.stdout).unwrap();
+    assert_eq!(
+        checked.status.code(),
+        Some(1),
+        "`check --staged .` from a subdirectory said:\n{report}"
+    );
+    assert!(report.contains("src/y.rs"), "{report}");
+    assert!(
+        report.contains("src/tall.rs"),
+        "`.` named the subtree and the size limit was applied to it anyway:\n{report}"
+    );
+    assert!(
+        !report.contains(".hidden/x.rs") && !report.contains("wide.rs"),
+        "`.` typed in src/ reached outside it:\n{report}"
+    );
+}
+
+/// The whole tree is what a staged run already covers, so naming it says
+/// nothing.
+///
+/// A hook that spells its run `ocomment check --staged .` from the top of the
+/// repository is asking for the same run as `ocomment check --staged`, and it
+/// must get the same answer: every `[files]` limit still applies. Only a
+/// pathspec that narrows the run is a request about particular paths, which is
+/// what earns the licence to look past those limits.
+#[test]
+fn a_whole_tree_staged_pathspec_keeps_the_project_limits() {
+    let directory = repository_with_limits();
+
+    let whole_tree = run(directory.path(), &["check", "--staged", "."]);
+    let report = String::from_utf8(whole_tree.stdout).unwrap();
+    let summary = String::from_utf8(whole_tree.stderr).unwrap();
+    assert_eq!(
+        whole_tree.status.code(),
+        Some(1),
+        "`check --staged .` said:\n{report}{summary}"
+    );
+    assert!(report.contains("src/y.rs"), "{report}");
+    assert!(
+        !report.contains(".hidden/x.rs"),
+        "a bare `.` lifted `hidden` from the whole tree:\n{report}"
+    );
+    assert!(
+        !report.contains("wide.rs") && !report.contains("src/tall.rs"),
+        "a bare `.` lifted `max_size` from the whole tree:\n{report}"
+    );
+    assert!(
+        summary.contains("2 files skipped (too large: 2"),
+        "the oversized staged blobs were passed over silently:\n{summary}"
+    );
+
+    let bare = run(directory.path(), &["check", "--staged"]);
+    assert_eq!(bare.status.code(), whole_tree.status.code());
+    assert_eq!(
+        String::from_utf8(bare.stdout).unwrap(),
+        report,
+        "`check --staged .` and `check --staged` disagreed about the same tree"
+    );
+    assert_eq!(String::from_utf8(bare.stderr).unwrap(), summary);
+}
+
+/// A staged path the caller named and nothing could read is answered on a line
+/// of its own.
+///
+/// The rule is the walk's: what a run merely came across is folded into the
+/// end-of-run summary, and what the caller asked about is answered directly.
+/// `ocomment check --staged notes.md` that says only "nothing to check" reads
+/// as a clean file rather than as a file with no scanner.
+#[test]
+fn a_named_staged_path_without_a_scanner_gets_its_own_line() {
+    let directory = repository();
+    fs::write(directory.path().join("notes.md"), b"# notes\n").unwrap();
+    git(directory.path(), &["add", "notes.md"]);
+
+    let named = run(directory.path(), &["check", "--staged", "notes.md"]);
+    let report = String::from_utf8(named.stdout).unwrap();
+    assert_eq!(named.status.code(), Some(0), "{report}");
+    assert!(
+        report.contains(&format!("notes.md: skipped: {NO_LANGUAGE}")),
+        "a staged path the caller named was passed over without a word:\n{report}"
+    );
+
+    let bare = run(directory.path(), &["check", "--staged"]);
+    let folded = String::from_utf8(bare.stdout).unwrap();
+    assert!(
+        !folded.contains("notes.md: skipped"),
+        "a staged path nobody named was listed per file:\n{folded}"
+    );
+}
+
 /// A staged blob OComment has no scanner for is passed over, and a run says so
 /// the way a walk says it: folded onto the end-of-run summary under the same
 /// short label, rather than dropped without a word. A pre-commit hook that
@@ -2967,6 +3144,47 @@ fn an_invalid_configuration_is_reported_whole_on_one_line() {
     );
 }
 
+/// The other half of that line: the path in front of the colon.
+///
+/// A configuration file is named by the directory it was found in, and a
+/// directory name carries whatever bytes the file system allowed — a `\x07`
+/// that rings the terminal's bell among them. The name is still the answer to
+/// "which file?", so it is printed rather than withheld, and it gets the
+/// treatment every other path in the report gets.
+#[test]
+fn an_invalid_configuration_names_its_file_without_ringing_the_terminal() {
+    let parent = tempfile::tempdir().unwrap();
+    let directory = parent.path().join("ring\u{7}ing");
+    fs::create_dir(&directory).unwrap();
+    fs::write(
+        directory.join(".ocomment.toml"),
+        b"version = 1\n\n[files]\ninclude = [\n",
+    )
+    .unwrap();
+
+    let output = run(&directory, &["check"]);
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        !output.stderr.contains(&0x07),
+        "a control byte from the path reached the terminal: {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let error = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        error.contains("invalid configuration ") && error.contains(".ocomment.toml"),
+        "the error lost the file it rejects:\n{error}"
+    );
+    assert!(
+        error.contains("ring\u{fffd}ing"),
+        "the directory the file was found in was dropped from the error:\n{error}"
+    );
+}
+
 /// A long comment is cut to a readable width rather than flooding the report.
 #[test]
 fn a_long_comment_preview_is_truncated_with_an_ellipsis() {
@@ -4962,4 +5180,46 @@ fn help_documents_the_interactive_fix() {
         help.contains("-i, --interactive"),
         "`fix --help` does not document --interactive:\n{help}"
     );
+}
+
+/// The listing is a table of languages, not a report of comments, so the
+/// formats that describe a report have nowhere to put it. Each is refused with
+/// the pair that does work rather than answered with the human table, which is
+/// what `--format json` used to be given.
+#[test]
+fn languages_refuses_the_formats_that_carry_no_table() {
+    let directory = tempfile::tempdir().unwrap();
+    for format in ["jsonl", "sarif", "github"] {
+        let output = run(directory.path(), &["languages", "--format", format]);
+        assert_eq!(
+            output.status.code(),
+            Some(2),
+            "`languages --format {format}` was accepted"
+        );
+        assert!(
+            output.stdout.is_empty(),
+            "`languages --format {format}` wrote a listing anyway"
+        );
+        let error = String::from_utf8(output.stderr).unwrap();
+        assert!(
+            error.contains("only available with --format human or --format json"),
+            "`languages --format {format}` said:\n{error}"
+        );
+    }
+    for format in ["human", "json"] {
+        let output = run(directory.path(), &["languages", "--format", format]);
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "`languages --format {format}` was refused: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let listing = String::from_utf8(output.stdout).unwrap();
+        for language in ["rust", "objective-cpp", "xhtml", "kotlin"] {
+            assert!(
+                listing.contains(language),
+                "`languages --format {format}` omits `{language}`:\n{listing}"
+            );
+        }
+    }
 }

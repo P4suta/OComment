@@ -1,210 +1,276 @@
 #!/usr/bin/env python3
-"""Run normalized JSONL fixtures against Rust and OCaml implementations."""
+"""Run the shared spec fixture corpus against the Rust and OCaml implementations.
+
+Every case comes from `spec/fixtures/v1/*.json`; this file holds no fixture
+bytes of its own. Each case becomes one normalized JSONL request, and the two
+responses must be equal byte for byte. A case that carries an `expect` block is
+additionally checked against that block, so the corpus pins absolute behaviour
+rather than only agreement.
+
+    python3 tools/differential.py             compare, and check every expectation
+    python3 tools/differential.py --record    also record the missing expectations
+
+`--record` writes an `expect` block into every case that has none, but only
+once the two implementations have agreed on every case, which is what makes a
+recorded block a record of the specification rather than of one implementation.
+It never overwrites a block that is already there: re-recording an intentional
+change means deleting that case's `expect` block first, in the same commit that
+argues for the change.
+"""
 
 import base64
 import json
 import pathlib
 import subprocess
 import sys
+import unicodedata
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 RUST = ROOT / "rust/target/debug/examples/ref_driver"
 OCAML = ROOT / "ocaml/_build/default/bin/main.exe"
+CORPUS = ROOT / "spec/fixtures/v1"
 
-CORPUS = json.loads((ROOT / "spec/fixtures/v1/builtins.json").read_text(encoding="utf-8"))
-assert CORPUS["version"] == 1
-# INVARIANT: `builtins.json` carries one case per language and is loaded into a
-# INVARIANT: dict keyed by that language, so a second case for a language the
-# INVARIANT: corpus already covers would silently replace the first rather than
-# INVARIANT: be run. The assertion below is what says so out loud; anything past
-# INVARIANT: the first case for a language belongs in SPECIAL_FIXTURES.
-FIXTURES = {
-    case["language"]: case["source_utf8"].encode("utf-8")
-    for case in CORPUS["cases"]
-}
-assert len(FIXTURES) == len(CORPUS["cases"]), "builtins.json holds one case per language"
+# INVARIANT: Hazards live in `spec/`, never in this file. The floor below is
+# INVARIANT: what says so out loud: deleting a case, or silently dropping a
+# INVARIANT: corpus file, fails the run instead of quietly shrinking the gate.
+MINIMUM_CASES = 109
 
-UNICODE_COLUMN_SAMPLE = "".join(
-    chr(value)
-    for value in range(0x80, 0x110000, 97)
-    if not 0xD800 <= value <= 0xDFFF
-).encode("utf-8")
+DEFAULT_OPTIONS = {"policy": "safe", "layout": "lines"}
+PAYLOAD_KEYS = ("spans", "edits", "profile")
+FIELD_ORDER = ("id", "language", "dialect", "operation", "options", "spans", "edits", "profile",
+               "source_utf8", "source_base64", "note", "expect")
 
+# NOTE: An output longer than this is left unrecorded rather than inlined; the
+# NOTE: comment spans still pin the case and the comparison still covers the
+# NOTE: bytes. Only the Unicode width sweep is anywhere near it.
+MAX_RECORDED_OUTPUT = 1024
 
-SPECIAL_FIXTURES = [
-    ("rust-nested-raw", "rust", br'r#"// opaque"# /* outer /* inner */ end */\n// rustfmt::skip\n', {}),
-    ("rust-raw-c-string", "rust", b'cr#"inner " // opaque"#; // remove\n', {}),
-    ("rust-multiline-string", "rust", b'const A: &str = "a\n// opaque\nb"; // remove\n', {}),
-    ("ocaml-nested-quoted", "ocaml", br'{tag| (* opaque *) |tag} (* outer "*)" (* inner *) *)', {}),
-    ("ocaml-comment-quoted", "ocaml", br'(* outer {tag| *) opaque |tag} end *)', {}),
-    ("ocaml-long-quoted-id", "ocaml", b"{" + b"a" * 80 + b"|(* opaque *)|" + b"a" * 80 + b"} (* remove *)", {}),
-    ("invalid-ocaml-quoted", "ocaml", br'{tag| unterminated (* opaque *)', {}),
-    ("c-line-splice", "c", b"int x; /\\\n/ comment\\\ncontinued\nint y;", {}),
-    ("cpp-raw", "cpp", br'R"tag(/* opaque */ // opaque)tag" // remove', {}),
-    ("go-directives", "go", b"//go:build linux\n// +build linux\n//line generated.go:1\n// remove\n", {}),
-    ("java-unicode", "java", br"int x; \u002f\u002f comment\u000aint y;", {}),
-    ("java-unicode-surrogates", "java", br'String s = "\uD83D\uDE00 // opaque"; // remove', {}),
-    ("invalid-java-unicode", "java", br"int x = 1; \u00G0 // known", {}),
-    ("forced-invalid-java-unicode", "java", br"int x = 1; \u00G0 // known", {"force_invalid": True}),
-    ("java-text-block-escape", "java", b'String s = """\n\\""" // opaque\nend\n"""; // remove\n', {}),
-    ("javascript-goals", "javascript", br'''#!/usr/bin/env node
-const r = /\/\/* opaque/;
-const t = `literal // opaque ${1 /* remove */}`;
-// remove
-''', {}),
-    ("javascript-control-regex", "javascript", br"if (ready) /https?:\/\/example\.test/.test(value); // remove", {}),
-    ("javascript-brace-goals", "javascript", b"const ratio = {} / 2; // remove\nif (ready) {} /[/*]/.test(value); // remove\n", {}),
-    ("javascript-html-like-comments", "javascript", b"const x = 1; <!-- remove\n  --> remove\nconst text = '<!-- opaque';\n", {}),
-    ("javascript-unicode-line-terminators", "javascript", "// remove\u2028const value = 1; /* first\u2029second */\n".encode(), {}),
-    ("javascript-unicode-line-in-string", "javascript", "const text = 'first\u2028second'; // known\n".encode(), {}),
-    ("jsx-goal", "javascript", br'const x=<div url="http://x">// opaque {1 /* remove */}</div>; // remove', {"dialect": "jsx"}),
-    ("html-raw-text-close-boundary", "html", b'<script>const s = "</scripture>"; // remove\n</script>', {}),
-    ("invalid-html-embedded", "html", b"<script>const x = 1; // known\n", {}),
-    ("forced-invalid-html-embedded", "html", b"<script>const x = 1; // known\n", {"force_invalid": True}),
-    ("typescript-directive", "typescript", b'/// <reference path="types.d.ts" />\n// remove\n', {}),
-    ("javascript-tree-shaking", "javascript", b"const x = /*#__PURE__*/ factory();\n// @ts-expect-error\ncall();\n// remove\n", {}),
-    ("python-fstring", "python", br"""#!/usr/bin/env python3
-# coding: utf-8
-value = f'''literal # opaque {(
-  1 # remove
-)}'''
-# remove
-""", {}),
-    ("python-inline-encoding-text", "python", b"value = 1  # coding: utf-8\n", {}),
-    ("python-template-string", "python", b"value = t'''literal # opaque {(\n  1 # remove\n)}'''\n# remove\n", {}),
-    ("shell-heredoc", "shell", b"cat <<'EOF'\n# opaque\nEOF\ncat <<< '# opaque'\n# remove\n", {"dialect": "bash53"}),
-    ("shell-quoted-heredoc-and-ansi", "shell", b"cat <<E\"OF\"\n# opaque\nEOF\ncat <<\\DONE\n# opaque\nDONE\nvalue=$'it\\'s # opaque'\n# remove\n", {"dialect": "bash53"}),
-    ("shell-command-substitutions", "shell", b'value="$(printf ok # nested\n)"\nold=`printf ok # legacy\n`\ntext="# opaque"\n# remove\n', {"dialect": "bash53"}),
-    ("shell-logical-word-boundaries", "shell", b"value=word\\\n#suffix\njoined=$(printf x)#suffix\nprintf ok \\\n# remove\n$(printf x);# remove\n", {}),
-    ("dockerfile-directives", "shell", b"# syntax=docker/dockerfile:1\n# remove\n# hadolint ignore=DL3018\n# hadolint\tignore=DL3019\n# hadolintish note\nRUN apk add --no-cache musl-dev\n# shellcheck disable=SC2086\n# shellcheck\tdisable=SC2087\n# shellcheckish note\n", {}),
-    ("shell-case-command-substitution", "shell", b"value=$(case x in\n  a) # remove\n    printf '%s' '# opaque' ;;\n  *) printf ok ;;\nesac\n)#suffix\n# remove\n", {}),
-    ("sql-postgres", "sql", br'select $tag$-- opaque /* opaque */$tag$; /* outer /* nested */ end */ -- remove', {"dialect": "postgresql"}),
-    ("sql-standard-backslash", "sql", b"select '\\'; -- remove\n", {}),
-    ("sql-postgres-escape", "sql", b"select E'it\\'s -- opaque'; -- remove\n", {"dialect": "postgresql"}),
-    ("sql-postgres-invalid-dollar-tag", "sql", b"select $1$; -- remove\n", {"dialect": "postgresql"}),
-    ("sql-postgres-long-dollar-tag", "sql", b"select $" + b"a" * 65 + b"$-- opaque$" + b"a" * 65 + b"$; -- remove\n", {"dialect": "postgresql"}),
-    ("sql-oracle", "sql", br"select q'[-- opaque /* opaque */]' from dual; /*+ index(t) */ -- remove", {"dialect": "oracle"}),
-    ("sql-mysql", "sql", b"/*!40101 SET NAMES utf8 */ # remove\n", {"dialect": "mysql"}),
-    ("sql-mysql-double-escape", "sql", b'select "it\\\"s -- opaque"; -- remove\n', {"dialect": "mysql"}),
-    ("sql-mysql-dash-boundary", "sql", b"select 1--2; -- remove\n", {"dialect": "mysql"}),
-    ("sql-tsql-nested", "sql", b"/* outer /* inner */ end */ select 1;", {"dialect": "t-sql"}),
-    ("c-plus-comment", "c", b"int x; /*+ ordinary C comment */", {}),
-    ("kotlin-string-templates", "kotlin", b"val regular = \"opaque // ${1 /* remove */}\"\nval raw = \"\"\"opaque ${run { // remove\n1 }} /* opaque */\"\"\"\n// remove\n", {}),
-    ("legal-policy", "javascript", b"// SPDX-License-Identifier: MIT\n// remove\n", {"policy": "legal"}),
-    ("force-preamble", "javascript", b"#!/usr/bin/env node\n// remove\n", {"policy": "all", "force_protected": True}),
-    ("kind-and-regex-overrides", "c", b"/* KEEP */ /* REMOVE */ // ordinary\n", {
-        "keep_regex": ["(?i)keep"], "remove_regex": ["(?i)remove"], "keep_kinds": ["line"]
-    }),
-    ("column-layout", "c", "x\t/*中😀*/y\r\n".encode(), {"layout": "columns"}),
-    ("column-unicode-width", "c", "x/*‍ֿ⌚️🇯🇵ᆍᇮힸ\U000e0093៘⵿؀؅*/y\n".encode(), {"layout": "columns"}),
-    ("column-unicode-width-scalar-sample", "c", b"x/*" + UNICODE_COLUMN_SAMPLE + b"*/y\n", {"layout": "columns"}),
-    ("column-valid-then-invalid-utf8", "c", b"x/*\xe4\xb8\xad\xff*/y", {"layout": "columns"}),
-    ("column-after-empty-html-removal", "html", b"ab<!-- drop\nline --><script>let x=1;/*\t*/y</script>", {"policy": "all", "layout": "columns"}),
-    ("non-utf8-bytes", "c", b"\xff/* remove */\x80\r\n", {}),
-    ("compact-layout", "c", b"left/* remove */right\n", {"layout": "compact"}),
-    ("invalid-cpp-raw", "cpp", br'R"tag(unterminated /* opaque */', {}),
-    ("invalid-shell-quote", "shell", b"echo 'unterminated", {}),
-    ("invalid-shell-heredoc", "shell", b"cat <<EOF\nbody\n", {}),
-    ("invalid-shell-command-substitution", "shell", b"value=$(echo ok # comment\n", {}),
-]
+# NOTE: Characters a JSON tool, an editor, or a terminal might normalise away.
+# NOTE: A fixture carrying one of these is written as base64 instead.
+TEXT_SAFE_CONTROL = frozenset("\n\r\t")
+TEXT_UNSAFE = frozenset("\u2028\u2029")
 
 
-def request(index, language, source, options):
-    return {
-        "id": index,
-        "operation": "transform",
-        "language": language,
-        "source_base64": base64.b64encode(source).decode(),
-        "options": {"policy": "safe", "layout": "lines", **options},
+def load_documents():
+    """Every corpus document, in file-name order, with the path it was read from."""
+    documents = []
+    for path in sorted(CORPUS.glob("*.json")):
+        document = json.loads(path.read_text(encoding="utf-8"))
+        if document.get("version") != 1:
+            raise SystemExit(f"{path.name}: unsupported corpus version {document.get('version')!r}")
+        documents.append((path, document))
+    return documents
+
+
+def load_cases(documents):
+    """Every case across the documents, in order, with its id unique corpus-wide."""
+    cases = []
+    origin = {}
+    for path, document in documents:
+        for case in document["cases"]:
+            identifier = case["id"]
+            if identifier in origin:
+                raise SystemExit(
+                    f"duplicate fixture id `{identifier}` in {origin[identifier]} and {path.name}"
+                )
+            origin[identifier] = path.name
+            cases.append(case)
+    if len(cases) < MINIMUM_CASES:
+        raise SystemExit(
+            f"the corpus holds {len(cases)} case(s), fewer than the {MINIMUM_CASES} required; "
+            f"cases live in {CORPUS.relative_to(ROOT)}/*.json"
+        )
+    return cases
+
+
+def source_bytes(case):
+    """The case source as bytes, whichever of the two encodings it uses."""
+    encoded = "source_base64" in case
+    text = "source_utf8" in case
+    if encoded == text:
+        raise SystemExit(f"{case['id']}: exactly one of `source_utf8` and `source_base64`")
+    if encoded:
+        return base64.b64decode(case["source_base64"], validate=True)
+    return case["source_utf8"].encode("utf-8")
+
+
+def request(case):
+    """One JSONL request for a case; the response carries the case id back."""
+    options = dict(DEFAULT_OPTIONS)
+    options.update(case.get("options", {}))
+    if "dialect" in case:
+        options["dialect"] = case["dialect"]
+    value = {
+        "id": case["id"],
+        "operation": case.get("operation", "transform"),
+        "language": case["language"],
+        "source_base64": base64.b64encode(source_bytes(case)).decode(),
+        "options": options,
     }
-
-
-def span_request(index):
-    source = b"a/*x*/b//y\n"
-    value = request(index, "c", source, {"keep_kinds": ["line"]})
-    value["operation"] = "transform-spans"
-    value["spans"] = [
-        {"start": 1, "end": 6, "kind": "block"},
-        {"start": 7, "end": 10, "kind": "line"},
-    ]
+    for key in PAYLOAD_KEYS:
+        if key in case:
+            value[key] = case[key]
     return value
 
 
-def edits_request(index):
-    source = b"\xffabcdef\r\n"
-    value = request(index, "c", source, {})
-    value["operation"] = "apply_edits"
-    value["edits"] = [
+def expected_bytes(expect):
+    """The output bytes an `expect` block pins, or `None` when it pins none."""
+    if "output_base64" in expect:
+        return base64.b64decode(expect["output_base64"], validate=True)
+    if "output_utf8" in expect:
+        return expect["output_utf8"].encode("utf-8")
+    return None
+
+
+def observed_comments(report):
+    """A report's comments in the shape an `expect` block records them."""
+    return [
         {
-            "span": {"start": 1, "end": 3},
-            "replacement_base64": base64.b64encode(b"\x80X").decode(),
-        },
-        {
-            "span": {"start": 6, "end": 7},
-            "replacement_base64": base64.b64encode(b"").decode(),
-        },
+            "start": comment["span"]["start"],
+            "end": comment["span"]["end"],
+            "kind": comment["kind"],
+            "action": comment["disposition"]["action"],
+        }
+        for comment in report["comments"]
     ]
-    return value
 
 
-def profile_request(index, policy):
-    source = b'";; opaque" ;; remove\n#| outer #| nested |# |# ;; KEEP\n'
-    value = request(index, "c", source, {"policy": policy})
-    value["operation"] = "transform-profile"
-    value["profile"] = {
-        "name": "demo",
-        "extensions": ["demo"],
-        "line_comments": [{"start": ";;", "kind": "line"}],
-        "block_comments": [{"start": "#|", "end": "|#", "nested": True, "kind": "block"}],
-        "strings": [{"start": '"', "end": '"', "escape": "\\"}],
-        "protected_patterns": [{"contains": "KEEP", "reason": "fixture protection"}],
-    }
-    return value
+def observed_diagnostics(report):
+    """A report's diagnostics in the shape an `expect` block records them."""
+    return [
+        {"code": item["code"], "start": item["span"]["start"], "end": item["span"]["end"]}
+        for item in report["diagnostics"]
+    ]
+
+
+def check_expect(case, payload):
+    """Every way `payload` departs from the case's recorded `expect` block."""
+    expect = case["expect"]
+    # NOTE: `transform` nests the report; `scan` is the report.
+    report = payload.get("report", payload)
+    failures = []
+    if "valid" in expect and report["valid"] != expect["valid"]:
+        failures.append(f"valid: expected {expect['valid']}, got {report['valid']}")
+    for name, observed in (
+        ("comments", observed_comments),
+        ("diagnostics", observed_diagnostics),
+    ):
+        if name in expect:
+            actual = observed(report)
+            if actual != expect[name]:
+                failures.append(
+                    f"{name}: expected {json.dumps(expect[name])}, got {json.dumps(actual)}"
+                )
+    wanted = expected_bytes(expect)
+    if wanted is not None:
+        if "output_base64" not in payload:
+            failures.append("output: this operation writes no bytes to pin")
+        else:
+            actual = base64.b64decode(payload["output_base64"], validate=True)
+            if actual != wanted:
+                failures.append(f"output: expected {wanted!r}, got {actual!r}")
+    return failures
 
 
 def run(executable, requests):
+    """Feed every request to one implementation and parse its responses."""
     payload = "".join(json.dumps(item, separators=(",", ":")) + "\n" for item in requests)
     completed = subprocess.run([str(executable)], input=payload, text=True, capture_output=True, check=True)
     return [json.loads(line) for line in completed.stdout.splitlines()]
 
 
-def main():
-    requests = []
-    labels = []
-    index = 0
-    for language, source in FIXTURES.items():
-        for policy in ("safe", "all"):
-            requests.append(request(index, language, source, {"policy": policy}))
-            labels.append(f"{language}-{policy}")
-            index += 1
-    for label, language, source, options in SPECIAL_FIXTURES:
-        requests.append(request(index, language, source, options))
-        labels.append(label)
-        index += 1
-    requests.append(span_request(index))
-    labels.append("external-plugin-spans")
-    index += 1
-    requests.append(edits_request(index))
-    labels.append("apply-edits-binary")
-    index += 1
-    for policy in ("safe", "all"):
-        requests.append(profile_request(index, policy))
-        labels.append(f"declarative-profile-{policy}")
-        index += 1
+def text_safe(raw):
+    """Whether bytes are safe to carry as a JSON string rather than as base64."""
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    return all(
+        character in TEXT_SAFE_CONTROL
+        or (character not in TEXT_UNSAFE and unicodedata.category(character)[0] != "C")
+        for character in text
+    )
+
+
+def recorded_expect(payload):
+    """The `expect` block for one response, in the shape the corpus stores."""
+    report = payload.get("report", payload)
+    expect = {}
+    if "comments" in report:
+        expect["valid"] = report["valid"]
+        expect["comments"] = observed_comments(report)
+        expect["diagnostics"] = observed_diagnostics(report)
+    if "output_base64" in payload:
+        output = base64.b64decode(payload["output_base64"], validate=True)
+        if len(output) <= MAX_RECORDED_OUTPUT:
+            if text_safe(output):
+                expect["output_utf8"] = output.decode("utf-8")
+            else:
+                expect["output_base64"] = base64.b64encode(output).decode()
+    return expect
+
+
+def record(documents, agreed):
+    """Write an `expect` block into every case that has none. Returns how many."""
+    added = 0
+    for path, document in documents:
+        for case in document["cases"]:
+            if "expect" in case:
+                continue
+            case["expect"] = recorded_expect(agreed[case["id"]])
+            added += 1
+        document["cases"] = [
+            {key: case[key] for key in FIELD_ORDER if key in case} for case in document["cases"]
+        ]
+        text = json.dumps(document, indent=2, ensure_ascii=False) + "\n"
+        if text != path.read_text(encoding="utf-8"):
+            path.write_text(text, encoding="utf-8")
+            print(f"{path.name}: rewritten")
+    return added
+
+
+def main(argv):
+    unknown = [argument for argument in argv if argument != "--record"]
+    if unknown:
+        print(f"unsupported argument(s): {' '.join(unknown)}", file=sys.stderr)
+        return 2
+    documents = load_documents()
+    cases = load_cases(documents)
+    requests = [request(case) for case in cases]
     rust = run(RUST, requests)
     ocaml = run(OCAML, requests)
     failures = 0
-    for label, request_value, left, right in zip(labels, requests, rust, ocaml):
+    expected = 0
+    for case, left, right in zip(cases, rust, ocaml):
+        label = f"{case['id']} ({case['language']})"
         if left != right:
             failures += 1
-            print(f"mismatch: {label} ({request_value['language']})", file=sys.stderr)
+            print(f"mismatch: {label}", file=sys.stderr)
             print(json.dumps({"rust": left, "ocaml": right}, indent=2), file=sys.stderr)
+            continue
+        # NOTE: Both implementations refusing a case alike is still a corpus
+        # NOTE: bug: every case is meant to run, and there is no way to record
+        # NOTE: an expected refusal.
+        if "ok" not in left:
+            failures += 1
+            print(f"refused: {label} {left.get('error')!r}", file=sys.stderr)
+            continue
+        if "expect" not in case:
+            continue
+        expected += 1
+        for problem in check_expect(case, left["ok"]):
+            failures += 1
+            print(f"expect: {label} {problem}", file=sys.stderr)
     if failures:
-        print(f"{failures} differential fixture(s) failed", file=sys.stderr)
+        print(f"{failures} differential fixture failure(s)", file=sys.stderr)
         return 1
-    print(f"{len(requests)} Rust/OCaml differential fixtures passed")
+    print(f"{len(requests)} Rust/OCaml differential fixtures passed, {expected} against a recorded expectation")
+    if "--record" in argv:
+        agreed = {case["id"]: response["ok"] for case, response in zip(cases, rust)}
+        added = record(documents, agreed)
+        print(f"recorded {added} new expectation(s); {expected} were already recorded")
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv[1:]))

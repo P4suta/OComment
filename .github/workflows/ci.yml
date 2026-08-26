@@ -34,6 +34,17 @@ jobs:
       # doctests, so the examples in the library rustdoc are only ever
       # compiled and run by this step.
       - run: cargo test --manifest-path rust/Cargo.toml --doc --workspace --locked
+      # docs/library.md is hand-written prose and the step above never reads
+      # it: `--doc` compiles what is in the crate sources and nothing else. The
+      # page says every example on it is compiled and run, so it is handed to
+      # `rustdoc` as its own doctest file, linked against the library it
+      # documents.
+      - name: The examples on the library page still compile
+        run: |
+          cargo build --manifest-path rust/Cargo.toml --locked -p ocomment-core
+          rustdoc --test docs/library.md --edition 2024 \
+            --extern ocomment_core=rust/target/debug/libocomment_core.rlib \
+            -L rust/target/debug/deps
       - name: The library documentation builds with no broken links
         env:
           RUSTDOCFLAGS: -D warnings

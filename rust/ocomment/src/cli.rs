@@ -8,12 +8,14 @@ use crate::{
     plugin,
     values::{CommentKindArg, DialectArg, LanguageArg, LayoutArg, PolicyArg},
 };
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, bail, ensure};
 use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{Shell, generate};
 use ocomment_core::{CommentKind, Dialect, Language, transform};
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
 use std::{
+    collections::BTreeMap,
     fs,
     io::{self, IsTerminal, Read, Write},
     path::PathBuf,
@@ -532,7 +534,7 @@ pub fn run() -> Result<u8> {
         Some(Command::Lsp) => lsp::run(common.config.as_deref()),
         Some(Command::Init(args)) => run_init(args),
         Some(Command::Config(args)) => run_config(args, &common),
-        Some(Command::Languages) => print_languages(),
+        Some(Command::Languages) => print_languages(&common),
         Some(Command::Plugin(args)) => run_plugin(args, &common),
         Some(Command::Completions { shell }) => run_completions(shell),
         Some(Command::Doctor) => run_doctor(&common),
@@ -1224,27 +1226,100 @@ fn run_config(args: ConfigArgs, common: &CommonArgs) -> Result<u8> {
     Ok(0)
 }
 
-fn print_languages() -> Result<u8> {
+/// The shared language table, embedded from `spec/languages.toml` at build
+/// time so a released binary carries the same list the repository publishes.
+/// `tools/check_embedded_specs.py` and `spec_languages.rs` both fail when the
+/// copy under `assets/` stops being the canonical file.
+const LANGUAGE_TABLE: &str = include_str!("../assets/languages.toml");
+
+/// One language of the shared table.
+///
+/// The field names are the keys of `spec/languages.toml` and the members of the
+/// objects `--format json` writes; the three that can be empty are left out of
+/// the JSON rather than written as an empty collection, so a reader can tell
+/// "no reserved names" from "reserved names not described".
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct LanguageRow {
+    /// The canonical language name, which is also what `--language` takes.
+    name: String,
+    /// Every file extension that selects the language, without the dot.
+    extensions: Vec<String>,
+    /// Every dialect the language accepts, in the order `--dialect` names them
+    /// when it refuses one.
+    dialects: Vec<String>,
+    /// The extensions that select a dialect other than `standard`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    extension_dialects: BTreeMap<String, String>,
+    /// Whole file names that select the language when the extension does not.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    reserved_names: Vec<String>,
+    /// Interpreter names that select the language from a `#!` line.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    shebangs: Vec<String>,
+    /// A short remark for the last column of the human listing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    notes: Option<String>,
+}
+
+/// The shared table as a whole.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LanguageTable {
+    /// The schema version of the file; only `1` exists.
+    version: u32,
+    /// One row per built-in language, in the order they are listed.
+    languages: Vec<LanguageRow>,
+}
+
+/// Read the embedded table.
+///
+/// A failure here is a broken build rather than a broken run — the bytes are
+/// compiled in — so the error says which file is at fault instead of blaming
+/// the command line.
+fn language_table() -> Result<Vec<LanguageRow>> {
+    let table: LanguageTable = toml::from_str(LANGUAGE_TABLE)
+        .context("the embedded spec/languages.toml is not a language table")?;
+    ensure!(
+        table.version == 1,
+        "the embedded spec/languages.toml is version {}, which this build does not know",
+        table.version
+    );
+    Ok(table.languages)
+}
+
+/// Print the shared language table.
+///
+/// The human listing is one tab-separated row per language — name, extensions,
+/// dialects, and the spec's remark where it has one — and `--format json`
+/// writes the same rows as an array of objects. The other formats are report
+/// schemas with nowhere to put a language table, so they are refused rather
+/// than quietly answered with the human one.
+fn print_languages(common: &CommonArgs) -> Result<u8> {
+    let rows = language_table()?;
     let mut stdout = output::stdout();
-    for line in [
-        "language\textensions / guaranteed dialects",
-        "rust\trs",
-        "ocaml\tml,mli (OCaml 5.5 lexical forms)",
-        "c\tc,h / standard, GNU, Objective-C",
-        "cpp\tcc,cpp,cxx,hpp / standard, GNU, Objective-C++, CUDA",
-        "go\tgo",
-        "java\tjava (Unicode escape translation)",
-        "javascript\tjs,mjs,cjs,jsx / ECMAScript, JSX",
-        "typescript\tts,mts,cts,tsx / TypeScript, TSX",
-        "python\tpy,pyw,pyi",
-        "shell\tsh,bash,zsh / POSIX sh, Bash 5.3, zsh",
-        "html\thtml,htm / recursive script and style",
-        "css\tcss",
-        "jsonc\tjsonc,json5",
-        "sql\tsql / PostgreSQL, MySQL, SQLite, T-SQL, Oracle",
-        "kotlin\tkt,kts",
-    ] {
-        output::wrote(writeln!(stdout, "{line}"))?;
+    match common.output.format {
+        OutputFormat::Human => {
+            output::wrote(writeln!(stdout, "language\textensions\tdialects\tnotes"))?;
+            for row in &rows {
+                let extensions = row.extensions.join(",");
+                let dialects = row.dialects.join(",");
+                let line = match &row.notes {
+                    Some(notes) => format!("{}\t{extensions}\t{dialects}\t{notes}", row.name),
+                    None => format!("{}\t{extensions}\t{dialects}", row.name),
+                };
+                output::wrote(writeln!(stdout, "{line}"))?;
+            }
+        }
+        /* NOTE: Rendered into a string rather than straight into the writer, so the
+         * one write is raised through `output::wrote` and a reader that closed
+         * the pipe still ends the run quietly. */
+        OutputFormat::Json => {
+            let json = serde_json::to_string_pretty(&rows)
+                .context("cannot render the language table as JSON")?;
+            output::wrote(writeln!(stdout, "{json}"))?;
+        }
+        _ => bail!("`ocomment languages` is only available with --format human or --format json"),
     }
     output::finish(&mut stdout)?;
     Ok(0)

@@ -13,6 +13,7 @@ use ocomment_core::{
     detect_language, transform,
 };
 use std::{
+    collections::BTreeSet,
     ffi::{OsStr, OsString},
     fs,
     io::Write,
@@ -61,17 +62,20 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
         dry_run,
     } = request;
     let root = repository_root()?;
-    let (names, mut skipped) =
-        configured_paths(&root, staged_paths(&root, paths)?, paths, resolved)?;
+    let (blobs, mut skipped) = configured_paths(&root, staged_paths(&root, paths)?, resolved)?;
     let mut entries = Vec::new();
-    for path in names {
+    for StagedBlob { path, named } in blobs {
         let source = index_blob(&root, &path)?;
         if source.iter().take(8192).any(|byte| *byte == 0) {
             /* NOTE: A walk says why it passed a file over, and so does this: a hook
              * that stages a PNG beside its source has to read as one file
              * scanned and one passed over, not as two files with nothing
              * to say about them. */
-            skipped.push(skipped_blob(path, "binary file (NUL byte)".to_owned()));
+            skipped.push(skipped_blob(
+                path,
+                "binary file (NUL byte)".to_owned(),
+                named,
+            ));
             continue;
         }
         let detection = forced_language
@@ -89,7 +93,11 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
             .then(|| crate::files::plugin_for_path(&path, resolved))
             .flatten();
         if detection.is_none() && profile.is_none() && routed_plugin.is_none() {
-            skipped.push(skipped_blob(path, crate::files::NO_LANGUAGE.to_owned()));
+            skipped.push(skipped_blob(
+                path,
+                crate::files::NO_LANGUAGE.to_owned(),
+                named,
+            ));
             continue;
         }
         let language = detection
@@ -348,9 +356,63 @@ fn repository_root() -> Result<PathBuf> {
     Ok(bytes_to_path(&output))
 }
 
-fn staged_paths(root: &Path, filters: &[PathBuf]) -> Result<Vec<PathBuf>> {
+/// Every staged path a run has to consider, and which of them the caller
+/// named.
+struct StagedPaths {
+    /// What `git diff --cached` answered: root-relative, sorted, each path
+    /// once however many pathspecs covered it.
+    paths: Vec<PathBuf>,
+    /// The paths a pathspec picked out, which is what lifts the project's own
+    /// limits from them.
+    named: BTreeSet<PathBuf>,
+}
+
+/// A staged path `[files]` let through, and whether the caller named it.
+struct StagedBlob {
+    path: PathBuf,
+    named: bool,
+}
+
+/// Ask `git` what is staged, one question for each pathspec.
+///
+/// A pathspec is `git`'s to interpret and nobody else's. `.hidden/*.rs` is a
+/// wildcard it expands, an absolute path is one it makes root-relative, `.` is
+/// a directory it resolves against the directory the command was typed in, and
+/// the answer to all of them is a path relative to the repository root. So
+/// each pathspec is put to `git` on its own and the answers are unioned, which
+/// leaves the run with both of the things it needs — the paths to scan, and
+/// the paths a caller asked about — without restating a word of pathspec
+/// syntax here, and so without the two readings drifting apart.
+///
+/// It costs one `git` invocation for each pathspec the caller typed, where the
+/// single combined question it replaces cost one for all of them. A hook that
+/// passes its staged file names in one by one pays that per name, next to the
+/// four this run already spends on every path it keeps, and it buys the only
+/// reading of a pathspec that `git` itself would agree with.
+fn staged_paths(root: &Path, filters: &[PathBuf]) -> Result<StagedPaths> {
+    let base = pathspec_base(root);
+    let mut paths = Vec::new();
+    let mut named = BTreeSet::new();
+    if filters.is_empty() {
+        paths = list_staged(&base, None)?;
+    } else {
+        for pathspec in filters {
+            let listed = list_staged(&base, Some(pathspec))?;
+            if !names_whole_tree(pathspec, &base, root) {
+                named.extend(listed.iter().cloned());
+            }
+            paths.extend(listed);
+        }
+    }
+    paths.sort();
+    paths.dedup();
+    Ok(StagedPaths { paths, named })
+}
+
+/// The staged paths one pathspec covers, or all of them when there is none.
+fn list_staged(base: &Path, pathspec: Option<&Path>) -> Result<Vec<PathBuf>> {
     let mut command = Command::new("git");
-    command.current_dir(root).args([
+    command.current_dir(base).args([
         "diff",
         "--cached",
         "--name-only",
@@ -358,16 +420,49 @@ fn staged_paths(root: &Path, filters: &[PathBuf]) -> Result<Vec<PathBuf>> {
         "--diff-filter=ACMR",
         "--",
     ]);
-    command.args(filters);
+    if let Some(pathspec) = pathspec {
+        command.arg(pathspec);
+    }
     let output = command_output(&mut command, "cannot list staged paths")?;
-    let mut paths: Vec<_> = output
+    Ok(output
         .split(|byte| *byte == 0)
         .filter(|bytes| !bytes.is_empty())
         .map(bytes_to_path)
-        .collect();
-    paths.sort();
-    paths.dedup();
-    Ok(paths)
+        .collect())
+}
+
+/// The directory a relative pathspec is measured from.
+///
+/// It is the directory the command was typed in, which is what `git` resolves
+/// `.` or `../lib` against. `resolved.cwd` cannot answer this question: a
+/// staged run points it at the repository root before it begins, because a
+/// staged path arrives root-relative and a `[files]` glob is written
+/// root-relative too. The root stands in where the working directory cannot be
+/// read at all: it is inside the repository by construction, so the worst it
+/// can do is read a relative pathspec as the top of the tree would.
+fn pathspec_base(root: &Path) -> PathBuf {
+    std::env::current_dir().unwrap_or_else(|_| root.to_path_buf())
+}
+
+/// Whether a pathspec covers the repository, and so picks nothing out of it.
+///
+/// `ocomment check --staged .` from the top of the repository asks for the run
+/// that `ocomment check --staged` already is, and it has to get that run's
+/// answer — every `[files]` limit included. Naming a path is what lifts those
+/// limits, and the whole tree is not a path anybody picked out: a hook that
+/// spells its run with a trailing `.` would otherwise put exactly the hidden
+/// or oversized blob through a commit that a bare run passes over. The same
+/// `.` typed in `src/` does pick a subtree out, which is why the pathspec is
+/// resolved where it was written before it is compared.
+///
+/// Only a pathspec that is a path is understood here. `git`'s `:(magic)`
+/// spellings are read as picking something out, which is the reading that
+/// answers about the paths the caller wrote rather than silently dropping
+/// them.
+fn names_whole_tree(pathspec: &Path, base: &Path, root: &Path) -> bool {
+    let joined = base.join(pathspec);
+    let absolute = std::path::absolute(&joined).unwrap_or(joined);
+    crate::config::lexical(&absolute) == crate::config::lexical(root)
 }
 
 /// Drop the staged paths `[files]` puts out of bounds, and say which of them
@@ -388,12 +483,13 @@ fn staged_paths(root: &Path, filters: &[PathBuf]) -> Result<Vec<PathBuf>> {
 /// much of a file is worth reading, and a hook that applied neither would put
 /// through a commit exactly what a walk would never have reached.
 ///
-/// A path the caller *did* name is the other case, and `given` is what tells
-/// the two apart. `ocomment check --staged .hidden/x.rs` is a request about
-/// that file, so answering "0 files" because the project does not walk into
-/// dot-directories reads as a clean file rather than as a path out of bounds —
-/// which is why a walk lifts both limits for an explicit argument, and why this
-/// lifts them for the same argument spelled as a pathspec.
+/// A path the caller *did* name is the other case, and
+/// [`StagedPaths::named`] is what tells the two apart.
+/// `ocomment check --staged .hidden/x.rs` is a request about that file, so
+/// answering "0 files" because the project does not walk into dot-directories
+/// reads as a clean file rather than as a path out of bounds — which is why a
+/// walk lifts both limits for an explicit argument, and why this lifts them
+/// for the same argument spelled as a pathspec.
 ///
 /// The two limits answer differently when they do apply, because they mean
 /// differently. A hidden path was never a candidate, so it leaves no trace; an
@@ -402,17 +498,13 @@ fn staged_paths(root: &Path, filters: &[PathBuf]) -> Result<Vec<PathBuf>> {
 /// than annotated once per file.
 fn configured_paths(
     root: &Path,
-    paths: Vec<PathBuf>,
-    given: &[PathBuf],
+    staged: StagedPaths,
     resolved: &ResolvedConfig,
-) -> Result<(Vec<PathBuf>, Vec<SkippedFile>)> {
+) -> Result<(Vec<StagedBlob>, Vec<SkippedFile>)> {
     let include = crate::files::compile_globs(&resolved.config.files.include)?;
     let exclude = crate::files::compile_globs(&resolved.config.files.exclude)?;
     let max_size = resolved.config.files.max_size;
-    let named: Vec<PathBuf> = given
-        .iter()
-        .map(|pathspec| directory_form(pathspec))
-        .collect();
+    let StagedPaths { paths, named } = staged;
     let mut kept = Vec::new();
     let mut skipped = Vec::new();
     for path in paths {
@@ -423,7 +515,7 @@ fn configured_paths(
         if (!include.is_empty() && !include.is_match(&relative)) || exclude.is_match(&relative) {
             continue;
         }
-        let explicit = was_named(&path, &named);
+        let explicit = named.contains(&path);
         if !explicit && !resolved.config.files.hidden && has_hidden_component(&path) {
             continue;
         }
@@ -438,53 +530,31 @@ fn configured_paths(
             });
             continue;
         }
-        kept.push(path);
+        kept.push(StagedBlob {
+            path,
+            named: explicit,
+        });
     }
     Ok((kept, skipped))
 }
 
-/// A staged blob that was met and declined, folded into the summary.
+/// A staged blob that was met and declined.
 ///
 /// Neither reason depends on what the caller typed — a PNG is not text and a
-/// `.md` file has no scanner however it got into the commit — so both are
-/// counted in the end-of-run summary under the short label
-/// [`crate::output::skip_label`] gives them, and listed per file only when `-v`
-/// asks for the list.
-fn skipped_blob(path: PathBuf, reason: String) -> SkippedFile {
+/// `.md` file has no scanner however it got into the commit — but who typed
+/// the path decides where the skip is reported. One nobody named is counted in
+/// the end-of-run summary under the short label [`crate::output::skip_label`]
+/// gives it, and listed per file only when `-v` asks for the list; one the
+/// caller named is answered on a line of its own, because
+/// `ocomment check --staged notes.md` that says only "nothing to check" reads
+/// as a clean file rather than as a file nothing could read.
+fn skipped_blob(path: PathBuf, reason: String, named: bool) -> SkippedFile {
     SkippedFile {
         path,
         reason,
         error: false,
-        explicit: false,
+        explicit: named,
     }
-}
-
-/// A pathspec as the prefix of the paths it covers.
-///
-/// `git` answers with a path relative to the repository root, and the
-/// pathspecs went to `git diff --cached` from that same root, so the two are
-/// comparable as they stand — once the `.` segments a typed target leaves
-/// behind are gone. A bare `.` normalizes to nothing, which is the right
-/// answer: it names the whole tree.
-fn directory_form(pathspec: &Path) -> PathBuf {
-    pathspec
-        .components()
-        .filter(|component| !matches!(component, Component::CurDir))
-        .collect()
-}
-
-/// Whether the caller named this staged path, directly or by naming a
-/// directory above it.
-///
-/// `Path::starts_with` compares whole components, so `big` does not name
-/// `big.rs` and `.hidden` names everything under `.hidden/`. A pathspec `git`
-/// resolves rather than compares — a wildcard, an absolute path, `git`'s own
-/// `:(magic)` — matches nothing here and the path stays a walked one, which is
-/// the safe direction: the project's limits go on applying to it.
-fn was_named(path: &Path, named: &[PathBuf]) -> bool {
-    named
-        .iter()
-        .any(|pathspec| pathspec.as_os_str().is_empty() || path.starts_with(pathspec))
 }
 
 /// Whether any component of a staged path is a hidden name.

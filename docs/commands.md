@@ -96,7 +96,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop the comment bytes and keep only the newlines it spanned
+          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -278,7 +278,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop the comment bytes and keep only the newlines it spanned
+          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -445,7 +445,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop the comment bytes and keep only the newlines it spanned
+          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -604,7 +604,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop the comment bytes and keep only the newlines it spanned
+          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -763,7 +763,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop the comment bytes and keep only the newlines it spanned
+          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -912,7 +912,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop the comment bytes and keep only the newlines it spanned
+          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -1061,7 +1061,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop the comment bytes and keep only the newlines it spanned
+          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -1226,7 +1226,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop the comment bytes and keep only the newlines it spanned
+          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -1382,7 +1382,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop the comment bytes and keep only the newlines it spanned
+          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -1531,7 +1531,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop the comment bytes and keep only the newlines it spanned
+          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -1689,7 +1689,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop the comment bytes and keep only the newlines it spanned
+          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -1851,7 +1851,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop the comment bytes and keep only the newlines it spanned
+          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -2004,7 +2004,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop the comment bytes and keep only the newlines it spanned
+          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -2153,7 +2153,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop the comment bytes and keep only the newlines it spanned
+          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -2306,7 +2306,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop the comment bytes and keep only the newlines it spanned
+          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -2459,7 +2459,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop the comment bytes and keep only the newlines it spanned
+          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -2612,7 +2612,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop the comment bytes and keep only the newlines it spanned
+          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -2767,7 +2767,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop the comment bytes and keep only the newlines it spanned
+          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -2916,7 +2916,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop the comment bytes and keep only the newlines it spanned
+          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -3065,7 +3065,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop the comment bytes and keep only the newlines it spanned
+          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents

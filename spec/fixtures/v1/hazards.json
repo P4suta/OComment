@@ -1,0 +1,2330 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "rust-nested-raw",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "r#\"// opaque\"# /* outer /* inner */ end */\\n// rustfmt::skip\\n",
+      "note": "Rust Reference, Tokens: raw string literals take no escapes, and block comments nest. The raw string hides `//`, `/* outer /* inner */ end */` is one comment, and `// rustfmt::skip` is a directive `safe` keeps.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 15,
+            "end": 42,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 44,
+            "end": 62,
+            "kind": "directive",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "r#\"// opaque\"# \\n// rustfmt::skip\\n"
+      }
+    },
+    {
+      "id": "rust-raw-c-string",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "cr#\"inner \" // opaque\"#; // remove\n",
+      "note": "Rust Reference, Tokens (raw C string literals, Rust 1.77): `cr#\"...\"#` ends only at `\"#`, so the unescaped `\"` and the `//` inside it are opaque and only the trailing line comment is found.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 25,
+            "end": 34,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "cr#\"inner \" // opaque\"#; \n"
+      }
+    },
+    {
+      "id": "rust-multiline-string",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "const A: &str = \"a\n// opaque\nb\"; // remove\n",
+      "note": "Rust Reference, Tokens: a string literal may contain newlines, so `//` on an inner line is opaque and only the trailing line comment is found.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 33,
+            "end": 42,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "const A: &str = \"a\n// opaque\nb\"; \n"
+      }
+    },
+    {
+      "id": "ocaml-nested-quoted",
+      "language": "ocaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "{tag| (* opaque *) |tag} (* outer \"*)\" (* inner *) *)",
+      "note": "OCaml manual, Lexical conventions: quoted string literals `{id|...|id}` take no escapes, and comments nest. The quoted string hides `(*`, and the nested comment closes once.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 25,
+            "end": 53,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "{tag| (* opaque *) |tag} "
+      }
+    },
+    {
+      "id": "ocaml-comment-quoted",
+      "language": "ocaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "(* outer {tag| *) opaque |tag} end *)",
+      "note": "OCaml manual, Comments: a comment may contain a string literal, and the literal's contents are not scanned for `*)`, so the `*)` inside `{tag|...|tag}` does not close the comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 37,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": ""
+      }
+    },
+    {
+      "id": "ocaml-long-quoted-id",
+      "language": "ocaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "{aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|(* opaque *)|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa} (* remove *)",
+      "note": "OCaml manual, Lexical conventions: the identifier of a quoted string literal has no length limit, so an 80-character tag must still be matched exactly at the close.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 177,
+            "end": 189,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "{aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|(* opaque *)|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa} "
+      }
+    },
+    {
+      "id": "invalid-ocaml-quoted",
+      "language": "ocaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "{tag| unterminated (* opaque *)",
+      "note": "OCaml manual, Lexical conventions: an unterminated quoted string literal is a lexical error, reported as an error diagnostic that makes the report invalid.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 0,
+            "end": 31
+          }
+        ],
+        "output_utf8": "{tag| unterminated (* opaque *)"
+      }
+    },
+    {
+      "id": "c-line-splice",
+      "language": "c",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "int x; /\\\n/ comment\\\ncontinued\nint y;",
+      "note": "ISO C17 5.1.1.2 translation phases: backslash-newline splicing (phase 2) happens before comments are recognised (phase 3), so `/\\<newline>/` opens a line comment and a spliced line comment runs on to the next line.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 7,
+            "end": 30,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "int x; \n\n\nint y;"
+      }
+    },
+    {
+      "id": "cpp-raw",
+      "language": "cpp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "R\"tag(/* opaque */ // opaque)tag\" // remove",
+      "note": "ISO C++ [lex.string]: a raw string literal `R\"tag(...)tag\"` ends only at the matching delimiter, so both comment forms inside it are opaque.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 34,
+            "end": 43,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "R\"tag(/* opaque */ // opaque)tag\" "
+      }
+    },
+    {
+      "id": "go-directives",
+      "language": "go",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "//go:build linux\n// +build linux\n//line generated.go:1\n// remove\n",
+      "note": "Go compiler directives: `//go:build`, the legacy `// +build` constraint, and `//line` are directives `safe` keeps; the plain line comment is removed.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 16,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 17,
+            "end": 32,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 33,
+            "end": 54,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 55,
+            "end": 64,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "//go:build linux\n// +build linux\n//line generated.go:1\n\n"
+      }
+    },
+    {
+      "id": "java-unicode",
+      "language": "java",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "int x; \\u002f\\u002f comment\\u000aint y;",
+      "note": "JLS 3.3 Unicode escapes: `\\uXXXX` is translated before lexing, so `\\u002f\\u002f` opens a line comment and `\\u000a` is the line terminator that ends it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 7,
+            "end": 27,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "int x; \\u000aint y;"
+      }
+    },
+    {
+      "id": "java-unicode-surrogates",
+      "language": "java",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "String s = \"\\uD83D\\uDE00 // opaque\"; // remove",
+      "note": "JLS 3.3: a surrogate pair written as two Unicode escapes is one code point; it is inside a string literal, so the `//` after it is opaque and only the trailing comment is found.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 37,
+            "end": 46,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "String s = \"\\uD83D\\uDE00 // opaque\"; "
+      }
+    },
+    {
+      "id": "invalid-java-unicode",
+      "language": "java",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "int x = 1; \\u00G0 // known",
+      "note": "JLS 3.3: an eligible backslash not followed by four hexadecimal digits is a compile-time error, reported as an error diagnostic while the trailing comment is still located.",
+      "expect": {
+        "valid": false,
+        "comments": [
+          {
+            "start": 18,
+            "end": 26,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [
+          {
+            "code": "invalid-unicode-escape",
+            "start": 11,
+            "end": 17
+          }
+        ],
+        "output_utf8": "int x = 1; \\u00G0 // known"
+      }
+    },
+    {
+      "id": "forced-invalid-java-unicode",
+      "language": "java",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines",
+        "force_invalid": true
+      },
+      "source_utf8": "int x = 1; \\u00G0 // known",
+      "note": "The `invalid-java-unicode` source with `force_invalid`: the error diagnostic stands, and edits are produced anyway.",
+      "expect": {
+        "valid": false,
+        "comments": [
+          {
+            "start": 18,
+            "end": 26,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [
+          {
+            "code": "invalid-unicode-escape",
+            "start": 11,
+            "end": 17
+          }
+        ],
+        "output_utf8": "int x = 1; \\u00G0 "
+      }
+    },
+    {
+      "id": "java-text-block-escape",
+      "language": "java",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "String s = \"\"\"\n\\\"\"\" // opaque\nend\n\"\"\"; // remove\n",
+      "note": "JLS 3.10.6 text blocks: an escaped `\\\"\"\"` does not close the block, so the `//` inside it is opaque.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 39,
+            "end": 48,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "String s = \"\"\"\n\\\"\"\" // opaque\nend\n\"\"\"; \n"
+      }
+    },
+    {
+      "id": "javascript-goals",
+      "language": "javascript",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "#!/usr/bin/env node\nconst r = /\\/\\/* opaque/;\nconst t = `literal // opaque ${1 /* remove */}`;\n// remove\n",
+      "note": "ECMA-262 lexical goal symbols: a `/` after `=` starts a regular expression, a template literal's text is opaque, and its substitution returns to the code goal. The hashbang (ECMA-262 Hashbang Grammar) is protected.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 19,
+            "kind": "shebang",
+            "action": "keep"
+          },
+          {
+            "start": 79,
+            "end": 91,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 95,
+            "end": 104,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "#!/usr/bin/env node\nconst r = /\\/\\/* opaque/;\nconst t = `literal // opaque ${1 }`;\n\n"
+      }
+    },
+    {
+      "id": "javascript-control-regex",
+      "language": "javascript",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "if (ready) /https?:\\/\\/example\\.test/.test(value); // remove",
+      "note": "ECMA-262 InputElementRegExp: after the `)` closing an `if` condition a `/` starts a regular expression, so the escaped `\\/\\/` in it is opaque.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 51,
+            "end": 60,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "if (ready) /https?:\\/\\/example\\.test/.test(value); "
+      }
+    },
+    {
+      "id": "javascript-brace-goals",
+      "language": "javascript",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "const ratio = {} / 2; // remove\nif (ready) {} /[/*]/.test(value); // remove\n",
+      "note": "ECMA-262 lexical goal symbols: `{}` after `=` is an object literal and the following `/` is division, while `{}` after `if (...)` is a block and the following `/` starts a regular expression.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 22,
+            "end": 31,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 66,
+            "end": 75,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "const ratio = {} / 2; \nif (ready) {} /[/*]/.test(value); \n"
+      }
+    },
+    {
+      "id": "javascript-html-like-comments",
+      "language": "javascript",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "const x = 1; <!-- remove\n  --> remove\nconst text = '<!-- opaque';\n",
+      "note": "ECMA-262 Annex B.1.1 HTML-like comments: `<!--` is a single-line comment and `-->` is one at the start of a line, but `<!--` inside a string literal is opaque.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 13,
+            "end": 24,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 27,
+            "end": 37,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "const x = 1; \n  \nconst text = '<!-- opaque';\n"
+      }
+    },
+    {
+      "id": "javascript-unicode-line-terminators",
+      "language": "javascript",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_base64": "Ly8gcmVtb3Zl4oCoY29uc3QgdmFsdWUgPSAxOyAvKiBmaXJzdOKAqXNlY29uZCAqLwo=",
+      "note": "ECMA-262 11.3 line terminators: U+2028 and U+2029 end a single-line comment and count as line breaks inside a block comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 9,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 29,
+            "end": 49,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_base64": "4oCoY29uc3QgdmFsdWUgPSAxOyDigKkK"
+      }
+    },
+    {
+      "id": "javascript-unicode-line-in-string",
+      "language": "javascript",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_base64": "Y29uc3QgdGV4dCA9ICdmaXJzdOKAqHNlY29uZCc7IC8vIGtub3duCg==",
+      "note": "ECMA-262 11.3 line terminators: a U+2028 inside a single-quoted string ends that string here, so the source is reported invalid, no comment is found, and the bytes come back unchanged. ES2019's JSON superset made the character legal inside a string literal; adopting that is a specification change, and this is the case that records it.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 13,
+            "end": 19
+          },
+          {
+            "code": "unterminated-string",
+            "start": 28,
+            "end": 39
+          }
+        ],
+        "output_base64": "Y29uc3QgdGV4dCA9ICdmaXJzdOKAqHNlY29uZCc7IC8vIGtub3duCg=="
+      }
+    },
+    {
+      "id": "jsx-goal",
+      "language": "javascript",
+      "dialect": "jsx",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "const x=<div url=\"http://x\">// opaque {1 /* remove */}</div>; // remove",
+      "note": "JSX specification, child text: `//` and `/* */` in element children are text rather than comments, and a `{...}` expression container returns to the JavaScript goal.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 41,
+            "end": 53,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 62,
+            "end": 71,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "const x=<div url=\"http://x\">// opaque {1 }</div>; "
+      }
+    },
+    {
+      "id": "html-raw-text-close-boundary",
+      "language": "html",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "<script>const s = \"</scripture>\"; // remove\n</script>",
+      "note": "HTML Standard 13.2.5 script data end tag name state: only `</script` followed by a tag terminator leaves script data, so `</scripture>` inside the string does not, and the embedded JavaScript is scanned to the real close tag.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 34,
+            "end": 43,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "<script>const s = \"</scripture>\"; \n</script>"
+      }
+    },
+    {
+      "id": "invalid-html-embedded",
+      "language": "html",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "<script>const x = 1; // known\n",
+      "note": "HTML Standard 13.2.5: a `<script>` element left open at end of input is an error diagnostic; the embedded line comment is still located.",
+      "expect": {
+        "valid": false,
+        "comments": [
+          {
+            "start": 21,
+            "end": 29,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [
+          {
+            "code": "unterminated-embedded-language",
+            "start": 0,
+            "end": 30
+          }
+        ],
+        "output_utf8": "<script>const x = 1; // known\n"
+      }
+    },
+    {
+      "id": "forced-invalid-html-embedded",
+      "language": "html",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines",
+        "force_invalid": true
+      },
+      "source_utf8": "<script>const x = 1; // known\n",
+      "note": "The `invalid-html-embedded` source with `force_invalid`: the error diagnostic stands, and edits are produced anyway.",
+      "expect": {
+        "valid": false,
+        "comments": [
+          {
+            "start": 21,
+            "end": 29,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [
+          {
+            "code": "unterminated-embedded-language",
+            "start": 0,
+            "end": 30
+          }
+        ],
+        "output_utf8": "<script>const x = 1; \n"
+      }
+    },
+    {
+      "id": "typescript-directive",
+      "language": "typescript",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "/// <reference path=\"types.d.ts\" />\n// remove\n",
+      "note": "TypeScript triple-slash directives: `/// <reference ... />` is a directive `safe` keeps; the plain line comment is removed.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 35,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 36,
+            "end": 45,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "/// <reference path=\"types.d.ts\" />\n\n"
+      }
+    },
+    {
+      "id": "javascript-tree-shaking",
+      "language": "javascript",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "const x = /*#__PURE__*/ factory();\n// @ts-expect-error\ncall();\n// remove\n",
+      "note": "Bundler and type-checker annotations: `/*#__PURE__*/` and `// @ts-expect-error` change what tools do and are directives `safe` keeps.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 10,
+            "end": 23,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 35,
+            "end": 54,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 63,
+            "end": 72,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "const x = /*#__PURE__*/ factory();\n// @ts-expect-error\ncall();\n\n"
+      }
+    },
+    {
+      "id": "python-fstring",
+      "language": "python",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "#!/usr/bin/env python3\n# coding: utf-8\nvalue = f'''literal # opaque {(\n  1 # remove\n)}'''\n# remove\n",
+      "note": "PEP 701: a replacement field in a triple-quoted f-string may contain a comment, while the literal text around it is opaque. PEP 263 and the shebang line are protected.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 22,
+            "kind": "shebang",
+            "action": "keep"
+          },
+          {
+            "start": 23,
+            "end": 38,
+            "kind": "encoding",
+            "action": "keep"
+          },
+          {
+            "start": 75,
+            "end": 83,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 90,
+            "end": 98,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "#!/usr/bin/env python3\n# coding: utf-8\nvalue = f'''literal # opaque {(\n  1 \n)}'''\n\n"
+      }
+    },
+    {
+      "id": "python-inline-encoding-text",
+      "language": "python",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "value = 1  # coding: utf-8\n",
+      "note": "PEP 263: the encoding declaration is matched only at the start of a line, so a trailing `# coding: utf-8` is an ordinary line comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 11,
+            "end": 26,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "value = 1  \n"
+      }
+    },
+    {
+      "id": "python-template-string",
+      "language": "python",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "value = t'''literal # opaque {(\n  1 # remove\n)}'''\n# remove\n",
+      "note": "PEP 750 template strings: a `t'''...'''` literal lexes like an f-string, so its text is opaque and its replacement field is code.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 36,
+            "end": 44,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 51,
+            "end": 59,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "value = t'''literal # opaque {(\n  1 \n)}'''\n\n"
+      }
+    },
+    {
+      "id": "shell-heredoc",
+      "language": "shell",
+      "dialect": "bash53",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "cat <<'EOF'\n# opaque\nEOF\ncat <<< '# opaque'\n# remove\n",
+      "note": "POSIX Shell Command Language 2.7.4 here-document: a quoted delimiter makes the body literal, and a here-string body is literal too, so `#` inside them is not a comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 44,
+            "end": 52,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "cat <<'EOF'\n# opaque\nEOF\ncat <<< '# opaque'\n\n"
+      }
+    },
+    {
+      "id": "shell-quoted-heredoc-and-ansi",
+      "language": "shell",
+      "dialect": "bash53",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "cat <<E\"OF\"\n# opaque\nEOF\ncat <<\\DONE\n# opaque\nDONE\nvalue=$'it\\'s # opaque'\n# remove\n",
+      "note": "POSIX 2.7.4: a partly quoted delimiter (`<<E\"OF\"`, `<<\\DONE`) still ends at the unquoted word, and bash ANSI-C quoting `$'...'` takes `\\'` as an escape rather than a close.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 75,
+            "end": 83,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "cat <<E\"OF\"\n# opaque\nEOF\ncat <<\\DONE\n# opaque\nDONE\nvalue=$'it\\'s # opaque'\n\n"
+      }
+    },
+    {
+      "id": "shell-command-substitutions",
+      "language": "shell",
+      "dialect": "bash53",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "value=\"$(printf ok # nested\n)\"\nold=`printf ok # legacy\n`\ntext=\"# opaque\"\n# remove\n",
+      "note": "POSIX 2.6.3 command substitution: both `$(...)` and the backquoted form contain shell code, so a comment inside them is a comment, while `#` inside double quotes is text.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 19,
+            "end": 27,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 46,
+            "end": 54,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 73,
+            "end": 81,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "value=\"$(printf ok \n)\"\nold=`printf ok \n`\ntext=\"# opaque\"\n\n"
+      }
+    },
+    {
+      "id": "shell-logical-word-boundaries",
+      "language": "shell",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "value=word\\\n#suffix\njoined=$(printf x)#suffix\nprintf ok \\\n# remove\n$(printf x);# remove\n",
+      "note": "POSIX 2.3 token recognition: `#` starts a comment only at the start of a word, so a `#` joined to the previous word by a line continuation or by `$(...)` is not one.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 58,
+            "end": 66,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 79,
+            "end": 87,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "value=word\\\n#suffix\njoined=$(printf x)#suffix\nprintf ok \\\n\n$(printf x);\n"
+      }
+    },
+    {
+      "id": "dockerfile-directives",
+      "language": "shell",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "# syntax=docker/dockerfile:1\n# remove\n# hadolint ignore=DL3018\n# hadolint\tignore=DL3019\n# hadolintish note\nRUN apk add --no-cache musl-dev\n# shellcheck disable=SC2086\n# shellcheck\tdisable=SC2087\n# shellcheckish note\n",
+      "note": "Dockerfile parser directives and linter suppressions: `# syntax=`, `# hadolint ignore=`, and `# shellcheck disable=` are directives `safe` keeps, including their tab-separated spellings, while lookalike prose is an ordinary comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 28,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 29,
+            "end": 37,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 38,
+            "end": 62,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 63,
+            "end": 87,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 88,
+            "end": 106,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 139,
+            "end": 166,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 167,
+            "end": 194,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 195,
+            "end": 215,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "# syntax=docker/dockerfile:1\n\n# hadolint ignore=DL3018\n# hadolint\tignore=DL3019\n\nRUN apk add --no-cache musl-dev\n# shellcheck disable=SC2086\n# shellcheck\tdisable=SC2087\n\n"
+      }
+    },
+    {
+      "id": "shell-case-command-substitution",
+      "language": "shell",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "value=$(case x in\n  a) # remove\n    printf '%s' '# opaque' ;;\n  *) printf ok ;;\nesac\n)#suffix\n# remove\n",
+      "note": "POSIX 2.6.3 with 2.9.4.3 case: a comment inside a case item inside a command substitution is a comment, the quoted `#` is not, and the `#suffix` joined to the closing `)` is not.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 23,
+            "end": 31,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 94,
+            "end": 102,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "value=$(case x in\n  a) \n    printf '%s' '# opaque' ;;\n  *) printf ok ;;\nesac\n)#suffix\n\n"
+      }
+    },
+    {
+      "id": "sql-postgres",
+      "language": "sql",
+      "dialect": "postgresql",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "select $tag$-- opaque /* opaque */$tag$; /* outer /* nested */ end */ -- remove",
+      "note": "PostgreSQL 4.1.2.4 dollar-quoted string constants and 4.1.5 comments: a dollar-quoted body is opaque and block comments nest.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 41,
+            "end": 69,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 70,
+            "end": 79,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "select $tag$-- opaque /* opaque */$tag$;  "
+      }
+    },
+    {
+      "id": "sql-standard-backslash",
+      "language": "sql",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "select '\\'; -- remove\n",
+      "note": "SQL standard string literals: a backslash is an ordinary character, so `'\\'` is a complete literal and the `--` after it opens a comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 12,
+            "end": 21,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "select '\\'; \n"
+      }
+    },
+    {
+      "id": "sql-postgres-escape",
+      "language": "sql",
+      "dialect": "postgresql",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "select E'it\\'s -- opaque'; -- remove\n",
+      "note": "PostgreSQL 4.1.2.2 string constants with C-style escapes: in `E'...'` a backslash escapes the following quote, so the literal runs past `\\'`.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 27,
+            "end": 36,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "select E'it\\'s -- opaque'; \n"
+      }
+    },
+    {
+      "id": "sql-postgres-invalid-dollar-tag",
+      "language": "sql",
+      "dialect": "postgresql",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "select $1$; -- remove\n",
+      "note": "PostgreSQL 4.1.2.4: a dollar-quote tag follows identifier rules and may not start with a digit, so `$1$` is a positional parameter and not a quote.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 12,
+            "end": 21,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "select $1$; \n"
+      }
+    },
+    {
+      "id": "sql-postgres-long-dollar-tag",
+      "language": "sql",
+      "dialect": "postgresql",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "select $aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa$-- opaque$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa$; -- remove\n",
+      "note": "PostgreSQL 4.1.2.4: a dollar-quote tag has no practical length limit and must be matched exactly at the close.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 152,
+            "end": 161,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "select $aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa$-- opaque$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa$; \n"
+      }
+    },
+    {
+      "id": "sql-oracle",
+      "language": "sql",
+      "dialect": "oracle",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "select q'[-- opaque /* opaque */]' from dual; /*+ index(t) */ -- remove",
+      "note": "Oracle SQL quote-delimited literals `q'[...]'` and optimizer hints `/*+ ... */`: the literal is opaque, and the hint is a kind `safe` keeps.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 46,
+            "end": 61,
+            "kind": "optimizer-hint",
+            "action": "keep"
+          },
+          {
+            "start": 62,
+            "end": 71,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "select q'[-- opaque /* opaque */]' from dual; /*+ index(t) */ "
+      }
+    },
+    {
+      "id": "sql-mysql",
+      "language": "sql",
+      "dialect": "mysql",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "/*!40101 SET NAMES utf8 */ # remove\n",
+      "note": "MySQL executable comments `/*! ... */` are executed by the server and are a kind `safe` keeps; `#` starts an ordinary MySQL comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 26,
+            "kind": "version-comment",
+            "action": "keep"
+          },
+          {
+            "start": 27,
+            "end": 35,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "/*!40101 SET NAMES utf8 */ \n"
+      }
+    },
+    {
+      "id": "sql-mysql-double-escape",
+      "language": "sql",
+      "dialect": "mysql",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "select \"it\\\"s -- opaque\"; -- remove\n",
+      "note": "MySQL string literals: a double-quoted string is a string, and `\\\"` escapes the quote rather than closing it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 35,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "select \"it\\\"s -- opaque\"; \n"
+      }
+    },
+    {
+      "id": "sql-mysql-dash-boundary",
+      "language": "sql",
+      "dialect": "mysql",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "select 1--2; -- remove\n",
+      "note": "MySQL comment syntax requires `--` to be followed by whitespace, so `1--2` is arithmetic and only the spaced `-- ` opens a comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 13,
+            "end": 22,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "select 1--2; \n"
+      }
+    },
+    {
+      "id": "sql-tsql-nested",
+      "language": "sql",
+      "dialect": "t-sql",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "/* outer /* inner */ end */ select 1;",
+      "note": "Transact-SQL slash-star comments nest, so `/* outer /* inner */ end */` is one comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 27,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": " select 1;"
+      }
+    },
+    {
+      "id": "c-plus-comment",
+      "language": "c",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "int x; /*+ ordinary C comment */",
+      "note": "ISO C17 6.4.9 comments: `/*+` has no special meaning in C, so an optimizer-hint spelling is an ordinary block comment here and is removed.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 7,
+            "end": 32,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "int x; "
+      }
+    },
+    {
+      "id": "kotlin-string-templates",
+      "language": "kotlin",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "val regular = \"opaque // ${1 /* remove */}\"\nval raw = \"\"\"opaque ${run { // remove\n1 }} /* opaque */\"\"\"\n// remove\n",
+      "note": "Kotlin specification, string templates: a `${...}` template expression is code in both escaped and raw strings, while the surrounding literal text is opaque.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 29,
+            "end": 41,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 72,
+            "end": 81,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 103,
+            "end": 112,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "val regular = \"opaque // ${1 }\"\nval raw = \"\"\"opaque ${run { \n1 }} /* opaque */\"\"\"\n\n"
+      }
+    },
+    {
+      "id": "legal-policy",
+      "language": "javascript",
+      "operation": "transform",
+      "options": {
+        "policy": "legal",
+        "layout": "lines"
+      },
+      "source_utf8": "// SPDX-License-Identifier: MIT\n// remove\n",
+      "note": "Policy `legal` keeps an SPDX license identifier and removes the ordinary comment beside it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 31,
+            "kind": "license",
+            "action": "keep"
+          },
+          {
+            "start": 32,
+            "end": 41,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "// SPDX-License-Identifier: MIT\n\n"
+      }
+    },
+    {
+      "id": "force-preamble",
+      "language": "javascript",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines",
+        "force_protected": true
+      },
+      "source_utf8": "#!/usr/bin/env node\n// remove\n",
+      "note": "`force_protected` with policy `all` removes even the shebang, which every other policy protects.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 19,
+            "kind": "shebang",
+            "action": "remove"
+          },
+          {
+            "start": 20,
+            "end": 29,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\n\n"
+      }
+    },
+    {
+      "id": "kind-and-regex-overrides",
+      "language": "c",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines",
+        "keep_regex": [
+          "(?i)keep"
+        ],
+        "remove_regex": [
+          "(?i)remove"
+        ],
+        "keep_kinds": [
+          "line"
+        ]
+      },
+      "source_utf8": "/* KEEP */ /* REMOVE */ // ordinary\n",
+      "note": "Option precedence: `keep_regex` and `remove_regex` are tested against the whole comment token before `keep_kinds`, and all three are tested before the policy.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 10,
+            "kind": "block",
+            "action": "keep"
+          },
+          {
+            "start": 11,
+            "end": 23,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 24,
+            "end": 35,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "/* KEEP */  // ordinary\n"
+      }
+    },
+    {
+      "id": "column-layout",
+      "language": "c",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "columns"
+      },
+      "source_utf8": "x\t/*中😀*/y\r\n",
+      "note": "Layout `columns` replaces a removed comment with spaces to the same display width; a tab, a wide CJK character, an emoji, and a CRLF ending must all survive unchanged.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 2,
+            "end": 13,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "x\t        y\r\n"
+      }
+    },
+    {
+      "id": "column-unicode-width",
+      "language": "c",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "columns"
+      },
+      "source_base64": "eC8q4oCN1r/ijJrvuI/wn4ev8J+HteGGjeGHru2euPOggpPhn5jitb/YgNiFKi95Cg==",
+      "note": "Layout `columns` over zero-width, combining, variation-selector, regional-indicator, Hangul-jamo, tag and format characters: the padding follows the display width both implementations compute.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 1,
+            "end": 47,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "x             y\n"
+      }
+    },
+    {
+      "id": "column-unicode-width-scalar-sample",
+      "language": "c",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "columns"
+      },
+      "source_base64": "eC8qwoDDocWCxqPIhMmly4bMp86Iz6nRitKr1IzVrdeO2K/akNux3ZLes+CglOChteCjluCkt+CmmOCnueCpmuCqu+CsnOCtveCvnuCwv+CyoOC0geC1ouC3g+C4pOC6heC7puC9h+C+qOGAieGBquGDi+GErOGGjeGHruGJj+GKsOGMkeGNsuGPk+GQtOGSleGTtuGVl+GWuOGYmeGZuuGbm+GcvOGeneGfvuGhn+GjgOGkoeGmguGno+GphOGqpeGshuGtp+GviOGwqeGyiuGzq+G1jOG2reG4juG5r+G7kOG8seG+kuG/s+KBlOKCteKEluKFt+KHmOKIueKKmuKLu+KNnOKOveKQnuKRv+KToOKVgeKWouKYg+KZpOKbheKcpuKeh+KfqOKhieKiquKki+KlrOKnjeKoruKqj+KrsOKtkeKusuKwk+KxtOKzleK0tuK2l+K3uOK5meK6uuK8m+K9vOK/neOAvuOCn+OEgOOFoeOHguOIo+OKhOOLpeONhuOOp+OQiOORqeOTiuOUq+OWjOOXreOZjuOar+OckOOdseOfkuOgs+OilOOjteOlluOmt+OomOOpueOrmuOsu+OunOOvveOxnuOyv+O0oOO2geO3ouO5g+O6pOO8heO9puO/h+SAqOSCieSDquSFi+SGrOSIjeSJruSLj+SMsOSOkeSPsuSRk+SStOSUleSVtuSXl+SYuOSameSbuuSdm+SevOSgneShvuSjn+SlgOSmoeSoguSpo+SrhOSspeSuhuSvp+SxiOSyqeS0iuS1q+S3jOS4reS6juS7r+S9kOS+seWAkuWBs+WDlOWEteWGluWHt+WJmOWKueWMmuWNu+WPnOWQveWSnuWTv+WVoOWXgeWYouWag+WbpOWdheWepuWgh+WhqOWjieWkquWmi+WnrOWpjeWqruWsj+WtsOWvkeWwsuWyk+WztOW1leW2tuW4l+W5uOW7meW8uuW+m+W/vOaBneaCvuaEn+aGgOaHoeaJguaKo+aMhOaNpeaPhuaQp+aSiOaTqeaViuaWq+aYjOaZreabjuacr+aekOafseahkuais+aklOalteanluaot+aqmOarueatmuauu+awnOaxveaznua0v+a2oOa4gea5oua7g+a8pOa+hea/pueBh+eCqOeEieeFqueHi+eIrOeKjeeLrueNj+eOsOeQkeeRsueTk+eUtOeWleeXtueZl+eauOecmeeduuefm+egvOeineejvueln+engOeooeeqguero+ethOeupeewhuexp+eziOe0qee2iue3q+e5jOe6ree8jue9r+e/kOiAseiCkuiDs+iFlOiGteiIluiJt+iLmOiMueiOmuiPu+iRnOiSveiUnuiVv+iXoOiZgeiaouicg+idpOifheigpuiih+ijqOilieimquioi+iprOirjeisruiuj+ivsOixkeiysui0k+i1tOi3lei4tui6l+i7uOi9mei+uumAm+mBvOmDnemEvumGn+mIgOmJoemLgumMo+mOhOmPpemRhumSp+mUiOmVqemXiumYq+majOmbremdjumer+mgkOmhsemjkumks+mmlOmntemplumqt+msmOmtuemvmumwu+mynOmzvem1num2v+m4oOm6gem7oum9g+m+pOqAheqBpuqDh+qEqOqGieqHquqJi+qKrOqMjeqNruqPj+qQsOqSkeqTsuqVk+qWtOqYleqZtuqbl+qcuOqemeqfuuqhm+qivOqkneqlvuqnn+qpgOqqoeqsguqto+qvhOqwpeqyhuqzp+q1iOq2qeq4iuq5q+q7jOq8req+juq/r+uBkOuCseuEkuuFs+uHlOuIteuKluuLt+uNmOuOueuQmuuRu+uTnOuUveuWnuuXv+uZoOubgeucouueg+ufpOuhheuipuukh+ulqOunieuoquuqi+urrOutjeuuruuwj+uxsOuzkeu0suu2k+u3tOu5leu6tuu8l+u9uOu/meyAuuyCm+yDvOyFneyGvuyIn+yKgOyLoeyNguyOo+yQhOyRpeyThuyUp+yWiOyXqeyZiuyaq+ycjOydreyfjuygr+yikOyjseylkuyms+yolOypteyrluyst+yumOyvueyxmuyyu+y0nOy1vey3nuy4v+y6oOy8gey9ouy/g+2ApO2Che2Dpu2Fh+2GqO2Iie2Jqu2Li+2MrO2Oje2Pru2Rj+2SsO2Uke2Vsu2Xk+2YtO2ale2btu2dl+2euO6Aju6Br+6DkO6Ese6Gku6Hs+6JlO6Kte6Mlu6Nt+6PmO6Que6Smu6Tu+6VnO6Wve6Ynu6Zv+6boO6dge6eou6gg+6hpO6jhe6kpu6mh+6nqO6pie6qqu6si+6trO6vje6wru6yj+6zsO61ke62su64k+65tO67le68tu6+l+6/uO+Bme+Cuu+Em++FvO+Hne+Ivu+Kn++MgO+Noe+Pgu+Qo++ShO+Tpe+Vhu+Wp++YiO+Zqe+biu+cq++ejO+fre+hju+ir++kkO+lse+nku+os++qlO+rte+tlu+ut++wmO+xue+zmu+0u++2nO+3ve+5nu+6v++8oO++ge+/ovCQgYPwkIKk8JCEhfCQhabwkIeH8JCIqPCQionwkIuq8JCNi/CQjqzwkJCN8JCRrvCQk4/wkJSw8JCWkfCQl7LwkJmT8JCatPCQnJXwkJ228JCfl/CQoLjwkKKZ8JCjuvCQpZvwkKa88JConfCQqb7wkKuf8JCtgPCQrqHwkLCC8JCxo/CQs4TwkLSl8JC2hvCQt6fwkLmI8JC6qfCQvIrwkL2r8JC/jPCRgK3wkYKO8JGDr/CRhZDwkYax8JGIkvCRibPwkYuU8JGMtfCRjpbwkY+38JGRmPCRkrnwkZSa8JGVu/CRl5zwkZi98JGanvCRm7/wkZ2g8JGfgfCRoKLwkaKD8JGjpPCRpYXwkaam8JGoh/CRqajwkauJ8JGsqvCRrovwka+s8JGxjfCRsq7wkbSP8JG1sPCRt5Hwkbiy8JG6k/CRu7Twkb2V8JG+tvCSgJfwkoG48JKDmfCShLrwkoab8JKHvPCSiZ3wkoq+8JKMn/CSjoDwko+h8JKRgvCSkqPwkpSE8JKVpfCSl4bwkpin8JKaiPCSm6nwkp2K8JKeq/CSoIzwkqGt8JKjjvCSpK/wkqaQ8JKnsfCSqZLwkqqz8JKslPCSrbXwkq+W8JKwt/CSspjwkrO58JK1mvCStrvwkric8JK5vfCSu57wkry/8JK+oPCTgIHwk4Gi8JODg/CThKTwk4aF8JOHpvCTiYfwk4qo8JOMifCTjarwk4+L8JOQrPCTko3wk5Ou8JOVj/CTlrDwk5iR8JOZsvCTm5Pwk5y08JOelfCTn7bwk6GX8JOiuPCTpJnwk6W68JOnm/CTqLzwk6qd8JOrvvCTrZ/wk6+A8JOwofCTsoLwk7Oj8JO1hPCTtqXwk7iG8JO5p/CTu4jwk7yp8JO+ivCTv6vwlIGM8JSCrfCUhI7wlIWv8JSHkPCUiLHwlIqS8JSLs/CUjZTwlI618JSQlvCUkbfwlJOY8JSUufCUlprwlJe78JSZnPCUmr3wlJye8JSdv/CUn6DwlKGB8JSiovCUpIPwlKWk8JSnhfCUqKbwlKqH8JSrqPCUrYnwlK6q8JSwi/CUsazwlLON8JS0rvCUto/wlLew8JS5kfCUurLwlLyT8JS9tPCUv5XwlYC28JWCl/CVg7jwlYWZ8JWGuvCViJvwlYm88JWLnfCVjL7wlY6f8JWQgPCVkaHwlZOC8JWUo/CVloTwlZel8JWZhvCVmqfwlZyI8JWdqfCVn4rwlaCr8JWijPCVo63wlaWO8JWmr/CVqJDwlamx8JWrkvCVrLPwla6U8JWvtfCVsZbwlbK38JW0mPCVtbnwlbea8JW4u/CVupzwlbu98JW9nvCVvr/wloCg8JaCgfCWg6LwloWD8JaGpPCWiIXwlomm8JaLh/CWjKjwlo6J8JaPqvCWkYvwlpKs8JaUjfCWla7wlpeP8JaYsPCWmpHwlpuy8Jadk/CWnrTwlqCV8JahtvCWo5fwlqS48JammfCWp7rwlqmb8JaqvPCWrJ3wlq2+8Javn/CWsYDwlrKh8Ja0gvCWtaPwlreE8Ja4pfCWuobwlrun8Ja9iPCWvqnwl4CK8JeBq/CXg4zwl4St8JeGjvCXh6/wl4mQ8JeKsfCXjJLwl42z8JePlPCXkLXwl5KW8JeTt/CXlZjwl5a58JeYmvCXmbvwl5uc8JecvfCXnp7wl5+/8JehoPCXo4Hwl6Si8Jemg/CXp6Twl6mF8JeqpvCXrIfwl62o8JevifCXsKrwl7KL8JezrPCXtY3wl7au8Je4j/CXubDwl7uR8Je8svCXvpPwl7+08JiBlfCYgrbwmISX8JiFuPCYh5nwmIi68JiKm/CYi7zwmI2d8JiOvvCYkJ/wmJKA8JiTofCYlYLwmJaj8JiYhPCYmaXwmJuG8Jicp/CYnojwmJ+p8JihivCYoqvwmKSM8JilrfCYp47wmKiv8JiqkPCYq7HwmK2S8Jius/CYsJTwmLG18JizlvCYtLfwmLaY8Ji3ufCYuZrwmLq78Ji8nPCYvb3wmL+e8JmAv/CZgqDwmYSB8JmFovCZh4PwmYik8JmKhfCZi6bwmY2H8JmOqPCZkInwmZGq8JmTi/CZlKzwmZaN8JmXrvCZmY/wmZqw8JmckfCZnbLwmZ+T8JmgtPCZopXwmaO28Jmll/CZprjwmaiZ8JmpuvCZq5vwmay88JmunfCZr77wmbGf8JmzgPCZtKHwmbaC8Jm3o/CZuYTwmbql8Jm8hvCZvafwmb+I8JqAqfCagorwmoOr8JqFjPCahq3wmoiO8JqJr/Cai5Dwmoyx8JqOkvCaj7PwmpGU8JqStfCalJbwmpW38JqXmPCamLnwmpqa8Jqbu/CanZzwmp698JqgnvCaob/wmqOg8JqlgfCapqLwmqiD8JqppPCaq4Xwmqym8Jquh/Car6jwmrGJ8JqyqvCatIvwmrWs8Jq3jfCauK7wmrqP8Jq7sPCavZHwmr6y8JuAk/CbgbTwm4OV8JuEtvCbhpfwm4e48JuJmfCbirrwm4yb8JuNvPCbj53wm5C+8JuSn/CblIDwm5Wh8JuXgvCbmKPwm5qE8JubpfCbnYbwm56n8JugiPCboanwm6OK8Jukq/Cbpozwm6et8JupjvCbqq/wm6yQ8JutsfCbr5Lwm7Cz8JuylPCbs7Xwm7WW8Ju2t/CbuJjwm7m58Ju7mvCbvLvwm76c8Ju/vfCcgZ7wnIK/8JyEoPCchoHwnIei8JyJg/CciqTwnIyF8JyNpvCcj4fwnJCo8JySifCck6rwnJWL8JyWrPCcmI3wnJmu8Jybj/CcnLDwnJ6R8JyfsvCcoZPwnKK08JyklfCcpbbwnKeX8JyouPCcqpnwnKu68Jytm/CcrrzwnLCd8JyxvvCcs5/wnLWA8Jy2ofCcuILwnLmj8Jy7hPCcvKXwnL6G8Jy/p/CdgYjwnYKp8J2EivCdhavwnYeM8J2IrfCdio7wnYuv8J2NkPCdjrHwnZCS8J2Rs/Cdk5TwnZS18J2WlvCdl7fwnZmY8J2aufCdnJrwnZ278J2fnPCdoL3wnaKe8J2jv/CdpaDwnaeB8J2oovCdqoPwnauk8J2thfCdrqbwnbCH8J2xqPCds4nwnbSq8J22i/Cdt6zwnbmN8J26rvCdvI/wnb2w8J2/kfCegLLwnoKT8J6DtPCehZXwnoa28J6Il/CeibjwnouZ8J6MuvCejpvwno+88J6RnfCekr7wnpSf8J6WgPCel6HwnpmC8J6ao/CenITwnp2l8J6fhvCeoKfwnqKI8J6jqfCepYrwnqar8J6ojPCeqa3wnquO8J6sr/CerpDwnq+x8J6xkvCesrPwnrSU8J61tfCet5bwnri38J66mPCeu7nwnr2a8J6+u/CfgJzwn4G98J+DnvCfhL/wn4ag8J+IgfCfiaLwn4uD8J+MpPCfjoXwn4+m8J+Rh/Cfkqjwn5SJ8J+VqvCfl4vwn5is8J+ajfCfm67wn52P8J+esPCfoJHwn6Gy8J+jk/CfpLTwn6aV8J+ntvCfqZfwn6q48J+smfCfrbrwn6+b8J+wvPCfsp3wn7O+8J+1n/Cft4Dwn7ih8J+6gvCfu6Pwn72E8J++pfCggIbwoIGn8KCDiPCghKnwoIaK8KCHq/CgiYzwoIqt8KCMjvCgja/woI+Q8KCQsfCgkpLwoJOz8KCVlPCglrXwoJiW8KCZt/Cgm5jwoJy58KCemvCgn7vwoKGc8KCivfCgpJ7woKW/8KCnoPCgqYHwoKqi8KCsg/CgraTwoK+F8KCwpvCgsofwoLOo8KC1ifCgtqrwoLiL8KC5rPCgu43woLyu8KC+j/Cgv7DwoYGR8KGCsvChhJPwoYW08KGHlfChiLbwoYqX8KGLuPChjZnwoY668KGQm/ChkbzwoZOd8KGUvvChlp/woZiA8KGZofChm4LwoZyj8KGehPChn6XwoaGG8KGip/ChpIjwoaWp8KGnivChqKvwoaqM8KGrrfChrY7woa6v8KGwkPChsbHwobOS8KG0s/ChtpTwobe18KG5lvChurfwobyY8KG9ufChv5rwooC78KKCnPCig73wooWe8KKGv/CiiKDwooqB8KKLovCijYPwoo6k8KKQhfCikabwopOH8KKUqPCilonwopeq8KKZi/CimqzwopyN8KKdrvCin4/woqCw8KKikfCio7LwoqWT8KKmtPCiqJXwoqm28KKrl/CirLjwoq6Z8KKvuvCisZvworK88KK0nfCitb7woref8KK5gPCiuqHworyC8KK9o/Civ4Two4Cl8KOChvCjg6fwo4WI8KOGqfCjiIrwo4mr8KOLjPCjjK3wo46O8KOPr/CjkZDwo5Kx8KOUkvCjlbPwo5eU8KOYtfCjmpbwo5u38KOdmPCjnrnwo6Ca8KOhu/Cjo5zwo6S98KOmnvCjp7/wo6mg8KOrgfCjrKLwo66D8KOvpPCjsYXwo7Km8KO0h/Cjtajwo7eJ8KO4qvCjuovwo7us8KO9jfCjvq7wpICP8KSBsPCkg5HwpISy8KSGk/Ckh7TwpImV8KSKtvCkjJfwpI248KSPmfCkkLrwpJKb8KSTvPCklZ3wpJa+8KSYn/CkmoDwpJuh8KSdgvCknqPwpKCE8KShpfCko4bwpKSn8KSmiPCkp6nwpKmK8KSqq/CkrIzwpK2t8KSvjvCksK/wpLKQ8KSzsfCktZLwpLaz8KS4lPCkubXwpLuW8KS8t/CkvpjwpL+58KWBmvClgrvwpYSc8KWFvfClh57wpYi/8KWKoPCljIHwpY2i8KWPg/ClkKTwpZKF8KWTpvCllYfwpZao8KWYifClmarwpZuL8KWcrPClno3wpZ+u8KWhj/ClorDwpaSR8KWlsvClp5Pwpai08KWqlfClq7bwpa2X8KWuuPClsJnwpbG68KWzm/CltLzwpbad8KW3vvCluZ/wpbuA8KW8ofClvoLwpb+j8KaBhPCmgqXwpoSG8KaFp/Cmh4jwpoip8KaKivCmi6vwpo2M8KaOrfCmkI7wppGv8KaTkPCmlLHwppaS8KaXs/CmmZTwppq18KaclvCmnbfwpp+Y8KagufCmoprwpqO78KalnPCmpr3wpqie8Kapv/Cmq6Dwpq2B8KauovCmsIPwprGk8KazhfCmtKbwpraH8Ka3qPCmuYnwprqq8Ka8i/Cmvazwpr+N8KeArvCngo/wp4Ow8KeFkfCnhrLwp4iT8KeJtPCni5Xwp4y28KeOl/Cnj7jwp5GZ8KeSuvCnlJvwp5W88KeXnfCnmL7wp5qf8KecgPCnnaHwp5+C8Kego/CnooTwp6Ol8KelhvCnpqfwp6iI8KepqfCnq4rwp6yr8KeujPCnr63wp7GO8Keyr/CntJDwp7Wx8Ke3kvCnuLPwp7qU8Ke7tfCnvZbwp7638KiAmPCogbnwqIOa8KiEu/CohpzwqIe98KiJnvCoir/wqIyg8KiOgfCoj6LwqJGD8KiSpPColIXwqJWm8KiXh/ComKjwqJqJ8KibqvConYvwqJ6s8KigjfCooa7wqKOP8KiksPCoppHwqKey8Kipk/CoqrTwqKyV8KittvCor5fwqLC48KiymfCos7rwqLWb8Ki2vPCouJ3wqLm+8Ki7n/CovYDwqL6h8KmAgvCpgaPwqYOE8KmEpfCphobwqYen8KmJiPCpiqnwqYyK8KmNq/Cpj4zwqZCt8KmSjvCpk6/wqZWQ8KmWsfCpmJLwqZmz8KmblPCpnLXwqZ6W8Kmft/CpoZjwqaK58KmkmvCppbvwqaec8KmovfCpqp7wqau/8KmtoPCpr4HwqbCi8Kmyg/Cps6TwqbWF8Km2pvCpuIfwqbmo8Km7ifCpvKrwqb6L8Km/rPCqgY3wqoKu8KqEj/CqhbDwqoeR8KqIsvCqipPwqou08KqNlfCqjrbwqpCX8KqRuPCqk5nwqpS68KqWm/Cql7zwqpmd8KqavvCqnJ/wqp6A8KqfofCqoYLwqqKj8KqkhPCqpaXwqqeG8Kqop/Cqqojwqqup8KqtivCqrqvwqrCM8KqxrfCqs47wqrSv8Kq2kPCqt7HwqrmS8Kq6s/CqvJTwqr218Kq/lvCrgLfwq4KY8KuDufCrhZrwq4a78KuInPCrib3wq4ue8KuMv/CrjqDwq5CB8KuRovCrk4Pwq5Sk8KuWhfCrl6bwq5mH8KuaqPCrnInwq52q8Kufi/CroKzwq6KN8KujrvCrpY/wq6aw8KuokfCrqbLwq6uT8KustPCrrpXwq6+28Kuxl/Crsrjwq7SZ8Ku1uvCrt5vwq7i88Ku6nfCru77wq72f8Ku/gPCsgKHwrIKC8KyDo/CshYTwrIal8KyIhvCsiafwrIuI8KyMqfCsjorwrI+r8KyRjPCskq3wrJSO8KyVr/Csl5DwrJix8KyakvCsm7PwrJ2U8KyetfCsoJbwrKG38KyjmPCspLnwrKaa8Kynu/CsqZzwrKq98KysnvCsrb/wrK+g8KyxgfCssqLwrLSD8Ky1pPCst4XwrLim8Ky6h/Csu6jwrL2J8Ky+qvCtgIvwrYGs8K2DjfCthK7wrYaP8K2HsPCtiZHwrYqy8K2Mk/CtjbTwrY+V8K2QtvCtkpfwrZO48K2VmfCtlrrwrZib8K2ZvPCtm53wrZy+8K2en/CtoIDwraGh8K2jgvCtpKPwraaE8K2npfCtqYbwraqn8K2siPCtranwra+K8K2wq/CtsozwrbOt8K21jvCttq/wrbiQ8K25sfCtu5Lwrbyz8K2+lPCtv7XwroGW8K6Ct/CuhJjwroW58K6HmvCuiLvwroqc8K6LvfCujZ7wro6/8K6QoPCukoHwrpOi8K6Vg/CulqTwrpiF8K6ZpvCum4fwrpyo8K6eifCun6rwrqGL8K6irPCupI3wrqWu8K6nj/CuqLDwrqqR8K6rsvCurZPwrq608K6wlfCusbbwrrOX8K60uPCutpnwrre68K65m/Cuurzwrryd8K69vvCuv5/wr4GA8K+CofCvhILwr4Wj8K+HhPCviKXwr4qG8K+Lp/CvjYjwr46p8K+QivCvkavwr5OM8K+UrfCvlo7wr5ev8K+ZkPCvmrHwr5yS8K+ds/Cvn5Twr6C18K+ilvCvo7fwr6WY8K+mufCvqJrwr6m78K+rnPCvrL3wr66e8K+vv/CvsaDwr7OB8K+0ovCvtoPwr7ek8K+5hfCvuqbwr7yH8K+9qPCvv4nwsICq8LCCi/Cwg6zwsIWN8LCGrvCwiI/wsImw8LCLkfCwjLLwsI6T8LCPtPCwkZXwsJK28LCUl/CwlbjwsJeZ8LCYuvCwmpvwsJu88LCdnfCwnr7wsKCf8LCigPCwo6HwsKWC8LCmo/CwqITwsKml8LCrhvCwrKfwsK6I8LCvqfCwsYrwsLKr8LC0jPCwta3wsLeO8LC4r/CwupDwsLux8LC9kvCwvrPwsYCU8LGBtfCxg5bwsYS38LGGmPCxh7nwsYma8LGKu/CxjJzwsY298LGPnvCxkL/wsZKg8LGUgfCxlaLwsZeD8LGYpPCxmoXwsZum8LGdh/CxnqjwsaCJ8LGhqvCxo4vwsaSs8LGmjfCxp67wsamP8LGqsPCxrJHwsa2y8LGvk/CxsLTwsbKV8LGztvCxtZfwsba48LG4mfCxubrwsbub8LG8vPCxvp3wsb++8LKBn/Cyg4DwsoSh8LKGgvCyh6PwsomE8LKKpfCyjIbwso2n8LKPiPCykKnwspKK8LKTq/CylYzwspat8LKYjvCyma/wspuQ8LKcsfCynpLwsp+z8LKhlPCyorXwsqSW8LKlt/Cyp5jwsqi58LKqmvCyq7vwsq2c8LKuvfCysJ7wsrG/8LKzoPCytYHwsrai8LK4g/CyuaTwsruF8LK8pvCyvofwsr+o8LOBifCzgqrws4SL8LOFrPCzh43ws4iu8LOKj/Czi7Dws42R8LOOsvCzkJPws5G08LOTlfCzlLbws5aX8LOXuPCzmZnws5q68LOcm/Cznbzws5+d8LOgvvCzop/ws6SA8LOlofCzp4Lws6ij8LOqhPCzq6Xws62G8LOup/CzsIjws7Gp8LOzivCztKvws7aM8LO3rfCzuY7ws7qv8LO8kPCzvbHws7+S8LSAs/C0gpTwtIO18LSFlvC0hrfwtIiY8LSJufC0i5rwtIy78LSOnPC0j73wtJGe8LSSv/C0lKDwtJaB8LSXovC0mYPwtJqk8LSchfC0nabwtJ+H8LSgqPC0oonwtKOq8LSli/C0pqzwtKiN8LSprvC0q4/wtKyw8LSukfC0r7LwtLGT8LSytPC0tJXwtLW28LS3l/C0uLjwtLqZ8LS7uvC0vZvwtL688LWAnfC1gb7wtYOf8LWFgPC1hqHwtYiC8LWJo/C1i4TwtYyl8LWOhvC1j6fwtZGI8LWSqfC1lIrwtZWr8LWXjPC1mK3wtZqO8LWbr/C1nZDwtZ6x8LWgkvC1obPwtaOU8LWktfC1ppbwtae38LWpmPC1qrnwtaya8LWtu/C1r5zwtbC98LWynvC1s7/wtbWg8LW3gfC1uKLwtbqD8LW7pPC1vYXwtb6m8LaAh/C2gajwtoOJ8LaEqvC2hovwtoes8LaJjfC2iq7wtoyP8LaNsPC2j5HwtpCy8LaSk/C2k7TwtpWV8LaWtvC2mJfwtpm48LabmfC2nLrwtp6b8LafvPC2oZ3wtqK+8Lakn/C2poDwtqeh8LapgvC2qqPwtqyE8LatpfC2r4bwtrCn8LayiPC2s6nwtrWK8La2q/C2uIzwtrmt8La7jvC2vK/wtr6Q8La/sfC3gZLwt4Kz8LeElPC3hbXwt4eW8LeIt/C3ipjwt4u58LeNmvC3jrvwt5Cc8LeRvfC3k57wt5S/8LeWoPC3mIHwt5mi8Lebg/C3nKTwt56F8LefpvC3oYfwt6Ko8LekifC3parwt6eL8LeorPC3qo3wt6uu8Letj/C3rrDwt7CR8LexsvC3s5Pwt7S08Le2lfC3t7bwt7mX8Le6uPC3vJnwt7268Le/m/C4gLzwuIKd8LiDvvC4hZ/wuIeA8LiIofC4ioLwuIuj8LiNhPC4jqXwuJCG8LiRp/C4k4jwuJSp8LiWivC4l6vwuJmM8LiarfC4nI7wuJ2v8LifkPC4oLHwuKKS8Lijs/C4pZTwuKa18LiolvC4qbfwuKuY8LisufC4rprwuK+78LixnPC4sr3wuLSe8Li1v/C4t6DwuLmB8Li6ovC4vIPwuL2k8Li/hfC5gKbwuYKH8LmDqPC5hYnwuYaq8LmIi/C5iazwuYuN8LmMrvC5jo/wuY+w8LmRkfC5krLwuZST8LmVtPC5l5XwuZi28Lmal/C5m7jwuZ2Z8LmeuvC5oJvwuaG88LmjnfC5pL7wuaaf8LmogPC5qaHwuauC8Lmso/C5roTwua+l8LmxhvC5sqfwubSI8Lm1qfC5t4rwubir8Lm6jPC5u63wub2O8Lm+r/C6gJDwuoGx8LqDkvC6hLPwuoaU8LqHtfC6iZbwuoq38LqMmPC6jbnwuo+a8LqQu/C6kpzwupO98LqVnvC6lr/wupig8LqagfC6m6Lwup2D8LqepPC6oIXwuqGm8Lqjh/C6pKjwuqaJ8LqnqvC6qYvwuqqs8LqsjfC6ra7wuq+P8LqwsPC6spHwurOy8Lq1k/C6trTwuriV8Lq5tvC6u5fwury48Lq+mfC6v7rwu4Gb8LuCvPC7hJ3wu4W+8LuHn/C7iYDwu4qh8LuMgvC7jaPwu4+E8LuQpfC7kobwu5On8LuViPC7lqnwu5iK8LuZq/C7m4zwu5yt8LuejvC7n6/wu6GQ8LuisfC7pJLwu6Wz8LunlPC7qLXwu6qW8Lurt/C7rZjwu6658LuwmvC7sbvwu7Oc8Lu0vfC7tp7wu7e/8Lu5oPC7u4Hwu7yi8Lu+g/C7v6TwvIGF8LyCpvC8hIfwvIWo8LyHifC8iKrwvIqL8LyLrPC8jY3wvI6u8LyQj/C8kbDwvJOR8LyUsvC8lpPwvJe08LyZlfC8mrbwvJyX8LyduPC8n5nwvKC68Lyim/C8o7zwvKWd8LymvvC8qJ/wvKqA8LyrofC8rYLwvK6j8LywhPC8saXwvLOG8Ly0p/C8tojwvLep8Ly5ivC8uqvwvLyM8Ly9rfC8v47wvYCv8L2CkPC9g7HwvYWS8L2Gs/C9iJTwvYm18L2LlvC9jLfwvY6Y8L2PufC9kZrwvZK78L2UnPC9lb3wvZee8L2Yv/C9mqDwvZyB8L2dovC9n4PwvaCk8L2ihfC9o6bwvaWH8L2mqPC9qInwvamq8L2ri/C9rKzwva6N8L2vrvC9sY/wvbKw8L20kfC9tbLwvbeT8L24tPC9upXwvbu28L29l/C9vrjwvoCZ8L6BuvC+g5vwvoS88L6GnfC+h77wvomf8L6LgPC+jKHwvo6C8L6Po/C+kYTwvpKl8L6UhvC+lafwvpeI8L6YqfC+morwvpur8L6djPC+nq3wvqCO8L6hr/C+o5DwvqSx8L6mkvC+p7PwvqmU8L6qtfC+rJbwvq238L6vmPC+sLnwvrKa8L6zu/C+tZzwvra98L64nvC+ub/wvrug8L69gfC+vqLwv4CD8L+BpPC/g4Xwv4Sm8L+Gh/C/h6jwv4mJ8L+KqvC/jIvwv42s8L+PjfC/kK7wv5KP8L+TsPC/lZHwv5ay8L+Yk/C/mbTwv5uV8L+ctvC/npfwv5+48L+hmfC/orrwv6Sb8L+lvPC/p53wv6i+8L+qn/C/rIDwv62h8L+vgvC/sKPwv7KE8L+zpfC/tYbwv7an8L+4iPC/uanwv7uK8L+8q/C/vozwv7+t8YCBjvGAgq/xgISQ8YCFsfGAh5LxgIiz8YCKlPGAi7XxgI2W8YCOt/GAkJjxgJG58YCTmvGAlLvxgJac8YCXvfGAmZ7xgJq/8YCcoPGAnoHxgJ+i8YChg/GAoqTxgKSF8YClpvGAp4fxgKio8YCqifGAq6rxgK2L8YCurPGAsI3xgLGu8YCzj/GAtLDxgLaR8YC3svGAuZPxgLq08YC8lfGAvbbxgL+X8YGAuPGBgpnxgYO68YGFm/GBhrzxgYid8YGJvvGBi5/xgY2A8YGOofGBkILxgZGj8YGThPGBlKXxgZaG8YGXp/GBmYjxgZqp8YGcivGBnavxgZ+M8YGgrfGBoo7xgaOv8YGlkPGBprHxgaiS8YGps/GBq5Txgay18YGulvGBr7fxgbGY8YGyufGBtJrxgbW78YG3nPGBuL3xgbqe8YG7v/GBvaDxgb+B8YKAovGCgoPxgoOk8YKFhfGChqbxgoiH8YKJqPGCi4nxgoyq8YKOi/GCj6zxgpGN8YKSrvGClI/xgpWw8YKXkfGCmLLxgpqT8YKbtPGCnZXxgp628YKgl/GCobjxgqOZ8YKkuvGCppvxgqe88YKpnfGCqr7xgqyf8YKugPGCr6HxgrGC8YKyo/GCtITxgrWl8YK3hvGCuKfxgrqI8YK7qfGCvYrxgr6r8YOAjPGDga3xg4OO8YOEr/GDhpDxg4ex8YOJkvGDirPxg4yU8YONtfGDj5bxg5C38YOSmPGDk7nxg5Wa8YOWu/GDmJzxg5m98YObnvGDnL/xg56g8YOggfGDoaLxg6OD8YOkpPGDpoXxg6em8YOph/GDqqjxg6yJ8YOtqvGDr4vxg7Cs8YOyjfGDs67xg7WP8YO2sPGDuJHxg7my8YO7k/GDvLTxg76V8YO/tvGEgZfxhIK48YSEmfGEhbrxhIeb8YSIvPGEip3xhIu+8YSNn/GEj4DxhJCh8YSSgvGEk6PxhJWE8YSWpfGEmIbxhJmn8YSbiPGEnKnxhJ6K8YSfq/GEoYzxhKKt8YSkjvGEpa/xhKeQ8YSosfGEqpLxhKuz8YStlPGErrXxhLCW8YSxt/GEs5jxhLS58YS2mvGEt7vxhLmc8YS6vfGEvJ7xhL2/8YS/oPGFgYHxhYKi8YWEg/GFhaTxhYeF8YWIpvGFiofxhYuo8YWNifGFjqrxhZCL8YWRrPGFk43xhZSu8YWWj/GFl7DxhZmR8YWasvGFnJPxhZ208YWflfGFoLbxhaKX8YWjuPGFpZnxhaa68YWom/GFqbzxhaud8YWsvvGFrp/xhbCA8YWxofGFs4LxhbSj8YW2hPGFt6XxhbmG8YW6p/GFvIjxhb2p8YW/ivGGgKvxhoKM8YaDrfGGhY7xhoav8YaIkPGGibHxhouS8YaMs/GGjpTxho+18YaRlvGGkrfxhpSY8YaVufGGl5rxhpi78YaanPGGm73xhp2e8Yaev/GGoKDxhqKB8YajovGGpYPxhqak8YaohfGGqabxhquH8YasqPGGronxhq+q8Yaxi/GGsqzxhrSN8Ya1rvGGt4/xhriw8Ya6kfGGu7Lxhr2T8Ya+tPGHgJXxh4G28YeDl/GHhLjxh4aZ8YeHuvGHiZvxh4q88YeMnfGHjb7xh4+f8YeRgPGHkqHxh5SC8YeVo/GHl4Txh5il8YeahvGHm6fxh52I8YeeqfGHoIrxh6Gr8YejjPGHpK3xh6aO8Yenr/GHqZDxh6qx8YeskvGHrbPxh6+U8YewtfGHspbxh7O38Ye1mPGHtrnxh7ia8Ye5u/GHu5zxh7y98Ye+nvGHv7/xiIGg8YiDgfGIhKLxiIaD8YiHpPGIiYXxiIqm8YiMh/GIjajxiI+J8YiQqvGIkovxiJOs8YiVjfGIlq7xiJiP8YiZsPGIm5HxiJyy8Yiek/GIn7TxiKGV8YiitvGIpJfxiKW48YinmfGIqLrxiKqb8YirvPGIrZ3xiK6+8Yiwn/GIsoDxiLOh8Yi1gvGItqPxiLiE8Yi5pfGIu4bxiLyn8Yi+iPGIv6nxiYGK8YmCq/GJhIzxiYWt8YmHjvGJiK/xiYqQ8YmLsfGJjZLxiY6z8YmQlPGJkbXxiZOW8YmUt/GJlpjxiZe58YmZmvGJmrvxiZyc8YmdvfGJn57xiaC/8YmioPGJpIHxiaWi8Ymng/GJqKTxiaqF8YmrpvGJrYfxia6o8YmwifGJsarxibOL8Ym0rPGJto3xibeu8Ym5j/GJurDxibyR8Ym9svGJv5PxioC08YqClfGKg7bxioWX8YqGuPGKiJnxiom68YqLm/GKjLzxio6d8YqPvvGKkZ/xipOA8YqUofGKloLxipej8YqZhPGKmqXxipyG8Yqdp/GKn4jxiqCp8YqiivGKo6vxiqWM8YqmrfGKqI7xiqmv8YqrkPGKrLHxiq6S8Yqvs/GKsZTxirK18Yq0lvGKtbfxireY8Yq4ufGKuprxiru78Yq9nPGKvr3xi4Ce8YuBv/GLg6Dxi4WB8YuGovGLiIPxi4mk8YuLhfGLjKbxi46H8YuPqPGLkYnxi5Kq8YuUi/GLlazxi5eN8YuYrvGLmo/xi5uw8YudkfGLnrLxi6CT8YuhtPGLo5Xxi6S28Yuml/GLp7jxi6mZ8YuquvGLrJvxi6288YuvnfGLsL7xi7Kf8Yu0gPGLtaHxi7eC8Yu4o/GLuoTxi7ul8Yu9hvGLvqfxjICI8YyBqfGMg4rxjISr8YyGjPGMh63xjImO8YyKr/GMjJDxjI2x8YyPkvGMkLPxjJKU8YyTtfGMlZbxjJa38YyYmPGMmbnxjJua8Yycu/GMnpzxjJ+98YyhnvGMor/xjKSg8YymgfGMp6LxjKmD8YyqpPGMrIXxjK2m8Yyvh/GMsKjxjLKJ8YyzqvGMtYvxjLas8Yy4jfGMua7xjLuP8Yy8sPGMvpHxjL+y8Y2Bk/GNgrTxjYSV8Y2FtvGNh5fxjYi48Y2KmfGNi7rxjY2b8Y2OvPGNkJ3xjZG+8Y2Tn/GNlYDxjZah8Y2YgvGNmaPxjZuE8Y2cpfGNnobxjZ+n8Y2hiPGNoqnxjaSK8Y2lq/GNp4zxjait8Y2qjvGNq6/xja2Q8Y2usfGNsJLxjbGz8Y2zlPGNtLXxjbaW8Y23t/GNuZjxjbq58Y28mvGNvbvxjb+c8Y6AvfGOgp7xjoO/8Y6FoPGOh4Hxjoii8Y6Kg/GOi6Txjo2F8Y6OpvGOkIfxjpGo8Y6TifGOlKrxjpaL8Y6XrPGOmY3xjpqu8Y6cj/GOnbDxjp+R8Y6gsvGOopPxjqO08Y6llfGOprbxjqiX8Y6puPGOq5nxjqy68Y6um/GOr7zxjrGd8Y6yvvGOtJ/xjraA8Y63ofGOuYLxjrqj8Y68hPGOvaXxjr+G8Y+Ap/GPgojxj4Op8Y+FivGPhqvxj4iM8Y+JrfGPi47xj4yv8Y+OkPGPj7Hxj5GS8Y+Ss/GPlJTxj5W18Y+XlvGPmLfxj5qY8Y+bufGPnZrxj5678Y+gnPGPob3xj6Oe8Y+kv/GPpqDxj6iB8Y+povGPq4Pxj6yk8Y+uhfGPr6bxj7GH8Y+yqPGPtInxj7Wq8Y+3i/GPuKzxj7qN8Y+7rvGPvY/xj76w8ZCAkfGQgbLxkIOT8ZCEtPGQhpXxkIe28ZCJl/GQirjxkIyZ8ZCNuvGQj5vxkJC88ZCSnfGQk77xkJWf8ZCXgPGQmKHxkJqC8ZCbo/GQnYTxkJ6l8ZCghvGQoafxkKOI8ZCkqfGQporxkKer8ZCpjPGQqq3xkKyO8ZCtr/GQr5DxkLCx8ZCykvGQs7PxkLWU8ZC2tfGQuJbxkLm38ZC7mPGQvLnxkL6a8ZC/u/GRgZzxkYK98ZGEnvGRhb/xkYeg8ZGJgfGRiqLxkYyD8ZGNpPGRj4XxkZCm8ZGSh/GRk6jxkZWJ8ZGWqvGRmIvxkZms8ZGbjfGRnK7xkZ6P8ZGfsPGRoZHxkaKy8ZGkk/GRpbTxkaeV8ZGotvGRqpfxkau48ZGtmfGRrrrxkbCb8ZGxvPGRs53xkbS+8ZG2n/GRuIDxkbmh8ZG7gvGRvKPxkb6E8ZG/pfGSgYbxkoKn8ZKEiPGShanxkoeK8ZKIq/GSiozxkout8ZKNjvGSjq/xkpCQ8ZKRsfGSk5LxkpSz8ZKWlPGSl7XxkpmW8ZKat/GSnJjxkp258ZKfmvGSoLvxkqKc8ZKjvfGSpZ7xkqa/8ZKooPGSqoHxkqui8ZKtg/GSrqTxkrCF8ZKxpvGSs4fxkrSo8ZK2ifGSt6rxkrmL8ZK6rPGSvI3xkr2u8ZK/j/GTgLDxk4KR8ZODsvGThZPxk4a08ZOIlfGTibbxk4uX8ZOMuPGTjpnxk4+68ZORm/GTkrzxk5Sd8ZOVvvGTl5/xk5mA8ZOaofGTnILxk52j8ZOfhPGToKXxk6KG8ZOjp/GTpYjxk6ap8ZOoivGTqavxk6uM8ZOsrfGTro7xk6+v8ZOxkPGTsrHxk7SS8ZO1s/GTt5Txk7i18ZO6lvGTu7fxk72Y8ZO+ufGUgJrxlIG78ZSDnPGUhL3xlIae8ZSHv/GUiaDxlIuB8ZSMovGUjoPxlI+k8ZSRhfGUkqbxlJSH8ZSVqPGUl4nxlJiq8ZSai/GUm6zxlJ2N8ZServGUoI/xlKGw8ZSjkfGUpLLxlKaT8ZSntPGUqZXxlKq28ZSsl/GUrbjxlK+Z8ZSwuvGUspvxlLO88ZS1nfGUtr7xlLif8ZS6gPGUu6HxlL2C8ZS+o/GVgITxlYGl8ZWDhvGVhKfxlYaI8ZWHqfGViYrxlYqr8ZWMjPGVja3xlY+O8ZWQr/GVkpDxlZOx8ZWVkvGVlrPxlZiU8ZWZtfGVm5bxlZy38ZWemPGVn7nxlaGa8ZWiu/GVpJzxlaW98ZWnnvGVqL/xlaqg8ZWsgfGVraLxla+D8ZWwpPGVsoXxlbOm8ZW1h/GVtqjxlbiJ8ZW5qvGVu4vxlbys8ZW+jfGVv67xloGP8ZaCsPGWhJHxloWy8ZaHk/GWiLTxloqV8ZaLtvGWjZfxlo648ZaQmfGWkbrxlpOb8ZaUvPGWlp3xlpe+8ZaZn/GWm4Dxlpyh8ZaegvGWn6PxlqGE8ZaipfGWpIbxlqWn8ZaniPGWqKnxlqqK8Zarq/GWrYzxlq6t8ZawjvGWsa/xlrOQ8Za0sfGWtpLxlrez8Za5lPGWurXxlryW8Za9t/GWv5jxl4C58ZeCmvGXg7vxl4Wc8ZeGvfGXiJ7xl4m/8ZeLoPGXjYHxl46i8ZeQg/GXkaTxl5OF8ZeUpvGXlofxl5eo8ZeZifGXmqrxl5yL8ZedrPGXn43xl6Cu8Zeij/GXo7Dxl6WR8ZemsvGXqJPxl6m08ZerlfGXrLbxl66X8ZevuPGXsZnxl7K68Ze0m/GXtbzxl7ed8Ze4vvGXup/xl7yA8Ze9ofGXv4LxmICj8ZiChPGYg6XxmIWG8ZiGp/GYiIjxmImp8ZiLivGYjKvxmI6M8ZiPrfGYkY7xmJKv8ZiUkPGYlbHxmJeS8ZiYs/GYmpTxmJu18ZidlvGYnrfxmKCY8ZihufGYo5rxmKS78ZimnPGYp73xmKme8Ziqv/GYrKDxmK6B8ZivovGYsYPxmLKk8Zi0hfGYtabxmLeH8Zi4qPGYuonxmLuq8Zi9i/GYvqzxmYCN8ZmBrvGZg4/xmYSw8ZmGkfGZh7LxmYmT8ZmKtPGZjJXxmY228ZmPl/GZkLjxmZKZ8ZmTuvGZlZvxmZa88ZmYnfGZmb7xmZuf8ZmdgPGZnqHxmaCC8Zmho/GZo4TxmaSl8ZmmhvGZp6fxmamI8ZmqqfGZrIrxma2r8ZmvjPGZsK3xmbKO8Zmzr/GZtZDxmbax8Zm4kvGZubPxmbuU8Zm8tfGZvpbxmb+38ZqBmPGagrnxmoSa8ZqFu/Gah5zxmoi98ZqKnvGai7/xmo2g8ZqPgfGakKLxmpKD8ZqTpPGalYXxmpam8ZqYh/GamajxmpuJ8ZqcqvGanovxmp+s8ZqhjfGaoq7xmqSP8ZqlsPGap5Hxmqiy8Zqqk/Gaq7Txmq2V8ZqutvGasJfxmrG48ZqzmfGatLrxmrab8Zq3vPGauZ3xmrq+8Zq8n/GavoDxmr+h8ZuBgvGbgqPxm4SE8ZuFpfGbh4bxm4in8ZuKiPGbi6nxm42K8ZuOq/GbkIzxm5Gt8ZuTjvGblK/xm5aQ8ZuXsfGbmZLxm5qz8ZuclPGbnbXxm5+W8Zugt/Gbopjxm6O58ZulmvGbprvxm6ic8ZupvfGbq57xm6y/8ZuuoPGbsIHxm7Gi8Zuzg/GbtKTxm7aF8Zu3pvGbuYfxm7qo8Zu8ifGbvarxm7+L8ZyArPGcgo3xnIOu8ZyFj/GchrDxnIiR8ZyJsvGci5PxnIy08ZyOlfGcj7bxnJGX8ZySuPGclJnxnJW68ZyXm/GcmLzxnJqd8ZybvvGcnZ/xnJ+A8ZygofGcooLxnKOj8ZylhPGcpqXxnKiG8Zypp/Gcq4jxnKyp8ZyuivGcr6vxnLGM8ZyyrfGctI7xnLWv8Zy3kPGcuLHxnLqS8Zy7s/GcvZTxnL618Z2AlvGdgbfxnYOY8Z2EufGdhprxnYe78Z2JnPGdir3xnYye8Z2Nv/Gdj6DxnZGB8Z2SovGdlIPxnZWk8Z2XhfGdmKbxnZqH8Z2bqPGdnYnxnZ6q8Z2gi/GdoazxnaON8Z2krvGdpo/xnaew8Z2pkfGdqrLxnayT8Z2ttPGdr5XxnbC28Z2yl/Gds7jxnbWZ8Z22uvGduJvxnbm88Z27nfGdvL7xnb6f8Z6AgPGegaHxnoOC8Z6Eo/GehoTxnoel8Z6JhvGeiqfxnoyI8Z6NqfGej4rxnpCr8Z6SjPGek63xnpWO8Z6Wr/GemJDxnpmx8Z6bkvGenLPxnp6U8Z6ftfGeoZbxnqK38Z6kmPGepbnxnqea8Z6ou/Geqpzxnqu98Z6tnvGerr/xnrCg8Z6ygfGes6LxnrWD8Z62pPGeuIXxnrmm8Z67h/GevKjxnr6J8Z6/qvGfgYvxn4Ks8Z+EjfGfha7xn4eP8Z+IsPGfipHxn4uy8Z+Nk/GfjrTxn5CV8Z+RtvGfk5fxn5S48Z+WmfGfl7rxn5mb8Z+avPGfnJ3xn52+8Z+fn/GfoYDxn6Kh8Z+kgvGfpaPxn6eE8Z+opfGfqobxn6un8Z+tiPGfrqnxn7CK8Z+xq/Gfs4zxn7St8Z+2jvGft6/xn7mQ8Z+6sfGfvJLxn72z8Z+/lPGggLXxoIKW8aCDt/GghZjxoIa58aCImvGgibvxoIuc8aCMvfGgjp7xoI+/8aCRoPGgk4HxoJSi8aCWg/Ggl6TxoJmF8aCapvGgnIfxoJ2o8aCfifGgoKrxoKKL8aCjrPGgpY3xoKau8aCoj/GgqbDxoKuR8aCssvGgrpPxoK+08aCxlfGgsrbxoLSX8aC1uPGgt5nxoLi68aC6m/Ggu7zxoL2d8aC+vvGhgJ/xoYKA8aGDofGhhYLxoYaj8aGIhPGhiaXxoYuG8aGMp/GhjojxoY+p8aGRivGhkqvxoZSM8aGVrfGhl47xoZiv8aGakPGhm7HxoZ2S8aGes/GhoJTxoaG18aGjlvGhpLfxoaaY8aGnufGhqZrxoaq78aGsnPGhrb3xoa+e8aGwv/GhsqDxobSB8aG1ovGht4Pxobik8aG6hfGhu6bxob2H8aG+qPGigInxooGq8aKDi/GihKzxooaN8aKHrvGiiY/xooqw8aKMkfGijbLxoo+T8aKQtPGikpXxopO28aKVl/GilrjxopiZ8aKZuvGim5vxopy88aKenfGin77xoqGf8aKjgPGipKHxoqaC8aKno/GiqYTxoqql8aKshvGirafxoq+I8aKwqfGisorxorOr8aK1jPGitq3xoriO8aK5r/Giu5Dxoryx8aK+kvGiv7Pxo4GU8aOCtfGjhJbxo4W38aOHmPGjiLnxo4qa8aOLu/GjjZzxo4698aOQnvGjkb/xo5Og8aOVgfGjlqLxo5iD8aOZpPGjm4Xxo5ym8aOeh/Gjn6jxo6GJ8aOiqvGjpIvxo6Ws8aOnjfGjqK7xo6qP8aOrsPGjrZHxo66y8aOwk/GjsbTxo7OV8aO0tvGjtpfxo7e48aO5mfGjurrxo7yb8aO9vPGjv53xpIC+8aSCn/GkhIDxpIWh8aSHgvGkiKPxpIqE8aSLpfGkjYbxpI6n8aSQiPGkkanxpJOK8aSUq/GklozxpJet8aSZjvGkmq/xpJyQ8aSdsfGkn5LxpKCz8aSilPGko7XxpKWW8aSmt/GkqJjxpKm58aSrmvGkrLvxpK6c8aSvvfGksZ7xpLK/8aS0oPGktoHxpLei8aS5g/GkuqTxpLyF8aS9pvGkv4fxpYCo8aWCifGlg6rxpYWL8aWGrPGliI3xpYmu8aWLj/GljLDxpY6R8aWPsvGlkZPxpZK08aWUlfGllbbxpZeX8aWYuPGlmpnxpZu68aWdm/GlnrzxpaCd8aWhvvGlo5/xpaWA8aWmofGlqILxpamj8aWrhPGlrKXxpa6G8aWvp/GlsYjxpbKp8aW0ivGltavxpbeM8aW4rfGluo7xpbuv8aW9kPGlvrHxpoCS8aaBs/Gmg5TxpoS18aaGlvGmh7fxpomY8aaKufGmjJrxpo278aaPnPGmkL3xppKe8aaTv/GmlaDxppeB8aaYovGmmoPxppuk8aadhfGmnqbxpqCH8aahqPGmo4nxpqSq8aami/Gmp6zxpqmN8aaqrvGmrI/xpq2w8aavkfGmsLLxprKT8aaztPGmtZXxpra28aa4l/GmubjxpruZ8aa8uvGmvpvxpr+88aeBnfGngr7xp4Sf8aeGgPGnh6Hxp4mC8aeKo/GnjITxp42l8aePhvGnkKfxp5KI8aeTqfGnlYrxp5ar8aeYjPGnma3xp5uO8aecr/GnnpDxp5+x8aehkvGnorPxp6SU8aeltfGnp5bxp6i38aeqmPGnq7nxp62a8aeuu/GnsJzxp7G98aeznvGntL/xp7ag8ae4gfGnuaLxp7uD8ae8pPGnvoXxp7+m8aiBh/GogqjxqISJ8aiFqvGoh4vxqIis8aiKjfGoi67xqI2P8aiOsPGokJHxqJGy8aiTk/GolLTxqJaV8aiXtvGomZfxqJq48aicmfGonbrxqJ+b8aigvPGoop3xqKO+8ailn/Gop4DxqKih8aiqgvGoq6PxqK2E8aiupfGosIbxqLGn8aiziPGotKnxqLaK8ai3q/GouYzxqLqt8ai8jvGova/xqL+Q8amAsfGpgpLxqYOz8amFlPGphrXxqYiW8amJt/Gpi5jxqYy58amOmvGpj7vxqZGc8amSvfGplJ7xqZW/8amXoPGpmYHxqZqi8amcg/GpnaTxqZ+F8amgpvGpoofxqaOo8amlifGppqrxqaiL8amprPGpq43xqayu8amuj/Gpr7DxqbGR8amysvGptJPxqbW08am3lfGpuLbxqbqX8am7uPGpvZnxqb668aqAm/GqgbzxqoOd8aqEvvGqhp/xqoiA8aqJofGqi4Lxqoyj8aqOhPGqj6XxqpGG8aqSp/GqlIjxqpWp8aqXivGqmKvxqpqM8aqbrfGqnY7xqp6v8aqgkPGqobHxqqOS8aqks/GqppTxqqe18aqplvGqqrfxqqyY8aqtufGqr5rxqrC78aqynPGqs73xqrWe8aq2v/GquKDxqrqB8aq7ovGqvYPxqr6k8auAhfGrgabxq4OH8auEqPGrhonxq4eq8auJi/Griqzxq4yN8auNrvGrj4/xq5Cw8auSkfGrk7Lxq5WT8auWtPGrmJXxq5m28aubl/GrnLjxq56Z8aufuvGroZvxq6K88auknfGrpb7xq6ef8aupgPGrqqHxq6yC8auto/Grr4Txq7Cl8auyhvGrs6fxq7WI8au2qfGruIrxq7mr8au7jPGrvK3xq76O8au/r/GsgZDxrIKx8ayEkvGshbPxrIeU8ayItfGsipbxrIu38ayNmPGsjrnxrJCa8ayRu/Gsk5zxrJS98ayWnvGsl7/xrJmg8aybgfGsnKLxrJ6D8ayfpPGsoYXxrKKm8aykh/GspajxrKeJ8ayoqvGsqovxrKus8aytjfGsrq7xrLCP8ayxsPGss5HxrLSy8ay2k/Gst7TxrLmV8ay6tvGsvJfxrL248ay/mfGtgLrxrYKb8a2DvPGthZ3xrYa+8a2In/GtioDxrYuh8a2NgvGtjqPxrZCE8a2RpfGtk4bxrZSn8a2WiPGtl6nxrZmK8a2aq/GtnIzxrZ2t8a2fjvGtoK/xraKQ8a2jsfGtpZLxraaz8a2olPGtqbXxrauW8a2st/Gtrpjxra+58a2xmvGtsrvxrbSc8a21vfGtt57xrbi/8a26oPGtvIHxrb2i8a2/g/GugKTxroKF8a6DpvGuhYfxroao8a6IifGuiarxrouL8a6MrPGujo3xro+u8a6Rj/GukrDxrpSR8a6VsvGul5Pxrpi08a6alfGum7bxrp2X8a6euPGuoJnxrqG68a6jm/GupLzxrqad8a6nvvGuqZ/xrquA8a6sofGuroLxrq+j8a6xhPGusqXxrrSG8a61p/Gut4jxrrip8a66ivGuu6vxrr2M8a6+rfGvgI7xr4Gv8a+DkPGvhLHxr4aS8a+Hs/GviZTxr4q18a+MlvGvjbfxr4+Y8a+QufGvkprxr5O78a+VnPGvlr3xr5ie8a+Zv/Gvm6Dxr52B8a+eovGvoIPxr6Gk8a+jhfGvpKbxr6aH8a+nqPGvqYnxr6qq8a+si/Gvrazxr6+N8a+wrvGvso/xr7Ow8a+1kfGvtrLxr7iT8a+5tPGvu5Xxr7y28a++l/Gvv7jxsIGZ8bCCuvGwhJvxsIW88bCHnfGwiL7xsIqf8bCMgPGwjaHxsI+C8bCQo/GwkoTxsJOl8bCVhvGwlqfxsJiI8bCZqfGwm4rxsJyr8bCejPGwn63xsKGO8bCir/GwpJDxsKWx8bCnkvGwqLPxsKqU8bCrtfGwrZbxsK638bCwmPGwsbnxsLOa8bC0u/GwtpzxsLe98bC5nvGwur/xsLyg8bC+gfGwv6LxsYGD8bGCpPGxhIXxsYWm8bGHh/GxiKjxsYqJ8bGLqvGxjYvxsY6s8bGQjfGxka7xsZOP8bGUsPGxlpHxsZey8bGZk/GxmrTxsZyV8bGdtvGxn5fxsaC48bGimfGxo7rxsaWb8bGmvPGxqJ3xsam+8bGrn/GxrYDxsa6h8bGwgvGxsaPxsbOE8bG0pfGxtobxsben8bG5iPGxuqnxsbyK8bG9q/Gxv4zxsoCt8bKCjvGyg6/xsoWQ8bKGsfGyiJLxsomz8bKLlPGyjLXxso6W8bKPt/GykZjxspK58bKUmvGylbvxspec8bKYvfGymp7xspu/8bKdoPGyn4HxsqCi8bKig/Gyo6TxsqWF8bKmpvGyqIfxsqmo8bKrifGyrKrxsq6L8bKvrPGysY3xsrKu8bK0j/GytbDxsreR8bK4svGyupPxsru08bK9lfGyvrbxs4CX8bOBuPGzg5nxs4S68bOGm/Gzh7zxs4md8bOKvvGzjJ/xs46A8bOPofGzkYLxs5Kj8bOUhPGzlaXxs5eG8bOYp/Gzmojxs5up8bOdivGznqvxs6CM8bOhrfGzo47xs6Sv8bOmkPGzp7Hxs6mS8bOqs/GzrJTxs6218bOvlvGzsLfxs7KY8bOzufGztZrxs7a78bO4nPGzub3xs7ue8bO8v/GzvqDxtICB8bSBovG0g4PxtISk8bSGhfG0h6bxtImH8bSKqPG0jInxtI2q8bSPi/G0kKzxtJKN8bSTrvG0lY/xtJaw8bSYkfG0mbLxtJuT8bSctPG0npXxtJ+28bShl/G0orjxtKSZ8bSluvG0p5vxtKi88bSqnfG0q77xtK2f8bSvgPG0sKHxtLKC8bSzo/G0tYTxtLal8bS4hvG0uafxtLuI8bS8qfG0vorxtL+r8bWBjPG1gq3xtYSO8bWFr/G1h5DxtYix8bWKkvG1i7PxtY2U8bWOtfG1kJbxtZG38bWTmPG1lLnxtZaa8bWXu/G1mZzxtZq98bWcnvG1nb/xtZ+g8bWhgfG1oqLxtaSD8bWlpPG1p4Xxtaim8bWqh/G1q6jxta2J8bWuqvG1sIvxtbGs8bWzjfG1tK7xtbaP8bW3sPG1uZHxtbqy8bW8k/G1vbTxtb+V8baAtvG2gpfxtoO48baFmfG2hrrxtoib8baJvPG2i53xtoy+8baOn/G2kIDxtpGh8baTgvG2lKPxtpaE8baXpfG2mYbxtpqn8baciPG2nanxtp+K8bagq/G2oozxtqOt8baljvG2pq/xtqiQ8bapsfG2q5Lxtqyz8baulPG2r7XxtrGW8bayt/G2tJjxtrW58ba3mvG2uLvxtrqc8ba7vfG2vZ7xtr6/8beAoPG3goHxt4Oi8beFg/G3hqTxt4iF8beJpvG3i4fxt4yo8beOifG3j6rxt5GL8beSrPG3lI3xt5Wu8beXj/G3mLDxt5qR8bebsvG3nZPxt5608beglfG3obbxt6OX8bekuPG3ppnxt6e68bepm/G3qrzxt6yd8betvvG3r5/xt7GA8beyofG3tILxt7Wj8be3hPG3uKXxt7qG8be7p/G3vYjxt76p8biAivG4gavxuIOM8biErfG4ho7xuIev8biJkPG4irHxuIyS8biNs/G4j5TxuJC18biSlvG4k7fxuJWY8biWufG4mJrxuJm78bibnPG4nL3xuJ6e8bifv/G4oaDxuKOB8bikovG4poPxuKek8biphfG4qqbxuKyH8bitqPG4r4nxuLCq8biyi/G4s6zxuLWN8bi2rvG4uI/xuLmw8bi7kfG4vLLxuL6T8bi/tPG5gZXxuYK28bmEl/G5hbjxuYeZ8bmIuvG5ipvxuYu88bmNnfG5jr7xuZCf8bmSgPG5k6HxuZWC8bmWo/G5mITxuZml8bmbhvG5nKfxuZ6I8bmfqfG5oYrxuaKr8bmkjPG5pa3xuaeO8bmor/G5qpDxuaux8bmtkvG5rrPxubCU8bmxtfG5s5bxubS38bm2mPG5t7nxubma8bm6u/G5vJzxub298bm/nvG6gL/xuoKg8bqEgfG6haLxuoeD8bqIpPG6ioXxuoum8bqNh/G6jqjxupCJ8bqRqvG6k4vxupSs8bqWjfG6l67xupmP8bqasPG6nJHxup2y8bqfk/G6oLTxuqKV8bqjtvG6pZfxuqa48bqomfG6qbrxuqub8bqsvPG6rp3xuq++8bqxn/G6s4DxurSh8bq2gvG6t6PxurmE8bq6pfG6vIbxur2n8bq/iPG7gKnxu4KK8buDq/G7hYzxu4at8buIjvG7ia/xu4uQ8buMsfG7jpLxu4+z8buRlPG7krXxu5SW8buVt/G7l5jxu5i58buamvG7m7vxu52c8buevfG7oJ7xu6G/8bujoPG7pYHxu6ai8buog/G7qaTxu6uF8buspvG7rofxu6+o8buxifG7sqrxu7SL8bu1rPG7t43xu7iu8bu6j/G7u7Dxu72R8bu+svG8gJPxvIG08byDlfG8hLbxvIaX8byHuPG8iZnxvIq68byMm/G8jbzxvI+d8byQvvG8kp/xvJSA8byVofG8l4LxvJij8byahPG8m6XxvJ2G8byep/G8oIjxvKGp8byjivG8pKvxvKaM8bynrfG8qY7xvKqv8byskPG8rbHxvK+S8byws/G8spTxvLO18by1lvG8trfxvLiY8by5ufG8u5rxvLy78by+nPG8v73xvYGe8b2Cv/G9hKDxvYaB8b2HovG9iYPxvYqk8b2MhfG9jabxvY+H8b2QqPG9konxvZOq8b2Vi/G9lqzxvZiN8b2ZrvG9m4/xvZyw8b2ekfG9n7LxvaGT8b2itPG9pJXxvaW28b2nl/G9qLjxvaqZ8b2ruvG9rZvxva688b2wnfG9sb7xvbOf8b21gPG9tqHxvbiC8b25o/G9u4Txvbyl8b2+hvG9v6fxvoGI8b6CqfG+hIrxvoWr8b6HjPG+iK3xvoqO8b6Lr/G+jZDxvo6x8b6QkvG+kbPxvpOU8b6UtfG+lpbxvpe38b6ZmPG+mrnxvpya8b6du/G+n5zxvqC98b6invG+o7/xvqWg8b6ngfG+qKLxvqqD8b6rpPG+rYXxvq6m8b6wh/G+sajxvrOJ8b60qvG+tovxvres8b65jfG+uq7xvryP8b69sPG+v5Hxv4Cy8b+Ck/G/g7Txv4WV8b+GtvG/iJfxv4m48b+LmfG/jLrxv46b8b+PvPG/kZ3xv5K+8b+Un/G/loDxv5eh8b+ZgvG/mqPxv5yE8b+dpfG/n4bxv6Cn8b+iiPG/o6nxv6WK8b+mq/G/qIzxv6mt8b+rjvG/rK/xv66Q8b+vsfG/sZLxv7Kz8b+0lPG/tbXxv7eW8b+4t/G/upjxv7u58b+9mvG/vrvygICc8oCBvfKAg57ygIS/8oCGoPKAiIHygImi8oCLg/KAjKTygI6F8oCPpvKAkYfygJKo8oCUifKAlarygJeL8oCYrPKAmo3ygJuu8oCdj/KAnrDygKCR8oChsvKAo5PygKS08oCmlfKAp7bygKmX8oCquPKArJnygK268oCvm/KAsLzygLKd8oCzvvKAtZ/ygLeA8oC4ofKAuoLygLuj8oC9hPKAvqXygYCG8oGBp/KBg4jygYSp8oGGivKBh6vygYmM8oGKrfKBjI7ygY2v8oGPkPKBkLHygZKS8oGTs/KBlZTygZa18oGYlvKBmbfygZuY8oGcufKBnprygZ+78oGhnPKBor3ygaSe8oGlv/KBp6DygamB8oGqovKBrIPyga2k8oGvhfKBsKbygbKH8oGzqPKBtYnygbaq8oG4i/KBuazygbuN8oG8rvKBvo/ygb+w8oKBkfKCgrLygoST8oKFtPKCh5Xygoi28oKKl/KCi7jygo2Z8oKOuvKCkJvygpG88oKTnfKClL7ygpaf8oKYgPKCmaHygpuC8oKco/KCnoTygp+l8oKhhvKCoqfygqSI8oKlqfKCp4rygqir8oKqjPKCq63ygq2O8oKur/KCsJDygrGx8oKzkvKCtLPygraU8oK3tfKCuZbygrq38oK8mPKCvbnygr+a8oOAu/KDgpzyg4O98oOFnvKDhr/yg4ig8oOKgfKDi6Lyg42D8oOOpPKDkIXyg5Gm8oOTh/KDlKjyg5aJ8oOXqvKDmYvyg5qs8oOcjfKDna7yg5+P8oOgsPKDopHyg6Oy8oOlk/KDprTyg6iV8oOptvKDq5fyg6y48oOumfKDr7ryg7Gb8oOyvPKDtJ3yg7W+8oO3n/KDuYDyg7qh8oO8gvKDvaPyg7+E8oSApfKEgobyhIOn8oSFiPKEhqnyhIiK8oSJq/KEi4zyhIyt8oSOjvKEj6/yhJGQ8oSSsfKElJLyhJWz8oSXlPKEmLXyhJqW8oSbt/KEnZjyhJ658oSgmvKEobvyhKOc8oSkvfKEpp7yhKe/8oSpoPKEq4HyhKyi8oSug/KEr6TyhLGF8oSypvKEtIfyhLWo8oS3ifKEuKryhLqL8oS7rPKEvY3yhL6u8oWAj/KFgbDyhYOR8oWEsvKFhpPyhYe08oWJlfKFirbyhYyX8oWNuPKFj5nyhZC68oWSm/KFk7zyhZWd8oWWvvKFmJ/yhZqA8oWbofKFnYLyhZ6j8oWghPKFoaXyhaOG8oWkp/KFpojyhaep8oWpivKFqqvyhayM8oWtrfKFr47yhbCv8oWykPKFs7HyhbWS8oW2s/KFuJTyhbm18oW7lvKFvLfyhb6Y8oW/ufKGgZryhoK78oaEnPKGhb3yhoee8oaIv/KGiqDyhoyB8oaNovKGj4PyhpCk8oaShfKGk6byhpWH8oaWqPKGmInyhpmq8oabi/KGnKzyhp6N8oafrvKGoY/yhqKw8oakkfKGpbLyhqeT8oaotPKGqpXyhqu28oatl/KGrrjyhrCZ8oaxuvKGs5vyhrS88oa2nfKGt77yhrmf8oa7gPKGvKHyhr6C8oa/o/KHgYTyh4Kl8oeEhvKHhafyh4eI8oeIqfKHioryh4ur8oeNjPKHjq3yh5CO8oeRr/KHk5Dyh5Sx8oeWkvKHl7Pyh5mU8oeatfKHnJbyh5238oefmPKHoLnyh6Ka8oeju/KHpZzyh6a98oeonvKHqb/yh6ug8oetgfKHrqLyh7CD8oexpPKHs4Xyh7Sm8oe2h/KHt6jyh7mJ8oe6qvKHvIvyh72s8oe/jfKIgK7yiIKP8oiDsPKIhZHyiIay8oiIk/KIibTyiIuV8oiMtvKIjpfyiI+48oiRmfKIkrryiJSb8oiVvPKIl53yiJi+8oian/KInIDyiJ2h8oifgvKIoKPyiKKE8oijpfKIpYbyiKan8oioiPKIqanyiKuK8oisq/KIrozyiK+t8oixjvKIsq/yiLSQ8oi1sfKIt5LyiLiz8oi6lPKIu7XyiL2W8oi+t/KJgJjyiYG58omDmvKJhLvyiYac8omHvfKJiZ7yiYq/8omMoPKJjoHyiY+i8omRg/KJkqTyiZSF8omVpvKJl4fyiZio8omaifKJm6ryiZ2L8omerPKJoI3yiaGu8omjj/KJpLDyiaaR8omnsvKJqZPyiaq08omslfKJrbbyia+X8omwuPKJspnyibO68om1m/KJtrzyibid8om5vvKJu5/yib2A8om+ofKKgILyioGj8oqDhPKKhKXyioaG8oqHp/KKiYjyioqp8oqMivKKjavyio+M8oqQrfKKko7yipOv8oqVkPKKlrHyipiS8oqZs/KKm5Tyipy18oqelvKKn7fyiqGY8oqiufKKpJryiqW78oqnnPKKqL3yiqqe8oqrv/KKraDyiq+B8oqwovKKsoPyirOk8oq1hfKKtqbyiriH8oq5qPKKu4nyiryq8oq+i/KKv6zyi4GN8ouCrvKLhI/yi4Ww8ouHkfKLiLLyi4qT8ouLtPKLjZXyi4628ouQl/KLkbjyi5OZ8ouUuvKLlpvyi5e88ouZnfKLmr7yi5yf8ouegPKLn6Hyi6GC8ouio/KLpITyi6Wl8ounhvKLqKfyi6qI8ourqfKLrYryi66r8ouwjPKLsa3yi7OO8ou0r/KLtpDyi7ex8ou5kvKLurPyi7yU8ou9tfKLv5byjIC38oyCmPKMg7nyjIWa8oyGu/KMiJzyjIm98oyLnvKMjL/yjI6g8oyQgfKMkaLyjJOD8oyUpPKMloXyjJem8oyZh/KMmqjyjJyJ8oydqvKMn4vyjKCs8oyijfKMo67yjKWP8oymsPKMqJHyjKmy8oyrk/KMrLTyjK6V8oyvtvKMsZfyjLK48oy0mfKMtbryjLeb8oy4vPKMup3yjLu+8oy9n/KMv4DyjYCh8o2CgvKNg6PyjYWE8o2GpfKNiIbyjYmn8o2LiPKNjKnyjY6K8o2Pq/KNkYzyjZKt8o2UjvKNla/yjZeQ8o2YsfKNmpLyjZuz8o2dlPKNnrXyjaCW8o2ht/KNo5jyjaS58o2mmvKNp7vyjamc8o2qvfKNrJ7yja2/8o2voPKNsYHyjbKi8o20g/KNtaTyjbeF8o24pvKNuofyjbuo8o29ifKNvqryjoCL8o6BrPKOg43yjoSu8o6Gj/KOh7DyjomR8o6KsvKOjJPyjo208o6PlfKOkLbyjpKX8o6TuPKOlZnyjpa68o6Ym/KOmbzyjpud8o6cvvKOnp/yjqCA8o6hofKOo4LyjqSj8o6mhPKOp6XyjqmG8o6qp/KOrIjyjq2p8o6vivKOsKvyjrKM8o6zrfKOtY7yjrav8o64kPKOubHyjruS8o68s/KOvpTyjr+18o+BlvKPgrfyj4SY8o+FufKPh5ryj4i78o+KnPKPi73yj42e8o+Ov/KPkKDyj5KB8o+TovKPlYPyj5ak8o+YhfKPmabyj5uH8o+cqPKPnonyj5+q8o+hi/KPoqzyj6SN8o+lrvKPp4/yj6iw8o+qkfKPq7Lyj62T8o+utPKPsJXyj7G28o+zl/KPtLjyj7aZ8o+3uvKPuZvyj7q88o+8nfKPvb7yj7+f8pCBgPKQgqHykISC8pCFo/KQh4TykIil8pCKhvKQi6fykI2I8pCOqfKQkIrykJGr8pCTjPKQlK3ykJaO8pCXr/KQmZDykJqx8pCckvKQnbPykJ+U8pCgtfKQopbykKO38pClmPKQprnykKia8pCpu/KQq5zykKy98pCunvKQr7/ykLGg8pCzgfKQtKLykLaD8pC3pPKQuYXykLqm8pC8h/KQvajykL+J8pGAqvKRgovykYOs8pGFjfKRhq7ykYiP8pGJsPKRi5HykYyy8pGOk/KRj7TykZGV8pGStvKRlJfykZW48pGXmfKRmLrykZqb8pGbvPKRnZ3ykZ6+8pGgn/KRooDykaOh8pGlgvKRpqPykaiE8pGppfKRq4bykayn8pGuiPKRr6nykbGK8pGyq/KRtIzykbWt8pG3jvKRuK/ykbqQ8pG7sfKRvZLykb6z8pKAlPKSgbXykoOW8pKEt/KShpjykoe58pKJmvKSirvykoyc8pKNvfKSj57ykpC/8pKSoPKSlIHykpWi8pKXg/KSmKTykpqF8pKbpvKSnYfykp6o8pKgifKSoarykqOL8pKkrPKSpo3ykqeu8pKpj/KSqrDykqyR8pKtsvKSr5PykrC08pKylfKSs7bykrWX8pK2uPKSuJnykrm68pK7m/KSvLzykr6d8pK/vvKTgZ/yk4OA8pOEofKThoLyk4ej8pOJhPKTiqXyk4yG8pONp/KTj4jyk5Cp8pOSivKTk6vyk5WM8pOWrfKTmI7yk5mv8pObkPKTnLHyk56S8pOfs/KToZTyk6K18pOklvKTpbfyk6eY8pOoufKTqpryk6u78pOtnPKTrr3yk7Ce8pOxv/KTs6Dyk7WB8pO2ovKTuIPyk7mk8pO7hfKTvKbyk76H8pO/qPKUgYnylIKq8pSEi/KUhazylIeN8pSIrvKUio/ylIuw8pSNkfKUjrLylJCT8pSRtPKUk5XylJS28pSWl/KUl7jylJmZ8pSauvKUnJvylJ288pSfnfKUoL7ylKKf8pSkgPKUpaHylKeC8pSoo/KUqoTylKul8pSthvKUrqfylLCI8pSxqfKUs4rylLSr8pS2jPKUt63ylLmO8pS6r/KUvJDylL2x8pS/kvKVgLPylYKU8pWDtfKVhZbylYa38pWImPKVibnylYua8pWMu/KVjpzylY+98pWRnvKVkr/ylZSg8pWWgfKVl6LylZmD8pWapPKVnIXylZ2m8pWfh/KVoKjylaKJ8pWjqvKVpYvylaas8pWojfKVqa7ylauP8pWssPKVrpHyla+y8pWxk/KVsrTylbSV8pW1tvKVt5fylbi48pW6mfKVu7rylb2b8pW+vPKWgJ3yloG+8paDn/KWhYDyloah8paIgvKWiaPylouE8paMpfKWjobylo+n8paRiPKWkqnylpSK8paVq/KWl4zylpit8paajvKWm6/ylp2Q8paesfKWoJLylqGz8pajlPKWpLXylqaW8pant/KWqZjylqq58pasmvKWrbvylq+c8pawvfKWsp7ylrO/8pa1oPKWt4Hylrii8pa6g/KWu6Tylr2F8pa+pvKXgIfyl4Go8peDifKXhKryl4aL8peHrPKXiY3yl4qu8peMj/KXjbDyl4+R8peQsvKXkpPyl5O08peVlfKXlrbyl5iX8peZuPKXm5nyl5y68peem/KXn7zyl6Gd8peivvKXpJ/yl6aA8penofKXqYLyl6qj8peshPKXraXyl6+G8pewp/KXsojyl7Op8pe1ivKXtqvyl7iM8pe5rfKXu47yl7yv8pe+kPKXv7HymIGS8piCs/KYhJTymIW18piHlvKYiLfymIqY8piLufKYjZrymI678piQnPKYkb3ymJOe8piUv/KYlqDymJiB8piZovKYm4PymJyk8piehfKYn6bymKGH8piiqPKYpInymKWq8pini/KYqKzymKqN8pirrvKYrY/ymK6w8piwkfKYsbLymLOT8pi0tPKYtpXymLe28pi5l/KYurjymLyZ8pi9uvKYv5vymYC88pmCnfKZg77ymYWf8pmHgPKZiKHymYqC8pmLo/KZjYTymY6l8pmQhvKZkafymZOI8pmUqfKZlorymZer8pmZjPKZmq3ymZyO8pmdr/KZn5DymaCx8pmikvKZo7PymaWU8pmmtfKZqJbymam38pmrmPKZrLnyma6a8pmvu/KZsZzymbK98pm0nvKZtb/ymbeg8pm5gfKZuqLymbyD8pm9pPKZv4XymoCm8pqCh/Kag6jymoWJ8pqGqvKaiIvymoms8pqLjfKajK7ymo6P8pqPsPKakZHympKy8pqUk/KalbTympeV8pqYtvKampfympu48pqdmfKanrrymqCb8pqhvPKao53ymqS+8pqmn/KaqIDymqmh8pqrgvKarKPymq6E8pqvpfKasYbymrKn8pq0iPKatanymreK8pq4q/Kauozymrut8pq9jvKavq/ym4CQ8puBsfKbg5Lym4Sz8puGlPKbh7Xym4mW8puKt/KbjJjym4258puPmvKbkLvym5Kc8puTvfKblZ7ym5a/8puYoPKbmoHym5ui8pudg/KbnqTym6CF8puhpvKbo4fym6So8pumifKbp6rym6mL8puqrPKbrI3ym62u8puvj/KbsLDym7KR8puzsvKbtZPym7a08pu4lfKbubbym7uX8pu8uPKbvpnym7+68pyBm/KcgrzynISd8pyFvvKch5/ynImA8pyKofKcjILynI2j8pyPhPKckKXynJKG8pyTp/KclYjynJap8pyYivKcmavynJuM8pycrfKcno7ynJ+v8pyhkPKcorHynKSS8pyls/Kcp5TynKi18pyqlvKcq7fynK2Y8pyuufKcsJrynLG78pyznPKctL3ynLae8py3v/KcuaDynLuB8py8ovKcvoPynL+k8p2BhfKdgqbynYSH8p2FqPKdh4nynYiq8p2Ki/Kdi6zynY2N8p2OrvKdkI/ynZGw8p2TkfKdlLLynZaT8p2XtPKdmZXynZq28p2cl/KdnbjynZ+Z8p2guvKdopvynaO88p2lnfKdpr7ynaif8p2qgPKdq6Hyna2C8p2uo/KdsITynbGl8p2zhvKdtKfynbaI8p23qfKduYrynbqr8p28jPKdva3ynb+O8p6Ar/KegpDynoOx8p6FkvKehrPynoiU8p6JtfKei5bynoy38p6OmPKej7nynpGa8p6Su/KelJzynpW98p6XnvKemL/ynpqg8p6cgfKenaLynp+D8p6gpPKeooXynqOm8p6lh/KepqjynqiJ8p6pqvKeq4vynqys8p6ujfKer67ynrGP8p6ysPKetJHynrWy8p63k/KeuLTynrqV8p67tvKevZfynr648p+AmfKfgbryn4Ob8p+EvPKfhp3yn4e+8p+Jn/Kfi4Dyn4yh8p+OgvKfj6Pyn5GE8p+SpfKflIbyn5Wn8p+XiPKfmKnyn5qK8p+bq/KfnYzyn56t8p+gjvKfoa/yn6OQ8p+ksfKfppLyn6ez8p+plPKfqrXyn6yW8p+tt/Kfr5jyn7C58p+ymvKfs7vyn7Wc8p+2vfKfuJ7yn7m/8p+7oPKfvYHyn76i8qCAg/KggaTyoIOF8qCEpvKghofyoIeo8qCJifKgiqryoIyL8qCNrPKgj43yoJCu8qCSj/Kgk7DyoJWR8qCWsvKgmJPyoJm08qCblfKgnLbyoJ6X8qCfuPKgoZnyoKK68qCkm/KgpbzyoKed8qCovvKgqp/yoKyA8qCtofKgr4LyoLCj8qCyhPKgs6XyoLWG8qC2p/KguIjyoLmp8qC7ivKgvKvyoL6M8qC/rfKhgY7yoYKv8qGEkPKhhbHyoYeS8qGIs/KhipTyoYu18qGNlvKhjrfyoZCY8qGRufKhk5ryoZS78qGWnPKhl73yoZme8qGav/KhnKDyoZ6B8qGfovKhoYPyoaKk8qGkhfKhpabyoaeH8qGoqPKhqonyoauq8qGti/KhrqzyobCN8qGxrvKhs4/yobSw8qG2kfKht7LyobmT8qG6tPKhvJXyob228qG/l/KigLjyooKZ8qKDuvKihZvyooa88qKInfKiib7yoouf8qKNgPKijqHyopCC8qKRo/Kik4TyopSl8qKWhvKil6fyopmI8qKaqfKinIryop2r8qKfjPKioK3yoqKO8qKjr/KipZDyoqax8qKokvKiqbPyoquU8qKstfKirpbyoq+38qKxmPKisrnyorSa8qK1u/Kit5zyori98qK6nvKiu7/yor2g8qK/gfKjgKLyo4KD8qODpPKjhYXyo4am8qOIh/Kjiajyo4uJ8qOMqvKjjovyo4+s8qORjfKjkq7yo5SP8qOVsPKjl5Hyo5iy8qOak/Kjm7Tyo52V8qOetvKjoJfyo6G48qOjmfKjpLryo6ab8qOnvPKjqZ3yo6q+8qOsn/KjroDyo6+h8qOxgvKjsqPyo7SE8qO1pfKjt4byo7in8qO6iPKju6nyo72K8qO+q/KkgIzypIGt8qSDjvKkhK/ypIaQ8qSHsfKkiZLypIqz8qSMlPKkjbXypI+W8qSQt/KkkpjypJO58qSVmvKklrvypJic8qSZvfKkm57ypJy/8qSeoPKkoIHypKGi8qSjg/KkpKTypKaF8qSnpvKkqYfypKqo8qSsifKkrarypK+L8qSwrPKkso3ypLOu8qS1j/KktrDypLiR8qS5svKku5PypLy08qS+lfKkv7bypYGX8qWCuPKlhJnypYW68qWHm/KliLzypYqd8qWLvvKljZ/ypY+A8qWQofKlkoLypZOj8qWVhPKllqXypZiG8qWZp/Klm4jypZyp8qWeivKln6vypaGM8qWirfKlpI7ypaWv8qWnkPKlqLHypaqS8qWrs/KlrZTypa618qWwlvKlsbfypbOY8qW0ufKltprypbe78qW5nPKlur3ypbye8qW9v/Klv6DypoGB8qaCovKmhIPypoWk8qaHhfKmiKbypoqH8qaLqPKmjYnypo6q8qaQi/KmkazyppON8qaUrvKmlo/yppew8qaZkfKmmrLyppyT8qadtPKmn5XypqC28qail/Kmo7jypqWZ8qamuvKmqJvypqm88qarnfKmrL7ypq6f8qawgPKmsaHyprOC8qa0o/KmtoTyprel8qa5hvKmuqfypryI8qa9qfKmv4ryp4Cr8qeCjPKng63yp4WO8qeGr/KniJDyp4mx8qeLkvKnjLPyp46U8qePtfKnkZbyp5K38qeUmPKnlbnyp5ea8qeYu/Knmpzyp5u98qednvKnnr/yp6Cg8qeigfKno6Lyp6WD8qempPKnqIXyp6mm8qerh/KnrKjyp66J8qevqvKnsYvyp7Ks8qe0jfKnta7yp7eP8qe4sPKnupHyp7uy8qe9k/KnvrTyqICV8qiBtvKog5fyqIS48qiGmfKoh7ryqImb8qiKvPKojJ3yqI2+8qiPn/KokYDyqJKh8qiUgvKolaPyqJeE8qiYpfKomobyqJun8qidiPKonqnyqKCK8qihq/Koo4zyqKSt8qimjvKop6/yqKmQ8qiqsfKorJLyqK2z8qivlPKosLXyqLKW8qizt/KotZjyqLa58qi4mvKoubvyqLuc8qi8vfKovp7yqL+/8qmBoPKpg4HyqYSi8qmGg/Kph6TyqYmF8qmKpvKpjIfyqY2o8qmPifKpkKryqZKL8qmTrPKplY3yqZau8qmYj/KpmbDyqZuR8qmcsvKpnpPyqZ+08qmhlfKporbyqaSX8qmluPKpp5nyqai68qmqm/Kpq7zyqa2d8qmuvvKpsJ/yqbKA8qmzofKptYLyqbaj8qm4hPKpuaXyqbuG8qm8p/Kpvojyqb+p8qqBivKqgqvyqoSM8qqFrfKqh47yqoiv8qqKkPKqi7Hyqo2S8qqOs/KqkJTyqpG18qqTlvKqlLfyqpaY8qqXufKqmZryqpq78qqcnPKqnb3yqp+e8qqgv/KqoqDyqqSB8qqlovKqp4Pyqqik8qqqhfKqq6byqq2H8qquqPKqsInyqrGq8qqzi/KqtKzyqraN8qq3rvKquY/yqrqw8qq8kfKqvbLyqr+T8quAtPKrgpXyq4O28quFl/Krhrjyq4iZ8quJuvKri5vyq4y88quOnfKrj77yq5Gf8quTgPKrlKHyq5aC8quXo/KrmYTyq5ql8quchvKrnafyq5+I8qugqfKrooryq6Or8quljPKrpq3yq6iO8qupr/Krq5Dyq6yx8quukvKrr7Pyq7GU8quytfKrtJbyq7W38qu3mPKruLnyq7qa8qu7u/KrvZzyq7698qyAnvKsgb/yrIOg8qyFgfKshqLyrIiD8qyJpPKsi4XyrIym8qyOh/Ksj6jyrJGJ8qySqvKslIvyrJWs8qyXjfKsmK7yrJqP8qybsPKsnZHyrJ6y8qygk/KsobTyrKOV8qyktvKsppfyrKe48qypmfKsqrryrKyb8qytvPKsr53yrLC+8qyyn/KstIDyrLWh8qy3gvKsuKPyrLqE8qy7pfKsvYbyrL6n8q2AiPKtganyrYOK8q2Eq/KthozyrYet8q2JjvKtiq/yrYyQ8q2NsfKtj5LyrZCz8q2SlPKtk7XyrZWW8q2Wt/KtmJjyrZm58q2bmvKtnLvyrZ6c8q2fvfKtoZ7yraK/8q2koPKtpoHyraei8q2pg/KtqqTyrayF8q2tpvKtr4fyrbCo8q2yifKts6ryrbWL8q22rPKtuI3yrbmu8q27j/KtvLDyrb6R8q2/svKugZPyroK08q6ElfKuhbbyroeX8q6IuPKuipnyrou68q6Nm/KujrzyrpCd8q6RvvKuk5/yrpWA8q6WofKumILyrpmj8q6bhPKunKXyrp6G8q6fp/KuoYjyrqKp8q6kivKupavyrqeM8q6orfKuqo7yrquv8q6tkPKurrHyrrCS8q6xs/Kus5TyrrS18q62lvKut7fyrrmY8q66ufKuvJryrr278q6/nPKvgL3yr4Ke8q+Dv/KvhaDyr4eB8q+IovKvioPyr4uk8q+NhfKvjqbyr5CH8q+RqPKvk4nyr5Sq8q+Wi/Kvl6zyr5mN8q+arvKvnI/yr52w8q+fkfKvoLLyr6KT8q+jtPKvpZXyr6a28q+ol/Kvqbjyr6uZ8q+suvKvrpvyr6+88q+xnfKvsr7yr7Sf8q+2gPKvt6Hyr7mC8q+6o/KvvITyr72l8q+/hvKwgKfysIKI8rCDqfKwhYrysIar8rCIjPKwia3ysIuO8rCMr/KwjpDysI+x8rCRkvKwkrPysJSU8rCVtfKwl5bysJi38rCamPKwm7nysJ2a8rCeu/KwoJzysKG98rCjnvKwpL/ysKag8rCogfKwqaLysKuD8rCspPKwroXysK+m8rCxh/KwsqjysLSJ8rC1qvKwt4vysLis8rC6jfKwu67ysL2P8rC+sPKxgJHysYGy8rGDk/KxhLTysYaV8rGHtvKxiZfysYq48rGMmfKxjbrysY+b8rGQvPKxkp3ysZO+8rGVn/Kxl4DysZih8rGagvKxm6PysZ2E8rGepfKxoIbysaGn8rGjiPKxpKnysaaK8rGnq/KxqYzysaqt8rGsjvKxra/ysa+Q8rGwsfKxspLysbOz8rG1lPKxtrXysbiW8rG5t/Kxu5jysby58rG+mvKxv7vysoGc8rKCvfKyhJ7ysoW/8rKHoPKyiYHysoqi8rKMg/KyjaTyso+F8rKQpvKykofyspOo8rKVifKylqryspiL8rKZrPKym43yspyu8rKej/Kyn7DysqGR8rKisvKypJPysqW08rKnlfKyqLbysqqX8rKruPKyrZnysq668rKwm/KysbzysrOd8rK0vvKytp/ysriA8rK5ofKyu4Lysryj8rK+hPKyv6Xys4GG8rOCp/KzhIjys4Wp8rOHivKziKvys4qM8rOLrfKzjY7ys46v8rOQkPKzkbHys5OS8rOUs/KzlpTys5e18rOZlvKzmrfys5yY8rOdufKzn5rys6C78rOinPKzo73ys6We8rOmv/KzqKDys6qB8rOrovKzrYPys66k8rOwhfKzsabys7OH8rO0qPKztonys7eq8rO5i/Kzuqzys7yN8rO9rvKzv4/ytICw8rSCkfK0g7LytIWT8rSGtPK0iJXytIm28rSLl/K0jLjytI6Z8rSPuvK0kZvytJK88rSUnfK0lb7ytJef8rSZgPK0mqHytJyC8rSdo/K0n4TytKCl8rSihvK0o6fytKWI8rSmqfK0qIrytKmr8rSrjPK0rK3ytK6O8rSvr/K0sZDytLKx8rS0kvK0tbPytLeU8rS4tfK0upbytLu38rS9mPK0vrnytYCa8rWBu/K1g5zytYS98rWGnvK1h7/ytYmg8rWLgfK1jKLytY6D8rWPpPK1kYXytZKm8rWUh/K1lajytZeJ8rWYqvK1movytZus8rWdjfK1nq7ytaCP8rWhsPK1o5HytaSy8rWmk/K1p7TytamV8rWqtvK1rJfyta248rWvmfK1sLrytbKb8rWzvPK1tZ3ytba+8rW4n/K1uoDytbuh8rW9gvK1vqPytoCE8raBpfK2g4bytoSn8raGiPK2h6nytomK8raKq/K2jIzyto2t8raPjvK2kK/ytpKQ8raTsfK2lZLytpaz8raYlPK2mbXytpuW8ract/K2npjytp+58rahmvK2orvytqSc8ralvfK2p57ytqi/8raqoPK2rIHytq2i8ravg/K2sKTytrKF8razpvK2tYfytrao8ra4ifK2uarytruL8ra8rPK2vo3ytr+u8reBj/K3grDyt4SR8reFsvK3h5Pyt4i08reKlfK3i7byt42X8reOuPK3kJnyt5G68reTm/K3lLzyt5ad8reXvvK3mZ/yt5uA8recofK3noLyt5+j8rehhPK3oqXyt6SG8relp/K3p4jyt6ip8reqivK3q6vyt62M8reurfK3sI7yt7Gv8rezkPK3tLHyt7aS8re3s/K3uZTyt7q18re8lvK3vbfyt7+Y8riAufK4gpryuIO78riFnPK4hr3yuIie8riJv/K4i6DyuI2B8riOovK4kIPyuJGk8riThfK4lKbyuJaH8riXqPK4mYnyuJqq8rici/K4nazyuJ+N8rigrvK4oo/yuKOw8rilkfK4prLyuKiT8riptPK4q5XyuKy28riul/K4r7jyuLGZ8riyuvK4tJvyuLW88ri3nfK4uL7yuLqf8ri8gPK4vaHyuL+C8rmAo/K5goTyuYOl8rmFhvK5hqfyuYiI8rmJqfK5i4ryuYyr8rmOjPK5j63yuZGO8rmSr/K5lJDyuZWx8rmXkvK5mLPyuZqU8rmbtfK5nZbyuZ638rmgmPK5obnyuaOa8rmku/K5ppzyuae98rmpnvK5qr/yuayg8rmugfK5r6LyubGD8rmypPK5tIXyubWm8rm3h/K5uKjyubqJ8rm7qvK5vYvyub6s8rqAjfK6ga7yuoOP8rqEsPK6hpHyuoey8rqJk/K6irTyuoyV8rqNtvK6j5fyupC48rqSmfK6k7ryupWb8rqWvPK6mJ3yupm+8rqbn/K6nYDyup6h8rqggvK6oaPyuqOE8rqkpfK6pobyuqen8rqpiPK6qqnyuqyK8rqtq/K6r4zyurCt8rqyjvK6s6/yurWQ8rq2sfK6uJLyurmz8rq7lPK6vLXyur6W8rq/t/K7gZjyu4K58ruEmvK7hbvyu4ec8ruIvfK7ip7yu4u/8ruNoPK7j4Hyu5Ci8ruSg/K7k6Tyu5WF8ruWpvK7mIfyu5mo8rubifK7nKryu56L8rufrPK7oY3yu6Ku8rukj/K7pbDyu6eR8ruosvK7qpPyu6u08rutlfK7rrbyu7CX8ruxuPK7s5nyu7S68ru2m/K7t7zyu7md8ru6vvK7vJ/yu76A8ru/ofK8gYLyvIKj8ryEhPK8haXyvIeG8ryIp/K8iojyvIup8ryNivK8jqvyvJCM8ryRrfK8k47yvJSv8ryWkPK8l7HyvJmS8ryas/K8nJTyvJ218ryflvK8oLfyvKKY8ryjufK8pZryvKa78ryonPK8qb3yvKue8rysv/K8rqDyvLCB8ryxovK8s4PyvLSk8ry2hfK8t6byvLmH8ry6qPK8vInyvL2q8ry/i/K9gKzyvYKN8r2DrvK9hY/yvYaw8r2IkfK9ibLyvYuT8r2MtPK9jpXyvY+28r2Rl/K9krjyvZSZ8r2VuvK9l5vyvZi88r2anfK9m77yvZ2f8r2fgPK9oKHyvaKC8r2jo/K9pYTyvaal8r2ohvK9qafyvauI8r2sqfK9roryva+r8r2xjPK9sq3yvbSO8r21r/K9t5Dyvbix8r26kvK9u7Pyvb2U8r2+tfK+gJbyvoG38r6DmPK+hLnyvoaa8r6Hu/K+iZzyvoq98r6MnvK+jb/yvo+g8r6RgfK+kqLyvpSD8r6VpPK+l4Xyvpim8r6ah/K+m6jyvp2J8r6eqvK+oIvyvqGs8r6jjfK+pK7yvqaP8r6nsPK+qZHyvqqy8r6sk/K+rbTyvq+V8r6wtvK+spfyvrO48r61mfK+trryvrib8r65vPK+u53yvry+8r6+n/K/gIDyv4Gh8r+DgvK/hKPyv4aE8r+HpfK/iYbyv4qn8r+MiPK/janyv4+K8r+Qq/K/kozyv5Ot8r+VjvK/lq/yv5iQ8r+ZsfK/m5Lyv5yz8r+elPK/n7Xyv6GW8r+it/K/pJjyv6W58r+nmvK/qLvyv6qc8r+rvfK/rZ7yv66/8r+woPK/soHyv7Oi8r+1g/K/tqTyv7iF8r+5pvK/u4fyv7yo8r++ifK/v6rzgIGL84CCrPOAhI3zgIWu84CHj/OAiLDzgIqR84CLsvOAjZPzgI6084CQlfOAkbbzgJOX84CUuPOAlpnzgJe684CZm/OAmrzzgJyd84CdvvOAn5/zgKGA84CiofOApILzgKWj84CnhPOAqKXzgKqG84Crp/OArYjzgK6p84CwivOAsavzgLOM84C0rfOAto7zgLev84C5kPOAurHzgLyS84C9s/OAv5TzgYC184GClvOBg7fzgYWY84GGufOBiJrzgYm784GLnPOBjL3zgY6e84GPv/OBkaDzgZOB84GUovOBloPzgZek84GZhfOBmqbzgZyH84GdqPOBn4nzgaCq84Gii/OBo6zzgaWN84GmrvOBqI/zgamw84GrkfOBrLLzga6T84GvtPOBsZXzgbK284G0l/OBtbjzgbeZ84G4uvOBupvzgbu884G9nfOBvr7zgoCf84KCgPOCg6HzgoWC84KGo/OCiITzgoml84KLhvOCjKfzgo6I84KPqfOCkYrzgpKr84KUjPOCla3zgpeO84KYr/OCmpDzgpux84KdkvOCnrPzgqCU84KhtfOCo5bzgqS384KmmPOCp7nzgqma84Kqu/OCrJzzgq2984KvnvOCsL/zgrKg84K0gfOCtaLzgreD84K4pPOCuoXzgrum84K9h/OCvqjzg4CJ84OBqvODg4vzg4Ss84OGjfODh67zg4mP84OKsPODjJHzg42y84OPk/ODkLTzg5KV84OTtvODlZfzg5a484OYmfODmbrzg5ub84OcvPODnp3zg5++84Ohn/ODo4Dzg6Sh84OmgvODp6Pzg6mE84OqpfODrIbzg62n84OviPODsKnzg7KK84Ozq/ODtYzzg7at84O4jvODua/zg7uQ84O8sfODvpLzg7+z84SBlPOEgrXzhISW84SFt/OEh5jzhIi584SKmvOEi7vzhI2c84SOvfOEkJ7zhJG/84SToPOElYHzhJai84SYg/OEmaTzhJuF84ScpvOEnofzhJ+o84ShifOEoqrzhKSL84SlrPOEp43zhKiu84Sqj/OEq7DzhK2R84SusvOEsJPzhLG084SzlfOEtLbzhLaX84S3uPOEuZnzhLq684S8m/OEvbzzhL+d84WAvvOFgp/zhYSA84WFofOFh4LzhYij84WKhPOFi6XzhY2G84WOp/OFkIjzhZGp84WTivOFlKvzhZaM84WXrfOFmY7zhZqv84WckPOFnbHzhZ+S84Wgs/OFopTzhaO184WllvOFprfzhaiY84WpufOFq5rzhay784WunPOFr73zhbGe84Wyv/OFtKDzhbaB84W3ovOFuYPzhbqk84W8hfOFvabzhb+H84aAqPOGgonzhoOq84aFi/OGhqzzhoiN84aJrvOGi4/zhoyw84aOkfOGj7LzhpGT84aStPOGlJXzhpW284aXl/OGmLjzhpqZ84abuvOGnZvzhp6884agnfOGob7zhqOf84algPOGpqHzhqiC84apo/OGq4Tzhqyl84auhvOGr6fzhrGI84ayqfOGtIrzhrWr84a3jPOGuK3zhrqO84a7r/OGvZDzhr6x84eAkvOHgbPzh4OU84eEtfOHhpbzh4e384eJmPOHirnzh4ya84eNu/OHj5zzh5C984eSnvOHk7/zh5Wg84eXgfOHmKLzh5qD84ebpPOHnYXzh56m84egh/OHoajzh6OJ84ekqvOHpovzh6es84epjfOHqq7zh6yP84etsPOHr5Hzh7Cy84eyk/OHs7Tzh7WV84e2tvOHuJfzh7m484e7mfOHvLrzh76b84e/vPOIgZ3ziIK+84iEn/OIhoDziIeh84iJgvOIiqPziIyE84iNpfOIj4bziJCn84iSiPOIk6nziJWK84iWq/OImIzziJmt84ibjvOInK/ziJ6Q84ifsfOIoZLziKKz84iklPOIpbXziKeW84iot/OIqpjziKu584itmvOIrrvziLCc84ixvfOIs57ziLS/84i2oPOIuIHziLmi84i7g/OIvKTziL6F84i/pvOJgYfziYKo84mEifOJharziYeL84mIrPOJio3ziYuu84mNj/OJjrDziZCR84mRsvOJk5PziZS084mWlfOJl7bziZmX84mauPOJnJnziZ2684mfm/OJoLzziaKd84mjvvOJpZ/ziaeA84moofOJqoLziauj84mthPOJrqXzibCG84mxp/OJs4jzibSp84m2ivOJt6vzibmM84m6rfOJvI7zib2v84m/kPOKgLHzioKS84qDs/OKhZTzioa184qIlvOKibfziouY84qMufOKjprzio+784qRnPOKkr3zipSe84qVv/OKl6DzipmB84qaovOKnIPzip2k84qfhfOKoKbziqKH84qjqPOKpYnziqaq84qoi/OKqazziquN84qsrvOKro/ziq+w84qxkfOKsrLzirST84q1tPOKt5Xziri284q6l/OKu7jzir2Z84q+uvOLgJvzi4G884uDnfOLhL7zi4af84uIgPOLiaHzi4uC84uMo/OLjoTzi4+l84uRhvOLkqfzi5SI84uVqfOLl4rzi5ir84uajPOLm63zi52O84uer/OLoJDzi6Gx84ujkvOLpLPzi6aU84untfOLqZbzi6q384usmPOLrbnzi6+a84uwu/OLspzzi7O984u1nvOLtr/zi7ig84u6gfOLu6Lzi72D84u+pPOMgIXzjIGm84yDh/OMhKjzjIaJ84yHqvOMiYvzjIqs84yMjfOMja7zjI+P84yQsPOMkpHzjJOy84yVk/OMlrTzjJiV84yZtvOMm5fzjJy484yemfOMn7rzjKGb84yivPOMpJ3zjKW+84ynn/OMqYDzjKqh84ysgvOMraPzjK+E84ywpfOMsobzjLOn84y1iPOMtqnzjLiK84y5q/OMu4zzjLyt84y+jvOMv6/zjYGQ842CsfONhJLzjYWz842HlPONiLXzjYqW842Lt/ONjZjzjY65842QmvONkbvzjZOc842UvfONlp7zjZe/842ZoPONm4HzjZyi842eg/ONn6TzjaGF842ipvONpIfzjaWo842nifONqKrzjaqL842rrPONrY3zja6u842wj/ONsbDzjbOR8420svONtpPzjbe08425lfONurbzjbyX8429uPONv5nzjoC6846Cm/OOg7zzjoWd846GvvOOiJ/zjoqA846LofOOjYLzjo6j846QhPOOkaXzjpOG846Up/OOlojzjpep846ZivOOmqvzjpyM846drfOOn47zjqCv846ikPOOo7HzjqWS846ms/OOqJTzjqm1846rlvOOrLfzjq6Y846vufOOsZrzjrK78460nPOOtb3zjree8464v/OOuqDzjryB8469ovOOv4Pzj4Ck84+ChfOPg6bzj4WH84+GqPOPiInzj4mq84+Li/OPjKzzj46N84+PrvOPkY/zj5Kw84+UkfOPlbLzj5eT84+YtPOPmpXzj5u284+dl/OPnrjzj6CZ84+huvOPo5vzj6S884+mnfOPp77zj6mf84+rgPOPrKHzj66C84+vo/OPsYTzj7Kl84+0hvOPtafzj7eI84+4qfOPuorzj7ur84+9jPOPvq3zkICO85CBr/OQg5DzkISx85CGkvOQh7PzkImU85CKtfOQjJbzkI2385CPmPOQkLnzkJKa85CTu/OQlZzzkJa985CYnvOQmb/zkJug85CdgfOQnqLzkKCD85ChpPOQo4XzkKSm85Cmh/OQp6jzkKmJ85CqqvOQrIvzkK2s85CvjfOQsK7zkLKP85CzsPOQtZHzkLay85C4k/OQubTzkLuV85C8tvOQvpfzkL+485GBmfORgrrzkYSb85GFvPORh53zkYi+85GKn/ORjIDzkY2h85GPgvORkKPzkZKE85GTpfORlYbzkZan85GYiPORmanzkZuK85Gcq/ORnozzkZ+t85GhjvORoq/zkaSQ85GlsfORp5Lzkaiz85GqlPORq7Xzka2W85Gut/ORsJjzkbG585GzmvORtLvzkbac85G3vfORuZ7zkbq/85G8oPORvoHzkb+i85KBg/OSgqTzkoSF85KFpvOSh4fzkoio85KKifOSi6rzko2L85KOrPOSkI3zkpGu85KTj/OSlLDzkpaR85KXsvOSmZPzkpq085KclfOSnbbzkp+X85KguPOSopnzkqO685Klm/OSprzzkqid85KpvvOSq5/zkq2A85KuofOSsILzkrGj85KzhPOStKXzkraG85K3p/OSuYjzkrqp85K8ivOSvavzkr+M85OArfOTgo7zk4Ov85OFkPOThrHzk4iS85OJs/OTi5Tzk4y185OOlvOTj7fzk5GY85OSufOTlJrzk5W785OXnPOTmL3zk5qe85Obv/OTnaDzk5+B85OgovOTooPzk6Ok85OlhfOTpqbzk6iH85OpqPOTq4nzk6yq85Oui/OTr6zzk7GN85OyrvOTtI/zk7Ww85O3kfOTuLLzk7qT85O7tPOTvZXzk76285SAl/OUgbjzlIOZ85SEuvOUhpvzlIe885SJnfOUir7zlIyf85SOgPOUj6HzlJGC85SSo/OUlITzlJWl85SXhvOUmKfzlJqI85SbqfOUnYrzlJ6r85SgjPOUoa3zlKOO85Skr/OUppDzlKex85SpkvOUqrPzlKyU85SttfOUr5bzlLC385SymPOUs7nzlLWa85S2u/OUuJzzlLm985S7nvOUvL/zlL6g85WAgfOVgaLzlYOD85WEpPOVhoXzlYem85WJh/OViqjzlYyJ85WNqvOVj4vzlZCs85WSjfOVk67zlZWP85WWsPOVmJHzlZmy85Wbk/OVnLTzlZ6V85WftvOVoZfzlaK485WkmfOVpbrzlaeb85WovPOVqp3zlau+85Wtn/OVr4DzlbCh85WygvOVs6PzlbWE85W2pfOVuIbzlbmn85W7iPOVvKnzlb6K85W/q/OWgYzzloKt85aEjvOWha/zloeQ85aIsfOWipLzlouz85aNlPOWjrXzlpCW85aRt/OWk5jzlpS585aWmvOWl7vzlpmc85aavfOWnJ7zlp2/85afoPOWoYHzlqKi85akg/OWpaTzlqeF85aopvOWqofzlquo85atifOWrqrzlrCL85axrPOWs43zlrSu85a2j/OWt7DzlrmR85a6svOWvJPzlr2085a/lfOXgLbzl4KX85eDuPOXhZnzl4a685eIm/OXibzzl4ud85eMvvOXjp/zl5CA85eRofOXk4Lzl5Sj85eWhPOXl6Xzl5mG85eap/OXnIjzl52p85efivOXoKvzl6KM85ejrfOXpY7zl6av85eokPOXqbHzl6uS85ess/OXrpTzl6+185exlvOXsrfzl7SY85e1ufOXt5rzl7i785e6nPOXu73zl72e85e+v/OYgKDzmIKB85iDovOYhYPzmIak85iIhfOYiabzmIuH85iMqPOYjonzmI+q85iRi/OYkqzzmJSN85iVrvOYl4/zmJiw85iakfOYm7LzmJ2T85ietPOYoJXzmKG285ijl/OYpLjzmKaZ85inuvOYqZvzmKq885isnfOYrb7zmK+f85ixgPOYsqHzmLSC85i1o/OYt4TzmLil85i6hvOYu6fzmL2I85i+qfOZgIrzmYGr85mDjPOZhK3zmYaO85mHr/OZiZDzmYqx85mMkvOZjbPzmY+U85mQtfOZkpbzmZO385mVmPOZlrnzmZia85mZu/OZm5zzmZy985menvOZn7/zmaGg85mjgfOZpKLzmaaD85mnpPOZqYXzmaqm85msh/OZrajzma+J85mwqvOZsovzmbOs85m1jfOZtq7zmbiP85m5sPOZu5Hzmbyy85m+k/OZv7TzmoGV85qCtvOahJfzmoW485qHmfOaiLrzmoqb85qLvPOajZ3zmo6+85qQn/OakoDzmpOh85qVgvOalqPzmpiE85qZpfOam4bzmpyn85qeiPOan6nzmqGK85qiq/OapIzzmqWt85qnjvOaqK/zmqqQ85qrsfOarZLzmq6z85qwlPOasbXzmrOW85q0t/Oatpjzmre585q5mvOaurvzmryc85q9vfOav57zm4C/85uCoPObhIHzm4Wi85uHg/ObiKTzm4qF85uLpvObjYfzm46o85uQifObkarzm5OL85uUrPOblo3zm5eu85uZj/ObmrDzm5yR85udsvObn5Pzm6C085uilfObo7bzm6WX85umuPObqJnzm6m685urm/ObrLzzm66d85uvvvObsZ/zm7OA85u0ofObtoLzm7ej85u5hPObuqXzm7yG85u9p/Obv4jznICp85yCivOcg6vznIWM85yGrfOciI7znImv85yLkPOcjLHznI6S85yPs/OckZTznJK185yUlvOclbfznJeY85yYufOcmprznJu785ydnPOcnr3znKCe85yhv/Oco6DznKWB85ymovOcqIPznKmk85yrhfOcrKbznK6H85yvqPOcsYnznLKq85y0i/OctazznLeN85y4rvOcuo/znLuw85y9kfOcvrLznYCT852BtPOdg5XznYS2852Gl/Odh7jznYmZ852KuvOdjJvznY28852PnfOdkL7znZKf852UgPOdlaHznZeC852Yo/OdmoTznZul852dhvOdnqfznaCI852hqfOdo4rznaSr852mjPOdp63znamO852qr/OdrJDzna2x852vkvOdsLPznbKU852ztfOdtZbznba38524mPOdubnznbua8528u/Odvpzznb+9856BnvOegr/znoSg856GgfOeh6LznomD856KpPOejIXzno2m856Ph/OekKjznpKJ856TqvOelYvznpas856YjfOema7znpuP856csPOenpHznp+y856hk/OeorTznqSV856ltvOep5fznqi4856qmfOeq7rznq2b856uvPOesJ3znrG+856zn/OetYDznrah8564gvOeuaPznruE8568pfOevobznr+n85+BiPOfgqnzn4SK85+Fq/Ofh4zzn4it85+KjvOfi6/zn42Q85+OsfOfkJLzn5Gz85+TlPOflLXzn5aW85+Xt/OfmZjzn5q585+cmvOfnbvzn5+c85+gvfOfop7zn6O/85+loPOfp4Hzn6ii85+qg/Ofq6Tzn62F85+upvOfsIfzn7Go85+zifOftKrzn7aL85+3rPOfuY3zn7qu85+8j/OfvbDzn7+R86CAsvOggpPzoIO086CFlfOghrbzoIiX86CJuPOgi5nzoIy686COm/Ogj7zzoJGd86CSvvOglJ/zoJaA86CXofOgmYLzoJqj86CchPOgnaXzoJ+G86Cgp/OgoojzoKOp86ClivOgpqvzoKiM86CprfOgq47zoKyv86CukPOgr7HzoLGS86Cys/OgtJTzoLW186C3lvOguLfzoLqY86C7ufOgvZrzoL6786GAnPOhgb3zoYOe86GEv/OhhqDzoYiB86GJovOhi4PzoYyk86GOhfOhj6bzoZGH86GSqPOhlInzoZWq86GXi/OhmKzzoZqN86GbrvOhnY/zoZ6w86GgkfOhobLzoaOT86GktPOhppXzoae286Gpl/OhqrjzoayZ86GtuvOhr5vzobC886GynfOhs77zobWf86G3gPOhuKHzobqC86G7o/OhvYTzob6l86KAhvOigafzooOI86KEqfOihorzooer86KJjPOiiq3zooyO86KNr/Oij5DzopCx86KSkvOik7PzopWU86KWtfOimJbzopm386KbmPOinLnzop6a86Kfu/OioZzzoqK986KknvOipb/zoqeg86KpgfOiqqLzoqyD86KtpPOir4XzorCm86Kyh/Ois6jzorWJ86K2qvOiuIvzorms86K7jfOivK7zor6P86K/sPOjgZHzo4Ky86OEk/OjhbTzo4eV86OItvOjipfzo4u486ONmfOjjrrzo5Cb86ORvPOjk53zo5S+86OWn/OjmIDzo5mh86ObgvOjnKPzo56E86OfpfOjoYbzo6Kn86OkiPOjpanzo6eK86Ooq/Ojqozzo6ut86OtjvOjrq/zo7CQ86OxsfOjs5Lzo7Sz86O2lPOjt7Xzo7mW86O6t/OjvJjzo72586O/mvOkgLvzpIKc86SDvfOkhZ7zpIa/86SIoPOkioHzpIui86SNg/OkjqTzpJCF86SRpvOkk4fzpJSo86SWifOkl6rzpJmL86SarPOknI3zpJ2u86Sfj/OkoLDzpKKR86SjsvOkpZPzpKa086SolfOkqbbzpKuX86SsuPOkrpnzpK+686Sxm/OksrzzpLSd86S1vvOkt5/zpLmA86S6ofOkvILzpL2j86S/hPOlgKXzpYKG86WDp/OlhYjzpYap86WIivOliavzpYuM86WMrfOljo7zpY+v86WRkPOlkrHzpZSS86WVs/Oll5TzpZi186WalvOlm7fzpZ2Y86WeufOloJrzpaG786WjnPOlpL3zpaae86Wnv/OlqaDzpauB86WsovOlroPzpa+k86WxhfOlsqbzpbSH86W1qPOlt4nzpbiq86W6i/Olu6zzpb2N86W+rvOmgI/zpoGw86aDkfOmhLLzpoaT86aHtPOmiZXzpoq286aMl/Omjbjzpo+Z86aQuvOmkpvzppO886aVnfOmlr7zppif86aagPOmm6Hzpp2C86aeo/OmoITzpqGl86ajhvOmpKfzpqaI86anqfOmqYrzpqqr86asjPOmra3zpq+O86awr/OmspDzprOx86a1kvOmtrPzpriU86a5tfOmu5bzpry386a+mPOmv7nzp4Ga86eCu/OnhJzzp4W986eHnvOniL/zp4qg86eMgfOnjaLzp4+D86eQpPOnkoXzp5Om86eVh/Onlqjzp5iJ86eZqvOnm4vzp5ys86eejfOnn67zp6GP86eisPOnpJHzp6Wy86enk/OnqLTzp6qV86ertvOnrZfzp66486ewmfOnsbrzp7Ob86e0vPOntp3zp7e+86e5n/Onu4Dzp7yh86e+gvOnv6PzqIGE86iCpfOohIbzqIWn86iHiPOoiKnzqIqK86iLq/OojYzzqI6t86iQjvOoka/zqJOQ86iUsfOolpLzqJez86iZlPOomrXzqJyW86idt/Oon5jzqKC586iimvOoo7vzqKWc86imvfOoqJ7zqKm/86iroPOorYHzqK6i86iwg/OosaTzqLOF86i0pvOotofzqLeo86i5ifOouqrzqLyL86i9rPOov43zqYCu86mCj/Opg7DzqYWR86mGsvOpiJPzqYm086mLlfOpjLbzqY6X86mPuPOpkZnzqZK686mUm/OplbzzqZed86mYvvOpmp/zqZyA86mdofOpn4LzqaCj86mihPOpo6XzqaWG86mmp/OpqIjzqamp86mrivOprKvzqa6M86mvrfOpsY7zqbKv86m0kPOptbHzqbeS86m4s/OpupTzqbu186m9lvOpvrfzqoCY86qBufOqg5rzqoS786qGnPOqh73zqome86qKv/OqjKDzqo6B86qPovOqkYPzqpKk86qUhfOqlabzqpeH86qYqPOqmonzqpuq86qdi/OqnqzzqqCN86qhrvOqo4/zqqSw86qmkfOqp7LzqqmT86qqtPOqrJXzqq2286qvl/OqsLjzqrKZ86qzuvOqtZvzqra886q4nfOqub7zqruf86q9gPOqvqHzq4CC86uBo/Org4Tzq4Sl86uGhvOrh6fzq4mI86uKqfOrjIrzq42r86uPjPOrkK3zq5KO86uTr/OrlZDzq5ax86uYkvOrmbPzq5uU86uctfOrnpbzq5+386uhmPOrornzq6Sa86ulu/Orp5zzq6i986uqnvOrq7/zq62g86uvgfOrsKLzq7KD86uzpPOrtYXzq7am86u4h/Oruajzq7uJ86u8qvOrvovzq7+s86yBjfOsgq7zrISP86yFsPOsh5HzrIiy86yKk/Osi7TzrI2V86yOtvOskJfzrJG486yTmfOslLrzrJab86yXvPOsmZ3zrJq+86ycn/OsnoDzrJ+h86yhgvOsoqPzrKSE86ylpfOsp4bzrKin86yqiPOsq6nzrK2K86yuq/OssIzzrLGt86yzjvOstK/zrLaQ86y3sfOsuZLzrLqz86y8lPOsvbXzrL+W862At/OtgpjzrYO5862FmvOthrvzrYic862JvfOti57zrYy/862OoPOtkIHzrZGi862Tg/OtlKTzrZaF862XpvOtmYfzrZqo862cifOtnarzrZ+L862grPOtoo3zraOu862lj/OtprDzraiR862psvOtq5Pzray0862ulfOtr7bzrbGX862yuPOttJnzrbW68623m/OtuLzzrbqd8627vvOtvZ/zrb+A866AofOugoLzroOj866FhPOuhqXzroiG866Jp/Oui4jzroyp866OivOuj6vzrpGM866SrfOulI7zrpWv866XkPOumLHzrpqS866bs/OunZTzrp61866glvOuobfzrqOY866kufOupprzrqe7866pnPOuqr3zrqye866tv/Our6DzrrGB866yovOutIPzrrWk8663hfOuuKbzrrqH8667qPOuvYnzrr6q86+Ai/Ovgazzr4ON86+ErvOvho/zr4ew86+JkfOvirLzr4yT86+NtPOvj5Xzr5C286+Sl/Ovk7jzr5WZ86+WuvOvmJvzr5m886+bnfOvnL7zr56f86+ggPOvoaHzr6OC86+ko/OvpoTzr6el86+phvOvqqfzr6yI86+tqfOvr4rzr7Cr86+yjPOvs63zr7WO86+2r/OvuJDzr7mx86+7kvOvvLPzr76U86+/tfOwgZbzsIK387CEmPOwhbnzsIea87CIu/OwipzzsIu987CNnvOwjr/zsJCg87CSgfOwk6LzsJWD87CWpPOwmIXzsJmm87Cbh/OwnKjzsJ6J87CfqvOwoYvzsKKs87CkjfOwpa7zsKeP87CosPOwqpHzsKuy87Ctk/OwrrTzsLCV87CxtvOws5fzsLS487C2mfOwt7rzsLmb87C6vPOwvJ3zsL2+87C/n/OxgYDzsYKh87GEgvOxhaPzsYeE87GIpfOxiobzsYun87GNiPOxjqnzsZCK87GRq/Oxk4zzsZSt87GWjvOxl6/zsZmQ87GasfOxnJLzsZ2z87GflPOxoLXzsaKW87Gjt/OxpZjzsaa587GomvOxqbvzsauc87GsvfOxrp7zsa+/87GxoPOxs4HzsbSi87G2g/Oxt6TzsbmF87G6pvOxvIfzsb2o87G/ifOygKrzsoKL87KDrPOyhY3zsoau87KIj/OyibDzsouR87KMsvOyjpPzso+087KRlfOykrbzspSX87KVuPOyl5nzspi687Kam/Oym7zzsp2d87KevvOyoJ/zsqKA87KjofOypYLzsqaj87KohPOyqaXzsquG87Ksp/Oyrojzsq+p87KxivOysqvzsrSM87K1rfOyt47zsriv87K6kPOyu7Hzsr2S87K+s/OzgJTzs4G187ODlvOzhLfzs4aY87OHufOziZrzs4q787OMnPOzjb3zs4+e87OQv/OzkqDzs5SB87OVovOzl4Pzs5ik87OahfOzm6bzs52H87OeqPOzoInzs6Gq87Oji/OzpKzzs6aN87OnrvOzqY/zs6qw87OskfOzrbLzs6+T87OwtPOzspXzs7O287O1l/Oztrjzs7iZ87O5uvOzu5vzs7y887O+nfOzv77ztIGf87SDgPO0hKHztIaC87SHo/O0iYTztIql87SMhvO0jafztI+I87SQqfO0korztJOr87SVjPO0lq3ztJiO87SZr/O0m5DztJyx87SekvO0n7PztKGU87SitfO0pJbztKW387SnmPO0qLnztKqa87Sru/O0rZzztK6987SwnvO0sb/ztLOg87S1gfO0tqLztLiD87S5pPO0u4XztLym87S+h/O0v6jztYGJ87WCqvO1hIvztYWs87WHjfO1iK7ztYqP87WLsPO1jZHztY6y87WQk/O1kbTztZOV87WUtvO1lpfztZe487WZmfO1mrrztZyb87WdvPO1n53ztaC+87Win/O1pIDztaWh87WngvO1qKPztaqE87WrpfO1rYbzta6n87WwiPO1sanztbOK87W0q/O1tozztbet87W5jvO1uq/ztbyQ87W9sfO1v5LztoCz87aClPO2g7XztoWW87aGt/O2iJjztom587aLmvO2jLvzto6c87aPvfO2kZ7ztpK/87aUoPO2loHztpei87aZg/O2mqTztpyF87adpvO2n4fztqCo87aiifO2o6rztqWL87amrPO2qI3ztqmu87arj/O2rLDztq6R87avsvO2sZPztrK087a0lfO2tbbztreX87a4uPO2upnztru687a9m/O2vrzzt4Cd87eBvvO3g5/zt4WA87eGofO3iILzt4mj87eLhPO3jKXzt46G87ePp/O3kYjzt5Kp87eUivO3lavzt5eM87eYrfO3mo7zt5uv87edkPO3nrHzt6CS87ehs/O3o5Tzt6S187emlvO3p7fzt6mY87equfO3rJrzt62787evnPO3sL3zt7Ke87ezv/O3taDzt7eB87e4ovO3uoPzt7uk87e9hfO3vqbzuICH87iBqPO4g4nzuISq87iGi/O4h6zzuImN87iKrvO4jI/zuI2w87iPkfO4kLLzuJKT87iTtPO4lZXzuJa287iYl/O4mbjzuJuZ87icuvO4npvzuJ+887ihnfO4or7zuKSf87imgPO4p6HzuKmC87iqo/O4rITzuK2l87ivhvO4sKfzuLKI87izqfO4tYrzuLar87i4jPO4ua3zuLuO87i8r/O4vpDzuL+x87mBkvO5grPzuYSU87mFtfO5h5bzuYi387mKmPO5i7nzuY2a87mOu/O5kJzzuZG987mTnvO5lL/zuZag87mYgfO5maLzuZuD87mcpPO5noXzuZ+m87mhh/O5oqjzuaSJ87mlqvO5p4vzuais87mqjfO5q67zua2P87musPO5sJHzubGy87mzk/O5tLTzubaV87m3tvO5uZfzubq487m8mfO5vbrzub+b87qAvPO6gp3zuoO+87qFn/O6h4Dzuoih87qKgvO6i6Pzuo2E87qOpfO6kIbzupGn87qTiPO6lKnzupaK87qXq/O6mYzzupqt87qcjvO6na/zup+Q87qgsfO6opLzuqOz87qllPO6prXzuqiW87qpt/O6q5jzuqy587qumvO6r7vzurGc87qyvfO6tJ7zurW/87q3oPO6uYHzurqi87q8g/O6vaTzur+F87uApvO7gofzu4Oo87uFifO7hqrzu4iL87uJrPO7i43zu4yu87uOj/O7j7Dzu5GR87uSsvO7lJPzu5W087uXlfO7mLbzu5qX87ubuPO7nZnzu56687ugm/O7obzzu6Od87ukvvO7pp/zu6iA87upofO7q4Lzu6yj87uuhPO7r6Xzu7GG87uyp/O7tIjzu7Wp87u3ivO7uKvzu7qM87u7rfO7vY7zu76v87yAkPO8gbHzvIOS87yEs/O8hpTzvIe187yJlvO8irfzvIyY87yNufO8j5rzvJC787ySnPO8k73zvJWe87yWv/O8mKDzvJqB87ybovO8nYPzvJ6k87yghfO8oabzvKOH87ykqPO8ponzvKeq87ypi/O8qqzzvKyN87ytrvO8r4/zvLCw87yykfO8s7LzvLWT87y2tPO8uJXzvLm287y7l/O8vLjzvL6Z87y/uvO9gZvzvYK8872EnfO9hb7zvYef872JgPO9iqHzvYyC872No/O9j4TzvZCl872ShvO9k6fzvZWI872WqfO9mIrzvZmr872bjPO9nK3zvZ6O872fr/O9oZDzvaKx872kkvO9pbPzvaeU872otfO9qpbzvau3872tmPO9rrnzvbCa872xu/O9s5zzvbS98722nvO9t7/zvbmg8727gfO9vKLzvb6D872/pPO+gYXzvoKm876Eh/O+hajzvoeJ876IqvO+iovzvous876NjfO+jq7zvpCP876RsPO+k5HzvpSy876Wk/O+l7TzvpmV876atvO+nJfzvp24876fmfO+oLrzvqKb876jvPO+pZ3zvqa+876on/O+qoDzvquh876tgvO+rqPzvrCE876xpfO+s4bzvrSn8762iPO+t6nzvrmK8766q/O+vIzzvr2t876/jvO/gK/zv4KQ87+DsfO/hZLzv4az87+IlPO/ibXzv4uW87+Mt/O/jpjzv4+587+RmvO/krvzv5Sc87+VvfO/l57zv5i/87+aoPO/nIHzv52i87+fg/O/oKTzv6KF87+jpvO/pYfzv6ao87+oifO/qarzv6uL87+srPO/ro3zv6+u87+xj/O/srDzv7SR87+1svO/t5Pzv7i087+6lfO/u7bzv72X87++uPSAgJn0gIG69ICDm/SAhLz0gIad9ICHvvSAiZ/0gIuA9ICMofSAjoL0gI+j9ICRhPSAkqX0gJSG9ICVp/SAl4j0gJip9ICaivSAm6v0gJ2M9ICerfSAoI70gKGv9ICjkPSApLH0gKaS9ICns/SAqZT0gKq19ICslvSArbf0gK+Y9ICwufSAspr0gLO79IC1nPSAtr30gLie9IC5v/SAu6D0gL2B9IC+ovSBgIP0gYGk9IGDhfSBhKb0gYaH9IGHqPSBiYn0gYqq9IGMi/SBjaz0gY+N9IGQrvSBko/0gZOw9IGVkfSBlrL0gZiT9IGZtPSBm5X0gZy29IGel/SBn7j0gaGZ9IGiuvSBpJv0gaW89IGnnfSBqL70gaqf9IGsgPSBraH0ga+C9IGwo/SBsoT0gbOl9IG1hvSBtqf0gbiI9IG5qfSBu4r0gbyr9IG+jPSBv630goGO9IKCr/SChJD0goWx9IKHkvSCiLP0goqU9IKLtfSCjZb0go639IKQmPSCkbn0gpOa9IKUu/SClpz0gpe99IKZnvSCmr/0gpyg9IKegfSCn6L0gqGD9IKipPSCpIX0gqWm9IKnh/SCqKj0gqqJ9IKrqvSCrYv0gq6s9IKwjfSCsa70grOP9IK0sPSCtpH0grey9IK5k/SCurT0gryV9IK9tvSCv5f0g4C49IOCmfSDg7r0g4Wb9IOGvPSDiJ30g4m+9IOLn/SDjYD0g46h9IOQgvSDkaP0g5OE9IOUpfSDlob0g5en9IOZiPSDmqn0g5yK9IOdq/SDn4z0g6Ct9IOijvSDo6/0g6WQ9IOmsfSDqJL0g6mz9IOrlPSDrLX0g66W9IOvt/SDsZj0g7K59IO0mvSDtbv0g7ec9IO4vfSDup70g7u/9IO9oPSDv4H0hICi9ISCg/SEg6T0hIWF9ISGpvSEiIf0hImo9ISLifSEjKr0hI6L9ISPrPSEkY30hJKu9ISUj/SElbD0hJeR9ISYsvSEmpP0hJu09ISdlfSEnrb0hKCX9IShuPSEo5n0hKS69ISmm/SEp7z0hKmd9ISqvvSErJ/0hK6A9ISvofSEsYL0hLKj9IS0hPSEtaX0hLeG9IS4p/SEuoj0hLup9IS9ivSEvqv0hYCM9IWBrfSFg470hYSv9IWGkPSFh7H0hYmS9IWKs/SFjJT0hY219IWPlvSFkLf0hZKY9IWTufSFlZr0hZa79IWYnPSFmb30hZue9IWcv/SFnqD0haCB9IWhovSFo4P0haSk9IWmhfSFp6b0hamH9IWqqPSFrIn0ha2q9IWvi/SFsKz0hbKN9IWzrvSFtY/0hbaw9IW4kfSFubL0hbuT9IW8tPSFvpX0hb+29IaBl/SGgrj0hoSZ9IaFuvSGh5v0hoi89IaKnfSGi770ho2f9IaPgPSGkKH0hpKC9IaTo/SGlYT0hpal9IaYhvSGmaf0hpuI9IacqfSGnor0hp+r9IahjPSGoq30hqSO9Ialr/SGp5D0hqix9IaqkvSGq7P0hq2U9IautfSGsJb0hrG39IazmPSGtLn0hraa9Ia3u/SGuZz0hrq99Ia8nvSGvb/0hr+g9IeBgfSHgqL0h4SD9IeFpPSHh4X0h4im9IeKh/SHi6j0h42J9IeOqvSHkIv0h5Gs9IeTjfSHlK70h5aP9IeXsPSHmZH0h5qy9Ieck/SHnbT0h5+V9IegtvSHopf0h6O49IelmfSHprr0h6ib9IepvPSHq530h6y+9Ieun/SHsID0h7Gh9IezgvSHtKP0h7aE9Ie3pfSHuYb0h7qn9Ie8iPSHvan0h7+K9IiAq/SIgoz0iIOt9IiFjvSIhq/0iIiQ9IiJsfSIi5L0iIyz9IiOlPSIj7X0iJGW9IiSt/SIlJj0iJW59IiXmvSImLv0iJqc9IibvfSInZ70iJ6/9IigoPSIooH0iKOi9Iilg/SIpqT0iKiF9IippvSIq4f0iKyo9IiuifSIr6r0iLGL9IiyrPSItI30iLWu9Ii3j/SIuLD0iLqR9Ii7svSIvZP0iL609ImAlfSJgbb0iYOX9ImEuPSJhpn0iYe69ImJm/SJirz0iYyd9ImNvvSJj5/0iZGA9ImSofSJlIL0iZWj9ImXhPSJmKX0iZqG9Imbp/SJnYj0iZ6p9ImgivSJoav0iaOM9ImkrfSJpo70iaev9ImpkPSJqrH0iayS9Imts/SJr5T0ibC19ImylvSJs7f0ibWY9Im2ufSJuJr0ibm79Im7nPSJvL30ib6e9Im/v/SKgaD0ioOB9IqEovSKhoP0ioek9IqJhfSKiqb0ioyH9IqNqPSKj4n0ipCq9IqSi/SKk6z0ipWN9IqWrvSKmI/0ipmw9IqbkfSKnLL0ip6T9IqftPSKoZX0iqK29Iqkl/SKpbj0iqeZ9IqouvSKqpv0iqu89IqtnfSKrr70irCf9IqygPSKs6H0irWC9Iq2o/SKuIT0irml9Iq7hvSKvKf0ir6I9Iq/qfSLgYr0i4Kr9IuEjPSLha30i4eO9IuIr/SLipD0i4ux9IuNkvSLjrP0i5CU9IuRtfSLk5b0i5S39IuWmPSLl7n0i5ma9Iuau/SLnJz0i5299IufnvSLoL/0i6Kg9IukgfSLpaL0i6eD9IuopPSLqoX0i6um9Iuth/SLrqj0i7CJ9IuxqvSLs4v0i7Ss9Iu2jfSLt670i7mP9Iu6sPSLvJH0i72y9Iu/k/SMgLT0jIKV9IyDtvSMhZf0jIa49IyImfSMibr0jIub9IyMvPSMjp30jI++9IyRn/SMk4D0jJSh9IyWgvSMl6P0jJmE9IyapfSMnIb0jJ2n9IyfiPSMoKn0jKKK9Iyjq/SMpYz0jKat9IyojvSMqa/0jKuQ9IyssfSMrpL0jK+z9IyxlPSMsrX0jLSW9Iy1t/SMt5j0jLi59Iy6mvSMu7v0jL2c9Iy+vfSNgJ70jYG/9I2DoPSNhYH0jYai9I2Ig/SNiaT0jYuF9I2MpvSNjof0jY+o9I2RifSNkqr0jZSL9I2VrPSNl430jZiu9I2aj/SNm7D0jZ2R9I2esvSNoJP0jaG09I2jlfSNpLb0jaaX9I2nuPSNqZn0jaq69I2sm/SNrbz0ja+d9I2wvvSNsp/0jbSA9I21ofSNt4L0jbij9I26hPSNu6X0jb2G9I2+p/SOgIj0joGp9I6DivSOhKv0joaM9I6HrfSOiY70joqv9I6MkPSOjbH0jo+S9I6Qs/SOkpT0jpO19I6VlvSOlrf0jpiY9I6ZufSOm5r0jpy79I6enPSOn730jqGe9I6iv/SOpKD0jqaB9I6novSOqYP0jqqk9I6shfSOrab0jq+H9I6wqPSOson0jrOq9I61i/SOtqz0jriN9I65rvSOu4/0jryw9I6+kfSOv7L0j4GT9I+CtPSPhJX0j4W29I+Hl/SPiLj0j4qZ9I+LuvSPjZv0j4689I+QnfSPkb70j5Of9I+VgPSPlqH0j5iC9I+Zo/SPm4T0j5yl9I+ehvSPn6f0j6GI9I+iqfSPpIr0j6Wr9I+njPSPqK30j6qO9I+rr/SPrZD0j66x9I+wkvSPsbP0j7OU9I+0tfSPtpb0j7e39I+5mPSPurn0j7ya9I+9u/SPv5wqL3kK",
+      "note": "Layout `columns` over a fixed sweep of Unicode scalar values (U+0080 upward, every 97th, surrogates excluded) recorded as base64: a width table that disagrees between the two implementations fails here.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 1,
+            "end": 45187,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "column-valid-then-invalid-utf8",
+      "language": "c",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "columns"
+      },
+      "source_base64": "eC8q5Lit/yoveQ==",
+      "note": "Layout `columns` over a comment whose body is valid UTF-8 followed by a byte that is not: the invalid byte gets a fixed width and no decoding is attempted over it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 1,
+            "end": 9,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "x       y"
+      }
+    },
+    {
+      "id": "column-after-empty-html-removal",
+      "language": "html",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "columns"
+      },
+      "source_utf8": "ab<!-- drop\nline --><script>let x=1;/*\t*/y</script>",
+      "note": "Layout `columns` after a removed HTML comment that spans lines: column positions are recomputed from the current line, not from the original offsets.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 2,
+            "end": 20,
+            "kind": "html-comment",
+            "action": "remove"
+          },
+          {
+            "start": 36,
+            "end": 41,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "ab<script>let x=1;        y</script>"
+      }
+    },
+    {
+      "id": "non-utf8-bytes",
+      "language": "c",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_base64": "/y8qIHJlbW92ZSAqL4ANCg==",
+      "note": "Bytes that are not UTF-8 around a comment are copied through untouched, and the CRLF ending survives.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 1,
+            "end": 13,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_base64": "/yCADQo="
+      }
+    },
+    {
+      "id": "compact-layout",
+      "language": "c",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "compact"
+      },
+      "source_utf8": "left/* remove */right\n",
+      "note": "Layout `compact` over a comment between two tokens on one line: nothing about the line changes but the comment, so `compact` leaves exactly what `lines` leaves, the separating space included.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 4,
+            "end": 16,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "left right\n"
+      }
+    },
+    {
+      "id": "compact-whole-line-run",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "compact"
+      },
+      "source_utf8": "fn main() {}\n// one\n// two\nlet x = 1;\n",
+      "note": "Layout `compact` takes a line that held nothing but a removed comment away entirely, its terminator included, so a run of whole-line comments disappears instead of leaving a run of blank lines. Layout `lines` keeps all four lines.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 13,
+            "end": 19,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 20,
+            "end": 26,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn main() {}\nlet x = 1;\n"
+      }
+    },
+    {
+      "id": "compact-indented-line",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "compact"
+      },
+      "source_utf8": "fn main() {\n    // note\n    let x = 1;\n}\n",
+      "note": "Layout `compact`: only whitespace stood before the comment on its line, so the indentation goes with the line rather than staying behind as trailing whitespace.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 16,
+            "end": 23,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn main() {\n    let x = 1;\n}\n"
+      }
+    },
+    {
+      "id": "compact-crlf-line",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "compact"
+      },
+      "source_utf8": "let x = 1;\r\n// note\r\nlet y = 2;\r\n",
+      "note": "Layout `compact` over CRLF endings: the terminator removed with the line is that line's own CRLF, and the lines that survive keep theirs byte for byte.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 12,
+            "end": 19,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "let x = 1;\r\nlet y = 2;\r\n"
+      }
+    },
+    {
+      "id": "compact-trailing-whitespace",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "compact"
+      },
+      "source_utf8": "let x = 1; \t // note\nlet y = 2;\t/* two */\t\nlet z = 3;\n",
+      "note": "Layout `compact` trims the whitespace a removal would otherwise leave at the end of a line, on both sides of the comment. Code survives on each line, so each keeps its terminator.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 13,
+            "end": 20,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 32,
+            "end": 41,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "let x = 1;\nlet y = 2;\nlet z = 3;\n"
+      }
+    },
+    {
+      "id": "compact-no-final-newline",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "compact"
+      },
+      "source_utf8": "let x = 1; // note",
+      "note": "Layout `compact` over a file that ends without a final newline: the trailing comment and the space before it go, and no terminator is invented for the line that survives.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 11,
+            "end": 18,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "let x = 1;"
+      }
+    },
+    {
+      "id": "compact-last-line-only-comment",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "compact"
+      },
+      "source_utf8": "let x = 1;\n// note",
+      "note": "Layout `compact`: the last line held nothing but the comment and had no terminator of its own, so the line goes and the line before it keeps the terminator it always had.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 11,
+            "end": 18,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "let x = 1;\n"
+      }
+    },
+    {
+      "id": "compact-block-shares-lines-with-code",
+      "language": "c",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "compact"
+      },
+      "source_utf8": "int a = 1; /* one\ntwo\nthree */ int b = 2;\n",
+      "note": "ISO C17 6.4.9p1: `/*` ... `*/` is one comment however many lines it spans. Layout `compact` keeps the code before it on a line of its own, ends that line with the terminator that ended it in the source, and drops the lines that held only comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 11,
+            "end": 30,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "int a = 1;\n int b = 2;\n"
+      }
+    },
+    {
+      "id": "compact-block-alone-on-its-lines",
+      "language": "c",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "compact"
+      },
+      "source_utf8": "int a = 1;\n/* one\ntwo */\nint b = 2;\n",
+      "note": "ISO C17 6.4.9p1. Layout `compact`: every line the block comment covered held nothing else, so all of them go, terminators included.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 11,
+            "end": 24,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "int a = 1;\nint b = 2;\n"
+      }
+    },
+    {
+      "id": "compact-block-at-end-without-newline",
+      "language": "c",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "compact"
+      },
+      "source_utf8": "int x = 1; /* one\ntwo */",
+      "note": "ISO C17 6.4.9p1. Layout `compact` over a block comment that runs to the end of a file with no final newline: the line the code is on kept its terminator inside the comment, so that terminator comes back, and the last line held only comment and goes.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 11,
+            "end": 24,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "int x = 1;\n"
+      }
+    },
+    {
+      "id": "compact-two-comments-on-one-line",
+      "language": "c",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "compact"
+      },
+      "source_utf8": "a/* one */ /* two */\n",
+      "note": "Layout `compact` judges being alone on a line from the original bytes: neither comment was, so the line keeps its terminator, and the trim closes the gap the first removal left before the second.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 1,
+            "end": 10,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 11,
+            "end": 20,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "a\n"
+      }
+    },
+    {
+      "id": "compact-html-comment",
+      "language": "html",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "compact"
+      },
+      "source_utf8": "<p>a</p>\n<!-- note -->\n<p>b</p> <!-- one\ntwo -->\n",
+      "note": "HTML 13.2.5.4x: `<!--` ... `-->` is one comment token. An HTML comment closes up completely under every layout, the newlines it spanned included; `compact` adds the whole-line rule and the trim, and never takes the terminator of a line where code survives.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 9,
+            "end": 22,
+            "kind": "html-comment",
+            "action": "remove"
+          },
+          {
+            "start": 32,
+            "end": 48,
+            "kind": "html-comment",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "<p>a</p>\n<p>b</p>\n"
+      }
+    },
+    {
+      "id": "compact-javascript-line-separator",
+      "language": "javascript",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "compact"
+      },
+      "source_base64": "bGV0IGEgPSAxO+KAqC8vIG5vdGXigKhsZXQgYiA9IDI7Cg==",
+      "note": "ECMA-262 12.3: U+2028 LINE SEPARATOR is a LineTerminator, so it ends a SingleLineComment. Layout `compact` removes it with the line it terminated and leaves the other one alone.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 13,
+            "end": 20,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_base64": "bGV0IGEgPSAxO+KAqGxldCBiID0gMjsK"
+      }
+    },
+    {
+      "id": "compact-kept-comment-holds-its-line",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "compact"
+      },
+      "source_utf8": "// rustfmt::skip\n// note\nfn main() {}\n",
+      "note": "Layout `compact` over a kept directive above a removed comment: a comment that survives is content on its line, so only the line of the removed one goes.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 16,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 17,
+            "end": 24,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "// rustfmt::skip\nfn main() {}\n"
+      }
+    },
+    {
+      "id": "invalid-cpp-raw",
+      "language": "cpp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "R\"tag(unterminated /* opaque */",
+      "note": "ISO C++ [lex.string]: an unterminated raw string literal is a lexical error, reported as an error diagnostic that makes the report invalid.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 0,
+            "end": 31
+          }
+        ],
+        "output_utf8": "R\"tag(unterminated /* opaque */"
+      }
+    },
+    {
+      "id": "invalid-shell-quote",
+      "language": "shell",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "echo 'unterminated",
+      "note": "POSIX 2.2.2 single quotes: an unterminated single quote is a lexical error, reported as an error diagnostic that makes the report invalid.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 5,
+            "end": 18
+          }
+        ],
+        "output_utf8": "echo 'unterminated"
+      }
+    },
+    {
+      "id": "invalid-shell-heredoc",
+      "language": "shell",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "cat <<EOF\nbody\n",
+      "note": "POSIX 2.7.4: a here-document whose delimiter never arrives is a lexical error, reported as an error diagnostic that makes the report invalid.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-heredoc",
+            "start": 4,
+            "end": 15
+          }
+        ],
+        "output_utf8": "cat <<EOF\nbody\n"
+      }
+    },
+    {
+      "id": "invalid-shell-command-substitution",
+      "language": "shell",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "value=$(echo ok # comment\n",
+      "note": "POSIX 2.6.3: an unterminated `$(` is a lexical error, and the comment inside it is still located.",
+      "expect": {
+        "valid": false,
+        "comments": [
+          {
+            "start": 16,
+            "end": 25,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [
+          {
+            "code": "unterminated-command-substitution",
+            "start": 6,
+            "end": 26
+          }
+        ],
+        "output_utf8": "value=$(echo ok # comment\n"
+      }
+    },
+    {
+      "id": "external-plugin-spans",
+      "language": "c",
+      "operation": "transform-spans",
+      "options": {
+        "policy": "safe",
+        "layout": "lines",
+        "keep_kinds": [
+          "line"
+        ]
+      },
+      "spans": [
+        {
+          "start": 1,
+          "end": 6,
+          "kind": "block"
+        },
+        {
+          "start": 7,
+          "end": 10,
+          "kind": "line"
+        }
+      ],
+      "source_utf8": "a/*x*/b//y\n",
+      "note": "Comment spans supplied by an external scanner go through the same policy, layout, edit validation and source map as a built-in scan; `keep_kinds` still applies to them.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 1,
+            "end": 6,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 7,
+            "end": 10,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "a b//y\n"
+      }
+    },
+    {
+      "id": "apply-edits-binary",
+      "language": "c",
+      "operation": "apply_edits",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "edits": [
+        {
+          "span": {
+            "start": 1,
+            "end": 3
+          },
+          "replacement_base64": "gFg="
+        },
+        {
+          "span": {
+            "start": 6,
+            "end": 7
+          },
+          "replacement_base64": ""
+        }
+      ],
+      "source_base64": "/2FiY2RlZg0K",
+      "note": "`apply_edits` applies caller-supplied edits verbatim: the replacement bytes need not be UTF-8, an empty replacement deletes, and untouched bytes are copied through.",
+      "expect": {
+        "output_base64": "/4BYY2RlDQo="
+      }
+    },
+    {
+      "id": "declarative-profile-safe",
+      "language": "c",
+      "operation": "transform-profile",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "profile": {
+        "name": "demo",
+        "extensions": [
+          "demo"
+        ],
+        "line_comments": [
+          {
+            "start": ";;",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [
+          {
+            "start": "#|",
+            "end": "|#",
+            "nested": true,
+            "kind": "block"
+          }
+        ],
+        "strings": [
+          {
+            "start": "\"",
+            "end": "\"",
+            "escape": "\\"
+          }
+        ],
+        "protected_patterns": [
+          {
+            "contains": "KEEP",
+            "reason": "fixture protection"
+          }
+        ]
+      },
+      "source_utf8": "\";; opaque\" ;; remove\n#| outer #| nested |# |# ;; KEEP\n",
+      "note": "A declarative profile with literal delimiters: nested block comments, an opaque string, and a `protected_patterns` entry that keeps the comment naming it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 12,
+            "end": 21,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 22,
+            "end": 46,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 47,
+            "end": 54,
+            "kind": "directive",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\";; opaque\" \n ;; KEEP\n"
+      }
+    },
+    {
+      "id": "declarative-profile-all",
+      "language": "c",
+      "operation": "transform-profile",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "profile": {
+        "name": "demo",
+        "extensions": [
+          "demo"
+        ],
+        "line_comments": [
+          {
+            "start": ";;",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [
+          {
+            "start": "#|",
+            "end": "|#",
+            "nested": true,
+            "kind": "block"
+          }
+        ],
+        "strings": [
+          {
+            "start": "\"",
+            "end": "\"",
+            "escape": "\\"
+          }
+        ],
+        "protected_patterns": [
+          {
+            "contains": "KEEP",
+            "reason": "fixture protection"
+          }
+        ]
+      },
+      "source_utf8": "\";; opaque\" ;; remove\n#| outer #| nested |# |# ;; KEEP\n",
+      "note": "The `declarative-profile-safe` profile under policy `all`: a `protected_patterns` match classifies the comment as a directive, and policy `all` removes directives, so the protection does not survive the stronger policy.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 12,
+            "end": 21,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 22,
+            "end": 46,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 47,
+            "end": 54,
+            "kind": "directive",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\";; opaque\" \n \n"
+      }
+    }
+  ]
+}

@@ -49,7 +49,7 @@ lines: Keep the line structure and separate tokens that would otherwise join
 .IP \(bu 2
 columns: Pad each removed comment so the following columns do not shift
 .IP \(bu 2
-compact: Drop the comment bytes and keep only the newlines it spanned
+compact: Drop lines that held only a removed comment, and the whitespace it left behind
 .RE
 .TP
 \fB\-\-language\fR \fI<LANGUAGE>\fR

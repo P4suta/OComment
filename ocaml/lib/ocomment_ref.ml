@@ -1759,16 +1759,133 @@ let ascii_whitespace = function
   | ' ' | '\t' | '\n' | '\r' | '\011' | '\012' -> true
   | _ -> false
 
-let replacement source layout kind span =
-  if kind = HtmlComment then Bytes.empty else match layout with
-  | Columns -> invalid_arg "column replacement requires tracked display state"
-  | Lines | Compact ->
-    let output = newline_bytes source span in
-    if Bytes.length output > 0 then output
-    else if span.start > 0 && span.finish < Bytes.length source &&
-      not (ascii_whitespace (Bytes.get source (span.start - 1))) &&
-      not (ascii_whitespace (Bytes.get source span.finish))
-    then Bytes.of_string " " else Bytes.empty
+let has_non_whitespace_neighbors source span =
+  span.start > 0 && span.finish < Bytes.length source &&
+  not (ascii_whitespace (Bytes.get source (span.start - 1))) &&
+  not (ascii_whitespace (Bytes.get source span.finish))
+
+(* NOTE: What layout `lines` leaves in place of a removed comment: the line
+   terminators the comment spanned, so every following line keeps its number,
+   and a single space when the comment was all that kept two tokens apart.  A
+   comment that spanned a terminator needs no space of its own, because a
+   newline is a lexical separator already. *)
+let line_replacement source kind span =
+  if kind = HtmlComment then Bytes.empty else
+  let output = newline_bytes source span in
+  if Bytes.length output > 0 then output
+  else if has_non_whitespace_neighbors source span then Bytes.of_string " "
+  else Bytes.empty
+
+(* NOTE: The first line terminator inside a comment, as the bytes that wrote
+   it, so a CRLF file keeps its CRLF.  A terminator that would reach past the
+   end of the comment is not one: the same rule newline_bytes applies. *)
+let first_line_terminator source span =
+  let rec loop index =
+    if index >= span.finish then None
+    else match unicode_line_terminator_width source index with
+    | Some width when index + width <= span.finish -> Some (Bytes.sub source index width)
+    | _ -> loop (index + 1)
+  in loop span.start
+
+(* NOTE: How the line a comment ended on runs out: where the blanks after the
+   comment stop, and how wide the line terminator there is - 0 at the end of the
+   source.  None when something other than blanks follows on that line, which is
+   what makes the comment an interior one rather than the last thing on its
+   line. *)
+let line_tail source from =
+  let rec loop index =
+    match unicode_line_terminator_width source index with
+    | Some width -> Some (index, width)
+    | None ->
+      if index >= Bytes.length source then Some (index, 0)
+      else if ascii_whitespace (Bytes.get source index) then loop (index + 1)
+      else None
+  in loop from
+
+(* NOTE: Where the run of blanks that ends at `at` begins.  It never reaches
+   before `floor` and never crosses a line terminator, so trimming what a
+   removal left at the end of a line can never touch the line before it. *)
+let blank_start source at floor =
+  let rec loop index =
+    if index > floor && ascii_whitespace (Bytes.get source (index - 1)) &&
+      unicode_line_terminator_width source (index - 1) = None
+    then loop (index - 1) else index
+  in loop at
+
+let rec has_code source index finish =
+  index < finish &&
+  (not (ascii_whitespace (Bytes.get source index)) || has_code source (index + 1) finish)
+
+(* NOTE: One layout `compact` edit.  `line_start` is where the line holding the
+   comment begins, `floor` is the end of the previous edit and `ceiling` the
+   start of the next comment, so the span that comes back is sorted and
+   non-overlapping with its neighbours however a scanner laid the comments out.
+
+   An HTML comment closes up completely under every layout, the newlines it
+   spanned included, so it never counts as ending a line by spanning one and
+   never puts a terminator back. *)
+let compact_edit source (comment : comment) line_start floor ceiling =
+  let span = comment.span in
+  let html = comment.kind = HtmlComment in
+  let interior = first_line_terminator source span in
+  let tail = line_tail source span.finish in
+  let head_code = has_code source line_start span.start in
+  let ends_the_line = tail <> None || (interior <> None && not html) in
+  let start =
+    if ends_the_line then blank_start source span.start (max floor line_start)
+    else span.start in
+  let eats_the_terminator =
+    if html then not head_code else interior <> None || not head_code in
+  let finish = match tail with
+    | Some (blanks, terminator) ->
+      blanks + (if eats_the_terminator then terminator else 0)
+    | None -> span.finish in
+  let replacement =
+    if html then Bytes.empty
+    (* NOTE: An interior comment: the line goes on after it, so keeping the two
+       tokens either side apart is the whole story, exactly as under `lines`. *)
+    else if not ends_the_line then line_replacement source comment.kind span
+    else match interior with
+    (* NOTE: The code before the comment keeps its own line, and the terminator
+       that ended that line was inside the comment. *)
+    | Some terminator when head_code -> terminator
+    (* NOTE: Nothing that survives on this line follows the comment, so the
+       line terminator - the one kept after it or the one that ended the code
+       line - is separator enough. *)
+    | _ -> Bytes.empty in
+  { span = { start; finish = min finish ceiling }; replacement }
+
+(* NOTE: The edits layout `compact` makes: layout `lines`, plus the promise
+   that a line which held nothing but a removed comment goes away instead of
+   staying behind as a blank one.
+
+   Whether a comment was alone on its line is judged from the bytes of the
+   original source, so a line holding two comments and nothing else keeps its
+   terminator: neither of them was alone on it.
+
+   The start of the current line is tracked forward through the whole source,
+   comment bodies included, so a comment beginning on a line that an earlier
+   comment ended is still measured from that line's real beginning. *)
+let compact_edits source comments =
+  let rec loop scan line_start floor edits = function
+    | [] -> List.rev edits
+    | (comment : comment) :: tail -> match comment.disposition with
+      | Keep _ -> loop scan line_start floor edits tail
+      | Remove ->
+        let rec advance scan line_start =
+          if scan >= comment.span.start then (scan, line_start)
+          else match unicode_line_terminator_width source scan with
+          | Some width when scan + width <= comment.span.start ->
+            advance (scan + width) (scan + width)
+          | _ -> advance (scan + 1) line_start in
+        let scan, line_start = advance scan line_start in
+        (* NOTE: The next comment of any disposition, kept ones included: the
+           blanks an edit swallows must never reach into one. *)
+        let ceiling = max comment.span.finish
+          (match tail with next :: _ -> next.span.start | [] -> Bytes.length source) in
+        let edit = compact_edit source comment line_start floor ceiling in
+        loop scan line_start edit.span.finish (edit :: edits) tail
+  in loop 0 0 0 [] comments
 
 (* PERF:
    Column state is threaded between edits so every source byte is inspected at
@@ -1826,10 +1943,11 @@ let transform_report source report options =
             let edit, column = column_edit source cursor column comment in
             loop comment.span.finish column (edit :: edits) tail)
       in loop 0 0 [] report.comments
-    | Lines | Compact ->
+    | Lines ->
       List.filter_map (fun comment -> match comment.disposition with Keep _ -> None | Remove ->
         Some { span = comment.span;
-          replacement = replacement source options.layout comment.kind comment.span }) report.comments
+          replacement = line_replacement source comment.kind comment.span }) report.comments
+    | Compact -> compact_edits source report.comments
   in
   { output = apply_edits source edits; edits; report; source_map = source_map (Bytes.length source) edits }
 

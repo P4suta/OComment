@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PAIRS = (
     (ROOT / "spec/config.schema.json", ROOT / "rust/ocomment/assets/config.schema.json"),
     (ROOT / "spec/default-config.toml", ROOT / "rust/ocomment/assets/default-config.toml"),
+    (ROOT / "spec/languages.toml", ROOT / "rust/ocomment/assets/languages.toml"),
     (ROOT / "spec/ocomment-scanner.wit", ROOT / "rust/ocomment/assets/ocomment-scanner.wit"),
 )
 

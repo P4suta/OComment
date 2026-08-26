@@ -779,7 +779,10 @@ fn parse_layer(path: &Path, require_version: bool) -> Result<toml::Value> {
          * because it quotes nothing back — only a key it found in the schema. */
         anyhow!(
             "invalid configuration {}: {}{}",
-            path.display(),
+            /* NOTE: The path is the project's too — a directory it named — so it is
+             * held to what every other path in the report is held to: printed
+             * as it was spelled, with nothing in it a terminal would act on. */
+            crate::output::sanitize_path(&path.display().to_string()),
             crate::output::sanitize_message(&message),
             unknown_key_hint(&message)
         )
@@ -853,7 +856,7 @@ fn compile_overrides(overrides: &[PathOverride]) -> Result<Vec<CompiledOverride>
 /// lexical because the path need not exist and because `canonicalize` would
 /// also resolve the symbolic links the root itself may be reached through,
 /// which would leave the two ends of the comparison in different spellings.
-fn lexical(path: &Path) -> PathBuf {
+pub(crate) fn lexical(path: &Path) -> PathBuf {
     let mut resolved = PathBuf::new();
     for component in path.components() {
         match component {

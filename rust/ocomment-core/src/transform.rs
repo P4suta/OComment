@@ -137,41 +137,15 @@ pub(crate) fn transform_report(
     report: crate::ScanReport,
     options: TransformOptions,
 ) -> TransformResult {
-    let mut edits = Vec::new();
-    let mut column_cursor = 0usize;
-    let mut display_column = 0usize;
-    if report.valid || options.scan.force_invalid {
-        for comment in report
-            .comments
-            .iter()
-            .filter(|comment| comment.disposition.is_remove())
-        {
-            let replacement = if options.layout == Layout::Columns {
-                display_column = advance_display_column(
-                    source,
-                    column_cursor,
-                    comment.span.start,
-                    display_column,
-                );
-                let (replacement, next_column) = if comment.kind == CommentKind::HtmlComment {
-                    (Vec::new(), display_column)
-                } else {
-                    column_replacement(source, comment.span, display_column)
-                };
-                column_cursor = comment.span.end;
-                display_column = next_column;
-                replacement
-            } else if comment.kind == CommentKind::HtmlComment {
-                Vec::new()
-            } else {
-                replacement(source, comment.span, options.layout)
-            };
-            edits.push(Edit {
-                span: comment.span,
-                replacement,
-            });
+    let edits = if report.valid || options.scan.force_invalid {
+        match options.layout {
+            Layout::Lines => line_edits(source, &report.comments),
+            Layout::Columns => column_edits(source, &report.comments),
+            Layout::Compact => compact_edits(source, &report.comments),
         }
-    }
+    } else {
+        Vec::new()
+    };
     let output = apply_edits(source, &edits);
     let source_map = SourceMap::from_edits(source.len(), &edits);
     TransformResult {
@@ -234,30 +208,216 @@ pub fn apply_edits(source: &[u8], edits: &[Edit]) -> Vec<u8> {
     output
 }
 
-fn replacement(source: &[u8], span: ByteSpan, layout: Layout) -> Vec<u8> {
-    let comment = &source[span.start..span.end];
-    match layout {
-        Layout::Columns => unreachable!("column replacement requires tracked display state"),
-        Layout::Lines => {
-            let mut output = newline_sequence(comment);
-            if output.is_empty() && has_non_whitespace_neighbors(source, span) {
-                output.push(b' ');
-            } else if !output.is_empty() && needs_leading_separator(source, span) {
-                // NOTE: A newline is already a lexical separator; no extra byte is needed.
-            }
-            output
-        }
-        Layout::Compact => {
-            let output = newline_sequence(comment);
-            if !output.is_empty() {
-                output
-            } else if has_non_whitespace_neighbors(source, span) {
-                vec![b' ']
-            } else {
+/// The removable comments of a report, in source order.
+fn removable(comments: &[Comment]) -> impl Iterator<Item = &Comment> {
+    comments
+        .iter()
+        .filter(|comment| comment.disposition.is_remove())
+}
+
+/// The edits [`Layout::Lines`] makes: one per removed comment, over exactly
+/// the bytes that comment covers.
+fn line_edits(source: &[u8], comments: &[Comment]) -> Vec<Edit> {
+    removable(comments)
+        .map(|comment| Edit {
+            span: comment.span,
+            replacement: if comment.kind == CommentKind::HtmlComment {
                 Vec::new()
+            } else {
+                line_replacement(source, comment.span)
+            },
+        })
+        .collect()
+}
+
+/// What [`Layout::Lines`] leaves in place of a removed comment: the line
+/// terminators the comment spanned, so every following line keeps its number,
+/// and a single space when the comment was all that kept two tokens apart. A
+/// comment that spanned a terminator needs no space of its own, because a
+/// newline is a lexical separator already.
+fn line_replacement(source: &[u8], span: ByteSpan) -> Vec<u8> {
+    let mut output = newline_sequence(&source[span.start..span.end]);
+    if output.is_empty() && has_non_whitespace_neighbors(source, span) {
+        output.push(b' ');
+    }
+    output
+}
+
+/// The edits [`Layout::Columns`] makes.
+///
+/// The display column is threaded from one edit to the next so every source
+/// byte is inspected at most once. It also reflects an explicitly removed HTML
+/// comment: because that edit emits no bytes, the newlines it covered do not
+/// move the column the edits after it are measured from.
+fn column_edits(source: &[u8], comments: &[Comment]) -> Vec<Edit> {
+    let mut edits = Vec::new();
+    let mut cursor = 0usize;
+    let mut column = 0usize;
+    for comment in removable(comments) {
+        column = advance_display_column(source, cursor, comment.span.start, column);
+        let (replacement, next) = if comment.kind == CommentKind::HtmlComment {
+            (Vec::new(), column)
+        } else {
+            column_replacement(source, comment.span, column)
+        };
+        cursor = comment.span.end;
+        column = next;
+        edits.push(Edit {
+            span: comment.span,
+            replacement,
+        });
+    }
+    edits
+}
+
+/// The edits [`Layout::Compact`] makes: [`Layout::Lines`], plus the promise
+/// that a line which held nothing but a removed comment goes away instead of
+/// staying behind as a blank one.
+///
+/// Whether a comment was alone on its line is judged from the bytes of the
+/// original source, so a line holding two comments and nothing else keeps its
+/// terminator: neither of them was alone on it.
+///
+/// The start of the current line is tracked forward through the whole source,
+/// comment bodies included, so a comment beginning on a line that an earlier
+/// comment ended is still measured from that line's real beginning.
+fn compact_edits(source: &[u8], comments: &[Comment]) -> Vec<Edit> {
+    let mut edits = Vec::new();
+    let mut scan = 0usize;
+    let mut line_start = 0usize;
+    let mut floor = 0usize;
+    for (index, comment) in comments.iter().enumerate() {
+        if !comment.disposition.is_remove() {
+            continue;
+        }
+        while scan < comment.span.start {
+            match unicode_line_terminator_width(source, scan) {
+                Some(width) if scan + width <= comment.span.start => {
+                    scan += width;
+                    line_start = scan;
+                }
+                _ => scan += 1,
             }
+        }
+        /* NOTE: The next comment of any disposition, kept ones included: the
+         * blanks an edit swallows must never reach into one. */
+        let ceiling = comments
+            .get(index + 1)
+            .map_or(source.len(), |next| next.span.start)
+            .max(comment.span.end);
+        let edit = compact_edit(source, comment, line_start, floor, ceiling);
+        floor = edit.span.end;
+        edits.push(edit);
+    }
+    edits
+}
+
+/// One [`Layout::Compact`] edit.
+///
+/// `line_start` is where the line holding `comment` begins, `floor` is the end
+/// of the previous edit and `ceiling` the start of the next comment, so the
+/// span that comes back is sorted and non-overlapping with its neighbours
+/// however a scanner laid the comments out.
+fn compact_edit(
+    source: &[u8],
+    comment: &Comment,
+    line_start: usize,
+    floor: usize,
+    ceiling: usize,
+) -> Edit {
+    let span = comment.span;
+    /* NOTE: An HTML comment closes up completely under every layout, the
+     * newlines it spanned included, so it never counts as ending a line by
+     * spanning one and never puts a terminator back. */
+    let html = comment.kind == CommentKind::HtmlComment;
+    let interior = first_line_terminator(source, span);
+    let tail = line_tail(source, span.end);
+    let head_code = source[line_start..span.start]
+        .iter()
+        .any(|byte| !byte.is_ascii_whitespace());
+    let ends_the_line = tail.is_some() || (interior.is_some() && !html);
+    let start = if ends_the_line {
+        blank_start(source, span.start, floor.max(line_start))
+    } else {
+        span.start
+    };
+    let eats_the_terminator = if html {
+        !head_code
+    } else {
+        interior.is_some() || !head_code
+    };
+    let end = match tail {
+        Some((blanks, terminator)) => blanks + if eats_the_terminator { terminator } else { 0 },
+        None => span.end,
+    };
+    let replacement = if html {
+        Vec::new()
+    } else if !ends_the_line {
+        /* NOTE: An interior comment: the line goes on after it, so keeping the
+         * two tokens either side apart is the whole story, exactly as under
+         * `lines`. */
+        line_replacement(source, span)
+    } else if let Some(terminator) = interior.filter(|_| head_code) {
+        /* NOTE: The code before the comment keeps its own line, and the
+         * terminator that ended that line was inside the comment. */
+        terminator.to_vec()
+    } else {
+        /* NOTE: Nothing that survives on this line follows the comment, so the
+         * line terminator - the one kept after it or the one that ended the
+         * code line - is separator enough. */
+        Vec::new()
+    };
+    Edit {
+        span: ByteSpan::new(start, end.min(ceiling)),
+        replacement,
+    }
+}
+
+/// The first line terminator inside a comment, as the bytes that wrote it, so
+/// a CRLF file keeps its CRLF. A terminator that would reach past the end of
+/// the comment is not one: the same rule [`newline_sequence`] applies.
+fn first_line_terminator(source: &[u8], span: ByteSpan) -> Option<&[u8]> {
+    let mut index = span.start;
+    while index < span.end {
+        match unicode_line_terminator_width(source, index) {
+            Some(width) if index + width <= span.end => return Some(&source[index..index + width]),
+            _ => index += 1,
         }
     }
+    None
+}
+
+/// How the line a comment ended on runs out: where the blanks after the
+/// comment stop, and how wide the line terminator there is — `0` at the end of
+/// the source. `None` when something other than blanks follows on that line,
+/// which is what makes the comment an interior one rather than the last thing
+/// on its line.
+fn line_tail(source: &[u8], from: usize) -> Option<(usize, usize)> {
+    let mut index = from;
+    loop {
+        if let Some(width) = unicode_line_terminator_width(source, index) {
+            return Some((index, width));
+        }
+        match source.get(index) {
+            None => return Some((index, 0)),
+            Some(byte) if byte.is_ascii_whitespace() => index += 1,
+            Some(_) => return None,
+        }
+    }
+}
+
+/// Where the run of blanks that ends at `at` begins. It never reaches before
+/// `floor` and never crosses a line terminator, so trimming what a removal
+/// left at the end of a line can never touch the line before it.
+fn blank_start(source: &[u8], at: usize, floor: usize) -> usize {
+    let mut index = at;
+    while index > floor
+        && source[index - 1].is_ascii_whitespace()
+        && unicode_line_terminator_width(source, index - 1).is_none()
+    {
+        index -= 1;
+    }
+    index
 }
 
 fn newline_sequence(bytes: &[u8]) -> Vec<u8> {
@@ -281,12 +441,6 @@ fn has_non_whitespace_neighbors(source: &[u8], span: ByteSpan) -> bool {
         && source
             .get(span.end)
             .is_some_and(|byte| !byte.is_ascii_whitespace())
-}
-
-fn needs_leading_separator(source: &[u8], span: ByteSpan) -> bool {
-    source
-        .get(span.start.wrapping_sub(1))
-        .is_some_and(|byte| !byte.is_ascii_whitespace())
 }
 
 fn column_replacement(source: &[u8], span: ByteSpan, mut column: usize) -> (Vec<u8>, usize) {

@@ -93,7 +93,8 @@ value_enum_wrapper!(PolicyArg, Policy, |value| match value {
 value_enum_wrapper!(LayoutArg, Layout, |value| match value {
     Layout::Lines => "Keep the line structure and separate tokens that would otherwise join",
     Layout::Columns => "Pad each removed comment so the following columns do not shift",
-    Layout::Compact => "Drop the comment bytes and keep only the newlines it spanned",
+    Layout::Compact =>
+        "Drop lines that held only a removed comment, and the whitespace it left behind",
 });
 
 /* NOTE: The CLI is deliberately stricter than the core `FromStr`, which folds case,

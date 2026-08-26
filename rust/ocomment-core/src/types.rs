@@ -821,8 +821,22 @@ pub enum Layout {
     /// display width, so every following column on the line keeps its number
     /// as well. Tabs are expanded to the next multiple of eight.
     Columns,
-    /// The comment goes and the hole is closed up. On the bytes the engine
-    /// writes today that is what [`Self::Lines`] already does.
+    /// As [`Self::Lines`], except that a line which held nothing but a
+    /// removed comment goes away instead of staying behind as a blank one,
+    /// and the whitespace a removal would leave at the end of a line is
+    /// trimmed away with it.
+    ///
+    /// Code keeps its own lines. A comment that shared a line with code
+    /// leaves that line, its terminator and its CRLF or LF style exactly as
+    /// they were, so a comment running across several lines with code before
+    /// or after it closes up to one line rather than joining two statements.
+    /// A surviving line keeps the ending it had in the source — the same LF
+    /// or CRLF, from inside the comment if that is where it was — or no
+    /// ending at all if the file stopped there without one.
+    ///
+    /// Being alone on a line is judged from the original bytes, so a line
+    /// holding two comments and nothing else keeps its terminator: neither
+    /// comment was alone on it.
     Compact,
 }
 

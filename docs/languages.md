@@ -5,7 +5,8 @@
 `spec/languages.toml` is the canonical table. The `files:` pattern of the
 published pre-commit hooks is generated from it, `tools/check_hooks.py` fails
 when the two drift apart, and the table below is generated from the same file.
-`ocomment languages` prints a shorter summary of it; this is the complete one.
+The binary embeds that same file, so `ocomment languages` prints these rows in
+columns and `ocomment languages --format json` prints them as JSON.
 
 A dialect changes the lexical rules rather than the file type: `--dialect
 mysql` is still SQL, and only that dialect treats `/*!40101 ... */` as
@@ -29,19 +30,33 @@ OComment has 15 built-in languages covering
 | --- | --- | --- |
 | `rust` | `.rs` | `standard` |
 | `ocaml` | `.ml`, `.mli` | `standard` |
-| `c` | `.c`, `.h`, `.m` | `standard`, `gnu-c`, `objective-c` |
-| `cpp` | `.cc`, `.cpp`, `.cxx`, `.hpp`, `.mm`, `.cu` | `standard`, `gnu-cpp`, `objective-cpp`, `cuda` |
+| `c` | `.c`, `.h`, `.m` (`objective-c`) | `standard`, `objective-c`, `gnu-c` |
+| `cpp` | `.cc`, `.cpp`, `.cxx`, `.hpp`, `.mm` (`objective-cpp`), `.cu` (`cuda`) | `standard`, `objective-cpp`, `gnu-cpp`, `cuda` |
 | `go` | `.go` | `standard` |
 | `java` | `.java` | `standard` |
-| `javascript` | `.js`, `.mjs`, `.cjs`, `.jsx` | `standard`, `jsx` |
-| `typescript` | `.ts`, `.mts`, `.cts`, `.tsx` | `standard`, `tsx` |
+| `javascript` | `.js`, `.mjs`, `.cjs`, `.jsx` (`jsx`) | `standard`, `jsx` |
+| `typescript` | `.ts`, `.mts`, `.cts`, `.tsx` (`tsx`) | `standard`, `tsx` |
 | `python` | `.py`, `.pyw`, `.pyi` | `standard` |
-| `shell` | `.sh`, `.bash`, `.zsh` | `posix-sh`, `bash53`, `zsh` |
+| `shell` | `.sh` (`posix-sh`), `.bash` (`bash53`), `.zsh` (`zsh`) | `standard`, `posix-sh`, `bash53`, `zsh` |
 | `html` | `.html`, `.htm`, `.xhtml` | `standard` |
 | `css` | `.css` | `standard` |
 | `jsonc` | `.jsonc`, `.json5` | `standard` |
 | `sql` | `.sql` | `standard`, `postgresql`, `mysql`, `sqlite`, `t-sql`, `oracle` |
 | `kotlin` | `.kt`, `.kts` | `standard` |
+
+## Detected without an extension
+
+A file whose extension decides nothing is looked up by its whole name, and a
+file with no name at all — a script on standard input — is read from its `#!`
+line. A name is matched without regard to case, and a shebang matches when the
+interpreter name appears anywhere on the line.
+
+| Language | File names | Shebangs |
+| --- | --- | --- |
+| `javascript` | — | `node`, `deno` |
+| `python` | — | `python` |
+| `shell` | `Dockerfile`, `Containerfile`, `Makefile`, `GNUmakefile`, `.profile`, `.bashrc`, `.zshrc` | `sh`, `bash`, `zsh` |
+| `jsonc` | `tsconfig.json`, `jsconfig.json` | — |
 
 ## Anything else
 
