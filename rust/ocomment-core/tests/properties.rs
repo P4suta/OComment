@@ -48,6 +48,15 @@ fn lexical_byte() -> impl Strategy<Value = u8> {
 /// and directive rules only fire on whole words, so without these the generated
 /// sources never reach the code paths that make a scan depend on where in the
 /// document it starts.
+///
+/// The two triple-quote runs are here for the opposite reason: they are three
+/// of one byte, which a per-byte alphabet reaches only by coincidence, and they
+/// open a string that swallows newlines in Python, Kotlin, Java, and TOML —
+/// which is exactly the state a restart must not be allowed to land inside.
+/// Lua's long brackets are the same state behind four bytes rather than three,
+/// and the levelled forms are here because a closing bracket of the wrong level
+/// is content: without them a generated source that opens one practically never
+/// closes it.
 fn lexical_fragment() -> impl Strategy<Value = Vec<u8>> {
     prop_oneof![
         8 => lexical_byte().prop_map(|byte| vec![byte]),
@@ -59,6 +68,12 @@ fn lexical_fragment() -> impl Strategy<Value = Vec<u8>> {
         1 => Just(b"/*#__PURE__*/".to_vec()),
         1 => Just(b"<!--".to_vec()),
         1 => Just(b"r#\"".to_vec()),
+        1 => Just(b"\"\"\"".to_vec()),
+        1 => Just(b"'''".to_vec()),
+        1 => Just(b"--[[".to_vec()),
+        1 => Just(b"--[=[".to_vec()),
+        1 => Just(b"]]".to_vec()),
+        1 => Just(b"]=]".to_vec()),
     ]
 }
 

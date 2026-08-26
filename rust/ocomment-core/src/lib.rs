@@ -149,7 +149,7 @@ mod scanner;
 mod transform;
 mod types;
 
-pub use detect::{Detection, detect_language};
+pub use detect::{Detection, detect_language, shebang_interpreters};
 pub use incremental::{DocumentChange, IncrementalDocument, IncrementalError, PositionEncoding};
 pub use profile::{
     BlockDelimiter, DeclarativeProfile, LineDelimiter, ProfileError, ProtectedPattern,

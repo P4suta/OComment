@@ -1,8 +1,9 @@
 # OComment for VS Code
 
 Fast, byte-preserving comment checking and removal for Rust, OCaml, C, C++,
-Go, Java, JavaScript, TypeScript, Python, Shell, HTML, CSS, JSONC, SQL, and
-Kotlin — including the JSX/TSX, Objective-C/C++, and CUDA dialects.
+Go, Java, JavaScript, TypeScript, Python, Shell, HTML, CSS, JSONC, SQL,
+Kotlin, TOML, and Lua — including the JSX/TSX, Objective-C/C++, and CUDA
+dialects.
 
 Removable comments appear as hints. Removing them is a code action, never a
 formatting pass, so nothing happens to a file until you ask for it.

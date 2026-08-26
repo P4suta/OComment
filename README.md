@@ -12,9 +12,9 @@ tool is the Rust `ocomment` binary and the public `ocomment-core` library.
 classification, diagnostics, edits, transformed bytes, and source maps.
 
 OComment supports Rust, OCaml, C, C++, Go, Java, JavaScript, TypeScript, Python,
-Shell, HTML, CSS, JSONC, SQL, and Kotlin. JSX/TSX, Objective-C/C++, GNU C/C++,
-CUDA, POSIX sh, Bash 5.3, zsh, PostgreSQL, MySQL, SQLite, T-SQL, and Oracle are
-explicit dialects. HTML `<script>` and `<style>` contents are scanned
+Shell, HTML, CSS, JSONC, SQL, Kotlin, TOML, and Lua. JSX/TSX, Objective-C/C++,
+GNU C/C++, CUDA, POSIX sh, Bash 5.3, zsh, PostgreSQL, MySQL, SQLite, T-SQL, and
+Oracle are explicit dialects. HTML `<script>` and `<style>` contents are scanned
 recursively.
 
 The complete documentation is the Markdown in [`docs/`](docs/), which GitHub

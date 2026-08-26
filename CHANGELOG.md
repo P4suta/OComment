@@ -7,7 +7,7 @@ All notable changes to OComment will be documented here. The project follows
 
 ### Added
 
-- Byte-oriented scanners and transformations for 15 built-in languages and the
+- Byte-oriented scanners and transformations for 17 built-in languages and the
   documented dialects.
 - CLI, staged Git fixes, LSP 3.18 server, declarative profiles, and sandboxed
   WASM component plugins.
@@ -119,6 +119,27 @@ All notable changes to OComment will be documented here. The project follows
   dialects against the list the binary prints when it refuses one, the schema
   enumerations against the same vocabulary, and both listings against the table
   itself.
+- TOML is a built-in language, scanned by a lexer of its own rather than by the
+  profile engine. `#` opens the only comment form there is, and every string
+  form hides one: basic and literal strings, the multi-line forms of both —
+  where the closing delimiter is the last three of a run of up to five quotes —
+  and the quoted keys written in either. `.toml` selects it, as do the lock
+  files written in TOML that carry no extension of their own (`Cargo.lock`,
+  `Pipfile`, `poetry.lock`, `uv.lock`, `pdm.lock`; `Pipfile.lock` is JSON and
+  is not among them). Taplo's `#:schema` and `# taplo:` lines are directives a
+  removal keeps.
+- Lua is a built-in language, scanned by a lexer of its own. `--` opens a short
+  comment and a long bracket after it — `--[[`, `--[==[` — a long one, which
+  ends only at the closing bracket of its own level; the same brackets without
+  the `--` are long strings, and `a[b[1]]` is neither, because a long bracket
+  needs its second `[`. Short strings carry `\z`, which swallows the whitespace
+  and newlines after it, and a backslash before a line ending, which carries it
+  into the string. `---` is the documentation comment of LDoc and the Lua
+  language server, a fourth dash makes an ordinary divider, and `---@diagnostic`
+  is a directive where the other annotations are documentation, alongside the
+  `-- luacheck:`, `-- selene:`, `-- stylua:` and `-- luacov:` lines. `.lua` and
+  `.rockspec` select it, as does a `lua` or `luajit` `#!` line — which, like any
+  first line that opens with `#`, the loader skips.
 
 ### Changed
 

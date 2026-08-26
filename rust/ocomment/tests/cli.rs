@@ -124,6 +124,78 @@ fn check_diff_and_fix_follow_the_exit_contract() {
     );
 }
 
+/* NOTE: A lock file carries no extension the detector can use, so the whole
+ * name has to reach it through the binary for the run to scan the file at all.
+ * `Cargo.lock` is the one every Rust checkout has. */
+#[test]
+fn a_toml_lock_file_is_scanned_under_its_reserved_name() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("Cargo.lock");
+    fs::write(&path, b"# generated\nname = \"# opaque\" # remove\n").unwrap();
+
+    let scanned = run(
+        directory.path(),
+        &["scan", "Cargo.lock", "--format", "json"],
+    );
+    assert_eq!(
+        scanned.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&scanned.stderr)
+    );
+    let document: serde_json::Value = serde_json::from_slice(&scanned.stdout).unwrap();
+    let report = &document["files"][0]["report"];
+    assert_eq!(report["language"], "toml");
+    assert_eq!(report["comments"].as_array().unwrap().len(), 2);
+
+    let fixed = run(directory.path(), &["fix", "Cargo.lock"]);
+    assert_eq!(
+        fixed.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&fixed.stderr)
+    );
+    assert_eq!(fs::read(&path).unwrap(), b"\nname = \"# opaque\" \n");
+}
+
+/* NOTE: A Lua script installed as a command carries no extension at all, so the
+ * `#!` line is the only evidence the run has; this is the path from the file
+ * name through the detector and out the other side as a Lua scan. */
+#[test]
+fn a_lua_script_is_scanned_from_its_shebang_alone() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("hook");
+    fs::write(
+        &path,
+        b"#!/usr/bin/env lua\nprint(\"-- opaque\") -- remove\n",
+    )
+    .unwrap();
+
+    let scanned = run(directory.path(), &["scan", "hook", "--format", "json"]);
+    assert_eq!(
+        scanned.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&scanned.stderr)
+    );
+    let document: serde_json::Value = serde_json::from_slice(&scanned.stdout).unwrap();
+    let report = &document["files"][0]["report"];
+    assert_eq!(report["language"], "lua");
+    assert_eq!(report["comments"].as_array().unwrap().len(), 2);
+
+    let fixed = run(directory.path(), &["fix", "hook"]);
+    assert_eq!(
+        fixed.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&fixed.stderr)
+    );
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        b"#!/usr/bin/env lua\nprint(\"-- opaque\") \n"
+    );
+}
+
 #[test]
 fn invalid_input_returns_two_and_fix_is_non_destructive() {
     let directory = tempfile::tempdir().unwrap();
@@ -1867,6 +1939,155 @@ fn sarif_keeps_kebab_rule_ids_and_canonical_messages() {
     assert_eq!(result["ruleId"], "removable-doc-block");
     assert_eq!(result["message"]["text"], "removable doc-block comment");
     assert_no_debug_leak("SARIF report", &String::from_utf8(output.stdout).unwrap());
+}
+
+/// A SARIF `fix` is an offer to rewrite the file, and a tool that takes it up
+/// has to end with the bytes `ocomment fix` would have written. Under
+/// `--layout compact` the edit is wider than the comment — a comment alone on
+/// its line takes the whole line with it — so a fix cut to the comment's own
+/// span would delete the comment and leave the blank line behind, which is the
+/// output of a layout nobody asked for. The region reported is the edit's.
+#[test]
+fn a_sarif_fix_reproduces_what_fix_writes_under_compact_layout() {
+    let directory = tempfile::tempdir().unwrap();
+    let source = "fn main() {\n    // note\n    let x = 1; // trailing\n}\n";
+    fs::write(directory.path().join("main.rs"), source).unwrap();
+    let reported = run(
+        directory.path(),
+        &[
+            "check", "main.rs", "--layout", "compact", "--format", "sarif",
+        ],
+    );
+    assert_eq!(reported.status.code(), Some(1));
+    let value: serde_json::Value = serde_json::from_slice(&reported.stdout).unwrap();
+    let results = value["runs"][0]["results"].as_array().unwrap();
+    let mut replacements: Vec<(usize, usize, String)> = Vec::new();
+    for result in results {
+        let replacement = &result["fixes"][0]["artifactChanges"][0]["replacements"][0];
+        let region = &replacement["deletedRegion"];
+        let number = |name: &str| usize::try_from(region[name].as_u64().unwrap()).unwrap();
+        replacements.push((
+            byte_offset(source, number("startLine"), number("startColumn")),
+            byte_offset(source, number("endLine"), number("endColumn")),
+            replacement["insertedContent"]["text"]
+                .as_str()
+                .unwrap()
+                .to_owned(),
+        ));
+    }
+    // NOTE: The whole-line comment: from the start of its line to the start of
+    // NOTE: the next one, so the line itself goes rather than being blanked.
+    assert_eq!(
+        replacements[0],
+        (12, 24, String::new()),
+        "the whole-line comment's fix is not the compact edit"
+    );
+    let mut patched = String::new();
+    let mut cursor = 0;
+    for (start, end, inserted) in &replacements {
+        assert!(*start >= cursor, "the SARIF fixes overlap");
+        patched.push_str(&source[cursor..*start]);
+        patched.push_str(inserted);
+        cursor = *end;
+    }
+    patched.push_str(&source[cursor..]);
+    let fixed = run(directory.path(), &["fix", "main.rs", "--layout", "compact"]);
+    assert_eq!(
+        fixed.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&fixed.stderr)
+    );
+    let written = fs::read_to_string(directory.path().join("main.rs")).unwrap();
+    assert_eq!(
+        patched, written,
+        "applying the SARIF fixes is not what `ocomment fix --layout compact` writes"
+    );
+}
+
+/// Where a 1-based line and a 1-based byte column land in the source, so a
+/// SARIF region can be turned back into the bytes it names.
+fn byte_offset(source: &str, line: usize, column: usize) -> usize {
+    let mut offset = 0;
+    for _ in 1..line {
+        offset += source[offset..]
+            .find('\n')
+            .expect("the region names a line the source has")
+            + 1;
+    }
+    offset + column - 1
+}
+
+/// `strip` writes the stripped source and `config` answers a question about
+/// the configuration; neither has a report to render, so a format that
+/// describes one is refused rather than silently ignored — the way `languages`
+/// refuses the same flags.
+#[test]
+fn strip_and_config_refuse_the_formats_they_cannot_honour() {
+    let directory = tempfile::tempdir().unwrap();
+    for format in ["json", "jsonl", "sarif", "github"] {
+        let stripped = run_stdin(
+            directory.path(),
+            &["strip", "--language", "rust", "--format", format],
+            b"let x = 1; // note\n",
+        );
+        assert_eq!(
+            stripped.status.code(),
+            Some(2),
+            "`strip --format {format}` was accepted"
+        );
+        assert!(
+            stripped.stdout.is_empty(),
+            "`strip --format {format}` stripped the source anyway"
+        );
+        let error = String::from_utf8(stripped.stderr).unwrap();
+        assert!(
+            error.contains("`ocomment strip` is only available with --format human"),
+            "`strip --format {format}` said:\n{error}"
+        );
+        for action in ["show", "locate", "explain", "schema"] {
+            let answered = run(directory.path(), &["config", action, "--format", format]);
+            assert_eq!(
+                answered.status.code(),
+                Some(2),
+                "`config {action} --format {format}` was accepted"
+            );
+            assert!(
+                answered.stdout.is_empty(),
+                "`config {action} --format {format}` answered anyway"
+            );
+            let error = String::from_utf8(answered.stderr).unwrap();
+            assert!(
+                error.contains("`ocomment config` is only available with --format human"),
+                "`config {action} --format {format}` said:\n{error}"
+            );
+        }
+    }
+    let stripped = run_stdin(
+        directory.path(),
+        &["strip", "--language", "rust", "--format", "human"],
+        b"let x = 1; // note\n",
+    );
+    assert_eq!(
+        stripped.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&stripped.stderr)
+    );
+    assert_eq!(stripped.stdout, b"let x = 1; \n");
+    for action in ["show", "locate", "explain", "schema"] {
+        let answered = run(directory.path(), &["config", action, "--format", "human"]);
+        assert_eq!(
+            answered.status.code(),
+            Some(0),
+            "`config {action}` was refused: {}",
+            String::from_utf8_lossy(&answered.stderr)
+        );
+        assert!(
+            !answered.stdout.is_empty(),
+            "`config {action}` answered with nothing"
+        );
+    }
 }
 
 /// Every comment kind a rule id can name, in the spelling `CommentKind`
@@ -5215,7 +5436,7 @@ fn languages_refuses_the_formats_that_carry_no_table() {
             String::from_utf8_lossy(&output.stderr)
         );
         let listing = String::from_utf8(output.stdout).unwrap();
-        for language in ["rust", "objective-cpp", "xhtml", "kotlin"] {
+        for language in ["rust", "objective-cpp", "xhtml", "kotlin", "toml"] {
             assert!(
                 listing.contains(language),
                 "`languages --format {format}` omits `{language}`:\n{listing}"

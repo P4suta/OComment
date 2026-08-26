@@ -1,17 +1,23 @@
-# OComment checks its own repository. `ocomment` from the root is the gate the
-# `dogfood` CI job runs, and Lefthook runs `ocomment check --staged` before every
-# commit; see CONTRIBUTING.md for the tag convention this configuration enforces.
+# NOTE: OComment checks its own repository. `ocomment` from the root is the
+# NOTE: gate the `dogfood` CI job runs, and Lefthook runs `ocomment check
+# NOTE: --staged` before every commit; see CONTRIBUTING.md for the tag
+# NOTE: convention this configuration enforces. TOML is a built-in language, so
+# NOTE: this file is now one of the files that convention applies to.
 version = 1
 
 [files]
 exclude = [
-  # Vendored crates, fixture bytes, and packaging or benchmark scratch are not
-  # ours to rewrite: fixture comments are the test input itself.
+  # NOTE: Vendored crates, fixture bytes, and packaging or benchmark scratch are
+  # NOTE: not ours to rewrite: fixture comments are the test input itself.
   "rust/vendor/**",
   "spec/fixtures/**",
   "editors/vscode/test-fixtures/**",
   "release-extras/**",
   "benchmarks/**",
+  # NOTE: A lock file is written by its resolver rather than by hand, and the
+  # NOTE: header Cargo puts at the top of this one comes back on the next
+  # NOTE: `cargo update`.
+  "rust/Cargo.lock",
 ]
 
 [policy]

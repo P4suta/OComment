@@ -8,8 +8,9 @@
 
 use ocomment_core::{
     ByteSpan, CommentKind, Dialect, Disposition, Language, Layout, Policy, ScanOptions,
-    TransformOptions, scan, transform,
+    TransformOptions, detect_language, scan, transform,
 };
+use std::path::Path;
 
 fn options(dialect: Dialect) -> ScanOptions {
     ScanOptions {
@@ -191,6 +192,49 @@ fn java_unicode_escapes_obey_backslash_eligibility() {
     assert!(invalid.edits.is_empty());
 }
 
+/// Java's documentation comments are `/** ... */` (JLS 3.7) and, since JDK 23,
+/// `///` (JEP 467). `//!` is Rust's inner-doc marker and `/*!` is Doxygen's;
+/// Java has a convention for neither, so a comment opening with either one is
+/// an ordinary line or block comment and is treated as one. Reading them as
+/// documentation would hide them from `--policy safe` in a language that never
+/// meant them as documentation.
+#[test]
+fn java_reads_only_its_own_two_documentation_markers() {
+    let source = b"/// javadoc\n//! plain\n/** javadoc */\n/*! plain */\nclass A {}\n";
+    let report = scan(source, Language::Java, ScanOptions::default());
+    assert!(report.valid);
+    assert_eq!(
+        report
+            .comments
+            .iter()
+            .map(|comment| comment.kind)
+            .collect::<Vec<_>>(),
+        vec![
+            CommentKind::DocLine,
+            CommentKind::Line,
+            CommentKind::DocBlock,
+            CommentKind::Block,
+        ]
+    );
+    // NOTE: C and C++ do have the Doxygen convention, so the same bytes there
+    // NOTE: are documentation, which is what makes this a Java rule rather
+    // NOTE: than a change to how the markers are spelled.
+    let doxygen = scan(source, Language::Cpp, ScanOptions::default());
+    assert_eq!(
+        doxygen
+            .comments
+            .iter()
+            .map(|comment| comment.kind)
+            .collect::<Vec<_>>(),
+        vec![
+            CommentKind::DocLine,
+            CommentKind::DocLine,
+            CommentKind::DocBlock,
+            CommentKind::DocBlock,
+        ]
+    );
+}
+
 #[test]
 fn java_text_block_ignores_an_escaped_closing_delimiter() {
     let source = b"String s = \"\"\"\n\\\"\"\" // opaque\nend\n\"\"\"; // remove\n";
@@ -200,6 +244,57 @@ fn java_text_block_ignores_an_escaped_closing_delimiter() {
     assert_eq!(
         report.comments[0].span.start,
         source.len() - b"// remove\n".len()
+    );
+}
+
+/// A Python string literal begins at its prefix, not at its quote: `r"`,
+/// `rb"` and `f"` are one token with the quote that follows them (Python
+/// reference 2.4.1). So an unterminated one is reported from the prefix, which
+/// is what the triple-quoted and f-string paths already did while the ordinary
+/// single-quoted one started the span at the quote and left the `r` outside
+/// the literal it belongs to.
+#[test]
+fn an_unterminated_python_string_is_reported_from_its_prefix() {
+    let spans = |source: &[u8]| {
+        scan(source, Language::Python, ScanOptions::default())
+            .diagnostics
+            .into_iter()
+            .map(|item| (item.code, item.span))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        spans(br#"r""#),
+        vec![("unterminated-string".to_owned(), ByteSpan::new(0, 2))]
+    );
+    assert_eq!(
+        spans(br#"rb""#),
+        vec![("unterminated-string".to_owned(), ByteSpan::new(0, 3))]
+    );
+    assert_eq!(
+        spans(b"x = r\"abc\n"),
+        vec![("unterminated-string".to_owned(), ByteSpan::new(4, 9))]
+    );
+    // NOTE: The two paths that already anchored at the prefix, here so the
+    // NOTE: three cannot drift apart again.
+    assert_eq!(
+        spans(br#"r""""#),
+        vec![("unterminated-string".to_owned(), ByteSpan::new(0, 4))]
+    );
+    assert_eq!(
+        spans(br#"rf"{"#),
+        vec![
+            (
+                "unterminated-fstring-expression".to_owned(),
+                ByteSpan::new(4, 4)
+            ),
+            ("unterminated-string".to_owned(), ByteSpan::new(0, 4)),
+        ]
+    );
+    // NOTE: An unprefixed literal is unchanged: the token and the quote are
+    // NOTE: the same byte.
+    assert_eq!(
+        spans(br#"""#),
+        vec![("unterminated-string".to_owned(), ByteSpan::new(0, 1))]
     );
 }
 
@@ -600,6 +695,533 @@ fn kotlin_nested_comments_and_triple_strings() {
     let report = scan(templates, Language::Kotlin, ScanOptions::default());
     assert!(report.valid);
     assert_eq!(report.comments.len(), 3);
+}
+
+/* NOTE: TOML has one comment form and no block form, so every hazard below is
+ * a question about which `#` is inside a string. The sections cited are of the
+ * TOML v1.0.0 specification. */
+
+#[test]
+fn toml_comments_are_line_comments_wherever_they_open() {
+    let source = b"# leading\nkey = \"value\" # trailing\n[table] # after a header\n";
+    let report = scan(source, Language::Toml, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 3);
+    assert!(
+        report
+            .comments
+            .iter()
+            .all(|comment| comment.kind == CommentKind::Line),
+        "TOML has only the line form: {:?}",
+        report.comments
+    );
+    assert_eq!(removable(&report), 3);
+}
+
+#[test]
+fn toml_string_and_quoted_key_forms_hide_comment_openers() {
+    let source = br##"basic = "a # b"
+literal = 'c # d'
+"quoted # key" = 1
+'literal # key' = 2
+inline = { x = "# no", y = 'no #' } # yes
+"##;
+    let report = scan(source, Language::Toml, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1);
+    assert_eq!(
+        report.comments[0].span.start,
+        source.len() - b"# yes\n".len()
+    );
+}
+
+#[test]
+fn toml_multi_line_strings_hide_comment_openers() {
+    let source = br##"basic = """
+# opaque
+"""
+literal = '''
+# opaque
+'''
+after = 1 # yes
+"##;
+    let report = scan(source, Language::Toml, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1);
+    assert_eq!(
+        report.comments[0].span.start,
+        source.len() - b"# yes\n".len()
+    );
+}
+
+#[test]
+fn a_toml_multi_line_string_ends_at_the_last_three_of_up_to_five_quotes() {
+    let source =
+        b"a = \"\"\"x\"\"\"\" # four\nb = \"\"\"y\"\"\"\"\" # five\nc = \"\"\"z\"\"\" # three\n";
+    let report = scan(source, Language::Toml, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 3);
+    let literal = b"a = '''x'''' # four\nb = '''y''''' # five\nc = '''z''' # three\n";
+    let report = scan(literal, Language::Toml, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 3);
+}
+
+#[test]
+fn toml_escapes_are_read_in_basic_strings_and_not_in_literal_ones() {
+    let basic = b"a = \"\"\"line \\\n  # opaque \\\"\"\" closed \"\"\"\nb = 1 # yes\n";
+    let report = scan(basic, Language::Toml, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1);
+    assert_eq!(
+        report.comments[0].span.start,
+        basic.len() - b"# yes\n".len()
+    );
+
+    let literal = b"a = '''keep \\''' # yes\nb = 1\n";
+    let report = scan(literal, Language::Toml, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1);
+    assert_eq!(report.comments[0].span.start, b"a = '''keep \\''' ".len());
+}
+
+#[test]
+fn every_unterminated_toml_string_stops_a_fix_until_it_is_forced() {
+    for source in [
+        b"a = \"unclosed\nb = 1\n".as_slice(),
+        b"a = 'unclosed\nb = 1\n".as_slice(),
+        b"a = \"\"\"unclosed\nb = 1\n".as_slice(),
+        b"a = '''unclosed\nb = 1\n".as_slice(),
+    ] {
+        let result = transform(source, Language::Toml, TransformOptions::default());
+        assert!(
+            !result.report.valid,
+            "{:?} was accepted",
+            String::from_utf8_lossy(source)
+        );
+        assert!(
+            result
+                .report
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == "unterminated-string"),
+            "{:?} reported {:?}",
+            String::from_utf8_lossy(source),
+            result.report.diagnostics
+        );
+        assert!(
+            result.edits.is_empty(),
+            "{:?} was edited anyway",
+            String::from_utf8_lossy(source)
+        );
+    }
+    let forced = transform(
+        b"# note\na = \"\"\"unclosed\n",
+        Language::Toml,
+        TransformOptions {
+            scan: ScanOptions {
+                force_invalid: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    );
+    assert!(!forced.report.valid);
+    assert_eq!(forced.output, b"\na = \"\"\"unclosed\n");
+}
+
+#[test]
+fn toml_schema_and_formatter_directives_are_protected() {
+    let source = b"#:schema https://example.test/pyproject.json\n# taplo: array_auto_expand = false\n# ordinary\n";
+    let report = scan(source, Language::Toml, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(
+        report
+            .comments
+            .iter()
+            .filter(|comment| comment.kind == CommentKind::Directive)
+            .count(),
+        2
+    );
+    assert_eq!(removable(&report), 1);
+}
+
+#[test]
+fn a_toml_hash_bang_is_a_preamble_only_on_the_first_line() {
+    let source = b"#!/usr/bin/env taplo\n#! second line\n#! third line\n";
+    let report = scan(source, Language::Toml, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 3);
+    assert_eq!(report.comments[0].kind, CommentKind::Shebang);
+    assert_eq!(report.comments[1].kind, CommentKind::Line);
+    assert_eq!(report.comments[2].kind, CommentKind::Line);
+    assert_eq!(removable(&report), 2);
+}
+
+#[test]
+fn toml_multi_line_constructs_survive_crlf_line_endings() {
+    let source =
+        b"a = \"\"\"\r\n# opaque\r\n\"\"\"\r\nb = '''\r\n# opaque\r\n'''\r\nc = 1 # yes\r\n";
+    let report = scan(source, Language::Toml, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1);
+    assert_eq!(report.comments[0].span.end, source.len() - b"\r\n".len());
+    let unterminated = scan(
+        b"a = \"\"\"unclosed\r\n",
+        Language::Toml,
+        ScanOptions::default(),
+    );
+    assert!(!unterminated.valid);
+}
+
+#[test]
+fn toml_is_detected_from_its_extension_and_from_the_lock_files_written_in_it() {
+    let found = detect_language(Some(Path::new("pyproject.toml")), b"")
+        .expect("`.toml` is detected as nothing");
+    assert_eq!(
+        (found.language, found.dialect, found.reason),
+        (Language::Toml, Dialect::Standard, "extension")
+    );
+    for name in [
+        "Cargo.lock",
+        "Pipfile",
+        "poetry.lock",
+        "uv.lock",
+        "pdm.lock",
+    ] {
+        let found =
+            detect_language(Some(Path::new(name)), b"").unwrap_or_else(|| panic!("`{name}`"));
+        assert_eq!(
+            (found.language, found.reason),
+            (Language::Toml, "reserved-filename"),
+            "`{name}`"
+        );
+    }
+    /* NOTE: `Pipfile.lock` is the JSON half of the pair Pipenv writes, so the
+     * name that carries no extension of its own is the only one of the two
+     * this scanner answers to. */
+    assert!(detect_language(Some(Path::new("Pipfile.lock")), b"").is_none());
+}
+
+#[test]
+fn toml_layouts_leave_a_line_columns_or_nothing() {
+    let source = b"# alone\nkey = 1 # trailing\n";
+    let lines = transform(source, Language::Toml, TransformOptions::default());
+    assert_eq!(lines.output, b"\nkey = 1 \n");
+    let columns = transform(
+        source,
+        Language::Toml,
+        TransformOptions {
+            layout: Layout::Columns,
+            ..Default::default()
+        },
+    );
+    let padded = format!("{}\nkey = 1 {}\n", " ".repeat(7), " ".repeat(10));
+    assert_eq!(columns.output, padded.as_bytes());
+    let compact = transform(
+        source,
+        Language::Toml,
+        TransformOptions {
+            layout: Layout::Compact,
+            ..Default::default()
+        },
+    );
+    assert_eq!(compact.output, b"key = 1\n");
+}
+
+/* NOTE: Lua's hazards are all about the long bracket: `[`, any number of `=`,
+ * `[` opens a comment when `--` precedes it and a string when nothing does,
+ * and it closes only at its own level. The sections cited are of the Lua 5.4
+ * reference manual, 3.1 Lexical Conventions. Lua has no string interpolation,
+ * so there is no comment inside one of those to protect. */
+
+#[test]
+fn lua_comment_forms_carry_their_own_kinds() {
+    let source = b"-- line\n--- documentation\n---- divider\n--[[ long ]]\n--[==[ level two ]==]\nlocal x = 1 -- trailing\n";
+    let report = scan(source, Language::Lua, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    let kinds: Vec<CommentKind> = report.comments.iter().map(|comment| comment.kind).collect();
+    assert_eq!(
+        kinds,
+        [
+            CommentKind::Line,
+            CommentKind::DocLine,
+            CommentKind::Line,
+            CommentKind::Block,
+            CommentKind::Block,
+            CommentKind::Line,
+        ],
+        "{:?}",
+        report.comments
+    );
+    assert_eq!(removable(&report), 6);
+}
+
+#[test]
+fn lua_string_forms_hide_comment_openers() {
+    let source = br#"a = "-- not a comment"
+b = '--[[ not a comment ]]'
+c = [[ -- opaque ]]
+d = [==[ -- opaque ]] ]==]
+e = 1 -- yes
+"#;
+    let report = scan(source, Language::Lua, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1);
+    assert_eq!(
+        report.comments[0].span.start,
+        source.len() - b"-- yes\n".len()
+    );
+}
+
+#[test]
+fn a_lua_long_bracket_closes_only_at_its_own_level() {
+    let source = b"--[==[ ]] ]=] ]===] still inside ]==]\nx = 1 -- yes\n";
+    let report = scan(source, Language::Lua, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 2);
+    assert_eq!(report.comments[0].kind, CommentKind::Block);
+    assert_eq!(
+        report.comments[0].span.end,
+        b"--[==[ ]] ]=] ]===] still inside ]==]".len()
+    );
+    let string = b"s = [=[ ]] inside ]=] -- yes\n";
+    let report = scan(string, Language::Lua, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1);
+    assert_eq!(
+        report.comments[0].span.start,
+        string.len() - b"-- yes\n".len()
+    );
+}
+
+#[test]
+fn a_lua_long_bracket_needs_the_second_bracket_to_open_at_all() {
+    /* NOTE: `[b` and `[1` are indexing rather than long strings, so the comment
+     * on the same line is still found; `--[=` never reaches its second `[`,
+     * which leaves it an ordinary comment to the end of the line. */
+    let source = b"a[b[1]] = 2 -- yes\n--[= still a line comment\nc = 3\n";
+    let report = scan(source, Language::Lua, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 2);
+    assert_eq!(report.comments[0].span.start, b"a[b[1]] = 2 ".len());
+    assert_eq!(
+        report.comments[1].span.end,
+        source.len() - b"\nc = 3\n".len()
+    );
+    assert!(
+        report
+            .comments
+            .iter()
+            .all(|comment| comment.kind == CommentKind::Line)
+    );
+}
+
+#[test]
+fn a_lua_short_string_carries_whitespace_skips_and_line_continuations() {
+    let source = b"a = \"x \\z\n   y\"\nb = \"c \\\nd\"\ne = 1 -- yes\n";
+    let report = scan(source, Language::Lua, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1);
+    assert_eq!(
+        report.comments[0].span.start,
+        source.len() - b"-- yes\n".len()
+    );
+}
+
+#[test]
+fn every_unterminated_lua_construct_stops_a_fix_until_it_is_forced() {
+    for (source, code) in [
+        (b"a = \"unclosed\nb = 1\n".as_slice(), "unterminated-string"),
+        (b"a = 'unclosed\nb = 1\n".as_slice(), "unterminated-string"),
+        (
+            b"a = \"unclosed at the end".as_slice(),
+            "unterminated-string",
+        ),
+        (b"a = [[unclosed\nb = 1\n".as_slice(), "unterminated-string"),
+        (
+            b"a = [==[unclosed ]] ]=]\n".as_slice(),
+            "unterminated-string",
+        ),
+        (b"--[[ unclosed\nb = 1\n".as_slice(), "unterminated-comment"),
+        (
+            b"--[==[ unclosed ]] ]=]\n".as_slice(),
+            "unterminated-comment",
+        ),
+    ] {
+        let result = transform(source, Language::Lua, TransformOptions::default());
+        assert!(
+            !result.report.valid,
+            "{:?} was accepted",
+            String::from_utf8_lossy(source)
+        );
+        assert!(
+            result
+                .report
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == code),
+            "{:?} reported {:?}",
+            String::from_utf8_lossy(source),
+            result.report.diagnostics
+        );
+        assert!(
+            result.edits.is_empty(),
+            "{:?} was edited anyway",
+            String::from_utf8_lossy(source)
+        );
+    }
+    let forced = transform(
+        b"-- note\na = [[unclosed\n",
+        Language::Lua,
+        TransformOptions {
+            scan: ScanOptions {
+                force_invalid: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    );
+    assert!(!forced.report.valid);
+    assert_eq!(forced.output, b"\na = [[unclosed\n");
+}
+
+#[test]
+fn lua_annotation_and_linter_directives_are_protected() {
+    let source = b"---@diagnostic disable-next-line: undefined-global\n\
+---@param count number\n\
+-- luacheck: ignore 212\n\
+-- selene: allow(unused_variable)\n\
+-- stylua: ignore\n\
+-- luacov: disable\n\
+-- ordinary\n";
+    let report = scan(source, Language::Lua, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    let kinds: Vec<CommentKind> = report.comments.iter().map(|comment| comment.kind).collect();
+    assert_eq!(
+        kinds,
+        [
+            CommentKind::Directive,
+            CommentKind::DocLine,
+            CommentKind::Directive,
+            CommentKind::Directive,
+            CommentKind::Directive,
+            CommentKind::Directive,
+            CommentKind::Line,
+        ],
+        "{:?}",
+        report.comments
+    );
+    /* NOTE: `---@param` documents a type where `---@diagnostic` instructs the
+     * language server, and only the second is a directive, so the annotation
+     * and the ordinary comment are the two a `safe` run removes. */
+    assert_eq!(removable(&report), 2);
+}
+
+#[test]
+fn a_lua_hash_line_is_a_preamble_only_at_the_first_byte() {
+    let shebang = b"#!/usr/bin/env lua\nx = 1 -- yes\n";
+    let report = scan(shebang, Language::Lua, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 2);
+    assert_eq!(report.comments[0].kind, CommentKind::Shebang);
+    assert_eq!(removable(&report), 1);
+
+    /* NOTE: The loader skips the whole of a first line that opens with `#`,
+     * whether or not a `!` follows, so a bare one is a comment Lua never sees
+     * — and one a `safe` run may therefore remove. */
+    let bare = b"# the loader skips this\nx = 1 -- yes\n";
+    let report = scan(bare, Language::Lua, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 2);
+    assert_eq!(report.comments[0].kind, CommentKind::Line);
+    assert_eq!(removable(&report), 2);
+
+    /* NOTE: On any later line `#` is the length operator, so neither the second
+     * nor the third line of a file holds a comment the way the first does. */
+    for source in [
+        b"x = 1\n#!/usr/bin/env lua\n".as_slice(),
+        b"x = 1\ny = 2\n# not a comment\n".as_slice(),
+    ] {
+        let report = scan(source, Language::Lua, ScanOptions::default());
+        assert!(
+            report.comments.is_empty(),
+            "{:?} found {:?}",
+            String::from_utf8_lossy(source),
+            report.comments
+        );
+    }
+}
+
+#[test]
+fn lua_multi_line_constructs_survive_crlf_line_endings() {
+    let source = b"--[[ long\r\ncomment ]]\r\ns = [==[\r\n-- opaque\r\n]==]\r\nc = \"x \\\r\ny\"\r\nd = \"p \\z\r\n  q\"\r\ne = 1 -- yes\r\n";
+    let report = scan(source, Language::Lua, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 2);
+    assert_eq!(report.comments[0].kind, CommentKind::Block);
+    assert_eq!(report.comments[1].span.end, source.len() - b"\r\n".len());
+    let unterminated = scan(
+        b"a = \"x\r\nb = 1\r\n",
+        Language::Lua,
+        ScanOptions::default(),
+    );
+    assert!(!unterminated.valid);
+}
+
+#[test]
+fn lua_is_detected_from_its_extensions_and_from_a_shebang() {
+    for name in ["init.lua", "luarocks-3.11-1.rockspec"] {
+        let found = detect_language(Some(Path::new(name)), b"")
+            .unwrap_or_else(|| panic!("`{name}` is detected as nothing"));
+        assert_eq!(
+            (found.language, found.dialect, found.reason),
+            (Language::Lua, Dialect::Standard, "extension"),
+            "`{name}`"
+        );
+    }
+    for line in [
+        "#!/usr/bin/env lua\n",
+        "#!/usr/bin/lua5.4\n",
+        "#!/usr/bin/luajit\n",
+    ] {
+        let found = detect_language(None, line.as_bytes())
+            .unwrap_or_else(|| panic!("`{line}` is detected as nothing"));
+        assert_eq!(
+            (found.language, found.reason),
+            (Language::Lua, "shebang"),
+            "`{line}`"
+        );
+    }
+    /* NOTE: Lua reserves no whole file name: `rockspec` is a suffix a package
+     * writes in front of, and a file called nothing else is not one. */
+    assert!(detect_language(Some(Path::new("rockspec")), b"").is_none());
+}
+
+#[test]
+fn lua_layouts_leave_a_line_columns_or_nothing() {
+    let source = b"-- alone\nx = 1 -- trailing\n";
+    let lines = transform(source, Language::Lua, TransformOptions::default());
+    assert_eq!(lines.output, b"\nx = 1 \n");
+    let columns = transform(
+        source,
+        Language::Lua,
+        TransformOptions {
+            layout: Layout::Columns,
+            ..Default::default()
+        },
+    );
+    let padded = format!("{}\nx = 1 {}\n", " ".repeat(8), " ".repeat(11));
+    assert_eq!(columns.output, padded.as_bytes());
+    let compact = transform(
+        source,
+        Language::Lua,
+        TransformOptions {
+            layout: Layout::Compact,
+            ..Default::default()
+        },
+    );
+    assert_eq!(compact.output, b"x = 1\n");
 }
 
 #[test]

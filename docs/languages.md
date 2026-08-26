@@ -23,26 +23,28 @@ $ ocomment strip --language rust --dialect mysql
 ocomment: unsupported dialect `mysql` for rust; supported: standard
 ```
 
-OComment has 15 built-in languages covering
-37 file extensions and 16 named dialects.
+OComment has 17 built-in languages covering
+45 file extensions and 16 named dialects.
 
 | Language | Extensions | Dialects |
 | --- | --- | --- |
 | `rust` | `.rs` | `standard` |
-| `ocaml` | `.ml`, `.mli` | `standard` |
+| `ocaml` | `.ml`, `.mli`, `.mlt` | `standard` |
 | `c` | `.c`, `.h`, `.m` (`objective-c`) | `standard`, `objective-c`, `gnu-c` |
-| `cpp` | `.cc`, `.cpp`, `.cxx`, `.hpp`, `.mm` (`objective-cpp`), `.cu` (`cuda`) | `standard`, `objective-cpp`, `gnu-cpp`, `cuda` |
+| `cpp` | `.cc`, `.cpp`, `.cxx`, `.hh`, `.hpp`, `.hxx`, `.mm` (`objective-cpp`), `.cu` (`cuda`), `.cuh` (`cuda`) | `standard`, `objective-cpp`, `gnu-cpp`, `cuda` |
 | `go` | `.go` | `standard` |
 | `java` | `.java` | `standard` |
 | `javascript` | `.js`, `.mjs`, `.cjs`, `.jsx` (`jsx`) | `standard`, `jsx` |
 | `typescript` | `.ts`, `.mts`, `.cts`, `.tsx` (`tsx`) | `standard`, `tsx` |
 | `python` | `.py`, `.pyw`, `.pyi` | `standard` |
 | `shell` | `.sh` (`posix-sh`), `.bash` (`bash53`), `.zsh` (`zsh`) | `standard`, `posix-sh`, `bash53`, `zsh` |
-| `html` | `.html`, `.htm`, `.xhtml` | `standard` |
+| `html` | `.html`, `.htm`, `.xhtml`, `.shtml` | `standard` |
 | `css` | `.css` | `standard` |
 | `jsonc` | `.jsonc`, `.json5` | `standard` |
 | `sql` | `.sql` | `standard`, `postgresql`, `mysql`, `sqlite`, `t-sql`, `oracle` |
 | `kotlin` | `.kt`, `.kts` | `standard` |
+| `toml` | `.toml` | `standard` |
+| `lua` | `.lua`, `.rockspec` | `standard` |
 
 ## Detected without an extension
 
@@ -57,6 +59,8 @@ interpreter name appears anywhere on the line.
 | `python` | — | `python` |
 | `shell` | `Dockerfile`, `Containerfile`, `Makefile`, `GNUmakefile`, `.profile`, `.bashrc`, `.zshrc` | `sh`, `bash`, `zsh` |
 | `jsonc` | `tsconfig.json`, `jsconfig.json` | — |
+| `toml` | `Cargo.lock`, `Pipfile`, `poetry.lock`, `uv.lock`, `pdm.lock` | — |
+| `lua` | — | `lua`, `luajit` |
 
 ## Anything else
 

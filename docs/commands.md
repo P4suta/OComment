@@ -117,6 +117,8 @@ Policy:
           - jsonc:      JSON with comments, including JSON5
           - sql:        SQL for every supported database dialect
           - kotlin:     Kotlin source and script files
+          - toml:       TOML documents, including the lock files written in it
+          - lua:        Lua chunks and LuaRocks rockspecs
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -299,6 +301,8 @@ Policy:
           - jsonc:      JSON with comments, including JSON5
           - sql:        SQL for every supported database dialect
           - kotlin:     Kotlin source and script files
+          - toml:       TOML documents, including the lock files written in it
+          - lua:        Lua chunks and LuaRocks rockspecs
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -466,6 +470,8 @@ Policy:
           - jsonc:      JSON with comments, including JSON5
           - sql:        SQL for every supported database dialect
           - kotlin:     Kotlin source and script files
+          - toml:       TOML documents, including the lock files written in it
+          - lua:        Lua chunks and LuaRocks rockspecs
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -625,6 +631,8 @@ Policy:
           - jsonc:      JSON with comments, including JSON5
           - sql:        SQL for every supported database dialect
           - kotlin:     Kotlin source and script files
+          - toml:       TOML documents, including the lock files written in it
+          - lua:        Lua chunks and LuaRocks rockspecs
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -784,6 +792,8 @@ Policy:
           - jsonc:      JSON with comments, including JSON5
           - sql:        SQL for every supported database dialect
           - kotlin:     Kotlin source and script files
+          - toml:       TOML documents, including the lock files written in it
+          - lua:        Lua chunks and LuaRocks rockspecs
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -933,6 +943,8 @@ Policy:
           - jsonc:      JSON with comments, including JSON5
           - sql:        SQL for every supported database dialect
           - kotlin:     Kotlin source and script files
+          - toml:       TOML documents, including the lock files written in it
+          - lua:        Lua chunks and LuaRocks rockspecs
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1082,6 +1094,8 @@ Policy:
           - jsonc:      JSON with comments, including JSON5
           - sql:        SQL for every supported database dialect
           - kotlin:     Kotlin source and script files
+          - toml:       TOML documents, including the lock files written in it
+          - lua:        Lua chunks and LuaRocks rockspecs
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1247,6 +1261,8 @@ Policy:
           - jsonc:      JSON with comments, including JSON5
           - sql:        SQL for every supported database dialect
           - kotlin:     Kotlin source and script files
+          - toml:       TOML documents, including the lock files written in it
+          - lua:        Lua chunks and LuaRocks rockspecs
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1403,6 +1419,8 @@ Policy:
           - jsonc:      JSON with comments, including JSON5
           - sql:        SQL for every supported database dialect
           - kotlin:     Kotlin source and script files
+          - toml:       TOML documents, including the lock files written in it
+          - lua:        Lua chunks and LuaRocks rockspecs
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1552,6 +1570,8 @@ Policy:
           - jsonc:      JSON with comments, including JSON5
           - sql:        SQL for every supported database dialect
           - kotlin:     Kotlin source and script files
+          - toml:       TOML documents, including the lock files written in it
+          - lua:        Lua chunks and LuaRocks rockspecs
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1710,6 +1730,8 @@ Policy:
           - jsonc:      JSON with comments, including JSON5
           - sql:        SQL for every supported database dialect
           - kotlin:     Kotlin source and script files
+          - toml:       TOML documents, including the lock files written in it
+          - lua:        Lua chunks and LuaRocks rockspecs
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1872,6 +1894,8 @@ Policy:
           - jsonc:      JSON with comments, including JSON5
           - sql:        SQL for every supported database dialect
           - kotlin:     Kotlin source and script files
+          - toml:       TOML documents, including the lock files written in it
+          - lua:        Lua chunks and LuaRocks rockspecs
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2025,6 +2049,8 @@ Policy:
           - jsonc:      JSON with comments, including JSON5
           - sql:        SQL for every supported database dialect
           - kotlin:     Kotlin source and script files
+          - toml:       TOML documents, including the lock files written in it
+          - lua:        Lua chunks and LuaRocks rockspecs
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2174,6 +2200,8 @@ Policy:
           - jsonc:      JSON with comments, including JSON5
           - sql:        SQL for every supported database dialect
           - kotlin:     Kotlin source and script files
+          - toml:       TOML documents, including the lock files written in it
+          - lua:        Lua chunks and LuaRocks rockspecs
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2327,6 +2355,8 @@ Policy:
           - jsonc:      JSON with comments, including JSON5
           - sql:        SQL for every supported database dialect
           - kotlin:     Kotlin source and script files
+          - toml:       TOML documents, including the lock files written in it
+          - lua:        Lua chunks and LuaRocks rockspecs
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2480,6 +2510,8 @@ Policy:
           - jsonc:      JSON with comments, including JSON5
           - sql:        SQL for every supported database dialect
           - kotlin:     Kotlin source and script files
+          - toml:       TOML documents, including the lock files written in it
+          - lua:        Lua chunks and LuaRocks rockspecs
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2633,6 +2665,8 @@ Policy:
           - jsonc:      JSON with comments, including JSON5
           - sql:        SQL for every supported database dialect
           - kotlin:     Kotlin source and script files
+          - toml:       TOML documents, including the lock files written in it
+          - lua:        Lua chunks and LuaRocks rockspecs
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2788,6 +2822,8 @@ Policy:
           - jsonc:      JSON with comments, including JSON5
           - sql:        SQL for every supported database dialect
           - kotlin:     Kotlin source and script files
+          - toml:       TOML documents, including the lock files written in it
+          - lua:        Lua chunks and LuaRocks rockspecs
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2937,6 +2973,8 @@ Policy:
           - jsonc:      JSON with comments, including JSON5
           - sql:        SQL for every supported database dialect
           - kotlin:     Kotlin source and script files
+          - toml:       TOML documents, including the lock files written in it
+          - lua:        Lua chunks and LuaRocks rockspecs
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -3086,6 +3124,8 @@ Policy:
           - jsonc:      JSON with comments, including JSON5
           - sql:        SQL for every supported database dialect
           - kotlin:     Kotlin source and script files
+          - toml:       TOML documents, including the lock files written in it
+          - lua:        Lua chunks and LuaRocks rockspecs
 
       --dialect <DIALECT>
           Force this dialect of the selected language

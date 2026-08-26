@@ -108,6 +108,13 @@ this page, so the table cannot claim a protection that is not there.
 | `version-comment` | `mysql` | `/*!40101 SET NAMES utf8 */` | `version-comment` | tool or language directive |
 | `syntax=` | `shell` | `# syntax=docker/dockerfile:1` | `directive` | tool or language directive |
 | `hadolint` | `shell` | `# hadolint ignore=DL3018` | `directive` | tool or language directive |
+| `:schema` | `toml` | `#:schema https://example.test/pyproject.json` | `directive` | tool or language directive |
+| `taplo:` | `toml` | `# taplo: array_auto_expand = false` | `directive` | tool or language directive |
+| `---@diagnostic` | `lua` | `---@diagnostic disable-next-line: undefined-global` | `directive` | tool or language directive |
+| `luacheck:` | `lua` | `-- luacheck: ignore 212` | `directive` | tool or language directive |
+| `selene:` | `lua` | `-- selene: allow(unused_variable)` | `directive` | tool or language directive |
+| `stylua:` | `lua` | `-- stylua: ignore` | `directive` | tool or language directive |
+| `luacov:` | `lua` | `-- luacov: disable` | `directive` | tool or language directive |
 
 `--remove-kind directive` or `--policy all` removes a directive anyway.
 A shebang and an encoding preamble need `--force-protected` on top of

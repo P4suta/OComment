@@ -90,6 +90,8 @@ fn scan_internal(
         Language::Shell => scanner.scan_shell(),
         Language::Html => scanner.scan_html(),
         Language::Sql => scanner.scan_sql(),
+        Language::Toml => scanner.scan_toml(),
+        Language::Lua => scanner.scan_lua(),
         Language::Unknown => scanner.error(
             "unknown-language",
             "a language is required",
@@ -615,13 +617,13 @@ impl<'a> Scanner<'a> {
         while index < child.source.len() {
             if starts(child.source, index, b"//") {
                 let end = line_end(child.source, index + 2);
-                child.add_comment(index, end, line_kind(child.source, index));
+                child.add_comment(index, end, java_line_kind(child.source, index));
                 index = end;
                 continue;
             }
             if starts(child.source, index, b"/*") {
                 let (end, closed) = block_end(child.source, index, b"/*", b"*/", false);
-                child.add_comment(index, end, block_kind(child.source, index));
+                child.add_comment(index, end, java_block_kind(child.source, index));
                 if !closed {
                     child.error(
                         "unterminated-comment",
@@ -734,10 +736,14 @@ impl<'a> Scanner<'a> {
             if let Some((quote_start, triple, formatted, raw)) = python_string_start(bytes, index) {
                 if formatted {
                     index = self.scan_python_fstring(index, quote_start, triple, raw, 0);
-                } else if triple {
-                    index = self.scan_python_delimited(index, quote_start, true);
                 } else {
-                    index = self.quoted_or_error(quote_start, false, "Python string");
+                    /* NOTE: `index` rather than `quote_start`: a prefix and the quote
+                     * after it are one token (Python reference 2.4.1), so an
+                     * unterminated `r"` is reported from the `r`, the way the
+                     * triple-quoted and f-string paths already report theirs.
+                     * The single-quoted case used the generic string reader,
+                     * which knows only where the quote was. */
+                    index = self.scan_python_delimited(index, quote_start, triple);
                 }
                 continue;
             }
@@ -877,6 +883,206 @@ impl<'a> Scanner<'a> {
             "unterminated-fstring-expression",
             "unterminated Python f-string expression",
             ByteSpan::new(index, index),
+        );
+        index
+    }
+
+    fn scan_toml(&mut self) {
+        let bytes = self.source;
+        let mut index = 0;
+        while index < bytes.len() && !self.stopped {
+            match bytes[index] {
+                b'#' => {
+                    let end = line_end(bytes, index + 1);
+                    self.add_comment(index, end, CommentKind::Line);
+                    index = end;
+                }
+                b'"' | b'\'' => index = self.scan_toml_string(index),
+                b'\r' | b'\n' => {
+                    index = consume_newline(bytes, index);
+                    self.add_safe_checkpoint(index);
+                }
+                _ => index += 1,
+            }
+        }
+    }
+
+    /// One TOML string beginning at its opening quote, whether it is a value
+    /// or a quoted key.
+    ///
+    /// `"` opens a basic string, which takes `\` escapes, and `'` a literal
+    /// string, which takes none, so a `\` in a literal string is a byte of it
+    /// (TOML v1.0.0, String). Three of either quote open the multi-line form,
+    /// where a newline is content instead of the end of an unterminated
+    /// string.
+    fn scan_toml_string(&mut self, start: usize) -> usize {
+        let bytes = self.source;
+        let quote = bytes[start];
+        let multiline = starts(bytes, start, &[quote, quote, quote]);
+        let escapes = quote == b'"';
+        let mut index = start + if multiline { 3 } else { 1 };
+        while index < bytes.len() {
+            if escapes && bytes[index] == b'\\' {
+                /* NOTE: This also carries the line-ending backslash of a multi-line
+                 * basic string, which continues the string across the newline
+                 * it swallows: the newline is content either way, so the two
+                 * need no separate rules. */
+                index = (index + 2).min(bytes.len());
+            } else if bytes[index] != quote {
+                if !multiline && matches!(bytes[index], b'\r' | b'\n') {
+                    self.error(
+                        "unterminated-string",
+                        "unterminated TOML string",
+                        ByteSpan::new(start, index),
+                    );
+                    return index;
+                }
+                index += 1;
+            } else if !multiline {
+                return index + 1;
+            } else {
+                /* NOTE: The delimiter is three quotes, and up to two more may sit
+                 * in front of it as content, so a run of three or more ends the
+                 * string on its last three — after at most five of them. A
+                 * sixth quote is past what the grammar lets the delimiter
+                 * absorb and belongs to whatever follows the string. */
+                let run = toml_quote_run(bytes, index, quote);
+                if run >= 3 {
+                    return index + run.min(5);
+                }
+                index += run;
+            }
+        }
+        self.error(
+            "unterminated-string",
+            if multiline {
+                "unterminated TOML multi-line string"
+            } else {
+                "unterminated TOML string"
+            },
+            ByteSpan::new(start, index),
+        );
+        index
+    }
+
+    /// One Lua chunk (Lua 5.4 reference manual, 3.1 Lexical Conventions).
+    fn scan_lua(&mut self) {
+        let bytes = self.source;
+        let mut index = 0;
+        /* NOTE: The loader skips a first line that opens with `#` before it lexes
+         * anything (`lauxlib.c`, `skipcomment`), which is what lets a chunk
+         * carry a `#!` line. It is that one byte at that one offset: `#` is the
+         * length operator everywhere else. The `self.offset` test is what keeps
+         * a suffix scan out of the rule, and no checkpoint of a full scan falls
+         * inside the first line, so the two answers cannot disagree. */
+        if self.offset == 0 && bytes.first() == Some(&b'#') {
+            let end = line_end(bytes, 1);
+            self.add_comment(0, end, CommentKind::Line);
+            index = end;
+        }
+        while index < bytes.len() && !self.stopped {
+            if starts(bytes, index, b"--") {
+                index = self.scan_lua_comment(index);
+                continue;
+            }
+            match bytes[index] {
+                b'"' | b'\'' => index = self.scan_lua_short_string(index),
+                b'[' => index = self.scan_lua_long_string(index),
+                b'\r' | b'\n' => {
+                    index = consume_newline(bytes, index);
+                    self.add_safe_checkpoint(index);
+                }
+                _ => index += 1,
+            }
+        }
+    }
+
+    /// One Lua comment beginning at its `--`.
+    ///
+    /// A long bracket immediately after the `--` opens a long comment, which
+    /// runs to the closing bracket of its own level; anything else is a short
+    /// comment to the end of the line. The two differ in the byte that
+    /// completes the bracket, so `--[=` is a short comment and `--[=[` is not.
+    fn scan_lua_comment(&mut self, start: usize) -> usize {
+        let bytes = self.source;
+        if let Some(level) = long_bracket_level(bytes, start + 2) {
+            let (end, closed) = long_bracket_end(bytes, start + 2 + level + 2, level);
+            self.add_comment(start, end, CommentKind::Block);
+            if !closed {
+                self.error(
+                    "unterminated-comment",
+                    "unterminated Lua long comment",
+                    ByteSpan::new(start, end),
+                );
+            }
+            return end;
+        }
+        let end = line_end(bytes, start + 2);
+        self.add_comment(start, end, lua_line_kind(bytes, start));
+        end
+    }
+
+    /// One Lua long string beginning at `start`, or `start + 1` when no long
+    /// bracket opens there: `a[b[1]]` indexes twice and opens nothing.
+    fn scan_lua_long_string(&mut self, start: usize) -> usize {
+        let bytes = self.source;
+        let Some(level) = long_bracket_level(bytes, start) else {
+            return start + 1;
+        };
+        let (end, closed) = long_bracket_end(bytes, start + level + 2, level);
+        if !closed {
+            self.error(
+                "unterminated-string",
+                "unterminated Lua long string",
+                ByteSpan::new(start, end),
+            );
+        }
+        end
+    }
+
+    /// One Lua short string beginning at its quote.
+    ///
+    /// `\z` skips the whitespace that follows it, newlines included, and a
+    /// backslash before a real line terminator carries that terminator into the
+    /// string. Any other unescaped line terminator ends a string that was never
+    /// closed. The remaining escapes — `\ddd`, `\xXX`, `\u{XXX}` and the
+    /// single-character ones — carry no quote and no newline, so skipping the
+    /// byte after the backslash finds the same closing quote the whole rule
+    /// would.
+    fn scan_lua_short_string(&mut self, start: usize) -> usize {
+        let bytes = self.source;
+        let quote = bytes[start];
+        let mut index = start + 1;
+        while index < bytes.len() {
+            if bytes[index] == b'\\' {
+                let escaped = index + 1;
+                if bytes.get(escaped) == Some(&b'z') {
+                    index = escaped + 1;
+                    while bytes.get(index).is_some_and(|byte| lua_is_space(*byte)) {
+                        index += 1;
+                    }
+                } else if let Some(width) = lua_newline_width(bytes, escaped) {
+                    index = escaped + width;
+                } else {
+                    index = (escaped + 1).min(bytes.len());
+                }
+            } else if bytes[index] == quote {
+                return index + 1;
+            } else if lua_newline_width(bytes, index).is_some() {
+                self.error(
+                    "unterminated-string",
+                    "unterminated Lua string",
+                    ByteSpan::new(start, index),
+                );
+                return index;
+            } else {
+                index += 1;
+            }
+        }
+        self.error(
+            "unterminated-string",
+            "unterminated Lua string",
+            ByteSpan::new(start, index),
         );
         index
     }
@@ -2236,6 +2442,30 @@ fn directive_name(text: &str, language: Language, raw: &[u8]) -> Option<&'static
         Language::Shell => opens_with_keyword(compact, "hadolint")
             .then_some("hadolint")
             .or_else(|| compact.starts_with("syntax=").then_some("syntax=")),
+        /* NOTE: Taplo reads two instructions out of a TOML comment: `#:schema`
+         * names the JSON schema the file is validated against, and `# taplo:`
+         * opens a formatter option. The first is followed by the URL after
+         * whitespace, so it ends at a boundary; the second carries its own in
+         * the colon. */
+        Language::Toml => opens_with_keyword(compact, ":schema")
+            .then_some(":schema")
+            .or_else(|| compact.starts_with("taplo:").then_some("taplo:")),
+        /* NOTE: `strip_comment_markers` takes the `--` off a Lua comment and
+         * leaves the third dash of `---@diagnostic` behind, so the annotation
+         * is read with that dash removed. `raw` is what tells it from prose:
+         * the language server's annotations are the only comments that open
+         * with `---@`, and `diagnostic` is the only one of them that instructs
+         * a tool rather than describing a type. The four checkers below are
+         * addressed as `-- <tool>:`, which carries its own boundary in the
+         * colon. */
+        Language::Lua => {
+            if raw.starts_with(b"---@") && text.trim_start_matches('-').starts_with("@diagnostic") {
+                return Some("---@diagnostic");
+            }
+            ["luacheck:", "selene:", "stylua:", "luacov:"]
+                .into_iter()
+                .find(|prefix| compact.starts_with(prefix))
+        }
         _ => None,
     }
 }
@@ -2254,6 +2484,32 @@ fn opens_with_keyword(text: &str, keyword: &str) -> bool {
         .is_some_and(|rest| rest.starts_with(|character: char| character.is_ascii_whitespace()))
 }
 
+/// The kind of a Java line comment.
+///
+/// Java has exactly one line-comment documentation marker: `///`, the Markdown
+/// documentation comment JEP 467 added in JDK 23. `//!` is Rust's inner-doc
+/// marker and means nothing here, so a comment opening with it is an ordinary
+/// line comment — reading it as documentation would hide it from
+/// [`crate::Policy::Safe`] in a language that never wrote it as one.
+fn java_line_kind(bytes: &[u8], index: usize) -> CommentKind {
+    if starts(bytes, index, b"///") {
+        CommentKind::DocLine
+    } else {
+        CommentKind::Line
+    }
+}
+
+/// The kind of a Java block comment: `/** ... */` is the documentation comment
+/// of JLS 3.7, and `/*!` — Doxygen's marker, which C and C++ do honour — is
+/// not one, for the same reason [`java_line_kind`] gives.
+fn java_block_kind(bytes: &[u8], index: usize) -> CommentKind {
+    if starts(bytes, index, b"/**") {
+        CommentKind::DocBlock
+    } else {
+        CommentKind::Block
+    }
+}
+
 fn line_kind(bytes: &[u8], index: usize) -> CommentKind {
     if starts(bytes, index, b"///") || starts(bytes, index, b"//!") {
         CommentKind::DocLine
@@ -2268,6 +2524,92 @@ fn block_kind(bytes: &[u8], index: usize) -> CommentKind {
     } else {
         CommentKind::Block
     }
+}
+
+/// The kind of a Lua short comment.
+///
+/// `---` opens the documentation comment LDoc and the Lua language server
+/// read; a fourth dash makes the divider that separates one section of a file
+/// from the next, which documents nothing and is an ordinary comment.
+fn lua_line_kind(bytes: &[u8], index: usize) -> CommentKind {
+    if starts(bytes, index, b"---") && !starts(bytes, index, b"----") {
+        CommentKind::DocLine
+    } else {
+        CommentKind::Line
+    }
+}
+
+/// The level of the long bracket that opens at `index`, or `None` when none
+/// does.
+///
+/// An opening long bracket is `[`, then a run of `=`, then `[`, and the length
+/// of that run is its level (Lua 5.4 reference manual, 3.1). The second `[` is
+/// what tells `[[` from the two brackets of `a[b[1]]`, so a bracket that never
+/// reaches it opens nothing at all.
+///
+/// The closing form is the same run between `]` and `]`, which is why
+/// [`long_bracket_end`] takes the level rather than a delimiter: a level-two
+/// bracket carries `]]` and `]=]` as content and ends only at `]==]`.
+fn long_bracket_level(bytes: &[u8], index: usize) -> Option<usize> {
+    if bytes.get(index) != Some(&b'[') {
+        return None;
+    }
+    let mut cursor = index + 1;
+    while bytes.get(cursor) == Some(&b'=') {
+        cursor += 1;
+    }
+    (bytes.get(cursor) == Some(&b'[')).then(|| cursor - index - 1)
+}
+
+/// The end of a long bracket whose content starts at `content`, and whether the
+/// closing bracket of `level` was there at all.
+///
+/// Long brackets do not nest, so the first close at the right level ends it and
+/// a run of the wrong length is content. A `]` that opens a run of the wrong
+/// length is passed over rather than skipped: the bytes it ran through are `=`,
+/// which can start no close of their own.
+fn long_bracket_end(bytes: &[u8], content: usize, level: usize) -> (usize, bool) {
+    let mut index = content.min(bytes.len());
+    while let Some(relative) = memchr(b']', &bytes[index..]) {
+        let close = index + relative;
+        let mut cursor = close + 1;
+        while bytes.get(cursor) == Some(&b'=') {
+            cursor += 1;
+        }
+        if cursor - close - 1 == level && bytes.get(cursor) == Some(&b']') {
+            return (cursor + 1, true);
+        }
+        index = close + 1;
+    }
+    (bytes.len(), false)
+}
+
+/// Whether `byte` is whitespace to Lua's lexer, which is what `\z` skips. It is
+/// C's `isspace` in the default locale, and so takes the vertical tab that
+/// [`u8::is_ascii_whitespace`] leaves out.
+fn lua_is_space(byte: u8) -> bool {
+    matches!(byte, b' ' | b'\t' | b'\n' | 0x0b | 0x0c | b'\r')
+}
+
+/// The width of the line terminator at `index`, or `None` when there is none.
+///
+/// Lua counts `\r\n` and `\n\r` alike as one line (`llex.c`,
+/// `inclinenumber`), so a backslash in front of either escapes the whole pair.
+fn lua_newline_width(bytes: &[u8], index: usize) -> Option<usize> {
+    match (bytes.get(index), bytes.get(index + 1)) {
+        (Some(b'\r'), Some(b'\n')) | (Some(b'\n'), Some(b'\r')) => Some(2),
+        (Some(b'\r' | b'\n'), _) => Some(1),
+        _ => None,
+    }
+}
+
+/// How many `quote` bytes run on from `start`, which is one of them.
+fn toml_quote_run(bytes: &[u8], start: usize, quote: u8) -> usize {
+    let mut index = start;
+    while index < bytes.len() && bytes[index] == quote {
+        index += 1;
+    }
+    index - start
 }
 
 fn starts(bytes: &[u8], index: usize, needle: &[u8]) -> bool {

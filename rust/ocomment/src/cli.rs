@@ -850,7 +850,19 @@ fn read_targets(
     Ok(discovery)
 }
 
+/// Strip one file from standard input to standard output.
+///
+/// The product is the stripped source itself — the bytes of the file, not a
+/// report about it — so there is no report for a machine format to encode.
+/// Writing the source under `--format sarif` would answer with something that
+/// is not SARIF, and wrapping it in one of the schemas would answer with
+/// something that is not the file, so the flag is refused the way
+/// `ocomment languages` refuses the formats that carry no language table.
 fn run_strip(common: &CommonArgs) -> Result<u8> {
+    ensure!(
+        common.output.format == OutputFormat::Human,
+        "`ocomment strip` is only available with --format human"
+    );
     let mut source = Vec::new();
     io::stdin()
         .lock()
@@ -1167,7 +1179,19 @@ fn write_template(
     Ok(())
 }
 
+/// Answer one question about the configuration.
+///
+/// Every answer here is about settings rather than about comments: the merged
+/// file as TOML, where the files were found, how they were layered, and the
+/// schema they are checked against. None of the report schemas has a place to
+/// put any of that — `--format json` would name the report format, not the
+/// TOML `show` writes or the JSON Schema `schema` writes — so the flag is
+/// refused rather than accepted and ignored.
 fn run_config(args: ConfigArgs, common: &CommonArgs) -> Result<u8> {
+    ensure!(
+        common.output.format == OutputFormat::Human,
+        "`ocomment config` is only available with --format human"
+    );
     let mut stdout = output::stdout();
     match args.action {
         ConfigAction::Schema => {

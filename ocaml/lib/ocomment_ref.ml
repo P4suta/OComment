@@ -1,6 +1,6 @@
 type language =
   | Rust | Ocaml | C | Cpp | Go | Java | JavaScript | TypeScript | Python
-  | Shell | Html | Css | Jsonc | Sql | Kotlin | Unknown
+  | Shell | Html | Css | Jsonc | Sql | Kotlin | Toml | Lua | Unknown
 
 type dialect =
   | Standard | Jsx | Tsx | ObjectiveC | ObjectiveCpp | GnuC | GnuCpp | Cuda
@@ -85,14 +85,15 @@ let language_of_string value =
   | "typescript" | "ts" | "tsx" -> Ok TypeScript | "python" | "py" -> Ok Python
   | "shell" | "sh" | "bash" | "zsh" -> Ok Shell | "html" | "htm" -> Ok Html
   | "css" -> Ok Css | "jsonc" | "json5" -> Ok Jsonc | "sql" -> Ok Sql
-  | "kotlin" | "kt" | "kts" -> Ok Kotlin
+  | "kotlin" | "kt" | "kts" -> Ok Kotlin | "toml" -> Ok Toml | "lua" -> Ok Lua
   | other -> Error ("unsupported language `" ^ other ^ "`")
 
 let string_of_language = function
   | Rust -> "rust" | Ocaml -> "ocaml" | C -> "c" | Cpp -> "cpp" | Go -> "go"
   | Java -> "java" | JavaScript -> "javascript" | TypeScript -> "typescript"
   | Python -> "python" | Shell -> "shell" | Html -> "html" | Css -> "css"
-  | Jsonc -> "jsonc" | Sql -> "sql" | Kotlin -> "kotlin" | Unknown -> "unknown"
+  | Jsonc -> "jsonc" | Sql -> "sql" | Kotlin -> "kotlin" | Toml -> "toml"
+  | Lua -> "lua" | Unknown -> "unknown"
 
 let string_of_comment_kind = function
   | Line -> "line" | Block -> "block" | DocLine -> "doc-line" | DocBlock -> "doc-block"
@@ -219,6 +220,14 @@ let opens_with_keyword compact keyword =
    | ' ' | '\t' | '\n' | '\012' | '\r' -> true
    | _ -> false)
 
+(* NOTE: trim_markers takes the "--" off a Lua comment and leaves the third dash
+   of "---@diagnostic" behind, which this is what removes. *)
+let trim_dashes text =
+  let length = String.length text in
+  let rec loop index = if index < length && text.[index] = '-' then loop (index + 1) else index in
+  let start = loop 0 in
+  String.sub text start (length - start)
+
 let is_directive language text raw =
   let compact = String.trim text |> String.to_seq |>
     Seq.drop_while (fun character -> String.contains "!/*#@ " character) |> String.of_seq in
@@ -241,6 +250,17 @@ let is_directive language text raw =
       ["pyright:"; "mypy:"; "ruff:"; "fmt:"]
   | Shell -> opens_with_keyword compact "hadolint" ||
       String.starts_with ~prefix:"syntax=" compact
+  | Toml -> opens_with_keyword compact ":schema" ||
+      String.starts_with ~prefix:"taplo:" compact
+  (* NOTE: The language server's annotations are the only Lua comments that open
+     with "---@", and "diagnostic" is the only one of them that instructs a tool
+     rather than describing a type, so "raw" is what tells the annotation from
+     prose about it. The four checkers below are addressed as "-- <tool>:",
+     which carries its own boundary in the colon. *)
+  | Lua -> (String.starts_with ~prefix:"---@" raw &&
+      String.starts_with ~prefix:"@diagnostic" (trim_dashes text)) ||
+      List.exists (fun prefix -> String.starts_with ~prefix compact)
+        ["luacheck:"; "selene:"; "stylua:"; "luacov:"]
   | _ -> false
 
 let within_first_two_lines source finish =
@@ -1063,6 +1083,180 @@ let scan_python source language options accumulator =
       | None -> loop (index + 1)
   in loop 0
 
+let toml_quote_run source start quote =
+  let rec loop index =
+    if index < Bytes.length source && Bytes.get source index = quote then loop (index + 1)
+    else index - start
+  in loop start
+
+(* NOTE: A basic string takes backslash escapes and a literal string takes none,
+   so a backslash is a byte of a literal string (TOML v1.0.0, String). Three of
+   either quote open the multi-line form, where a newline is content rather than
+   the end of an unterminated string, and where the three-quote delimiter may
+   absorb up to two content quotes in front of it. *)
+let scan_toml_string source accumulator start =
+  let quote = Bytes.get source start in
+  let multiline = starts source start (String.make 3 quote) in
+  let escapes = quote = '"' in
+  let rec loop index =
+    if index >= Bytes.length source then begin
+      add_error accumulator "unterminated-string"
+        (if multiline then "unterminated TOML multi-line string"
+          else "unterminated TOML string") start index;
+      index
+    end else if escapes && Bytes.get source index = '\\' then
+      loop (min (Bytes.length source) (index + 2))
+    else if Bytes.get source index <> quote then begin
+      if (not multiline) && (Bytes.get source index = '\r' || Bytes.get source index = '\n')
+      then begin
+        add_error accumulator "unterminated-string" "unterminated TOML string" start index;
+        index
+      end else loop (index + 1)
+    end else if not multiline then index + 1
+    else
+      let run = toml_quote_run source index quote in
+      if run >= 3 then index + min run 5 else loop (index + run)
+  in loop (start + if multiline then 3 else 1)
+
+let scan_toml source language options accumulator =
+  let rec loop index =
+    if index >= Bytes.length source then ()
+    else match Bytes.get source index with
+      | '#' -> let finish = line_end source (index + 1) in
+        add_comment accumulator source language options Line index finish; loop finish
+      | '"' | '\'' -> loop (scan_toml_string source accumulator index)
+      | _ -> loop (index + 1)
+  in loop 0
+
+(* NOTE: An opening long bracket is '[', a run of '=', then '[', and the length
+   of that run is its level (Lua 5.4 reference manual, 3.1). The second bracket
+   is what tells "[[" from the two brackets of a[b[1]], so a bracket that never
+   reaches it opens nothing at all. *)
+let long_bracket_level source index =
+  let length = Bytes.length source in
+  if index >= length || Bytes.get source index <> '[' then None
+  else
+    let rec loop cursor =
+      if cursor < length && Bytes.get source cursor = '=' then loop (cursor + 1)
+      else if cursor < length && Bytes.get source cursor = '[' then Some (cursor - index - 1)
+      else None
+    in loop (index + 1)
+
+(* NOTE: Long brackets do not nest, so the first close at the right level ends
+   one and a run of the wrong length is content: a level-two bracket carries
+   "]]" and "]=]" and ends only at "]==]". *)
+let long_bracket_end source content level =
+  let length = Bytes.length source in
+  let rec loop index =
+    if index >= length then (length, false)
+    else if Bytes.get source index = ']' then
+      let rec equals cursor =
+        if cursor < length && Bytes.get source cursor = '=' then equals (cursor + 1) else cursor in
+      let cursor = equals (index + 1) in
+      if cursor - index - 1 = level && cursor < length && Bytes.get source cursor = ']'
+      then (cursor + 1, true) else loop (index + 1)
+    else loop (index + 1)
+  in loop (min content length)
+
+(* NOTE: What the \z escape skips is C's isspace in the default locale, which
+   takes the vertical tab as well. *)
+let lua_is_space = function
+  | ' ' | '\t' | '\n' | '\011' | '\012' | '\r' -> true
+  | _ -> false
+
+(* NOTE: Lua counts "\r\n" and "\n\r" alike as one line (llex.c,
+   inclinenumber), so a backslash in front of either escapes the whole pair. *)
+let lua_newline_width source index =
+  let length = Bytes.length source in
+  if index >= length then None
+  else match Bytes.get source index with
+    | '\r' -> Some (if index + 1 < length && Bytes.get source (index + 1) = '\n' then 2 else 1)
+    | '\n' -> Some (if index + 1 < length && Bytes.get source (index + 1) = '\r' then 2 else 1)
+    | _ -> None
+
+(* NOTE: "---" opens the documentation comment LDoc and the Lua language server
+   read; a fourth dash makes an ordinary divider. *)
+let lua_line_kind source index =
+  if starts source index "---" && not (starts source index "----") then DocLine else Line
+
+(* NOTE: The \z escape skips the whitespace that follows it, newlines included,
+   and a backslash before a real line terminator carries that terminator into
+   the string; any other unescaped terminator ends a string that was never
+   closed. The remaining escapes carry neither a quote nor a newline, so
+   skipping the byte after the backslash finds the same closing quote. *)
+let scan_lua_short_string source accumulator start =
+  let length = Bytes.length source in
+  let quote = Bytes.get source start in
+  let rec loop index =
+    if index >= length then begin
+      add_error accumulator "unterminated-string" "unterminated Lua string" start index;
+      index
+    end else if Bytes.get source index = '\\' then
+      let escaped = index + 1 in
+      if escaped < length && Bytes.get source escaped = 'z' then
+        let rec space cursor =
+          if cursor < length && lua_is_space (Bytes.get source cursor) then space (cursor + 1)
+          else cursor in
+        loop (space (escaped + 1))
+      else (match lua_newline_width source escaped with
+        | Some width -> loop (escaped + width)
+        | None -> loop (min length (escaped + 1)))
+    else if Bytes.get source index = quote then index + 1
+    else (match lua_newline_width source index with
+      | Some _ ->
+        add_error accumulator "unterminated-string" "unterminated Lua string" start index;
+        index
+      | None -> loop (index + 1))
+  in loop (start + 1)
+
+(* NOTE: A long bracket immediately after the "--" opens a long comment, which
+   runs to the closing bracket of its own level; anything else is a short
+   comment to the end of the line, so "--[=" is one and "--[=[" is not. *)
+let scan_lua_comment source language options accumulator start =
+  match long_bracket_level source (start + 2) with
+  | Some level ->
+    let finish, closed = long_bracket_end source (start + 2 + level + 2) level in
+    add_comment accumulator source language options Block start finish;
+    if not closed then
+      add_error accumulator "unterminated-comment" "unterminated Lua long comment" start finish;
+    finish
+  | None ->
+    let finish = line_end source (start + 2) in
+    add_comment accumulator source language options (lua_line_kind source start) start finish;
+    finish
+
+(* NOTE: a[b[1]] indexes twice and opens no string, so a bracket that is not a
+   long one is one byte of the chunk. *)
+let scan_lua_long_string source accumulator start =
+  match long_bracket_level source start with
+  | None -> start + 1
+  | Some level ->
+    let finish, closed = long_bracket_end source (start + level + 2) level in
+    if not closed then
+      add_error accumulator "unterminated-string" "unterminated Lua long string" start finish;
+    finish
+
+(* NOTE: The loader skips a first line that opens with '#' before it lexes
+   anything (lauxlib.c, skipcomment), which is what lets a chunk carry a "#!"
+   line. It is that one byte at that one offset: '#' is the length operator
+   everywhere else. *)
+let scan_lua source language options accumulator =
+  let length = Bytes.length source in
+  let rec loop index =
+    if index >= length then ()
+    else if starts source index "--" then
+      loop (scan_lua_comment source language options accumulator index)
+    else match Bytes.get source index with
+      | '"' | '\'' -> loop (scan_lua_short_string source accumulator index)
+      | '[' -> loop (scan_lua_long_string source accumulator index)
+      | _ -> loop (index + 1)
+  in
+  if length > 0 && Bytes.get source 0 = '#' then begin
+    let finish = line_end source 1 in
+    add_comment accumulator source language options Line 0 finish;
+    loop finish
+  end else loop 0
+
 type heredoc = { operator : int; delimiter : bytes; strip_tabs : bool }
 
 let consume_newline source index =
@@ -1525,6 +1719,8 @@ and scan source language options =
   | Python -> scan_python source language options accumulator
   | Shell -> scan_shell source language options accumulator
   | Sql -> scan_sql source language options accumulator
+  | Toml -> scan_toml source language options accumulator
+  | Lua -> scan_lua source language options accumulator
   | Html -> scan_html source language options accumulator
   | Unknown -> add_error accumulator "unknown-language" "a language is required" 0 0);
   let comments = List.rev accumulator.comments_rev in

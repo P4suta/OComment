@@ -155,7 +155,11 @@ fn removable_count(file: &ProcessedFile) -> usize {
 ///
 /// The per-file line says what to do about one file; the summary counts many,
 /// so it trades the sentence for a key short enough to sit in a list of them.
-fn skip_label(reason: &str) -> &str {
+///
+/// Visible to the crate so the modules that *produce* the reasons — `files`
+/// and `git` — can name this function in their own documentation rather than
+/// describing a rule they do not own.
+pub(crate) fn skip_label(reason: &str) -> &str {
     if reason.starts_with("larger than ") {
         "too large"
     } else if reason.starts_with("binary file") {
@@ -1350,6 +1354,9 @@ fn render_sarif(
         {
             let (line, column) = line_column(&file.source, comment.span.start);
             let (end_line, end_column) = line_column(&file.source, comment.span.end);
+            let (fix_span, replacement) = fix_for_span(file, comment.span);
+            let (fix_line, fix_column) = line_column(&file.source, fix_span.start);
+            let (fix_end_line, fix_end_column) = line_column(&file.source, fix_span.end);
             let kind = comment.kind.as_str();
             let index = rules.kind(comment.kind);
             results.push(json!({
@@ -1367,9 +1374,9 @@ fn render_sarif(
                     "artifactChanges": [{
                         "artifactLocation": location.clone(),
                         "replacements": [{"deletedRegion": {
-                            "startLine": line, "startColumn": column,
-                            "endLine": end_line, "endColumn": end_column
-                        }, "insertedContent": {"text": replacement_for_span(file, comment.span)}}]
+                            "startLine": fix_line, "startColumn": fix_column,
+                            "endLine": fix_end_line, "endColumn": fix_end_column
+                        }, "insertedContent": {"text": replacement}}]
                     }]
                 }]
             }));
@@ -1444,13 +1451,37 @@ fn render_sarif(
     Ok(())
 }
 
-fn replacement_for_span(file: &ProcessedFile, span: ByteSpan) -> String {
+/// The rewrite a removed comment's SARIF fix offers: the bytes it deletes and
+/// the bytes that go in their place.
+///
+/// A fix is an offer to rewrite the file, so what it deletes has to be what the
+/// run would have deleted. Under [`ocomment_core::Layout::Compact`] that is
+/// wider than the comment: a comment alone on its line takes the indentation
+/// before it and the terminator after it with it, and a fix cut back to the
+/// comment's own span would leave behind exactly the blank line that layout
+/// exists to close up. So the edit that *contains* the comment is what is
+/// reported, rather than one that starts and ends where the comment does.
+///
+/// Edits are sorted and non-overlapping and each one spans the comment it
+/// removes, so at most one of them can contain a given comment. A file whose
+/// report came back invalid has comments but no edits — nothing is rewritten
+/// from a source the scanner could not read to the end — and there the
+/// comment's own span, with nothing to put in its place, is all there is to
+/// offer.
+fn fix_for_span(file: &ProcessedFile, span: ByteSpan) -> (ByteSpan, String) {
     file.result
         .edits
         .iter()
-        .find(|edit| edit.span == span)
-        .map(|edit| String::from_utf8_lossy(&edit.replacement).into_owned())
-        .unwrap_or_default()
+        .find(|edit| edit.span.start <= span.start && edit.span.end >= span.end)
+        .map_or_else(
+            || (span, String::new()),
+            |edit| {
+                (
+                    edit.span,
+                    String::from_utf8_lossy(&edit.replacement).into_owned(),
+                )
+            },
+        )
 }
 
 fn render_github(

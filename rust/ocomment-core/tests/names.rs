@@ -69,7 +69,7 @@ macro_rules! check_stable_names {
 #[test]
 fn language_names_are_stable() {
     let seen = check_stable_names!(Language);
-    assert_eq!(Language::ALL.len(), 15);
+    assert_eq!(Language::ALL.len(), 17);
     assert!(
         !seen.contains("unknown"),
         "Unknown must stay out of the parseable set"
@@ -146,6 +146,8 @@ fn language_aliases_are_pinned() {
         ("kotlin", Language::Kotlin),
         ("kt", Language::Kotlin),
         ("kts", Language::Kotlin),
+        ("toml", Language::Toml),
+        ("lua", Language::Lua),
     ];
     for (text, expected) in cases {
         assert_eq!(Language::from_str(text), Ok(expected), "`{text}`");

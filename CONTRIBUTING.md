@@ -141,10 +141,24 @@ JSONL, SARIF, and GitHub output. All user-facing text is English.
   changes; `tools/check_embedded_specs.py` checks shared embedded assets.
 - Adding a language to `spec/languages.toml` also changes the published
   pre-commit hooks; `tools/check_hooks.py --print-pattern` regenerates the
-  `files:` regex that `.pre-commit-hooks.yaml` must carry.
-- Adding a marker to `spec/directives.toml` needs a sample in
+  `files:` regex that `.pre-commit-hooks.yaml` must carry. It changes what this
+  repository checks about itself as well: a file the new scanner now reads is a
+  file whose comments have to carry a tag, so run a bare `ocomment` before
+  opening the change. Two more things count the languages rather than reading
+  the table: `MINIMUM_CASES` in `tools/differential.py`, the floor that stops a
+  later change from quietly dropping the fixtures the language brings, and the
+  editor clients — `editors/vscode/package.json` lists the identifiers the
+  extension attaches to, and `docs/editors.md` names and counts them.
+- Adding a marker to `spec/directives.toml` needs two samples: one in
   `tools/check_directives.py`, which proves the scanner protects it — and,
-  through a near-miss derived from the name, that it protects nothing more.
+  through a near-miss derived from the name, that it protects nothing more —
+  and one in `PROTECTED_SAMPLES` of `tools/gen_docs.py`, which is the row the
+  published table of protected markers is generated from. Each is checked
+  against `spec/directives.toml` on its own, so a marker with only one of the
+  two fails the run that needs the other. Both run the binary where this
+  repository's own `.ocomment.toml` applies, so write the near-miss as a comment
+  kind that configuration does not keep: a `doc-line` one comes back kept for a
+  reason that has nothing to do with the marker under test.
 - A new CI job must be added to `.github/rulesets/main.json` in the same change,
   and every `uses:` must be SHA-pinned with a version comment.
 - Do not include build output, credentials, or unrelated formatting changes.

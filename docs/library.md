@@ -277,4 +277,7 @@ the build rather than a user's install.
 Both library crates are documented item by item: `missing_docs` is denied in
 CI, the doctests on this page run there, and `cargo doc` runs with
 `-D warnings`, so a public item added without documentation, an example that
-stops compiling, or a broken intra-doc link fails the build.
+stops compiling, or a broken intra-doc link fails the build. The `ocomment`
+binary crate is documented in the same run for its links alone — nothing
+publishes its rustdoc, but its modules describe each other, and a link naming
+an item somebody has since renamed is a wrong sentence wherever it is written.

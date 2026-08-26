@@ -33,11 +33,16 @@ const EMBEDDED: &str = include_str!("../assets/languages.toml");
 const DETECT: &str = include_str!("../../ocomment-core/src/detect.rs");
 
 /// The extensions `detect_language` knows that `spec/languages.toml` does not
-/// publish. Publishing one means regenerating the `files:` pattern of
-/// `.pre-commit-hooks.yaml` from the spec — `python3 tools/check_hooks.py
-/// --print-pattern` — so they are recorded here rather than quietly missing,
-/// and this test fails the day the detector grows a sixth one.
-const UNPUBLISHED_EXTENSIONS: [&str; 5] = ["cuh", "hh", "hxx", "mlt", "shtml"];
+/// publish. There are none: an extension the detector answers to is one the
+/// hooks match, the documentation lists and `ocomment languages` prints.
+///
+/// The list stays here rather than the assertion being narrowed to "empty",
+/// because it is what an extension added to the detector alone lands in, and
+/// what it costs to put one here is the point: publishing one means
+/// regenerating the `files:` pattern of `.pre-commit-hooks.yaml` from the spec
+/// — `python3 tools/check_hooks.py --print-pattern` — and the languages page
+/// with it, so an extension left out is left out on purpose and in writing.
+const UNPUBLISHED_EXTENSIONS: [&str; 0] = [];
 
 /// One language of the shared table.
 ///
@@ -493,6 +498,33 @@ fn the_detector_knows_no_unrecorded_extension() {
     assert!(
         unknown.is_empty(),
         "spec/languages.toml publishes extensions the detector does not know: {unknown:?}"
+    );
+}
+
+/// The same, for the interpreter names a `#!` line is read for. Unlike the
+/// extensions and the reserved names, this set is not read out of the
+/// detector's source: `ocomment_core::shebang_interpreters` publishes it, so
+/// what is compared here is the table the detector actually searches rather
+/// than a reading of the file it is written in.
+///
+/// `every_listed_shebang_detects_its_language` runs the detector over every
+/// name the spec claims; this is the other direction, and it is the one that
+/// catches an interpreter taught to the detector and never written down —
+/// which would leave a piped script detected as a language `ocomment
+/// languages` says nothing about.
+#[test]
+fn the_detector_knows_no_unrecorded_shebang() {
+    let published: BTreeSet<String> = table()
+        .languages
+        .iter()
+        .flat_map(|entry| entry.shebangs.iter().cloned())
+        .collect();
+    let known: BTreeSet<String> = ocomment_core::shebang_interpreters()
+        .map(ToOwned::to_owned)
+        .collect();
+    assert_eq!(
+        known, published,
+        "the detector and spec/languages.toml disagree about which interpreters exist"
     );
 }
 

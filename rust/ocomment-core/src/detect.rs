@@ -24,6 +24,63 @@ impl Detection {
     }
 }
 
+/// The interpreter names a `#!` line is read for, in the order they are tried,
+/// with the language and dialect each one selects.
+///
+/// The line is searched for each name as a substring rather than split into
+/// words, because an interpreter arrives written a dozen ways: as a path
+/// (`#!/bin/bash`), with a version (`#!/usr/bin/python3.12`), or behind `env`
+/// with options (`#!/usr/bin/env -S node --enable-source-maps`). The order is
+/// therefore part of the rule and not an accident of listing: `bash` and `zsh`
+/// both *contain* `sh`, so each has to be met before it, or every Bash script
+/// on disk would be read as POSIX shell. `luajit` contains `lua` and is listed
+/// before it under the same convention, though that one pair names the same
+/// language whichever of the two is met first.
+const SHEBANGS: [(&str, Language, Dialect); 8] = [
+    ("python", Language::Python, Dialect::Standard),
+    ("bash", Language::Shell, Dialect::Bash53),
+    ("zsh", Language::Shell, Dialect::Zsh),
+    ("luajit", Language::Lua, Dialect::Standard),
+    ("lua", Language::Lua, Dialect::Standard),
+    ("sh", Language::Shell, Dialect::PosixSh),
+    ("node", Language::JavaScript, Dialect::Standard),
+    ("deno", Language::JavaScript, Dialect::Standard),
+];
+
+/// Every interpreter name [`detect_language`] reads a `#!` line for, in the
+/// order it tries them.
+///
+/// This is the detector's own table rather than a copy of it, so a caller that
+/// documents or publishes the list — `spec/languages.toml` does, and
+/// `ocomment languages` prints it — can be checked against what the detector
+/// will actually answer to instead of against a second list that may have
+/// stopped agreeing.
+///
+/// A name matches anywhere in the first line, so these are the substrings to
+/// look for and not the whole words to compare against. The order they come
+/// back in is the order they must be tried in: `bash` and `zsh` both contain
+/// `sh`, so each has to be met before it, or every Bash script on disk would
+/// be read as POSIX shell.
+///
+/// # Examples
+///
+/// ```
+/// use ocomment_core::{Language, detect_language, shebang_interpreters};
+///
+/// // Every published name really does select a language from a `#!` line.
+/// for interpreter in shebang_interpreters() {
+///     let line = format!("#!/usr/bin/env {interpreter}\n");
+///     let found = detect_language(None, line.as_bytes()).unwrap();
+///     assert_eq!(found.reason, "shebang");
+/// }
+/// // `bash` is met before `sh`, which it contains.
+/// let bash = detect_language(None, b"#!/bin/bash\n").unwrap();
+/// assert_eq!(bash.dialect, ocomment_core::Dialect::Bash53);
+/// ```
+pub fn shebang_interpreters() -> impl Iterator<Item = &'static str> {
+    SHEBANGS.iter().map(|(name, _, _)| *name)
+}
+
 /// Detect a built-in language from filename, shebang, then conservative content hints.
 ///
 /// The evidence is weighed in that order and the first answer wins, so a
@@ -85,6 +142,8 @@ pub fn detect_language(path: Option<&Path>, source: &[u8]) -> Option<Detection> 
             "jsonc" | "json5" => Some((Language::Jsonc, Dialect::Standard)),
             "sql" => Some((Language::Sql, Dialect::Standard)),
             "kt" | "kts" => Some((Language::Kotlin, Dialect::Standard)),
+            "toml" => Some((Language::Toml, Dialect::Standard)),
+            "lua" | "rockspec" => Some((Language::Lua, Dialect::Standard)),
             _ => None,
         };
         if let Some((language, dialect)) = by_extension {
@@ -96,6 +155,13 @@ pub fn detect_language(path: Option<&Path>, source: &[u8]) -> Option<Detection> 
             }
             "makefile" | "gnumakefile" => Some((Language::Shell, Dialect::PosixSh)),
             "tsconfig.json" | "jsconfig.json" => Some((Language::Jsonc, Dialect::Standard)),
+            /* NOTE: A lock file has no extension of its own to go on, and only some
+             * of them are TOML: `Cargo.lock`, `Pipfile`, and the three Python
+             * resolvers below are, while `Pipfile.lock` beside `Pipfile` is
+             * JSON and is deliberately absent. */
+            "cargo.lock" | "pipfile" | "poetry.lock" | "uv.lock" | "pdm.lock" => {
+                Some((Language::Toml, Dialect::Standard))
+            }
             _ => None,
         };
         if let Some((language, dialect)) = reserved {
@@ -106,28 +172,10 @@ pub fn detect_language(path: Option<&Path>, source: &[u8]) -> Option<Detection> 
     let first_line = source.split(|byte| *byte == b'\n').next().unwrap_or(source);
     if first_line.starts_with(b"#!") {
         let line = String::from_utf8_lossy(first_line).to_ascii_lowercase();
-        if line.contains("python") {
-            return Some(Detection::new(
-                Language::Python,
-                Dialect::Standard,
-                "shebang",
-            ));
-        }
-        if line.contains("bash") {
-            return Some(Detection::new(Language::Shell, Dialect::Bash53, "shebang"));
-        }
-        if line.contains("zsh") {
-            return Some(Detection::new(Language::Shell, Dialect::Zsh, "shebang"));
-        }
-        if line.contains("sh") {
-            return Some(Detection::new(Language::Shell, Dialect::PosixSh, "shebang"));
-        }
-        if line.contains("node") | line.contains("deno") {
-            return Some(Detection::new(
-                Language::JavaScript,
-                Dialect::Standard,
-                "shebang",
-            ));
+        if let Some((_, language, dialect)) =
+            SHEBANGS.iter().find(|(name, _, _)| line.contains(name))
+        {
+            return Some(Detection::new(*language, *dialect, "shebang"));
         }
     }
 

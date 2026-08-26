@@ -246,6 +246,77 @@ SAMPLES: dict[str, Sample] = {
         f"# hadolint{NEGATIVE_SUFFIX}",
         KEPT_AS_DIRECTIVE,
     ),
+    ":schema": Sample(
+        "toml",
+        None,
+        f"{SLOT}\n# control\n",
+        "#:schema https://example.test/pyproject.json",
+        # NOTE: Taplo writes the schema URL after whitespace, so the marker ends
+        # NOTE: at a boundary and prose that runs letters on past it -- a note
+        # NOTE: about schemas rather than the file's own -- is not the marker.
+        f"#:schema{NEGATIVE_SUFFIX}",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "taplo:": Sample(
+        "toml",
+        None,
+        f"{SLOT}\n# control\n",
+        "# taplo: array_auto_expand = false",
+        # NOTE: The colon is the marker's own boundary, so `taplo:ish` is still
+        # NOTE: an instruction to the formatter -- one naming an option it does
+        # NOTE: not have. What is left to get wrong is the front of it, which is
+        # NOTE: what a comment merely mentioning the tool takes away.
+        "# a note about taplo: array_auto_expand",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "---@diagnostic": Sample(
+        "lua",
+        None,
+        f"{SLOT}\n-- control\n",
+        "---@diagnostic disable-next-line: undefined-global",
+        # NOTE: `---@` is a shape rather than a word: every annotation of the
+        # NOTE: Lua language server is spelled that way, and running letters on
+        # NOTE: past `diagnostic` would still be one of them. What the marker
+        # NOTE: promises is that it opens the comment, so the near-miss is the
+        # NOTE: comment that talks about the annotation instead -- written with
+        # NOTE: two dashes, because a third would make it documentation, which
+        # NOTE: this repository's own configuration keeps for a reason that has
+        # NOTE: nothing to do with the marker under test.
+        "-- a note about ---@diagnostic disable-next-line",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "luacheck:": Sample(
+        "lua",
+        None,
+        f"{SLOT}\n-- control\n",
+        "-- luacheck: ignore 212",
+        f"-- luacheck{NEGATIVE_SUFFIX}",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "selene:": Sample(
+        "lua",
+        None,
+        f"{SLOT}\n-- control\n",
+        "-- selene: allow(unused_variable)",
+        f"-- selene{NEGATIVE_SUFFIX}",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "stylua:": Sample(
+        "lua",
+        None,
+        f"{SLOT}\n-- control\n",
+        "-- stylua: ignore",
+        f"-- stylua{NEGATIVE_SUFFIX}",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "luacov:": Sample(
+        "lua",
+        None,
+        f"{SLOT}\n-- control\n",
+        "-- luacov: disable",
+        f"-- luacov{NEGATIVE_SUFFIX}",
+        KEPT_AS_DIRECTIVE,
+    ),
 }
 
 

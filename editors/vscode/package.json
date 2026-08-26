@@ -1,7 +1,7 @@
 {
   "name": "ocomment",
   "displayName": "OComment",
-  "description": "Fast, byte-preserving comment checker and remover for 15 languages.",
+  "description": "Fast, byte-preserving comment checker and remover for 16 languages.",
   "version": "0.1.0",
   "publisher": "P4suta",
   "license": "MIT",
@@ -59,6 +59,8 @@
     "onLanguage:jsonc",
     "onLanguage:sql",
     "onLanguage:kotlin",
+    "onLanguage:toml",
+    "onLanguage:lua",
     "workspaceContains:**/.ocomment.toml"
   ],
   "contributes": {
@@ -111,7 +113,9 @@
             "css",
             "jsonc",
             "sql",
-            "kotlin"
+            "kotlin",
+            "toml",
+            "lua"
           ],
           "description": "Language identifiers the server is attached to.",
           "scope": "window"

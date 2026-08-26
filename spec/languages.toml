@@ -1,19 +1,22 @@
 version = 1
 
-# The canonical list of the languages OComment has a built-in scanner for.
-#
-# `extensions` holds every suffix that selects the language, without the dot,
-# and `dialects` every dialect it accepts, in the order the binary lists them
-# when it refuses one. An extension that selects a dialect other than
-# `standard` says so in `extension_dialects`; `reserved_names` and `shebangs`
-# are the whole file names and interpreter names that select the language when
-# the extension does not decide it. `notes` is a remark for the human listing.
-#
-# The `files:` pattern of the published pre-commit hooks is generated from the
-# extensions here (tools/check_hooks.py), docs/languages.md is generated from
-# the whole table (tools/gen_docs.py), and `ocomment languages` prints the copy
-# the binary embeds. rust/ocomment/tests/spec_languages.rs checks every claim
-# below against the detector and the binary.
+# NOTE: The canonical list of the languages OComment has a built-in scanner
+# NOTE: for.
+# NOTE:
+# NOTE: `extensions` holds every suffix that selects the language, without the
+# NOTE: dot, and `dialects` every dialect it accepts, in the order the binary
+# NOTE: lists them when it refuses one. An extension that selects a dialect
+# NOTE: other than `standard` says so in `extension_dialects`; `reserved_names`
+# NOTE: and `shebangs` are the whole file names and interpreter names that
+# NOTE: select the language when the extension does not decide it. `notes` is a
+# NOTE: remark for the human listing.
+# NOTE:
+# NOTE: The `files:` pattern of the published pre-commit hooks is generated
+# NOTE: from the extensions here (tools/check_hooks.py), docs/languages.md is
+# NOTE: generated from the whole table (tools/gen_docs.py), and `ocomment
+# NOTE: languages` prints the copy the binary embeds.
+# NOTE: rust/ocomment/tests/spec_languages.rs checks every claim below against
+# NOTE: the detector and the binary.
 
 [[languages]]
 name = "rust"
@@ -22,7 +25,7 @@ dialects = ["standard"]
 
 [[languages]]
 name = "ocaml"
-extensions = ["ml", "mli"]
+extensions = ["ml", "mli", "mlt"]
 dialects = ["standard"]
 notes = "OCaml 5.5 lexical forms"
 
@@ -34,9 +37,9 @@ extension_dialects = { m = "objective-c" }
 
 [[languages]]
 name = "cpp"
-extensions = ["cc", "cpp", "cxx", "hpp", "mm", "cu"]
+extensions = ["cc", "cpp", "cxx", "hh", "hpp", "hxx", "mm", "cu", "cuh"]
 dialects = ["standard", "objective-cpp", "gnu-cpp", "cuda"]
-extension_dialects = { mm = "objective-cpp", cu = "cuda" }
+extension_dialects = { mm = "objective-cpp", cu = "cuda", cuh = "cuda" }
 
 [[languages]]
 name = "go"
@@ -86,7 +89,7 @@ shebangs = ["sh", "bash", "zsh"]
 
 [[languages]]
 name = "html"
-extensions = ["html", "htm", "xhtml"]
+extensions = ["html", "htm", "xhtml", "shtml"]
 dialects = ["standard"]
 notes = "script and style bodies are scanned as JavaScript and CSS"
 
@@ -110,3 +113,23 @@ dialects = ["standard", "postgresql", "mysql", "sqlite", "t-sql", "oracle"]
 name = "kotlin"
 extensions = ["kt", "kts"]
 dialects = ["standard"]
+
+[[languages]]
+name = "toml"
+extensions = ["toml"]
+dialects = ["standard"]
+reserved_names = [
+    "Cargo.lock",
+    "Pipfile",
+    "poetry.lock",
+    "uv.lock",
+    "pdm.lock",
+]
+notes = "TOML v1.0.0 lexical forms"
+
+[[languages]]
+name = "lua"
+extensions = ["lua", "rockspec"]
+dialects = ["standard"]
+shebangs = ["lua", "luajit"]
+notes = "Lua 5.4 lexical forms"

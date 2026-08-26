@@ -780,6 +780,126 @@
         "diagnostics": [],
         "output_utf8": "val s = \"// raw\" \n"
       }
+    },
+    {
+      "id": "toml-builtin-safe",
+      "language": "toml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "#:schema https://example.test/pyproject.json\nkey = \"# opaque\" # remove\n",
+      "note": "TOML v1.0.0, Comment and String: a `#` inside a basic string is one of its bytes, and only the one outside opens a comment. Taplo's `#:schema` line is a directive `safe` keeps and `all` removes.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 44,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 62,
+            "end": 70,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "#:schema https://example.test/pyproject.json\nkey = \"# opaque\" \n"
+      }
+    },
+    {
+      "id": "toml-builtin-all",
+      "language": "toml",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "#:schema https://example.test/pyproject.json\nkey = \"# opaque\" # remove\n",
+      "note": "TOML v1.0.0, Comment and String: a `#` inside a basic string is one of its bytes, and only the one outside opens a comment. Taplo's `#:schema` line is a directive `safe` keeps and `all` removes.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 44,
+            "kind": "directive",
+            "action": "remove"
+          },
+          {
+            "start": 62,
+            "end": 70,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\nkey = \"# opaque\" \n"
+      }
+    },
+    {
+      "id": "lua-builtin-safe",
+      "language": "lua",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "---@diagnostic disable-next-line: undefined-global\nprint([[-- opaque]]) -- remove\n",
+      "note": "Lua 5.4 reference manual, 3.1: a long string carries the comment opener inside it as content, and only the `--` outside one opens a comment. The language server's `---@diagnostic` line is a directive `safe` keeps and `all` removes.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 50,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 72,
+            "end": 81,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "---@diagnostic disable-next-line: undefined-global\nprint([[-- opaque]]) \n"
+      }
+    },
+    {
+      "id": "lua-builtin-all",
+      "language": "lua",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "---@diagnostic disable-next-line: undefined-global\nprint([[-- opaque]]) -- remove\n",
+      "note": "Lua 5.4 reference manual, 3.1: a long string carries the comment opener inside it as content, and only the `--` outside one opens a comment. The language server's `---@diagnostic` line is a directive `safe` keeps and `all` removes.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 50,
+            "kind": "directive",
+            "action": "remove"
+          },
+          {
+            "start": 72,
+            "end": 81,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\nprint([[-- opaque]]) \n"
+      }
     }
   ]
 }

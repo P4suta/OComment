@@ -79,6 +79,17 @@ PROTECTED_SAMPLES: dict[str, tuple[str, str | None, bytes]] = {
     "version-comment": ("sql", "mysql", b"/*!40101 SET NAMES utf8 */\n"),
     "syntax=": ("shell", None, b"# syntax=docker/dockerfile:1\n"),
     "hadolint": ("shell", None, b"# hadolint ignore=DL3018\n"),
+    ":schema": ("toml", None, b"#:schema https://example.test/pyproject.json\n"),
+    "taplo:": ("toml", None, b"# taplo: array_auto_expand = false\n"),
+    "---@diagnostic": (
+        "lua",
+        None,
+        b"---@diagnostic disable-next-line: undefined-global\n",
+    ),
+    "luacheck:": ("lua", None, b"-- luacheck: ignore 212\n"),
+    "selene:": ("lua", None, b"-- selene: allow(unused_variable)\n"),
+    "stylua:": ("lua", None, b"-- stylua: ignore\n"),
+    "luacov:": ("lua", None, b"-- luacov: disable\n"),
 }
 
 BANNER = (

@@ -33,7 +33,7 @@ CORPUS = ROOT / "spec/fixtures/v1"
 # INVARIANT: Hazards live in `spec/`, never in this file. The floor below is
 # INVARIANT: what says so out loud: deleting a case, or silently dropping a
 # INVARIANT: corpus file, fails the run instead of quietly shrinking the gate.
-MINIMUM_CASES = 109
+MINIMUM_CASES = 143
 
 DEFAULT_OPTIONS = {"policy": "safe", "layout": "lines"}
 PAYLOAD_KEYS = ("spans", "edits", "profile")

@@ -109,6 +109,12 @@ pub enum Language {
     Sql,
     /// Kotlin, detected from `.kt` and `.kts`.
     Kotlin,
+    /// TOML, detected from `.toml` and from the lock file names written in
+    /// it, such as `Cargo.lock`.
+    Toml,
+    /// Lua, detected from `.lua` and `.rockspec`, and from a `lua` or
+    /// `luajit` `#!` line.
+    Lua,
     /// No built-in scanner, and the default.
     ///
     /// Scanning it yields no comments and one `unknown-language` error
@@ -121,7 +127,7 @@ pub enum Language {
 
 impl Language {
     /// Every CLI-visible language; `Unknown` is deliberately excluded.
-    pub const ALL: [Self; 15] = [
+    pub const ALL: [Self; 17] = [
         Self::Rust,
         Self::Ocaml,
         Self::C,
@@ -137,6 +143,8 @@ impl Language {
         Self::Jsonc,
         Self::Sql,
         Self::Kotlin,
+        Self::Toml,
+        Self::Lua,
     ];
 
     /// The canonical name, identical to the serde representation.
@@ -157,6 +165,8 @@ impl Language {
             Self::Jsonc => "jsonc",
             Self::Sql => "sql",
             Self::Kotlin => "kotlin",
+            Self::Toml => "toml",
+            Self::Lua => "lua",
             Self::Unknown => "unknown",
         }
     }
@@ -167,7 +177,13 @@ impl Language {
         match self {
             Self::Rust => &["rs"],
             Self::Ocaml => &["ml"],
-            Self::C | Self::Java | Self::Css | Self::Sql | Self::Unknown => &[],
+            Self::C
+            | Self::Java
+            | Self::Css
+            | Self::Sql
+            | Self::Toml
+            | Self::Lua
+            | Self::Unknown => &[],
             Self::Cpp => &["c++", "cxx"],
             Self::Go => &["golang"],
             Self::JavaScript => &["js", "jsx", "ecmascript"],

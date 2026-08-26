@@ -117,6 +117,8 @@ value_enum_wrapper!(LanguageArg, Language, |value| match value {
     Language::Jsonc => "JSON with comments, including JSON5",
     Language::Sql => "SQL for every supported database dialect",
     Language::Kotlin => "Kotlin source and script files",
+    Language::Toml => "TOML documents, including the lock files written in it",
+    Language::Lua => "Lua chunks and LuaRocks rockspecs",
     Language::Unknown => "An undetected language",
 });
 

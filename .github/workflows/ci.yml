@@ -45,10 +45,15 @@ jobs:
           rustdoc --test docs/library.md --edition 2024 \
             --extern ocomment_core=rust/target/debug/libocomment_core.rlib \
             -L rust/target/debug/deps
-      - name: The library documentation builds with no broken links
+      # The binary crate is in here for its links alone: nothing publishes its
+      # rustdoc, but its modules document each other, and a link that names a
+      # function somebody has since renamed is a wrong sentence wherever it is
+      # written. `missing_docs` stays off for it — a `clap` derive has no
+      # documentation to give.
+      - name: The documentation builds with no broken links
         env:
           RUSTDOCFLAGS: -D warnings
-        run: cargo doc --manifest-path rust/Cargo.toml --no-deps -p ocomment-core -p ocomment-plugin-sdk --locked
+        run: cargo doc --manifest-path rust/Cargo.toml --no-deps -p ocomment-core -p ocomment-plugin-sdk -p ocomment --locked
       - run: python3 tools/check_embedded_specs.py
       - run: python3 tools/check_hooks.py
       - run: python3 -m pip install --disable-pip-version-check jsonschema==4.25.1
