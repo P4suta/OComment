@@ -23,8 +23,8 @@ $ ocomment strip --language rust --dialect mysql
 ocomment: unsupported dialect `mysql` for rust; supported: standard
 ```
 
-OComment has 19 built-in languages covering
-50 file extensions and 16 named dialects.
+OComment has 20 built-in languages covering
+59 file extensions and 16 named dialects.
 
 | Language | Extensions | Dialects |
 | --- | --- | --- |
@@ -47,6 +47,7 @@ OComment has 19 built-in languages covering
 | `lua` | `.lua`, `.rockspec` | `standard` |
 | `yaml` | `.yml`, `.yaml` | `standard` |
 | `php` | `.php`, `.phtml`, `.phpt` | `standard` |
+| `ruby` | `.rb`, `.rbw`, `.rake`, `.gemspec`, `.ru`, `.podspec`, `.jbuilder`, `.thor`, `.rbi` | `standard` |
 
 ## Detected without an extension
 
@@ -65,6 +66,7 @@ interpreter name appears anywhere on the line.
 | `lua` | — | `lua`, `luajit` |
 | `yaml` | `.clang-format`, `.clang-tidy`, `.yamllint` | — |
 | `php` | — | `php` |
+| `ruby` | `Gemfile`, `Rakefile`, `Guardfile`, `Capfile`, `Vagrantfile`, `Brewfile`, `Podfile`, `Fastfile`, `Appfile`, `Berksfile`, `Thorfile`, `Dangerfile`, `.irbrc`, `.pryrc` | `truffleruby`, `jruby`, `ruby` |
 
 ## Anything else
 
@@ -79,6 +81,34 @@ in a PHP file is not reported and is never removed. Which mode a byte
 sits in is decided by everything above it, so only a line break in
 inline HTML is a point an editor may rescan a PHP file from: a file
 that is all PHP is rescanned from the top.
+
+Ruby is scanned with a lexer that keeps three states, because four
+of Ruby's tokens are spelled with a byte that is also an operator
+and only where the token stands decides which: `/` is a regular
+expression or a division, `%` a literal or a modulo, `?` a
+one-character string or a ternary, and `<<` a here document or an
+append. Ruby's own parser answers those from a lexer state that a
+symbol table feeds -- it knows whether `a` is a local variable or a
+method -- and a scanner has no symbol table, so a bare word is
+always read as a method that may take a command argument. `a /b/ c`
+is therefore a pattern here where Ruby, knowing `a` to be a
+variable, reads two divisions. The reading that differs is the one
+that keeps more bytes inside a literal, so a comment is never
+invented out of a division; it is a comment left unfound, not a
+byte removed.
+
+Three smaller readings go the same way. A `/` inside a character
+class stays inside the pattern, where Ruby's own lexer ends the
+literal at it, so `/[/]/` is one regular expression. `$#`, which
+Ruby refuses outright as a global variable name, is read as a `$`
+and then the comment that `#` opens everywhere else. And a here
+document terminator may be spelled with digits, because Ruby
+builds an unquoted one out of name bytes and a digit is one of
+those from the first byte on: `puts <<2` opens a here document
+that runs to a line reading `2`, and every line between the two
+is body rather than code. Where the same `<<` follows an operand
+-- `a[0] <<2`, `p 1 <<2` -- it is the shift operator it looks
+like, and the rest of that line is code.
 
 YAML is scanned lexically, and `valid` is a lexical answer: the
 shapes a YAML *parser* rejects are not all shapes a lexer can see.

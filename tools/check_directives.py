@@ -431,6 +431,63 @@ SAMPLES: dict[str, Sample] = {
         "// a note about @codeCoverageIgnoreStart",
         KEPT_AS_DIRECTIVE,
     ),
+    # NOTE: Ruby's three magic comments, which the interpreter reads out of the
+    # NOTE: head of a file. Each carries its own boundary in the colon, so what
+    # NOTE: is left to get wrong is the front of it -- which is what running
+    # NOTE: letters on past the word takes away.
+    "frozen_string_literal:": Sample(
+        "ruby",
+        None,
+        f"{SLOT}\n# control\n",
+        "# frozen_string_literal: true",
+        f"# frozen_string_literal{NEGATIVE_SUFFIX}",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "warn_indent:": Sample(
+        "ruby",
+        None,
+        f"{SLOT}\n# control\n",
+        "# warn_indent: true",
+        f"# warn_indent{NEGATIVE_SUFFIX}",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "shareable_constant_value:": Sample(
+        "ruby",
+        None,
+        f"{SLOT}\n# control\n",
+        "# shareable_constant_value: literal",
+        f"# shareable_constant_value{NEGATIVE_SUFFIX}",
+        KEPT_AS_DIRECTIVE,
+    ),
+    # NOTE: The three tools every Ruby project runs. `rubocop:` and `standard:`
+    # NOTE: are namespaces -- `disable`, `enable`, `todo` -- so letters run on
+    # NOTE: past the colon are still an instruction to the linter, and the
+    # NOTE: near-miss is again the comment that talks about the directive
+    # NOTE: instead of being it.
+    "rubocop:": Sample(
+        "ruby",
+        None,
+        f"{SLOT}\n# control\n",
+        "# rubocop:disable Style/Documentation",
+        "# a note about rubocop:disable Style/Documentation",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "standard:": Sample(
+        "ruby",
+        None,
+        f"{SLOT}\n# control\n",
+        "# standard:disable Style/StringLiterals",
+        "# a note about standard:disable Style/StringLiterals",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "typed:": Sample(
+        "ruby",
+        None,
+        f"{SLOT}\n# control\n",
+        "# typed: strict",
+        "# a note about typed: strict",
+        KEPT_AS_DIRECTIVE,
+    ),
     "@schema": Sample(
         "yaml",
         None,

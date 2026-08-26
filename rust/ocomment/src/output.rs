@@ -174,7 +174,7 @@ pub(crate) fn skip_label(reason: &str) -> &str {
 }
 
 /// The `Keep` reason the core scanner gives a shebang or encoding line that
-/// `--force-protected` would have removed. It is one of the five reasons the
+/// `--force-protected` would have removed. It is one of the six reasons the
 /// differential protocol freezes, so matching on it is stable; the end-to-end
 /// test `policy_all_says_how_to_remove_a_kept_preamble` is what would catch it
 /// drifting apart from the scanner.

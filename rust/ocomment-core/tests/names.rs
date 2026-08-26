@@ -69,7 +69,7 @@ macro_rules! check_stable_names {
 #[test]
 fn language_names_are_stable() {
     let seen = check_stable_names!(Language);
-    assert_eq!(Language::ALL.len(), 19);
+    assert_eq!(Language::ALL.len(), 20);
     assert!(
         !seen.contains("unknown"),
         "Unknown must stay out of the parseable set"

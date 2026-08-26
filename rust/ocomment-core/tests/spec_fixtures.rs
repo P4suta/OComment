@@ -20,18 +20,51 @@ use ocomment_core::{
 use serde_json::{Value, json};
 use std::{collections::BTreeSet, fs, path::PathBuf, str::FromStr};
 
-// INVARIANT: The floor `tools/differential.py` enforces with `MINIMUM_CASES`,
-// INVARIANT: repeated here so a case deleted from the corpus fails the Rust
-// INVARIANT: test suite too, on a machine with no OCaml toolchain.
-const MINIMUM_CASES: usize = 269;
+// INVARIANT: The floors live in `spec/fixtures/v1/floor.txt`, which
+// INVARIANT: `tools/differential.py` reads too, so a case deleted from the
+// INVARIANT: corpus fails the Rust test suite as well — on a machine with no
+// INVARIANT: OCaml toolchain — and neither runner can be raised or lowered on
+// INVARIANT: its own. `cases` is the least number of cases the corpus may hold;
+// INVARIANT: `expectations` is the least number of those that must carry a
+// INVARIANT: recorded `expect` block. A case with none is still held to the
+// INVARIANT: structural promises below, so the second floor is what stops the
+// INVARIANT: corpus from quietly degrading into that weaker check. Deleting a
+// INVARIANT: block to re-record it is the documented way to change a recorded
+// INVARIANT: behaviour, and `differential.py --record` puts it back before this
+// INVARIANT: test is meant to run again.
+const FLOOR_FILE: &str = "floor.txt";
 
-// INVARIANT: How many cases must carry a recorded `expect` block. A case with
-// INVARIANT: none is still held to the structural promises below, so this floor
-// INVARIANT: is what stops the corpus from quietly degrading into that weaker
-// INVARIANT: check. Deleting a block to re-record it is the documented way to
-// INVARIANT: change a recorded behaviour, and `differential.py --record` puts it
-// INVARIANT: back before this test is meant to run again.
-const MINIMUM_EXPECTATIONS: usize = 269;
+/// One floor from `floor.txt`, which holds a `#` comment or a name and a
+/// decimal count per line. A missing name is a failure rather than a zero: the
+/// file is the only place either runner reads these numbers from.
+fn floor(name: &str) -> usize {
+    let path = corpus_directory().join(FLOOR_FILE);
+    let text = std::fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
+    for (number, line) in text.lines().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        let mut fields = trimmed.split_whitespace();
+        let (Some(key), Some(count), None) = (fields.next(), fields.next(), fields.next()) else {
+            panic!(
+                "{FLOOR_FILE}:{}: expected `name count`, got {line:?}",
+                number + 1
+            );
+        };
+        let count: usize = count.parse().unwrap_or_else(|error| {
+            panic!(
+                "{FLOOR_FILE}:{}: {count:?} is not a count: {error}",
+                number + 1
+            )
+        });
+        if key == name {
+            return count;
+        }
+    }
+    panic!("{FLOOR_FILE}: no `{name}` floor");
+}
 
 /// One comment as an `expect` block records it, and as the checks compare it.
 #[derive(Debug, Eq, PartialEq)]
@@ -50,9 +83,14 @@ struct ExpectedDiagnostic {
     end: usize,
 }
 
+/// Where the corpus and its `floor.txt` live, relative to this crate.
+fn corpus_directory() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../spec/fixtures/v1")
+}
+
 /// Every corpus document, in file-name order, with the file each case came from.
 fn corpus() -> Vec<(String, Value)> {
-    let directory = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../spec/fixtures/v1");
+    let directory = corpus_directory();
     let mut paths: Vec<_> = fs::read_dir(&directory)
         .unwrap_or_else(|error| panic!("read {}: {error}", directory.display()))
         .map(|entry| entry.expect("corpus directory entry").path())
@@ -431,9 +469,11 @@ fn decode_base64(text: &str) -> Result<Vec<u8>, String> {
 #[test]
 fn the_corpus_is_well_formed() {
     let cases = cases();
+    let minimum = floor("cases");
     assert!(
-        cases.len() >= MINIMUM_CASES,
-        "the corpus holds {} case(s), fewer than the {MINIMUM_CASES} required",
+        cases.len() >= minimum,
+        "the corpus holds {} case(s), fewer than the {minimum} required by \
+         spec/fixtures/v1/{FLOOR_FILE}",
         cases.len()
     );
     let mut seen = BTreeSet::new();
@@ -476,10 +516,11 @@ fn every_recorded_expectation_still_holds() {
         let outcome = run(&case, &source);
         check_expectation(&case, expect, &outcome);
     }
+    let minimum = floor("expectations");
     assert!(
-        recorded >= MINIMUM_EXPECTATIONS,
+        recorded >= minimum,
         "{recorded} case(s) carry a recorded `expect` block, fewer than the \
-         {MINIMUM_EXPECTATIONS} required; record the missing ones with \
-         `python3 tools/differential.py --record`"
+         {minimum} required by spec/fixtures/v1/{FLOOR_FILE}; record the missing \
+         ones with `python3 tools/differential.py --record`"
     );
 }

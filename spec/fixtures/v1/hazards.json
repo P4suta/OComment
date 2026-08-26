@@ -6240,6 +6240,1173 @@
         "diagnostics": [],
         "output_utf8": "k: |\n    a\n  # yamllint disable\nz: 1\n"
       }
+    },
+    {
+      "id": "ruby-line-comment",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "x = 1 # remove\ny = 2\n",
+      "note": "Ruby 3.3 documentation, doc/syntax/comments.rdoc: a `#` outside a literal runs to the end of the line.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 6,
+            "end": 14,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "x = 1 \ny = 2\n"
+      }
+    },
+    {
+      "id": "ruby-embedded-doc-block",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "=begin\ndocument\n=end\nx = 1\n",
+      "note": "Ruby 3.3 documentation, doc/syntax/comments.rdoc: `=begin` and `=end` at column zero delimit an embedded document, which is one block comment running to the end of the `=end` line.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 20,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\n\n\nx = 1\n"
+      }
+    },
+    {
+      "id": "ruby-embedded-doc-not-at-column-0",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "x = 1\n  =begin\n# remove\n",
+      "note": "Ruby 3.3 documentation, doc/syntax/comments.rdoc: both markers stand at column zero, so an indented `=begin` is the `=` operator and the `begin` keyword and opens no comment at all.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 15,
+            "end": 23,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "x = 1\n  =begin\n\n"
+      }
+    },
+    {
+      "id": "ruby-end-marker",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "x = 1\n__END__\n# data, not a comment\n",
+      "note": "Ruby 3.3 documentation, doc/syntax/comments.rdoc: everything past a `__END__` alone on its line is the DATA section, which is not source and holds no comment.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "diagnostics": [],
+        "output_utf8": "x = 1\n__END__\n# data, not a comment\n"
+      }
+    },
+    {
+      "id": "ruby-end-marker-not-alone",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "__END__ x\n# remove\n",
+      "note": "Ruby 3.3 documentation, doc/syntax/comments.rdoc: the marker has to be the whole line (`whole_match_p`), so `__END__ x` is an ordinary name and the source runs on past it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 10,
+            "end": 18,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "__END__ x\n\n"
+      }
+    },
+    {
+      "id": "ruby-shebang",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "#!/usr/bin/env ruby\nx = 1 # remove\n",
+      "note": "Ruby 3.3 documentation, doc/syntax/comments.rdoc: a `#!` line at the first byte names the interpreter, which is a preamble `safe` keeps and an ordinary comment anywhere else.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 19,
+            "kind": "shebang",
+            "action": "keep"
+          },
+          {
+            "start": 26,
+            "end": 34,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "#!/usr/bin/env ruby\nx = 1 \n"
+      }
+    },
+    {
+      "id": "ruby-magic-encoding-line-2",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "#!/usr/bin/env ruby\n# -*- coding: utf-8 -*-\nx = 1\n# coding: utf-8\n",
+      "note": "Ruby 3.3 documentation, \"Magic comments\": the source encoding is read from the first line, or from the second when a `#!` line took the first. The same phrase further down declares nothing and is an ordinary comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 19,
+            "kind": "shebang",
+            "action": "keep"
+          },
+          {
+            "start": 20,
+            "end": 43,
+            "kind": "encoding",
+            "action": "keep"
+          },
+          {
+            "start": 50,
+            "end": 65,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "#!/usr/bin/env ruby\n# -*- coding: utf-8 -*-\nx = 1\n\n"
+      }
+    },
+    {
+      "id": "ruby-frozen-string-literal-directive",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "# frozen_string_literal: true\n# ordinary\n",
+      "note": "Ruby 3.3 documentation, \"Magic comments\": `frozen_string_literal` is read by the interpreter, so it is a directive `safe` keeps; the comment beside it is not.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 29,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 30,
+            "end": 40,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "# frozen_string_literal: true\n\n"
+      }
+    },
+    {
+      "id": "ruby-rubocop-directive",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "x = 1 # rubocop:disable Style/Documentation\ny = 2 # ordinary\n",
+      "note": "Ruby 3.3 documentation, doc/syntax/comments.rdoc: RuboCop reads `# rubocop:disable` out of a comment, so the whole `rubocop:` namespace is a directive `safe` keeps.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 6,
+            "end": 43,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 50,
+            "end": 60,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "x = 1 # rubocop:disable Style/Documentation\ny = 2 \n"
+      }
+    },
+    {
+      "id": "ruby-typed-directive",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "# typed: strict\n# ordinary\n",
+      "note": "Ruby 3.3 documentation, doc/syntax/comments.rdoc: Sorbet reads its strictness sigil `# typed:` out of the head of a file, so it is a directive `safe` keeps.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 15,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 16,
+            "end": 26,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "# typed: strict\n\n"
+      }
+    },
+    {
+      "id": "ruby-interpolation-with-comment",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "x = \"a#{ 1 + # inner\n  2 }b\" # trailing\n",
+      "note": "Ruby 3.3 documentation, literals.rdoc: the expression inside `#{}` is code, so a `#` written in it opens a real comment and the brace that ends the interpolation is the one balancing it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 13,
+            "end": 20,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 29,
+            "end": 39,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "x = \"a#{ 1 + \n  2 }b\" \n"
+      }
+    },
+    {
+      "id": "ruby-nested-interpolation",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "x = \"a#{ \"b#{ c # deep\n }d\" }e\" # trailing\n",
+      "note": "Ruby 3.3 documentation, literals.rdoc: an interpolation may hold a string that interpolates again, and the comment inside the inner expression is a comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 16,
+            "end": 22,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 32,
+            "end": 42,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "x = \"a#{ \"b#{ c \n }d\" }e\" \n"
+      }
+    },
+    {
+      "id": "ruby-single-quoted-escapes",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "x = 'a\\' # opaque' # remove\n",
+      "note": "Ruby 3.3 documentation, literals.rdoc: a single-quoted string escapes `\\'` and `\\\\` and nothing else, so the escaped quote does not close it and the `#` inside is one of its bytes.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 19,
+            "end": 27,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "x = 'a\\' # opaque' \n"
+      }
+    },
+    {
+      "id": "ruby-char-literal",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "a = ?a\nb = ?\\n\nc = ?\\u{1F600}\nd = ?'\n# remove\n",
+      "note": "Ruby 3.3 documentation, literals.rdoc: `?x` is a one-character string where a value is expected, escapes and `\\u{{...}}` included, so the quote of `?'` opens no string.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 37,
+            "end": 45,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "a = ?a\nb = ?\\n\nc = ?\\u{1F600}\nd = ?'\n\n"
+      }
+    },
+    {
+      "id": "ruby-method-question-then-comment",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "puts x.empty?# remove\n",
+      "note": "Ruby 3.3 documentation, doc/syntax/comments.rdoc: a trailing `?` belongs to the method name, so the `#` touching it still opens a comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 13,
+            "end": 21,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "puts x.empty?\n"
+      }
+    },
+    {
+      "id": "ruby-ternary-not-char",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "y = a ? b : c # remove\n",
+      "note": "Ruby 3.3 documentation, literals.rdoc: a `?` with white space behind it is the ternary operator and never a character literal.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 14,
+            "end": 22,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "y = a ? b : c \n"
+      }
+    },
+    {
+      "id": "ruby-gvar-quote",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "a = $\"\nb = $'\n# remove\n",
+      "note": "Ruby 3.3 documentation, literals.rdoc: `$\"` and `$'` are global variables, so neither quote opens a string and the only comment is the one on the last line.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 14,
+            "end": 22,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "a = $\"\nb = $'\n\n"
+      }
+    },
+    {
+      "id": "ruby-percent-q",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "x = %q(a # opaque) # remove\n",
+      "note": "Ruby 3.3 documentation, literals.rdoc: `%q(...)` is a non-interpolating string, so the `#` inside it is one of its bytes.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 19,
+            "end": 27,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "x = %q(a # opaque) \n"
+      }
+    },
+    {
+      "id": "ruby-percent-w-nested-brackets",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "x = %w[a [b] # opaque]\n# remove\n",
+      "note": "Ruby 3.3 documentation, literals.rdoc: a bracket delimiter nests, so the word list ends at the bracket that balances the one that opened it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 23,
+            "end": 31,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "x = %w[a [b] # opaque]\n\n"
+      }
+    },
+    {
+      "id": "ruby-percent-r-interpolating",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "x = %r{a#{ b # inner\n }c}\n# remove\n",
+      "note": "Ruby 3.3 documentation, literals.rdoc: `%r` interpolates, so `#{}` in it holds code and the comment written there is a comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 13,
+            "end": 20,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 26,
+            "end": 34,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "x = %r{a#{ b \n }c}\n\n"
+      }
+    },
+    {
+      "id": "ruby-percent-modulo-after-operand",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "x = a % b # remove\n",
+      "note": "Ruby 3.3 documentation, literals.rdoc: `%` opens a literal only where a value is expected; after an operand it is the modulo operator.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 10,
+            "end": 18,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "x = a % b \n"
+      }
+    },
+    {
+      "id": "ruby-regex-literal",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "x = /a # opaque/\n# remove\n",
+      "note": "Ruby 3.3 documentation, literals.rdoc: `/.../` where a value is expected is a regular expression, so the `#` inside the pattern is one of its bytes.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 17,
+            "end": 25,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "x = /a # opaque/\n\n"
+      }
+    },
+    {
+      "id": "ruby-regex-vs-division",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "x = a / b # remove\n",
+      "note": "Ruby 3.3 documentation, literals.rdoc: after an operand the same byte is division, so the line holds one comment and no literal. The word in front of it is what makes the difference: see `ruby-command-argument-regexp` for the spacing that opens a pattern after one.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 10,
+            "end": 18,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "x = a / b \n"
+      }
+    },
+    {
+      "id": "ruby-regex-char-class-slash",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "x = /[/] # opaque/i\n# remove\n",
+      "note": "Ruby 3.3 documentation, literals.rdoc: a `/` inside a character class is one of the pattern's own bytes, so the literal ends at the slash after the class and its options follow.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 20,
+            "end": 28,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "x = /[/] # opaque/i\n\n"
+      }
+    },
+    {
+      "id": "ruby-heredoc-plain",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "x = <<EOS\n  EOS # opaque\nEOS\n# remove\n",
+      "note": "Ruby 3.3 documentation, literals.rdoc: a bare `<<` wants its terminator at column zero, so the indented line is body and the body is opaque.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 29,
+            "end": 37,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "x = <<EOS\n  EOS # opaque\nEOS\n\n"
+      }
+    },
+    {
+      "id": "ruby-heredoc-squiggly-indented-terminator",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "x = <<~EOS\n  body # opaque\n  EOS\n# remove\n",
+      "note": "Ruby 3.3 documentation, literals.rdoc: `<<~` lets the terminator line be indented, and the body it ends is opaque.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 33,
+            "end": 41,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "x = <<~EOS\n  body # opaque\n  EOS\n\n"
+      }
+    },
+    {
+      "id": "ruby-heredoc-quoted-no-interp",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "x = <<~'EOS'\n  #{ y } # opaque\n  EOS\n# remove\n",
+      "note": "Ruby 3.3 documentation, literals.rdoc: a single-quoted terminator turns interpolation off, so `#{ y }` in the body is text.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 37,
+            "end": 45,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "x = <<~'EOS'\n  #{ y } # opaque\n  EOS\n\n"
+      }
+    },
+    {
+      "id": "ruby-heredoc-interpolating-comment",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "x = <<~EOS\n  #{ y # inner\n  } # opaque\n  EOS\n# remove\n",
+      "note": "Ruby 3.3 documentation, literals.rdoc: an unquoted terminator leaves interpolation on, so the expression in the body is code and the comment in it is a comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 18,
+            "end": 25,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 45,
+            "end": 53,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "x = <<~EOS\n  #{ y \n  } # opaque\n  EOS\n\n"
+      }
+    },
+    {
+      "id": "ruby-heredoc-two-on-one-line",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "f(<<~A, <<~B)\n  one # opaque\n  A\n  two # opaque\n  B\n# remove\n",
+      "note": "Ruby 3.3 documentation, literals.rdoc: two here documents opened on one line take the lines under it in the order they were opened.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 52,
+            "end": 60,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "f(<<~A, <<~B)\n  one # opaque\n  A\n  two # opaque\n  B\n\n"
+      }
+    },
+    {
+      "id": "ruby-heredoc-opened-in-interpolation",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "puts \"#{ <<EOS }\"\n# not a comment\nEOS\n# remove\n",
+      "note": "Ruby 3.3 documentation, literals.rdoc: a here document header queues a body for the line under the physical line it stands on, and standing inside an interpolation does not change that. Ground truth, Ruby 3.3.12 Ripper.lex: on_heredoc_beg \"<<EOS\", on_embexpr_end \"}\", on_tstring_end \"\\\"\", on_nl, on_tstring_content \"# not a comment\\n\", on_heredoc_end \"EOS\\n\", on_comment \"# remove\\n\" — the body line is content, so its `#` opens nothing.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 38,
+            "end": 46,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "puts \"#{ <<EOS }\"\n# not a comment\nEOS\n\n"
+      }
+    },
+    {
+      "id": "ruby-heredoc-two-openers-in-interpolation",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "puts \"#{ [<<A, <<B] }\"\n# a body\nA\n# b body\nB\n# remove\n",
+      "note": "Ruby 3.3 documentation, literals.rdoc: two here documents opened on one line take the lines under it in the order they were opened, whether or not the headers stand inside an interpolation. Ground truth, Ruby 3.3.12 Ripper.lex: on_heredoc_beg \"<<A\", on_heredoc_beg \"<<B\", on_nl, on_tstring_content \"# a body\\n\", on_heredoc_end \"A\\n\", on_tstring_content \"# b body\\n\", on_heredoc_end \"B\\n\", on_comment \"# remove\\n\".",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 45,
+            "end": 53,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "puts \"#{ [<<A, <<B] }\"\n# a body\nA\n# b body\nB\n\n"
+      }
+    },
+    {
+      "id": "ruby-heredoc-before-and-inside-interpolation",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "x(<<A, \"#{<<B}\")\n# a body\nA\n# b body\nB\n# remove\n",
+      "note": "Ruby 3.3 documentation, literals.rdoc: the queue belongs to the physical line, so an opener written before an interpolation and one written inside it are consumed left to right rather than outermost first. Ground truth, Ruby 3.3.12 Ripper.lex: on_heredoc_beg \"<<A\", on_tstring_beg \"\\\"\", on_embexpr_beg, on_heredoc_beg \"<<B\", on_embexpr_end, on_tstring_end, on_rparen, on_nl, on_tstring_content \"# a body\\n\", on_heredoc_end \"A\\n\", on_tstring_content \"# b body\\n\", on_heredoc_end \"B\\n\", on_comment \"# remove\\n\".",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 39,
+            "end": 47,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "x(<<A, \"#{<<B}\")\n# a body\nA\n# b body\nB\n\n"
+      }
+    },
+    {
+      "id": "ruby-heredoc-nested-interpolation",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "puts \"#{ \"#{<<A}\" }\"\n# a body\nA\n# remove\n",
+      "note": "Ruby 3.3 documentation, literals.rdoc: an interpolation may hold a string that interpolates again, and a here document header reached through both still queues for the line under the one it stands on. Ground truth, Ruby 3.3.12 Ripper.lex: on_embexpr_beg, on_tstring_beg \"\\\"\", on_embexpr_beg, on_heredoc_beg \"<<A\", on_embexpr_end, on_tstring_end, on_embexpr_end, on_tstring_end, on_nl, on_tstring_content \"# a body\\n\", on_heredoc_end \"A\\n\", on_comment \"# remove\\n\".",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 32,
+            "end": 40,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "puts \"#{ \"#{<<A}\" }\"\n# a body\nA\n\n"
+      }
+    },
+    {
+      "id": "ruby-heredoc-opened-in-a-heredoc-body-interpolation",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "puts <<A\nx #{<<B}\nA\nB\n# a body\nA\n# remove\n",
+      "note": "Ruby 3.3 documentation, literals.rdoc: a here document body line is a physical line like any other, so a header inside an interpolation on it queues for the line under that body line and is read before the outer body resumes. Ground truth, Ruby 3.3.12 Ripper.lex: on_heredoc_beg \"<<A\", on_nl, on_tstring_content \"x \", on_embexpr_beg, on_heredoc_beg \"<<B\", on_embexpr_end, on_tstring_content \"\\n\", on_tstring_content \"A\\n\" — line 3 is B's body, not A's terminator — on_heredoc_end \"B\\n\", on_tstring_content \"# a body\\n\", on_heredoc_end \"A\\n\", on_comment \"# remove\\n\".",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 33,
+            "end": 41,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "puts <<A\nx #{<<B}\nA\nB\n# a body\nA\n\n"
+      }
+    },
+    {
+      "id": "ruby-heredoc-quoted-forms-in-interpolation",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "puts \"#{ <<~A } #{ <<-'B' } #{ <<C }\"\n  # not a comment\n  A\n  # not a comment either\n  B\n# nor this\nC\n# remove\n",
+      "note": "Ruby 3.3 documentation, literals.rdoc: the squiggly, dash and quoted header forms behave the same inside an interpolation as outside one — an indented terminator for the first two, and interpolation off under a single-quoted terminator. Ground truth, Ruby 3.3.12 Ripper.lex: on_heredoc_beg \"<<~A\", on_heredoc_beg \"<<-'B'\", on_heredoc_beg \"<<C\", then the three bodies in that order with on_heredoc_end \"  A\\n\", \"  B\\n\" and \"C\\n\", and on_comment \"# remove\\n\" last.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 102,
+            "end": 110,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "puts \"#{ <<~A } #{ <<-'B' } #{ <<C }\"\n  # not a comment\n  A\n  # not a comment either\n  B\n# nor this\nC\n\n"
+      }
+    },
+    {
+      "id": "ruby-heredoc-in-interpolation-crlf",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "puts \"#{ <<EOS }\"\r\n# not a comment\r\nEOS\r\n# remove\r\n",
+      "note": "Ruby 3.3 documentation, literals.rdoc: the queue is drained at the line break, and a CRLF is one break. Ground truth, Ruby 3.3.12 Ripper.lex: on_heredoc_beg \"<<EOS\", on_nl \"\\r\\n\", on_tstring_content \"# not a comment\\r\\n\", on_heredoc_end \"EOS\\r\\n\", on_comment \"# remove\\r\\n\".",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 41,
+            "end": 49,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "puts \"#{ <<EOS }\"\r\n# not a comment\r\nEOS\r\n\r\n"
+      }
+    },
+    {
+      "id": "ruby-heredoc-line-break-inside-interpolation",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "x(<<A, \"#{<<B\n})\n# not a comment\nA\n# nor this\nB\nputs 2 # a comment safe keeps\n",
+      "note": "Ruby 3.3 documentation, literals.rdoc: the drain happens wherever the lexer stands when it reaches the break, so a break inside an interpolation drains the whole queue and the interpolation resumes underneath the bodies. Ground truth, Ruby 3.3.12 Ripper.lex: on_heredoc_beg \"<<A\", on_heredoc_beg \"<<B\", on_nl, on_tstring_content \"})\\n# not a comment\\n\" — A's body swallows the `}` that would have closed the interpolation — on_heredoc_end \"A\\n\", on_tstring_content \"# nor this\\n\", on_heredoc_end \"B\\n\", on_ident \"puts\", on_int \"2\", on_comment \"# a comment safe keeps\\n\". The interpolation never closes, so `ruby -c` reports `unterminated string meets end of file`, the scan is invalid, and `safe` writes nothing.",
+      "expect": {
+        "valid": false,
+        "comments": [
+          {
+            "start": 55,
+            "end": 77,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [
+          {
+            "code": "unterminated-interpolation",
+            "start": 78,
+            "end": 78
+          },
+          {
+            "code": "unterminated-string",
+            "start": 7,
+            "end": 78
+          }
+        ],
+        "output_utf8": "x(<<A, \"#{<<B\n})\n# not a comment\nA\n# nor this\nB\nputs 2 # a comment safe keeps\n"
+      }
+    },
+    {
+      "id": "ruby-heredoc-vs-shift",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "a = b\na << c # remove\n",
+      "note": "Ruby 3.3 documentation, literals.rdoc: `<<` opens a here document only where its terminator could begin, so `a << b` with a space behind it is the append operator.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 13,
+            "end": 21,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "a = b\na << c \n"
+      }
+    },
+    {
+      "id": "ruby-heredoc-unterminated",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "x = <<~EOS\n# not a comment\n",
+      "note": "Ruby 3.3 documentation, literals.rdoc: a here document whose terminator never arrives is an error, so the scan is invalid and the transformation writes nothing.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-heredoc",
+            "start": 4,
+            "end": 27
+          }
+        ],
+        "output_utf8": "x = <<~EOS\n# not a comment\n"
+      }
+    },
+    {
+      "id": "ruby-heredoc-digit-label",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "puts <<2\n# not a comment\n2\nx = [1] <<2 # remove\n",
+      "note": "Ruby 3.3.12 ground truth, Ripper.lex(\"puts <<2\\n# not a comment\\n2\\n\"): on_heredoc_beg \"<<2\", on_tstring_content \"# not a comment\\n\", on_heredoc_end \"2\\n\" -- heredoc_identifier reads an unquoted terminator as a run of is_identchar bytes, and a digit is one from the first byte on. The same lexer reads \"a[0] <<2\" as on_op \"<<\" and on_int \"2\", so after an operand the very same bytes are the shift operator and the rest of that line is code.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 39,
+            "end": 47,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "puts <<2\n# not a comment\n2\nx = [1] <<2 \n"
+      }
+    },
+    {
+      "id": "ruby-heredoc-unterminated-at-eof-no-newline",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "# note\nx = <<EOS",
+      "note": "Ruby 3.3.12 ground truth: Ripper.lex(\"x = <<EOS\") reads on_heredoc_beg \"<<EOS\" and Ripper.sexp of the same bytes is a syntax error. A here document opened on a last line that carries no line break of its own never reaches a body, and is unterminated all the same, so the scan is invalid and the transformation writes nothing.",
+      "expect": {
+        "valid": false,
+        "comments": [
+          {
+            "start": 0,
+            "end": 6,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [
+          {
+            "code": "unterminated-heredoc",
+            "start": 11,
+            "end": 16
+          }
+        ],
+        "output_utf8": "# note\nx = <<EOS"
+      }
+    },
+    {
+      "id": "ruby-crlf",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "=begin\r\ndoc\r\n=end\r\nx = <<~EOS\r\n  body # opaque\r\n  EOS\r\n# remove\r\n",
+      "note": "Ruby 3.3 documentation, doc/syntax/comments.rdoc and literals.rdoc: an embedded document and a here document both end at a whole line, and a CRLF pair is one line ending.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 17,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 55,
+            "end": 63,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\r\n\r\n\r\nx = <<~EOS\r\n  body # opaque\r\n  EOS\r\n\r\n"
+      }
+    },
+    {
+      "id": "ruby-columns-layout",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "columns"
+      },
+      "source_utf8": "# alone\nx = 1 # trailing\n",
+      "note": "Ruby 3.3 documentation, doc/syntax/comments.rdoc: the `columns` layout pads each removed comment with as many spaces as it took, so the columns after it do not shift.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 7,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 14,
+            "end": 24,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "       \nx = 1           \n"
+      }
+    },
+    {
+      "id": "ruby-compact-layout",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "compact"
+      },
+      "source_utf8": "# alone\nx = 1 # trailing\n",
+      "note": "Ruby 3.3 documentation, doc/syntax/comments.rdoc: the `compact` layout drops the line a removed comment had to itself and the white space it left behind.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 7,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 14,
+            "end": 24,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "x = 1\n"
+      }
+    },
+    {
+      "id": "ruby-command-argument-regexp",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "puts /x # opaque/\na /y # opaque/ z\n# remove\n",
+      "note": "Ruby 3.3 literals.rdoc and parse.y `parse_slash`: a `/` after a bare word, with white space in front of it and none behind it, opens a regular expression that the word takes as a command argument. Ruby tells a method name from a local variable by the symbol table its parser is building, and a scanner has none, so every bare word is read as a command here: the second line is a pattern to this scanner where Ruby, knowing `a` to be a variable, reads two divisions. That approximation only ever keeps more bytes inside a literal, so it loses a comment rather than inventing one.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 35,
+            "end": 43,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "puts /x # opaque/\na /y # opaque/ z\n\n"
+      }
     }
   ]
 }

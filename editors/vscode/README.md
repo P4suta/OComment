@@ -2,8 +2,8 @@
 
 Fast, byte-preserving comment checking and removal for Rust, OCaml, C, C++,
 Go, Java, JavaScript, TypeScript, Python, Shell, HTML, CSS, JSONC, SQL,
-Kotlin, TOML, Lua, YAML, and PHP — including the JSX/TSX, Objective-C/C++, and
-CUDA dialects.
+Kotlin, TOML, Lua, YAML, PHP, and Ruby — including the JSX/TSX,
+Objective-C/C++, and CUDA dialects.
 
 Removable comments appear as hints. Removing them is a code action, never a
 formatting pass, so nothing happens to a file until you ask for it.
@@ -41,7 +41,7 @@ it opens the output channel.
 | `ocomment.enable` | `true` | Run the server at all. |
 | `ocomment.path` | `""` | The `ocomment` executable. Empty means the first one on `PATH`; a relative path is resolved against the workspace, and a leading `~` is expanded. |
 | `ocomment.extraArgs` | `[]` | Extra arguments after `lsp`, such as `["--config", "tools/ocomment.toml"]`. |
-| `ocomment.languages` | the 24 identifiers above | Which language identifiers the server is attached to. |
+| `ocomment.languages` | the 25 identifiers above | Which language identifiers the server is attached to. |
 | `ocomment.trace.server` | `"off"` | Log the traffic to the output channel. |
 
 Everything else — which comments count as removable, which are protected, per

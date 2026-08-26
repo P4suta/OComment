@@ -126,6 +126,45 @@ assert_eq!(kept.to_string(), r"kept: matched keep_regex #0 `^//\s*NOTE\b`");
 `explain_disposition_with` takes pattern sets compiled once, which is what you
 want when explaining a whole file rather than one comment.
 
+One rule is missing from that account, and no reading of a comment's bytes could
+supply it: a YAML block scalar decides where its body ends from the lines below
+it, so the comment a body ends at is kept for where it sits rather than for what
+it says. `explain_comment` takes the `Comment` a scan produced instead of a kind
+and some bytes, which is what lets it see that rule — it is the entry point that
+agrees with what the scan recorded, and for every other comment it answers
+exactly as `explain_disposition` does:
+
+```rust
+use ocomment_core::{
+    Action, DispositionExplanation, Language, ScanOptions, explain_comment, scan,
+};
+
+let source = b"k: |\n  a\n# ends the block\n  # yamllint disable\nz: 1\n";
+let options = ScanOptions::default();
+let report = scan(source, Language::Yaml, options.clone());
+
+// The scan kept the first comment: removing its line would hand the directive
+// under it back to the block scalar above.
+let comment = &report.comments[0];
+let why = explain_comment(
+    comment,
+    &source[comment.span.start..comment.span.end],
+    Language::Yaml,
+    &options,
+);
+assert_eq!(why.action(), Action::Keep);
+assert!(matches!(
+    why,
+    DispositionExplanation::KeptStructural {
+        language: Language::Yaml
+    }
+));
+```
+
+`explain_comment_with` is to `explain_comment` what `explain_disposition_with`
+is to `explain_disposition`: the same answer, against pattern sets the caller
+compiled once.
+
 ## Choosing the language
 
 `detect_language` resolves a path and its contents to a `Language`, and

@@ -81,26 +81,37 @@ YAML does not: a block scalar decides where its body ends from the lines
 content of the scalar above it. That is a property of the *parsed value*, and
 no byte-level fixture can state it.
 
-`tools/yaml_roundtrip.py` states it. It builds a corpus — every YAML case in
-`spec/fixtures/v1`, a systematic sweep of every block scalar header crossed
-with every short arrangement of blank, comment, and directive lines under one,
+`tools/yaml_roundtrip.py` states it. Its documents come from four places —
+every YAML case in `spec/fixtures/v1`; a systematic sweep of every block scalar
+header crossed with every short arrangement of blank, comment, and directive
+lines under one; a second sweep of the same headers over trails whose comments
+sit *below* the body's own indentation, where a surviving comment is what the
+body would swallow and the comment above it is the only thing holding it out;
 and a few thousand generated documents of nested mappings, sequences, and block
-scalars with comments in every position, in LF and in CRLF — strips each one
-under every layout and both policies, and asserts that PyYAML reads the same
-value out of it afterwards. A document PyYAML rejects *before* the removal is
-skipped: YAML has shapes a lexer cannot rule out and a parser will not take.
+scalars with comments in every position, in LF and in CRLF. It strips every one
+of them under all three layouts and all three policies — `safe`, `legal` and
+`all`, because each keeps a different comment and only a survivor makes the
+hazard reachable — and asserts that PyYAML reads the same value out of it
+afterwards. A document PyYAML rejects *before* the removal is skipped: YAML has
+shapes a lexer cannot rule out and a parser will not take.
 
 ```sh
 python3 -m pip install pyyaml
 cargo build --manifest-path rust/Cargo.toml --locked -p ocomment
-python3 tools/yaml_roundtrip.py                     # the CI gate, ~4000 documents
+python3 tools/yaml_roundtrip.py                          # the full sweep
+python3 tools/yaml_roundtrip.py --cases 200              # what CI runs
 python3 tools/yaml_roundtrip.py --cases 20000 --seed 7   # a longer sweep
 ```
 
-It runs in CI in the `dogfood` job, and unlike the fuzz below it is
-deterministic: the seed is fixed, so a red run reproduces. Anything it finds
-belongs in `spec/fixtures/v1/hazards.json` as a named case per layout, the same
-as a fuzz finding.
+CI runs `python3 tools/yaml_roundtrip.py --cases 200` in the `dogfood` job: the
+corpus and both enumerated sweeps run in full there — they are where the hazard
+lives and they are the same documents on every run — and only the pseudo-random
+set is cut, because its cost is linear and its value is not. The bare run above
+is the fuller one — around 5,900 documents against CI's 3,700 — and `--seed`
+moves the generated set. Unlike the fuzz below it is deterministic: the seed is
+fixed, so a red run reproduces. Anything it finds belongs in
+`spec/fixtures/v1/hazards.json` as a named case per layout, the same as a fuzz
+finding.
 
 ### On demand: the differential fuzz
 
@@ -117,6 +128,14 @@ opam exec -- dune build --root ocaml bin/main.exe
 python3 tools/fuzz_differential.py --seed 1 --seed 2      # ~2 minutes
 python3 tools/fuzz_differential.py --cases 200            # a quicker sweep
 ```
+
+The pool it draws from is one pool for every language, so a scanner meets the
+delimiters it does not own — but it is a pool of *tokens*, and a lexical state
+that only a whole word opens is never reached by a per-byte draw. That is why
+the pool carries a named group for each language whose states are spelled that
+way: a YAML block scalar header, a `<?php` tag, a Ruby `=begin` or `<<~EOS`.
+Adding a language means adding its own group, or the sweep runs its scanner over
+sources that never leave the top level.
 
 It is not wired into CI and is not meant to be: it is random, so a green run is
 weaker evidence than a corpus case and a red one is not reproducible from the
@@ -207,7 +226,12 @@ JSONL, SARIF, and GitHub output. All user-facing text is English.
   the table: `MINIMUM_CASES` in `tools/differential.py`, the floor that stops a
   later change from quietly dropping the fixtures the language brings, and the
   editor clients — `editors/vscode/package.json` lists the identifiers the
-  extension attaches to, and `docs/editors.md` names and counts them. Every
+  extension attaches to, and `docs/editors.md` names and counts them. The two
+  published JSON schemas carry the vocabulary rather than deriving it:
+  `spec/config.schema.json` enumerates the languages a configuration may name
+  and `spec/result.schema.json` the ones a report may carry, which is the same
+  list plus `unknown`. `the_schemas_enumerate_the_same_vocabulary` compares both
+  against the table, so a language added to one file alone fails the build. Every
   written-out count of languages or of editor language identifiers is checked
   against `Language::ALL` and against that selector by
   `every_written_language_count_matches_what_it_counts` in
@@ -225,11 +249,19 @@ JSONL, SARIF, and GitHub output. All user-facing text is English.
   its own: it only ever restarts at an offset the previous full scan emitted and
   whose preceding bytes an edit has not touched. `RestartRules` is for the other
   shape, a construct whose *end* is decided by the bytes below a checkpoint;
-  `first_yaml_block_scalar` is the one instance. The proptest
+  `first_yaml_block_scalar` is the one instance. A third shape lives there too:
+  a rule that reads the *absolute* offset rather than the bytes around it. A
+  `#!` line is a preamble only at the first byte, and a source-encoding
+  declaration only inside the first two lines, so a language that declares one —
+  Python and Ruby are the two — belongs in `the_preamble_permits_a_restart`,
+  which is what refuses a restart at a line a full scan would have classified
+  differently. The proptest
   `arbitrary_incremental_edits_match_full_scans_for_every_builtin` covers every
   language automatically, but only over the byte fragments its generator knows,
-  so add the tokens that open the new state to `lexical_fragment` and run it
-  once with `PROPTEST_CASES=2000`.
+  so add the tokens that open the new state to `lexical_fragment` — there are
+  two of those, one in `rust/ocomment-core/src/incremental.rs` and one in
+  `rust/ocomment-core/tests/properties.rs`, and both pools want the tokens — and
+  run it once with `PROPTEST_CASES=2000`.
 - Adding a marker to `spec/directives.toml` needs two samples: one in
   `tools/check_directives.py`, which proves the scanner protects it — and,
   through a near-miss derived from the name, that it protects nothing more —

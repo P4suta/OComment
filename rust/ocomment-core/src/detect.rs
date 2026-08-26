@@ -33,16 +33,20 @@ impl Detection {
 /// with options (`#!/usr/bin/env -S node --enable-source-maps`). The order is
 /// therefore part of the rule and not an accident of listing: `bash` and `zsh`
 /// both *contain* `sh`, so each has to be met before it, or every Bash script
-/// on disk would be read as POSIX shell. `luajit` contains `lua` and is listed
-/// before it under the same convention, though that one pair names the same
+/// on disk would be read as POSIX shell. `luajit` contains `lua`, and `jruby`
+/// and `truffleruby` contain `ruby`, and all three are listed before the name
+/// they contain under the same convention, though those pairs name the same
 /// language whichever of the two is met first.
-const SHEBANGS: [(&str, Language, Dialect); 9] = [
+const SHEBANGS: [(&str, Language, Dialect); 12] = [
     ("python", Language::Python, Dialect::Standard),
     ("bash", Language::Shell, Dialect::Bash53),
     ("zsh", Language::Shell, Dialect::Zsh),
     ("luajit", Language::Lua, Dialect::Standard),
     ("lua", Language::Lua, Dialect::Standard),
     ("php", Language::Php, Dialect::Standard),
+    ("truffleruby", Language::Ruby, Dialect::Standard),
+    ("jruby", Language::Ruby, Dialect::Standard),
+    ("ruby", Language::Ruby, Dialect::Standard),
     ("sh", Language::Shell, Dialect::PosixSh),
     ("node", Language::JavaScript, Dialect::Standard),
     ("deno", Language::JavaScript, Dialect::Standard),
@@ -151,6 +155,17 @@ pub fn detect_language(path: Option<&Path>, source: &[u8]) -> Option<Detection> 
              * for, and the second names a file included by another language
              * quite as often as by PHP. */
             "php" | "phtml" | "phpt" => Some((Language::Php, Dialect::Standard)),
+            /* NOTE: Ruby owns more suffixes than any other language here, because
+             * a Ruby project writes so much of itself in Ruby: `.rake` for a
+             * Rake task file, `.gemspec` for a gem's own manifest, `.ru` for a
+             * Rack configuration, `.podspec` and `.jbuilder` and `.thor` for
+             * three more tools that read a Ruby script under a name of their
+             * own, and `.rbi` for a Sorbet interface. `.erb` is deliberately
+             * absent: an ERB template is text with Ruby in tags, which is a
+             * scanner of its own rather than this one. */
+            "rb" | "rbw" | "rake" | "gemspec" | "ru" | "podspec" | "jbuilder" | "thor" | "rbi" => {
+                Some((Language::Ruby, Dialect::Standard))
+            }
             _ => None,
         };
         if let Some((language, dialect)) = by_extension {
@@ -177,6 +192,16 @@ pub fn detect_language(path: Option<&Path>, source: &[u8]) -> Option<Detection> 
             ".clang-format" | ".clang-tidy" | ".yamllint" => {
                 Some((Language::Yaml, Dialect::Standard))
             }
+            /* NOTE: Every one of these is a Ruby script a tool loads by name and
+             * evaluates: Bundler's `Gemfile`, Rake's `Rakefile`, and the
+             * project files of Guard, Capistrano, Vagrant, Homebrew,
+             * CocoaPods, fastlane, Berkshelf, Thor and Danger, plus the two
+             * dot files `irb` and `pry` read at start-up. `.gemrc` is
+             * deliberately absent: it carries the same air of a Ruby dot file
+             * and is a YAML document. */
+            "gemfile" | "rakefile" | "guardfile" | "capfile" | "vagrantfile" | "brewfile"
+            | "podfile" | "fastfile" | "appfile" | "berksfile" | "thorfile" | "dangerfile"
+            | ".irbrc" | ".pryrc" => Some((Language::Ruby, Dialect::Standard)),
             _ => None,
         };
         if let Some((language, dialect)) = reserved {

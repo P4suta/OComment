@@ -30,10 +30,12 @@ RUST = ROOT / "rust/target/debug/examples/ref_driver"
 OCAML = ROOT / "ocaml/_build/default/bin/main.exe"
 CORPUS = ROOT / "spec/fixtures/v1"
 
-# INVARIANT: Hazards live in `spec/`, never in this file. The floor below is
-# INVARIANT: what says so out loud: deleting a case, or silently dropping a
+# INVARIANT: Hazards live in `spec/`, never in this file, and so does the floor
+# INVARIANT: that says so out loud: deleting a case, or silently dropping a
 # INVARIANT: corpus file, fails the run instead of quietly shrinking the gate.
-MINIMUM_CASES = 269
+# INVARIANT: `rust/ocomment-core/tests/spec_fixtures.rs` reads the same file, so
+# INVARIANT: the two runners cannot hold the corpus to different floors.
+FLOOR = CORPUS / "floor.txt"
 
 DEFAULT_OPTIONS = {"policy": "safe", "layout": "lines"}
 PAYLOAD_KEYS = ("spans", "edits", "profile")
@@ -49,6 +51,31 @@ MAX_RECORDED_OUTPUT = 1024
 # NOTE: A fixture carrying one of these is written as base64 instead.
 TEXT_SAFE_CONTROL = frozenset("\n\r\t")
 TEXT_UNSAFE = frozenset("\u2028\u2029")
+
+
+def load_floor():
+    """The floors in `floor.txt`, as a name-to-count mapping."""
+    floor = {}
+    for number, line in enumerate(FLOOR.read_text(encoding="utf-8").splitlines(), start=1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        parts = stripped.split()
+        if len(parts) != 2 or not parts[1].isdigit():
+            raise SystemExit(f"{FLOOR.name}:{number}: expected `name count`, got {line!r}")
+        floor[parts[0]] = int(parts[1])
+    # NOTE: `expectations` is enforced by the Rust test rather than here: this
+    # NOTE: runner is also the one that records a missing block, and a floor it
+    # NOTE: enforced would refuse to run on the way to putting one back. It is
+    # NOTE: still required to be present, so a typo in the file is an error
+    # NOTE: rather than a floor that silently stops being read.
+    for name in ("cases", "expectations"):
+        if name not in floor:
+            raise SystemExit(f"{FLOOR.name}: no `{name}` floor")
+    return floor
+
+
+FLOORS = load_floor()
 
 
 def load_documents():
@@ -75,10 +102,10 @@ def load_cases(documents):
                 )
             origin[identifier] = path.name
             cases.append(case)
-    if len(cases) < MINIMUM_CASES:
+    if len(cases) < FLOORS["cases"]:
         raise SystemExit(
-            f"the corpus holds {len(cases)} case(s), fewer than the {MINIMUM_CASES} required; "
-            f"cases live in {CORPUS.relative_to(ROOT)}/*.json"
+            f"the corpus holds {len(cases)} case(s), fewer than the {FLOORS['cases']} required by "
+            f"{FLOOR.relative_to(ROOT)}; cases live in {CORPUS.relative_to(ROOT)}/*.json"
         )
     return cases
 

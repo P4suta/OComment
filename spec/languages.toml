@@ -151,3 +151,36 @@ extensions = ["php", "phtml", "phpt"]
 dialects = ["standard"]
 shebangs = ["php"]
 notes = "PHP 8 lexical forms; the inline HTML around the tags is opaque"
+
+[[languages]]
+name = "ruby"
+extensions = [
+    "rb",
+    "rbw",
+    "rake",
+    "gemspec",
+    "ru",
+    "podspec",
+    "jbuilder",
+    "thor",
+    "rbi",
+]
+dialects = ["standard"]
+reserved_names = [
+    "Gemfile",
+    "Rakefile",
+    "Guardfile",
+    "Capfile",
+    "Vagrantfile",
+    "Brewfile",
+    "Podfile",
+    "Fastfile",
+    "Appfile",
+    "Berksfile",
+    "Thorfile",
+    "Dangerfile",
+    ".irbrc",
+    ".pryrc",
+]
+shebangs = ["truffleruby", "jruby", "ruby"]
+notes = "Ruby 3.3 lexical forms"

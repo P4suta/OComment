@@ -152,6 +152,9 @@ mod scanner;
 mod transform;
 mod types;
 
+#[doc(hidden)]
+pub mod lexical_pool;
+
 pub use detect::{Detection, detect_language, shebang_interpreters};
 pub use incremental::{DocumentChange, IncrementalDocument, IncrementalError, PositionEncoding};
 pub use profile::{

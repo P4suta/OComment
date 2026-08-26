@@ -127,6 +127,12 @@ this page, so the table cannot claim a protection that is not there.
 | `@phpstan-ignore` | `php` | `// @phpstan-ignore-next-line` | `directive` | tool or language directive |
 | `@psalm-suppress` | `php` | `/** @psalm-suppress InvalidReturnType */` | `directive` | tool or language directive |
 | `@codeCoverageIgnore` | `php` | `// @codeCoverageIgnoreStart` | `directive` | tool or language directive |
+| `frozen_string_literal:` | `ruby` | `# frozen_string_literal: true` | `directive` | tool or language directive |
+| `warn_indent:` | `ruby` | `# warn_indent: true` | `directive` | tool or language directive |
+| `shareable_constant_value:` | `ruby` | `# shareable_constant_value: literal` | `directive` | tool or language directive |
+| `rubocop:` | `ruby` | `# rubocop:disable Style/Documentation` | `directive` | tool or language directive |
+| `standard:` | `ruby` | `# standard:disable Style/StringLiterals` | `directive` | tool or language directive |
+| `typed:` | `ruby` | `# typed: strict` | `directive` | tool or language directive |
 
 `--remove-kind directive` or `--policy all` removes a directive anyway.
 A shebang and an encoding preamble need `--force-protected` on top of

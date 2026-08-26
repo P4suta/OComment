@@ -101,6 +101,24 @@ PHP_STRUCTURE = [
     "{$a}", "${a}", "phpcs:ignore", "@phpstan-ignore-next-line",
 ]
 
+# NOTE: The shapes Ruby needs before a generated source reaches its lexical
+# NOTE: states at all. Four of Ruby's tokens are spelled with a byte that is also
+# NOTE: an operator, so the pool carries the whole opener rather than the byte:
+# NOTE: a percent literal with each kind of delimiter, a here document header
+# NOTE: with the terminator line that ends one, an interpolation, a character
+# NOTE: literal, and a regular expression. `=begin` and `__END__` are here for
+# NOTE: the reason the YAML headers are -- both are whole words at column zero
+# NOTE: that a per-byte pool would practically never assemble. The last three
+# NOTE: are the interpolation boundary a here document header may be written
+# NOTE: across: the body such a header asks for belongs to the line the header
+# NOTE: stands on, not to the interpolation, and only a pool that can assemble
+# NOTE: an opener inside `"#{ ... }"` puts that in front of the two scanners.
+RUBY_STRUCTURE = [
+    "%w[", "%q(", "%r{", "%Q{", "<<~EOS", "<<EOS", "EOS", "?c", "?\\", "=begin",
+    "=end", "__END__", "#{", "/re/", "$\"", "@a", ":sym", "empty?", "puts ",
+    "\"#{", "}\"", "#{ <<EOS }",
+]
+
 # NOTE: The bytes a lexer is liable to mishandle: NUL, DEL, a byte order mark, a
 # NOTE: no-break space, the two Unicode line terminators, and two characters
 # NOTE: wider than one byte.
@@ -119,6 +137,7 @@ TOKENS = (
     + SHELL_STRUCTURE
     + YAML_STRUCTURE
     + PHP_STRUCTURE
+    + RUBY_STRUCTURE
     + AWKWARD_BYTES
 )
 

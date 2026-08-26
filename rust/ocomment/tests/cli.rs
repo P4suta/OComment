@@ -279,6 +279,47 @@ fn a_php_template_is_scanned_only_inside_its_tags() {
     );
 }
 
+/* NOTE: A `Gemfile` carries no extension, so it reaches the Ruby scanner by its
+ * whole name alone — and once there, the magic comment at the head of it is a
+ * directive the default policy keeps, where the embedded document below it is
+ * an ordinary comment the same run removes. */
+#[test]
+fn a_gemfile_is_scanned_as_ruby_by_its_name_alone() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("Gemfile");
+    fs::write(
+        &path,
+        b"# frozen_string_literal: true\nsource '# opaque' # remove\n=begin\nnotes\n=end\n",
+    )
+    .unwrap();
+
+    let scanned = run(directory.path(), &["scan", "Gemfile", "--format", "json"]);
+    assert_eq!(
+        scanned.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&scanned.stderr)
+    );
+    let document: serde_json::Value = serde_json::from_slice(&scanned.stdout).unwrap();
+    let report = &document["files"][0]["report"];
+    assert_eq!(report["language"], "ruby");
+    assert_eq!(report["comments"].as_array().unwrap().len(), 3);
+    assert_eq!(report["comments"][0]["kind"], "directive");
+    assert_eq!(report["comments"][0]["disposition"]["action"], "keep");
+
+    let fixed = run(directory.path(), &["fix", "Gemfile"]);
+    assert_eq!(
+        fixed.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&fixed.stderr)
+    );
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        b"# frozen_string_literal: true\nsource '# opaque' \n\n\n\n"
+    );
+}
+
 #[test]
 fn invalid_input_returns_two_and_fix_is_non_destructive() {
     let directory = tempfile::tempdir().unwrap();

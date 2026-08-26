@@ -49,7 +49,8 @@ kotlin\t'Kotlin source and script files'
 toml\t'TOML documents, including the lock files written in it'
 lua\t'Lua chunks and LuaRocks rockspecs'
 yaml\t'YAML documents, including the tool configurations written in it'
-php\t'PHP scripts and templates; the inline HTML around the tags is content'"
+php\t'PHP scripts and templates; the inline HTML around the tags is content'
+ruby\t'Ruby scripts, gem manifests, and the project files named after their tool'"
 complete -c ocomment -n "__fish_ocomment_needs_command" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -149,7 +150,8 @@ kotlin\t'Kotlin source and script files'
 toml\t'TOML documents, including the lock files written in it'
 lua\t'Lua chunks and LuaRocks rockspecs'
 yaml\t'YAML documents, including the tool configurations written in it'
-php\t'PHP scripts and templates; the inline HTML around the tags is content'"
+php\t'PHP scripts and templates; the inline HTML around the tags is content'
+ruby\t'Ruby scripts, gem manifests, and the project files named after their tool'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -236,7 +238,8 @@ kotlin\t'Kotlin source and script files'
 toml\t'TOML documents, including the lock files written in it'
 lua\t'Lua chunks and LuaRocks rockspecs'
 yaml\t'YAML documents, including the tool configurations written in it'
-php\t'PHP scripts and templates; the inline HTML around the tags is content'"
+php\t'PHP scripts and templates; the inline HTML around the tags is content'
+ruby\t'Ruby scripts, gem manifests, and the project files named after their tool'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -325,7 +328,8 @@ kotlin\t'Kotlin source and script files'
 toml\t'TOML documents, including the lock files written in it'
 lua\t'Lua chunks and LuaRocks rockspecs'
 yaml\t'YAML documents, including the tool configurations written in it'
-php\t'PHP scripts and templates; the inline HTML around the tags is content'"
+php\t'PHP scripts and templates; the inline HTML around the tags is content'
+ruby\t'Ruby scripts, gem manifests, and the project files named after their tool'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -412,7 +416,8 @@ kotlin\t'Kotlin source and script files'
 toml\t'TOML documents, including the lock files written in it'
 lua\t'Lua chunks and LuaRocks rockspecs'
 yaml\t'YAML documents, including the tool configurations written in it'
-php\t'PHP scripts and templates; the inline HTML around the tags is content'"
+php\t'PHP scripts and templates; the inline HTML around the tags is content'
+ruby\t'Ruby scripts, gem manifests, and the project files named after their tool'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -499,7 +504,8 @@ kotlin\t'Kotlin source and script files'
 toml\t'TOML documents, including the lock files written in it'
 lua\t'Lua chunks and LuaRocks rockspecs'
 yaml\t'YAML documents, including the tool configurations written in it'
-php\t'PHP scripts and templates; the inline HTML around the tags is content'"
+php\t'PHP scripts and templates; the inline HTML around the tags is content'
+ruby\t'Ruby scripts, gem manifests, and the project files named after their tool'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -584,7 +590,8 @@ kotlin\t'Kotlin source and script files'
 toml\t'TOML documents, including the lock files written in it'
 lua\t'Lua chunks and LuaRocks rockspecs'
 yaml\t'YAML documents, including the tool configurations written in it'
-php\t'PHP scripts and templates; the inline HTML around the tags is content'"
+php\t'PHP scripts and templates; the inline HTML around the tags is content'
+ruby\t'Ruby scripts, gem manifests, and the project files named after their tool'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -669,7 +676,8 @@ kotlin\t'Kotlin source and script files'
 toml\t'TOML documents, including the lock files written in it'
 lua\t'Lua chunks and LuaRocks rockspecs'
 yaml\t'YAML documents, including the tool configurations written in it'
-php\t'PHP scripts and templates; the inline HTML around the tags is content'"
+php\t'PHP scripts and templates; the inline HTML around the tags is content'
+ruby\t'Ruby scripts, gem manifests, and the project files named after their tool'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -757,7 +765,8 @@ kotlin\t'Kotlin source and script files'
 toml\t'TOML documents, including the lock files written in it'
 lua\t'Lua chunks and LuaRocks rockspecs'
 yaml\t'YAML documents, including the tool configurations written in it'
-php\t'PHP scripts and templates; the inline HTML around the tags is content'"
+php\t'PHP scripts and templates; the inline HTML around the tags is content'
+ruby\t'Ruby scripts, gem manifests, and the project files named after their tool'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -842,7 +851,8 @@ kotlin\t'Kotlin source and script files'
 toml\t'TOML documents, including the lock files written in it'
 lua\t'Lua chunks and LuaRocks rockspecs'
 yaml\t'YAML documents, including the tool configurations written in it'
-php\t'PHP scripts and templates; the inline HTML around the tags is content'"
+php\t'PHP scripts and templates; the inline HTML around the tags is content'
+ruby\t'Ruby scripts, gem manifests, and the project files named after their tool'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -927,7 +937,8 @@ kotlin\t'Kotlin source and script files'
 toml\t'TOML documents, including the lock files written in it'
 lua\t'Lua chunks and LuaRocks rockspecs'
 yaml\t'YAML documents, including the tool configurations written in it'
-php\t'PHP scripts and templates; the inline HTML around the tags is content'"
+php\t'PHP scripts and templates; the inline HTML around the tags is content'
+ruby\t'Ruby scripts, gem manifests, and the project files named after their tool'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -1022,7 +1033,8 @@ kotlin\t'Kotlin source and script files'
 toml\t'TOML documents, including the lock files written in it'
 lua\t'Lua chunks and LuaRocks rockspecs'
 yaml\t'YAML documents, including the tool configurations written in it'
-php\t'PHP scripts and templates; the inline HTML around the tags is content'"
+php\t'PHP scripts and templates; the inline HTML around the tags is content'
+ruby\t'Ruby scripts, gem manifests, and the project files named after their tool'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -1107,7 +1119,8 @@ kotlin\t'Kotlin source and script files'
 toml\t'TOML documents, including the lock files written in it'
 lua\t'Lua chunks and LuaRocks rockspecs'
 yaml\t'YAML documents, including the tool configurations written in it'
-php\t'PHP scripts and templates; the inline HTML around the tags is content'"
+php\t'PHP scripts and templates; the inline HTML around the tags is content'
+ruby\t'Ruby scripts, gem manifests, and the project files named after their tool'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -1192,7 +1205,8 @@ kotlin\t'Kotlin source and script files'
 toml\t'TOML documents, including the lock files written in it'
 lua\t'Lua chunks and LuaRocks rockspecs'
 yaml\t'YAML documents, including the tool configurations written in it'
-php\t'PHP scripts and templates; the inline HTML around the tags is content'"
+php\t'PHP scripts and templates; the inline HTML around the tags is content'
+ruby\t'Ruby scripts, gem manifests, and the project files named after their tool'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -1277,7 +1291,8 @@ kotlin\t'Kotlin source and script files'
 toml\t'TOML documents, including the lock files written in it'
 lua\t'Lua chunks and LuaRocks rockspecs'
 yaml\t'YAML documents, including the tool configurations written in it'
-php\t'PHP scripts and templates; the inline HTML around the tags is content'"
+php\t'PHP scripts and templates; the inline HTML around the tags is content'
+ruby\t'Ruby scripts, gem manifests, and the project files named after their tool'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -1362,7 +1377,8 @@ kotlin\t'Kotlin source and script files'
 toml\t'TOML documents, including the lock files written in it'
 lua\t'Lua chunks and LuaRocks rockspecs'
 yaml\t'YAML documents, including the tool configurations written in it'
-php\t'PHP scripts and templates; the inline HTML around the tags is content'"
+php\t'PHP scripts and templates; the inline HTML around the tags is content'
+ruby\t'Ruby scripts, gem manifests, and the project files named after their tool'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -1447,7 +1463,8 @@ kotlin\t'Kotlin source and script files'
 toml\t'TOML documents, including the lock files written in it'
 lua\t'Lua chunks and LuaRocks rockspecs'
 yaml\t'YAML documents, including the tool configurations written in it'
-php\t'PHP scripts and templates; the inline HTML around the tags is content'"
+php\t'PHP scripts and templates; the inline HTML around the tags is content'
+ruby\t'Ruby scripts, gem manifests, and the project files named after their tool'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -1539,7 +1556,8 @@ kotlin\t'Kotlin source and script files'
 toml\t'TOML documents, including the lock files written in it'
 lua\t'Lua chunks and LuaRocks rockspecs'
 yaml\t'YAML documents, including the tool configurations written in it'
-php\t'PHP scripts and templates; the inline HTML around the tags is content'"
+php\t'PHP scripts and templates; the inline HTML around the tags is content'
+ruby\t'Ruby scripts, gem manifests, and the project files named after their tool'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -1624,7 +1642,8 @@ kotlin\t'Kotlin source and script files'
 toml\t'TOML documents, including the lock files written in it'
 lua\t'Lua chunks and LuaRocks rockspecs'
 yaml\t'YAML documents, including the tool configurations written in it'
-php\t'PHP scripts and templates; the inline HTML around the tags is content'"
+php\t'PHP scripts and templates; the inline HTML around the tags is content'
+ruby\t'Ruby scripts, gem manifests, and the project files named after their tool'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -1709,7 +1728,8 @@ kotlin\t'Kotlin source and script files'
 toml\t'TOML documents, including the lock files written in it'
 lua\t'Lua chunks and LuaRocks rockspecs'
 yaml\t'YAML documents, including the tool configurations written in it'
-php\t'PHP scripts and templates; the inline HTML around the tags is content'"
+php\t'PHP scripts and templates; the inline HTML around the tags is content'
+ruby\t'Ruby scripts, gem manifests, and the project files named after their tool'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'

@@ -1,0 +1,20 @@
+# The floors both corpus runners hold this corpus to, in one file so that they
+# cannot drift apart. `tools/differential.py` and
+# `rust/ocomment-core/tests/spec_fixtures.rs` both read it; neither carries a
+# number of its own.
+#
+# cases        the least number of cases `v1/*.json` may hold.
+# expectations the least number of those that must carry a recorded `expect`
+#              block. A case with none is still held to the structural promises,
+#              so this floor is what stops the corpus from degrading into that
+#              weaker check.
+#
+# Raising either is optional when a case is added and mandatory when the corpus
+# is reorganised: the floors exist so that neither a case nor its recorded
+# expectation can quietly disappear.
+#
+# Blank lines and `#` lines are ignored; every other line is a name and a
+# decimal count separated by white space.
+
+cases 316
+expectations 316

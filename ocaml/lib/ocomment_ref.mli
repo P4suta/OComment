@@ -1,6 +1,7 @@
 type language =
   | Rust | Ocaml | C | Cpp | Go | Java | JavaScript | TypeScript | Python
-  | Shell | Html | Css | Jsonc | Sql | Kotlin | Toml | Lua | Yaml | Php | Unknown
+  | Shell | Html | Css | Jsonc | Sql | Kotlin | Toml | Lua | Yaml | Php | Ruby
+  | Unknown
 
 type dialect =
   | Standard | Jsx | Tsx | ObjectiveC | ObjectiveCpp | GnuC | GnuCpp | Cuda

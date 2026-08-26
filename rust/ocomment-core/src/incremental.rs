@@ -524,66 +524,41 @@ fn line_checkpoints(source: &[u8]) -> Vec<usize> {
 mod tests {
     use super::*;
     use crate::{Disposition, scanner::scan_with_checkpoints};
-    use proptest::prelude::*;
+    use proptest::{prelude::*, sample::select};
 
-    /// Bytes that exercise every built-in scanner's string, comment, heredoc
-    /// and template states rather than only the C-family delimiters.
+    /// A pool length as a `prop_oneof!` weight, so that drawing uniformly from
+    /// a pool of `n` gives each of its members the weight one arm would have.
+    fn weight(length: usize) -> u32 {
+        u32::try_from(length).expect("the pool is far smaller than a weight")
+    }
+
+    /// One byte of the shared pool, or a uniformly random one.
+    ///
+    /// The pool is [`crate::lexical_pool::BYTES`], and `tests/properties.rs`
+    /// draws from the same one: a fragment worth generating against the
+    /// whole-file scanner is worth generating against the incremental one. The
+    /// extra `\n` arm doubles that byte's weight, because a line boundary is
+    /// where a checkpoint may be offered and every one of them is a restart
+    /// this suite gets to try.
     fn lexical_byte() -> impl Strategy<Value = u8> {
         prop_oneof![
             4 => any::<u8>(),
-            2 => Just(b'\n'),
-            1 => Just(b'\r'),
-            1 => Just(b'/'),
-            1 => Just(b'*'),
-            1 => Just(b'\''),
-            1 => Just(b'"'),
-            1 => Just(b'#'),
-            1 => Just(b'`'),
-            1 => Just(b'{'),
-            1 => Just(b'}'),
-            1 => Just(b'<'),
-            1 => Just(b'>'),
-            1 => Just(b'='),
-            1 => Just(b'['),
-            1 => Just(b']'),
-            1 => Just(b'-'),
-            1 => Just(b'|'),
-            1 => Just(b'?'),
-            1 => Just(b'\\'),
-            1 => Just(b'$'),
-            1 => Just(b'%'),
-            1 => Just(b'('),
-            1 => Just(b')'),
-            1 => Just(b'@'),
-            1 => Just(b':'),
-            1 => Just(b'!'),
-            1 => Just(b'~'),
+            1 => Just(b'\n'),
+            weight(crate::lexical_pool::BYTES.len()) => select(crate::lexical_pool::BYTES),
         ]
     }
 
-    /// Multi-byte tokens a single-byte alphabet can never synthesise. The
-    /// preamble and directive rules only fire on whole words, so without these
-    /// the generated sources never reach the code paths that make a checkpoint
-    /// depend on the bytes in front of it.
+    /// A fragment: one byte of the pool, or one whole token from it.
     ///
-    /// The last three are YAML block scalar headers and the indented line that
-    /// follows one. A block scalar body is a state a restart must never land
-    /// inside, and the four bytes that open one have to arrive in that order to
-    /// open it at all, which a per-byte alphabet reaches only by coincidence.
+    /// The tokens are [`crate::lexical_pool::TOKENS`] — multi-byte openers a
+    /// single-byte alphabet can never synthesise — and each is drawn as often
+    /// as one byte is, which is what the eight-to-one weight in front of the
+    /// byte arm keeps in proportion.
     fn lexical_fragment() -> impl Strategy<Value = Vec<u8>> {
         prop_oneof![
             8 => lexical_byte().prop_map(|byte| vec![byte]),
-            1 => Just(b"coding:".to_vec()),
-            1 => Just(b"# -*- coding: utf-8 -*-".to_vec()),
-            1 => Just(b"# coding: latin-1".to_vec()),
-            1 => Just(b"#!".to_vec()),
-            1 => Just(b"//go:build".to_vec()),
-            1 => Just(b"/*#__PURE__*/".to_vec()),
-            1 => Just(b"<!--".to_vec()),
-            1 => Just(b"r#\"".to_vec()),
-            1 => Just(b": |\n".to_vec()),
-            1 => Just(b"- >2\n".to_vec()),
-            1 => Just(b"\n  # ".to_vec()),
+            weight(crate::lexical_pool::TOKENS.len()) => select(crate::lexical_pool::TOKENS)
+                .prop_map(<[u8]>::to_vec),
         ]
     }
 
@@ -772,6 +747,74 @@ mod tests {
         assert_eq!(document.report().comments, expected.comments);
         assert_eq!(document.report(), &expected);
         assert_eq!(document.safe_checkpoints(), expected_checkpoints);
+    }
+
+    /// Ruby reads a source-encoding declaration out of the same two lines
+    /// Python does, and only while scanning from offset 0, so the start of line
+    /// 2 is a restart point for it under exactly the same condition. A rescan
+    /// that restarted there anyway would demote `# coding:` from `Encoding`
+    /// (kept) to a plain line comment (removed).
+    #[test]
+    fn a_rescan_never_demotes_a_second_line_ruby_encoding_declaration() {
+        let source = b"value = 1\n# coding: latin-1\ntail = 2\n".to_vec();
+        let mut document =
+            IncrementalDocument::new(source, Language::Ruby, ScanOptions::default(), 1);
+        /* NOTE: The edit falls inside the declaration itself, so the last
+         * checkpoint before it is the start of line 2 — the one offset this
+         * rule exists to refuse. */
+        document
+            .apply_changes(
+                &[DocumentChange {
+                    span: ByteSpan::new(26, 27),
+                    replacement: b"2".to_vec(),
+                }],
+                2,
+            )
+            .unwrap();
+        let (expected, expected_checkpoints) =
+            scan_with_checkpoints(document.source(), Language::Ruby, ScanOptions::default(), 0);
+        assert_eq!(
+            document.report().comments[0].kind,
+            crate::CommentKind::Encoding,
+            "{:?}",
+            document.report().comments,
+        );
+        assert_eq!(document.report(), &expected);
+        assert_eq!(document.safe_checkpoints(), expected_checkpoints);
+    }
+
+    /// A here document body and an embedded document are two Ruby states whose
+    /// lines say nothing about themselves: the `#` at the head of one is a byte
+    /// of the value, and the line that decides so sits above it. Neither offers
+    /// a restart point, so the checkpoints of such a file are the line starts
+    /// outside them and nothing else.
+    #[test]
+    fn a_ruby_line_start_inside_an_opaque_construct_is_no_restart_point() {
+        let heredoc = IncrementalDocument::new(
+            b"a = <<~EOS\n  # opaque\n  EOS\nb = 2\n".to_vec(),
+            Language::Ruby,
+            ScanOptions::default(),
+            1,
+        );
+        assert_eq!(heredoc.safe_checkpoints(), [0, 28, 34]);
+
+        let document = IncrementalDocument::new(
+            b"=begin\n# opaque\n=end\nb = 2\n".to_vec(),
+            Language::Ruby,
+            ScanOptions::default(),
+            1,
+        );
+        assert_eq!(document.safe_checkpoints(), [0, 21, 27]);
+
+        /* NOTE: The DATA section behind the marker is not source at all, so the
+         * marker's own line break is the last restart point there is. */
+        let data = IncrementalDocument::new(
+            b"a = 1\n__END__\nnot source\n".to_vec(),
+            Language::Ruby,
+            ScanOptions::default(),
+            1,
+        );
+        assert_eq!(data.safe_checkpoints(), [0, 6]);
     }
 
     /// Regression: `safe_start` was chosen from the *previous* document's

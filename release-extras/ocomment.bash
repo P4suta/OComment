@@ -186,7 +186,7 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
@@ -244,7 +244,7 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
@@ -302,7 +302,7 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
@@ -360,7 +360,7 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
@@ -418,7 +418,7 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
@@ -476,7 +476,7 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
@@ -534,7 +534,7 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
@@ -886,7 +886,7 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
@@ -944,7 +944,7 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
@@ -1002,7 +1002,7 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
@@ -1060,7 +1060,7 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
@@ -1118,7 +1118,7 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
@@ -1188,7 +1188,7 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
@@ -1358,7 +1358,7 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
@@ -1416,7 +1416,7 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
@@ -1474,7 +1474,7 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
@@ -1532,7 +1532,7 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
@@ -1590,7 +1590,7 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
@@ -1648,7 +1648,7 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
@@ -1706,7 +1706,7 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)

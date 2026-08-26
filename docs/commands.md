@@ -121,6 +121,7 @@ Policy:
           - lua:        Lua chunks and LuaRocks rockspecs
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
+          - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -307,6 +308,7 @@ Policy:
           - lua:        Lua chunks and LuaRocks rockspecs
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
+          - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -478,6 +480,7 @@ Policy:
           - lua:        Lua chunks and LuaRocks rockspecs
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
+          - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -641,6 +644,7 @@ Policy:
           - lua:        Lua chunks and LuaRocks rockspecs
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
+          - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -804,6 +808,7 @@ Policy:
           - lua:        Lua chunks and LuaRocks rockspecs
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
+          - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -957,6 +962,7 @@ Policy:
           - lua:        Lua chunks and LuaRocks rockspecs
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
+          - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1110,6 +1116,7 @@ Policy:
           - lua:        Lua chunks and LuaRocks rockspecs
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
+          - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1279,6 +1286,7 @@ Policy:
           - lua:        Lua chunks and LuaRocks rockspecs
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
+          - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1439,6 +1447,7 @@ Policy:
           - lua:        Lua chunks and LuaRocks rockspecs
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
+          - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1592,6 +1601,7 @@ Policy:
           - lua:        Lua chunks and LuaRocks rockspecs
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
+          - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1754,6 +1764,7 @@ Policy:
           - lua:        Lua chunks and LuaRocks rockspecs
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
+          - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1920,6 +1931,7 @@ Policy:
           - lua:        Lua chunks and LuaRocks rockspecs
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
+          - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2077,6 +2089,7 @@ Policy:
           - lua:        Lua chunks and LuaRocks rockspecs
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
+          - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2230,6 +2243,7 @@ Policy:
           - lua:        Lua chunks and LuaRocks rockspecs
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
+          - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2387,6 +2401,7 @@ Policy:
           - lua:        Lua chunks and LuaRocks rockspecs
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
+          - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2544,6 +2559,7 @@ Policy:
           - lua:        Lua chunks and LuaRocks rockspecs
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
+          - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2701,6 +2717,7 @@ Policy:
           - lua:        Lua chunks and LuaRocks rockspecs
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
+          - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2860,6 +2877,7 @@ Policy:
           - lua:        Lua chunks and LuaRocks rockspecs
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
+          - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -3013,6 +3031,7 @@ Policy:
           - lua:        Lua chunks and LuaRocks rockspecs
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
+          - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -3166,6 +3185,7 @@ Policy:
           - lua:        Lua chunks and LuaRocks rockspecs
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
+          - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
 
       --dialect <DIALECT>
           Force this dialect of the selected language

@@ -7,7 +7,7 @@ All notable changes to OComment will be documented here. The project follows
 
 ### Added
 
-- Byte-oriented scanners and transformations for 19 built-in languages and the
+- Byte-oriented scanners and transformations for 20 built-in languages and the
   documented dialects.
 - CLI, staged Git fixes, LSP 3.18 server, declarative profiles, and sandboxed
   WASM component plugins.
@@ -67,7 +67,7 @@ All notable changes to OComment will be documented here. The project follows
   for the OCaml reference. `CONTRIBUTING.md` documents the tags.
 - An official VS Code extension, `P4suta.ocomment`, under `editors/vscode`. It
   is a client only: it launches the separately installed `ocomment lsp`,
-  attaches it to the twenty-four language identifiers OComment scans, and
+  attaches it to the twenty-five language identifiers OComment scans, and
   exposes the server's quick fixes, `source.fixAll.ocomment`, code lens, and
   pull diagnostics, plus `OComment: Remove comments in file`, `... in
   workspace`, `OComment: Restart server`, `OComment: Show output`, and a status
@@ -173,6 +173,28 @@ All notable changes to OComment will be documented here. The project follows
   `docs/languages.md` says out loud. It is also the only place an editor may
   restart a scan from, because which mode a byte sits in is decided by
   everything above it, so a file that is all PHP is rescanned from the top.
+- Ruby is a built-in language, scanned by a lexer of its own. Four of Ruby's
+  tokens are spelled with a byte that is also an operator, and only where the
+  token stands decides which, so the scanner keeps the three states Ruby's own
+  lexer answers those questions from: `/` is a regular expression where a value
+  is expected and division after an operand, `%` opens `%q %Q %w %W %i %I %s %r
+  %x` and the bare `%(...)` in the first place and is modulo in the second, `?`
+  is a one-character string or the ternary operator, and `<<` opens a here
+  document or appends — with a bare word between the two, where white space in
+  front and none behind makes `puts /x/` a pattern and `a <<EOS` a here
+  document. `#` opens the only one-line form; `=begin` and `=end` at column zero
+  delimit an embedded document; a `__END__` alone on its line ends the source
+  and leaves the DATA section behind it opaque. Single-quoted, backtick,
+  symbol, character, percent, regular-expression and here-document literals all
+  hide a `#`, and the interpolating ones read `#{ ... }` as code, so a comment
+  written inside one is a comment. A `#!` line at the first byte is a preamble
+  and a `coding:` declaration in the first two lines is an encoding, the same
+  two positional rules Python has; `# frozen_string_literal:`, `# warn_indent:`,
+  `# shareable_constant_value:`, `# rubocop:`, `# standard:` and `# typed:` are
+  directives a removal keeps. `.rb` and its eight siblings select it, as do the
+  fourteen project files named after the tool that reads them — `Gemfile`,
+  `Rakefile`, `Vagrantfile` and the rest — and a `ruby`, `jruby` or
+  `truffleruby` `#!` line.
 - `tools/fuzz_differential.py`, an on-demand cross-implementation fuzz. It
   builds random sources out of the delimiters, escapes, quotes and directive
   words the built-in scanners care about, asks both implementations across
@@ -493,3 +515,29 @@ All notable changes to OComment will be documented here. The project follows
   the wall time. CI runs the corpus and both enumerated sweeps in full and cuts
   only the pseudo-random set, whose cost is linear and whose value is not; the
   whole 2400 is one command away.
+- A Ruby here document opened inside an interpolation takes the lines under the
+  line it was written on. `puts "#{ <<EOS }"` queued the body on the
+  interpolation's own scan, which the `}` returned from and dropped, so the body
+  was read as code and a `#` line inside it was reported as a comment and
+  removed. The queue now belongs to the physical line rather than to the scan
+  reading it: openers are consumed left to right across the whole line whether
+  they stand before an interpolation, inside one, inside a nested one, or inside
+  an interpolation on another here document's body line — the order Ruby 3.3.12
+  `Ripper.lex` gives — and it is drained wherever the lexer meets the line
+  break, so a break inside an interpolation drains the openers written before it
+  too. Eight cases in `spec/fixtures/v1/hazards.json` pin the shapes, each with
+  the `Ripper.lex` output it was recorded against. The OCaml reference agrees.
+- The two corpus runners hold `spec/fixtures/v1` to the same floors. Each
+  carried its own copy of the numbers and they had drifted apart —
+  `tools/differential.py` required 308 cases and
+  `rust/ocomment-core/tests/spec_fixtures.rs` 306 — so two cases could have gone
+  missing without either runner saying so. Both now read
+  `spec/fixtures/v1/floor.txt`, which is the only place the numbers are written.
+- The randomised property suites draw from one alphabet. `src/incremental.rs`
+  said its pool was the one in `tests/properties.rs` and that the two were meant
+  to stay the same list; they were not, and the incremental suite was missing
+  sixteen of the multi-byte openers the whole-file suite had — every Lua long
+  bracket, every triple-quoted string, and every PHP fragment among them, which
+  are exactly the states a restart must never land inside. Both now draw from
+  `ocomment_core::lexical_pool`, which also carries the Ruby interpolation
+  boundary a here document header may be written across.

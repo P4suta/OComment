@@ -16,13 +16,18 @@ Two consumers read it, and both must pass:
   That says *what* they agree on.
 
 Both also check a case's `expect` block, and both refuse to run a corpus that
-has shrunk: `MINIMUM_CASES` in each is the floor the other repeats, and
-`MINIMUM_EXPECTATIONS` in the Rust test is the floor for how many of those
-cases carry a recorded expectation.
+has shrunk. The floors live in `v1/floor.txt` and nowhere else, so the two
+runners cannot drift apart: `cases` is the least number of cases the corpus may
+hold, and `expectations` the least number of those that must carry a recorded
+expectation. `differential.py` enforces `cases` and requires `expectations` to
+be present but does not enforce it — it is also the runner that *records* a
+missing block, and a floor it enforced would refuse to run on the way to
+putting one back. The Rust test, which never records, enforces both.
 
 Two documents are in `v1/` today. The split is editorial, not structural — the
 loaders concatenate every `*.json` in file-name order and require ids to be
-unique across all of them.
+unique across all of them. `floor.txt` sits beside them and is not a document:
+both loaders read only `*.json`.
 
 - `builtins.json` — one small source per built-in language, under both the
   `safe` and the `all` policy.
@@ -122,11 +127,9 @@ the output when applied in one pass.
 4. Record `expect` with `python3 tools/differential.py --record` once that run
    is green, then run both consumers again.
 
-Raising `MINIMUM_CASES` in `tools/differential.py` and in
-`rust/ocomment-core/tests/spec_fixtures.rs`, and `MINIMUM_EXPECTATIONS` in the
-latter, is optional when adding a case and mandatory when the corpus is
-reorganised: the floors exist so that neither a case nor its recorded
-expectation can quietly disappear.
+Raising `cases` and `expectations` in `v1/floor.txt` is optional when adding a
+case and mandatory when the corpus is reorganised: the floors exist so that
+neither a case nor its recorded expectation can quietly disappear.
 
 ## Recording an `expect` block
 

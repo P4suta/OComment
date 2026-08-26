@@ -2728,3 +2728,918 @@ fn php_layouts_leave_a_line_columns_or_nothing() {
     );
     assert_eq!(compact.output, b"<?php\n$x = 1;\n");
 }
+
+/// Ruby 3.3 doc/syntax/comments.rdoc: `#` runs to the end of the line, an
+/// embedded document runs from a `=begin` at column zero to the matching
+/// `=end`, and everything past a `__END__` alone on its line is the DATA
+/// section rather than source.
+#[test]
+fn ruby_comment_forms_carry_their_kinds() {
+    let source =
+        b"# line\n=begin\ndocument\n=end\nx = 1 # trailing\n__END__\n# data, not a comment\n";
+    let report = scan(source, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    let kinds: Vec<CommentKind> = report.comments.iter().map(|comment| comment.kind).collect();
+    assert_eq!(
+        kinds,
+        [CommentKind::Line, CommentKind::Block, CommentKind::Line],
+        "{:?}",
+        report.comments
+    );
+    assert_eq!(
+        report.comments[1].span,
+        ByteSpan::new(
+            offset_of(source, b"=begin"),
+            offset_of(source, b"\nx = 1 # trailing")
+        )
+    );
+    assert_eq!(removable(&report), 3);
+    let stripped = transform(source, Language::Ruby, TransformOptions::default());
+    assert_eq!(
+        stripped.output,
+        b"\n\n\n\nx = 1 \n__END__\n# data, not a comment\n"
+    );
+}
+
+/// Both markers of an embedded document sit at column zero, and `__END__` is
+/// the DATA marker only when it is the whole line. Anywhere else the bytes are
+/// the `=` operator and an ordinary identifier.
+#[test]
+fn a_ruby_embedded_document_and_data_marker_need_their_own_line() {
+    let indented = b"x = 1\n  =begin\n# note\n";
+    let report = scan(indented, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(
+        report.comments[0].span.start,
+        offset_of(indented, b"# note")
+    );
+
+    let word = b"=beginner = 1 # note\n";
+    let report = scan(word, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span.start, offset_of(word, b"# note"));
+
+    let inline = b"__END__ x\n# note\n";
+    let report = scan(inline, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span.start, offset_of(inline, b"# note"));
+
+    let marker = b"x = 1\n__END__\n# data\n";
+    let report = scan(marker, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert!(report.comments.is_empty(), "{:?}", report.comments);
+}
+
+/// Ruby 3.3 literals.rdoc: every literal below carries a `#` as one of its own
+/// bytes, so the only comment in each source is the one written after it.
+#[test]
+fn ruby_literals_hide_comment_openers() {
+    let cases: &[&[u8]] = &[
+        b"x = 'a # opaque'  # remove\n",
+        b"x = \"a # opaque\"  # remove\n",
+        b"x = `echo # opaque`  # remove\n",
+        b"x = :\"a # opaque\"  # remove\n",
+        b"x = :'a # opaque'  # remove\n",
+        b"x = ?#  # remove\n",
+        b"x = %q(a # opaque)  # remove\n",
+        b"x = %Q[a # opaque]  # remove\n",
+        b"x = %(a # opaque)  # remove\n",
+        b"x = %w[a # opaque]  # remove\n",
+        b"x = %W{a # opaque}  # remove\n",
+        b"x = %i(a # opaque)  # remove\n",
+        b"x = %I(a # opaque)  # remove\n",
+        b"x = %s(a # opaque)  # remove\n",
+        b"x = %x(echo # opaque)  # remove\n",
+        b"x = %r{a # opaque}  # remove\n",
+        b"x = /a # opaque/  # remove\n",
+        b"x = <<~EOS\n  a # opaque\nEOS\n# remove\n",
+    ];
+    for source in cases {
+        let report = scan(source, Language::Ruby, ScanOptions::default());
+        assert!(report.valid, "{source:?}: {:?}", report.diagnostics);
+        assert_eq!(
+            report.comments.len(),
+            1,
+            "{source:?}: {:?}",
+            report.comments
+        );
+        assert_eq!(
+            report.comments[0].span.start,
+            offset_of(source, b"# remove"),
+            "{source:?}"
+        );
+        assert_eq!(removable(&report), 1, "{source:?}");
+    }
+}
+
+/// Ruby 3.3 literals.rdoc, Interpolation: the expression inside `#{}` is code,
+/// so a `#` written in it opens a real comment, and the brace that ends the
+/// interpolation is the one that balances it.
+#[test]
+fn a_ruby_interpolation_holds_real_comments() {
+    let source = b"x = \"a#{ 1 + # inner\n  2 }b\" # trailing\n";
+    let report = scan(source, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 2, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span.start, offset_of(source, b"# inner"));
+    assert_eq!(
+        report.comments[1].span.start,
+        offset_of(source, b"# trailing")
+    );
+    assert_eq!(removable(&report), 2);
+
+    let nested = b"x = \"a#{ \"b#{ c # deep\n }d\" }e\" # trailing\n";
+    let report = scan(nested, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 2, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span.start, offset_of(nested, b"# deep"));
+    assert_eq!(
+        report.comments[1].span.start,
+        offset_of(nested, b"# trailing")
+    );
+}
+
+/// Ruby's `parse_qmark`: a `?` where a value is expected and a single
+/// character behind it is a character literal; a `?` after an operand is the
+/// ternary operator; and a `?` that touches the identifier before it belongs
+/// to the method name, so the byte after it can still open a comment.
+#[test]
+fn a_ruby_question_mark_opens_a_character_literal_only_in_value_position() {
+    let method = b"puts x.empty?# note\n";
+    let report = scan(method, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span.start, offset_of(method, b"# note"));
+
+    let ternary = b"y = a ? b : c # note\n";
+    let report = scan(ternary, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span.start, offset_of(ternary, b"# note"));
+
+    let literals = b"a = ?a\nb = ?\\n\nc = ?\\u{1F600}\nd = ?'\n# note\n";
+    let report = scan(literals, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(
+        report.comments[0].span.start,
+        offset_of(literals, b"# note")
+    );
+
+    /* NOTE: An alphanumeric with an identifier character behind it is a
+     * ternary and not a two-character literal, which is what keeps `a ?bc : d`
+     * out of the literal path. */
+    let word = b"a = b ?cd : e # note\n";
+    let report = scan(word, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span.start, offset_of(word, b"# note"));
+}
+
+/// Ruby's `parse_gvar`: a `$` followed by one of the punctuation names is a
+/// global variable, so the quote of `$"` opens no string. `#` is not one of
+/// those names, which leaves `$#` a `$` and then a comment.
+#[test]
+fn a_ruby_global_variable_swallows_the_punctuation_that_names_it() {
+    let punctuation = b"a = $\"\nb = $'\nc = $/\nd = $\\\ne = $;\n# note\n";
+    let report = scan(punctuation, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(
+        report.comments[0].span.start,
+        offset_of(punctuation, b"# note")
+    );
+
+    let hash = b"a = $# note\n";
+    let report = scan(hash, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span.start, offset_of(hash, b"# note"));
+}
+
+/// Ruby's `parse_percent`: `%` opens a literal where a value is expected, and
+/// after an operand it is the modulo operator. A bracket delimiter nests, and
+/// the interpolating forms honour `#{}`.
+#[test]
+fn a_ruby_percent_opens_a_literal_only_where_a_value_is_expected() {
+    let nested = b"a = %w[x [y] # opaque]\n# note\n";
+    let report = scan(nested, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span.start, offset_of(nested, b"# note"));
+
+    let interpolating = b"a = %r{x#{ y # inner\n }z}\n# note\n";
+    let report = scan(interpolating, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 2, "{:?}", report.comments);
+    assert_eq!(
+        report.comments[0].span.start,
+        offset_of(interpolating, b"# inner")
+    );
+
+    for modulo in [
+        b"a = b % c # note\n".as_slice(),
+        b"a = b%c # note\n".as_slice(),
+        b"a = b %= c # note\n".as_slice(),
+    ] {
+        let report = scan(modulo, Language::Ruby, ScanOptions::default());
+        assert!(report.valid, "{modulo:?}: {:?}", report.diagnostics);
+        assert_eq!(
+            report.comments.len(),
+            1,
+            "{modulo:?}: {:?}",
+            report.comments
+        );
+        assert_eq!(
+            report.comments[0].span.start,
+            offset_of(modulo, b"# note"),
+            "{modulo:?}"
+        );
+    }
+}
+
+/// Ruby's `parse_percent` again, for the one form a delimiter cannot be told
+/// from an operator by its own byte: `% ` opens a `%Q` literal delimited by a
+/// space, but only where a value is expected. The next space closes it, so the
+/// `#` it hides is the one written inside the word.
+#[test]
+fn a_ruby_percent_space_literal_opens_only_where_a_value_is_expected() {
+    let literal = b"a = % x#opaque # note\n";
+    let report = scan(literal, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span.start, offset_of(literal, b"# note"));
+
+    let operator = b"a = b % c # note\n";
+    let report = scan(operator, Language::Ruby, ScanOptions::default());
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(
+        report.comments[0].span.start,
+        offset_of(operator, b"# note")
+    );
+}
+
+/// Ruby's `parse_slash`: `/` opens a regular expression where a value is
+/// expected and after a command name with a space in front of it and none
+/// behind it; after an operand it is division. A `/` inside a character class
+/// is one of the pattern's own bytes.
+#[test]
+fn a_ruby_slash_opens_a_regular_expression_only_where_a_value_is_expected() {
+    let value = b"a = /x # opaque/\n# note\n";
+    let report = scan(value, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span.start, offset_of(value, b"# note"));
+
+    let command = b"puts /x # opaque/\n# note\n";
+    let report = scan(command, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span.start, offset_of(command, b"# note"));
+
+    let class = b"a = /[/] # opaque/i\n# note\n";
+    let report = scan(class, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span.start, offset_of(class, b"# note"));
+
+    for division in [
+        b"a = b / c # note\n".as_slice(),
+        b"a = b/c # note\n".as_slice(),
+        b"a = b /= c # note\n".as_slice(),
+    ] {
+        let report = scan(division, Language::Ruby, ScanOptions::default());
+        assert!(report.valid, "{division:?}: {:?}", report.diagnostics);
+        assert_eq!(
+            report.comments.len(),
+            1,
+            "{division:?}: {:?}",
+            report.comments
+        );
+        assert_eq!(
+            report.comments[0].span.start,
+            offset_of(division, b"# note"),
+            "{division:?}"
+        );
+    }
+}
+
+/// Ruby 3.3 literals.rdoc, Here Document Literals: a body is opaque up to its
+/// own terminator, which sits at column zero unless `<<-` or `<<~` allowed it
+/// to be indented; a quoted terminator turns interpolation off; and the bodies
+/// of several here documents opened on one line follow that line in order.
+#[test]
+fn ruby_heredocs_are_opaque_up_to_their_own_terminator() {
+    let plain = b"a = <<EOS\n  EOS # opaque\nEOS\n# note\n";
+    let report = scan(plain, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span.start, offset_of(plain, b"# note"));
+
+    let squiggly = b"a = <<~EOS\n  body # opaque\n  EOS\n# note\n";
+    let report = scan(squiggly, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(
+        report.comments[0].span.start,
+        offset_of(squiggly, b"# note")
+    );
+
+    let quoted = b"a = <<~'EOS'\n  #{ x } # opaque\n  EOS\n# note\n";
+    let report = scan(quoted, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span.start, offset_of(quoted, b"# note"));
+
+    let interpolating = b"a = <<~EOS\n  #{ x # inner\n  } # opaque\n  EOS\n# note\n";
+    let report = scan(interpolating, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 2, "{:?}", report.comments);
+    assert_eq!(
+        report.comments[0].span.start,
+        offset_of(interpolating, b"# inner")
+    );
+    assert_eq!(
+        report.comments[1].span.start,
+        offset_of(interpolating, b"# note")
+    );
+
+    let two = b"a(<<~A, <<~B)\n  one # opaque\n  A\n  two # opaque\n  B\n# note\n";
+    let report = scan(two, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span.start, offset_of(two, b"# note"));
+}
+
+/// A here document header may stand inside an interpolation, and the body it
+/// opens is still taken from the lines under the *physical* line the header was
+/// written on. Ruby's lexer holds one queue of pending here documents for the
+/// line it is reading and drains it when that line ends, so an opener inside
+/// `#{ ... }` joins the same queue as one outside it and the queue drains left
+/// to right across the whole line, interpolation boundaries included.
+///
+/// Ground truth, Ruby 3.3.12 `Ripper.lex`:
+///
+/// - `puts "#{ <<EOS }"` then `# not a comment` then `EOS` lexes as
+///   `on_heredoc_beg "<<EOS"`, `on_embexpr_end "}"`, `on_tstring_end`,
+///   `on_nl`, `on_tstring_content "# not a comment\n"`, `on_heredoc_end
+///   "EOS\n"`. The body line is content, not code, so its `#` opens nothing.
+/// - `puts "#{ [<<A, <<B] }"` takes the two bodies in header order: the lines
+///   under it lex as `on_tstring_content "# a body\n"`, `on_heredoc_end "A\n"`,
+///   `on_tstring_content "# b body\n"`, `on_heredoc_end "B\n"`.
+/// - `x(<<A, "#{<<B}")` mixes the two positions on one line and Ripper still
+///   reads `A` first and `B` second, which is left-to-right across the line
+///   rather than outermost-first.
+/// - `puts "#{ "#{<<A}" }"` reaches the header through two interpolations and
+///   `on_heredoc_end "A\n"` still closes the body on the next line.
+/// - `puts "#{ <<~'A' }"` and `puts "#{ <<-"B" }"` carry the squiggly and the
+///   quoted forms through the same boundary: `on_heredoc_beg "<<~'A'"` and
+///   `on_heredoc_beg "<<-\"B\""`, each with an indented `on_heredoc_end`.
+#[test]
+fn a_ruby_heredoc_opened_inside_an_interpolation_takes_the_lines_under_the_line() {
+    let single = b"puts \"#{ <<EOS }\"\n# not a comment\nEOS\n# note\n";
+    let report = scan(single, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span.start, offset_of(single, b"# note"));
+    let stripped = transform(single, Language::Ruby, TransformOptions::default());
+    assert_eq!(
+        stripped.output,
+        b"puts \"#{ <<EOS }\"\n# not a comment\nEOS\n\n"
+    );
+
+    let two = b"puts \"#{ [<<A, <<B] }\"\n# a body\nA\n# b body\nB\n# note\n";
+    let report = scan(two, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span.start, offset_of(two, b"# note"));
+
+    let straddling = b"x(<<A, \"#{<<B}\")\n# a body\nA\n# b body\nB\n# note\n";
+    let report = scan(straddling, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(
+        report.comments[0].span.start,
+        offset_of(straddling, b"# note")
+    );
+
+    let nested = b"puts \"#{ \"#{<<A}\" }\"\n# a body\nA\n# note\n";
+    let report = scan(nested, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span.start, offset_of(nested, b"# note"));
+
+    let squiggly = b"puts \"#{ <<~'A' }\"\n  # not a comment\n  A\n# note\n";
+    let report = scan(squiggly, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(
+        report.comments[0].span.start,
+        offset_of(squiggly, b"# note")
+    );
+
+    let quoted = b"puts \"#{ <<-\"B\" }\"\n  # not a comment\n  B\n# note\n";
+    let report = scan(quoted, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span.start, offset_of(quoted, b"# note"));
+
+    let crlf = b"puts \"#{ <<EOS }\"\r\n# not a comment\r\nEOS\r\n# note\r\n";
+    let report = scan(crlf, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span.start, offset_of(crlf, b"# note"));
+}
+
+/// The queue belongs to the physical line, so a here document opened inside an
+/// interpolation written on the *body line of another here document* is read
+/// from the line under that body line, and the outer body resumes only once the
+/// inner one has closed.
+///
+/// Ground truth, Ruby 3.3.12 `Ripper.lex` of
+/// `"puts <<A\nx #{<<B}\nA\nB\n# a body\nA\n# note\n"`: `on_heredoc_beg "<<A"`,
+/// `on_tstring_content "x "`, `on_embexpr_beg`, `on_heredoc_beg "<<B"`,
+/// `on_embexpr_end`, `on_tstring_content "\n"`, then `on_tstring_content "A\n"`
+/// — line 3 is *B's* body, not A's terminator — `on_heredoc_end "B\n"`,
+/// `on_tstring_content "# a body\n"` back in A's body, `on_heredoc_end "A\n"`,
+/// and only then `on_comment "# note\n"`.
+///
+/// A scanner that drops the opener reads line 3 as A's terminator instead, and
+/// `# a body` becomes a comment it would remove.
+#[test]
+fn a_ruby_heredoc_opened_in_a_body_line_interpolation_is_read_before_that_body_resumes() {
+    let source = b"puts <<A\nx #{<<B}\nA\nB\n# a body\nA\n# note\n";
+    let report = scan(source, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span.start, offset_of(source, b"# note"));
+    let stripped = transform(source, Language::Ruby, TransformOptions::default());
+    assert_eq!(
+        stripped.output,
+        b"puts <<A\nx #{<<B}\nA\nB\n# a body\nA\n\n"
+    );
+}
+
+/// The drain happens at the line break, wherever the lexer stands when it
+/// reaches one, so a break *inside* the interpolation drains the whole queue —
+/// the openers written before the interpolation included — and the
+/// interpolation resumes underneath the bodies.
+///
+/// Ground truth, Ruby 3.3.12 `Ripper.lex` of
+/// `"x(<<A, \"#{<<B\n})\n# ??? body\nA\n# b body\nB\nputs 2 # inner\n"`:
+/// `on_heredoc_beg "<<A"`, `on_heredoc_beg "<<B"`, `on_nl`, then
+/// `on_tstring_content "})\n# ??? body\n"` — A's body, which swallows the `}`
+/// that would have closed the interpolation — `on_heredoc_end "A\n"`,
+/// `on_tstring_content "# b body\n"`, `on_heredoc_end "B\n"`, and the
+/// interpolation runs on to the end of the file, which `ruby -c` reports as
+/// `unterminated string meets end of file`.
+#[test]
+fn a_ruby_line_break_inside_an_interpolation_drains_the_whole_queue() {
+    let source = b"x(<<A, \"#{<<B\n})\n# ??? body\nA\n# b body\nB\nputs 2 # inner\n";
+    let report = scan(source, Language::Ruby, ScanOptions::default());
+    assert!(!report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span.start, offset_of(source, b"# inner"));
+    let codes: Vec<&str> = report
+        .diagnostics
+        .iter()
+        .map(|diagnostic| diagnostic.code.as_str())
+        .collect();
+    assert_eq!(
+        codes,
+        ["unterminated-interpolation", "unterminated-string"],
+        "{:?}",
+        report.diagnostics
+    );
+}
+
+/// The same `<<` is the append operator after an operand, and a here document
+/// header where a value is expected. `a << b` is a shift because a space
+/// stands where the terminator would have to begin; `a <<b` is the here
+/// document that spacing exists to avoid.
+#[test]
+fn a_ruby_shift_operator_is_told_from_a_heredoc_by_where_it_stands() {
+    let shift = b"a = b\na << c # note\nd = [1] << 2 # note\n";
+    let report = scan(shift, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 2, "{:?}", report.comments);
+    assert_eq!(removable(&report), 2);
+
+    let tight = b"a <<c\n# opaque\nc\n# note\n";
+    let report = scan(tight, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span.start, offset_of(tight, b"# note"));
+}
+
+/// Ruby's `heredoc_identifier` reads an unquoted terminator as a run of
+/// `is_identchar` bytes, and a digit is one of those from the first byte on, so
+/// `puts <<2` opens a here document terminated by a line reading `2` and
+/// everything between the two is body.
+///
+/// Ground truth, Ruby 3.3.12 `Ripper.lex`: `"puts <<2\n# not a comment\n2\n"`
+/// lexes as `on_heredoc_beg "<<2"`, `on_tstring_content "# not a comment\n"`,
+/// `on_heredoc_end "2\n"`, and the same holds for `<<-2`, `<<~2`, `<<0` and the
+/// digit-led `<<9x`. Where the `<<` follows an operand — `a[0] <<2`, `p 1 <<2`,
+/// `@x <<2` — Ripper reads `on_op "<<"` and `on_int "2"`, which is the shift
+/// this scanner's `End` state already gives.
+#[test]
+fn a_ruby_heredoc_terminator_may_be_spelled_with_digits() {
+    let command = b"puts <<2\n# not a comment\n2\n# note\n";
+    let report = scan(command, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span.start, offset_of(command, b"# note"));
+
+    let line_start = b"<<2\n# not a comment\n2\n# note\n";
+    let report = scan(line_start, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(
+        report.comments[0].span.start,
+        offset_of(line_start, b"# note")
+    );
+
+    let assigned = b"x = <<0\n# not a comment\n0\n# note\n";
+    let report = scan(assigned, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(
+        report.comments[0].span.start,
+        offset_of(assigned, b"# note")
+    );
+
+    let dashed = b"puts <<-2\n# not a comment\n   2\n# note\n";
+    let report = scan(dashed, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span.start, offset_of(dashed, b"# note"));
+
+    let squiggly = b"puts <<~2\n  # not a comment\n  2\n# note\n";
+    let report = scan(squiggly, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(
+        report.comments[0].span.start,
+        offset_of(squiggly, b"# note")
+    );
+
+    let digit_led = b"puts <<9x\n# not a comment\n9x\n# note\n";
+    let report = scan(digit_led, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(
+        report.comments[0].span.start,
+        offset_of(digit_led, b"# note")
+    );
+
+    /* NOTE: A digit terminator changes nothing about where a `<<` may open one.
+     * After an operand it is still the shift operator, so the rest of each of
+     * these lines is code and the comment on it is a comment. */
+    for shift in [
+        b"a = [1]\na[0] <<2 # note\n".as_slice(),
+        b"p 1 <<2 # note\n".as_slice(),
+        b"@x <<2 # note\n".as_slice(),
+        b"f() <<2 # note\n".as_slice(),
+    ] {
+        let report = scan(shift, Language::Ruby, ScanOptions::default());
+        assert!(
+            report.valid,
+            "{shift:?} diagnostics: {:?}",
+            report.diagnostics
+        );
+        assert_eq!(report.comments.len(), 1, "{shift:?} {:?}", report.comments);
+        assert_eq!(
+            report.comments[0].span.start,
+            offset_of(shift, b"# note"),
+            "{shift:?}",
+        );
+        assert_eq!(removable(&report), 1, "{shift:?}");
+    }
+}
+
+/// A here document opened on the last line of a file that has no line break of
+/// its own never gets a body, and an unterminated here document is an error
+/// wherever the file runs out — reported from the `<<` that opened it, exactly
+/// as one whose body did start is.
+///
+/// Ground truth, Ruby 3.3.12: `Ripper.sexp("x = <<EOS")` is a syntax error
+/// while `Ripper.lex` still reads `on_heredoc_beg "<<EOS"`.
+#[test]
+fn a_ruby_heredoc_opened_on_an_unterminated_last_line_is_reported() {
+    let source = b"# note\nx = <<EOS";
+    let result = transform(source, Language::Ruby, TransformOptions::default());
+    assert!(
+        !result.report.valid,
+        "diagnostics: {:?}",
+        result.report.diagnostics
+    );
+    assert_eq!(
+        result
+            .report
+            .diagnostics
+            .iter()
+            .map(|diagnostic| (
+                diagnostic.code.as_str(),
+                diagnostic.span.start,
+                diagnostic.span.end
+            ))
+            .collect::<Vec<_>>(),
+        vec![(
+            "unterminated-heredoc",
+            offset_of(source, b"<<EOS"),
+            source.len()
+        )],
+    );
+    assert!(result.edits.is_empty(), "an unterminated file was edited");
+
+    /* NOTE: Two opened on that line report the first, which is the one whose
+     * body the next line would have been — the same choice the scan of a body
+     * that did start makes. */
+    let two = b"a(<<A, <<B)";
+    let report = scan(two, Language::Ruby, ScanOptions::default());
+    assert!(!report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(
+        report
+            .diagnostics
+            .iter()
+            .map(|diagnostic| (diagnostic.code.as_str(), diagnostic.span.start))
+            .collect::<Vec<_>>(),
+        vec![("unterminated-heredoc", offset_of(two, b"<<A"))],
+    );
+}
+
+#[test]
+fn every_unterminated_ruby_construct_stops_a_fix_until_it_is_forced() {
+    let cases: &[(&[u8], &str, &str)] = &[
+        (
+            b"=begin\n# not a comment\n",
+            "unterminated-comment",
+            "unterminated Ruby embedded document",
+        ),
+        (
+            b"x = 'unclosed # not a comment\n",
+            "unterminated-string",
+            "unterminated Ruby single-quoted string",
+        ),
+        (
+            b"x = \"unclosed # not a comment\n",
+            "unterminated-string",
+            "unterminated Ruby double-quoted string",
+        ),
+        (
+            b"x = `unclosed # not a comment\n",
+            "unterminated-string",
+            "unterminated Ruby backtick string",
+        ),
+        (
+            b"x = /unclosed # not a comment\n",
+            "unterminated-string",
+            "unterminated Ruby regular expression",
+        ),
+        (
+            b"x = %w[unclosed # not a comment\n",
+            "unterminated-string",
+            "unterminated Ruby percent literal",
+        ),
+        (
+            b"x = <<~EOS\n# not a comment\n",
+            "unterminated-heredoc",
+            "unterminated Ruby here document",
+        ),
+        /* NOTE: The same here document opened on a last line that has no break
+         * of its own, which never reaches a body at all. */
+        (
+            b"x = <<~EOS",
+            "unterminated-heredoc",
+            "unterminated Ruby here document",
+        ),
+    ];
+    for (source, code, message) in cases {
+        let result = transform(source, Language::Ruby, TransformOptions::default());
+        assert!(!result.report.valid, "{source:?} was accepted");
+        assert_eq!(
+            result
+                .report
+                .diagnostics
+                .iter()
+                .map(|diagnostic| (diagnostic.code.as_str(), diagnostic.message.as_str()))
+                .collect::<Vec<_>>(),
+            vec![(*code, *message)],
+            "{source:?}",
+        );
+        assert!(result.edits.is_empty(), "{source:?} was edited anyway");
+    }
+    /* NOTE: An interpolation that never closes leaves the string it sits in
+     * unterminated too, so both are reported rather than only the outer one. */
+    let interpolation = transform(
+        b"x = \"a#{ 1\n",
+        Language::Ruby,
+        TransformOptions::default(),
+    );
+    assert!(!interpolation.report.valid);
+    assert_eq!(
+        interpolation
+            .report
+            .diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.code.as_str())
+            .collect::<Vec<_>>(),
+        ["unterminated-interpolation", "unterminated-string"],
+    );
+    assert!(interpolation.edits.is_empty());
+
+    let forced = transform(
+        b"# note\nx = 'unclosed\n",
+        Language::Ruby,
+        TransformOptions {
+            scan: ScanOptions {
+                force_invalid: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    );
+    assert!(!forced.report.valid);
+    assert_eq!(forced.output, b"\nx = 'unclosed\n");
+}
+
+/// Every marker a Ruby tool reads out of a comment is kept where an ordinary
+/// comment is removed.
+#[test]
+fn ruby_tool_directives_are_protected() {
+    let source = b"# frozen_string_literal: true\n# warn_indent: true\n# shareable_constant_value: literal\n# typed: strict\n# rubocop:disable Style/Documentation\n# standard:disable Style/StringLiterals\n# ordinary\n";
+    let report = scan(source, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    let kinds: Vec<CommentKind> = report.comments.iter().map(|comment| comment.kind).collect();
+    assert_eq!(
+        kinds,
+        [
+            CommentKind::Directive,
+            CommentKind::Directive,
+            CommentKind::Directive,
+            CommentKind::Directive,
+            CommentKind::Directive,
+            CommentKind::Directive,
+            CommentKind::Line,
+        ],
+        "{:?}",
+        report.comments
+    );
+    assert_eq!(removable(&report), 1);
+    /* NOTE: Each marker carries its own boundary in the colon, so what is left
+     * to get wrong is the front of it: a comment that merely mentions the
+     * instruction is not one. */
+    let prose = b"x = 1\n# a note about rubocop:disable Style/Documentation\n# frozen_string_literalish note\n";
+    let report = scan(prose, Language::Ruby, ScanOptions::default());
+    assert_eq!(removable(&report), 2, "{:?}", report.comments);
+}
+
+/// A `#!` line is a preamble at the first byte of the file and nowhere else,
+/// and a source-encoding declaration only in the first two lines — the same
+/// two positional rules Python has, because Ruby reads the same two lines
+/// (Ruby 3.3, Magic comments).
+#[test]
+fn ruby_preamble_lines_are_kept_by_where_they_sit() {
+    let source = b"#!/usr/bin/env ruby\n# encoding: utf-8\nx = 1\n# coding: utf-8\n";
+    let report = scan(source, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    let kinds: Vec<CommentKind> = report.comments.iter().map(|comment| comment.kind).collect();
+    assert_eq!(
+        kinds,
+        [
+            CommentKind::Shebang,
+            CommentKind::Encoding,
+            CommentKind::Line
+        ],
+        "{:?}",
+        report.comments
+    );
+    assert_eq!(removable(&report), 1);
+
+    let later = b"x = 1\n#!/usr/bin/env ruby\n";
+    let report = scan(later, Language::Ruby, ScanOptions::default());
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].kind, CommentKind::Line);
+
+    let marked = b"\xef\xbb\xbf#!/usr/bin/env ruby\n# -*- coding: utf-8 -*-\n";
+    let report = scan(marked, Language::Ruby, ScanOptions::default());
+    let kinds: Vec<CommentKind> = report.comments.iter().map(|comment| comment.kind).collect();
+    assert_eq!(
+        kinds,
+        [CommentKind::Shebang, CommentKind::Encoding],
+        "{:?}",
+        report.comments
+    );
+}
+
+#[test]
+fn ruby_multi_line_constructs_survive_crlf_line_endings() {
+    let source = b"=begin\r\ndoc\r\n=end\r\nx = <<~EOS\r\n  body # opaque\r\n  EOS\r\n# note\r\n";
+    let report = scan(source, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 2, "{:?}", report.comments);
+    let stripped = transform(source, Language::Ruby, TransformOptions::default());
+    assert_eq!(
+        stripped.output,
+        b"\r\n\r\n\r\nx = <<~EOS\r\n  body # opaque\r\n  EOS\r\n\r\n"
+    );
+
+    let interpolated = b"x = \"a#{ 1 + # inner\r\n  2 }b\"\r\n";
+    let report = scan(interpolated, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(
+        report.comments[0].span,
+        ByteSpan::new(
+            offset_of(interpolated, b"# inner"),
+            offset_of(interpolated, b"\r\n  2 }")
+        )
+    );
+}
+
+#[test]
+fn ruby_is_detected_from_its_extensions_reserved_names_and_shebang() {
+    for name in [
+        "app.rb",
+        "app.rbw",
+        "tasks.rake",
+        "gem.gemspec",
+        "config.ru",
+        "lib.podspec",
+        "show.jbuilder",
+        "tasks.thor",
+        "app.rbi",
+    ] {
+        let found = detect_language(Some(Path::new(name)), b"")
+            .unwrap_or_else(|| panic!("`{name}` is detected as nothing"));
+        assert_eq!(
+            (found.language, found.dialect, found.reason),
+            (Language::Ruby, Dialect::Standard, "extension"),
+            "`{name}`"
+        );
+    }
+    for name in [
+        "Gemfile",
+        "Rakefile",
+        "Guardfile",
+        "Capfile",
+        "Vagrantfile",
+        "Brewfile",
+        "Podfile",
+        "Fastfile",
+        "Appfile",
+        "Berksfile",
+        "Thorfile",
+        "Dangerfile",
+        ".irbrc",
+        ".pryrc",
+    ] {
+        let found = detect_language(Some(Path::new(name)), b"")
+            .unwrap_or_else(|| panic!("`{name}` is detected as nothing"));
+        assert_eq!(
+            (found.language, found.reason),
+            (Language::Ruby, "reserved-filename"),
+            "`{name}`"
+        );
+    }
+    for interpreter in ["ruby", "jruby", "truffleruby"] {
+        let line = format!("#!/usr/bin/env {interpreter}\n");
+        let piped = detect_language(None, line.as_bytes())
+            .unwrap_or_else(|| panic!("`{line:?}` is detected as nothing"));
+        assert_eq!(
+            (piped.language, piped.reason),
+            (Language::Ruby, "shebang"),
+            "`{interpreter}`"
+        );
+    }
+}
+
+#[test]
+fn ruby_layouts_leave_a_line_columns_or_nothing() {
+    let source = b"# alone\nx = 1 # trailing\n";
+    let lines = transform(source, Language::Ruby, TransformOptions::default());
+    assert_eq!(lines.output, b"\nx = 1 \n");
+    let columns = transform(
+        source,
+        Language::Ruby,
+        TransformOptions {
+            layout: Layout::Columns,
+            ..Default::default()
+        },
+    );
+    let padded = format!("{}\nx = 1 {}\n", " ".repeat(7), " ".repeat(10));
+    assert_eq!(columns.output, padded.as_bytes());
+    let compact = transform(
+        source,
+        Language::Ruby,
+        TransformOptions {
+            layout: Layout::Compact,
+            ..Default::default()
+        },
+    );
+    assert_eq!(compact.output, b"x = 1\n");
+}

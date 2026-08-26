@@ -7,8 +7,8 @@
 //! where the promise says they do and nowhere else.
 
 use ocomment_core::{
-    ByteSpan, CommentKind, Language, Layout, Policy, ScanOptions, TransformOptions, apply_edits,
-    transform, transform_spans,
+    ByteSpan, CommentKind, Disposition, Language, Layout, Policy, ScanOptions, TransformOptions,
+    apply_edits, transform, transform_spans,
 };
 use proptest::prelude::*;
 
@@ -321,6 +321,103 @@ fn external_spans_with_blanks_between_them_stay_non_overlapping() {
     }
     assert_eq!(apply_edits(source, &result.edits), result.output);
     assert_eq!(result.output, b"x\n\nb");
+}
+
+/// The half-open span of `needle`, which must occur exactly once in `source`.
+fn only_span(source: &[u8], needle: &[u8]) -> ByteSpan {
+    let mut found = source
+        .windows(needle.len())
+        .enumerate()
+        .filter(|(_, window)| *window == needle)
+        .map(|(start, _)| start);
+    let start = found
+        .next()
+        .unwrap_or_else(|| panic!("`{}` is not in the source", String::from_utf8_lossy(needle)));
+    assert_eq!(
+        found.next(),
+        None,
+        "`{}` occurs more than once",
+        String::from_utf8_lossy(needle)
+    );
+    ByteSpan::new(start, start + needle.len())
+}
+
+/// The hand-off gets the positional keep a built-in scan gets.
+///
+/// A YAML block scalar reads the lines below it, so the comment that ends one
+/// is not commentary: take its line and the kept directive under it is handed
+/// back to the body. The bytes of that comment say nothing about this, so an
+/// external scanner cannot classify it — `transform_spans` has to apply the
+/// rule itself. It has to under every layout, because the least any of them can
+/// leave in place of that line is a blank one, and a blank line is content of
+/// the body above it whatever its indentation.
+#[test]
+fn external_spans_keep_the_comment_a_yaml_block_scalar_leans_on() {
+    let source =
+        b"a: 1 # trailing note\nk: |\n  body\n# ends the block\n  # yamllint disable\nz: 1\n";
+    let trailing = only_span(source, b"# trailing note");
+    let ends_block = only_span(source, b"# ends the block");
+    let directive = only_span(source, b"# yamllint disable");
+    // NOTE: All three layouts agree about the structural comment and differ
+    // NOTE: only over the trailing note: `columns` pads its width back, `lines`
+    // NOTE: leaves the space in front of it, `compact` trims that space away.
+    let expected: [(Layout, &[u8]); 3] = [
+        (
+            Layout::Lines,
+            b"a: 1 \nk: |\n  body\n# ends the block\n  # yamllint disable\nz: 1\n",
+        ),
+        (
+            Layout::Columns,
+            b"a: 1                \nk: |\n  body\n# ends the block\n  # yamllint disable\nz: 1\n",
+        ),
+        (
+            Layout::Compact,
+            b"a: 1\nk: |\n  body\n# ends the block\n  # yamllint disable\nz: 1\n",
+        ),
+    ];
+    for (layout, output) in expected {
+        let result = transform_spans(
+            source,
+            Language::Yaml,
+            &[
+                (trailing, CommentKind::Line),
+                (ends_block, CommentKind::Line),
+                (directive, CommentKind::Directive),
+            ],
+            TransformOptions {
+                layout,
+                ..TransformOptions::default()
+            },
+        )
+        .expect("the spans are sorted, non-empty and inside the source");
+        assert_eq!(
+            result.report.comments[1].disposition,
+            Disposition::Keep {
+                reason: "structural in a YAML block scalar trail".into()
+            },
+            "{layout:?} let the hand-off remove the comment the block scalar ends at"
+        );
+        assert!(
+            result.edits.iter().all(|edit| edit.span != ends_block),
+            "{layout:?} emitted an edit for it anyway: {:?}",
+            result.edits
+        );
+        // NOTE: The trailing note leans on nothing, so it goes: the pass is the
+        // NOTE: one keep the shape asks for, not a blanket amnesty for YAML.
+        assert_eq!(
+            result.edits.len(),
+            1,
+            "{layout:?} edits: {:?}",
+            result.edits
+        );
+        assert_eq!(result.edits[0].span.end, trailing.end, "{layout:?}");
+        assert_eq!(result.output, output, "{layout:?}");
+        assert_eq!(
+            apply_edits(source, &result.edits),
+            result.output,
+            "{layout:?}"
+        );
+    }
 }
 
 proptest! {

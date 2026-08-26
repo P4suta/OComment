@@ -121,6 +121,10 @@ pub enum Language {
     /// PHP, detected from `.php`, `.phtml` and `.phpt`, and from a `php` `#!`
     /// line. The inline HTML around the `<?php ... ?>` tags is content.
     Php,
+    /// Ruby, detected from `.rb` and its siblings, from the extensionless
+    /// project files written in it, such as `Gemfile`, and from a `ruby` `#!`
+    /// line.
+    Ruby,
     /// No built-in scanner, and the default.
     ///
     /// Scanning it yields no comments and one `unknown-language` error
@@ -133,7 +137,7 @@ pub enum Language {
 
 impl Language {
     /// Every CLI-visible language; `Unknown` is deliberately excluded.
-    pub const ALL: [Self; 19] = [
+    pub const ALL: [Self; 20] = [
         Self::Rust,
         Self::Ocaml,
         Self::C,
@@ -153,6 +157,7 @@ impl Language {
         Self::Lua,
         Self::Yaml,
         Self::Php,
+        Self::Ruby,
     ];
 
     /// The canonical name, identical to the serde representation.
@@ -177,6 +182,7 @@ impl Language {
             Self::Lua => "lua",
             Self::Yaml => "yaml",
             Self::Php => "php",
+            Self::Ruby => "ruby",
             Self::Unknown => "unknown",
         }
     }
@@ -205,6 +211,7 @@ impl Language {
             Self::Jsonc => &["json5"],
             Self::Kotlin => &["kt", "kts"],
             Self::Yaml => &["yml"],
+            Self::Ruby => &["rb"],
         }
     }
 }

@@ -1020,6 +1020,90 @@
         "diagnostics": [],
         "output_utf8": "<?php \r\n$s = '// opaque'; \r\n?>\r\n<p># html</p>\r\n"
       }
+    },
+    {
+      "id": "ruby-builtin-safe",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "#!/usr/bin/env ruby\r\n# frozen_string_literal: true\r\nx = '# opaque' # remove\r\n=begin\r\ndoc\r\n=end\r\n",
+      "note": "Ruby 3.3 documentation, doc/syntax/comments.rdoc, literals.rdoc, and \"Magic comments\": the `#!` line is the interpreter preamble, `# frozen_string_literal:` is a magic comment the interpreter reads, a `#` inside a single-quoted string is one of its bytes, and `=begin`/`=end` at column zero delimit an embedded document that `safe` and `all` both remove. The CRLF endings survive the transformation.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 19,
+            "kind": "shebang",
+            "action": "keep"
+          },
+          {
+            "start": 21,
+            "end": 50,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 67,
+            "end": 75,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 77,
+            "end": 94,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "#!/usr/bin/env ruby\r\n# frozen_string_literal: true\r\nx = '# opaque' \r\n\r\n\r\n\r\n"
+      }
+    },
+    {
+      "id": "ruby-builtin-all",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "#!/usr/bin/env ruby\r\n# frozen_string_literal: true\r\nx = '# opaque' # remove\r\n=begin\r\ndoc\r\n=end\r\n",
+      "note": "Ruby 3.3 documentation, doc/syntax/comments.rdoc, literals.rdoc, and \"Magic comments\": the `#!` line is the interpreter preamble, `# frozen_string_literal:` is a magic comment the interpreter reads, a `#` inside a single-quoted string is one of its bytes, and `=begin`/`=end` at column zero delimit an embedded document that `safe` and `all` both remove. The CRLF endings survive the transformation.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 19,
+            "kind": "shebang",
+            "action": "keep"
+          },
+          {
+            "start": 21,
+            "end": 50,
+            "kind": "directive",
+            "action": "remove"
+          },
+          {
+            "start": 67,
+            "end": 75,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 77,
+            "end": 94,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "#!/usr/bin/env ruby\r\n\r\nx = '# opaque' \r\n\r\n\r\n\r\n"
+      }
     }
   ]
 }

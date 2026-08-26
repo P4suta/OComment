@@ -5,99 +5,42 @@
 
 use ocomment_core::{
     ByteSpan, DocumentChange, IncrementalDocument, Language, Layout, ScanOptions, TransformOptions,
-    scan, transform,
+    lexical_pool, scan, transform,
 };
-use proptest::prelude::*;
+use proptest::{prelude::*, sample::select};
 
-/// Bytes that exercise every built-in scanner's string, comment, heredoc and
-/// template states rather than only the C-family delimiters.
+/// A pool length as a `prop_oneof!` weight, so that drawing uniformly from a
+/// pool of `n` gives each of its members the weight one arm would have.
+fn weight(length: usize) -> u32 {
+    u32::try_from(length).expect("the pool is far smaller than a weight")
+}
+
+/// One byte of the shared pool, or a uniformly random one.
+///
+/// The pool is `ocomment_core::lexical_pool::BYTES`, and the checkpoint
+/// properties in `src/incremental.rs` draw from the same one: a fragment worth
+/// generating against the whole-file scanner is worth generating against the
+/// incremental one. The extra `\n` arm doubles that byte's weight, because a
+/// line boundary is where most of the interesting lexical states begin and end.
 fn lexical_byte() -> impl Strategy<Value = u8> {
     prop_oneof![
         4 => any::<u8>(),
-        2 => Just(b'\n'),
-        1 => Just(b'\r'),
-        1 => Just(b'/'),
-        1 => Just(b'*'),
-        1 => Just(b'\''),
-        1 => Just(b'"'),
-        1 => Just(b'#'),
-        1 => Just(b'`'),
-        1 => Just(b'{'),
-        1 => Just(b'}'),
-        1 => Just(b'<'),
-        1 => Just(b'>'),
-        1 => Just(b'='),
-        1 => Just(b'['),
-        1 => Just(b']'),
-        1 => Just(b'-'),
-        1 => Just(b'|'),
-        1 => Just(b'?'),
-        1 => Just(b'\\'),
-        1 => Just(b'$'),
-        1 => Just(b'%'),
-        1 => Just(b'('),
-        1 => Just(b')'),
-        1 => Just(b'@'),
-        1 => Just(b':'),
-        1 => Just(b'!'),
-        1 => Just(b'~'),
+        1 => Just(b'\n'),
+        weight(lexical_pool::BYTES.len()) => select(lexical_pool::BYTES),
     ]
 }
 
-/// Multi-byte tokens a single-byte alphabet can never synthesise. The preamble
-/// and directive rules only fire on whole words, so without these the generated
-/// sources never reach the code paths that make a scan depend on where in the
-/// document it starts.
+/// A fragment: one byte of the pool, or one whole token from it.
 ///
-/// The two triple-quote runs are here for the opposite reason: they are three
-/// of one byte, which a per-byte alphabet reaches only by coincidence, and they
-/// open a string that swallows newlines in Python, Kotlin, Java, and TOML —
-/// which is exactly the state a restart must not be allowed to land inside.
-/// Lua's long brackets are the same state behind four bytes rather than three,
-/// and the levelled forms are here because a closing bracket of the wrong level
-/// is content: without them a generated source that opens one practically never
-/// closes it. The eight YAML fragments after them are block scalar headers and
-/// the indented line that follows one — a body is the state a YAML restart must
-/// never land inside, and the bytes that open one have to arrive in that order.
-/// Three of the eight put the owner of that body on an earlier line than its
-/// header: a line ending in `:` or in a bare `-`, and the node properties that
-/// may stand between the two. That owner is the one thing a YAML line does not
-/// say about itself, so it is the one thing a restart at a line start has to be
-/// refused over. The `|+` header is the keep-chomped body whose trailing blank
-/// lines are content. The five PHP fragments at the end are its two tags, an
-/// attribute, and a heredoc header with the line that closes one: PHP mode is
-/// the state a restart must never land inside, and only a whole `<?php` opens
-/// it.
+/// The tokens are `ocomment_core::lexical_pool::TOKENS` — multi-byte openers a
+/// single-byte alphabet can never synthesise, and the reason each of them is
+/// there is written out beside the list. Each is drawn as often as one byte is,
+/// which is what the eight-to-one weight in front of the byte arm keeps in
+/// proportion.
 fn lexical_fragment() -> impl Strategy<Value = Vec<u8>> {
     prop_oneof![
         8 => lexical_byte().prop_map(|byte| vec![byte]),
-        1 => Just(b"coding:".to_vec()),
-        1 => Just(b"# -*- coding: utf-8 -*-".to_vec()),
-        1 => Just(b"# coding: latin-1".to_vec()),
-        1 => Just(b"#!".to_vec()),
-        1 => Just(b"//go:build".to_vec()),
-        1 => Just(b"/*#__PURE__*/".to_vec()),
-        1 => Just(b"<!--".to_vec()),
-        1 => Just(b"r#\"".to_vec()),
-        1 => Just(b"\"\"\"".to_vec()),
-        1 => Just(b"'''".to_vec()),
-        1 => Just(b"--[[".to_vec()),
-        1 => Just(b"--[=[".to_vec()),
-        1 => Just(b"]]".to_vec()),
-        1 => Just(b"]=]".to_vec()),
-        1 => Just(b": |\n".to_vec()),
-        1 => Just(b"- >2\n".to_vec()),
-        1 => Just(b"|+\n".to_vec()),
-        1 => Just(b"\n  # ".to_vec()),
-        1 => Just(b"k:\n".to_vec()),
-        1 => Just(b"\n-\n".to_vec()),
-        1 => Just(b"!!str ".to_vec()),
-        1 => Just(b"&a ".to_vec()),
-        1 => Just(b"<?php ".to_vec()),
-        1 => Just(b"<?=".to_vec()),
-        1 => Just(b"#[".to_vec()),
-        1 => Just(b"<<<E\n".to_vec()),
-        1 => Just(b"\nE;\n".to_vec()),
+        weight(lexical_pool::TOKENS.len()) => select(lexical_pool::TOKENS).prop_map(<[u8]>::to_vec),
     ]
 }
 

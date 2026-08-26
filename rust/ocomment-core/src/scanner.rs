@@ -95,6 +95,7 @@ fn scan_internal(
         Language::Lua => scanner.scan_lua(),
         Language::Yaml => scanner.scan_yaml(),
         Language::Php => scanner.scan_php(),
+        Language::Ruby => scanner.scan_ruby(),
         Language::Unknown => scanner.error(
             "unknown-language",
             "a language is required",
@@ -1550,6 +1551,524 @@ impl<'a> Scanner<'a> {
         bytes.len()
     }
 
+    /// Ruby, from the first byte of the file.
+    ///
+    /// The whole scanner is one state machine over three states — see
+    /// [`RubyState`] — because four of Ruby's tokens are spelled with a byte
+    /// that is also an operator, and only where the token stands decides
+    /// which: `/` is a regular expression or a division, `%` a literal or a
+    /// modulo, `?` a character literal or a ternary, and `<<` a here document
+    /// or a shift. Ruby's own lexer answers those four questions from its
+    /// `lex_state`, and these three states are that variable folded down to
+    /// what the four questions actually read out of it.
+    fn scan_ruby(&mut self) {
+        let mut pending = Vec::new();
+        let _ = self.scan_ruby_code(0, false, 0, &mut pending);
+    }
+
+    /// Ruby code from `index`, to the end of the file — or, when
+    /// `interpolation` is set, to the `}` that balances the `#{` the caller
+    /// has just consumed. Returns where it stopped.
+    ///
+    /// `pending` is the here documents opened on the physical line being read
+    /// and not yet given a body, in the order Ruby will consume them. It is one
+    /// list for the whole line rather than one per nested scan because a header
+    /// may stand inside an interpolation — `puts "#{ <<EOS }"` opens a here
+    /// document whose body is the line *under* that one — and because Ruby
+    /// takes the bodies in header order across the whole line, so an opener
+    /// written before an interpolation and one written inside it queue
+    /// together. The list is drained by whichever scan reaches the line break
+    /// first, which is why it has to outlive the `}` this call returns from.
+    fn scan_ruby_code(
+        &mut self,
+        mut index: usize,
+        interpolation: bool,
+        depth: usize,
+        pending: &mut Vec<RubyHeredoc>,
+    ) -> usize {
+        if depth > 256 {
+            self.error(
+                "nesting-limit",
+                "Ruby lexical nesting limit exceeded",
+                ByteSpan::new(index, index),
+            );
+            return self.source.len();
+        }
+        let bytes = self.source;
+        let offset = self.offset;
+        let mut state = RubyState::Begin;
+        let mut space_seen = false;
+        let mut braces = usize::from(interpolation);
+        /* NOTE: Where this call's own openers begin in the shared list. An
+         * enclosing scan's entries sit in front of them and are that scan's to
+         * report, which is what keeps one unterminated here document to one
+         * diagnostic. */
+        let base = pending.len();
+        while index < bytes.len() && !self.stopped {
+            match bytes[index] {
+                b'#' => {
+                    let end = line_end(bytes, index + 1);
+                    self.add_comment(index, end, CommentKind::Line);
+                    index = end;
+                }
+                b'=' if ruby_at_line_start(bytes, index, offset)
+                    && ruby_embedded_document(bytes, index) =>
+                {
+                    let (end, closed) = ruby_embedded_document_end(bytes, index);
+                    self.add_comment(index, end, CommentKind::Block);
+                    if !closed {
+                        self.error(
+                            "unterminated-comment",
+                            "unterminated Ruby embedded document",
+                            ByteSpan::new(index, end),
+                        );
+                    }
+                    index = end;
+                    state = RubyState::Begin;
+                    space_seen = false;
+                }
+                /* NOTE: Everything past the marker is the DATA section, which is
+                 * not source and holds no comments. */
+                b'_' if ruby_at_line_start(bytes, index, offset)
+                    && ruby_data_marker(bytes, index) =>
+                {
+                    index = bytes.len();
+                }
+                b'\r' | b'\n' => {
+                    index = consume_newline(bytes, index);
+                    if !pending.is_empty() {
+                        let opened = std::mem::take(pending);
+                        match self.scan_ruby_heredoc_bodies(index, opened, depth + 1, pending) {
+                            Some(end) => index = end,
+                            None => {
+                                index = bytes.len();
+                                continue;
+                            }
+                        }
+                    }
+                    state = RubyState::Begin;
+                    space_seen = false;
+                    /* NOTE: The queue is drained above before a checkpoint is
+                     * offered, so a restart here never lands inside a body a
+                     * header on an earlier line asked for. The emptiness test
+                     * says so locally rather than leaving it to that argument. */
+                    if !interpolation && depth == 0 && pending.is_empty() {
+                        self.add_safe_checkpoint(index);
+                    }
+                }
+                b'\'' => {
+                    index = self.scan_ruby_string(index, false, depth, pending);
+                    state = RubyState::End;
+                    space_seen = false;
+                }
+                b'"' | b'`' => {
+                    index = self.scan_ruby_string(index, true, depth, pending);
+                    state = RubyState::End;
+                    space_seen = false;
+                }
+                b':' if starts(bytes, index, b"::") => {
+                    index += 2;
+                    state = RubyState::End;
+                    space_seen = false;
+                }
+                b':' if matches!(bytes.get(index + 1), Some(b'\'' | b'"')) => {
+                    index =
+                        self.scan_ruby_string(index + 1, bytes[index + 1] == b'"', depth, pending);
+                    state = RubyState::End;
+                    space_seen = false;
+                }
+                b':' if bytes
+                    .get(index + 1)
+                    .is_some_and(|byte| ruby_symbol_head(*byte)) =>
+                {
+                    index = ruby_symbol_end(bytes, index);
+                    state = RubyState::End;
+                    space_seen = false;
+                }
+                b'?' => {
+                    match ruby_character_literal_end(bytes, index) {
+                        Some(end) if state != RubyState::End => {
+                            index = end;
+                            state = RubyState::End;
+                        }
+                        _ => {
+                            index += 1;
+                            state = RubyState::Begin;
+                        }
+                    }
+                    space_seen = false;
+                }
+                b'%' => {
+                    match ruby_percent_header(bytes, index) {
+                        Some(literal) if ruby_literal_opens(state, space_seen, bytes, index) => {
+                            index = self.scan_ruby_percent(index, &literal, depth, pending);
+                            state = RubyState::End;
+                        }
+                        _ => {
+                            index += 1;
+                            state = RubyState::Begin;
+                        }
+                    }
+                    space_seen = false;
+                }
+                b'/' => {
+                    if ruby_literal_opens(state, space_seen, bytes, index) {
+                        index = self.scan_ruby_regexp(index, depth, pending);
+                        state = RubyState::End;
+                    } else {
+                        index += 1;
+                        state = RubyState::Begin;
+                    }
+                    space_seen = false;
+                }
+                b'<' if starts(bytes, index, b"<<") => {
+                    match ruby_heredoc_header(bytes, index) {
+                        Some((heredoc, end)) if ruby_heredoc_may_open(state, space_seen) => {
+                            pending.push(heredoc);
+                            index = end;
+                            state = RubyState::End;
+                        }
+                        _ => {
+                            index += 2;
+                            state = RubyState::Begin;
+                        }
+                    }
+                    space_seen = false;
+                }
+                b'$' => {
+                    index = ruby_global_end(bytes, index);
+                    state = RubyState::End;
+                    space_seen = false;
+                }
+                b'@' => {
+                    index = ruby_at_variable_end(bytes, index);
+                    state = RubyState::End;
+                    space_seen = false;
+                }
+                b'{' => {
+                    braces += 1;
+                    index += 1;
+                    state = RubyState::Begin;
+                    space_seen = false;
+                }
+                b'}' => {
+                    index += 1;
+                    if interpolation {
+                        braces -= 1;
+                        if braces == 0 {
+                            return index;
+                        }
+                    }
+                    state = RubyState::End;
+                    space_seen = false;
+                }
+                b'(' | b'[' => {
+                    index += 1;
+                    state = RubyState::Begin;
+                    space_seen = false;
+                }
+                b')' | b']' => {
+                    index += 1;
+                    state = RubyState::End;
+                    space_seen = false;
+                }
+                /* NOTE: The method-call dot, which is also the two range
+                 * operators. All three want the byte after them read as a name
+                 * rather than as a literal delimiter, which is what `End` says. */
+                b'.' => {
+                    index += 1;
+                    state = RubyState::End;
+                    space_seen = false;
+                }
+                /* NOTE: Outside a literal a backslash only continues the line,
+                 * which is white space to the grammar. No checkpoint is emitted
+                 * for the break it swallows, because the statement runs on past
+                 * it and a scan restarted there would not know that. */
+                b'\\' if matches!(bytes.get(index + 1), Some(b'\r' | b'\n')) => {
+                    index = consume_newline(bytes, index + 1);
+                    space_seen = true;
+                }
+                b'\\' => {
+                    index = (index + 2).min(bytes.len());
+                    state = RubyState::End;
+                    space_seen = false;
+                }
+                byte if byte.is_ascii_digit() => {
+                    index = ruby_number_end(bytes, index);
+                    state = RubyState::End;
+                    space_seen = false;
+                }
+                byte if ruby_identifier_start(byte) => {
+                    let start = index;
+                    index = ruby_word_end(bytes, index);
+                    state = ruby_state_after_word(&bytes[start..index]);
+                    space_seen = false;
+                }
+                byte if ruby_is_space(byte) => {
+                    index += 1;
+                    space_seen = true;
+                }
+                _ => {
+                    index += 1;
+                    state = RubyState::Begin;
+                    space_seen = false;
+                }
+            }
+        }
+        /* NOTE: A here document opened on a last line that has no break of its
+         * own never reaches [`Self::scan_ruby_heredoc_bodies`], because that is
+         * driven from the break. It is unterminated all the same, and is
+         * reported from its own `<<` with the span that call would have given
+         * it. Only this call's own openers are reported here — the ones from
+         * `base` on — because an enclosing scan reports its own, and the list is
+         * cut back to `base` so that it reports them once. Nothing is left to
+         * report whenever the loop stopped at a checkpoint instead, because a
+         * break empties the list before one is offered. */
+        if let Some(operator) = pending.get(base).map(|heredoc| heredoc.operator) {
+            self.error(
+                "unterminated-heredoc",
+                "unterminated Ruby here document",
+                ByteSpan::new(operator, bytes.len()),
+            );
+            pending.truncate(base);
+        }
+        if interpolation {
+            self.error(
+                "unterminated-interpolation",
+                "unterminated Ruby interpolation",
+                ByteSpan::new(index, index),
+            );
+        }
+        index
+    }
+
+    /// One Ruby string, from its delimiter: `'`, `"`, or the backtick of a
+    /// command literal.
+    ///
+    /// A single-quoted string escapes only `\'` and `\\`, and every other
+    /// backslash is a byte of it — but the byte after a backslash can never be
+    /// the closing quote unless the pair *is* the `\'` escape, so skipping two
+    /// finds the same closer either way. The other two take the full escape set
+    /// and interpolate, and `#{ ... }` holds an expression, so a comment
+    /// written inside one is a comment. None of the three ends at a line break,
+    /// so only the end of the file leaves one unterminated.
+    fn scan_ruby_string(
+        &mut self,
+        start: usize,
+        interpolates: bool,
+        depth: usize,
+        pending: &mut Vec<RubyHeredoc>,
+    ) -> usize {
+        let bytes = self.source;
+        let quote = bytes[start];
+        let mut index = start + 1;
+        while index < bytes.len() {
+            if bytes[index] == b'\\' {
+                index = (index + 2).min(bytes.len());
+            } else if bytes[index] == quote {
+                return index + 1;
+            } else if interpolates && starts(bytes, index, b"#{") {
+                index = self.scan_ruby_code(index + 2, true, depth + 1, pending);
+            } else {
+                index += 1;
+            }
+        }
+        self.error(
+            "unterminated-string",
+            match quote {
+                b'\'' => "unterminated Ruby single-quoted string",
+                b'"' => "unterminated Ruby double-quoted string",
+                _ => "unterminated Ruby backtick string",
+            },
+            ByteSpan::new(start, index),
+        );
+        index
+    }
+
+    /// One `/ ... /` regular expression, from its opening slash.
+    ///
+    /// A `[` opens a character class, where the delimiter is one of the
+    /// pattern's own bytes. That is deliberately more forgiving than Ruby's own
+    /// `tokadd_string`, which ends the literal at the first unescaped `/`
+    /// wherever it stands: reading `/[/]/` as one literal keeps the rest of the
+    /// line inside it, which hides bytes from a removal rather than exposing
+    /// them, and it is the reading a person writing the pattern meant. A
+    /// pattern interpolates and may span lines, so only the end of the file
+    /// leaves one unterminated.
+    fn scan_ruby_regexp(
+        &mut self,
+        start: usize,
+        depth: usize,
+        pending: &mut Vec<RubyHeredoc>,
+    ) -> usize {
+        let bytes = self.source;
+        let mut index = start + 1;
+        let mut in_class = false;
+        while index < bytes.len() {
+            match bytes[index] {
+                b'\\' => index = (index + 2).min(bytes.len()),
+                b'[' => {
+                    in_class = true;
+                    index += 1;
+                }
+                b']' => {
+                    in_class = false;
+                    index += 1;
+                }
+                b'/' if !in_class => return ruby_regexp_flags_end(bytes, index + 1),
+                b'#' if starts(bytes, index, b"#{") => {
+                    index = self.scan_ruby_code(index + 2, true, depth + 1, pending);
+                }
+                _ => index += 1,
+            }
+        }
+        self.error(
+            "unterminated-string",
+            "unterminated Ruby regular expression",
+            ByteSpan::new(start, index),
+        );
+        index
+    }
+
+    /// One `%` literal, from the `%` itself, with the header
+    /// [`ruby_percent_header`] read out of it.
+    ///
+    /// A paired delimiter nests, which is what lets `%w[a [b] c]` hold a
+    /// bracket; every other delimiter closes with itself and cannot. The
+    /// interpolating forms read `#{ ... }` as an expression before either
+    /// delimiter is considered, so the braces of one never count towards a
+    /// `%Q{...}` nesting depth.
+    fn scan_ruby_percent(
+        &mut self,
+        start: usize,
+        literal: &RubyPercent,
+        depth: usize,
+        pending: &mut Vec<RubyHeredoc>,
+    ) -> usize {
+        let bytes = self.source;
+        let mut index = literal.content;
+        let mut nesting = 1usize;
+        while index < bytes.len() {
+            if bytes[index] == b'\\' {
+                index = (index + 2).min(bytes.len());
+                continue;
+            }
+            if literal.interpolates && starts(bytes, index, b"#{") {
+                index = self.scan_ruby_code(index + 2, true, depth + 1, pending);
+                continue;
+            }
+            if literal.open != literal.close && bytes[index] == literal.open {
+                nesting += 1;
+                index += 1;
+                continue;
+            }
+            if bytes[index] == literal.close {
+                nesting -= 1;
+                index += 1;
+                if nesting == 0 {
+                    return if literal.form == b'r' {
+                        ruby_regexp_flags_end(bytes, index)
+                    } else {
+                        index
+                    };
+                }
+                continue;
+            }
+            index += 1;
+        }
+        self.error(
+            "unterminated-string",
+            "unterminated Ruby percent literal",
+            ByteSpan::new(start, index),
+        );
+        index
+    }
+
+    /// Every here document opened on the line that has just ended, in the order
+    /// they were opened, from the first byte of the line under it.
+    ///
+    /// `None` once one of them runs out of file, which is reported from the
+    /// `<<` that opened it rather than from the line it swallowed. `pending` is
+    /// the shared queue the caller has just emptied into `heredocs`; a body line
+    /// that opens another here document fills it again, and this call reads that
+    /// one from under that body line before the body around it resumes.
+    fn scan_ruby_heredoc_bodies(
+        &mut self,
+        mut index: usize,
+        heredocs: Vec<RubyHeredoc>,
+        depth: usize,
+        pending: &mut Vec<RubyHeredoc>,
+    ) -> Option<usize> {
+        for heredoc in heredocs {
+            match self.scan_ruby_heredoc_body(index, &heredoc, depth, pending) {
+                Some(end) => index = end,
+                None => {
+                    self.error(
+                        "unterminated-heredoc",
+                        "unterminated Ruby here document",
+                        ByteSpan::new(heredoc.operator, self.source.len()),
+                    );
+                    return None;
+                }
+            }
+        }
+        Some(index)
+    }
+
+    /// The body of one here document, from the first byte of a line of it.
+    ///
+    /// Returns the offset just past the terminator line. The body is opaque:
+    /// only `#{ ... }` in an interpolating form is read as code, and the
+    /// terminator is looked for at the start of each of the body's own lines,
+    /// so one written inside an interpolation is content like the rest of it.
+    ///
+    /// A body line is a physical line, so a here document header reached
+    /// through one of those interpolations queues a body for the line beneath
+    /// *it* — Ruby 3.3.12 reads `puts <<A` / `x #{<<B}` / `A` / `B` with `A` as
+    /// B's body and not as A's terminator — and this loop drains the queue at
+    /// each line break before looking for its own terminator again.
+    fn scan_ruby_heredoc_body(
+        &mut self,
+        mut index: usize,
+        heredoc: &RubyHeredoc,
+        depth: usize,
+        pending: &mut Vec<RubyHeredoc>,
+    ) -> Option<usize> {
+        let bytes = self.source;
+        loop {
+            if index >= bytes.len() {
+                return None;
+            }
+            if ruby_heredoc_terminates(bytes, index, heredoc) {
+                return Some(consume_newline(bytes, line_end(bytes, index)).min(bytes.len()));
+            }
+            while index < bytes.len() && !matches!(bytes[index], b'\r' | b'\n') {
+                if heredoc.interpolates && bytes[index] == b'\\' {
+                    index = if starts(bytes, index, b"\\\r\n") {
+                        index + 3
+                    } else {
+                        (index + 2).min(bytes.len())
+                    };
+                } else if heredoc.interpolates && starts(bytes, index, b"#{") {
+                    index = self.scan_ruby_code(index + 2, true, depth + 1, pending);
+                } else {
+                    index += 1;
+                }
+            }
+            if index >= bytes.len() {
+                return None;
+            }
+            index = consume_newline(bytes, index);
+            /* NOTE: A body line is a physical line like any other, so a header
+             * reached through an interpolation on it queues for the line under
+             * it and is read there — before this body resumes. */
+            if !pending.is_empty() {
+                let opened = std::mem::take(pending);
+                index = self.scan_ruby_heredoc_bodies(index, opened, depth + 1, pending)?;
+            }
+        }
+    }
+
     fn scan_shell(&mut self) {
         let _ = self.scan_shell_region(0, None, 0);
     }
@@ -2498,6 +3017,13 @@ fn legal_marker_of(raw: &[u8]) -> Option<&'static str> {
 /// unparseable pattern list is ignored here as the scanner ignores it, which
 /// keeps the two in step even on input the scanner has already flagged.
 ///
+/// That agreement is with the bytes-only rule table and with nothing else. A
+/// scan applies one rule no reading of `raw` can reach —
+/// [`DispositionExplanation::KeptStructural`], where a YAML block scalar leans
+/// on the comment that ends it — and a comment kept by *where it sits* is
+/// reported here as the table alone would have it. That verdict comes only from
+/// [`explain_comment`], which is handed the [`Comment`] a scan produced.
+///
 /// `raw` is the comment's complete bytes, delimiters included, exactly as
 /// [`Comment::span`](crate::Comment::span) delimits them.
 ///
@@ -2669,7 +3195,7 @@ fn java_text_block_end(source: &[u8], start: usize) -> (usize, bool) {
 /// Lua's `skipBOM` — so the line behind one is still the first line, and a
 /// preamble rule that asked for byte 0 alone would miss it. The bytes stay
 /// where they are; only the question `is this the first line?` skips them.
-/// [`is_python_encoding_declaration`] has always skipped the same three.
+/// [`is_encoding_declaration`] has always skipped the same three.
 fn byte_order_mark_width(source: &[u8]) -> usize {
     if source.starts_with(b"\xef\xbb\xbf") {
         3
@@ -2694,8 +3220,8 @@ fn classify_comment(
         return CommentKind::Shebang;
     }
     if offset == 0
-        && language == Language::Python
-        && is_python_encoding_declaration(source, start, raw)
+        && matches!(language, Language::Python | Language::Ruby)
+        && is_encoding_declaration(source, start, raw)
     {
         return CommentKind::Encoding;
     }
@@ -2766,16 +3292,16 @@ fn the_line_ending_permits_a_restart(source: &[u8], offset: usize) -> bool {
     offset == 0 || source.get(offset - 1) != Some(&b'\r') || source.get(offset) != Some(&b'\n')
 }
 
-/// Preamble classification depends on the absolute offset, and Python only
-/// recognises an encoding declaration while scanning from offset 0, which makes
-/// the start of line 2 a restart point exactly when no encoding declaration
-/// follows. Offset 0 always passes — restarting a scan there *is* the full
-/// scan.
+/// Preamble classification depends on the absolute offset, and the two
+/// languages that declare a source encoding in a comment — Python and Ruby —
+/// only recognise one while scanning from offset 0, which makes the start of
+/// line 2 a restart point exactly when no encoding declaration follows. Offset
+/// 0 always passes — restarting a scan there *is* the full scan.
 fn the_preamble_permits_a_restart(source: &[u8], language: Language, offset: usize) -> bool {
     offset == 0
-        || language != Language::Python
+        || !matches!(language, Language::Python | Language::Ruby)
         || !is_within_first_two_lines(source, offset)
-        || !python_line_declares_encoding(source, offset)
+        || !line_declares_encoding(source, offset)
 }
 
 /// The restart rules for one revision of a document: a safe checkpoint promises
@@ -2851,10 +3377,10 @@ fn is_within_first_two_lines(source: &[u8], offset: usize) -> bool {
     true
 }
 
-/// Whether the line beginning at `line_start` carries a Python encoding
+/// Whether the line beginning at `line_start` carries a source-encoding
 /// declaration, and therefore a comment whose classification depends on the
 /// scan starting at offset 0.
-fn python_line_declares_encoding(source: &[u8], line_start: usize) -> bool {
+fn line_declares_encoding(source: &[u8], line_start: usize) -> bool {
     let mut index = line_start;
     while matches!(source.get(index), Some(b' ' | b'\t' | 0x0c)) {
         index += 1;
@@ -2863,10 +3389,34 @@ fn python_line_declares_encoding(source: &[u8], line_start: usize) -> bool {
         return false;
     }
     let end = line_end(source, index + 1);
-    is_python_encoding_declaration(source, index, &source[index..end])
+    is_encoding_declaration(source, index, &source[index..end])
 }
 
-fn is_python_encoding_declaration(source: &[u8], start: usize, raw: &[u8]) -> bool {
+/// Whether the comment beginning at `start` is a source-encoding declaration.
+///
+/// Python and Ruby share the phrase, down to the spelling: PEP 263 asks for
+/// `coding[:=]\s*([-\w.]+)` in one of the first two lines, and Ruby's
+/// `magic_comment` reads the same phrase out of the same two lines. The Emacs
+/// form `# -*- coding: utf-8 -*-` satisfies both, which is why both languages
+/// are written with it.
+///
+/// What the two do *not* share is which second line counts, and the rule here
+/// is neither of theirs: any `coding:` comment on either of the first two lines
+/// is a declaration, whatever stands on the line above it. Ruby reads the
+/// second line only behind a `#!` line, and Python only behind a line that is
+/// itself a comment or blank — so `x = 1\n# coding: us-ascii\n` names an
+/// encoding to neither of them (Ruby 3.3.12 reports `__ENCODING__` as UTF-8,
+/// and `tokenize.detect_encoding` reports utf-8), and this function calls it a
+/// declaration all the same.
+///
+/// That is deliberate. Saying yes here only ever *keeps* a comment that `safe`
+/// would otherwise remove, so the two ways to be wrong are not the same size:
+/// a missed declaration removes the line a file's encoding is written on, and
+/// an invented one leaves an ordinary comment in place. One rule for both
+/// languages is also one rule that cannot drift apart between them, which is
+/// what [`preamble_is_settled`] leans on when it names the first two lines the
+/// only position-sensitive bytes in any document.
+fn is_encoding_declaration(source: &[u8], start: usize, raw: &[u8]) -> bool {
     if !is_within_first_two_lines(source, start) || !raw.starts_with(b"#") {
         return false;
     }
@@ -3075,6 +3625,32 @@ fn directive_name(text: &str, language: Language, raw: &[u8]) -> Option<&'static
          * `-next-line`, `Start`, `End` — so a prefix is the whole rule there.
          * `phpcs:` carries its own boundary in the colon and covers `ignore`,
          * `disable`, `enable`, and `ignoreFile` alike. */
+        /* NOTE: Three of these six are Ruby's own magic comments, which the
+         * interpreter reads out of the head of a file: `frozen_string_literal`
+         * decides whether every literal string in it is frozen,
+         * `shareable_constant_value` what Ractor may share, and `warn_indent`
+         * whether the parser complains about the indentation. The other three
+         * are the tools every Ruby project runs — RuboCop, StandardRB, and
+         * Sorbet's `# typed:` sigil. Each carries its own boundary in the
+         * colon and covers the whole namespace behind it: `rubocop:disable`,
+         * `:enable` and `:todo` alike. The encoding declaration is deliberately
+         * absent: it is a kind of its own, classified before this runs.
+         *
+         * A magic comment is honoured only at the head of a file, and this is
+         * asked of every comment in it. Reading one further down as an
+         * instruction keeps a comment a removal would otherwise take, which is
+         * the direction to be wrong in, and it is what keeps the answer
+         * independent of where in the document the scan began. */
+        Language::Ruby => [
+            "frozen_string_literal:",
+            "warn_indent:",
+            "shareable_constant_value:",
+            "rubocop:",
+            "standard:",
+            "typed:",
+        ]
+        .into_iter()
+        .find(|prefix| compact.starts_with(prefix)),
         Language::Php => {
             if opens_with_keyword(text, "@psalm-suppress") {
                 return Some("@psalm-suppress");
@@ -4548,6 +5124,542 @@ fn php_heredoc_end(bytes: &[u8], mut index: usize, label: &[u8]) -> Option<usize
         }
         index = consume_newline(bytes, end);
     }
+}
+
+/// Where a Ruby token may begin, which is what decides whether `/`, `%`, `?`
+/// and `<<` open a literal or are the operator spelled with the same byte.
+///
+/// This is Ruby's own `lex_state` folded onto the three answers those four
+/// questions read out of it: `IS_BEG()`, `IS_END()`, and the `IS_ARG()` in
+/// between, where a bare word may be a method about to take a command argument
+/// and only the spacing around the byte says which. Ruby's lexer tells a local
+/// variable from a method name by the symbol table it is building, which a
+/// scanner has not got, so every bare word lands in [`Self::Argument`]: `a /b/`
+/// is read as a regular expression where Ruby, knowing `a` to be a variable,
+/// reads a division. That reading keeps more bytes inside a literal than the
+/// parser would, which loses no comment that is one.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RubyState {
+    /// A value is expected: the start of a file, or just past an operator, a
+    /// comma, an opening bracket, a keyword that opens an expression, or a
+    /// line break.
+    Begin,
+    /// Just past a bare word, which may be a method taking a command argument.
+    Argument,
+    /// Just past an operand: a literal, a `)`, `]` or `}`, a variable, or one
+    /// of the keywords that finishes an expression.
+    End,
+}
+
+/// The header of one Ruby `%` literal: what closes it, whether it nests, and
+/// whether it interpolates.
+#[derive(Clone, Copy)]
+struct RubyPercent {
+    /// The letter naming the form, or `Q` for the bare `%(...)`.
+    form: u8,
+    /// The opening delimiter, equal to `close` where the delimiter does not
+    /// pair and so does not nest.
+    open: u8,
+    /// The delimiter that ends the literal.
+    close: u8,
+    /// The offset of the first byte of the content.
+    content: usize,
+    /// Whether a `#{ ... }` inside it is an expression.
+    interpolates: bool,
+}
+
+/// One Ruby here document, as the lines under the one that opened it need it.
+struct RubyHeredoc {
+    /// Where the `<<` sits, which is what an unterminated body is reported
+    /// from.
+    operator: usize,
+    /// The terminator word, without the quotes that may have written it.
+    label: Vec<u8>,
+    /// `<<-` and `<<~` let the terminator line be indented; a bare `<<` wants
+    /// it at column zero.
+    indented: bool,
+    /// A single-quoted terminator turns interpolation off; every other form
+    /// leaves it on.
+    interpolates: bool,
+}
+
+/// Ruby's `is_identchar` for the first byte of a name: a letter, `_`, or the
+/// lead byte of a character outside ASCII, which Ruby takes as a name byte
+/// wholesale.
+fn ruby_identifier_start(byte: u8) -> bool {
+    byte.is_ascii_alphabetic() || byte == b'_' || !byte.is_ascii()
+}
+
+/// The same for every byte after the first, which a digit may also be.
+fn ruby_identifier_continue(byte: u8) -> bool {
+    ruby_identifier_start(byte) || byte.is_ascii_digit()
+}
+
+/// White space that separates Ruby tokens without ending a line. The vertical
+/// tab and the form feed are in it, as `rb_isspace` has them; the two line
+/// terminators are handled on their own, because they finish a statement.
+fn ruby_is_space(byte: u8) -> bool {
+    matches!(byte, b' ' | b'\t' | 0x0b | 0x0c)
+}
+
+/// Past the name at `index`.
+fn ruby_identifier_end(bytes: &[u8], mut index: usize) -> usize {
+    while bytes
+        .get(index)
+        .is_some_and(|byte| ruby_identifier_continue(*byte))
+    {
+        index += 1;
+    }
+    index
+}
+
+/// Past the bare word at `index`, including the `?` or `!` that may end a
+/// method name.
+///
+/// Ruby's lexer takes a trailing `?` or `!` into the name unless a `=` follows
+/// it, which is what tells `x.empty?` from the ternary `x ? y : z` — and, in
+/// the other direction, keeps `a != b` a comparison rather than a call of a
+/// method named `a!`.
+fn ruby_word_end(bytes: &[u8], index: usize) -> usize {
+    let end = ruby_identifier_end(bytes, index + 1);
+    if matches!(bytes.get(end), Some(b'?' | b'!')) && bytes.get(end + 1) != Some(&b'=') {
+        end + 1
+    } else {
+        end
+    }
+}
+
+/// Past the numeric literal at `index`.
+///
+/// The digits, the `_` separators, the radix letters and the `r` and `i`
+/// suffixes are one run of name bytes; a `.` joins the run only when a digit
+/// follows it, which is what keeps `1.times` a method call.
+fn ruby_number_end(bytes: &[u8], mut index: usize) -> usize {
+    loop {
+        index = ruby_identifier_end(bytes, index);
+        if bytes.get(index) == Some(&b'.') && bytes.get(index + 1).is_some_and(u8::is_ascii_digit) {
+            index += 1;
+            continue;
+        }
+        return index;
+    }
+}
+
+/// The state a bare word leaves the lexer in.
+///
+/// The two lists are Ruby's own keyword table folded onto [`RubyState`].
+/// `def`, `alias` and `undef` are in the first because the name that follows
+/// one may be spelled `/` or `%` — `def /(other)` defines division — so
+/// nothing opens a literal after them; `class` and `module` are there for the
+/// mirror-image reason, that `class <<self` is a singleton class and never a
+/// here document. `super`, `yield`, `not` and `defined?` are in neither, which
+/// leaves them where Ruby has them: a command that may take an argument.
+///
+/// [`RubyState::End`] is a coarser answer than either reason asked for, and it
+/// is worth naming what the coarseness costs, because it is the one place this
+/// scanner reads *fewer* bytes into a literal than Ruby does. `End` answers all
+/// four of the state machine's questions at once, so it also decides `/`, `%`
+/// and `?`:
+///
+/// * After `def`, `alias` and `undef` that is Ruby's own answer for `/` and
+///   `%`, which `EXPR_FNAME` reads as the method names they are.
+/// * After `class` and `module` it is not: `EXPR_CLASS` expects a value, so
+///   Ruby opens a literal there. `class /x # c/` is one regular expression to
+///   Ruby 3.3.12 (`Ripper.lex` gives `on_regexp_beg`) and a division with a
+///   comment behind it here.
+/// * `?` diverges after all five — `class ?# x` and `def ?# x` are `on_CHAR
+///   "?#"` to Ruby and a comment opener here.
+///
+/// Every one of those spellings is a file Ruby itself refuses: `class` and
+/// `module` take a constant, a `::` or a `<<` in any program that parses, and
+/// `def ?# x` is a syntax error. So the divergence is reachable only where the
+/// scan is already reading a broken file, and buying it back with a fourth
+/// state — one that keeps the literal readings and refuses only the here
+/// document — would add a state to the machine for no program that runs.
+///
+/// `<<` itself is not a fourth entry on that list, and what keeps it off is not
+/// this function. A header this state refuses is a shift, which reads no fewer
+/// bytes into a literal than Ruby does; a header it allows queues a body, and
+/// [`Scanner::scan_ruby_code`] queues it for the physical line the header
+/// stands on wherever that header was written — before an interpolation, inside
+/// one, inside a nested one, or inside an interpolation on another here
+/// document's body line. A queue that stopped at an interpolation boundary
+/// would read a whole here document body as code, which is a second place this
+/// scanner reads fewer bytes into a literal than Ruby does, and it is the one
+/// the corpus cases named `ruby-heredoc-*-interpolation` hold shut.
+fn ruby_state_after_word(token: &[u8]) -> RubyState {
+    match token {
+        b"end" | b"self" | b"nil" | b"true" | b"false" | b"redo" | b"retry" | b"__FILE__"
+        | b"__LINE__" | b"__ENCODING__" | b"def" | b"alias" | b"undef" | b"class" | b"module" => {
+            RubyState::End
+        }
+        b"if" | b"unless" | b"while" | b"until" | b"case" | b"when" | b"in" | b"and" | b"or"
+        | b"return" | b"break" | b"next" | b"then" | b"do" | b"else" | b"elsif" | b"begin"
+        | b"ensure" | b"rescue" | b"for" => RubyState::Begin,
+        _ => RubyState::Argument,
+    }
+}
+
+/// Whether the delimiter at `index` opens a literal rather than being the
+/// operator spelled with the same byte.
+///
+/// Ruby's rule for both `/` and `%` (`parse_slash`, `parse_percent`) is one
+/// rule: where a value is expected the byte always opens a literal; after an
+/// operand it never does; and in between it opens one exactly when white space
+/// stands before it and none behind it, which is what tells the command
+/// argument of `puts /x/` from the division in `a / b`. `/=` and `%=` are
+/// recognised before that last test, so an assignment operator is never read as
+/// a literal outside value position.
+fn ruby_literal_opens(state: RubyState, space_seen: bool, bytes: &[u8], index: usize) -> bool {
+    match state {
+        RubyState::Begin => true,
+        RubyState::End => false,
+        RubyState::Argument => {
+            space_seen
+                && bytes.get(index + 1).is_some_and(|byte| {
+                    *byte != b'=' && !ruby_is_space(*byte) && !matches!(byte, b'\r' | b'\n')
+                })
+        }
+    }
+}
+
+/// Whether a `<<` where the lexer stands may open a here document.
+///
+/// Ruby's `parser_yylex`: never after an operand, and after a bare word only
+/// when white space stands in front of it — which is why `a << b` is a shift
+/// and `a <<b` is the here document that spacing exists to avoid.
+fn ruby_heredoc_may_open(state: RubyState, space_seen: bool) -> bool {
+    match state {
+        RubyState::Begin => true,
+        RubyState::Argument => space_seen,
+        RubyState::End => false,
+    }
+}
+
+/// Whether `index` is the first byte of a line, which is where Ruby's two
+/// column-zero markers — `=begin` and `__END__` — are recognised.
+///
+/// A byte order mark is consumed before the first line is read, so the byte
+/// behind one still opens the first line. That clause is asked only of a scan
+/// starting at offset zero, because the first byte a suffix scan is handed
+/// opens a line whatever it is, and a mark cannot stand there in the document
+/// the suffix came from.
+fn ruby_at_line_start(bytes: &[u8], index: usize, offset: usize) -> bool {
+    if index == 0 || (offset == 0 && index == byte_order_mark_width(bytes)) {
+        return true;
+    }
+    match bytes[index - 1] {
+        b'\n' => true,
+        b'\r' => bytes.get(index) != Some(&b'\n'),
+        _ => false,
+    }
+}
+
+/// Whether a `=begin` at `index` opens an embedded document.
+///
+/// Ruby's `word_match_p`: the word ends at white space or at the end of the
+/// file, so `=beginner` is the `=` operator and a name.
+fn ruby_embedded_document(bytes: &[u8], index: usize) -> bool {
+    starts(bytes, index, b"=begin") && ruby_word_boundary(bytes, index + b"=begin".len())
+}
+
+/// Where the embedded document opened at `start` ends, and whether its `=end`
+/// was there at all.
+///
+/// The document runs to the end of the `=end` line, whose remaining bytes Ruby
+/// skips along with the rest of it, and both markers stand at column zero.
+fn ruby_embedded_document_end(bytes: &[u8], start: usize) -> (usize, bool) {
+    let mut index = line_end(bytes, start);
+    while index < bytes.len() {
+        index = consume_newline(bytes, index);
+        if starts(bytes, index, b"=end") && ruby_word_boundary(bytes, index + b"=end".len()) {
+            return (line_end(bytes, index + b"=end".len()), true);
+        }
+        index = line_end(bytes, index);
+    }
+    (bytes.len(), false)
+}
+
+/// Whether `index` is past the end of a word: white space, a line break, or the
+/// end of the file.
+fn ruby_word_boundary(bytes: &[u8], index: usize) -> bool {
+    bytes
+        .get(index)
+        .is_none_or(|byte| ruby_is_space(*byte) || matches!(byte, b'\r' | b'\n'))
+}
+
+/// Whether a `__END__` alone on its line begins the DATA section at `index`.
+///
+/// Ruby's `whole_match_p`: the marker is the whole line, so `__END__ x` is an
+/// ordinary name and the source runs on past it.
+fn ruby_data_marker(bytes: &[u8], index: usize) -> bool {
+    starts(bytes, index, b"__END__")
+        && matches!(
+            bytes.get(index + b"__END__".len()),
+            None | Some(b'\r' | b'\n')
+        )
+}
+
+/// Whether the byte behind a `:` makes it the head of a symbol rather than the
+/// operator of a ternary or the colon of a hash label.
+fn ruby_symbol_head(byte: u8) -> bool {
+    ruby_identifier_start(byte) || matches!(byte, b'@' | b'$') || ruby_symbol_operator(byte)
+}
+
+/// The characters an operator method is spelled with, which is how a symbol
+/// naming one — `:<=>`, `:[]=`, `:+@` — is written.
+fn ruby_symbol_operator(byte: u8) -> bool {
+    matches!(
+        byte,
+        b'+' | b'-' | b'*' | b'/' | b'%' | b'<' | b'>' | b'=' | b'!' | b'~' | b'^' | b'&' | b'|'
+    ) || matches!(byte, b'[' | b']' | b'@')
+}
+
+/// Past the symbol a `:` at `index` opens.
+///
+/// A symbol is a name — with the `@`, `@@` or `$` of a variable in front of it
+/// where one is meant — or one of the operator methods, which is read here as
+/// the run of characters those are spelled with rather than as a table of
+/// them: a run that names no method is a syntax error either way, and reading
+/// it as one symbol keeps the byte after it out of the literal path.
+fn ruby_symbol_end(bytes: &[u8], index: usize) -> usize {
+    let mut cursor = index + 1;
+    match bytes.get(cursor) {
+        Some(b'$') => return ruby_global_end(bytes, cursor),
+        Some(b'@') => return ruby_at_variable_end(bytes, cursor),
+        Some(byte) if ruby_identifier_start(*byte) => return ruby_word_end(bytes, cursor),
+        _ => {}
+    }
+    while bytes
+        .get(cursor)
+        .is_some_and(|byte| ruby_symbol_operator(*byte))
+    {
+        cursor += 1;
+    }
+    cursor
+}
+
+/// Past the global variable a `$` at `index` opens, or past the `$` alone.
+///
+/// Ruby's `parse_gvar`: a name, a digit run, `-` and one character, or one of
+/// the punctuation names. `$"` and `$'` are two of those names, which is what
+/// keeps the quote in either from opening a string, and `$/` and `$\` two more.
+/// `#` is not one of them — the reference refuses that spelling outright — so
+/// `$#` is a `$` on its own, and the byte behind it opens the comment it opens
+/// everywhere else in the language.
+fn ruby_global_end(bytes: &[u8], index: usize) -> usize {
+    let Some(byte) = bytes.get(index + 1).copied() else {
+        return index + 1;
+    };
+    if ruby_identifier_start(byte) {
+        return ruby_identifier_end(bytes, index + 2);
+    }
+    if byte.is_ascii_digit() {
+        let mut end = index + 2;
+        while bytes.get(end).is_some_and(u8::is_ascii_digit) {
+            end += 1;
+        }
+        return end;
+    }
+    if byte == b'-' {
+        return (index + 3).min(bytes.len());
+    }
+    if matches!(
+        byte,
+        b'~' | b'*' | b'$' | b'?' | b'!' | b'@' | b'/' | b'\\' | b';' | b',' | b'.' | b'='
+    ) || matches!(byte, b':' | b'<' | b'>' | b'"' | b'&' | b'`' | b'\'' | b'+')
+    {
+        return index + 2;
+    }
+    index + 1
+}
+
+/// Past the instance or class variable a `@` at `index` opens, or past the `@`
+/// alone where no name follows it.
+fn ruby_at_variable_end(bytes: &[u8], index: usize) -> usize {
+    let mut cursor = index + 1;
+    if bytes.get(cursor) == Some(&b'@') {
+        cursor += 1;
+    }
+    ruby_identifier_end(bytes, cursor)
+}
+
+/// The end of the character literal a `?` at `question` opens, or `None` when
+/// those bytes are the ternary operator.
+///
+/// Ruby's `parse_qmark`: white space behind the `?` makes it the operator; a
+/// character outside ASCII is a literal whole; an ASCII letter, digit or `_`
+/// with another name byte behind it is the operator again, which is what keeps
+/// `a ?bc : d` a ternary; and everything else — an escape, or one punctuation
+/// byte — is a literal.
+fn ruby_character_literal_end(bytes: &[u8], question: usize) -> Option<usize> {
+    let index = question + 1;
+    let byte = *bytes.get(index)?;
+    if ruby_is_space(byte) || matches!(byte, b'\r' | b'\n') {
+        return None;
+    }
+    if !byte.is_ascii() {
+        return Some((index + ruby_character_width(byte)).min(bytes.len()));
+    }
+    if byte == b'\\' {
+        /* NOTE: `\u{...}` is the one escape whose length the bytes after it
+         * decide; every other one ends within a byte or two of name bytes,
+         * which are read as the name they look like and cannot open anything. */
+        if bytes.get(index + 1) == Some(&b'u') && bytes.get(index + 2) == Some(&b'{') {
+            let mut cursor = index + 3;
+            while bytes.get(cursor).is_some_and(|byte| *byte != b'}') {
+                cursor += 1;
+            }
+            return Some((cursor + 1).min(bytes.len()));
+        }
+        return Some((index + 2).min(bytes.len()));
+    }
+    if ruby_identifier_continue(byte)
+        && bytes
+            .get(index + 1)
+            .is_some_and(|next| ruby_identifier_continue(*next))
+    {
+        return None;
+    }
+    Some(index + 1)
+}
+
+/// How many bytes the UTF-8 sequence headed by `byte` takes, or one where it
+/// heads none. A trailing byte read on its own is a name byte here, which opens
+/// nothing, so a miscount costs nothing but a token boundary.
+fn ruby_character_width(byte: u8) -> usize {
+    match byte {
+        0xc0..=0xdf => 2,
+        0xe0..=0xef => 3,
+        0xf0..=0xf7 => 4,
+        _ => 1,
+    }
+}
+
+/// Past the option letters that may follow a regular expression — `i`, `m`,
+/// `x`, `o`, `n`, `e`, `s`, `u`.
+///
+/// They are read as a run of ASCII letters rather than as that set: a letter
+/// that is not an option is a syntax error either way, and taking it here
+/// leaves the lexer where the letters ended rather than in the middle of them.
+fn ruby_regexp_flags_end(bytes: &[u8], mut index: usize) -> usize {
+    while bytes.get(index).is_some_and(u8::is_ascii_alphabetic) {
+        index += 1;
+    }
+    index
+}
+
+/// The header of the `%` literal at `start`, or `None` when those bytes head
+/// none and the `%` is the modulo operator.
+///
+/// Ruby's `parse_percent`: the byte after the `%` is the delimiter unless it is
+/// alphanumeric, in which case it names the form and the byte after *that* is
+/// the delimiter. A delimiter is any ASCII byte that is not alphanumeric, the
+/// space of `% a ` included. `(`, `[`, `{` and `<` pair with their closer and
+/// nest; every other delimiter closes with itself.
+fn ruby_percent_header(bytes: &[u8], start: usize) -> Option<RubyPercent> {
+    let first = *bytes.get(start + 1)?;
+    let (form, delimiter, content) = if first.is_ascii_alphanumeric() {
+        if !matches!(
+            first,
+            b'q' | b'Q' | b'w' | b'W' | b'i' | b'I' | b's' | b'r' | b'x'
+        ) {
+            return None;
+        }
+        (first, *bytes.get(start + 2)?, start + 3)
+    } else {
+        (b'Q', first, start + 2)
+    };
+    if delimiter.is_ascii_alphanumeric() || !delimiter.is_ascii() {
+        return None;
+    }
+    let close = match delimiter {
+        b'(' => b')',
+        b'[' => b']',
+        b'{' => b'}',
+        b'<' => b'>',
+        _ => delimiter,
+    };
+    Some(RubyPercent {
+        form,
+        open: delimiter,
+        close,
+        content,
+        interpolates: matches!(form, b'Q' | b'W' | b'I' | b'r' | b'x'),
+    })
+}
+
+/// The here document a `<<` at `index` opens, and where its header ends, or
+/// `None` when those two bytes open none.
+///
+/// Ruby's `heredoc_identifier`: an optional `-` or `~`, then a quoted
+/// terminator or a bare word. The bare word is a run of `is_identchar` bytes
+/// from its very first one, which is a wider set than a name may start with: a
+/// digit is an identchar, so `<<2` is a here document terminated by a line
+/// reading `2` and `<<9x` one terminated by `9x`. Refusing digits would read
+/// the body as code, which is the one direction that invents a comment out of
+/// bytes Ruby has inside a string, so they are taken. Whether the `<<` stands
+/// where one may open at all is [`ruby_heredoc_may_open`]'s question, and it is
+/// what still leaves `a[0] <<2` and `p 1 <<2` the shift they are. A quoted
+/// terminator that runs past the end of its line opens nothing.
+fn ruby_heredoc_header(bytes: &[u8], index: usize) -> Option<(RubyHeredoc, usize)> {
+    let mut cursor = index + 2;
+    let indented = matches!(bytes.get(cursor), Some(b'-' | b'~'));
+    if indented {
+        cursor += 1;
+    }
+    let quote = match bytes.get(cursor)? {
+        b'\'' => Some(b'\''),
+        b'"' => Some(b'"'),
+        b'`' => Some(b'`'),
+        byte if ruby_identifier_continue(*byte) => None,
+        _ => return None,
+    };
+    let (label, end) = match quote {
+        Some(quote) => {
+            let start = cursor + 1;
+            let mut end = start;
+            loop {
+                match bytes.get(end) {
+                    Some(byte) if *byte == quote => break,
+                    None | Some(b'\r' | b'\n') => return None,
+                    Some(_) => end += 1,
+                }
+            }
+            (bytes[start..end].to_vec(), end + 1)
+        }
+        None => {
+            let end = ruby_identifier_end(bytes, cursor + 1);
+            (bytes[cursor..end].to_vec(), end)
+        }
+    };
+    Some((
+        RubyHeredoc {
+            operator: index,
+            label,
+            indented,
+            interpolates: quote != Some(b'\''),
+        },
+        end,
+    ))
+}
+
+/// Whether the line beginning at `index` is `heredoc`'s terminator.
+///
+/// Ruby's `whole_match_p`: the terminator is the whole line, with leading white
+/// space skipped only for the `<<-` and `<<~` forms.
+fn ruby_heredoc_terminates(bytes: &[u8], index: usize, heredoc: &RubyHeredoc) -> bool {
+    let mut probe = index;
+    if heredoc.indented {
+        while bytes.get(probe).is_some_and(|byte| ruby_is_space(*byte)) {
+            probe += 1;
+        }
+    }
+    starts(bytes, probe, &heredoc.label)
+        && matches!(
+            bytes.get(probe + heredoc.label.len()),
+            None | Some(b'\r' | b'\n')
+        )
 }
 
 fn starts_ascii_case(haystack: &[u8], needle: &[u8]) -> bool {

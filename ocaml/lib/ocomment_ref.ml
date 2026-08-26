@@ -1,6 +1,7 @@
 type language =
   | Rust | Ocaml | C | Cpp | Go | Java | JavaScript | TypeScript | Python
-  | Shell | Html | Css | Jsonc | Sql | Kotlin | Toml | Lua | Yaml | Php | Unknown
+  | Shell | Html | Css | Jsonc | Sql | Kotlin | Toml | Lua | Yaml | Php | Ruby
+  | Unknown
 
 type dialect =
   | Standard | Jsx | Tsx | ObjectiveC | ObjectiveCpp | GnuC | GnuCpp | Cuda
@@ -86,7 +87,7 @@ let language_of_string value =
   | "shell" | "sh" | "bash" | "zsh" -> Ok Shell | "html" | "htm" -> Ok Html
   | "css" -> Ok Css | "jsonc" | "json5" -> Ok Jsonc | "sql" -> Ok Sql
   | "kotlin" | "kt" | "kts" -> Ok Kotlin | "toml" -> Ok Toml | "lua" -> Ok Lua
-  | "yaml" | "yml" -> Ok Yaml | "php" -> Ok Php
+  | "yaml" | "yml" -> Ok Yaml | "php" -> Ok Php | "ruby" | "rb" -> Ok Ruby
   | other -> Error ("unsupported language `" ^ other ^ "`")
 
 let string_of_language = function
@@ -94,7 +95,8 @@ let string_of_language = function
   | Java -> "java" | JavaScript -> "javascript" | TypeScript -> "typescript"
   | Python -> "python" | Shell -> "shell" | Html -> "html" | Css -> "css"
   | Jsonc -> "jsonc" | Sql -> "sql" | Kotlin -> "kotlin" | Toml -> "toml"
-  | Lua -> "lua" | Yaml -> "yaml" | Php -> "php" | Unknown -> "unknown"
+  | Lua -> "lua" | Yaml -> "yaml" | Php -> "php" | Ruby -> "ruby"
+  | Unknown -> "unknown"
 
 let string_of_comment_kind = function
   | Line -> "line" | Block -> "block" | DocLine -> "doc-line" | DocBlock -> "doc-block"
@@ -359,6 +361,18 @@ let is_directive language text raw =
       String.starts_with ~prefix:"@phpstan-ignore" text ||
       String.starts_with ~prefix:"@codecoverageignore" text ||
       String.starts_with ~prefix:"phpcs:" compact
+  (* NOTE: Three of these six are Ruby's own magic comments, which the
+     interpreter reads out of the head of a file: "frozen_string_literal"
+     decides whether every literal string in it is frozen,
+     "shareable_constant_value" what Ractor may share, and "warn_indent" whether
+     the parser complains about the indentation.  The other three are the tools
+     every Ruby project runs -- RuboCop, StandardRB, and Sorbet's "# typed:"
+     sigil.  Each carries its own boundary in the colon and covers the whole
+     namespace behind it.  The encoding declaration is deliberately absent: it
+     is a kind of its own, classified before this runs. *)
+  | Ruby -> List.exists (fun prefix -> String.starts_with ~prefix compact)
+      ["frozen_string_literal:"; "warn_indent:"; "shareable_constant_value:";
+       "rubocop:"; "standard:"; "typed:"]
   | _ -> false
 
 let within_first_two_lines source finish =
@@ -382,7 +396,24 @@ let within_first_two_lines source finish =
    them. *)
 let byte_order_mark_width source = if starts source 0 "\xef\xbb\xbf" then 3 else 0
 
-let python_encoding_declaration source start raw =
+(* NOTE: Python and Ruby share the phrase, down to the spelling: PEP 263 asks
+   for "coding[:=]\s*([-\w.]+)" in one of the first two lines, and Ruby's
+   magic_comment reads the same phrase out of the same two lines.  The Emacs
+   form "# -*- coding: utf-8 -*-" satisfies both, which is why both languages
+   are written with it.
+
+   What the two do not share is which second line counts, and the rule here is
+   neither of theirs: any "coding:" comment on either of the first two lines is
+   a declaration, whatever stands on the line above it.  Ruby reads the second
+   line only behind a "#!" line, and Python only behind a line that is itself a
+   comment or blank -- so "x = 1\n# coding: us-ascii\n" names an encoding to
+   neither of them (Ruby 3.3.12 reports __ENCODING__ as UTF-8, and
+   tokenize.detect_encoding reports utf-8), and this function calls it a
+   declaration all the same.  Saying yes only ever keeps a comment "safe" would
+   otherwise remove, and the two ways to be wrong are not the same size: a
+   missed declaration removes the line a file's encoding is written on, an
+   invented one leaves an ordinary comment in place. *)
+let encoding_declaration source start raw =
   if not (within_first_two_lines source start) || not (String.starts_with ~prefix:"#" raw)
   then false else
   let rec find_line_start index =
@@ -420,7 +451,8 @@ let classify source language lexical start finish =
   let raw = Bytes.sub_string source start (finish - start) in
   let text = trim_markers raw in
   if start = byte_order_mark_width source && String.starts_with ~prefix:"#!" raw then Shebang
-  else if language = Python && python_encoding_declaration source start raw then Encoding
+  else if (language = Python || language = Ruby) &&
+    encoding_declaration source start raw then Encoding
   else if language = Sql && String.starts_with ~prefix:"/*+" raw then OptimizerHint
   else if language = Sql && String.starts_with ~prefix:"/*!" raw then VersionComment
   else if is_legal text then License else if is_directive language text raw then Directive else lexical
@@ -2490,6 +2522,614 @@ let scan_php source language options accumulator =
     html finish
   end else html 0
 
+(* NOTE: Where a Ruby token may begin, which is what decides whether "/", "%",
+   "?" and "<<" open a literal or are the operator spelled with the same byte.
+   This is Ruby's own lex_state folded onto the three answers those four
+   questions read out of it: IS_BEG(), IS_END(), and the IS_ARG() in between,
+   where a bare word may be a method about to take a command argument and only
+   the spacing around the byte says which.  Ruby's lexer tells a local variable
+   from a method name by the symbol table it is building, which a scanner has
+   not got, so every bare word lands in RubyArgument. *)
+type ruby_state = RubyBegin | RubyArgument | RubyEnd
+
+type ruby_percent = {
+  percent_form : char;
+  percent_open : char;
+  percent_close : char;
+  percent_content : int;
+  percent_interpolates : bool;
+}
+
+type ruby_heredoc = {
+  heredoc_operator : int;
+  heredoc_label : string;
+  heredoc_indented : bool;
+  heredoc_interpolates : bool;
+}
+
+(* NOTE: Ruby's is_identchar: a letter, "_", or the lead byte of a character
+   outside ASCII, which Ruby takes as a name byte wholesale. *)
+let ruby_identifier_start character =
+  (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') ||
+  character = '_' || Char.code character land 0x80 <> 0
+
+let ruby_identifier_continue character =
+  ruby_identifier_start character || (character >= '0' && character <= '9')
+
+let ruby_digit character = character >= '0' && character <= '9'
+
+let ruby_alphanumeric character =
+  (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') ||
+  ruby_digit character
+
+(* NOTE: White space that separates Ruby tokens without ending a line.  The
+   vertical tab and the form feed are in it, as rb_isspace has them; the two
+   line terminators are handled on their own, because they finish a statement. *)
+let ruby_is_space = function ' ' | '\t' | '\011' | '\012' -> true | _ -> false
+
+let ruby_identifier_end source index =
+  let rec loop cursor =
+    if cursor < Bytes.length source && ruby_identifier_continue (Bytes.get source cursor)
+    then loop (cursor + 1) else cursor
+  in loop index
+
+(* NOTE: Ruby's lexer takes a trailing "?" or "!" into a name unless a "="
+   follows it, which is what tells "x.empty?" from the ternary "x ? y : z" --
+   and, in the other direction, keeps "a != b" a comparison. *)
+let ruby_word_end source index =
+  let finish = ruby_identifier_end source (index + 1) in
+  if finish < Bytes.length source &&
+    (Bytes.get source finish = '?' || Bytes.get source finish = '!') &&
+    not (finish + 1 < Bytes.length source && Bytes.get source (finish + 1) = '=')
+  then finish + 1 else finish
+
+(* NOTE: The digits, the "_" separators, the radix letters and the "r" and "i"
+   suffixes are one run of name bytes; a "." joins the run only when a digit
+   follows it, which is what keeps "1.times" a method call. *)
+let ruby_number_end source index =
+  let rec loop cursor =
+    let finish = ruby_identifier_end source cursor in
+    if finish + 1 < Bytes.length source && Bytes.get source finish = '.' &&
+      ruby_digit (Bytes.get source (finish + 1))
+    then loop (finish + 1) else finish
+  in loop index
+
+(* NOTE: Ruby's keyword table folded onto ruby_state.  "def", "alias" and
+   "undef" are in the first list because the name that follows one may be
+   spelled "/" or "%" -- "def /(other)" defines division -- so nothing opens a
+   literal after them; "class" and "module" are there for the mirror-image
+   reason, that "class <<self" is a singleton class and never a here document.
+   "super", "yield", "not" and "defined?" are in neither, which leaves them
+   where Ruby has them: a command that may take an argument.
+
+   RubyEnd is a coarser answer than either reason asked for, and it is worth
+   naming what the coarseness costs, because it is the one place this scanner
+   reads fewer bytes into a literal than Ruby does.  RubyEnd answers all four of
+   the state machine's questions at once, so it also decides "/", "%" and "?".
+   After "def", "alias" and "undef" that is Ruby's own answer for "/" and "%",
+   which EXPR_FNAME reads as the method names they are.  After "class" and
+   "module" it is not: EXPR_CLASS expects a value, so Ruby opens a literal there
+   -- "class /x # c/" is one regular expression to Ruby 3.3.12 (Ripper.lex gives
+   on_regexp_beg) and a division with a comment behind it here.  And "?"
+   diverges after all five: "class ?# x" and "def ?# x" are on_CHAR "?#" to Ruby
+   and a comment opener here.  Every one of those spellings is a file Ruby
+   itself refuses -- "class" and "module" take a constant, a "::" or a "<<" in
+   any program that parses, and "def ?# x" is a syntax error -- so the
+   divergence is reachable only where the scan is already reading a broken
+   file.
+
+   "<<" itself is not a fourth entry on that list, and what keeps it off is not
+   this function.  A header this state refuses is a shift, which reads no fewer
+   bytes into a literal than Ruby does; a header it allows queues a body, and
+   scan_ruby queues it for the physical line the header stands on wherever that
+   header was written -- before an interpolation, inside one, inside a nested
+   one, or inside an interpolation on another here document's body line.  A
+   queue that stopped at an interpolation boundary would read a whole here
+   document body as code, which is a second place this scanner reads fewer bytes
+   into a literal than Ruby does, and it is the one the corpus cases named
+   "ruby-heredoc-*-interpolation" hold shut. *)
+let ruby_state_after_word token =
+  match token with
+  | "end" | "self" | "nil" | "true" | "false" | "redo" | "retry" | "__FILE__"
+  | "__LINE__" | "__ENCODING__" | "def" | "alias" | "undef" | "class" | "module" -> RubyEnd
+  | "if" | "unless" | "while" | "until" | "case" | "when" | "in" | "and" | "or"
+  | "return" | "break" | "next" | "then" | "do" | "else" | "elsif" | "begin"
+  | "ensure" | "rescue" | "for" -> RubyBegin
+  | _ -> RubyArgument
+
+(* NOTE: Ruby's rule for both "/" and "%" (parse_slash, parse_percent) is one
+   rule: where a value is expected the byte always opens a literal; after an
+   operand it never does; and in between it opens one exactly when white space
+   stands before it and none behind it, which tells the command argument of
+   "puts /x/" from the division in "a / b".  "/=" and "%=" are recognised before
+   that last test, so an assignment operator is never read as a literal outside
+   value position. *)
+let ruby_literal_opens state space_seen source index =
+  match state with
+  | RubyBegin -> true
+  | RubyEnd -> false
+  | RubyArgument ->
+    space_seen && index + 1 < Bytes.length source &&
+    (let byte = Bytes.get source (index + 1) in
+     byte <> '=' && not (ruby_is_space byte) && byte <> '\r' && byte <> '\n')
+
+(* NOTE: Never after an operand, and after a bare word only when white space
+   stands in front of it -- which is why "a << b" is a shift and "a <<b" is the
+   here document that spacing exists to avoid. *)
+let ruby_heredoc_may_open state space_seen =
+  match state with
+  | RubyBegin -> true | RubyArgument -> space_seen | RubyEnd -> false
+
+(* NOTE: Where Ruby's two column-zero markers -- "=begin" and "__END__" -- are
+   recognised.  A byte order mark is consumed before the first line is read, so
+   the byte behind one still opens the first line. *)
+let ruby_at_line_start source index =
+  if index = 0 || index = byte_order_mark_width source then true
+  else match Bytes.get source (index - 1) with
+    | '\n' -> true
+    | '\r' -> not (index < Bytes.length source && Bytes.get source index = '\n')
+    | _ -> false
+
+let ruby_word_boundary source index =
+  index >= Bytes.length source ||
+  (let byte = Bytes.get source index in
+   ruby_is_space byte || byte = '\r' || byte = '\n')
+
+(* NOTE: Ruby's word_match_p: the word ends at white space or at the end of the
+   file, so "=beginner" is the "=" operator and a name. *)
+let ruby_embedded_document source index =
+  starts source index "=begin" && ruby_word_boundary source (index + 6)
+
+(* NOTE: The document runs to the end of the "=end" line, whose remaining bytes
+   Ruby skips along with the rest of it, and both markers stand at column zero. *)
+let ruby_embedded_document_end source start =
+  let rec loop index =
+    if index >= Bytes.length source then (Bytes.length source, false)
+    else
+      let next = consume_newline source index in
+      if starts source next "=end" && ruby_word_boundary source (next + 4)
+      then (line_end source (next + 4), true)
+      else loop (line_end source next)
+  in loop (line_end source start)
+
+(* NOTE: Ruby's whole_match_p: the marker is the whole line, so "__END__ x" is
+   an ordinary name and the source runs on past it. *)
+let ruby_data_marker source index =
+  starts source index "__END__" &&
+  (index + 7 >= Bytes.length source ||
+   (let byte = Bytes.get source (index + 7) in byte = '\r' || byte = '\n'))
+
+(* NOTE: The characters an operator method is spelled with, which is how a
+   symbol naming one -- ":<=>", ":[]=", ":+@" -- is written. *)
+let ruby_symbol_operator = function
+  | '+' | '-' | '*' | '/' | '%' | '<' | '>' | '=' | '!' | '~' | '^' | '&' | '|'
+  | '[' | ']' | '@' -> true
+  | _ -> false
+
+let ruby_symbol_head character =
+  ruby_identifier_start character || character = '@' || character = '$' ||
+  ruby_symbol_operator character
+
+(* NOTE: Ruby's parse_gvar: a name, a digit run, "-" and one character, or one
+   of the punctuation names.  "$\"" and "$'" are two of those names, which keeps
+   the quote in either from opening a string, and "$/" and "$\\" two more.  "#"
+   is not one of them -- the reference refuses that spelling outright -- so "$#"
+   is a "$" on its own and the byte behind it opens the comment it opens
+   everywhere else in the language. *)
+let ruby_global_end source index =
+  if index + 1 >= Bytes.length source then index + 1 else
+  let byte = Bytes.get source (index + 1) in
+  if ruby_identifier_start byte then ruby_identifier_end source (index + 2)
+  else if ruby_digit byte then
+    (let rec loop cursor =
+       if cursor < Bytes.length source && ruby_digit (Bytes.get source cursor)
+       then loop (cursor + 1) else cursor
+     in loop (index + 2))
+  else if byte = '-' then min (Bytes.length source) (index + 3)
+  else if String.contains "~*$?!@/\\;,.=:<>\"&`'+" byte then index + 2
+  else index + 1
+
+let ruby_at_variable_end source index =
+  let cursor =
+    if index + 1 < Bytes.length source && Bytes.get source (index + 1) = '@'
+    then index + 2 else index + 1 in
+  ruby_identifier_end source cursor
+
+(* NOTE: A symbol is a name -- with the "@", "@@" or "$" of a variable in front
+   of it where one is meant -- or one of the operator methods, which is read
+   here as the run of characters those are spelled with rather than as a table
+   of them: a run that names no method is a syntax error either way, and reading
+   it as one symbol keeps the byte after it out of the literal path. *)
+let ruby_symbol_end source index =
+  let cursor = index + 1 in
+  if cursor >= Bytes.length source then cursor
+  else match Bytes.get source cursor with
+    | '$' -> ruby_global_end source cursor
+    | '@' -> ruby_at_variable_end source cursor
+    | byte when ruby_identifier_start byte -> ruby_word_end source cursor
+    | _ ->
+      let rec loop probe =
+        if probe < Bytes.length source && ruby_symbol_operator (Bytes.get source probe)
+        then loop (probe + 1) else probe
+      in loop cursor
+
+let ruby_character_width byte =
+  let code = Char.code byte in
+  if code >= 0xf0 && code <= 0xf7 then 4
+  else if code >= 0xe0 && code <= 0xef then 3
+  else if code >= 0xc0 && code <= 0xdf then 2
+  else 1
+
+(* NOTE: Ruby's parse_qmark: white space behind the "?" makes it the operator; a
+   character outside ASCII is a literal whole; an ASCII letter, digit or "_"
+   with another name byte behind it is the operator again, which keeps
+   "a ?bc : d" a ternary; and everything else -- an escape, or one punctuation
+   byte -- is a literal. *)
+let ruby_character_literal_end source question =
+  let index = question + 1 in
+  if index >= Bytes.length source then None else
+  let byte = Bytes.get source index in
+  if ruby_is_space byte || byte = '\r' || byte = '\n' then None
+  else if Char.code byte land 0x80 <> 0 then
+    Some (min (Bytes.length source) (index + ruby_character_width byte))
+  else if byte = '\\' then
+    (if index + 2 < Bytes.length source && Bytes.get source (index + 1) = 'u' &&
+       Bytes.get source (index + 2) = '{'
+     then
+       let rec loop cursor =
+         if cursor < Bytes.length source && Bytes.get source cursor <> '}'
+         then loop (cursor + 1) else min (Bytes.length source) (cursor + 1)
+       in Some (loop (index + 3))
+     else Some (min (Bytes.length source) (index + 2)))
+  else if ruby_identifier_continue byte && index + 1 < Bytes.length source &&
+    ruby_identifier_continue (Bytes.get source (index + 1))
+  then None
+  else Some (index + 1)
+
+(* NOTE: The option letters that may follow a regular expression are read as a
+   run of ASCII letters rather than as the set "imxonesu": a letter that is not
+   an option is a syntax error either way, and taking it here leaves the lexer
+   where the letters ended rather than in the middle of them. *)
+let ruby_regexp_flags_end source index =
+  let rec loop cursor =
+    if cursor < Bytes.length source &&
+      (let byte = Bytes.get source cursor in
+       (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z'))
+    then loop (cursor + 1) else cursor
+  in loop index
+
+(* NOTE: Ruby's parse_percent: the byte after the "%" is the delimiter unless it
+   is alphanumeric, in which case it names the form and the byte after that is
+   the delimiter.  A delimiter is any ASCII byte that is not alphanumeric, the
+   space of "% a " included.  "(", "[", "{" and "<" pair with their closer and
+   nest; every other delimiter closes with itself. *)
+let ruby_percent_header source start =
+  if start + 1 >= Bytes.length source then None else
+  let first = Bytes.get source (start + 1) in
+  let header =
+    if ruby_alphanumeric first then
+      (if not (String.contains "qQwWiIsrx" first) then None
+       else if start + 2 >= Bytes.length source then None
+       else Some (first, Bytes.get source (start + 2), start + 3))
+    else Some ('Q', first, start + 2) in
+  match header with
+  | None -> None
+  | Some (form, delimiter, content) ->
+    if ruby_alphanumeric delimiter || Char.code delimiter land 0x80 <> 0 then None
+    else
+      let close = match delimiter with
+        | '(' -> ')' | '[' -> ']' | '{' -> '}' | '<' -> '>' | other -> other in
+      Some { percent_form = form; percent_open = delimiter; percent_close = close;
+             percent_content = content;
+             percent_interpolates = String.contains "QWIrx" form }
+
+(* NOTE: Ruby's heredoc_identifier: an optional "-" or "~", then a quoted
+   terminator or a bare word.  The bare word is a run of is_identchar bytes from
+   its very first one, which is a wider set than a name may start with: a digit
+   is an identchar, so "<<2" is a here document terminated by a line reading "2"
+   and "<<9x" one terminated by "9x".  Refusing digits would read the body as
+   code, which is the one direction that invents a comment out of bytes Ruby has
+   inside a string, so they are taken.  Whether the "<<" stands where one may
+   open at all is ruby_heredoc_may_open's question, and it is what still leaves
+   "a[0] <<2" and "p 1 <<2" the shift they are.  A quoted terminator that runs
+   past the end of its line opens nothing. *)
+let ruby_heredoc_header source index =
+  let cursor = index + 2 in
+  let indented = cursor < Bytes.length source &&
+    (Bytes.get source cursor = '-' || Bytes.get source cursor = '~') in
+  let cursor = if indented then cursor + 1 else cursor in
+  let opener =
+    if cursor >= Bytes.length source then `Absent
+    else match Bytes.get source cursor with
+      | ('\'' | '"' | '`') as quote -> `Quoted quote
+      | byte when ruby_identifier_continue byte -> `Bare
+      | _ -> `Absent in
+  match opener with
+  | `Absent -> None
+  | `Quoted quote ->
+    let start = cursor + 1 in
+    let rec loop finish =
+      if finish >= Bytes.length source then None
+      else match Bytes.get source finish with
+        | '\r' | '\n' -> None
+        | byte when byte = quote ->
+          Some (Bytes.sub_string source start (finish - start), finish + 1)
+        | _ -> loop (finish + 1) in
+    (match loop start with
+     | None -> None
+     | Some (label, finish) ->
+       Some ({ heredoc_operator = index; heredoc_label = label;
+               heredoc_indented = indented; heredoc_interpolates = quote <> '\'' }, finish))
+  | `Bare ->
+    let finish = ruby_identifier_end source (cursor + 1) in
+    Some ({ heredoc_operator = index;
+            heredoc_label = Bytes.sub_string source cursor (finish - cursor);
+            heredoc_indented = indented; heredoc_interpolates = true }, finish)
+
+(* NOTE: Ruby's whole_match_p: the terminator is the whole line, with leading
+   white space skipped only for the "<<-" and "<<~" forms. *)
+let ruby_heredoc_terminates source index heredoc =
+  let rec skip probe =
+    if heredoc.heredoc_indented && probe < Bytes.length source &&
+      ruby_is_space (Bytes.get source probe)
+    then skip (probe + 1) else probe in
+  let probe = skip index in
+  let width = String.length heredoc.heredoc_label in
+  starts source probe heredoc.heredoc_label &&
+  (probe + width >= Bytes.length source ||
+   (let byte = Bytes.get source (probe + width) in byte = '\r' || byte = '\n'))
+
+(* NOTE: The first "count" elements of "items", which is how the shared here
+   document queue is cut back to what an enclosing scan had put in it. *)
+let rec ruby_take count items =
+  if count <= 0 then []
+  else match items with [] -> [] | head :: tail -> head :: ruby_take (count - 1) tail
+
+let scan_ruby source language options accumulator =
+  let length = Bytes.length source in
+  (* NOTE: The here documents opened on the physical line being read and not yet
+     given a body, in the order Ruby will consume them.  It is one queue for the
+     whole line rather than one per nested scan because a header may stand
+     inside an interpolation -- "puts \"#{ <<EOS }\"" opens a here document whose
+     body is the line under that one -- and because Ruby takes the bodies in
+     header order across the whole line, so an opener written before an
+     interpolation and one written inside it queue together.  The queue is
+     drained by whichever scan reaches the line break first, which is why it has
+     to outlive the "}" a nested scan returns from. *)
+  let pending = ref [] in
+  let pending_push heredoc = pending := !pending @ [heredoc] in
+  let pending_take () = let opened = !pending in pending := []; opened in
+  let rec code index interpolation depth =
+    if depth > 256 then begin
+      add_error accumulator "nesting-limit" "Ruby lexical nesting limit exceeded" index index;
+      length
+    end else
+    (* NOTE: Where this call's own openers begin in the shared queue.  An
+       enclosing scan's entries sit in front of them and are that scan's to
+       report, which is what keeps one unterminated here document to one
+       diagnostic. *)
+    let base = List.length !pending in
+    let rec loop index state space_seen braces =
+      if index >= length then begin
+        (* NOTE: A here document opened on a last line that has no break of its
+           own never reaches "bodies", which is driven from the break.  It is
+           unterminated all the same, and is reported from its own "<<" with the
+           span that call would have given it.  Only this call's own openers are
+           reported here -- the ones from "base" on -- because an enclosing scan
+           reports its own, and the queue is cut back to "base" so that it
+           reports them once. *)
+        (match List.nth_opt !pending base with
+         | Some heredoc ->
+           add_error accumulator "unterminated-heredoc"
+             "unterminated Ruby here document" heredoc.heredoc_operator length;
+           pending := ruby_take base !pending
+         | None -> ());
+        if interpolation then
+          add_error accumulator "unterminated-interpolation"
+            "unterminated Ruby interpolation" index index;
+        index
+      end else
+      match Bytes.get source index with
+      | '#' ->
+        let finish = line_end source (index + 1) in
+        add_comment accumulator source language options Line index finish;
+        loop finish state space_seen braces
+      | '=' when ruby_at_line_start source index && ruby_embedded_document source index ->
+        let finish, closed = ruby_embedded_document_end source index in
+        add_comment accumulator source language options Block index finish;
+        if not closed then add_error accumulator "unterminated-comment"
+          "unterminated Ruby embedded document" index finish;
+        loop finish RubyBegin false braces
+      (* NOTE: Everything past the marker is the DATA section, which is not
+         source and holds no comments. *)
+      | '_' when ruby_at_line_start source index && ruby_data_marker source index ->
+        loop length state space_seen braces
+      | '\r' | '\n' ->
+        let next = consume_newline source index in
+        (match pending_take () with
+         | [] -> loop next RubyBegin false braces
+         | opened ->
+           (match bodies next opened (depth + 1) with
+            | Some finish -> loop finish RubyBegin false braces
+            | None -> loop length state space_seen braces))
+      | '\'' -> loop (string index false depth) RubyEnd false braces
+      | '"' | '`' -> loop (string index true depth) RubyEnd false braces
+      | ':' when starts source index "::" -> loop (index + 2) RubyEnd false braces
+      | ':' when index + 1 < length &&
+          (Bytes.get source (index + 1) = '\'' || Bytes.get source (index + 1) = '"') ->
+        loop (string (index + 1) (Bytes.get source (index + 1) = '"') depth)
+          RubyEnd false braces
+      | ':' when index + 1 < length && ruby_symbol_head (Bytes.get source (index + 1)) ->
+        loop (ruby_symbol_end source index) RubyEnd false braces
+      | '?' ->
+        (match ruby_character_literal_end source index with
+         | Some finish when state <> RubyEnd -> loop finish RubyEnd false braces
+         | _ -> loop (index + 1) RubyBegin false braces)
+      | '%' ->
+        (match ruby_percent_header source index with
+         | Some literal when ruby_literal_opens state space_seen source index ->
+           loop (percent index literal depth) RubyEnd false braces
+         | _ -> loop (index + 1) RubyBegin false braces)
+      | '/' ->
+        if ruby_literal_opens state space_seen source index
+        then loop (regexp index depth) RubyEnd false braces
+        else loop (index + 1) RubyBegin false braces
+      | '<' when starts source index "<<" ->
+        (match ruby_heredoc_header source index with
+         | Some (heredoc, finish) when ruby_heredoc_may_open state space_seen ->
+           pending_push heredoc; loop finish RubyEnd false braces
+         | _ -> loop (index + 2) RubyBegin false braces)
+      | '$' -> loop (ruby_global_end source index) RubyEnd false braces
+      | '@' -> loop (ruby_at_variable_end source index) RubyEnd false braces
+      | '{' -> loop (index + 1) RubyBegin false (braces + 1)
+      | '}' ->
+        if interpolation && braces = 1 then index + 1
+        else loop (index + 1) RubyEnd false
+          (if interpolation then braces - 1 else braces)
+      | '(' | '[' -> loop (index + 1) RubyBegin false braces
+      | ')' | ']' -> loop (index + 1) RubyEnd false braces
+      (* NOTE: The method-call dot, which is also the two range operators.  All
+         three want the byte after them read as a name rather than as a literal
+         delimiter, which is what RubyEnd says. *)
+      | '.' -> loop (index + 1) RubyEnd false braces
+      (* NOTE: Outside a literal a backslash only continues the line, which is
+         white space to the grammar. *)
+      | '\\' when index + 1 < length &&
+          (Bytes.get source (index + 1) = '\r' || Bytes.get source (index + 1) = '\n') ->
+        loop (consume_newline source (index + 1)) state true braces
+      | '\\' -> loop (min length (index + 2)) RubyEnd false braces
+      | byte when ruby_digit byte ->
+        loop (ruby_number_end source index) RubyEnd false braces
+      | byte when ruby_identifier_start byte ->
+        let finish = ruby_word_end source index in
+        loop finish (ruby_state_after_word (Bytes.sub_string source index (finish - index)))
+          false braces
+      | byte when ruby_is_space byte -> loop (index + 1) state true braces
+      | _ -> loop (index + 1) RubyBegin false braces
+    in loop index RubyBegin false (if interpolation then 1 else 0)
+
+  (* NOTE: A single-quoted string escapes only "\'" and "\\", and every other
+     backslash is a byte of it -- but the byte after a backslash can never be
+     the closing quote unless the pair is the "\'" escape, so skipping two finds
+     the same closer either way.  The other two take the full escape set and
+     interpolate, and none of the three ends at a line break. *)
+  and string start interpolates depth =
+    let quote = Bytes.get source start in
+    let rec loop index =
+      if index >= length then begin
+        add_error accumulator "unterminated-string"
+          (match quote with
+           | '\'' -> "unterminated Ruby single-quoted string"
+           | '"' -> "unterminated Ruby double-quoted string"
+           | _ -> "unterminated Ruby backtick string")
+          start index;
+        index
+      end
+      else if Bytes.get source index = '\\' then loop (min length (index + 2))
+      else if Bytes.get source index = quote then index + 1
+      else if interpolates && starts source index "#{" then
+        loop (code (index + 2) true (depth + 1))
+      else loop (index + 1)
+    in loop (start + 1)
+
+  (* NOTE: A "[" opens a character class, where the delimiter is one of the
+     pattern's own bytes.  That is deliberately more forgiving than Ruby's own
+     tokadd_string, which ends the literal at the first unescaped "/" wherever
+     it stands: reading "/[/]/" as one literal keeps the rest of the line inside
+     it, which hides bytes from a removal rather than exposing them. *)
+  and regexp start depth =
+    let rec loop index in_class =
+      if index >= length then begin
+        add_error accumulator "unterminated-string"
+          "unterminated Ruby regular expression" start index;
+        index
+      end
+      else match Bytes.get source index with
+        | '\\' -> loop (min length (index + 2)) in_class
+        | '[' -> loop (index + 1) true
+        | ']' -> loop (index + 1) false
+        | '/' when not in_class -> ruby_regexp_flags_end source (index + 1)
+        | '#' when starts source index "#{" -> loop (code (index + 2) true (depth + 1)) in_class
+        | _ -> loop (index + 1) in_class
+    in loop (start + 1) false
+
+  (* NOTE: A paired delimiter nests, which is what lets "%w[a [b] c]" hold a
+     bracket; every other delimiter closes with itself and cannot.  The
+     interpolating forms read "#{ ... }" as an expression before either
+     delimiter is considered, so the braces of one never count towards a
+     "%Q{...}" nesting depth. *)
+  and percent start literal depth =
+    let rec loop index nesting =
+      if index >= length then begin
+        add_error accumulator "unterminated-string"
+          "unterminated Ruby percent literal" start index;
+        index
+      end
+      else if Bytes.get source index = '\\' then loop (min length (index + 2)) nesting
+      else if literal.percent_interpolates && starts source index "#{" then
+        loop (code (index + 2) true (depth + 1)) nesting
+      else if literal.percent_open <> literal.percent_close &&
+        Bytes.get source index = literal.percent_open
+      then loop (index + 1) (nesting + 1)
+      else if Bytes.get source index = literal.percent_close then
+        (if nesting = 1 then
+           (if literal.percent_form = 'r' then ruby_regexp_flags_end source (index + 1)
+            else index + 1)
+         else loop (index + 1) (nesting - 1))
+      else loop (index + 1) nesting
+    in loop literal.percent_content 1
+
+  (* NOTE: Every here document opened on the line that has just ended, in the
+     order they were opened.  None once one of them runs out of file, which is
+     reported from the "<<" that opened it rather than from the line it
+     swallowed. *)
+  and bodies index heredocs depth =
+    match heredocs with
+    | [] -> Some index
+    | heredoc :: tail ->
+      (match body index heredoc depth with
+       | Some finish -> bodies finish tail depth
+       | None ->
+         add_error accumulator "unterminated-heredoc" "unterminated Ruby here document"
+           heredoc.heredoc_operator length;
+         None)
+
+  (* NOTE: The body is opaque: only "#{ ... }" in an interpolating form is read
+     as code, and the terminator is looked for at the start of each of the
+     body's own lines, so one written inside an interpolation is content like
+     the rest of it. *)
+  and body index heredoc depth =
+    let rec line index =
+      if index >= length then None
+      else if ruby_heredoc_terminates source index heredoc then
+        Some (min length (consume_newline source (line_end source index)))
+      else
+        let rec content cursor =
+          if cursor >= length then cursor
+          else match Bytes.get source cursor with
+            | '\r' | '\n' -> cursor
+            | '\\' when heredoc.heredoc_interpolates ->
+              content (if starts source cursor "\\\r\n" then cursor + 3
+                       else min length (cursor + 2))
+            | '#' when heredoc.heredoc_interpolates && starts source cursor "#{" ->
+              content (code (cursor + 2) true (depth + 1))
+            | _ -> content (cursor + 1) in
+        let finish = content index in
+        if finish >= length then None
+        else
+          let next = consume_newline source finish in
+          (* NOTE: A body line is a physical line like any other, so a header
+             reached through an interpolation on it queues for the line under it
+             and is read there -- before this body resumes. *)
+          (match pending_take () with
+           | [] -> line next
+           | opened ->
+             (match bodies next opened (depth + 1) with
+              | Some resume -> line resume
+              | None -> None))
+    in line index
+  in ignore (code 0 false 0)
+
 let rec scan_html source language options accumulator =
   let tag_boundary = function None -> true | Some character ->
     ascii_whitespace character || character = '>' || character = '/' in
@@ -2577,6 +3217,7 @@ and scan source language options =
   | Lua -> scan_lua source language options accumulator
   | Yaml -> scan_yaml source language options accumulator
   | Php -> scan_php source language options accumulator
+  | Ruby -> scan_ruby source language options accumulator
   | Html -> scan_html source language options accumulator
   | Unknown -> add_error accumulator "unknown-language" "a language is required" 0 0);
   let comments = List.rev accumulator.comments_rev in
