@@ -66,6 +66,29 @@ pub(crate) fn scan_until_checkpoint(
     scan_internal(source, language, options, offset, true, Some(stop))
 }
 
+/// Every safe checkpoint a scan of `source` offers, paired with the watermark
+/// standing when it was offered — one past the furthest byte any decision made
+/// before it had read.
+///
+/// Test-only, and the whole of what [`Reach`] is for: the checkpoint-soundness
+/// property asserts the mechanism directly rather than inferring it from a
+/// rescan that may re-lex the same bytes by luck.
+#[cfg(test)]
+pub(crate) fn scan_checkpoint_watermarks(
+    source: &[u8],
+    language: Language,
+    options: ScanOptions,
+) -> Vec<(usize, usize)> {
+    let mut scanner = Scanner::with_offset(source, language, options, 0, true, None);
+    scanner.scan_language();
+    scanner
+        .safe_checkpoints
+        .iter()
+        .copied()
+        .zip(scanner.checkpoint_watermarks)
+        .collect()
+}
+
 fn scan_internal(
     source: &[u8],
     language: Language,
@@ -76,32 +99,7 @@ fn scan_internal(
 ) -> (ScanReport, Vec<usize>, bool) {
     let mut scanner =
         Scanner::with_offset(source, language, options, offset, track_checkpoints, stop);
-    match language {
-        Language::Rust
-        | Language::C
-        | Language::Cpp
-        | Language::Go
-        | Language::Kotlin
-        | Language::Css
-        | Language::Jsonc => scanner.scan_c_family(),
-        Language::Java => scanner.scan_java(),
-        Language::JavaScript | Language::TypeScript => scanner.scan_javascript(),
-        Language::Ocaml => scanner.scan_ocaml(),
-        Language::Python => scanner.scan_python(),
-        Language::Shell => scanner.scan_shell(),
-        Language::Html => scanner.scan_html(),
-        Language::Sql => scanner.scan_sql(),
-        Language::Toml => scanner.scan_toml(),
-        Language::Lua => scanner.scan_lua(),
-        Language::Yaml => scanner.scan_yaml(),
-        Language::Php => scanner.scan_php(),
-        Language::Ruby => scanner.scan_ruby(),
-        Language::Unknown => scanner.error(
-            "unknown-language",
-            "a language is required",
-            ByteSpan::new(0, 0),
-        ),
-    }
+    scanner.scan_language();
     debug_assert!(scanner.comments.windows(2).all(|comments| {
         comments[0].span.start < comments[1].span.start
             && comments[0].span.end <= comments[1].span.start
@@ -122,6 +120,63 @@ fn scan_internal(
     )
 }
 
+/// One past the furthest byte a lookahead read, in the coordinates of the
+/// slice it was handed.
+///
+/// INVARIANT: a safe checkpoint promises that nothing decided before it depends
+/// on bytes at or after it, and [`Scanner::add_safe_checkpoint`] keeps that
+/// promise by refusing any position an earlier decision already read through.
+/// That is a mechanism rather than an audit only while every *lookahead*
+/// reports how far it went: a helper takes `&mut Reach`, records each byte as
+/// it consults it — a `get` that came back `None` included, because deciding
+/// that the document ends there is a decision about that byte just the same —
+/// and its caller folds the result into the scan with [`Scanner::consult`].
+///
+/// NOTE: a plain forward scan is not a lookahead and reports nothing: the index
+/// consumes every byte it reads, so a restart inside the region reaches the
+/// same answer for what is left of it. What has to be reported is the read that
+/// the scan then *rewinds* behind — a delimiter parse that gives up and lexes
+/// the same bytes again, an unbounded search for a closing token that fails —
+/// because the bytes past the resume point have already decided something no
+/// rescan from a later checkpoint would revisit.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct Reach(usize);
+
+impl Reach {
+    /// Record a read of every byte below `end`.
+    fn through(&mut self, end: usize) {
+        self.0 = self.0.max(end);
+    }
+
+    /// Record a read of the byte at `index`.
+    fn byte(&mut self, index: usize) {
+        self.through(index + 1);
+    }
+
+    /// Record a search that ran off the end of `bytes`.
+    ///
+    /// One byte further than the document holds, because what such a search
+    /// decided out of is not only every byte it crossed but the end itself —
+    /// and an append is an edit exactly there. A checkpoint at the end of the
+    /// document is the one an append reuses the whole prefix from, so it is
+    /// the one this has to withdraw.
+    fn end_of(&mut self, bytes: &[u8]) {
+        self.through(bytes.len() + 1);
+    }
+}
+
+/// One past the last byte a bounded window of `width` bytes at `index` can
+/// consult: the windows that tell a character literal from something else stop
+/// at the first line terminator, and read that terminator to know they must.
+fn line_bounded_reach(bytes: &[u8], index: usize, width: usize) -> usize {
+    let limit = (index + width).min(bytes.len());
+    let window = &bytes[index.min(limit)..limit];
+    window
+        .iter()
+        .position(|byte| is_line_terminator(*byte))
+        .map_or(limit, |stop| index + stop + 1)
+}
+
 struct Scanner<'a> {
     source: &'a [u8],
     language: Language,
@@ -134,6 +189,15 @@ struct Scanner<'a> {
     track_checkpoints: bool,
     stop: Option<usize>,
     stopped: bool,
+    /// One past the furthest byte any decision so far consulted, in the local
+    /// coordinates every index here is in. See [`Reach`].
+    consulted: usize,
+    /// The watermark as each safe checkpoint was offered, in the order
+    /// `safe_checkpoints` holds them. Test-only: it is what lets the
+    /// checkpoint-soundness property assert the mechanism itself, instead of
+    /// trusting that a rescan happens to re-lex whatever a lookahead read.
+    #[cfg(test)]
+    checkpoint_watermarks: Vec<usize>,
     restart_rules: RestartRules,
     /// Every YAML block scalar the scan walked over, in source order. Empty
     /// for every other language, and for the YAML documents — nearly all of
@@ -168,6 +232,11 @@ impl<'a> Scanner<'a> {
             track_checkpoints,
             stop,
             stopped: false,
+            consulted: 0,
+            #[cfg(test)]
+            checkpoint_watermarks: track_checkpoints
+                .then_some(vec![offset])
+                .unwrap_or_default(),
             restart_rules: RestartRules::of(source, language),
             yaml_blocks: Vec::new(),
         };
@@ -196,9 +265,53 @@ impl<'a> Scanner<'a> {
             track_checkpoints: false,
             stop: None,
             stopped: false,
+            consulted: 0,
+            #[cfg(test)]
+            checkpoint_watermarks: Vec::new(),
             restart_rules: RestartRules::of(source, language),
             yaml_blocks: Vec::new(),
         }
+    }
+
+    /// Run the scanner for its own language.
+    fn scan_language(&mut self) {
+        match self.language {
+            Language::Rust
+            | Language::C
+            | Language::Cpp
+            | Language::Go
+            | Language::Kotlin
+            | Language::Css
+            | Language::Jsonc => self.scan_c_family(),
+            Language::Java => self.scan_java(),
+            Language::JavaScript | Language::TypeScript => self.scan_javascript(),
+            Language::Ocaml => self.scan_ocaml(),
+            Language::Python => self.scan_python(),
+            Language::Shell => self.scan_shell(),
+            Language::Html => self.scan_html(),
+            Language::Sql => self.scan_sql(),
+            Language::Toml => self.scan_toml(),
+            Language::Lua => self.scan_lua(),
+            Language::Yaml => self.scan_yaml(),
+            Language::Php => self.scan_php(),
+            Language::Ruby => self.scan_ruby(),
+            Language::Zig => self.scan_zig(),
+            Language::R => self.scan_r(),
+            Language::Dart => self.scan_dart(),
+            Language::Unknown => self.error(
+                "unknown-language",
+                "a language is required",
+                ByteSpan::new(0, 0),
+            ),
+        }
+    }
+
+    /// Fold what a lookahead read into the scan's watermark.
+    ///
+    /// Clamped to the source, so that a `get` past the last byte does not
+    /// withdraw the checkpoint a trailing line terminator earns.
+    fn consult(&mut self, reach: Reach) {
+        self.consulted = self.consulted.max(reach.0.min(self.source.len() + 1));
     }
 
     fn error(&mut self, code: &str, message: &str, span: ByteSpan) {
@@ -248,13 +361,28 @@ impl<'a> Scanner<'a> {
             && (self.offset > 0 || self.restart_rules.permit_restart_at(self.source, local))
     }
 
+    /// Offer `local` as a restart point, if it may stand as one.
+    ///
+    /// INVARIANT: a checkpoint promises that nothing decided before it depends
+    /// on bytes at or after it, so it may only stand where no earlier decision
+    /// read past it. That is what the watermark is for: a position below what
+    /// [`Reach`] has already recorded is refused outright, rather than left to
+    /// an audit of which lookahead reaches how far. Refusing one costs a
+    /// rescan the chance to start there; keeping an unsound one corrupts the
+    /// rescan silently.
     fn add_safe_checkpoint(&mut self, local: usize) {
-        if !self.track_checkpoints || !self.checkpoint_is_restartable(local) {
+        if !self.track_checkpoints
+            || local < self.consulted
+            || !self.checkpoint_is_restartable(local)
+        {
             return;
         }
         let absolute = self.offset + local;
         if self.safe_checkpoints.last().copied() != Some(absolute) {
             self.safe_checkpoints.push(absolute);
+            #[cfg(test)]
+            self.checkpoint_watermarks
+                .push(self.offset + self.consulted);
         }
         if self.stop == Some(absolute) {
             self.stopped = true;
@@ -368,16 +496,39 @@ impl<'a> Scanner<'a> {
                      * rest of the source. */
                     return Some(self.quoted_or_error(quote, true, "string"));
                 }
-                if bytes[index] == b'\'' && rust_char_start(bytes, index) {
-                    return Some(self.quoted_or_error(index, false, "character literal"));
+                if bytes[index] == b'\'' {
+                    let mut reach = Reach::default();
+                    let literal = rust_char_start(bytes, index, &mut reach);
+                    self.consult(reach);
+                    if literal {
+                        return Some(self.quoted_or_error(index, false, "character literal"));
+                    }
+                    /* NOTE: What is left is an apostrophe this window read as
+                     * no literal, and nothing on its line says whether it
+                     * opens one. A Rust identifier is `XID_Start
+                     * XID_Continue*` (Rust Reference, Identifiers) and has
+                     * been since 1.53, so `'ä` is as good a lifetime or loop
+                     * label as `'a` -- `fn f<'ä>() {}` and `'ä: loop {}` both
+                     * compile -- and an unterminated non-ASCII character
+                     * literal is spelled the same way within one line. `rustc`
+                     * tells the two apart in the parser, which is where E0762
+                     * is raised; this scanner is a lexer with a line-bounded
+                     * window and cannot. So it reports neither: over-keeping a
+                     * comment is the safe direction, calling a valid file
+                     * invalid is not. */
                 }
             }
             Language::C | Language::Cpp => {
-                if self.language == Language::Cpp
-                    && bytes[index] == b'"'
-                    && let Some(raw_start) = cpp_raw_start_at_quote(bytes, index)
-                    && let Some((end, closed)) = cpp_raw_string(bytes, raw_start)
-                {
+                let raw = (self.language == Language::Cpp && bytes[index] == b'"')
+                    .then(|| cpp_raw_start_at_quote(bytes, index))
+                    .flatten()
+                    .and_then(|raw_start| {
+                        let mut reach = Reach::default();
+                        let raw = cpp_raw_string(bytes, raw_start, &mut reach);
+                        self.consult(reach);
+                        raw.map(|(end, closed)| (raw_start, end, closed))
+                    });
+                if let Some((raw_start, end, closed)) = raw {
                     if !closed {
                         self.error(
                             "unterminated-string",
@@ -697,7 +848,9 @@ impl<'a> Scanner<'a> {
         let mut index = 0;
         while index < bytes.len() && !self.stopped {
             if starts(bytes, index, b"(*") {
-                let (end, closed) = ocaml_comment_end(bytes, index);
+                let mut reach = Reach::default();
+                let (end, closed) = ocaml_comment_end(bytes, index, &mut reach);
+                self.consult(reach);
                 self.add_comment(
                     index,
                     end,
@@ -717,7 +870,10 @@ impl<'a> Scanner<'a> {
                 index = end;
                 continue;
             }
-            if let Some((end, closed)) = ocaml_quoted_string(bytes, index) {
+            let mut reach = Reach::default();
+            let quoted = ocaml_quoted_string(bytes, index, &mut reach);
+            self.consult(reach);
+            if let Some((end, closed)) = quoted {
                 if !closed {
                     self.error(
                         "unterminated-string",
@@ -732,9 +888,14 @@ impl<'a> Scanner<'a> {
                 index = self.quoted_or_error(index, true, "OCaml string");
                 continue;
             }
-            if bytes[index] == b'\'' && ocaml_char_start(bytes, index) {
-                index = self.quoted_or_error(index, false, "OCaml character literal");
-                continue;
+            if bytes[index] == b'\'' {
+                let mut reach = Reach::default();
+                let literal = ocaml_char_start(bytes, index, &mut reach);
+                self.consult(reach);
+                if literal {
+                    index = self.quoted_or_error(index, false, "OCaml character literal");
+                    continue;
+                }
             }
             if matches!(bytes[index], b'\r' | b'\n') {
                 index = consume_newline(bytes, index);
@@ -1687,7 +1848,7 @@ impl<'a> Scanner<'a> {
                 }
                 b'?' => {
                     match ruby_character_literal_end(bytes, index) {
-                        Some(end) if state != RubyState::End => {
+                        Some(end) if !matches!(state, RubyState::End | RubyState::Fname) => {
                             index = end;
                             state = RubyState::End;
                         }
@@ -1700,9 +1861,29 @@ impl<'a> Scanner<'a> {
                 }
                 b'%' => {
                     match ruby_percent_header(bytes, index) {
-                        Some(literal) if ruby_literal_opens(state, space_seen, bytes, index) => {
+                        Some(literal)
+                            if ruby_percent_opens(
+                                state,
+                                space_seen,
+                                bytes,
+                                index,
+                                literal.form,
+                            ) =>
+                        {
+                            /* NOTE: `alias` and `undef` hold `EXPR_FNAME|EXPR_FITEM`
+                             * across the whole statement rather than only up to
+                             * the first name: `Ripper.lex` under Ruby 3.3.12
+                             * reports that state again after the `)` of the
+                             * first symbol, which is what makes
+                             * `alias%s(a)%s(b # c)` two symbols and not one
+                             * symbol and a modulo. */
+                            let fitem = state == RubyState::Fname && literal.form == b's';
                             index = self.scan_ruby_percent(index, &literal, depth, pending);
-                            state = RubyState::End;
+                            state = if fitem {
+                                RubyState::Fname
+                            } else {
+                                RubyState::End
+                            };
                         }
                         _ => {
                             index += 1;
@@ -2069,6 +2250,412 @@ impl<'a> Scanner<'a> {
         }
     }
 
+    /// One Zig source file (Zig Language Reference: Comments, Doc comments,
+    /// String Literals).
+    ///
+    /// Zig has no block comment at all — `/*` is the division operator and
+    /// then multiplication, which `std.zig.Tokenizer` reports as `slash` and
+    /// `asterisk` — so this is its own small lexer rather than a
+    /// [`Self::scan_c_family`] with one delimiter taken away. Everything it has
+    /// to know ends at a line break: a comment runs to the end of its line, a
+    /// quoted literal may not cross one, and a multiline string literal is one
+    /// line of content at a time. That is what makes every line start a
+    /// restart point with nothing to carry across it.
+    fn scan_zig(&mut self) {
+        let bytes = self.source;
+        let mut index = 0;
+        while index < bytes.len() && !self.stopped {
+            if starts(bytes, index, b"//") {
+                let end = line_end(bytes, index + 2);
+                self.add_comment(index, end, zig_line_kind(bytes, index));
+                index = end;
+                continue;
+            }
+            /* NOTE: `\\` is the whole opener of a multiline string literal line,
+             * and the tokenizer takes it wherever a token may begin rather
+             * than only as the first thing on a line: `const b = \\text` is
+             * one `multiline_string_literal_line` to `std.zig.Tokenizer` just
+             * as an indented `\\` is. Everything to the end of the line is
+             * content, and the next line starts in code again, so consecutive
+             * lines are separate tokens that the parser joins. A single `\` is
+             * an invalid token to Zig and an ordinary byte here: nothing it
+             * could open is a state a comment can hide in. */
+            if starts(bytes, index, b"\\\\") {
+                index = line_end(bytes, index + 2);
+                continue;
+            }
+            match bytes[index] {
+                b'"' | b'\'' => index = self.scan_zig_quoted(index),
+                b'\r' | b'\n' => {
+                    index = consume_newline(bytes, index);
+                    self.add_safe_checkpoint(index);
+                }
+                _ => index += 1,
+            }
+        }
+    }
+
+    /// One Zig string or character literal beginning at its quote.
+    ///
+    /// The two are one rule: `.string_literal` and `.char_literal` of
+    /// `std.zig.Tokenizer` differ only in the quote that closes them. A `\`
+    /// carries the next byte into the literal, and a real line terminator ends
+    /// neither — the tokenizer marks the token `invalid` at it — so a quote
+    /// that never closes is reported at the line break rather than swallowing
+    /// the lines below it. A `\` in front of that terminator does not carry it
+    /// either, for the same reason.
+    ///
+    /// `@"quoted identifier"` needs no rule of its own: the `@` is an ordinary
+    /// byte and the identifier that follows it is lexed as the string literal
+    /// it is spelled as, which is what hides a `//` written inside one.
+    fn scan_zig_quoted(&mut self, start: usize) -> usize {
+        let bytes = self.source;
+        let quote = bytes[start];
+        let message = if quote == b'"' {
+            "unterminated Zig string"
+        } else {
+            "unterminated Zig character literal"
+        };
+        let mut index = start + 1;
+        while index < bytes.len() {
+            if bytes[index] == b'\\' && !matches!(bytes.get(index + 1), None | Some(b'\r' | b'\n'))
+            {
+                index += 2;
+            } else if bytes[index] == quote {
+                return index + 1;
+            } else if matches!(bytes[index], b'\r' | b'\n') {
+                self.error("unterminated-string", message, ByteSpan::new(start, index));
+                return index;
+            } else {
+                index += 1;
+            }
+        }
+        self.error("unterminated-string", message, ByteSpan::new(start, index));
+        index
+    }
+
+    /// One R script (R Language Definition, 10 Parser; `?Quotes`).
+    ///
+    /// `#` opens a comment that runs to the end of the line and that is the
+    /// whole comment grammar — there is no block form and no nesting. What
+    /// makes the scanner more than a search for `#` is the four literals that
+    /// carry one as content: a quoted string, a raw string, a backquoted name,
+    /// and the `%...%` operator.
+    ///
+    /// Three of the four may cross a line break, so the start of a line is a
+    /// restart point only when the scan reaches it here, at the top level. The
+    /// fourth may not: `SpecialValue` in `gram.y` returns `ERROR` at a newline,
+    /// which is why an unterminated `%` is reported where it is rather than
+    /// swallowing the rest of the file.
+    ///
+    /// Measured against the interpreter over the 42 `.R` files the R 4.3.3
+    /// distribution ships — its `demo/`, `doc/` and `share/R/` scripts — every
+    /// one of the 1,330 comments `utils::getParseData` reports as a `COMMENT`
+    /// token comes back here with the same byte span, and no file is called
+    /// invalid.
+    fn scan_r(&mut self) {
+        let bytes = self.source;
+        let mut index = 0;
+        while index < bytes.len() && !self.stopped {
+            match bytes[index] {
+                b'#' => {
+                    let end = line_end(bytes, index + 1);
+                    self.add_comment(index, end, r_line_kind(bytes, index));
+                    index = end;
+                }
+                b'"' | b'\'' => index = self.scan_r_string(index),
+                b'`' => index = self.scan_r_name(index),
+                b'%' => index = self.scan_r_operator(index),
+                b'\r' | b'\n' => {
+                    index = consume_newline(bytes, index);
+                    self.add_safe_checkpoint(index);
+                }
+                _ => index += 1,
+            }
+        }
+    }
+
+    /// One R string beginning at its quote, raw or not.
+    ///
+    /// A raw string is the quote behind an `r` or an `R` that begins a token
+    /// ([`r_raw_string`]); everything else is the ordinary form, which takes
+    /// `\` escapes and carries a line break as content, so only the matching
+    /// quote or the end of the file ends one.
+    ///
+    /// Where the bytes look like a raw string and are not one — `r"<a>"`, whose
+    /// delimiter is not a bracket — R refuses the file outright with `malformed
+    /// raw string literal`. Falling back to the ordinary reading is what this
+    /// does instead: it is the same fallback [`cpp_raw_string`] takes, and it
+    /// hides the `#` behind a quote rather than exposing it in a file no
+    /// interpreter would run.
+    fn scan_r_string(&mut self, start: usize) -> usize {
+        let bytes = self.source;
+        if let Some((end, closed)) = r_raw_string(bytes, start) {
+            if !closed {
+                self.error(
+                    "unterminated-string",
+                    "unterminated R raw string",
+                    ByteSpan::new(start - 1, end),
+                );
+            }
+            return end;
+        }
+        let (end, closed) = r_delimited_end(bytes, start + 1, bytes[start]);
+        if !closed {
+            self.error(
+                "unterminated-string",
+                "unterminated R string",
+                ByteSpan::new(start, end),
+            );
+        }
+        end
+    }
+
+    /// One backquoted name beginning at its backquote.
+    ///
+    /// It is a quoted string in every lexical respect: `\` carries the next
+    /// byte into it, a line break is content, and only the closing backquote
+    /// ends it. What it is not is a string constant, so an unterminated one is
+    /// reported as the identifier it was going to be.
+    fn scan_r_name(&mut self, start: usize) -> usize {
+        let bytes = self.source;
+        let (end, closed) = r_delimited_end(bytes, start + 1, b'`');
+        if !closed {
+            self.error(
+                "unterminated-identifier",
+                "unterminated R backquoted name",
+                ByteSpan::new(start, end),
+            );
+        }
+        end
+    }
+
+    /// One `%...%` operator beginning at its first `%`.
+    ///
+    /// `SpecialValue` (`gram.y`) pushes every byte up to the next `%` into the
+    /// operator's name and returns `ERROR` when a line break arrives first, so
+    /// the name may hold a `#`, a quote or a backquote, takes no escapes, and
+    /// cannot cross a line. `%%` and `%in%` are the same rule with nothing
+    /// interesting inside them.
+    fn scan_r_operator(&mut self, start: usize) -> usize {
+        let bytes = self.source;
+        let stop = line_end(bytes, start + 1);
+        match memchr(b'%', &bytes[start + 1..stop]) {
+            Some(relative) => start + relative + 2,
+            None => {
+                self.error(
+                    "unterminated-operator",
+                    "unterminated R special operator",
+                    ByteSpan::new(start, stop),
+                );
+                stop
+            }
+        }
+    }
+
+    /// One Dart compilation unit (Dart Language Specification, 17.1 Comments
+    /// and 17.6 Strings).
+    ///
+    /// Dart is a C-family syntax with three departures that decide the shape of
+    /// this scanner rather than of [`Self::scan_c_family`]:
+    ///
+    /// * its block comment *nests*, so `/* /* */ */` is one comment;
+    /// * `//!` and `/*!` document nothing — Dart's only markers are `///` and
+    ///   `/**` — while `////` still does ([`dart_line_kind`]); and
+    /// * `#!` at the very first byte is the script tag, and `#` is the
+    ///   symbol-literal operator everywhere else.
+    ///
+    /// A string is the one construct that hides a comment opener, and Dart
+    /// writes six of them: either quote, single-line or triple-quoted, raw or
+    /// not. A raw one is the quote behind an `r`, and only where that `r`
+    /// begins a token ([`dart_raw_string_prefix`]).
+    ///
+    /// The start of a line is a restart point only when the scan reaches it
+    /// here, at the top level: a triple-quoted string, a nested block comment,
+    /// and an interpolation with a comment inside it all carry a line break.
+    ///
+    /// Ground truth for every rule below is `scanString` of
+    /// `package:_fe_analyzer_shared` as the Dart SDK 3.13.2 ships it, read for
+    /// token kinds and offsets, with `dart analyze` for acceptance.
+    ///
+    /// Measured against that scanner over the 3,143 `.dart` files of the SDK's
+    /// own `lib/` and of the packages `dart pub get` fetched beside it: all
+    /// 147,988 comments it reports — its comment stream plus the `SCRIPT_TAG`
+    /// token, with its UTF-16 offsets mapped back to bytes — come back here
+    /// with the same byte span, and no file is called invalid.
+    fn scan_dart(&mut self) {
+        let bytes = self.source;
+        let mut index = 0;
+        while index < bytes.len() && !self.stopped {
+            /* NOTE: `tokenizeTag` reads a `#!` line only when `scanOffset == 0`, and
+             * a comment on the line above one is enough to take that away, so
+             * this is the first byte of the document and no other. `#`
+             * elsewhere is the operator that opens a symbol literal — `#foo`,
+             * `#+` — which needs no rule of its own because nothing it can be
+             * followed by hides a comment. */
+            if index == 0 && self.offset == 0 && starts(bytes, index, b"#!") {
+                let end = line_end(bytes, index + 2);
+                self.add_comment(index, end, CommentKind::Line);
+                index = end;
+                continue;
+            }
+            if starts(bytes, index, b"//") {
+                let end = line_end(bytes, index + 2);
+                self.add_comment(index, end, dart_line_kind(bytes, index));
+                index = end;
+                continue;
+            }
+            if starts(bytes, index, b"/*") {
+                let (end, closed) = block_end(bytes, index, b"/*", b"*/", true);
+                self.add_comment(index, end, dart_block_kind(bytes, index));
+                if !closed {
+                    self.error(
+                        "unterminated-comment",
+                        "unterminated Dart block comment",
+                        ByteSpan::new(index, end),
+                    );
+                }
+                index = end;
+                continue;
+            }
+            match bytes[index] {
+                b'"' | b'\'' => index = self.scan_dart_string(index, 0),
+                b'\r' | b'\n' => {
+                    index = consume_newline(bytes, index);
+                    self.add_safe_checkpoint(index);
+                }
+                _ => index += 1,
+            }
+        }
+    }
+
+    /// One Dart string beginning at its opening quote.
+    ///
+    /// The six forms are one rule with two switches. `triple` is three of the
+    /// same quote, which makes a line break content instead of the end of the
+    /// literal; `raw` is the `r` in front of it, which takes away both the `\`
+    /// escape and `${` interpolation. A `\` in an ordinary string carries the
+    /// next byte in — that is what hides a `\'` — but it does not carry a line
+    /// terminator: `tokenizeSingleLineString` leaves `.string_literal` at the
+    /// break either way, so `'x\<newline>y'` is an unterminated string and not
+    /// a continuation.
+    ///
+    /// The closing delimiter is the first unescaped run of it, not the last:
+    /// `''''x''''` is `'''` + `'x` + `'''` and then one quote left over, which
+    /// is what the Dart scanner reports for those bytes.
+    fn scan_dart_string(&mut self, quote: usize, depth: usize) -> usize {
+        if depth > 256 {
+            self.error(
+                "nesting-limit",
+                "Dart string interpolation nesting limit exceeded",
+                ByteSpan::new(quote, quote),
+            );
+            return self.source.len();
+        }
+        let bytes = self.source;
+        let raw = dart_raw_string_prefix(bytes, quote);
+        let start = if raw { quote - 1 } else { quote };
+        let triple = bytes.get(quote + 1) == Some(&bytes[quote])
+            && bytes.get(quote + 2) == Some(&bytes[quote]);
+        let width = if triple { 3 } else { 1 };
+        let delimiter = &bytes[quote..quote + width];
+        let mut index = quote + width;
+        while index < bytes.len() {
+            if bytes[index..].starts_with(delimiter) {
+                return index + width;
+            }
+            if !raw
+                && bytes[index] == b'\\'
+                && !matches!(bytes.get(index + 1), None | Some(b'\r' | b'\n'))
+            {
+                index += 2;
+                continue;
+            }
+            if !raw && starts(bytes, index, b"${") {
+                index = self.scan_dart_interpolation(index + 2, depth + 1);
+                continue;
+            }
+            if !triple && matches!(bytes[index], b'\r' | b'\n') {
+                self.error(
+                    "unterminated-string",
+                    dart_unterminated_string(raw, triple),
+                    ByteSpan::new(start, index),
+                );
+                return index;
+            }
+            index += 1;
+        }
+        self.error(
+            "unterminated-string",
+            dart_unterminated_string(raw, triple),
+            ByteSpan::new(start, index),
+        );
+        index
+    }
+
+    /// One `${ ... }` interpolation, beginning past its `${`.
+    ///
+    /// The braces of the expression are counted rather than searched for,
+    /// because the expression is code: a nested string, a map literal, and a
+    /// comment may all stand inside one. A comment written there is a comment —
+    /// the Dart scanner attaches it to the token that follows, exactly as it
+    /// does outside a string — and a `//` one runs to the end of its line while
+    /// the string it sits inside carries on below.
+    fn scan_dart_interpolation(&mut self, mut index: usize, depth: usize) -> usize {
+        if depth > 256 {
+            self.error(
+                "nesting-limit",
+                "Dart string interpolation nesting limit exceeded",
+                ByteSpan::new(index, index),
+            );
+            return self.source.len();
+        }
+        let bytes = self.source;
+        let mut braces = 1usize;
+        while index < bytes.len() {
+            if starts(bytes, index, b"//") {
+                let end = line_end(bytes, index + 2);
+                self.add_comment(index, end, dart_line_kind(bytes, index));
+                index = end;
+                continue;
+            }
+            if starts(bytes, index, b"/*") {
+                let (end, closed) = block_end(bytes, index, b"/*", b"*/", true);
+                self.add_comment(index, end, dart_block_kind(bytes, index));
+                if !closed {
+                    self.error(
+                        "unterminated-comment",
+                        "unterminated Dart block comment",
+                        ByteSpan::new(index, end),
+                    );
+                }
+                index = end;
+                continue;
+            }
+            match bytes[index] {
+                b'"' | b'\'' => index = self.scan_dart_string(index, depth + 1),
+                b'{' => {
+                    braces += 1;
+                    index += 1;
+                }
+                b'}' => {
+                    braces -= 1;
+                    index += 1;
+                    if braces == 0 {
+                        return index;
+                    }
+                }
+                _ => index += 1,
+            }
+        }
+        self.error(
+            "unterminated-template-expression",
+            "unterminated Dart string interpolation",
+            ByteSpan::new(index, index),
+        );
+        index
+    }
+
     fn scan_shell(&mut self) {
         let _ = self.scan_shell_region(0, None, 0);
     }
@@ -2151,12 +2738,17 @@ impl<'a> Scanner<'a> {
                     word_open = false;
                     if bytes.get(index + 2) == Some(&b'<') {
                         index += 3;
-                    } else if let Some((heredoc, end)) = parse_heredoc(bytes, index) {
-                        heredocs.push(heredoc);
-                        index = end;
-                        word_open = true;
                     } else {
-                        index += 1;
+                        let mut reach = Reach::default();
+                        let parsed = parse_heredoc(bytes, index, &mut reach);
+                        self.consult(reach);
+                        if let Some((heredoc, end)) = parsed {
+                            heredocs.push(heredoc);
+                            index = end;
+                            word_open = true;
+                        } else {
+                            index += 1;
+                        }
                     }
                 }
                 b'\r' | b'\n' if !heredocs.is_empty() => {
@@ -2431,10 +3023,15 @@ impl<'a> Scanner<'a> {
                 index = end;
                 continue;
             }
-            if bytes[index] == b'$'
-                && self.options.dialect == Dialect::PostgreSql
-                && let Some((end, closed)) = sql_dollar_quote_end(bytes, index)
-            {
+            let dollar = (bytes[index] == b'$' && self.options.dialect == Dialect::PostgreSql)
+                .then(|| {
+                    let mut reach = Reach::default();
+                    let quoted = sql_dollar_quote_end(bytes, index, &mut reach);
+                    self.consult(reach);
+                    quoted
+                })
+                .flatten();
+            if let Some((end, closed)) = dollar {
                 if !closed {
                     self.error(
                         "unterminated-string",
@@ -2445,10 +3042,16 @@ impl<'a> Scanner<'a> {
                 index = end;
                 continue;
             }
-            if (bytes[index] == b'q' || bytes[index] == b'Q')
-                && self.options.dialect == Dialect::Oracle
-                && let Some((end, closed)) = oracle_q_quote_end(bytes, index)
-            {
+            let q_quote = ((bytes[index] == b'q' || bytes[index] == b'Q')
+                && self.options.dialect == Dialect::Oracle)
+                .then(|| {
+                    let mut reach = Reach::default();
+                    let quoted = oracle_q_quote_end(bytes, index, &mut reach);
+                    self.consult(reach);
+                    quoted
+                })
+                .flatten();
+            if let Some((end, closed)) = q_quote {
                 if !closed {
                     self.error(
                         "unterminated-string",
@@ -3663,6 +4266,67 @@ fn directive_name(text: &str, language: Language, raw: &[u8]) -> Option<&'static
             }
             compact.starts_with("phpcs:").then_some("phpcs:")
         }
+        /* NOTE: `zig fmt` reads one instruction out of a comment, and it reads it
+         * by equality rather than by prefix: `Render.zig` takes `"//".len()`
+         * bytes off the trimmed comment, trims the white space that follows,
+         * and compares the remainder with `zig fmt: off` and `zig fmt: on`.
+         * So `// zig fmt: off please` turns nothing off, and neither does
+         * `/// zig fmt: off` or `//// zig fmt: off` — the first leaves a `/`
+         * in front of the phrase and the second two. `raw` is what tells those
+         * apart, because `strip_comment_markers` takes a `///` off whole; the
+         * comparison itself is against the trimmed text, which is folded to
+         * lower case here where `zig fmt` is case-sensitive. Folding can only
+         * keep a comment a removal would otherwise take, which is the
+         * direction to be wrong in. */
+        /* NOTE: The two comments an R tool reads rather than a reader. styler
+         * turns its formatter off between `# styler: off` and `# styler: on`,
+         * and the colon carries the marker's own boundary; covr excludes the
+         * lines between `# nocov start` and `# nocov end`, and `nocov` is the
+         * whole word it looks for — `start`, `end` and nothing at all all
+         * follow it — so that one ends at a boundary instead. lintr's
+         * `# nolint` is protected for every language already and is deliberately
+         * absent here. */
+        Language::R => {
+            if opens_with_keyword(compact, "nocov") {
+                return Some("nocov");
+            }
+            compact.starts_with("styler:").then_some("styler:")
+        }
+        Language::Zig => {
+            let opens_a_plain_comment =
+                raw.starts_with(b"//") && !matches!(raw.get(2), Some(b'/' | b'!'));
+            (opens_a_plain_comment && matches!(text, "zig fmt: off" | "zig fmt: on"))
+                .then_some("zig fmt:")
+        }
+        /* NOTE: Four instructions, and only one of them is addressed to a tool.
+         * `// @dart = 2.12` is read by the Dart scanner itself, and it decides
+         * which version of the language the file is written in, so a removal
+         * that took it would change what the remaining code means
+         * ([`dart_language_version`] follows that grammar). `dart format` is
+         * matched by equality on the whole comment rather than by prefix,
+         * because that is how `dart_style` matches it: `piece_writer.dart`
+         * switches on `comment.text` against `// dart format off` and
+         * `// dart format on`, so `//   dart format off` with a second space
+         * and `/// dart format off` with a third slash turn nothing off —
+         * measured on `dart format` from SDK 3.13.2, which reformatted both.
+         * `comment.text` is trimmed at the end and not at the front, and this
+         * is asked of `raw` for the reason Zig's is: `strip_comment_markers`
+         * takes a `///` off whole and would leave the two spellings
+         * indistinguishable. The analyzer's two ignore comments each carry
+         * their own boundary in the colon and cover the whole namespace behind
+         * it (`ignore_info.dart`). */
+        Language::Dart => {
+            if dart_language_version(raw) {
+                return Some("@dart");
+            }
+            let phrase = raw.trim_ascii_end();
+            if phrase == b"// dart format off" || phrase == b"// dart format on" {
+                return Some("dart format");
+            }
+            ["ignore:", "ignore_for_file:"]
+                .into_iter()
+                .find(|prefix| compact.starts_with(prefix))
+        }
         _ => None,
     }
 }
@@ -3713,6 +4377,138 @@ fn java_block_kind(bytes: &[u8], index: usize) -> CommentKind {
     }
 }
 
+/// The kind of a Dart line comment.
+///
+/// `tokenizeSingleLineComment` reads the byte behind `//` and sets `dartdoc`
+/// when it is a third slash, then reads no further: a fourth slash leaves
+/// `////` a `DartDocToken` just as `///` is one, which is where Dart parts
+/// company with Lua's `----` and Zig's `////`. `//!` is Rust's inner-doc
+/// marker and means nothing here, so a comment opening with it is an ordinary
+/// line comment — reading it as documentation would hide it from
+/// [`crate::Policy::Safe`] in a language that never wrote it as one.
+fn dart_line_kind(bytes: &[u8], index: usize) -> CommentKind {
+    if starts(bytes, index, b"///") {
+        CommentKind::DocLine
+    } else {
+        CommentKind::Line
+    }
+}
+
+/// The kind of a Dart block comment.
+///
+/// `tokenizeMultiLineComment` sets `dartdoc` from the single byte behind `/*`,
+/// so `/**` opens the documentation comment `dart doc` reads and `/**/` is an
+/// empty one. `/*!` is Doxygen's marker, which C and C++ honour and Dart does
+/// not, for the reason [`dart_line_kind`] gives.
+fn dart_block_kind(bytes: &[u8], index: usize) -> CommentKind {
+    if starts(bytes, index, b"/**") {
+        CommentKind::DocBlock
+    } else {
+        CommentKind::Block
+    }
+}
+
+/// The name of the Dart string form that was left open, so the diagnostic says
+/// which of the six a reader has to go and close.
+const fn dart_unterminated_string(raw: bool, triple: bool) -> &'static str {
+    match (raw, triple) {
+        (true, true) => "unterminated Dart raw multiline string",
+        (true, false) => "unterminated Dart raw string",
+        (false, true) => "unterminated Dart multiline string",
+        (false, false) => "unterminated Dart string",
+    }
+}
+
+/// Whether the quote at `quote` is opened by a raw-string `r`.
+///
+/// `tokenizeRawStringKeywordOrIdentifier` is reached from the scanner's main
+/// switch, which means the `r` has to *begin a token*: an `r` that continues an
+/// identifier is a letter of that identifier, and the quote behind it opens an
+/// ordinary string. Only a lower-case `r` does it — `R'x'` is the identifier
+/// `R` and then a string.
+///
+/// What decides it is therefore the run of identifier bytes ending just before
+/// the `r`. An empty run means nothing precedes it and the `r` begins a token.
+/// A run that begins with a letter, `_` or `$` is an identifier the `r`
+/// continues. A run that begins with a digit is a number, and a number token
+/// always ends before an `r` — `r` is not a digit, a hex digit, `x`, `e`, `.`
+/// or `_` — so the `r` begins a token there too.
+///
+/// Measured on Dart SDK 3.13.2: `1r'x'` and `0x1r'x'` are `INT`/`HEXADECIMAL`
+/// and then a raw `STRING`, while `xr'x'`, `_r'x'` and `$r'x'` are one
+/// `IDENTIFIER` and then an ordinary `STRING`.
+fn dart_raw_string_prefix(bytes: &[u8], quote: usize) -> bool {
+    if quote == 0 || bytes[quote - 1] != b'r' {
+        return false;
+    }
+    let mut cursor = quote - 1;
+    while cursor > 0 && is_dart_identifier_continue(bytes[cursor - 1]) {
+        cursor -= 1;
+    }
+    cursor == quote - 1 || bytes[cursor].is_ascii_digit()
+}
+
+/// Whether `byte` may stand inside a Dart identifier.
+///
+/// The grammar spells one `IDENTIFIER_START_NO_DOLLAR ::= LETTER | '_'` with
+/// `'$'` allowed as well, and `IDENTIFIER_PART` adds the digits (Dart Language
+/// Specification, 17.4 Identifier Reference). `LETTER` is an ASCII letter
+/// there and nothing wider, so this is deliberately ASCII-only.
+fn is_dart_identifier_continue(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'$')
+}
+
+/// Whether `raw` is Dart's language version comment, which the scanner itself
+/// reads rather than a tool.
+///
+/// `tokenizeLanguageVersionOrSingleLineComment` accepts exactly two slashes —
+/// a third one sends it to `tokenizeSingleLineComment` instead — then spaces,
+/// `@dart` in lower case, spaces, `=`, spaces, a run of digits, `.`, a second
+/// run of digits, spaces, and the end of the line. Anything else falls back to
+/// an ordinary comment, so this follows the same grammar byte for byte. Only
+/// the space is skipped, not the tab: the scanner compares against `$SPACE`.
+///
+/// The comment is honoured only ahead of the first real token of a file, and
+/// this is asked of every comment in one. Reading a later one as an instruction
+/// keeps a comment a removal would otherwise take, which is the direction to be
+/// wrong in, and it is what keeps the answer independent of where in the
+/// document the scan began.
+fn dart_language_version(raw: &[u8]) -> bool {
+    fn past_spaces(bytes: &[u8]) -> &[u8] {
+        let taken = bytes.iter().take_while(|byte| **byte == b' ').count();
+        &bytes[taken..]
+    }
+    fn past_digits(bytes: &[u8]) -> Option<&[u8]> {
+        let taken = bytes
+            .iter()
+            .take_while(|byte| byte.is_ascii_digit())
+            .count();
+        (taken > 0).then(|| &bytes[taken..])
+    }
+    let Some(rest) = raw.strip_prefix(b"//") else {
+        return false;
+    };
+    if rest.first() == Some(&b'/') {
+        return false;
+    }
+    let Some(rest) = past_spaces(rest).strip_prefix(b"@dart") else {
+        return false;
+    };
+    let Some(rest) = past_spaces(rest).strip_prefix(b"=") else {
+        return false;
+    };
+    let Some(rest) = past_digits(past_spaces(rest)) else {
+        return false;
+    };
+    let Some(rest) = rest.strip_prefix(b".") else {
+        return false;
+    };
+    let Some(rest) = past_digits(rest) else {
+        return false;
+    };
+    past_spaces(rest).is_empty()
+}
+
 fn line_kind(bytes: &[u8], index: usize) -> CommentKind {
     if starts(bytes, index, b"///") || starts(bytes, index, b"//!") {
         CommentKind::DocLine
@@ -3740,6 +4536,116 @@ fn lua_line_kind(bytes: &[u8], index: usize) -> CommentKind {
     } else {
         CommentKind::Line
     }
+}
+
+/// The kind of a Zig comment.
+///
+/// `///` documents the declaration under it and `//!` the container the file
+/// is (Zig Language Reference, Doc comments), and `std.zig.Tokenizer` tags
+/// them `doc_comment` and `container_doc_comment`. A fourth slash takes the
+/// first back: `.doc_comment_start` falls to `.line_comment` when it meets
+/// one, so `////` is an ordinary comment and only exactly three slashes
+/// document anything. `//!!` stays a top-level doc comment, because the
+/// tokenizer decides that one at the `!` and reads no further.
+fn zig_line_kind(bytes: &[u8], index: usize) -> CommentKind {
+    if starts(bytes, index, b"////") {
+        CommentKind::Line
+    } else if starts(bytes, index, b"///") || starts(bytes, index, b"//!") {
+        CommentKind::DocLine
+    } else {
+        CommentKind::Line
+    }
+}
+
+/// The kind of an R comment.
+///
+/// R's parser has one comment token and calls every `#` line a `COMMENT`
+/// (measured on R 4.3.3: `utils::getParseData` gives `#' doc` and `# line` the
+/// same token name). `#'` is roxygen2's marker for the prose it turns into a
+/// manual page, so it is documentation here for the reason Lua's `---` and
+/// Zig's `///` are: the tool that reads it is what makes it one. Nothing takes
+/// the marker back the way a fourth slash does in Zig — roxygen2 reads `#''`
+/// and `#'#` as its own too — so the test is the two bytes and no more.
+fn r_line_kind(bytes: &[u8], index: usize) -> CommentKind {
+    if starts(bytes, index, b"#'") {
+        CommentKind::DocLine
+    } else {
+        CommentKind::Line
+    }
+}
+
+/// Whether `byte` may continue an R name, and so cannot be followed by the `r`
+/// that opens a raw string.
+///
+/// `SymbolValue` (`gram.y`) reads a name while the bytes are alphanumeric, `.`
+/// or `_`, and it is entered on a multi-byte character as well, so every byte
+/// with the high bit set counts here. Counting one that does not only refuses
+/// the raw reading, which falls back to an ordinary string and hides more
+/// rather than less.
+fn is_r_name_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_') || byte >= 0x80
+}
+
+/// The end of the R raw string whose quote is at `quote`, and whether it closed
+/// — or `None` when no raw string opens there at all.
+///
+/// The literal is `r` or `R`, the quote, a run of dashes, and one of `(`, `[`
+/// or `{`; it closes on the matching bracket, the same run of dashes, and the
+/// same quote (`?Quotes`; R 4.0.0 and later). The dash run is what lets the
+/// closing bracket appear as content, so it is copied out of the source rather
+/// than counted twice, and R puts no limit on its length — 100 dashes were
+/// measured accepted on R 4.3.3.
+///
+/// The `r` opens the literal only where it begins a token: `xr"(a)"` is the
+/// name `xr` and then an ordinary string, which is what R's lexer reads there
+/// too.
+fn r_raw_string(bytes: &[u8], quote: usize) -> Option<(usize, bool)> {
+    let prefix = quote.checked_sub(1)?;
+    if !matches!(bytes[prefix], b'r' | b'R') {
+        return None;
+    }
+    if prefix > 0 && is_r_name_byte(bytes[prefix - 1]) {
+        return None;
+    }
+    let mut bracket = quote + 1;
+    while bytes.get(bracket) == Some(&b'-') {
+        bracket += 1;
+    }
+    let closing = match bytes.get(bracket) {
+        Some(b'(') => b')',
+        Some(b'[') => b']',
+        Some(b'{') => b'}',
+        _ => return None,
+    };
+    let mut close = Vec::with_capacity(bracket - quote + 1);
+    close.push(closing);
+    close.extend_from_slice(&bytes[quote + 1..bracket]);
+    close.push(bytes[quote]);
+    Some(match find_subslice(&bytes[bracket + 1..], &close) {
+        Some(relative) => (bracket + 1 + relative + close.len(), true),
+        None => (bytes.len(), false),
+    })
+}
+
+/// The end of the R literal that runs from `index` to the next unescaped
+/// `close`, and whether that delimiter was there at all.
+///
+/// One function for the two quoted strings and the backquoted name, because R
+/// lexes all three the same way: `\` carries the next byte in — a line break
+/// included, which is why a literal that never closes runs to the end of the
+/// file rather than to the end of its line — and nothing but the delimiter ends
+/// them.
+fn r_delimited_end(bytes: &[u8], mut index: usize, close: u8) -> (usize, bool) {
+    while index < bytes.len() {
+        if bytes[index] == b'\\' {
+            index = (index + 2).min(bytes.len());
+        } else if bytes[index] == close {
+            return (index + 1, true);
+        } else {
+            index += 1;
+        }
+    }
+    (bytes.len(), false)
 }
 
 /// The level of the long bracket that opens at `index`, or `None` when none
@@ -4314,6 +5220,16 @@ fn starts(bytes: &[u8], index: usize, needle: &[u8]) -> bool {
     bytes.get(index..index.saturating_add(needle.len())) == Some(needle)
 }
 
+/// The two bytes that end a line everywhere a checkpoint may be offered.
+///
+/// INVARIANT: a bounded lookahead that decides a token consults this before it
+/// reads one byte further: a checkpoint sits at the line start behind a
+/// terminator, so a decision that crossed one would depend on bytes the
+/// incremental engine is entitled to rescan on their own.
+fn is_line_terminator(byte: u8) -> bool {
+    matches!(byte, b'\r' | b'\n')
+}
+
 fn line_end(bytes: &[u8], mut index: usize) -> usize {
     while index < bytes.len() && !matches!(bytes[index], b'\r' | b'\n') {
         index += 1;
@@ -4393,15 +5309,46 @@ fn rust_raw_start_at_quote(bytes: &[u8], quote: usize) -> Option<(usize, usize)>
     Some((start, hashes))
 }
 
-fn rust_char_start(bytes: &[u8], index: usize) -> bool {
+/// Whether the apostrophe at `index` opens a character literal rather than a
+/// lifetime, told apart by a bounded lookahead.
+///
+/// INVARIANT: no window this reads may run past a line terminator. `scan_c_family`
+/// offers a checkpoint at the line start behind every terminator, and a
+/// checkpoint promises that nothing decided before it depends on bytes after
+/// it — so a lookahead that read across one would let an edit on the next line
+/// rewrite a token on this one while the incremental engine reused it
+/// unchanged. Nothing is lost by stopping there: a Rust character literal ends
+/// at the line (Rust Reference, Tokens), and `\` before a line terminator is a
+/// string continuation, never a character escape, so every shape the window
+/// would have reached across is already invalid Rust.
+fn rust_char_start(bytes: &[u8], index: usize, reach: &mut Reach) -> bool {
+    reach.byte(index + 1);
     let Some(next) = bytes.get(index + 1) else {
         return false;
     };
-    if *next == b'\\' {
-        return bytes.get(index + 3..index + 4) == Some(b"'");
+    if is_line_terminator(*next) {
+        return false;
     }
-    bytes.get(index + 2) == Some(&b'\'')
-        || (*next & 0x80 != 0 && bytes[index + 1..].iter().take(5).any(|byte| *byte == b'\''))
+    if *next == b'\\' {
+        reach.through(line_bounded_reach(bytes, index + 2, 2));
+        return bytes
+            .get(index + 2)
+            .is_some_and(|byte| !is_line_terminator(*byte))
+            && bytes.get(index + 3..index + 4) == Some(b"'");
+    }
+    reach.byte(index + 2);
+    if bytes.get(index + 2) == Some(&b'\'') {
+        return true;
+    }
+    if *next & 0x80 == 0 {
+        return false;
+    }
+    reach.through(line_bounded_reach(bytes, index + 1, 5));
+    bytes[index + 1..]
+        .iter()
+        .take(5)
+        .take_while(|byte| !is_line_terminator(**byte))
+        .any(|byte| *byte == b'\'')
 }
 
 fn is_c_quote_start(bytes: &[u8], index: usize) -> bool {
@@ -4411,16 +5358,24 @@ fn is_c_quote_start(bytes: &[u8], index: usize) -> bool {
         || (starts(bytes, index, b"u8\"") || starts(bytes, index, b"u8'"))
 }
 
-fn cpp_raw_string(bytes: &[u8], index: usize) -> Option<(usize, bool)> {
+fn cpp_raw_string(bytes: &[u8], index: usize, reach: &mut Reach) -> Option<(usize, bool)> {
     let prefixes: [&[u8]; 5] = [b"R\"", b"u8R\"", b"uR\"", b"UR\"", b"LR\""];
-    let prefix = prefixes
-        .iter()
-        .find(|prefix| starts(bytes, index, prefix))?;
+    let Some(prefix) = prefixes.iter().find(|prefix| starts(bytes, index, prefix)) else {
+        reach.through((index + 4).min(bytes.len()));
+        return None;
+    };
     let delimiter_start = index + prefix.len();
-    let open = bytes[delimiter_start..]
+    let Some(open) = bytes[delimiter_start..]
         .iter()
-        .position(|byte| *byte == b'(')?
-        + delimiter_start;
+        .position(|byte| *byte == b'(')
+        .map(|relative| relative + delimiter_start)
+    else {
+        /* NOTE: no `(` anywhere leaves this quote an ordinary one, decided out
+         * of every byte behind it. */
+        reach.end_of(bytes);
+        return None;
+    };
+    reach.byte(open);
     /* NOTE: [lex.string]: a d-char is any member of the basic source character
      * set except space, `(`, `)`, `\`, and the control characters horizontal
      * tab, vertical tab, form feed and new-line. The vertical tab is in that
@@ -4440,8 +5395,15 @@ fn cpp_raw_string(bytes: &[u8], index: usize) -> Option<(usize, bool)> {
     close.extend_from_slice(&bytes[delimiter_start..open]);
     close.push(b'"');
     Some(match find_subslice(&bytes[open + 1..], &close) {
-        Some(relative) => (open + 1 + relative + close.len(), true),
-        None => (bytes.len(), false),
+        Some(relative) => {
+            let end = open + 1 + relative + close.len();
+            reach.through(end);
+            (end, true)
+        }
+        None => {
+            reach.end_of(bytes);
+            (bytes.len(), false)
+        }
     })
 }
 
@@ -4459,7 +5421,13 @@ fn cpp_raw_start_at_quote(bytes: &[u8], quote: usize) -> Option<usize> {
     None
 }
 
-fn ocaml_comment_end(bytes: &[u8], start: usize) -> (usize, bool) {
+/// The end of the OCaml comment opening at `start`, and whether it closed.
+///
+/// A comment lexes the string and character literals inside it, so the
+/// lookaheads that decide those are this one's as well: `reach` carries theirs
+/// out, because a quoted-string tag search inside a comment can read past the
+/// comment's own end.
+fn ocaml_comment_end(bytes: &[u8], start: usize, reach: &mut Reach) -> (usize, bool) {
     let mut index = start + 2;
     let mut depth = 1;
     while index < bytes.len() {
@@ -4484,9 +5452,9 @@ fn ocaml_comment_end(bytes: &[u8], start: usize) -> (usize, bool) {
                     index += 1;
                 }
             }
-        } else if let Some((end, _)) = ocaml_quoted_string(bytes, index) {
+        } else if let Some((end, _)) = ocaml_quoted_string(bytes, index, reach) {
             index = end;
-        } else if bytes[index] == b'\'' && ocaml_char_start(bytes, index) {
+        } else if bytes[index] == b'\'' && ocaml_char_start(bytes, index, reach) {
             let quote = bytes[index];
             index += 1;
             while index < bytes.len() {
@@ -4506,15 +5474,29 @@ fn ocaml_comment_end(bytes: &[u8], start: usize) -> (usize, bool) {
     (bytes.len(), false)
 }
 
-fn ocaml_quoted_string(bytes: &[u8], index: usize) -> Option<(usize, bool)> {
+fn ocaml_quoted_string(bytes: &[u8], index: usize, reach: &mut Reach) -> Option<(usize, bool)> {
+    reach.byte(index);
     if bytes.get(index) != Some(&b'{') {
         return None;
     }
-    let pipe = bytes[index + 1..].iter().position(|byte| *byte == b'|')? + index + 1;
-    if !bytes[index + 1..pipe]
-        .iter()
-        .all(|byte| byte.is_ascii_lowercase() || *byte == b'_')
+    /* INVARIANT: the tag of a quoted string literal is `[a-z_]*` and the `|`
+     * stands directly behind it (OCaml manual, Lexical conventions), so this
+     * reads the class and one byte more rather than searching the document for
+     * a `|` that may never come. The bound is what the reach is for: an
+     * ordinary `{` in OCaml code gives up at the first byte outside the class,
+     * and the lines under it keep their checkpoints instead of losing them to
+     * a search that crossed the whole file to say no. */
+    let mut pipe = index + 1;
+    while bytes
+        .get(pipe)
+        .is_some_and(|byte| byte.is_ascii_lowercase() || *byte == b'_')
     {
+        pipe += 1;
+    }
+    /* NOTE: the byte that ended the class decided this, and a `get` that came
+     * back `None` at the end of the document decided it just the same. */
+    reach.byte(pipe);
+    if bytes.get(pipe) != Some(&b'|') {
         return None;
     }
     let mut close = Vec::with_capacity(pipe - index + 1);
@@ -4522,15 +5504,51 @@ fn ocaml_quoted_string(bytes: &[u8], index: usize) -> Option<(usize, bool)> {
     close.extend_from_slice(&bytes[index + 1..pipe]);
     close.push(b'}');
     Some(match find_subslice(&bytes[pipe + 1..], &close) {
-        Some(relative) => (pipe + 1 + relative + close.len(), true),
-        None => (bytes.len(), false),
+        Some(relative) => {
+            let end = pipe + 1 + relative + close.len();
+            reach.through(end);
+            (end, true)
+        }
+        None => {
+            reach.end_of(bytes);
+            (bytes.len(), false)
+        }
     })
 }
 
-fn ocaml_char_start(bytes: &[u8], index: usize) -> bool {
-    bytes.get(index + 2) == Some(&b'\'')
-        || (bytes.get(index + 1) == Some(&b'\\')
-            && bytes[index + 2..].iter().take(6).any(|byte| *byte == b'\''))
+/// Whether the apostrophe at `index` opens an OCaml character literal.
+///
+/// INVARIANT: the same rule [`rust_char_start`] states — neither the two-byte
+/// window for a bare character nor the eight-byte one for an escape may run
+/// past a line terminator, because `scan_ocaml` offers a checkpoint at the line
+/// start behind it. `'\` followed by a line terminator is an illegal backslash
+/// escape (OCaml manual, Lexical conventions; `ocamlc` 5.5.0 rejects it), so
+/// the escaped window gives up nothing valid by stopping. The bare window
+/// crossing costs the one shape OCaml does accept — an apostrophe, a literal
+/// newline, an apostrophe — which the scanner never read as a literal anyway:
+/// it ends a character literal at the line, so that shape used to be reported
+/// as an unterminated literal and is now simply not one.
+fn ocaml_char_start(bytes: &[u8], index: usize, reach: &mut Reach) -> bool {
+    reach.byte(index + 1);
+    let Some(next) = bytes.get(index + 1) else {
+        return false;
+    };
+    if is_line_terminator(*next) {
+        return false;
+    }
+    reach.byte(index + 2);
+    if bytes.get(index + 2) == Some(&b'\'') {
+        return true;
+    }
+    if *next != b'\\' {
+        return false;
+    }
+    reach.through(line_bounded_reach(bytes, index + 2, 6));
+    bytes[index + 2..]
+        .iter()
+        .take(6)
+        .take_while(|byte| !is_line_terminator(**byte))
+        .any(|byte| *byte == b'\'')
 }
 
 fn python_string_start(bytes: &[u8], index: usize) -> Option<(usize, bool, bool, bool)> {
@@ -4602,7 +5620,20 @@ struct Heredoc {
     strip_tabs: bool,
 }
 
-fn parse_heredoc(bytes: &[u8], index: usize) -> Option<(Heredoc, usize)> {
+/// The here-document the `<<` at `index` opens, and the byte after its
+/// delimiter word.
+///
+/// INVARIANT: a quoted delimiter word may legitimately span lines — `<<"EO`,
+/// a line break, `F"` names the delimiter `EO\nF` — and so may an unquoted one
+/// carrying a backslash-newline continuation, so this is a lookahead with no
+/// line bound at all. `reach` carries out how far it read, because the paths
+/// that give up (an unterminated quote, a backslash at the end of the
+/// document) rewind the scan to the byte after the operator and lex those
+/// bytes again from a state this parse already decided out of them. That the
+/// re-lex happens to reach the same end today is a property of two lexers
+/// agreeing, not a guarantee the checkpoints may rest on.
+fn parse_heredoc(bytes: &[u8], index: usize, reach: &mut Reach) -> Option<(Heredoc, usize)> {
+    reach.byte(index + 2);
     let strip_tabs = bytes.get(index + 2) == Some(&b'-');
     let mut cursor = index + if strip_tabs { 3 } else { 2 };
     while bytes.get(cursor).is_some_and(u8::is_ascii_whitespace)
@@ -4610,17 +5641,23 @@ fn parse_heredoc(bytes: &[u8], index: usize) -> Option<(Heredoc, usize)> {
     {
         cursor += 1;
     }
+    reach.byte(cursor);
     let mut delimiter = Vec::new();
     let mut quote = None;
     let mut saw_word = false;
     while cursor < bytes.len() {
+        reach.byte(cursor);
         let byte = bytes[cursor];
         if let Some(active) = quote {
             if byte == active {
                 quote = None;
                 cursor += 1;
             } else if active == b'"' && byte == b'\\' {
+                reach.byte(cursor + 1);
                 let escaped = *bytes.get(cursor + 1)?;
+                if escaped == b'\r' {
+                    reach.byte(cursor + 2);
+                }
                 if escaped == b'\r' && bytes.get(cursor + 2) == Some(&b'\n') {
                     cursor += 3;
                 } else if matches!(escaped, b'\r' | b'\n') {
@@ -4655,7 +5692,11 @@ fn parse_heredoc(bytes: &[u8], index: usize) -> Option<(Heredoc, usize)> {
             }
             b'\\' => {
                 saw_word = true;
+                reach.byte(cursor + 1);
                 let escaped = *bytes.get(cursor + 1)?;
+                if escaped == b'\r' {
+                    reach.byte(cursor + 2);
+                }
                 if escaped == b'\r' && bytes.get(cursor + 2) == Some(&b'\n') {
                     cursor += 3;
                 } else {
@@ -4671,6 +5712,9 @@ fn parse_heredoc(bytes: &[u8], index: usize) -> Option<(Heredoc, usize)> {
                 cursor += 1;
             }
         }
+    }
+    if cursor >= bytes.len() {
+        reach.end_of(bytes);
     }
     if !saw_word || quote.is_some() {
         return None;
@@ -4752,28 +5796,49 @@ fn sql_identifier_end(bytes: &[u8], start: usize, close: u8) -> (usize, bool) {
     (index, false)
 }
 
-fn sql_dollar_quote_end(bytes: &[u8], start: usize) -> Option<(usize, bool)> {
-    let second = bytes[start + 1..].iter().position(|byte| *byte == b'$')? + start + 1;
-    let tag = &bytes[start + 1..second];
-    if !tag.is_empty()
-        && (!matches!(tag[0], b'a'..=b'z' | b'A'..=b'Z' | b'_')
-            || !tag[1..]
-                .iter()
-                .all(|byte| byte.is_ascii_alphanumeric() || *byte == b'_'))
+fn sql_dollar_quote_end(bytes: &[u8], start: usize, reach: &mut Reach) -> Option<(usize, bool)> {
+    /* INVARIANT: as in `ocaml_quoted_string`, and for the same reason. The tag
+     * of a dollar-quoted string is empty or an identifier —
+     * `[A-Za-z_][A-Za-z0-9_]*` (PostgreSQL 4.1.2.4) — and the second `$`
+     * stands directly behind it, so this reads that class and one byte more.
+     * An ordinary `$` in a query then costs the lines under it nothing. */
+    let mut second = start + 1;
+    if bytes
+        .get(second)
+        .is_some_and(|byte| matches!(byte, b'a'..=b'z' | b'A'..=b'Z' | b'_'))
     {
+        second += 1;
+        while bytes
+            .get(second)
+            .is_some_and(|byte| byte.is_ascii_alphanumeric() || *byte == b'_')
+        {
+            second += 1;
+        }
+    }
+    reach.byte(second);
+    if bytes.get(second) != Some(&b'$') {
         return None;
     }
     let delimiter = &bytes[start..=second];
     Some(match find_subslice(&bytes[second + 1..], delimiter) {
-        Some(relative) => (second + 1 + relative + delimiter.len(), true),
-        None => (bytes.len(), false),
+        Some(relative) => {
+            let end = second + 1 + relative + delimiter.len();
+            reach.through(end);
+            (end, true)
+        }
+        None => {
+            reach.end_of(bytes);
+            (bytes.len(), false)
+        }
     })
 }
 
-fn oracle_q_quote_end(bytes: &[u8], start: usize) -> Option<(usize, bool)> {
+fn oracle_q_quote_end(bytes: &[u8], start: usize, reach: &mut Reach) -> Option<(usize, bool)> {
+    reach.byte(start + 1);
     if bytes.get(start + 1) != Some(&b'\'') {
         return None;
     }
+    reach.byte(start + 2);
     let open = *bytes.get(start + 2)?;
     let close = match open {
         b'[' => b']',
@@ -4784,8 +5849,15 @@ fn oracle_q_quote_end(bytes: &[u8], start: usize) -> Option<(usize, bool)> {
     };
     let token = [close, b'\''];
     Some(match find_subslice(&bytes[start + 3..], &token) {
-        Some(relative) => (start + 3 + relative + 2, true),
-        None => (bytes.len(), false),
+        Some(relative) => {
+            let end = start + 3 + relative + 2;
+            reach.through(end);
+            (end, true)
+        }
+        None => {
+            reach.end_of(bytes);
+            (bytes.len(), false)
+        }
     })
 }
 
@@ -5149,6 +6221,11 @@ enum RubyState {
     /// Just past an operand: a literal, a `)`, `]` or `}`, a variable, or one
     /// of the keywords that finishes an expression.
     End,
+    /// Just past `alias` or `undef`, where Ruby stands in
+    /// `EXPR_FNAME|EXPR_FITEM`. It answers every question [`Self::End`]
+    /// answers, and one differently: `parse_percent` opens a symbol literal on
+    /// `%s` there, spacing or none.
+    Fname,
 }
 
 /// The header of one Ruby `%` literal: what closes it, whether it nests, and
@@ -5247,52 +6324,87 @@ fn ruby_number_end(bytes: &[u8], mut index: usize) -> usize {
 
 /// The state a bare word leaves the lexer in.
 ///
-/// The two lists are Ruby's own keyword table folded onto [`RubyState`].
-/// `def`, `alias` and `undef` are in the first because the name that follows
-/// one may be spelled `/` or `%` — `def /(other)` defines division — so
-/// nothing opens a literal after them; `class` and `module` are there for the
-/// mirror-image reason, that `class <<self` is a singleton class and never a
-/// here document. `super`, `yield`, `not` and `defined?` are in neither, which
-/// leaves them where Ruby has them: a command that may take an argument.
+/// The three lists are Ruby's own keyword table folded onto [`RubyState`].
+/// `def`, `alias` and `undef` refuse a literal because the name that follows
+/// one may be spelled `/` or `%` — `def /(other)` defines division; `class`
+/// and `module` are in the first list for the mirror-image reason, that `class
+/// <<self` is a singleton class and never a here document. `alias` and `undef`
+/// take [`RubyState::Fname`] rather than [`RubyState::End`] because they leave
+/// Ruby in `EXPR_FNAME|EXPR_FITEM`, which is one answer wider. `super`,
+/// `yield`, `not` and `defined?` are in none of the three, which leaves them
+/// where Ruby has them: a command that may take an argument.
 ///
 /// [`RubyState::End`] is a coarser answer than either reason asked for, and it
-/// is worth naming what the coarseness costs, because it is the one place this
-/// scanner reads *fewer* bytes into a literal than Ruby does. `End` answers all
-/// four of the state machine's questions at once, so it also decides `/`, `%`
-/// and `?`:
+/// is worth naming what the coarseness costs. What is measured is this table
+/// against `Ripper.lex`, keyword by keyword: `End` answers all four of the
+/// state machine's questions at once, so it also decides `/`, `%` and `?`, and
+/// the four readings below are the ones where the answer it gives is not
+/// Ruby's.
 ///
-/// * After `def`, `alias` and `undef` that is Ruby's own answer for `/` and
-///   `%`, which `EXPR_FNAME` reads as the method names they are.
-/// * After `class` and `module` it is not: `EXPR_CLASS` expects a value, so
-///   Ruby opens a literal there. `class /x # c/` is one regular expression to
-///   Ruby 3.3.12 (`Ripper.lex` gives `on_regexp_beg`) and a division with a
-///   comment behind it here.
+/// * After `def`, `End` is Ruby's own answer for `/` and for every percent
+///   literal, which `EXPR_FNAME` reads as the method names they are. `def` has
+///   no exception: `def%s(foo)` is `on_op "%"` then `on_ident "s"` to Ruby
+///   3.3.12, the modulo this table reads as well.
+/// * After `class` and `module`, `End` is not Ruby's answer either:
+///   `EXPR_CLASS` expects a value, so Ruby opens a literal there. `class
+///   /x # c/` is one regular expression to Ruby 3.3.12 (`Ripper.lex` gives
+///   `on_regexp_beg`) and a division with a comment behind it here.
 /// * `?` diverges after all five — `class ?# x` and `def ?# x` are `on_CHAR
 ///   "?#"` to Ruby and a comment opener here.
 ///
-/// Every one of those spellings is a file Ruby itself refuses: `class` and
-/// `module` take a constant, a `::` or a `<<` in any program that parses, and
-/// `def ?# x` is a syntax error. So the divergence is reachable only where the
-/// scan is already reading a broken file, and buying it back with a fourth
-/// state — one that keeps the literal readings and refuses only the here
-/// document — would add a state to the machine for no program that runs.
+/// Both of those are spellings Ruby itself refuses: `class` and `module` take a
+/// constant, a `::` or a `<<` in any program that parses, and `def ?# x` is a
+/// syntax error, so both are reachable only where the scan is already reading a
+/// broken file, and buying them back with a state of their own — one that keeps
+/// the literal readings and refuses only the here document — would add a state
+/// to the machine for no program that runs.
 ///
-/// `<<` itself is not a fourth entry on that list, and what keeps it off is not
-/// this function. A header this state refuses is a shift, which reads no fewer
-/// bytes into a literal than Ruby does; a header it allows queues a body, and
+/// [`RubyState::Fname`] is the state that *is* worth its keep, and `%s` after
+/// `alias` or `undef` is what buys it: `alias%s(baz # x) %s(bar)` is a file
+/// Ruby runs, and `Ripper.lex` under Ruby 3.3.12 gives `on_symbeg "%s("` in
+/// state `FNAME|FITEM` for both names with `baz # x` an `on_tstring_content`.
+/// Reading that `#` as a comment would remove bytes Ruby has inside a symbol,
+/// which is the one direction this scanner may not take. The rule is about the
+/// delimiter and not only the state — `alias` goes on refusing `/`, `<<`, `%w`
+/// and `%q` in the same breath it accepts `%s` (`alias%w[a]` is `on_op "%"` to
+/// Ripper) — so [`ruby_percent_opens`] asks it rather than
+/// [`ruby_literal_opens`] alone.
+///
+/// `<<` itself is not an entry on that list, and what keeps it off is not
+/// this function. A header [`RubyState::End`] refuses is a shift, which reads
+/// no fewer bytes into a literal than Ruby does; a header it allows queues a
+/// body, and
 /// [`Scanner::scan_ruby_code`] queues it for the physical line the header
 /// stands on wherever that header was written — before an interpolation, inside
 /// one, inside a nested one, or inside an interpolation on another here
 /// document's body line. A queue that stopped at an interpolation boundary
-/// would read a whole here document body as code, which is a second place this
-/// scanner reads fewer bytes into a literal than Ruby does, and it is the one
-/// the corpus cases named `ruby-heredoc-*-interpolation` hold shut.
+/// would read a whole here document body as code, which would be one more
+/// reading that takes fewer bytes into a literal than Ruby does, and it is the
+/// one the corpus cases named `ruby-heredoc-*-interpolation` hold shut.
+///
+/// NOTE: `End` is as far as that first half reaches, and `def`, `alias` and
+/// `undef` are where it stops. MRI's `parser_yylex` tries `heredoc_identifier`
+/// on `<<` unless the lexer state is `EXPR_DOT|EXPR_CLASS`, unless `IS_END()`,
+/// or unless it is an `IS_ARG()` with no white space in front — and
+/// `EXPR_FNAME` is in none of those three, so the state `def` leaves Ruby in,
+/// and the `EXPR_FNAME|EXPR_FITEM` that `alias` and `undef` do, still reach a
+/// here document. This table answers `End` for `def` and [`RubyState::Fname`]
+/// for the other two, and both refuse the header: `def <<EOS` is a shift here
+/// and a here-document header to MRI, which is the direction — fewer bytes into
+/// a literal than Ruby takes — that the rest of this file refuses. What bounds
+/// it is what bounds the `class` and `module` readings above: no program that
+/// runs is written that way, because `def` is followed by a method name and
+/// `<<EOS` is not one. `class` and `module` are not part of this exception at
+/// all — `EXPR_CLASS` is named in that guard, which is what makes `class
+/// <<self` a singleton class rather than a here document. Unlike every other
+/// reading in this comment, the `def <<EOS` one is argued from MRI's `parse.y`
+/// alone and has not been put to `Ripper.lex`: no Ruby 3.3 was available where
+/// it was written.
 fn ruby_state_after_word(token: &[u8]) -> RubyState {
     match token {
         b"end" | b"self" | b"nil" | b"true" | b"false" | b"redo" | b"retry" | b"__FILE__"
-        | b"__LINE__" | b"__ENCODING__" | b"def" | b"alias" | b"undef" | b"class" | b"module" => {
-            RubyState::End
-        }
+        | b"__LINE__" | b"__ENCODING__" | b"def" | b"class" | b"module" => RubyState::End,
+        b"alias" | b"undef" => RubyState::Fname,
         b"if" | b"unless" | b"while" | b"until" | b"case" | b"when" | b"in" | b"and" | b"or"
         | b"return" | b"break" | b"next" | b"then" | b"do" | b"else" | b"elsif" | b"begin"
         | b"ensure" | b"rescue" | b"for" => RubyState::Begin,
@@ -5313,7 +6425,7 @@ fn ruby_state_after_word(token: &[u8]) -> RubyState {
 fn ruby_literal_opens(state: RubyState, space_seen: bool, bytes: &[u8], index: usize) -> bool {
     match state {
         RubyState::Begin => true,
-        RubyState::End => false,
+        RubyState::End | RubyState::Fname => false,
         RubyState::Argument => {
             space_seen
                 && bytes.get(index + 1).is_some_and(|byte| {
@@ -5332,8 +6444,26 @@ fn ruby_heredoc_may_open(state: RubyState, space_seen: bool) -> bool {
     match state {
         RubyState::Begin => true,
         RubyState::Argument => space_seen,
-        RubyState::End => false,
+        RubyState::End | RubyState::Fname => false,
     }
+}
+
+/// Whether the `%` at `index` opens the percent literal `form` names.
+///
+/// [`ruby_literal_opens`] answers it everywhere but one: `parse_percent` tests
+/// `IS_lex_state(EXPR_FNAME | EXPR_FITEM)` before it reaches the spacing rule
+/// and opens a symbol literal on `%s` there, so `alias%s(a)` and `alias %s(a)`
+/// open one alike. Only `s` does; `%w`, `%q` and the rest fall through to the
+/// ordinary answer, which is `false` in that state.
+fn ruby_percent_opens(
+    state: RubyState,
+    space_seen: bool,
+    bytes: &[u8],
+    index: usize,
+    form: u8,
+) -> bool {
+    (state == RubyState::Fname && form == b's')
+        || ruby_literal_opens(state, space_seen, bytes, index)
 }
 
 /// Whether `index` is the first byte of a line, which is where Ruby's two
@@ -5876,6 +7006,102 @@ mod tests {
             &br"int x; \u002f\u002f hi\nint y;"
                 [report.comments[0].span.start..report.comments[0].span.end],
             br"\u002f\u002f hi\nint y;"
+        );
+    }
+
+    /// [`parse_heredoc`] is a lookahead with no line bound — a quoted
+    /// delimiter word may carry a line terminator as content, so `<<"EO`, a
+    /// break, `F"` names the delimiter `EO\nF` — and every path that gives up
+    /// rewinds the scan to the byte after the operator and lexes those bytes
+    /// again from a state this parse already decided out of them. The reach it
+    /// reports is what withdraws the checkpoints in between, so it is asserted
+    /// here against the parse itself rather than only through a document whose
+    /// checkpoints might move for some other reason.
+    #[test]
+    fn a_heredoc_delimiter_parse_reports_every_byte_it_consulted() {
+        let quoted = b"cat <<\"EO\nF\"\nx\n";
+        assert_eq!(quoted[9], b'\n');
+        assert_eq!(quoted[11], b'"');
+        let mut reach = Reach::default();
+        let (heredoc, end) =
+            parse_heredoc(quoted, 4, &mut reach).expect("a quoted delimiter word spanning a line");
+        assert_eq!(heredoc.delimiter, b"EO\nF");
+        assert_eq!(end, 12);
+        /* NOTE: one past the line terminator that ended the word, and so past
+         * the closing quote on line 2 the parse had to cross to reach it. A
+         * checkpoint at the line start at 10 would sit inside that reading. */
+        assert_eq!(reach, Reach(13));
+        assert!(
+            reach.0 > 11,
+            "{reach:?} does not cover the closing quote at 11"
+        );
+
+        /* NOTE: A plain delimiter word ends at its line, and the parse says so:
+         * the terminator that ended the word is the last byte it consulted, and
+         * the line start behind it is left standing. */
+        let plain = b"cat <<EOF\nx\n";
+        assert_eq!(plain[9], b'\n');
+        let mut reach = Reach::default();
+        let (heredoc, end) = parse_heredoc(plain, 4, &mut reach).expect("a plain delimiter word");
+        assert_eq!(heredoc.delimiter, b"EOF");
+        assert_eq!(end, 9);
+        assert_eq!(reach, Reach(10));
+        assert!(
+            reach.0 <= 10,
+            "{reach:?} reaches past the line the delimiter word ends on"
+        );
+    }
+
+    /// A tag search a character class bounds reads that class and one byte
+    /// more, never the whole document.
+    ///
+    /// INVARIANT: the reach a lookahead reports withdraws every checkpoint at
+    /// or under it, so a search that runs to the end of the file on an
+    /// ordinary byte costs the rest of the document its restart points. An
+    /// OCaml quoted-string tag is `[a-z_]*` and is followed by `|` (OCaml
+    /// manual, Lexical conventions); a PostgreSQL dollar-quote tag is an
+    /// identifier or nothing and is followed by `$` (PostgreSQL 4.1.2.4). Each
+    /// search therefore gives up at the first byte outside its class, and an
+    /// ordinary `{` or `$` in the code leaves the lines under it their
+    /// checkpoints.
+    #[test]
+    fn a_class_bounded_tag_search_keeps_the_checkpoints_under_it() {
+        // NOTE: `{aa` opens no quoted string: the tag class stops at the line
+        // NOTE: terminator, which is not the `|` a tag needs behind it.
+        let ocaml = b"let x = {aa\n(* c *)\ny\n";
+        assert_eq!(
+            scan_checkpoint_watermarks(ocaml, Language::Ocaml, ScanOptions::default()),
+            [(0, 0), (12, 12), (20, 20), (22, 22)]
+        );
+
+        // NOTE: `a$b` opens no dollar-quoted string: the tag class stops at the
+        // NOTE: space, which is not the `$` a tag needs behind it.
+        let postgres = b"select a$b from t\n-- c\nx\n";
+        assert_eq!(
+            scan_checkpoint_watermarks(
+                postgres,
+                Language::Sql,
+                ScanOptions {
+                    dialect: Dialect::PostgreSql,
+                    ..Default::default()
+                }
+            ),
+            [(0, 0), (18, 11), (23, 11), (25, 11)]
+        );
+
+        // NOTE: An Oracle q-quote reads one delimiter byte and no more, so a
+        // NOTE: bare `q` in the code costs nothing either.
+        let oracle = b"select q from t\n-- c\nx\n";
+        assert_eq!(
+            scan_checkpoint_watermarks(
+                oracle,
+                Language::Sql,
+                ScanOptions {
+                    dialect: Dialect::Oracle,
+                    ..Default::default()
+                }
+            ),
+            [(0, 0), (16, 9), (21, 9), (23, 9)]
         );
     }
 

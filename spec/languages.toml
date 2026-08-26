@@ -184,3 +184,24 @@ reserved_names = [
 ]
 shebangs = ["truffleruby", "jruby", "ruby"]
 notes = "Ruby 3.3 lexical forms"
+
+[[languages]]
+name = "zig"
+extensions = ["zig", "zon"]
+dialects = ["standard"]
+notes = "Zig 0.16 lexical forms; no block comment, so `/*` is two operators"
+
+[[languages]]
+name = "r"
+extensions = ["r"]
+dialects = ["standard"]
+reserved_names = [".Rprofile"]
+shebangs = ["rscript", "r"]
+notes = "R 4.3 lexical forms; `%op%` is opaque and `r\"(...)\"` is a raw string"
+
+[[languages]]
+name = "dart"
+extensions = ["dart"]
+dialects = ["standard"]
+shebangs = ["dart"]
+notes = "Dart 3.13 lexical forms; block comments nest and `${...}` is code"

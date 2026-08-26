@@ -2086,10 +2086,14 @@ fn an_unterminated_literal_is_named_after_its_construct() {
         // NOTE: `'x ` is a lifetime, not a literal, so the character literal
         // NOTE: that fails here has to be one `rust_char_start` accepts: a
         // NOTE: non-ASCII character with a `'` close enough behind it to look
-        // NOTE: like the closing quote, which the line break arrives before.
+        // NOTE: like the closing quote. The escape in front of that quote eats
+        // NOTE: it, so nothing closes the literal before the line break ends
+        // NOTE: it. Both quotes sit on one line because the lookahead stops at
+        // NOTE: a line terminator, and `rustc` 1.97 reports `E0762
+        // NOTE: unterminated character literal` for this line as well.
         (
             Language::Rust,
-            "let c = '\u{e4}\n';\n".as_bytes(),
+            "let c = '\u{e4}\\';\n".as_bytes(),
             "unterminated character literal",
         ),
         (
@@ -2196,6 +2200,141 @@ fn a_rust_lifetime_opens_no_character_literal() {
     );
 }
 
+/// Rust Reference, Identifiers: an identifier is `XID_Start XID_Continue*` and
+/// has been since Rust 1.53, so `'` before a non-ASCII letter opens a lifetime
+/// or a loop label exactly as readily as `'` before an ASCII one — `fn
+/// f<'ä>() {}` and `'ä: loop { break 'ä }` both compile. Neither can be told
+/// from an unterminated character literal by anything on its own line, so
+/// neither is reported and the comment behind it is a comment.
+#[test]
+fn a_unicode_rust_lifetime_or_loop_label_opens_no_character_literal() {
+    for source in [
+        "fn f<'\u{e4}>() {} // remove\n".as_bytes(),
+        "'\u{e4}: loop { break '\u{e4} } // remove\n".as_bytes(),
+    ] {
+        let report = scan(source, Language::Rust, ScanOptions::default());
+        assert!(report.valid, "{source:?}: {:?}", report.diagnostics);
+        assert!(
+            report.diagnostics.is_empty(),
+            "{source:?}: {:?}",
+            report.diagnostics
+        );
+        assert_eq!(report.comments.len(), 1, "{source:?}");
+        assert_eq!(
+            report.comments[0].span,
+            ByteSpan::new(source.len() - b"// remove\n".len(), source.len() - 1),
+            "{source:?}"
+        );
+        assert!(report.comments[0].disposition.is_remove(), "{source:?}");
+    }
+}
+
+/// A character literal is told from a lifetime, and a lone apostrophe from the
+/// opening of one, by a bounded lookahead — and that lookahead stops at the
+/// line terminator.
+///
+/// The scanner offers a restart point at the line start behind every
+/// terminator, and a restart point promises that nothing decided before it
+/// depends on bytes after it; a window that read across one would let an edit
+/// on the next line rewrite a token on this one. Nothing valid is given up.
+/// `rustc` 1.97 reads `'ä` with the closing quote on the next line as a
+/// lifetime and reports `E0762 unterminated character literal` against that
+/// next line rather than this one, and `\` before a line terminator is a string
+/// continuation and no character escape. What the stop costs is one reading
+/// and no report at all: an apostrophe before a non-ASCII character that no
+/// second apostrophe closes before the line ends is a Unicode lifetime or loop
+/// label as readily as an unterminated literal, the last block here holds that
+/// case, and nothing on one line separates them. `ocamlc` 5.5.0 rejects `'\`
+/// before a line break as an illegal backslash escape, and accepts an
+/// apostrophe, a literal newline and an apostrophe as the one-character
+/// literal it is — which this scanner has never read as a literal, because it
+/// ends one at the line.
+#[test]
+fn a_character_literal_never_reaches_across_a_line_terminator() {
+    let crossing: &[(Language, &[u8])] = &[
+        // NOTE: The bare window: the closing quote two bytes on, past the
+        // NOTE: terminator.
+        (Language::Rust, "let a = '\n'; // remove\n".as_bytes()),
+        // NOTE: The escaped window, which reaches one byte further.
+        (Language::Rust, "let a = '\\\n'; // remove\n".as_bytes()),
+        (Language::Ocaml, "let c = '\n' (* remove *)\n".as_bytes()),
+        (Language::Ocaml, "let c = '\\\n' (* remove *)\n".as_bytes()),
+    ];
+    for (language, source) in crossing {
+        let report = scan(source, *language, ScanOptions::default());
+        assert!(
+            report.valid,
+            "{language:?} {source:?}: {:?}",
+            report.diagnostics
+        );
+        assert_eq!(report.comments.len(), 1, "{language:?} {source:?}");
+        assert!(
+            report.comments[0].disposition.is_remove(),
+            "{language:?} {source:?}"
+        );
+    }
+
+    // NOTE: The windows that stay on their line are untouched, which is what
+    // NOTE: keeps the rule from being a refusal to read character literals.
+    let closed: &[(Language, &[u8])] = &[
+        (Language::Rust, "let a = 'x'; // remove\n".as_bytes()),
+        (Language::Rust, "let a = '\\n'; // remove\n".as_bytes()),
+        (Language::Rust, "let a = '\u{e4}'; // remove\n".as_bytes()),
+        (Language::Rust, "let a = '/'; // remove\n".as_bytes()),
+        (Language::Ocaml, "let c = 'x' (* remove *)\n".as_bytes()),
+        (Language::Ocaml, "let c = '\\n' (* remove *)\n".as_bytes()),
+    ];
+    for (language, source) in closed {
+        let report = scan(source, *language, ScanOptions::default());
+        assert!(
+            report.valid,
+            "{language:?} {source:?}: {:?}",
+            report.diagnostics
+        );
+        assert_eq!(report.comments.len(), 1, "{language:?} {source:?}");
+    }
+
+    // NOTE: A literal whose quote is escaped away still runs off the end of its
+    // NOTE: line, and is still reported there.
+    let unterminated = "let a = '\u{e4}\\'; // not a comment\n".as_bytes();
+    let report = scan(unterminated, Language::Rust, ScanOptions::default());
+    assert!(!report.valid, "{:?}", report.diagnostics);
+    assert_eq!(report.diagnostics.len(), 1, "{:?}", report.diagnostics);
+    assert_eq!(
+        report.diagnostics[0].span,
+        ByteSpan::new(8, unterminated.len() - 1)
+    );
+
+    /* NOTE: The non-ASCII window stops at the terminator like the others, and
+     * the apostrophe it then read as no literal is left unreported. Within one
+     * line `\u{e4}` behind an apostrophe is a Unicode lifetime or loop label as
+     * readily as an unterminated character literal -- Rust identifiers are XID
+     * -- and `rustc` separates them in the parser, which is where E0762 comes
+     * from. A lexer with a line-bounded window cannot, so it keeps the file
+     * valid: over-keeping a comment is the safe direction. The reading of line
+     * 2 is unchanged either way: its apostrophe opens nothing and the `//`
+     * behind it is the comment it looks like. */
+    let across = "let a = '\u{e4}\n'; // remove\n".as_bytes();
+    let report = scan(across, Language::Rust, ScanOptions::default());
+    assert!(report.valid, "{:?}", report.diagnostics);
+    assert!(report.diagnostics.is_empty(), "{:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(15, 24));
+    assert!(report.comments[0].disposition.is_remove());
+
+    // NOTE: A closing quote further along the same line is still a literal, and
+    // NOTE: an ASCII character before it is still a lifetime, so neither is
+    // NOTE: reported.
+    for quiet in [
+        "let a = '\u{e4}aaaaaa'; // remove\n".as_bytes(),
+        "let a = 'x\n'; // remove\n".as_bytes(),
+    ] {
+        let report = scan(quiet, Language::Rust, ScanOptions::default());
+        assert!(report.valid, "{quiet:?}: {:?}", report.diagnostics);
+        assert_eq!(report.comments.len(), 1, "{quiet:?}");
+    }
+}
+
 /// Rust Reference, raw string literals: `r"` and `r#"` close only at their own
 /// closer, so one that never closes runs to the end of the file and is an
 /// error spanning what the lexer consumed.
@@ -2219,8 +2358,19 @@ fn an_unterminated_rust_raw_string_is_an_error_to_the_end_of_the_file() {
 
 /// A UTF-8 BOM is consumed before the first line is read — CPython's
 /// `check_bom`, Lua's `skipBOM` — so a `#!` line behind one is still the first
-/// line and still a preamble. A shell is the exception: `#` opens a comment
-/// only where no word has begun, and the BOM bytes begin one.
+/// line and still a preamble.
+///
+/// Three languages are the exception, and each was measured rather than
+/// assumed. A shell reads `#` as a comment opener only where no word has begun,
+/// and the BOM bytes begin one. Dart's `tokenizeTag` tests `scanOffset == 0`
+/// and counts the mark, so a BOM in front of a `#!` line leaves no `SCRIPT_TAG`
+/// at all: Dart SDK 3.13.2 compiles `#!/usr/bin/env dart` on the first line and
+/// rejects the same line behind a BOM with `Expected a declaration, but got
+/// '#'`. JavaScript's hashbang has to be the very first thing in a Script or
+/// Module (ECMA-262, Hashbang Comments), and `<ZWNBSP>` in front of it is
+/// `WhiteSpace` that arrives first: Node 26 runs a `#!` first line and answers
+/// the BOM-prefixed one with `SyntaxError: Invalid or unexpected token`. Both
+/// accept a bare BOM, so it is the `#!` behind it that they refuse.
 #[test]
 fn a_byte_order_mark_does_not_hide_the_first_line() {
     let python = b"\xef\xbb\xbf#!/usr/bin/env python3\nx = 1\n";
@@ -2252,6 +2402,49 @@ fn a_byte_order_mark_does_not_hide_the_first_line() {
     let shell = b"\xef\xbb\xbf#!/bin/sh\necho 1\n";
     let report = scan(shell, Language::Shell, ScanOptions::default());
     assert!(report.comments.is_empty());
+
+    let dart = b"\xef\xbb\xbf#!/usr/bin/env dart\nvoid main() {}\n";
+    let report = scan(dart, Language::Dart, ScanOptions::default());
+    assert!(report.comments.is_empty(), "{:?}", report.comments);
+    assert_eq!(
+        transform(dart, Language::Dart, TransformOptions::default()).output,
+        dart
+    );
+
+    let javascript = b"\xef\xbb\xbf#!/usr/bin/env node\nlet x = 1;\n";
+    let report = scan(javascript, Language::JavaScript, ScanOptions::default());
+    assert!(report.comments.is_empty(), "{:?}", report.comments);
+    assert_eq!(
+        transform(
+            javascript,
+            Language::JavaScript,
+            TransformOptions::default()
+        )
+        .output,
+        javascript
+    );
+
+    // NOTE: The same two lines without the mark are the shebang both languages
+    // NOTE: do read, which is what makes the assertions above about the mark.
+    for (language, source) in [
+        (
+            Language::Dart,
+            b"#!/usr/bin/env dart\nvoid main() {}\n".as_slice(),
+        ),
+        (
+            Language::JavaScript,
+            b"#!/usr/bin/env node\nlet x = 1;\n".as_slice(),
+        ),
+    ] {
+        let report = scan(source, language, ScanOptions::default());
+        assert_eq!(report.comments.len(), 1, "{language:?}");
+        assert_eq!(
+            report.comments[0].kind,
+            CommentKind::Shebang,
+            "{language:?}"
+        );
+        assert!(!report.comments[0].disposition.is_remove(), "{language:?}");
+    }
 }
 
 /// A directive named after the tool that reads it ends at a boundary, and the
@@ -2982,6 +3175,70 @@ fn a_ruby_percent_space_literal_opens_only_where_a_value_is_expected() {
     );
 }
 
+/// Ruby's `parse_percent` tests `IS_lex_state(EXPR_FNAME | EXPR_FITEM)` before
+/// it reaches the spacing rule, so `%s` opens a symbol literal after `alias`
+/// and `undef` however the `%` is spaced — and only `%s` does. `def` leaves
+/// Ruby in `EXPR_FNAME` alone and has no such exception.
+///
+/// Ground truth, Ruby 3.3.12 `Ripper.lex`: `alias%s(baz # x) %s(bar)` gives
+/// `on_symbeg "%s("` in state `FNAME|FITEM` with `baz # x` an
+/// `on_tstring_content`, and so does `undef%s(...)`; `def%s(baz # x)`,
+/// `alias%w[baz # x]`, `alias%q(baz # x)` and `alias/baz # x/` each give
+/// `on_op` for the delimiter and then an `on_comment`.
+#[test]
+fn a_ruby_alias_opens_a_symbol_literal_on_percent_s() {
+    for opaque in [
+        b"alias%s(baz # x) %s(bar)\n".as_slice(),
+        b"alias %s(baz # x)\n".as_slice(),
+        b"undef%s(baz # x)\n".as_slice(),
+        b"undef %s(baz # x)\n".as_slice(),
+        // NOTE: `alias` holds `FNAME|FITEM` across the whole statement, so the
+        // NOTE: second name is a symbol literal too.
+        b"alias%s(a)%s(b # x)\n".as_slice(),
+    ] {
+        let report = scan(opaque, Language::Ruby, ScanOptions::default());
+        assert!(report.valid, "{opaque:?}: {:?}", report.diagnostics);
+        assert!(
+            report.comments.is_empty(),
+            "{opaque:?}: {:?}",
+            report.comments
+        );
+    }
+
+    for operator in [
+        b"def%s(baz # x)\n".as_slice(),
+        b"alias%w[baz # x]\n".as_slice(),
+        b"alias%q(baz # x)\n".as_slice(),
+        b"alias/baz # x/\n".as_slice(),
+        b"undef%w[baz # x]\n".as_slice(),
+    ] {
+        let report = scan(operator, Language::Ruby, ScanOptions::default());
+        assert!(report.valid, "{operator:?}: {:?}", report.diagnostics);
+        assert_eq!(
+            report.comments.len(),
+            1,
+            "{operator:?}: {:?}",
+            report.comments
+        );
+        assert_eq!(
+            report.comments[0].span.start,
+            offset_of(operator, b"# x"),
+            "{operator:?}"
+        );
+    }
+
+    // NOTE: The spacing rule is untouched where no keyword put the lexer in
+    // NOTE: `FNAME|FITEM`: after an operand a spaced `%s` opens a symbol
+    // NOTE: literal on the ordinary rule and the `#` behind it is a comment.
+    // NOTE: Ripper agrees -- `a = b %s(c) # x` gives `on_symbeg "%s("` and
+    // NOTE: then `on_comment "# x"`.
+    let operand = b"a = b %s(c) # x\n";
+    let report = scan(operand, Language::Ruby, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span.start, offset_of(operand, b"# x"));
+}
+
 /// Ruby's `parse_slash`: `/` opens a regular expression where a value is
 /// expected and after a command name with a space in front of it and none
 /// behind it; after an operand it is division. A `/` inside a character class
@@ -3642,4 +3899,1221 @@ fn ruby_layouts_leave_a_line_columns_or_nothing() {
         },
     );
     assert_eq!(compact.output, b"x = 1\n");
+}
+
+/// Zig's comment forms, and the fourth slash that takes a documentation marker
+/// back (Zig Language Reference: Comments, Doc comments).
+///
+/// Ground truth, `std.zig.Tokenizer` 0.16.0 over
+/// `"//! module\nconst x = 1; // line\n/// doc\n//// divider\nconst y = 2;\n"`:
+/// `container_doc_comment "//! module"` at `[0,10)`, `doc_comment "/// doc"` at
+/// `[32,39)`, and no token at all for the `// line` and `//// divider` lines —
+/// the tokenizer skips an ordinary comment rather than emitting one, which is
+/// exactly what says `////` is not documentation.
+#[test]
+fn zig_comment_forms_carry_their_kinds() {
+    let source = b"//! module\nconst x = 1; // line\n/// doc\n//// divider\nconst y = 2;\n";
+    let report = scan(source, Language::Zig, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(
+        report
+            .comments
+            .iter()
+            .map(|comment| (comment.span.start, comment.span.end, comment.kind))
+            .collect::<Vec<_>>(),
+        vec![
+            (0, 10, CommentKind::DocLine),
+            (24, 31, CommentKind::Line),
+            (32, 39, CommentKind::DocLine),
+            (40, 52, CommentKind::Line),
+        ],
+    );
+    assert_eq!(removable(&report), 4);
+    /* NOTE: `//!!` is still a top-level doc comment: the tokenizer decides that
+     * one at the `!` and never looks at what follows. */
+    let bang = scan(b"//!! module\n", Language::Zig, ScanOptions::default());
+    assert_eq!(bang.comments[0].kind, CommentKind::DocLine);
+}
+
+/// Zig has no block comment at all: `/*` is the division operator followed by
+/// multiplication, so a `/* ... */` written in a Zig file is code.
+///
+/// Ground truth, `std.zig.Tokenizer` 0.16.0 over
+/// `"const a = 1 /* not a comment */ + 2;\n"`: `slash`, `asterisk`,
+/// `identifier`, `identifier`, `identifier`, `asterisk`, `slash` — seven
+/// ordinary tokens and no comment. (`zig ast-check` refuses that particular
+/// line for its own reason, that a binary operator has white space on one side
+/// only; the tokenizer is what decides whether a comment is there.)
+#[test]
+fn zig_has_no_block_comment() {
+    let source = b"const a = 1 /* not a comment */ + 2;\n// remove\n";
+    let report = scan(source, Language::Zig, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(
+        report.comments[0].span.start,
+        offset_of(source, b"// remove")
+    );
+    let result = transform(source, Language::Zig, TransformOptions::default());
+    assert_eq!(result.output, b"const a = 1 /* not a comment */ + 2;\n\n");
+}
+
+/// Every Zig literal hides a comment opener, and none of them is spelled with
+/// a marker of its own: `@"quoted identifier"` is lexed as the string literal
+/// it looks like, and a character literal takes the same escapes a string does.
+///
+/// Ground truth, `std.zig.Tokenizer` 0.16.0 over the source below:
+/// `string_literal "\"a // b\""`, `char_literal "'\\''"`,
+/// `identifier "@\"id // x\""`, `multiline_string_literal_line
+/// "\\\\ // not a comment"`, and `zig ast-check` accepts the file.
+#[test]
+fn zig_literals_hide_comment_openers() {
+    let source = b"const s = \"a // b\";\nconst c = '\\'';\nconst @\"id // x\" = 1;\nconst m =\n    \\\\ // not a comment\n;\n// remove\n";
+    let report = scan(source, Language::Zig, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(
+        report.comments[0].span.start,
+        offset_of(source, b"// remove")
+    );
+    /* NOTE: Zig interpolates nothing: `{s}` in a string is a format placeholder
+     * that `std.fmt` reads at run time and one more byte to the lexer, so
+     * there is no interpolation for a comment to be written inside. */
+    let placeholder = b"const s = \"{s} // opaque {d}\";\n// remove\n";
+    let report = scan(placeholder, Language::Zig, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+}
+
+/// A multiline string literal is one line at a time: `\\` wherever a token may
+/// begin runs to the end of that line as content, and the line under it starts
+/// in code again.
+///
+/// Ground truth, `std.zig.Tokenizer` 0.16.0 over the source below:
+/// `multiline_string_literal_line` at `[14,24)`, `[29,36)` and `[49,64)` —
+/// `\\x // one`, `\\y "z'` and `\\inline // two` — each ending before its own
+/// newline, with `semicolon` tokens between them; `zig ast-check` accepts the
+/// file. The third shows that the opener is taken wherever a token may begin
+/// rather than only as the first thing on a line.
+#[test]
+fn zig_multiline_string_literals_are_one_line_at_a_time() {
+    let source = b"const a =\n    \\\\x // one\n    \\\\y \"z'\n;\nconst b = \\\\inline // two\n;\n// remove\n";
+    let report = scan(source, Language::Zig, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(
+        report.comments[0].span.start,
+        offset_of(source, b"// remove")
+    );
+    /* NOTE: The line under a `\\` line is code, so a comment written there is
+     * found — the literal does not run on the way a here document would. */
+    let resumed = b"const a =\n    \\\\body // opaque\n;\n// remove\n";
+    let report = scan(resumed, Language::Zig, ScanOptions::default());
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(
+        report.comments[0].span.start,
+        offset_of(resumed, b"// remove")
+    );
+    /* NOTE: A single `\` opens nothing. Zig calls it an invalid token; here it is
+     * one ordinary byte, and the `//` behind it is still a comment. */
+    let single = b"const a = \\ // remove\n";
+    let report = scan(single, Language::Zig, ScanOptions::default());
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(
+        report.comments[0].span.start,
+        offset_of(single, b"// remove")
+    );
+}
+
+/// Both of Zig's quoted literals end at their line, so one that never closes is
+/// an error rather than a literal that swallows the file. A fix writes nothing
+/// until it is forced, and then takes only the comments it found before the
+/// error.
+///
+/// Ground truth, `std.zig.Tokenizer` 0.16.0: `"const s = \"unterminated // x\n"`
+/// lexes the literal as `invalid`, and `zig ast-check` reports `string literal
+/// contains invalid byte: '\n'`; `"const c = 'a;\n"` is the same for a
+/// character literal.
+#[test]
+fn every_unterminated_zig_construct_stops_a_fix_until_it_is_forced() {
+    let cases: &[(&[u8], &str)] = &[
+        (
+            b"const s = \"unterminated // x\nconst t = 1;\n",
+            "unterminated Zig string",
+        ),
+        (
+            b"const c = 'a;\nconst t = 1;\n",
+            "unterminated Zig character literal",
+        ),
+        /* NOTE: The same two run out at the end of a file that has no line break
+         * of its own. */
+        (b"const s = \"unterminated", "unterminated Zig string"),
+        (b"const c = 'a", "unterminated Zig character literal"),
+        /* NOTE: A backslash in front of the line break carries nothing over it:
+         * the literal still ends where the line does. */
+        (
+            b"const s = \"a\\\nconst t = 1;\n",
+            "unterminated Zig string",
+        ),
+    ];
+    for (source, message) in cases {
+        let result = transform(source, Language::Zig, TransformOptions::default());
+        assert!(!result.report.valid, "{source:?} was accepted");
+        assert_eq!(
+            result
+                .report
+                .diagnostics
+                .iter()
+                .map(|diagnostic| (diagnostic.code.as_str(), diagnostic.message.as_str()))
+                .collect::<Vec<_>>(),
+            vec![("unterminated-string", *message)],
+            "{source:?}",
+        );
+        assert!(result.edits.is_empty(), "{source:?} was edited anyway");
+    }
+
+    let forced = transform(
+        b"// note\nconst s = \"unclosed\n",
+        Language::Zig,
+        TransformOptions {
+            scan: ScanOptions {
+                force_invalid: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    );
+    assert!(!forced.report.valid);
+    assert_eq!(forced.output, b"\nconst s = \"unclosed\n");
+}
+
+/// `zig fmt` reads one instruction out of a comment, and it reads the whole
+/// phrase rather than a prefix of it: `Ast/Render.zig` takes `"//".len()` bytes
+/// off the trimmed comment, trims the white space behind them, and compares the
+/// remainder with `zig fmt: off` and `zig fmt: on` for equality. So the three
+/// near-misses below turn nothing off and are removed like any other comment.
+#[test]
+fn zig_fmt_directives_are_protected() {
+    let source = b"// zig fmt: off\n// zig fmt: on\n//zig fmt: off\n// ordinary\n";
+    let report = scan(source, Language::Zig, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 4, "{:?}", report.comments);
+    for comment in &report.comments[..3] {
+        assert_eq!(comment.kind, CommentKind::Directive, "{comment:?}");
+        assert!(!comment.disposition.is_remove(), "{comment:?}");
+    }
+    assert_eq!(report.comments[3].kind, CommentKind::Line);
+    assert_eq!(removable(&report), 1);
+
+    for near_miss in [
+        b"/// zig fmt: off\n".as_slice(),
+        b"//// zig fmt: off\n".as_slice(),
+        b"// zig fmt: off please\n".as_slice(),
+        b"//! zig fmt: off\n".as_slice(),
+    ] {
+        let report = scan(near_miss, Language::Zig, ScanOptions::default());
+        assert_eq!(report.comments.len(), 1, "{near_miss:?}");
+        assert_ne!(
+            report.comments[0].kind,
+            CommentKind::Directive,
+            "{near_miss:?} was read as a directive"
+        );
+        assert_eq!(removable(&report), 1, "{near_miss:?}");
+    }
+}
+
+/// Zig has no `#!` line and no preamble of any kind: `#` is not a token of the
+/// language, so a first line spelled like a shebang is neither a comment nor a
+/// reason to detect the file as Zig.
+#[test]
+fn a_zig_file_has_no_shebang_line() {
+    let source = b"#!/usr/bin/env zig\n// remove\n";
+    let report = scan(source, Language::Zig, ScanOptions::default());
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].kind, CommentKind::Line);
+    assert_eq!(
+        report.comments[0].span.start,
+        offset_of(source, b"// remove")
+    );
+    assert!(
+        detect_language(None, b"#!/usr/bin/env zig\n").is_none(),
+        "a `#!` line naming zig detected a language"
+    );
+}
+
+/// Every Zig construct that runs to the end of a line ends at a CRLF pair as it
+/// ends at a bare newline: a comment, a multiline string literal line, and an
+/// unterminated quoted literal alike.
+#[test]
+fn zig_multi_line_constructs_survive_crlf_line_endings() {
+    let source = b"//! module\r\nconst a =\r\n    \\\\body // opaque\r\n;\r\n/// doc\r\nconst b = 1; // remove\r\n";
+    let result = transform(source, Language::Zig, TransformOptions::default());
+    assert!(
+        result.report.valid,
+        "diagnostics: {:?}",
+        result.report.diagnostics
+    );
+    assert_eq!(
+        result.report.comments.len(),
+        3,
+        "{:?}",
+        result.report.comments
+    );
+    assert_eq!(
+        result.output,
+        b"\r\nconst a =\r\n    \\\\body // opaque\r\n;\r\n\r\nconst b = 1; \r\n"
+    );
+
+    let unterminated = scan(
+        b"const s = \"unclosed\r\nconst t = 1;\r\n",
+        Language::Zig,
+        ScanOptions::default(),
+    );
+    assert!(!unterminated.valid);
+    assert_eq!(unterminated.diagnostics.len(), 1);
+    assert_eq!(unterminated.diagnostics[0].code, "unterminated-string");
+}
+
+#[test]
+fn zig_is_detected_from_its_extensions() {
+    for name in ["main.zig", "build.zig", "build.zig.zon", "deps.zon"] {
+        let found = detect_language(Some(Path::new(name)), b"")
+            .unwrap_or_else(|| panic!("`{name}` is detected as nothing"));
+        assert_eq!(
+            (found.language, found.dialect, found.reason),
+            (Language::Zig, Dialect::Standard, "extension"),
+            "`{name}`"
+        );
+    }
+}
+
+#[test]
+fn zig_layouts_leave_a_line_columns_or_nothing() {
+    let source = b"// alone\nconst x = 1; // trailing\n";
+    let lines = transform(source, Language::Zig, TransformOptions::default());
+    assert_eq!(lines.output, b"\nconst x = 1; \n");
+    let columns = transform(
+        source,
+        Language::Zig,
+        TransformOptions {
+            layout: Layout::Columns,
+            ..Default::default()
+        },
+    );
+    let padded = format!("{}\nconst x = 1; {}\n", " ".repeat(8), " ".repeat(11));
+    assert_eq!(columns.output, padded.as_bytes());
+    let compact = transform(
+        source,
+        Language::Zig,
+        TransformOptions {
+            layout: Layout::Compact,
+            ..Default::default()
+        },
+    );
+    assert_eq!(compact.output, b"const x = 1;\n");
+}
+
+/// R's two comment forms and the one convention that tells them apart.
+///
+/// R's own parser has a single comment token: `#` runs to the end of the line
+/// and that is the whole rule (R Language Definition, 10.2 Comments). `#'` is
+/// roxygen2's marker for the documentation it generates a manual page from,
+/// and it is a documentation comment here for the reason Lua's `---` and Zig's
+/// `///` are — the tool that reads it is what makes it one.
+///
+/// Ground truth, R 4.3.3 `utils::getParseData(parse(file =, keep.source =
+/// TRUE))` over the source below: `COMMENT` at `[0,6)`, `[14,20)`, `[21,34)`
+/// and `[35,46)`, all four with the same token name, which is exactly why the
+/// distinction below is a convention rather than a reading of the grammar.
+#[test]
+fn r_comment_forms_carry_their_kinds() {
+    let source = b"#' doc\nx <- 1 # line\n#'' still doc\n## ordinary\n";
+    let report = scan(source, Language::R, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(
+        report
+            .comments
+            .iter()
+            .map(|comment| (comment.span.start, comment.span.end, comment.kind))
+            .collect::<Vec<_>>(),
+        vec![
+            (0, 6, CommentKind::DocLine),
+            (14, 20, CommentKind::Line),
+            (21, 34, CommentKind::DocLine),
+            (35, 46, CommentKind::Line),
+        ],
+    );
+    assert_eq!(removable(&report), 4);
+}
+
+/// Every R literal hides a comment opener, and there are four of them: the two
+/// quoted strings, the backquoted name, and the `%...%` operator.
+///
+/// Ground truth, R 4.3.3 `getParseData` over the source below: `STR_CONST`
+/// `"\"a # b\""` at `[5,12)` and `'c # d'` at `[18,25)`, `SYMBOL` `` `e # f` ``
+/// at `[31,38)`, `SPECIAL` `%g # h%` at `[46,53)`, `STR_CONST` `r"(i # j)"` at
+/// `[61,71)`, and one `COMMENT` at `[79,87)`.
+#[test]
+fn r_literals_hide_comment_openers() {
+    let source = b"s <- \"a # b\"\nt <- 'c # d'\nn <- `e # f`\no <- 1 %g # h% 2\nr <- r\"(i # j)\"\nx <- 1 # remove\n";
+    let report = scan(source, Language::R, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(
+        report.comments[0].span,
+        ByteSpan::new(79, 87),
+        "{:?}",
+        report.comments
+    );
+    /* NOTE: Base R interpolates nothing. `glue` and `sprintf` read `{name}` and
+     * `%s` out of a finished string at run time, so there is no interpolation
+     * for a comment to be written inside and no state for one to escape
+     * from. */
+    let braces = scan(
+        b"s <- \"{x} # opaque {y}\"\n# remove\n",
+        Language::R,
+        ScanOptions::default(),
+    );
+    assert!(braces.valid, "diagnostics: {:?}", braces.diagnostics);
+    assert_eq!(braces.comments.len(), 1, "{:?}", braces.comments);
+}
+
+/// A `%...%` operator is opaque, and it ends at the `%` rather than at any
+/// boundary: `x %a # b% y` is one operator whose name carries a `#`.
+///
+/// Ground truth, R 4.3.3 `gram.y`, `SpecialValue`: the lexer pushes bytes until
+/// it meets a second `%`, and returns `ERROR` at a line break instead. Measured
+/// on the interpreter: `x <- 1 %a # b% 2 # remove` lexes `SPECIAL "%a # b%"` at
+/// `[7,14)` and `COMMENT "# remove"` at `[17,25)`, and `x <- 5 % 2` is refused
+/// with `unexpected input` at the `2`.
+#[test]
+fn r_special_operators_are_opaque_to_the_end_of_their_line() {
+    let source = b"x <- 1 %a # b% 2 # remove\ny <- 3 %in% c(1, 2) # also\n";
+    let report = scan(source, Language::R, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(
+        report
+            .comments
+            .iter()
+            .map(|comment| (comment.span.start, comment.span.end))
+            .collect::<Vec<_>>(),
+        vec![(17, 25), (46, 52)],
+    );
+    /* NOTE: `%` takes no escapes at all — `SpecialValue` has no backslash case —
+     * so `%a\%` is a complete operator and the byte after it is code again.
+     * Measured: `SPECIAL "%a\\%"` at `[7,11)`. */
+    let escaped = scan(
+        b"x <- 1 %a\\% 2 # remove\n",
+        Language::R,
+        ScanOptions::default(),
+    );
+    assert!(escaped.valid, "diagnostics: {:?}", escaped.diagnostics);
+    assert_eq!(escaped.comments.len(), 1, "{:?}", escaped.comments);
+    assert_eq!(
+        escaped.comments[0].span.start,
+        offset_of(b"x <- 1 %a\\% 2 # remove\n", b"# remove")
+    );
+}
+
+/// A raw string takes any of the three delimiter pairs, either quote, and any
+/// number of dashes between the quote and the bracket, and it closes only on
+/// the matching bracket with the same run of dashes and the same quote behind
+/// it (R 4.0.0 and later; `?Quotes`).
+///
+/// Ground truth, R 4.3.3 `getParseData`: `r"(paren # x)"` at `[5,19)`,
+/// `R"[brack # x]"` at `[25,39)`, `r"{brace # x}"` at `[45,59)` and
+/// `R'(single # x)'` at `[65,80)` are four `STR_CONST` tokens, with the only
+/// `COMMENT` at `[88,96)`; and in the dashed source, `r"--(dashes ) # x)--"` at
+/// `[5,26)` and `r"---[deep ]-- # x]---"` at `[32,55)` are two more, with the
+/// only `COMMENT` at `[63,71)`.
+#[test]
+fn r_raw_strings_take_every_delimiter_and_dash_count() {
+    let forms = b"a <- r\"(paren # x)\"\nb <- R\"[brack # x]\"\nc <- r\"{brace # x}\"\nd <- R'(single # x)'\ne <- 1 # remove\n";
+    let report = scan(forms, Language::R, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(88, 96));
+
+    let dashes = b"a <- r\"--(dashes ) # x)--\"\nb <- r\"---[deep ]-- # x]---\"\nc <- 1 # remove\n";
+    let report = scan(dashes, Language::R, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(63, 71));
+
+    /* NOTE: A raw string takes no escapes, which is what it is for: `r"(a\)"` is
+     * six bytes of content and a `)"` that closes. Measured: `STR_CONST
+     * "r\"(a\\)\""` at `[5,12)`, `COMMENT` at `[13,21)`. */
+    let backslash = b"x <- r\"(a\\)\" # remove\n";
+    let report = scan(backslash, Language::R, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(13, 21));
+}
+
+/// The `r` in front of a raw string opens one only where it begins a token: a
+/// letter, a digit, a `.` or a `_` in front of it makes it the tail of a name,
+/// and the quote behind that name opens an ordinary string instead.
+///
+/// Ground truth, R 4.3.3: `z <- r"(a " b)" # remove` lexes one `STR_CONST`
+/// `r"(a " b)"` at `[5,15)` and a `COMMENT` at `[16,24)`, while
+/// `z <- xr"(a " b)" # x` is refused with `unexpected string constant` at
+/// column 8 — the `"` — and the echoed line is cut at `z <- xr"(a "`, which is
+/// the ordinary string R's lexer read there.
+#[test]
+fn an_r_raw_string_prefix_needs_a_token_boundary() {
+    let raw = b"z <- r\"(a \" b)\" # remove\n";
+    let report = scan(raw, Language::R, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(16, 24));
+
+    /* NOTE: The same bytes behind a name are an ordinary string that closes at
+     * the second quote, so what follows it is code and the last quote opens a
+     * string that never closes. */
+    let named = b"z <- xr\"(a \" b)\" # x\n";
+    let report = scan(named, Language::R, ScanOptions::default());
+    assert!(!report.valid, "{:?}", report.comments);
+    assert!(
+        report
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "unterminated-string"),
+        "{:?}",
+        report.diagnostics
+    );
+    /* NOTE: A byte that cannot continue a name leaves the `r` a token of its
+     * own: `l$r"(a # b)"` is a raw string to R, measured as `STR_CONST` at
+     * `[17,27)` after the `'$'`. */
+    let dollar = b"l <- list(r = 1)\nl$r\"(a # b)\"\nx <- 1 # remove\n";
+    let report = scan(dollar, Language::R, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+}
+
+/// A quoted string and a backquoted name both carry a line break as content,
+/// so a `#` on a line inside one is not a comment and the literal ends only at
+/// its own delimiter.
+///
+/// Ground truth, R 4.3.3 `getParseData` over the source below: `STR_CONST` at
+/// `[5,30)` spanning three lines, `SYMBOL` `` `three\n# nor this\nfour` `` at
+/// `[36,59)` spanning three more, and one `COMMENT` at `[67,75)`.
+#[test]
+fn r_strings_and_backquoted_names_may_span_lines() {
+    let source =
+        b"s <- \"one\n# not a comment\ntwo\"\nn <- `three\n# nor this\nfour`\nx <- 1 # remove\n";
+    let report = scan(source, Language::R, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(67, 75));
+
+    /* NOTE: A raw string carries them too, and its own bracket is still the only
+     * thing that closes it. Measured: `STR_CONST "r\"(multi\nline # x)\""` at
+     * `[0,19)`, `COMMENT` at `[27,35)`. */
+    let raw = b"r\"(multi\nline # x)\"\ny <- 1 # remove\n";
+    let report = scan(raw, Language::R, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(27, 35));
+}
+
+/// Each of R's four literals is an error when it never closes, a fix writes
+/// nothing until it is forced, and a forced fix takes only what was found in
+/// front of the error.
+///
+/// Ground truth, R 4.3.3: the three that run to the end of the file are refused
+/// with `unexpected INCOMPLETE_STRING` — an unterminated `"`, an unterminated
+/// `r"--(` raw string whose closing run of dashes is one short, and an
+/// unterminated backquoted name — and a `%` with no second `%` before the line
+/// break is refused with `unexpected input`, which is `SpecialValue` returning
+/// `ERROR` at the newline.
+#[test]
+fn every_unterminated_r_construct_stops_a_fix_until_it_is_forced() {
+    let cases: &[(&[u8], &str, &str)] = &[
+        (
+            b"x <- \"never closed # x\ny <- 1\n",
+            "unterminated-string",
+            "unterminated R string",
+        ),
+        (
+            b"x <- r\"--(never closed # x)-\"\ny <- 1\n",
+            "unterminated-string",
+            "unterminated R raw string",
+        ),
+        (
+            b"`odd # name <- 1\ny <- 2\n",
+            "unterminated-identifier",
+            "unterminated R backquoted name",
+        ),
+        (
+            b"x <- 1 % 2\ny <- 3\n",
+            "unterminated-operator",
+            "unterminated R special operator",
+        ),
+    ];
+    for (source, code, message) in cases {
+        let result = transform(source, Language::R, TransformOptions::default());
+        assert!(!result.report.valid, "{source:?} was accepted");
+        assert_eq!(
+            result
+                .report
+                .diagnostics
+                .iter()
+                .map(|diagnostic| (diagnostic.code.as_str(), diagnostic.message.as_str()))
+                .collect::<Vec<_>>(),
+            vec![(*code, *message)],
+            "{source:?}",
+        );
+        assert!(result.edits.is_empty(), "{source:?} was edited anyway");
+    }
+
+    let forced = transform(
+        b"# note\nx <- \"unclosed\n",
+        Language::R,
+        TransformOptions {
+            scan: ScanOptions {
+                force_invalid: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    );
+    assert!(!forced.report.valid);
+    assert_eq!(forced.output, b"\nx <- \"unclosed\n");
+}
+
+/// The comments an R tool reads rather than a reader: lintr's `# nolint`,
+/// styler's `# styler: off`, and covr's `# nocov start`.
+///
+/// `nolint` is matched for every language already; the other two are R's own.
+/// styler carries its boundary in the colon and covers `off` and `on` alike;
+/// `nocov` is the whole word covr looks for and is followed by `start`, `end`,
+/// or nothing at all, so it ends at a boundary and prose that merely opens with
+/// those letters is not an instruction.
+#[test]
+fn r_tool_directives_are_protected() {
+    let source = b"# nolint\n# nolint start\n# nolint end\n# styler: off\n# styler: on\n# nocov\n# nocov start\n# nocov end\n# ordinary\n";
+    let report = scan(source, Language::R, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 9, "{:?}", report.comments);
+    for comment in &report.comments[..8] {
+        assert_eq!(comment.kind, CommentKind::Directive, "{comment:?}");
+        assert!(!comment.disposition.is_remove(), "{comment:?}");
+    }
+    assert_eq!(report.comments[8].kind, CommentKind::Line);
+    assert_eq!(removable(&report), 1);
+
+    for near_miss in [
+        b"# nocovish note\n".as_slice(),
+        b"# a note about styler: off\n".as_slice(),
+        b"# a note about nolint\n".as_slice(),
+    ] {
+        let report = scan(near_miss, Language::R, ScanOptions::default());
+        assert_eq!(report.comments.len(), 1, "{near_miss:?}");
+        assert_ne!(
+            report.comments[0].kind,
+            CommentKind::Directive,
+            "{near_miss:?} was read as a directive"
+        );
+        assert_eq!(removable(&report), 1, "{near_miss:?}");
+    }
+}
+
+/// A `#!` line is a comment to R wherever it sits — `#` opens one and the `!`
+/// is content — so what makes the first one a preamble is its position, and a
+/// second one further down the file is an ordinary comment.
+///
+/// Ground truth, R 4.3.3: `#!/usr/bin/env Rscript` is a `COMMENT` at `[0,22)`
+/// in a file that opens with it, and a `COMMENT` at `[7,29)` in one that does
+/// not.
+#[test]
+fn an_r_shebang_is_a_preamble_only_on_the_first_line() {
+    let first = b"#!/usr/bin/env Rscript\n# ordinary\nx <- 1\n";
+    let report = scan(first, Language::R, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 2, "{:?}", report.comments);
+    assert_eq!(report.comments[0].kind, CommentKind::Shebang);
+    assert!(!report.comments[0].disposition.is_remove());
+    assert_eq!(report.comments[1].kind, CommentKind::Line);
+    assert_eq!(removable(&report), 1);
+
+    let later = b"x <- 1\n#!/usr/bin/env Rscript\n";
+    let report = scan(later, Language::R, ScanOptions::default());
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].kind, CommentKind::Line);
+    assert_eq!(removable(&report), 1);
+}
+
+/// Every R construct that runs to the end of a line ends at a CRLF pair as it
+/// ends at a bare newline, and every one that crosses a line carries the pair
+/// as content.
+///
+/// Ground truth, R 4.3.3 reading the file rather than a string: `parse(file =)`
+/// translates the line endings, so `COMMENT` comes back as `# one` at `[12,17)`
+/// without the `\r`, `STR_CONST` spans `[5,11)` across the pair and the raw
+/// string `[24,33)` across another, and the last `COMMENT` is `# three` at
+/// `[48,55)`. (`parse(text =)` is the other reading, and it is not the one
+/// `Rscript` uses: it takes the bytes as given, so a lone `\r` there is not a
+/// line break at all.)
+#[test]
+fn r_multi_line_constructs_survive_crlf_line_endings() {
+    let source = b"x <- \"a\r\nb\" # one\r\ny <- r\"(c\r\nd)\" # two\r\nz <- 3 # three\r\n";
+    let result = transform(source, Language::R, TransformOptions::default());
+    assert!(
+        result.report.valid,
+        "diagnostics: {:?}",
+        result.report.diagnostics
+    );
+    assert_eq!(
+        result
+            .report
+            .comments
+            .iter()
+            .map(|comment| (comment.span.start, comment.span.end))
+            .collect::<Vec<_>>(),
+        vec![(12, 17), (34, 39), (48, 55)],
+    );
+    assert_eq!(
+        result.output,
+        b"x <- \"a\r\nb\" \r\ny <- r\"(c\r\nd)\" \r\nz <- 3 \r\n"
+    );
+
+    /* NOTE: A quoted string carries a CRLF the way it carries a bare newline, so
+     * a quote that never closes swallows the lines below it and is reported at
+     * the end of the file rather than at the first line break. */
+    let never = scan(
+        b"x <- \"unclosed\r\ny <- 1\r\n",
+        Language::R,
+        ScanOptions::default(),
+    );
+    assert!(!never.valid);
+    assert_eq!(never.diagnostics[0].code, "unterminated-string");
+    assert_eq!(never.diagnostics[0].span, ByteSpan::new(5, 24));
+
+    /* NOTE: A `%...%` operator is the one construct a CRLF ends rather than
+     * carries: `SpecialValue` returns `ERROR` at the line break. */
+    let operator = scan(
+        b"x <- 1 % 2\r\ny <- 3\r\n",
+        Language::R,
+        ScanOptions::default(),
+    );
+    assert!(!operator.valid);
+    assert_eq!(operator.diagnostics[0].code, "unterminated-operator");
+}
+
+#[test]
+fn r_is_detected_from_its_extension_reserved_name_and_shebang() {
+    for name in ["analysis.R", "analysis.r", "src/model.R"] {
+        let found = detect_language(Some(Path::new(name)), b"")
+            .unwrap_or_else(|| panic!("`{name}` is detected as nothing"));
+        assert_eq!(
+            (found.language, found.dialect, found.reason),
+            (Language::R, Dialect::Standard, "extension"),
+            "`{name}`"
+        );
+    }
+    let profile = detect_language(Some(Path::new(".Rprofile")), b"").expect("`.Rprofile`");
+    assert_eq!(
+        (profile.language, profile.reason),
+        (Language::R, "reserved-filename")
+    );
+    /* NOTE: `.Rmd` is a Markdown document with R chunks in it, and `.Renviron`
+     * is a table of `name=value` lines rather than R code, so neither is R. */
+    for name in ["report.Rmd", ".Renviron", "Rprofile.site"] {
+        assert!(
+            detect_language(Some(Path::new(name)), b"").is_none(),
+            "`{name}` was detected as a language"
+        );
+    }
+    for line in [
+        b"#!/usr/bin/env Rscript\n".as_slice(),
+        b"#!/usr/local/bin/Rscript\n".as_slice(),
+        b"#!/usr/bin/env r\n".as_slice(),
+        b"#!/usr/bin/env -S r --vanilla\n".as_slice(),
+    ] {
+        let found = detect_language(None, line).unwrap_or_else(|| {
+            panic!("{:?} is detected as nothing", String::from_utf8_lossy(line))
+        });
+        assert_eq!(
+            (found.language, found.reason),
+            (Language::R, "shebang"),
+            "{:?}",
+            String::from_utf8_lossy(line)
+        );
+    }
+    /* NOTE: The one-letter name is the reason the `#!` table cannot be searched
+     * for it as a substring: `/usr/` carries an `r` and so does every second
+     * interpreter path, so this name is compared against whole words. */
+    for line in [
+        b"#!/usr/bin/perl -w\n".as_slice(),
+        b"#!/usr/bin/awk -f\n".as_slice(),
+    ] {
+        assert!(
+            detect_language(None, line).is_none(),
+            "{:?} was read as R",
+            String::from_utf8_lossy(line)
+        );
+    }
+}
+
+#[test]
+fn r_layouts_leave_a_line_columns_or_nothing() {
+    let source = b"# alone\nx <- 1 # trailing\n";
+    let lines = transform(source, Language::R, TransformOptions::default());
+    assert_eq!(lines.output, b"\nx <- 1 \n");
+    let columns = transform(
+        source,
+        Language::R,
+        TransformOptions {
+            layout: Layout::Columns,
+            ..Default::default()
+        },
+    );
+    let padded = format!("{}\nx <- 1 {}\n", " ".repeat(7), " ".repeat(10));
+    assert_eq!(columns.output, padded.as_bytes());
+    let compact = transform(
+        source,
+        Language::R,
+        TransformOptions {
+            layout: Layout::Compact,
+            ..Default::default()
+        },
+    );
+    assert_eq!(compact.output, b"x <- 1\n");
+}
+
+/// Dart's six comment forms and the three markers that make one documentation.
+///
+/// `tokenizeSingleLineComment` (`_fe_analyzer_shared`
+/// `src/scanner/abstract_scanner.dart`) decides at the *third* slash and reads
+/// no further, so `////` documents as `///` does; `tokenizeMultiLineComment`
+/// decides at the character behind `/*` in the same way. `//!` and `/*!` are
+/// Rust's and Doxygen's markers and mean nothing in Dart.
+///
+/// Ground truth, Dart SDK 3.13.2 `scanString` over the source below:
+/// `DartDocToken` at `[0,12)` and `[13,30)`, `CommentTokenImpl` at `[31,43)`,
+/// `DartDocToken` at `[44,60)`, and `CommentTokenImpl` at `[61,78)` and
+/// `[79,86)`. `dart analyze` reports no issues.
+#[test]
+fn dart_comment_forms_carry_their_kinds() {
+    let source = b"/// doc line\n//// four slashes\n//! not dart\n/** doc block */\n/*! bang block */\n// line\nvar a = 1;\n";
+    let report = scan(source, Language::Dart, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(
+        report
+            .comments
+            .iter()
+            .map(|comment| (comment.span.start, comment.span.end, comment.kind))
+            .collect::<Vec<_>>(),
+        vec![
+            (0, 12, CommentKind::DocLine),
+            (13, 30, CommentKind::DocLine),
+            (31, 43, CommentKind::Line),
+            (44, 60, CommentKind::DocBlock),
+            (61, 78, CommentKind::Block),
+            (79, 86, CommentKind::Line),
+        ]
+    );
+    assert_eq!(removable(&report), 6);
+}
+
+/// A Dart block comment nests: `tokenizeMultiLineComment` counts `/*` up and
+/// `*/` down and ends the comment only when the count reaches zero, which is
+/// what makes commenting out a region that already holds a comment work.
+///
+/// Ground truth, Dart SDK 3.13.2 `scanString`: one `MULTI_LINE_COMMENT` at
+/// `[0,35)` — the inner `*/` closes nothing — and `// remove` at `[47,56)`.
+/// `dart analyze` reports no issues.
+#[test]
+fn dart_block_comments_nest() {
+    let source = b"/* outer /* inner */ still outer */\nvar a = 1; // remove\n";
+    let report = scan(source, Language::Dart, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 2, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(0, 35));
+    assert_eq!(report.comments[0].kind, CommentKind::Block);
+    assert_eq!(report.comments[1].span, ByteSpan::new(47, 56));
+}
+
+/// Every Dart string form hides a comment opener written inside it.
+///
+/// Dart has six: both quotes, each of them single-line, triple-quoted, and
+/// raw. Ground truth, Dart SDK 3.13.2 `scanString` over the source below: one
+/// `STRING` token for each of the six literals and a single
+/// `SINGLE_LINE_COMMENT` at the end, at `[139,148)`.
+#[test]
+fn dart_string_literals_hide_comment_openers() {
+    let source = b"var a = '// not';\nvar b = \"/* not */\";\nvar c = '''\n// not\n''';\nvar d = \"\"\"/* x */\"\"\";\nvar e = r'raw \\ // not';\nvar f = r\"\"\"raw3 // not\"\"\";\n// remove\n";
+    let report = scan(source, Language::Dart, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(
+        report.comments[0].span,
+        ByteSpan::new(offset_of(source, b"// remove"), source.len() - 1)
+    );
+    assert_eq!(removable(&report), 1);
+}
+
+/// A raw string takes no escapes and no interpolation, so a `\` in front of
+/// its closing quote does not carry it and a `${` inside it opens nothing.
+///
+/// Ground truth, Dart SDK 3.13.2 `scanString`: `r'a\'` is one `STRING` at
+/// `[8,13)` — the literal is three characters and the `\` is one of them — and
+/// `r'v: ${not} $x'` is one `STRING` with no `STRING_INTERPOLATION_EXPRESSION`
+/// token inside it at all.
+#[test]
+fn dart_raw_strings_take_no_escapes_and_no_interpolation() {
+    let escaped = b"var a = r'a\\'; // remove\n";
+    let report = scan(escaped, Language::Dart, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(
+        report.comments[0].span.start,
+        offset_of(escaped, b"// remove")
+    );
+
+    let interpolated = b"var a = r'v: ${not} $x // not';\n// remove\n";
+    let report = scan(interpolated, Language::Dart, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(
+        report.comments[0].span.start,
+        offset_of(interpolated, b"// remove")
+    );
+}
+
+/// The `r` opens a raw string only where it begins a token.
+///
+/// `tokenizeRawStringKeywordOrIdentifier` is reached from the scanner's main
+/// switch, so an `r` that continues an identifier is a letter of that
+/// identifier and the quote behind it opens an ordinary string. A digit run
+/// does not continue into it — `r` is neither a digit nor a hex digit — so the
+/// number ends and the `r` does begin a token.
+///
+/// Ground truth, Dart SDK 3.13.2 `scanString` over the source below: `INT "1"`
+/// at `[8,9)` and then `STRING "r'x\\'"` at `[9,14)`, against `IDENTIFIER
+/// "xr"` at `[24,26)` and then `STRING "'x\\'; // still string'"` at `[26,48)`
+/// — the same bytes read as a raw string on one line and as an escaped
+/// ordinary string on the other. The only comment is `// remove` at `[50,59)`.
+///
+/// Those two lines are a token stream and not a program: `dart analyze` refuses
+/// both a step later with `Expected to find ';'`, because a literal written
+/// directly behind a number or an identifier parses as nothing, so no file that
+/// runs can tell the two readings apart. A scanner still has to, because a
+/// wrong reading here deletes bytes out of a string literal in a file someone is
+/// halfway through writing.
+#[test]
+fn dart_raw_string_prefix_only_where_a_token_begins() {
+    let source = b"var a = 1r'x\\';\nvar b = xr'x\\'; // still string';\n// remove\n";
+    let report = scan(source, Language::Dart, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(50, 59));
+
+    for (source, raw) in [
+        (b"var a = _r'x\\'; // hidden';\n".as_slice(), false),
+        (b"var a = $r'x\\'; // hidden';\n".as_slice(), false),
+        (b"var a = b.r'x\\'; // remove\n".as_slice(), true),
+        (b"var a = 0x1r'x\\'; // remove\n".as_slice(), true),
+    ] {
+        let report = scan(source, Language::Dart, ScanOptions::default());
+        assert!(report.valid, "{source:?}: {:?}", report.diagnostics);
+        assert_eq!(report.comments.len(), usize::from(raw), "{source:?}");
+    }
+}
+
+/// A `${ ... }` interpolation is lexed as code, so a comment written inside
+/// one is a comment.
+///
+/// Ground truth, Dart SDK 3.13.2 `scanString`: for the first source, `STRING
+/// "'v: "`, `STRING_INTERPOLATION_EXPRESSION "${"`, `INT`, then
+/// `CommentTokenImpl MULTI_LINE_COMMENT` at `[16,23)`; for the second, the
+/// same shape with `SINGLE_LINE_COMMENT` at `[16,20)` and the single-quoted
+/// string carrying on over the line break the comment ended at.
+#[test]
+fn dart_comments_inside_interpolation_are_comments() {
+    let block = b"var a = 'v: ${1 /* c */ + 2}';\n// remove\n";
+    let report = scan(block, Language::Dart, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 2, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(16, 23));
+    assert_eq!(report.comments[0].kind, CommentKind::Block);
+
+    let line = b"var a = 'v: ${3 // c\n + 4}';\n// remove\n";
+    let report = scan(line, Language::Dart, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 2, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(16, 20));
+    assert_eq!(report.comments[0].kind, CommentKind::Line);
+
+    let identifier = b"var a = 'v: $x and $y // still string';\n// remove\n";
+    let report = scan(identifier, Language::Dart, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(
+        report.comments[0].span.start,
+        offset_of(identifier, b"// remove")
+    );
+}
+
+/// Every Dart construct that has to be closed reports itself unclosed, and
+/// nothing is edited until `force_invalid` says to edit what is known anyway.
+///
+/// Ground truth, Dart SDK 3.13.2 `scanString`: `UnterminatedToken
+/// UnterminatedComment` at the `/*` of the first source, and
+/// `UnterminatedString` at the quote of each of the next three. A single-line
+/// string ends at the line break it could not cross — the scanner resumes at
+/// `var` on the next line — while a triple-quoted one runs to the end of the
+/// file.
+///
+/// An interpolation left open reports twice, because two constructs really are
+/// left open: Dart gives `UnmatchedToken` \"Can't find '}' to match '${'\" at
+/// the `${` and then `UnterminatedString` at the quote that opened the string
+/// around it, in that order.
+#[test]
+fn dart_unterminated_constructs_are_reported() {
+    for (source, code, message) in [
+        (
+            b"var a = 1;\n/* outer /* inner */\n".as_slice(),
+            "unterminated-comment",
+            "unterminated Dart block comment",
+        ),
+        (
+            b"var a = 'open\nvar b = 2;\n".as_slice(),
+            "unterminated-string",
+            "unterminated Dart string",
+        ),
+        (
+            b"var a = '''open\nmore\n".as_slice(),
+            "unterminated-string",
+            "unterminated Dart multiline string",
+        ),
+        (
+            b"var a = r'open\nvar b = 2;\n".as_slice(),
+            "unterminated-string",
+            "unterminated Dart raw string",
+        ),
+    ] {
+        let result = transform(source, Language::Dart, TransformOptions::default());
+        assert!(!result.report.valid, "{source:?} was called valid");
+        assert_eq!(
+            result
+                .report
+                .diagnostics
+                .iter()
+                .map(|diagnostic| (diagnostic.code.as_str(), diagnostic.message.as_str()))
+                .collect::<Vec<_>>(),
+            vec![(code, message)],
+            "{source:?}",
+        );
+        assert!(result.edits.is_empty(), "{source:?} was edited anyway");
+    }
+
+    let open_interpolation = transform(
+        b"var a = 'x ${1 + 2;\n",
+        Language::Dart,
+        TransformOptions::default(),
+    );
+    assert!(!open_interpolation.report.valid);
+    assert_eq!(
+        open_interpolation
+            .report
+            .diagnostics
+            .iter()
+            .map(|diagnostic| (diagnostic.code.as_str(), diagnostic.message.as_str()))
+            .collect::<Vec<_>>(),
+        vec![
+            (
+                "unterminated-template-expression",
+                "unterminated Dart string interpolation"
+            ),
+            ("unterminated-string", "unterminated Dart string"),
+        ]
+    );
+    assert!(open_interpolation.edits.is_empty());
+
+    let forced = transform(
+        b"// note\nvar a = 'open\n",
+        Language::Dart,
+        TransformOptions {
+            scan: ScanOptions {
+                force_invalid: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    );
+    assert!(!forced.report.valid);
+    assert_eq!(forced.output, b"\nvar a = 'open\n");
+}
+
+/// The four instructions a Dart tool reads out of a comment, and the shapes
+/// that are only about them.
+///
+/// `// @dart = 2.12` is the language version comment the scanner itself reads
+/// (`tokenizeLanguageVersionOrSingleLineComment`), and removing it changes what
+/// the file means. `// dart format off` is compared by equality:
+/// `piece_writer.dart` switches on `comment.text` against that exact phrase,
+/// so `//   dart format off` and `/// dart format off` turn nothing off —
+/// measured on `dart format` from SDK 3.13.2, which reformatted both. The
+/// analyzer's two ignore comments carry their own boundary in the colon
+/// (`ignore_info.dart`).
+#[test]
+fn dart_tool_and_language_directives_are_protected() {
+    let source = b"// @dart = 2.12\n// dart format off\n// ignore_for_file: unused_import\nvar a = 1; // ignore: unused_local_variable\n// coverage:ignore-line\n// ordinary\n";
+    let report = scan(source, Language::Dart, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 6, "{:?}", report.comments);
+    for comment in &report.comments[..5] {
+        assert_eq!(comment.kind, CommentKind::Directive, "{comment:?}");
+        assert!(!comment.disposition.is_remove(), "{comment:?}");
+    }
+    assert_eq!(report.comments[5].kind, CommentKind::Line);
+    assert_eq!(removable(&report), 1);
+
+    for near_miss in [
+        b"// @dartish note\n".as_slice(),
+        b"// @dart = two.twelve\n".as_slice(),
+        b"/// @dart = 2.12\n".as_slice(),
+        b"//   dart format off\n".as_slice(),
+        b"/// dart format off\n".as_slice(),
+        b"// dart format offish note\n".as_slice(),
+        b"// a note about ignore: unused_import\n".as_slice(),
+    ] {
+        let report = scan(near_miss, Language::Dart, ScanOptions::default());
+        assert_eq!(report.comments.len(), 1, "{near_miss:?}");
+        assert_ne!(
+            report.comments[0].kind,
+            CommentKind::Directive,
+            "{near_miss:?} was read as a directive"
+        );
+        assert_eq!(removable(&report), 1, "{near_miss:?}");
+    }
+}
+
+/// Dart's script tag is a `#!` line at the very first byte and nowhere else:
+/// `tokenizeTag` tests `scanOffset == 0` before it reads one, and `#` is the
+/// symbol-literal operator everywhere else.
+///
+/// Ground truth, Dart SDK 3.13.2 `scanString`: `SCRIPT_TAG` at `[0,19)` for the
+/// first source, against `HASH` and `BANG` tokens for the same bytes on the
+/// second line of the second.
+#[test]
+fn dart_script_tag_is_a_shebang_only_at_the_first_byte() {
+    let source = b"#!/usr/bin/env dart\nvoid main() {} // remove\n";
+    let report = scan(source, Language::Dart, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 2, "{:?}", report.comments);
+    assert_eq!(report.comments[0].kind, CommentKind::Shebang);
+    assert_eq!(report.comments[0].span, ByteSpan::new(0, 19));
+    assert!(!report.comments[0].disposition.is_remove());
+    assert_eq!(removable(&report), 1);
+
+    let later = b"var a = 1;\n#!/usr/bin/env dart\n// remove\n";
+    let report = scan(later, Language::Dart, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(
+        report.comments[0].span.start,
+        offset_of(later, b"// remove")
+    );
+
+    let symbols = b"var a = #foo;\nvar b = #+;\n// remove\n";
+    let report = scan(symbols, Language::Dart, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(
+        report.comments[0].span.start,
+        offset_of(symbols, b"// remove")
+    );
+}
+
+/// Every Dart construct that crosses a line crosses a CRLF pair as it crosses
+/// a bare newline: a nested block comment, a triple-quoted string, and the
+/// line comment that ends before the `\r` rather than at it.
+///
+/// Ground truth, Dart SDK 3.13.2 `scanString` over the source below:
+/// `MULTI_LINE_COMMENT` at `[0,18)`, `STRING "'''x\r\ny'''"` at `[28,38)`, and
+/// `SINGLE_LINE_COMMENT` at `[41,50)`.
+#[test]
+fn dart_multi_line_constructs_survive_crlf_line_endings() {
+    let source = b"/* block\r\nstill */\r\nvar a = '''x\r\ny''';\r\n// remove\r\n";
+    let result = transform(source, Language::Dart, TransformOptions::default());
+    assert!(
+        result.report.valid,
+        "diagnostics: {:?}",
+        result.report.diagnostics
+    );
+    assert_eq!(
+        result
+            .report
+            .comments
+            .iter()
+            .map(|comment| (comment.span.start, comment.span.end))
+            .collect::<Vec<_>>(),
+        vec![(0, 18), (41, 50)]
+    );
+    assert_eq!(result.output, b"\r\n\r\nvar a = '''x\r\ny''';\r\n\r\n");
+
+    let unterminated = scan(
+        b"var a = 'open\r\nvar b = 2;\r\n",
+        Language::Dart,
+        ScanOptions::default(),
+    );
+    assert!(!unterminated.valid);
+    assert_eq!(unterminated.diagnostics.len(), 1);
+    assert_eq!(unterminated.diagnostics[0].code, "unterminated-string");
+}
+
+/// Dart is detected from `.dart` and from a `#!` line naming the interpreter.
+#[test]
+fn dart_is_detected_from_its_extension_and_shebang() {
+    for name in ["main.dart", "lib/src/App.Dart"] {
+        let found = detect_language(Some(Path::new(name)), b"")
+            .unwrap_or_else(|| panic!("`{name}` is detected as nothing"));
+        assert_eq!(
+            (found.language, found.dialect, found.reason),
+            (Language::Dart, Dialect::Standard, "extension"),
+            "`{name}`"
+        );
+    }
+    for line in [
+        b"#!/usr/bin/env dart\n".as_slice(),
+        b"#!/usr/lib/dart-sdk/bin/dart --enable-asserts\n".as_slice(),
+    ] {
+        let found = detect_language(None, line).unwrap_or_else(|| {
+            panic!("{:?} is detected as nothing", String::from_utf8_lossy(line))
+        });
+        assert_eq!(
+            (found.language, found.reason),
+            (Language::Dart, "shebang"),
+            "{:?}",
+            String::from_utf8_lossy(line)
+        );
+    }
+}
+
+#[test]
+fn dart_layouts_leave_a_line_columns_or_nothing() {
+    let source = b"// alone\nvar x = 1; // trailing\n";
+    let lines = transform(source, Language::Dart, TransformOptions::default());
+    assert_eq!(lines.output, b"\nvar x = 1; \n");
+    let columns = transform(
+        source,
+        Language::Dart,
+        TransformOptions {
+            layout: Layout::Columns,
+            ..Default::default()
+        },
+    );
+    let padded = format!("{}\nvar x = 1; {}\n", " ".repeat(8), " ".repeat(11));
+    assert_eq!(columns.output, padded.as_bytes());
+    let compact = transform(
+        source,
+        Language::Dart,
+        TransformOptions {
+            layout: Layout::Compact,
+            ..Default::default()
+        },
+    );
+    assert_eq!(compact.output, b"var x = 1;\n");
 }

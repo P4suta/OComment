@@ -223,10 +223,14 @@ JSONL, SARIF, and GitHub output. All user-facing text is English.
   repository checks about itself as well: a file the new scanner now reads is a
   file whose comments have to carry a tag, so run a bare `ocomment` before
   opening the change. Two more things count the languages rather than reading
-  the table: `MINIMUM_CASES` in `tools/differential.py`, the floor that stops a
-  later change from quietly dropping the fixtures the language brings, and the
-  editor clients — `editors/vscode/package.json` lists the identifiers the
-  extension attaches to, and `docs/editors.md` names and counts them. The two
+  the table: `spec/fixtures/v1/floor.txt`, the floors that stop a later change
+  from quietly dropping the fixtures the language brings — `cases` and
+  `expectations`, both read by `tools/differential.py` and by
+  `rust/ocomment-core/tests/spec_fixtures.rs`, and both raised by the number of
+  fixtures the language adds in the same commit that adds them — and the
+  editor clients: `editors/vscode/package.json` lists the identifiers the
+  extension attaches to in both `activationEvents` and the `ocomment.languages`
+  default, and `docs/editors.md` names and counts them. The two
   published JSON schemas carry the vocabulary rather than deriving it:
   `spec/config.schema.json` enumerates the languages a configuration may name
   and `spec/result.schema.json` the ones a report may carry, which is the same
@@ -236,12 +240,44 @@ JSONL, SARIF, and GitHub output. All user-facing text is English.
   against `Language::ALL` and against that selector by
   `every_written_language_count_matches_what_it_counts` in
   `rust/ocomment/tests/spec_languages.rs`, so the sentences fail the build
-  rather than drifting; the names in `docs/editors.md` are still yours to
-  extend. `MINIMUM_CASES` has two more copies in
-  `rust/ocomment-core/tests/spec_fixtures.rs`, beside `MINIMUM_EXPECTATIONS`,
-  which is the floor for how many of those cases carry a recorded `expect`
-  block; all three move up by the number of fixtures the language brings, in
-  the same commit that adds them.
+  rather than drifting. It reads six files, and the whole set is worth having in
+  front of you rather than discovering one failure at a time: the coverage row
+  of `docs/comparison.md`, the `description` of
+  `editors/vscode/package.json`, `editors/vscode/README.md` and
+  `editors/vscode/CHANGELOG.md` — the extension carries its own two counts
+  besides the ones in `docs/` — `docs/editors.md`, and `CHANGELOG.md`, which is
+  counted twice, once for the languages and once for the editor identifiers.
+  The *names* beside those counts are still yours to extend: `docs/editors.md`,
+  the language lists in `README.md` and `editors/vscode/README.md`, and the
+  `Added` entry in `CHANGELOG.md`. Two more
+  places name the language rather than counting it: `Language::ALL.len()` is
+  asserted outright by `language_names_are_stable` in
+  `rust/ocomment-core/tests/names.rs`, and every language carries one line of
+  per-value help in `rust/ocomment/src/values.rs`. Every spelling the language
+  answers to goes in that same test: `language_aliases_are_pinned` holds a row
+  for the canonical name and for each entry of `Language::aliases`, and it
+  checks that table *against* `Language::aliases` in both directions, so an
+  alias added to the one and not the other fails there rather than shipping
+  unpinned. That help is `--help` text,
+  so adding it makes the checked-in manual page and the shell completions
+  stale: regenerate them with `python3 tools/release_extras.py --binary
+  rust/target/debug/ocomment`, copy `release-extras/ocomment.1` to `docs/`, and
+  run `python3 tools/gen_docs.py --binary rust/target/debug/ocomment` for the
+  generated pages.
+- An interpreter name a `#!` line is read for is searched for as a *substring*
+  of that line, because an interpreter arrives written a dozen ways: as a path,
+  with a version, or behind `env` with options. The order of `SHEBANGS` in
+  `rust/ocomment-core/src/detect.rs` is therefore part of the rule and not an
+  accident of listing — a name another name *contains* has to be met first, or
+  every Bash script on disk would be read as POSIX `sh`. A name too short to be
+  looked for that way is what the table carries a `Spelling` for: `r`, the front
+  end littler installs, is one letter, and `/usr/` alone carries one, so it is
+  compared against the whole words of the line and is listed last. Publish every
+  name in `spec/languages.toml` in the same change:
+  `the_detector_knows_no_unrecorded_shebang` compares that list against
+  `ocomment_core::shebang_interpreters` in both directions, and
+  `every_listed_shebang_detects_its_language` runs the detector over
+  `#!/usr/bin/env <name>` for each one.
 - A language whose lexical mode is document state rather than line state — PHP,
   where the same line means one thing under an unclosed `<?php` and another
   without it — must offer a safe checkpoint only in its outermost state. Emit
@@ -258,10 +294,51 @@ JSONL, SARIF, and GitHub output. All user-facing text is English.
   differently. The proptest
   `arbitrary_incremental_edits_match_full_scans_for_every_builtin` covers every
   language automatically, but only over the byte fragments its generator knows,
-  so add the tokens that open the new state to `lexical_fragment` — there are
-  two of those, one in `rust/ocomment-core/src/incremental.rs` and one in
-  `rust/ocomment-core/tests/properties.rs`, and both pools want the tokens — and
-  run it once with `PROPTEST_CASES=2000`.
+  so add the tokens that open the new state to `ocomment_core::lexical_pool` —
+  `BYTES` for a single byte and `TOKENS` for a whole opener, with the reason
+  written beside the list — and run the incremental properties five times over
+  with `PROPTEST_CASES=5000`, all five green:
+
+  ```sh
+  for i in 1 2 3 4 5; do
+    PROPTEST_CASES=5000 cargo test -p ocomment-core --locked -- \
+      incremental arbitrary_incremental safe_checkpoints arbitrary_edits
+  done
+  ```
+
+  Five runs rather than one because each draws a fresh seed: the counterexamples
+  that matter here are two rare fragments meeting in one document, and a single
+  pass of 2,000 cases was what let a character-literal lookahead read across a
+  line terminator for as long as it did. The
+  pool is one place on purpose: two generators draw from it, one in
+  `rust/ocomment-core/src/incremental.rs` and one in
+  `rust/ocomment-core/tests/properties.rs`, and
+  `rust/ocomment-core/tests/source_guards.rs` reads both of them and fails a
+  `prop_oneof!` arm that spells a literal of its own, so an opener added to one
+  suite alone is refused rather than silently leaving the other blind to it.
+- A lookahead that can read past the byte the scan resumes at takes `&mut Reach`
+  and records every byte it consults — the failed `get` at the end of the
+  document included, because deciding that the document ends there is a decision
+  about that byte just the same — and its caller folds the result in with
+  `Scanner::consult`. That is what makes `Scanner::add_safe_checkpoint` a
+  mechanism rather than an audit: it refuses outright any position an earlier
+  decision already read through. A plain forward scan is not a lookahead and
+  reports nothing — its index consumes every byte it reads, so a restart inside
+  the region reaches the same answer for what is left of it. What has to be
+  reported is the read the scan then *rewinds* behind: a delimiter parse that
+  gives up and lexes the same bytes again, a search for a closing token that
+  fails. Prefer a bound to a withdrawal. A search for a tag terminator reads the
+  tag's own character class and one byte more — `ocaml_quoted_string` reads
+  `[a-z_]*` and then requires `|`, `sql_dollar_quote_end` an identifier and then
+  `$` — so an ordinary `{` or `$` in the code gives up where the class does,
+  rather than pushing the watermark to the end of the file and costing every line
+  under it its restart point. Assert either kind directly with
+  `scanner::scan_checkpoint_watermarks`, which pairs each checkpoint with the
+  watermark standing when it was offered;
+  `safe_checkpoints_restart_every_builtin_scan_exactly` runs it over every
+  language, and a reach that is merely unpinned still passes a rescan that
+  happens to re-lex the same bytes, so pin it with a unit test on the lookahead
+  itself.
 - Adding a marker to `spec/directives.toml` needs two samples: one in
   `tools/check_directives.py`, which proves the scanner protects it — and,
   through a near-miss derived from the name, that it protects nothing more —

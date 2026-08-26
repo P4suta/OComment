@@ -523,7 +523,10 @@ fn line_checkpoints(source: &[u8]) -> Vec<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Disposition, scanner::scan_with_checkpoints};
+    use crate::{
+        Disposition,
+        scanner::{scan_checkpoint_watermarks, scan_with_checkpoints},
+    };
     use proptest::{prelude::*, sample::select};
 
     /// A pool length as a `prop_oneof!` weight, so that drawing uniformly from
@@ -617,11 +620,28 @@ mod tests {
         /// prefix of the previous report on the strength of this invariant, so a
         /// checkpoint that is not a clean lexical state silently corrupts a
         /// rescan.
+        ///
+        /// The rescan is the observable half. The other half is the mechanism
+        /// under it: no checkpoint may stand at or before the furthest byte any
+        /// decision made before it consulted. A rescan that agrees only because
+        /// the lookahead which read across the checkpoint happens to re-lex the
+        /// same bytes and reach the same answer is agreeing by luck, and the
+        /// luck runs out at the next lookahead — so the watermark is asserted
+        /// directly, per language, before the restarts are tried.
         #[test]
         fn safe_checkpoints_restart_every_builtin_scan_exactly(
             source in lexical_source(0..48),
         ) {
             for language in Language::ALL {
+                for (point, consulted) in
+                    scan_checkpoint_watermarks(&source, language, ScanOptions::default())
+                {
+                    prop_assert!(
+                        consulted <= point,
+                        "{} offers a checkpoint at {} that a decision before it read through {}",
+                        language, point, consulted,
+                    );
+                }
                 let (full, checkpoints) =
                     scan_with_checkpoints(&source, language, ScanOptions::default(), 0);
                 for point in checkpoints.iter().copied() {
@@ -1292,6 +1312,293 @@ z: 1
         assert_eq!(document.report().valid, expected.valid);
         assert_eq!(document.report(), &expected);
         assert_eq!(document.safe_checkpoints(), expected_checkpoints);
+    }
+
+    /// Regression: `rust_char_start` decided whether an apostrophe opened a
+    /// character literal by reading up to six bytes forward, and the window was
+    /// allowed to run past a line terminator — while `scan_c_family` still
+    /// offers a checkpoint at the line start behind it. The decision for a
+    /// token on line 1 therefore depended on bytes on line 2, which is exactly
+    /// what a checkpoint promises cannot happen: an edit on line 2 left the
+    /// reused prefix describing a literal a full scan no longer sees.
+    #[test]
+    fn a_rust_character_literal_never_decides_across_a_line_terminator() {
+        /* NOTE: The bare window: `'` at the end of line 1 and the apostrophe
+         * that would close it two bytes on, past the terminator. */
+        let mut document = IncrementalDocument::new(
+            b"let a = '\nx;\n".to_vec(),
+            Language::Rust,
+            ScanOptions::default(),
+            1,
+        );
+        assert_eq!(document.safe_checkpoints(), [0, 10, 13]);
+        document
+            .apply_changes(
+                &[DocumentChange {
+                    span: ByteSpan::new(10, 11),
+                    replacement: b"'".to_vec(),
+                }],
+                2,
+            )
+            .unwrap();
+        let (expected, expected_checkpoints) =
+            scan_with_checkpoints(document.source(), Language::Rust, ScanOptions::default(), 0);
+        assert_eq!(document.report().diagnostics, expected.diagnostics);
+        assert_eq!(document.report().valid, expected.valid);
+        assert_eq!(document.report(), &expected);
+        assert_eq!(document.safe_checkpoints(), expected_checkpoints);
+
+        /* NOTE: The escaped window, which reaches one byte further: `'\` at the
+         * end of line 1 and the closing apostrophe at the head of line 2. A
+         * full scan used to read the terminator as the escaped character and
+         * swallow it, dropping the checkpoint the line start had. */
+        let mut escaped = IncrementalDocument::new(
+            b"let a = '\\\nx;\n".to_vec(),
+            Language::Rust,
+            ScanOptions::default(),
+            1,
+        );
+        assert_eq!(escaped.safe_checkpoints(), [0, 11, 14]);
+        escaped
+            .apply_changes(
+                &[DocumentChange {
+                    span: ByteSpan::new(11, 12),
+                    replacement: b"'".to_vec(),
+                }],
+                2,
+            )
+            .unwrap();
+        let (expected, expected_checkpoints) =
+            scan_with_checkpoints(escaped.source(), Language::Rust, ScanOptions::default(), 0);
+        assert_eq!(escaped.report(), &expected);
+        assert_eq!(escaped.safe_checkpoints(), expected_checkpoints);
+        assert_eq!(escaped.safe_checkpoints(), [0, 11, 14]);
+    }
+
+    /// The OCaml half of the same rule. `ocaml_char_start` reads two bytes
+    /// forward for a bare character and eight for an escaped one, and both
+    /// windows used to run past a line terminator that `scan_ocaml` offers a
+    /// checkpoint behind.
+    #[test]
+    fn an_ocaml_character_literal_never_decides_across_a_line_terminator() {
+        let mut document = IncrementalDocument::new(
+            b"let c = '\nz\n".to_vec(),
+            Language::Ocaml,
+            ScanOptions::default(),
+            1,
+        );
+        assert_eq!(document.safe_checkpoints(), [0, 10, 12]);
+        document
+            .apply_changes(
+                &[DocumentChange {
+                    span: ByteSpan::new(10, 11),
+                    replacement: b"'".to_vec(),
+                }],
+                2,
+            )
+            .unwrap();
+        let (expected, expected_checkpoints) = scan_with_checkpoints(
+            document.source(),
+            Language::Ocaml,
+            ScanOptions::default(),
+            0,
+        );
+        assert_eq!(document.report().diagnostics, expected.diagnostics);
+        assert_eq!(document.report().valid, expected.valid);
+        assert_eq!(document.report(), &expected);
+        assert_eq!(document.safe_checkpoints(), expected_checkpoints);
+
+        let mut escaped = IncrementalDocument::new(
+            b"let c = '\\\nz;\n".to_vec(),
+            Language::Ocaml,
+            ScanOptions::default(),
+            1,
+        );
+        assert_eq!(escaped.safe_checkpoints(), [0, 11, 14]);
+        escaped
+            .apply_changes(
+                &[DocumentChange {
+                    span: ByteSpan::new(12, 13),
+                    replacement: b"'".to_vec(),
+                }],
+                2,
+            )
+            .unwrap();
+        let (expected, expected_checkpoints) =
+            scan_with_checkpoints(escaped.source(), Language::Ocaml, ScanOptions::default(), 0);
+        assert_eq!(escaped.report(), &expected);
+        assert_eq!(escaped.safe_checkpoints(), expected_checkpoints);
+        assert_eq!(escaped.safe_checkpoints(), [0, 11, 14]);
+    }
+
+    /// A here-document delimiter is a word, and a quoted word may span lines:
+    /// `<<"EO`, a line break, `F"` names the delimiter `EO\nF`. The parse that
+    /// reads it is therefore a lookahead with no line bound, and the path that
+    /// gives up on an unterminated quote rewinds the scan to the byte after the
+    /// operator and lexes the same bytes again from a state it already decided
+    /// out of them. That the re-lex reaches the same end today is two lexers
+    /// agreeing, not a promise, so the watermark withdraws every checkpoint
+    /// the parse read through and the two edits below — one that opens the
+    /// quote, one that closes it again — stay equal to a full scan.
+    #[test]
+    fn a_quoted_shell_heredoc_delimiter_withdraws_the_checkpoints_it_read_past() {
+        let closed = b"cat <<\"EO\nF\"\nx\nEO\nF\n# c\n".to_vec();
+        let mut document =
+            IncrementalDocument::new(closed.clone(), Language::Shell, ScanOptions::default(), 1);
+        assert_eq!(document.safe_checkpoints(), [0]);
+        /* NOTE: deleting the closing quote leaves the delimiter word open, so
+         * the parse reads to the end of the document and gives up there. */
+        document
+            .apply_changes(
+                &[DocumentChange {
+                    span: ByteSpan::new(11, 12),
+                    replacement: Vec::new(),
+                }],
+                2,
+            )
+            .unwrap();
+        let (expected, expected_checkpoints) = scan_with_checkpoints(
+            document.source(),
+            Language::Shell,
+            ScanOptions::default(),
+            0,
+        );
+        assert_eq!(document.report(), &expected);
+        assert_eq!(document.safe_checkpoints(), expected_checkpoints);
+
+        let mut reopened = IncrementalDocument::new(
+            document.source().to_vec(),
+            Language::Shell,
+            ScanOptions::default(),
+            1,
+        );
+        reopened
+            .apply_changes(
+                &[DocumentChange {
+                    span: ByteSpan::new(11, 11),
+                    replacement: b"\"".to_vec(),
+                }],
+                2,
+            )
+            .unwrap();
+        let (expected, expected_checkpoints) = scan_with_checkpoints(
+            reopened.source(),
+            Language::Shell,
+            ScanOptions::default(),
+            0,
+        );
+        assert_eq!(reopened.source(), &closed[..]);
+        assert_eq!(reopened.report(), &expected);
+        assert_eq!(reopened.safe_checkpoints(), expected_checkpoints);
+        /* NOTE: The document above is invalid — a delimiter word holding a line
+         * terminator matches no line of the body, so the here-document runs off
+         * the end — and an invalid report is never reused, which leaves the
+         * watermark unexercised. This one is valid, and its checkpoints are
+         * withdrawn by nothing but the reach. `#` is an ordinary word character
+         * to the delimiter parse, so `<<#"` reads a word that opens a quote;
+         * the quote finds no partner and the parse gives up at the end of the
+         * document, having read every byte of it. The scan rewinds to the byte
+         * after the operator, where `#` is a comment opener instead, and lexes
+         * a comment, a line, and a comment — line starts a checkpoint would
+         * otherwise be offered at. */
+        let mut giving_up = IncrementalDocument::new(
+            b"cat <<#\"\nx\n# c\n".to_vec(),
+            Language::Shell,
+            ScanOptions::default(),
+            1,
+        );
+        assert!(giving_up.report().valid);
+        assert_eq!(giving_up.report().comments.len(), 2);
+        assert_eq!(giving_up.safe_checkpoints(), [0]);
+        /* NOTE: Closing the quote on line 3 gives the delimiter word the whole
+         * file, and the here-document it opens is then the unterminated one: the
+         * full scan finds no comment at all. A rescan restarted from the line
+         * start at 11 — which is what stands there without the reach — would
+         * keep both of the old comments and call the file valid. */
+        giving_up
+            .apply_changes(
+                &[DocumentChange {
+                    span: ByteSpan::new(14, 14),
+                    replacement: b"\"".to_vec(),
+                }],
+                2,
+            )
+            .unwrap();
+        let (expected, expected_checkpoints) = scan_with_checkpoints(
+            giving_up.source(),
+            Language::Shell,
+            ScanOptions::default(),
+            0,
+        );
+        assert!(!expected.valid);
+        assert!(expected.comments.is_empty());
+        assert_eq!(giving_up.report(), &expected);
+        assert_eq!(giving_up.safe_checkpoints(), expected_checkpoints);
+    }
+
+    /// OCaml's quoted strings are where that property first caught a
+    /// checkpoint standing inside what a decision had read — and the answer is
+    /// not to withdraw the rest of the document but to stop reading it. A
+    /// quoted-string tag is `[a-z_]*` with the `|` directly behind it, so the
+    /// search is bounded by that class: an ordinary `{` gives up at the first
+    /// byte outside it, and every line under it keeps the restart point it
+    /// earned. What the bound has to be worth is soundness, so both edits are
+    /// checked against a full scan — the one on a later line, which restarts
+    /// from a kept checkpoint, and the one that turns the `{` into a real
+    /// quoted string, which lies before every checkpoint but 0.
+    #[test]
+    fn an_ocaml_quoted_string_tag_search_is_bounded_by_its_tag_class() {
+        let stray = b"let x = {aa\n(* c *)\ny\n".to_vec();
+        let mut document =
+            IncrementalDocument::new(stray.clone(), Language::Ocaml, ScanOptions::default(), 1);
+        assert!(document.report().valid);
+        assert_eq!(document.report().comments.len(), 1);
+        assert_eq!(document.safe_checkpoints(), [0, 12, 20, 22]);
+
+        /* NOTE: An edit on the last line restarts from one of those kept
+         * checkpoints rather than from 0, which is the whole point of keeping
+         * them, and it still answers what a full scan answers. */
+        document
+            .apply_changes(
+                &[DocumentChange {
+                    span: ByteSpan::new(21, 21),
+                    replacement: b" (* d *)".to_vec(),
+                }],
+                2,
+            )
+            .unwrap();
+        assert!(document.last_rescan_span().start >= 12);
+        let (expected, expected_checkpoints) = scan_with_checkpoints(
+            document.source(),
+            Language::Ocaml,
+            ScanOptions::default(),
+            0,
+        );
+        assert_eq!(document.report().comments.len(), 2);
+        assert_eq!(document.report(), &expected);
+        assert_eq!(document.safe_checkpoints(), expected_checkpoints);
+
+        /* NOTE: The `|` is what makes the tag a tag, and it stands before every
+         * checkpoint the file has but 0: the `{aa|` opens a quoted string that
+         * no `|aa}` closes, so the file is one unterminated literal and the
+         * comment on line 2 is inside it. */
+        let mut opened =
+            IncrementalDocument::new(stray, Language::Ocaml, ScanOptions::default(), 1);
+        opened
+            .apply_changes(
+                &[DocumentChange {
+                    span: ByteSpan::new(11, 11),
+                    replacement: b"|".to_vec(),
+                }],
+                2,
+            )
+            .unwrap();
+        let (expected, expected_checkpoints) =
+            scan_with_checkpoints(opened.source(), Language::Ocaml, ScanOptions::default(), 0);
+        assert!(!expected.valid);
+        assert!(expected.comments.is_empty());
+        assert_eq!(opened.report(), &expected);
+        assert_eq!(opened.safe_checkpoints(), expected_checkpoints);
     }
 
     #[test]

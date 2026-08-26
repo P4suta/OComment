@@ -125,6 +125,15 @@ pub enum Language {
     /// project files written in it, such as `Gemfile`, and from a `ruby` `#!`
     /// line.
     Ruby,
+    /// Zig, detected from `.zig` and from the `.zon` of Zig Object Notation.
+    /// It has no block comment: `/*` is two operators.
+    Zig,
+    /// R, detected from `.r` in either case, from a `.Rprofile` name, and from
+    /// an `Rscript` or `r` `#!` line.
+    R,
+    /// Dart, detected from `.dart` and from a `dart` `#!` line. Its block
+    /// comments nest.
+    Dart,
     /// No built-in scanner, and the default.
     ///
     /// Scanning it yields no comments and one `unknown-language` error
@@ -137,7 +146,7 @@ pub enum Language {
 
 impl Language {
     /// Every CLI-visible language; `Unknown` is deliberately excluded.
-    pub const ALL: [Self; 20] = [
+    pub const ALL: [Self; 23] = [
         Self::Rust,
         Self::Ocaml,
         Self::C,
@@ -158,6 +167,9 @@ impl Language {
         Self::Yaml,
         Self::Php,
         Self::Ruby,
+        Self::Zig,
+        Self::R,
+        Self::Dart,
     ];
 
     /// The canonical name, identical to the serde representation.
@@ -183,6 +195,9 @@ impl Language {
             Self::Yaml => "yaml",
             Self::Php => "php",
             Self::Ruby => "ruby",
+            Self::Zig => "zig",
+            Self::R => "r",
+            Self::Dart => "dart",
             Self::Unknown => "unknown",
         }
     }
@@ -200,6 +215,8 @@ impl Language {
             | Self::Toml
             | Self::Lua
             | Self::Php
+            | Self::Zig
+            | Self::Dart
             | Self::Unknown => &[],
             Self::Cpp => &["c++", "cxx"],
             Self::Go => &["golang"],
@@ -212,6 +229,11 @@ impl Language {
             Self::Kotlin => &["kt", "kts"],
             Self::Yaml => &["yml"],
             Self::Ruby => &["rb"],
+            /* NOTE: `Rscript` is the front end that runs an R script and the name
+             * a `#!` line carries, so someone naming the language after the
+             * command they type reaches the same scanner. GitHub Linguist
+             * publishes it as an alias of R for the same reason. */
+            Self::R => &["rscript"],
         }
     }
 }

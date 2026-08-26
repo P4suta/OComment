@@ -133,6 +133,13 @@ this page, so the table cannot claim a protection that is not there.
 | `rubocop:` | `ruby` | `# rubocop:disable Style/Documentation` | `directive` | tool or language directive |
 | `standard:` | `ruby` | `# standard:disable Style/StringLiterals` | `directive` | tool or language directive |
 | `typed:` | `ruby` | `# typed: strict` | `directive` | tool or language directive |
+| `zig fmt:` | `zig` | `// zig fmt: off` | `directive` | tool or language directive |
+| `styler:` | `r` | `# styler: off` | `directive` | tool or language directive |
+| `nocov` | `r` | `# nocov start` | `directive` | tool or language directive |
+| `@dart` | `dart` | `// @dart = 2.12` | `directive` | tool or language directive |
+| `dart format` | `dart` | `// dart format off` | `directive` | tool or language directive |
+| `ignore:` | `dart` | `// ignore: unused_local_variable` | `directive` | tool or language directive |
+| `ignore_for_file:` | `dart` | `// ignore_for_file: unused_import` | `directive` | tool or language directive |
 
 `--remove-kind directive` or `--policy all` removes a directive anyway.
 A shebang and an encoding preamble need `--force-protected` on top of

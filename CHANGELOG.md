@@ -7,7 +7,7 @@ All notable changes to OComment will be documented here. The project follows
 
 ### Added
 
-- Byte-oriented scanners and transformations for 20 built-in languages and the
+- Byte-oriented scanners and transformations for 23 built-in languages and the
   documented dialects.
 - CLI, staged Git fixes, LSP 3.18 server, declarative profiles, and sandboxed
   WASM component plugins.
@@ -67,7 +67,7 @@ All notable changes to OComment will be documented here. The project follows
   for the OCaml reference. `CONTRIBUTING.md` documents the tags.
 - An official VS Code extension, `P4suta.ocomment`, under `editors/vscode`. It
   is a client only: it launches the separately installed `ocomment lsp`,
-  attaches it to the twenty-five language identifiers OComment scans, and
+  attaches it to the twenty-eight language identifiers OComment scans, and
   exposes the server's quick fixes, `source.fixAll.ocomment`, code lens, and
   pull diagnostics, plus `OComment: Remove comments in file`, `... in
   workspace`, `OComment: Restart server`, `OComment: Show output`, and a status
@@ -175,26 +175,85 @@ All notable changes to OComment will be documented here. The project follows
   everything above it, so a file that is all PHP is rescanned from the top.
 - Ruby is a built-in language, scanned by a lexer of its own. Four of Ruby's
   tokens are spelled with a byte that is also an operator, and only where the
-  token stands decides which, so the scanner keeps the three states Ruby's own
+  token stands decides which, so the scanner keeps the four states Ruby's own
   lexer answers those questions from: `/` is a regular expression where a value
   is expected and division after an operand, `%` opens `%q %Q %w %W %i %I %s %r
   %x` and the bare `%(...)` in the first place and is modulo in the second, `?`
   is a one-character string or the ternary operator, and `<<` opens a here
   document or appends — with a bare word between the two, where white space in
   front and none behind makes `puts /x/` a pattern and `a <<EOS` a here
-  document. `#` opens the only one-line form; `=begin` and `=end` at column zero
-  delimit an embedded document; a `__END__` alone on its line ends the source
-  and leaves the DATA section behind it opaque. Single-quoted, backtick,
-  symbol, character, percent, regular-expression and here-document literals all
-  hide a `#`, and the interpolating ones read `#{ ... }` as code, so a comment
-  written inside one is a comment. A `#!` line at the first byte is a preamble
-  and a `coding:` declaration in the first two lines is an encoding, the same
-  two positional rules Python has; `# frozen_string_literal:`, `# warn_indent:`,
+  document. The fourth state is `EXPR_FNAME|EXPR_FITEM`, where `alias` and
+  `undef` leave Ruby: `parse_percent` opens a symbol literal on `%s` there
+  whatever the spacing, so `alias%s(a)` is a symbol while `alias%w[a]`,
+  `alias%q(a)` and `alias/a/` stay operators. `#` opens the only one-line form;
+  `=begin` and `=end` at column zero delimit an embedded document; a `__END__`
+  alone on its line ends the source and leaves the DATA section behind it
+  opaque. Single-quoted, backtick, symbol, character, percent,
+  regular-expression and here-document literals all hide a `#`, and the
+  interpolating ones read `#{ ... }` as code, so a comment written inside one
+  is a comment. A `#!` line at the first byte is a preamble and a `coding:`
+  declaration in the first two lines is an encoding, the same two positional
+  rules Python has; `# frozen_string_literal:`, `# warn_indent:`,
   `# shareable_constant_value:`, `# rubocop:`, `# standard:` and `# typed:` are
   directives a removal keeps. `.rb` and its eight siblings select it, as do the
   fourteen project files named after the tool that reads them — `Gemfile`,
   `Rakefile`, `Vagrantfile` and the rest — and a `ruby`, `jruby` or
   `truffleruby` `#!` line.
+- Zig is a built-in language, and the one built-in with no block comment at
+  all: `/*` is the division operator followed by multiplication, which
+  `std.zig.Tokenizer` reports as two ordinary tokens, so a `/* ... */` written
+  in a Zig file is code and is never removed. `//` opens the only comment form;
+  `///` documents the declaration under it and `//!` the container the file is,
+  and both are doc-line comments, while a fourth slash takes the marker back —
+  `////` is an ordinary comment, exactly as the tokenizer has it. String and
+  character literals take backslash escapes and may not cross a line break, and
+  `@"quoted identifier"` is lexed as the string it is spelled as, so each of
+  them hides a `//`. A multiline string literal is one line at a time: `\\`
+  wherever a token may begin runs to the end of that line as content, which is
+  why `\\ // not a comment` reports nothing, and consecutive such lines are
+  one literal to the parser. `// zig fmt: off` and `// zig fmt: on` are
+  directives a removal keeps, matched as the whole phrase `zig fmt` compares
+  rather than as a prefix. `.zig` and the `.zon` of Zig Object Notation select
+  it; it has no `#!` line and no reserved file names.
+- R is a built-in language. `#` opens its one comment form and runs to the end
+  of the line; `#'` is roxygen2's documentation marker and is a doc-line, which
+  R's own parser does not distinguish — `utils::getParseData` calls every one of
+  them a `COMMENT`. Four literals hide a `#`: the two quoted strings and the
+  backquoted name, all three of which take backslash escapes and carry a line
+  break as content, and the `%...%` operator, whose name is every byte up to the
+  next `%` on the same line — `x %a # b% y` is one operator, and a `%` that
+  reaches the line break without a second one is an error rather than a comment
+  opener. A raw string is `r` or `R`, either quote, any run of dashes and one of
+  `(`, `[` or `{`, and it closes only on the matching bracket with the same run
+  of dashes and the same quote; the `r` opens one only where it begins a token,
+  so `xr"(a)"` is a name and then an ordinary string. `# nolint`, `# styler:
+  off` and `# nocov start` are directives a removal keeps, and a `#!` line at
+  the first byte is a preamble. `.r` in either case selects it, as do a
+  `.Rprofile` name and an `Rscript` or `r` `#!` line — the second of which is
+  the one interpreter name the `#!` table compares against whole words rather
+  than searching for as a substring, because a bare `r` is carried by `/usr/`
+  and by half the interpreter paths on disk.
+- Dart is a built-in language, and the one built-in C-family language whose
+  block comment nests: `tokenizeMultiLineComment` counts `/*` up and `*/` down,
+  so `/* /* */ */` is one comment and commenting out a region that already holds
+  one works. `///` and `/** */` are documentation comments and `//` and `/* */`
+  ordinary ones; the scanner decides which at the single byte behind the opener,
+  which is why a fourth slash leaves `////` documentation — the opposite of what
+  Lua's `----` and Zig's `////` do — and why `//!` and `/*!` document nothing.
+  Six string forms hide a `//`: either quote, single-line or triple-quoted, raw
+  or not. A raw one is the quote behind an `r`, and only where that `r` begins a
+  token, so `xr'a'` is a name and then an ordinary string while `1r'a'` is a
+  number and then a raw one; a raw string takes neither a backslash escape nor
+  interpolation. `${ ... }` is code, so a comment written inside a string is a
+  comment, and a `//` one there ends at the line break while the string carries
+  on below it. `#` opens a symbol literal and is a comment only as the `#!`
+  script tag at the very first byte of a file, which is where `tokenizeTag`
+  reads one and nowhere else. `// @dart = 2.12` is kept because the language
+  version it names changes what the rest of the file means; `// dart format off`
+  and `// dart format on` are kept and are matched as the whole phrase
+  `dart_style` compares rather than as a prefix; and the analyzer's `// ignore:`
+  and `// ignore_for_file:` are kept as well. `.dart` and a `dart` `#!` line
+  select it; it has no dialects and no reserved file names.
 - `tools/fuzz_differential.py`, an on-demand cross-implementation fuzz. It
   builds random sources out of the delimiters, escapes, quotes and directive
   words the built-in scanners care about, asks both implementations across
@@ -541,3 +600,84 @@ All notable changes to OComment will be documented here. The project follows
   are exactly the states a restart must never land inside. Both now draw from
   `ocomment_core::lexical_pool`, which also carries the Ruby interpolation
   boundary a here document header may be written across.
+- A safe checkpoint may only stand where no decision made before it read past
+  it, and that is a mechanism now rather than an audit. Every lookahead that
+  can read beyond the byte the scan resumes at reports the furthest one it
+  consulted -- the here-document delimiter parse, the search for the `|` that
+  ends an OCaml `{tag|`, the second `$` of a PostgreSQL dollar quote, the `(`
+  of a C++ raw string, the `'` of an Oracle q-quote, and the bounded windows
+  that tell a character literal from a lifetime -- and `add_safe_checkpoint`
+  refuses any position below that watermark, the end of the document included,
+  because an append is an edit exactly there. Shell's quoted here-document
+  delimiter is the shape that asked for it: `<<"EO`, a line break and `F"` name
+  the delimiter `EO\nF`, so the parse has no line bound at all, and the path
+  that gives up on an unterminated quote rewinds the scan to the byte after the
+  operator and lexes those bytes again -- which reached the same end only
+  because two lexers happened to agree, which is a coincidence and not a
+  guarantee. The checkpoint-soundness property asserts the watermark per
+  language before it tries any restart, and caught OCaml offering three
+  checkpoints inside what a `{`'s tag search had already read. No full-scan
+  result changes; what changes is which restarts an incremental rescan may
+  take.
+- A bounded lookahead never decides a token across a line terminator. Rust's
+  character-literal test read up to six bytes past the apostrophe and OCaml's
+  up to eight, and both windows were allowed to run past a line break that the
+  scanner offers a restart point behind — so the reading of a token on one line
+  depended on bytes the incremental engine is entitled to rescan on their own,
+  and an edit to the line below left a reused prefix describing a literal a
+  full scan no longer sees. Both windows now stop at the terminator. Nothing
+  valid is given up: `rustc` 1.97 reads `'ä` with its closing quote on the next
+  line as a lifetime and reports `E0762` against that next line, `\` before a
+  line terminator is a string continuation and no character escape, and
+  `ocamlc` 5.5.0 rejects `'\` before a line break outright. What the stop costs
+  is the reading and no report: an apostrophe before a non-ASCII character with
+  no second apostrophe before the line ends cannot be told, within its line,
+  from a Unicode lifetime or loop label. A Rust identifier is `XID_Start
+  XID_Continue*` and has been since 1.53, so `fn f<'ä>() {}` and
+  `'ä: loop { break 'ä }` both compile, and `rustc` separates them in the
+  parser, which is where its `E0762` is raised. A lexer with a line-bounded
+  window has no such judgement to make, so it reports neither and keeps such a
+  file valid: over-keeping a comment on a file another tool will reject costs
+  that file one comment, and calling a valid one invalid costs it its whole
+  transformation. The cross-edit property test found the windows at 5,000
+  cases; `rust-char-literal-across-newline` and
+  `ocaml-char-literal-across-newline` pin the readings. The OCaml reference
+  agrees.
+- A lookahead is bounded by what its grammar allows rather than by the end of
+  the file. The search for the `|` that ends an OCaml `{tag|` and the search for
+  the second `$` of a PostgreSQL dollar-quoted string each read the whole
+  document before giving up, and the watermark that keeps a checkpoint out of
+  what a decision has read then withdrew every restart point below them — one
+  stray `{` in an OCaml file cost the rest of that file its incremental
+  restarts, and so did one `$` in a query. Each search now reads its tag's own
+  character class and one byte more: `[a-z_]*` and then `|` (OCaml manual,
+  Lexical conventions), an identifier or nothing and then `$` (PostgreSQL
+  4.1.2.4). An Oracle q-quote already read one delimiter byte and no further. No
+  reading changes — the same tags are accepted and the same ones rejected, and
+  the differential corpus is untouched — only how far a rejection had to look;
+  `a_class_bounded_tag_search_keeps_the_checkpoints_under_it` asserts the
+  watermarks against the scan directly.
+- The reach a here-document delimiter parse reports is pinned by tests that fail
+  without it. A quoted delimiter word may carry a line terminator — `<<"EO`, a
+  break, `F"` names the delimiter `EO` + newline + `F` — so the parse is a
+  lookahead with no line bound, and the paths that give up rewind the scan to
+  the byte after the operator and lex those bytes again. The document that
+  covered this was invalid, and an invalid report is never reused, so the case
+  passed with every `reach` call in the parse deleted. `cat <<#"` is the valid
+  one: `#` is an ordinary word character to the delimiter parse and a comment
+  opener to the scan that rewinds past it, so closing the quote two lines down
+  turns the file from two comments into one unterminated here-document — and a
+  rescan restarted from a line start the parse had read keeps both comments and
+  calls it valid. A `scanner` unit test asserts the parse's reach on its own as
+  well, so the instrumentation cannot go quiet again behind a document whose
+  checkpoints move for some other reason.
+- `alias%s(...)` and `undef%s(...)` are symbol literals. Ruby's `parse_percent`
+  tests `EXPR_FNAME|EXPR_FITEM` before it reaches the spacing rule, so `%s`
+  opens one after either keyword whether or not white space stands before the
+  `%`; the scanner refused every percent literal in that position and read
+  `alias%s(baz # x) %s(bar)` as a modulo, which made the `#` inside the first
+  symbol a comment and, under a policy that removes one, took bytes Ruby has
+  inside a literal. Only `s` is the exception — `%w`, `%q` and `/` after the
+  same keyword are still operators, and `def` has no exception at all. Ground
+  truth is `Ripper.lex` under Ruby 3.3.12, recorded in the note of
+  `ruby-alias-percent-s`. The OCaml reference agrees.

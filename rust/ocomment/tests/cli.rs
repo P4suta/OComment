@@ -279,6 +279,151 @@ fn a_php_template_is_scanned_only_inside_its_tags() {
     );
 }
 
+/* NOTE: Zig is the one built-in language with no block comment, and this is what
+ * that costs a run end to end: `// zig fmt: off` is the only instruction the
+ * formatter reads out of a comment and is kept, the `//` written on a
+ * multiline string literal line is content the way one inside a quoted string
+ * is, and only the ordinary comment beside them is removed. `zig ast-check`
+ * (0.16.0) accepts the file below. */
+#[test]
+fn a_zig_file_keeps_its_fmt_directive_and_its_multiline_string() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("main.zig");
+    fs::write(
+        &path,
+        b"// zig fmt: off\nconst text =\n    \\\\a // not a comment\n;\nconst n: u32 = 1; // remove\n",
+    )
+    .unwrap();
+
+    let scanned = run(directory.path(), &["scan", "main.zig", "--format", "json"]);
+    assert_eq!(
+        scanned.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&scanned.stderr)
+    );
+    let document: serde_json::Value = serde_json::from_slice(&scanned.stdout).unwrap();
+    let report = &document["files"][0]["report"];
+    assert_eq!(report["language"], "zig");
+    assert_eq!(report["comments"].as_array().unwrap().len(), 2);
+    assert_eq!(report["comments"][0]["kind"], "directive");
+    assert_eq!(report["comments"][0]["disposition"]["action"], "keep");
+    assert_eq!(report["comments"][1]["disposition"]["action"], "remove");
+
+    let fixed = run(directory.path(), &["fix", "main.zig"]);
+    assert_eq!(
+        fixed.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&fixed.stderr)
+    );
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        b"// zig fmt: off\nconst text =\n    \\\\a // not a comment\n;\nconst n: u32 = 1; \n"
+    );
+}
+
+/* NOTE: Dart is the one built-in C-family language whose block comment nests, and
+ * this is what that plus its interpolation costs a run end to end: the outer
+ * `/*` is closed by the second `*/` and not the first, `${ ... }` is code so
+ * the comment written inside the string is a comment of its own, and
+ * `// dart format off` is one of the four instructions a Dart tool reads and is
+ * kept. Ground truth, Dart SDK 3.13.2 `scanString`: `SINGLE_LINE_COMMENT` at
+ * [0,18), `MULTI_LINE_COMMENT "/* who */
+"` at [48,57) inside the interpolation,
+ * `SINGLE_LINE_COMMENT` at [61,70), and `MULTI_LINE_COMMENT` at [71,106).
+ * `dart analyze` accepts both the file below and the bytes `fix` leaves. */
+#[test]
+fn a_dart_file_keeps_its_format_directive_and_nests_its_block_comment() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("main.dart");
+    fs::write(
+        &path,
+        b"// dart format off\nvar greeting = 'hi ${'there' /* who */}'; // remove\n/* outer /* inner */ still outer */\n",
+    )
+    .unwrap();
+
+    let scanned = run(directory.path(), &["scan", "main.dart", "--format", "json"]);
+    assert_eq!(
+        scanned.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&scanned.stderr)
+    );
+    let document: serde_json::Value = serde_json::from_slice(&scanned.stdout).unwrap();
+    let report = &document["files"][0]["report"];
+    assert_eq!(report["language"], "dart");
+    assert_eq!(report["comments"].as_array().unwrap().len(), 4);
+    assert_eq!(report["comments"][0]["kind"], "directive");
+    assert_eq!(report["comments"][0]["disposition"]["action"], "keep");
+    assert_eq!(report["comments"][1]["span"]["start"], 48);
+    assert_eq!(report["comments"][1]["span"]["end"], 57);
+    assert_eq!(report["comments"][3]["span"]["start"], 71);
+    assert_eq!(report["comments"][3]["span"]["end"], 106);
+
+    let fixed = run(directory.path(), &["fix", "main.dart"]);
+    assert_eq!(
+        fixed.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&fixed.stderr)
+    );
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        b"// dart format off\nvar greeting = 'hi ${'there' }'; \n\n"
+    );
+}
+
+/* NOTE: R is the one built-in language whose extension is written in upper case
+ * as often as in lower — `analysis.R` and `analysis.r` are the same kind of
+ * file — so this is the run that proves the suffix is folded before it is
+ * looked up. It is also what a roxygen comment costs end to end: `#'` is
+ * documentation and the default policy takes it, `# nolint` is lintr's
+ * instruction and is kept, and the `#` inside the raw string is content. R
+ * 4.3.3 `getParseData` reads the file below as `COMMENT` at [0,19), [20,30),
+ * [60,68) and [116,124), with `STR_CONST` covering [80,104). */
+#[test]
+fn an_r_file_keeps_its_lint_directive_and_its_raw_string() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("analysis.R");
+    fs::write(
+        &path,
+        b"#' Add two numbers.\n#' @export\nadd <- function(a, b) a + b  # nolint\npattern <- r\"(\\d+ # not a comment)\"\ntotal <- 1 # remove\n",
+    )
+    .unwrap();
+
+    let scanned = run(
+        directory.path(),
+        &["scan", "analysis.R", "--format", "json"],
+    );
+    assert_eq!(
+        scanned.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&scanned.stderr)
+    );
+    let document: serde_json::Value = serde_json::from_slice(&scanned.stdout).unwrap();
+    let report = &document["files"][0]["report"];
+    assert_eq!(report["language"], "r");
+    assert_eq!(report["comments"].as_array().unwrap().len(), 4);
+    assert_eq!(report["comments"][0]["kind"], "doc-line");
+    assert_eq!(report["comments"][2]["kind"], "directive");
+    assert_eq!(report["comments"][2]["disposition"]["action"], "keep");
+    assert_eq!(report["comments"][3]["disposition"]["action"], "remove");
+
+    let fixed = run(directory.path(), &["fix", "analysis.R"]);
+    assert_eq!(
+        fixed.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&fixed.stderr)
+    );
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        b"\n\nadd <- function(a, b) a + b  # nolint\npattern <- r\"(\\d+ # not a comment)\"\ntotal <- 1 \n"
+    );
+}
+
 /* NOTE: A `Gemfile` carries no extension, so it reaches the Ruby scanner by its
  * whole name alone — and once there, the magic comment at the head of it is a
  * directive the default policy keeps, where the embedded document below it is

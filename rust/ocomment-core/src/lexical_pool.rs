@@ -56,7 +56,21 @@ pub const BYTES: &[u8] = b"\n\r/*'\"#`{}<>=[]-|?\\$%()@:!~";
 /// are three more states a restart must never land inside. The body a header
 /// inside `"#{ ... }"` asks for belongs to the line the header stands on rather
 /// than to the interpolation, and only a pool that can assemble that opener
-/// generates the case at all.
+/// generates the case at all. The two Zig fragments at the end are the whole
+/// opener of a multiline string literal line — two of one byte, which a
+/// per-byte alphabet reaches only by coincidence, and the only thing in the
+/// language that hides a `//` without a quote — and the fourth slash that turns
+/// a documentation comment back into an ordinary one. The five R fragments
+/// after them are its raw string openers and closers and its roxygen marker:
+/// the `r` that opens a raw string is a letter no per-byte alphabet carries, so
+/// without them a generated R source never reaches the one literal in the
+/// language whose delimiter is neither a quote nor a bracket alone, and the
+/// dashed pair is there for the reason Lua's levelled brackets are — a closing
+/// run of the wrong length is content. The three Dart fragments after those are
+/// its raw string openers, whose `r` is a letter no per-byte alphabet carries
+/// and which take neither an escape nor an interpolation, and the interpolation
+/// opener itself: a `${` turns the inside of a string back into code, and a
+/// comment written there is one more state a restart must not land inside.
 #[doc(hidden)]
 pub const TOKENS: &[&[u8]] = &[
     b"coding:",
@@ -95,4 +109,14 @@ pub const TOKENS: &[&[u8]] = &[
     b"\"#{",
     b"}\"",
     b"\"#{ <<EOS }\"",
+    b"\\\\",
+    b"////",
+    b"r\"(",
+    b")\"",
+    b"r\"--(",
+    b")--\"",
+    b"#'",
+    b"r'",
+    b"r'''",
+    b"${",
 ];

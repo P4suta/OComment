@@ -122,6 +122,9 @@ Policy:
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
           - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
+          - zig:        Zig source files and Zig Object Notation data
+          - r:          R scripts and the `.Rprofile` an R session sources at start-up
+          - dart:       Dart source files, whose block comments nest
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -309,6 +312,9 @@ Policy:
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
           - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
+          - zig:        Zig source files and Zig Object Notation data
+          - r:          R scripts and the `.Rprofile` an R session sources at start-up
+          - dart:       Dart source files, whose block comments nest
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -481,6 +487,9 @@ Policy:
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
           - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
+          - zig:        Zig source files and Zig Object Notation data
+          - r:          R scripts and the `.Rprofile` an R session sources at start-up
+          - dart:       Dart source files, whose block comments nest
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -645,6 +654,9 @@ Policy:
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
           - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
+          - zig:        Zig source files and Zig Object Notation data
+          - r:          R scripts and the `.Rprofile` an R session sources at start-up
+          - dart:       Dart source files, whose block comments nest
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -809,6 +821,9 @@ Policy:
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
           - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
+          - zig:        Zig source files and Zig Object Notation data
+          - r:          R scripts and the `.Rprofile` an R session sources at start-up
+          - dart:       Dart source files, whose block comments nest
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -963,6 +978,9 @@ Policy:
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
           - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
+          - zig:        Zig source files and Zig Object Notation data
+          - r:          R scripts and the `.Rprofile` an R session sources at start-up
+          - dart:       Dart source files, whose block comments nest
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1117,6 +1135,9 @@ Policy:
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
           - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
+          - zig:        Zig source files and Zig Object Notation data
+          - r:          R scripts and the `.Rprofile` an R session sources at start-up
+          - dart:       Dart source files, whose block comments nest
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1287,6 +1308,9 @@ Policy:
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
           - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
+          - zig:        Zig source files and Zig Object Notation data
+          - r:          R scripts and the `.Rprofile` an R session sources at start-up
+          - dart:       Dart source files, whose block comments nest
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1448,6 +1472,9 @@ Policy:
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
           - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
+          - zig:        Zig source files and Zig Object Notation data
+          - r:          R scripts and the `.Rprofile` an R session sources at start-up
+          - dart:       Dart source files, whose block comments nest
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1602,6 +1629,9 @@ Policy:
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
           - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
+          - zig:        Zig source files and Zig Object Notation data
+          - r:          R scripts and the `.Rprofile` an R session sources at start-up
+          - dart:       Dart source files, whose block comments nest
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1765,6 +1795,9 @@ Policy:
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
           - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
+          - zig:        Zig source files and Zig Object Notation data
+          - r:          R scripts and the `.Rprofile` an R session sources at start-up
+          - dart:       Dart source files, whose block comments nest
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1932,6 +1965,9 @@ Policy:
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
           - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
+          - zig:        Zig source files and Zig Object Notation data
+          - r:          R scripts and the `.Rprofile` an R session sources at start-up
+          - dart:       Dart source files, whose block comments nest
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2090,6 +2126,9 @@ Policy:
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
           - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
+          - zig:        Zig source files and Zig Object Notation data
+          - r:          R scripts and the `.Rprofile` an R session sources at start-up
+          - dart:       Dart source files, whose block comments nest
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2244,6 +2283,9 @@ Policy:
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
           - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
+          - zig:        Zig source files and Zig Object Notation data
+          - r:          R scripts and the `.Rprofile` an R session sources at start-up
+          - dart:       Dart source files, whose block comments nest
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2402,6 +2444,9 @@ Policy:
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
           - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
+          - zig:        Zig source files and Zig Object Notation data
+          - r:          R scripts and the `.Rprofile` an R session sources at start-up
+          - dart:       Dart source files, whose block comments nest
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2560,6 +2605,9 @@ Policy:
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
           - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
+          - zig:        Zig source files and Zig Object Notation data
+          - r:          R scripts and the `.Rprofile` an R session sources at start-up
+          - dart:       Dart source files, whose block comments nest
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2718,6 +2766,9 @@ Policy:
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
           - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
+          - zig:        Zig source files and Zig Object Notation data
+          - r:          R scripts and the `.Rprofile` an R session sources at start-up
+          - dart:       Dart source files, whose block comments nest
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2878,6 +2929,9 @@ Policy:
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
           - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
+          - zig:        Zig source files and Zig Object Notation data
+          - r:          R scripts and the `.Rprofile` an R session sources at start-up
+          - dart:       Dart source files, whose block comments nest
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -3032,6 +3086,9 @@ Policy:
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
           - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
+          - zig:        Zig source files and Zig Object Notation data
+          - r:          R scripts and the `.Rprofile` an R session sources at start-up
+          - dart:       Dart source files, whose block comments nest
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -3186,6 +3243,9 @@ Policy:
           - yaml:       YAML documents, including the tool configurations written in it
           - php:        PHP scripts and templates; the inline HTML around the tags is content
           - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
+          - zig:        Zig source files and Zig Object Notation data
+          - r:          R scripts and the `.Rprofile` an R session sources at start-up
+          - dart:       Dart source files, whose block comments nest
 
       --dialect <DIALECT>
           Force this dialect of the selected language

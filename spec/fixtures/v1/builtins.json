@@ -1104,6 +1104,222 @@
         "diagnostics": [],
         "output_utf8": "#!/usr/bin/env ruby\r\n\r\nx = '# opaque' \r\n\r\n\r\n\r\n"
       }
+    },
+    {
+      "id": "zig-builtin-safe",
+      "language": "zig",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "// zig fmt: off\r\nconst s = \"// string\";\r\n/// doc\r\n// line\r\n",
+      "note": "Zig Language Reference, Comments and String Literals: a string literal hides the `//` inside it, `///` is a documentation comment and `//` an ordinary one, `// zig fmt: off` is the one instruction the formatter reads out of a comment, and the CRLF endings survive the transformation. Ground truth, `std.zig.Tokenizer` 0.16.0: `string_literal \"\\\"// string\\\"\"` and `doc_comment \"/// doc\"`, with no token at all for the two ordinary comment lines.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 15,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 41,
+            "end": 48,
+            "kind": "doc-line",
+            "action": "remove"
+          },
+          {
+            "start": 50,
+            "end": 57,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "// zig fmt: off\r\nconst s = \"// string\";\r\n\r\n\r\n"
+      }
+    },
+    {
+      "id": "zig-builtin-all",
+      "language": "zig",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "// zig fmt: off\r\nconst s = \"// string\";\r\n/// doc\r\n// line\r\n",
+      "note": "Zig Language Reference, Comments and String Literals: a string literal hides the `//` inside it, `///` is a documentation comment and `//` an ordinary one, `// zig fmt: off` is the one instruction the formatter reads out of a comment, and the CRLF endings survive the transformation. Ground truth, `std.zig.Tokenizer` 0.16.0: `string_literal \"\\\"// string\\\"\"` and `doc_comment \"/// doc\"`, with no token at all for the two ordinary comment lines.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 15,
+            "kind": "directive",
+            "action": "remove"
+          },
+          {
+            "start": 41,
+            "end": 48,
+            "kind": "doc-line",
+            "action": "remove"
+          },
+          {
+            "start": 50,
+            "end": 57,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\r\nconst s = \"// string\";\r\n\r\n\r\n"
+      }
+    },
+    {
+      "id": "r-builtin-safe",
+      "language": "r",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "# styler: off\r\nx <- \"# string\"\r\n#' doc\r\n# line\r\n",
+      "note": "R Language Definition, 10.2 Comments and `?Quotes`: a string hides the `#` inside it, `#'` is roxygen2's documentation marker and `#` an ordinary comment, `# styler: off` is the instruction the formatter reads out of a comment, and the CRLF endings survive the transformation. Ground truth, R 4.3.3 `utils::getParseData(parse(file =, keep.source = TRUE))`: `COMMENT` at [0,13), [32,38) and [40,46), and `STR_CONST \"\\\"# string\\\"\"` at [20,30).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 13,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 32,
+            "end": 38,
+            "kind": "doc-line",
+            "action": "remove"
+          },
+          {
+            "start": 40,
+            "end": 46,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "# styler: off\r\nx <- \"# string\"\r\n\r\n\r\n"
+      }
+    },
+    {
+      "id": "r-builtin-all",
+      "language": "r",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "# styler: off\r\nx <- \"# string\"\r\n#' doc\r\n# line\r\n",
+      "note": "R Language Definition, 10.2 Comments and `?Quotes`: a string hides the `#` inside it, `#'` is roxygen2's documentation marker and `#` an ordinary comment, `# styler: off` is the instruction the formatter reads out of a comment, and the CRLF endings survive the transformation. Ground truth, R 4.3.3 `utils::getParseData(parse(file =, keep.source = TRUE))`: `COMMENT` at [0,13), [32,38) and [40,46), and `STR_CONST \"\\\"# string\\\"\"` at [20,30).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 13,
+            "kind": "directive",
+            "action": "remove"
+          },
+          {
+            "start": 32,
+            "end": 38,
+            "kind": "doc-line",
+            "action": "remove"
+          },
+          {
+            "start": 40,
+            "end": 46,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\r\nx <- \"# string\"\r\n\r\n\r\n"
+      }
+    },
+    {
+      "id": "dart-builtin-safe",
+      "language": "dart",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "// dart format off\r\nvar s = '// string';\r\n/// doc\r\n// line\r\n",
+      "note": "Dart Language Specification, 17.1 Comments and 17.6 Strings: a string literal hides the `//` inside it, `///` is a documentation comment and `//` an ordinary one, `// dart format off` is the whole phrase `dart_style` compares against, and the CRLF endings survive the transformation. Ground truth, Dart SDK 3.13.2 `scanString` of `package:_fe_analyzer_shared`: `SINGLE_LINE_COMMENT \"// dart format off\"` at [0,18), `STRING \"'// string'\"` at [28,39), `DartDocToken \"/// doc\"` at [42,49), and `SINGLE_LINE_COMMENT \"// line\"` at [51,58).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 18,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 42,
+            "end": 49,
+            "kind": "doc-line",
+            "action": "remove"
+          },
+          {
+            "start": 51,
+            "end": 58,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "// dart format off\r\nvar s = '// string';\r\n\r\n\r\n"
+      }
+    },
+    {
+      "id": "dart-builtin-all",
+      "language": "dart",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "// dart format off\r\nvar s = '// string';\r\n/// doc\r\n// line\r\n",
+      "note": "Dart Language Specification, 17.1 Comments and 17.6 Strings: a string literal hides the `//` inside it, `///` is a documentation comment and `//` an ordinary one, `// dart format off` is the whole phrase `dart_style` compares against, and the CRLF endings survive the transformation. Ground truth, Dart SDK 3.13.2 `scanString` of `package:_fe_analyzer_shared`: `SINGLE_LINE_COMMENT \"// dart format off\"` at [0,18), `STRING \"'// string'\"` at [28,39), `DartDocToken \"/// doc\"` at [42,49), and `SINGLE_LINE_COMMENT \"// line\"` at [51,58).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 18,
+            "kind": "directive",
+            "action": "remove"
+          },
+          {
+            "start": 42,
+            "end": 49,
+            "kind": "doc-line",
+            "action": "remove"
+          },
+          {
+            "start": 51,
+            "end": 58,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\r\nvar s = '// string';\r\n\r\n\r\n"
+      }
     }
   ]
 }

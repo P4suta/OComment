@@ -3410,8 +3410,8 @@
         "policy": "safe",
         "layout": "lines"
       },
-      "source_utf8": "let c = 'ä\n';\n",
-      "note": "Rust Reference, Tokens (character literals): a character literal holds one character and ends at the line, so this one is never closed. It is also the shape that tells a literal from a lifetime -- a non-ASCII character with an apostrophe close enough behind it to be the closing quote -- which is why the diagnostic here is `unterminated character literal` and `parity-rust-lifetime-is-not-a-literal` reports nothing at all.",
+      "source_utf8": "let c = 'ä\\';\n",
+      "note": "Rust Reference, Tokens (character literals): a character literal holds one character and ends at the line, so this one is never closed -- the `\\` in front of the second apostrophe carries it into the literal as an escape, and no third one arrives before the line break. It is also the shape that tells a literal from a lifetime -- a non-ASCII character with an apostrophe close enough behind it to be the closing quote -- which is why the diagnostic here is `unterminated character literal` and `parity-rust-lifetime-is-not-a-literal` reports nothing at all. Both apostrophes stand on one line because that lookahead stops at a line terminator (`rust-char-literal-across-newline`). Ground truth, `rustc` 1.97: `error[E0762]: unterminated character literal` for this line.",
       "expect": {
         "valid": false,
         "comments": [],
@@ -3419,7 +3419,7 @@
           {
             "code": "unterminated-string",
             "start": 8,
-            "end": 11
+            "end": 14
           }
         ]
       }
@@ -3969,14 +3969,14 @@
         "policy": "safe",
         "layout": "lines"
       },
-      "source_utf8": "let c = '\\\r\n' ^ \"x\" (* remove *)\n",
-      "note": "OCaml manual, 11.1 (Lexical conventions): a character literal is one character between apostrophes and does not span a line, so this one is never closed. The rest of the file is still a file: the scan resumes where the literal stopped and finds the block comment further on, rather than treating one bad literal as the end of what can be read.",
+      "source_utf8": "let c = '\\\\\\'\r\n(* remove *)\r\n",
+      "note": "OCaml manual, 11.1 (Lexical conventions): a character literal is one character between apostrophes, and an escape is one character -- `\\\\` names a backslash and `\\'` an apostrophe. These bytes name two, and the second escape carries off the apostrophe that would have closed the literal, so nothing closes it before the line ends. `ocamlc` 5.5.0 answers the line with `Illegal backslash escape in string or character`. The rest of the file is still a file: the scan resumes where the literal stopped and finds the block comment on the next line, rather than treating one bad literal as the end of what can be read. Both apostrophes stand on one line because the lookahead that finds the second stops at a line terminator (`ocaml-char-literal-across-newline`).",
       "expect": {
         "valid": false,
         "comments": [
           {
-            "start": 20,
-            "end": 32,
+            "start": 15,
+            "end": 27,
             "kind": "block",
             "action": "remove"
           }
@@ -3985,10 +3985,10 @@
           {
             "code": "unterminated-string",
             "start": 8,
-            "end": 11
+            "end": 13
           }
         ],
-        "output_utf8": "let c = '\\\r\n' ^ \"x\" (* remove *)\n"
+        "output_utf8": "let c = '\\\\\\'\r\n(* remove *)\r\n"
       }
     },
     {
@@ -7406,6 +7406,1625 @@
         ],
         "diagnostics": [],
         "output_utf8": "puts /x # opaque/\na /y # opaque/ z\n\n"
+      }
+    },
+    {
+      "id": "zig-doc-line-forms",
+      "language": "zig",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "//! module\nconst x = 1;\n/// doc\nconst y = 2; // line\n",
+      "note": "Zig Language Reference, Doc comments: `///` documents the declaration under it and `//!` the container the file is, and both are documentation comments. Ground truth, `std.zig.Tokenizer` 0.16.0: `container_doc_comment \"//! module\"` at [0,10), `doc_comment \"/// doc\"` at [24,31), and no token for the `// line` comment, which is how the tokenizer reports an ordinary one. `zig ast-check` accepts the file.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 10,
+            "kind": "doc-line",
+            "action": "remove"
+          },
+          {
+            "start": 24,
+            "end": 31,
+            "kind": "doc-line",
+            "action": "remove"
+          },
+          {
+            "start": 45,
+            "end": 52,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\nconst x = 1;\n\nconst y = 2; \n"
+      }
+    },
+    {
+      "id": "zig-quad-slash-is-plain",
+      "language": "zig",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "//// divider\n/// doc\nconst x = 1;\n",
+      "note": "Zig Language Reference, Doc comments: exactly three slashes document anything, and a fourth takes the marker back — `.doc_comment_start` falls to `.line_comment` when it meets one. Ground truth, `std.zig.Tokenizer` 0.16.0: no token at all for `//// divider`, `doc_comment \"/// doc\"` at [13,20). `zig ast-check` accepts the file.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 12,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 13,
+            "end": 20,
+            "kind": "doc-line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\n\nconst x = 1;\n"
+      }
+    },
+    {
+      "id": "zig-no-block-comment",
+      "language": "zig",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "const a = 1 /* not a comment */ + 2; // remove\n",
+      "note": "Zig Language Reference, Comments: Zig has one comment form and it is `//`. Ground truth, `std.zig.Tokenizer` 0.16.0: `/*` is `slash` then `asterisk` and `*/` is `asterisk` then `slash`, seven ordinary tokens between the two operands and no comment, so only the `//` behind them is removed. (`zig ast-check` refuses this line for a reason of its own — a binary operator with white space on one side only — and the tokenizer is what decides whether a comment is there.)",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 37,
+            "end": 46,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "const a = 1 /* not a comment */ + 2; \n"
+      }
+    },
+    {
+      "id": "zig-multiline-string-lines",
+      "language": "zig",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "const a =\n    \\\\one\n    \\\\two\n;\nconst b = 3; // remove\n",
+      "note": "Zig Language Reference, String Literals: consecutive `\\\\` lines are one multiline string literal, and each is its own token that ends before its newline, so the line under them starts in code again. Ground truth, `std.zig.Tokenizer` 0.16.0: `multiline_string_literal_line` at [14,19) and [24,29), then `semicolon` at [30,31). `zig ast-check` accepts the file.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 45,
+            "end": 54,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "const a =\n    \\\\one\n    \\\\two\n;\nconst b = 3; \n"
+      }
+    },
+    {
+      "id": "zig-multiline-string-with-slashes",
+      "language": "zig",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "const a =\n    \\\\x // not a comment\n;\nconst b = \\\\inline // opaque\n;\n// remove\n",
+      "note": "Zig Language Reference, String Literals: everything from a `\\\\` to the end of its line is string content, and the tokenizer takes that opener wherever a token may begin rather than only as the first thing on a line. Ground truth, `std.zig.Tokenizer` 0.16.0: `multiline_string_literal_line` at [14,34) and at [47,65), so both `//` runs are content and only the last line is a comment. `zig ast-check` accepts the file.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 68,
+            "end": 77,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "const a =\n    \\\\x // not a comment\n;\nconst b = \\\\inline // opaque\n;\n\n"
+      }
+    },
+    {
+      "id": "zig-char-literal-quote",
+      "language": "zig",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "const q = '\\'';\nconst s = '\\u{1F600}';\nconst d = '\"';\n// remove\n",
+      "note": "Zig Language Reference, Primitive Values and String Literals: a character literal takes the same backslash escapes a string does, so `'\\''` is one literal and the `\"` inside one opens nothing. Ground truth, `std.zig.Tokenizer` 0.16.0: `char_literal` at [10,14), [26,37) and [49,52). `zig ast-check` accepts the file.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 54,
+            "end": 63,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "const q = '\\'';\nconst s = '\\u{1F600}';\nconst d = '\"';\n\n"
+      }
+    },
+    {
+      "id": "zig-quoted-identifier",
+      "language": "zig",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "const @\"id // x\" = 1;\nconst @\"if\" = 2; // remove\n",
+      "note": "Zig Language Reference, Identifiers: `@\"...\"` names an identifier that is not a legal bare name, and the tokenizer lexes it through its string-literal state, so a `//` written inside one is part of the name. Ground truth, `std.zig.Tokenizer` 0.16.0: `identifier \"@\\\"id // x\\\"\"` at [6,16) and `identifier \"@\\\"if\\\"\"` at [28,33). `zig ast-check` accepts the file.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 39,
+            "end": 48,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "const @\"id // x\" = 1;\nconst @\"if\" = 2; \n"
+      }
+    },
+    {
+      "id": "zig-fmt-off-directive",
+      "language": "zig",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "// zig fmt: off\n// zig fmt: on\n// zig fmt: off please\n",
+      "note": "Zig standard library, `std/zig/Ast/Render.zig`: the formatter takes `\"//\".len` bytes off the trimmed comment, trims the white space behind them, and compares the remainder with `zig fmt: off` and `zig fmt: on` for equality — so the first two lines are instructions a removal keeps and the third, which merely opens with the phrase, is an ordinary comment. `zig ast-check` accepts the file.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 15,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 16,
+            "end": 30,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 31,
+            "end": 53,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "// zig fmt: off\n// zig fmt: on\n\n"
+      }
+    },
+    {
+      "id": "zig-unterminated-string",
+      "language": "zig",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "const s = \"unterminated // x\nconst t = 1;\n",
+      "note": "Zig Language Reference, String Literals: a quoted string may not carry a line break, so one that never closes is an error and the transformation writes nothing. Ground truth, `std.zig.Tokenizer` 0.16.0 tags the token `invalid`, and `zig ast-check` reports `string literal contains invalid byte: '\\n'`.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 10,
+            "end": 28
+          }
+        ],
+        "output_utf8": "const s = \"unterminated // x\nconst t = 1;\n"
+      }
+    },
+    {
+      "id": "zig-unterminated-char-literal",
+      "language": "zig",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "const c = 'a;\nconst t = 1;\n",
+      "note": "Zig Language Reference, Primitive Values: a character literal may not carry a line break either. Ground truth, `std.zig.Tokenizer` 0.16.0 tags the token `invalid`, and `zig ast-check` reports `character literal contains invalid byte: '\\n'`.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 10,
+            "end": 13
+          }
+        ],
+        "output_utf8": "const c = 'a;\nconst t = 1;\n"
+      }
+    },
+    {
+      "id": "zig-crlf",
+      "language": "zig",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "//! module\r\nconst a =\r\n    \\\\body // opaque\r\n;\r\n/// doc\r\nconst b = 1; // remove\r\n",
+      "note": "Zig Language Reference, Comments and String Literals: every Zig construct that runs to the end of a line ends at a CRLF pair as it ends at a bare newline — a documentation comment, a multiline string literal line, and an ordinary comment alike. Ground truth, `std.zig.Tokenizer` 0.16.0 ends each of those tokens before the `\\r`, and refuses a `\\r` that no `\\n` follows.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 10,
+            "kind": "doc-line",
+            "action": "remove"
+          },
+          {
+            "start": 48,
+            "end": 55,
+            "kind": "doc-line",
+            "action": "remove"
+          },
+          {
+            "start": 70,
+            "end": 79,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\r\nconst a =\r\n    \\\\body // opaque\r\n;\r\n\r\nconst b = 1; \r\n"
+      }
+    },
+    {
+      "id": "zig-columns",
+      "language": "zig",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "columns"
+      },
+      "source_utf8": "// alone\nconst x = 1; // trailing\n",
+      "note": "Zig Language Reference, Comments: the `columns` layout pads each removed comment with as many spaces as it took, so the columns after it do not shift.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 8,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 22,
+            "end": 33,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "        \nconst x = 1;            \n"
+      }
+    },
+    {
+      "id": "zig-compact",
+      "language": "zig",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "compact"
+      },
+      "source_utf8": "// alone\nconst x = 1; // trailing\n",
+      "note": "Zig Language Reference, Comments: the `compact` layout drops the line a removed comment had to itself and the white space it left behind.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 8,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 22,
+            "end": 33,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "const x = 1;\n"
+      }
+    },
+    {
+      "id": "r-roxygen-doc-line",
+      "language": "r",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "#' Title\n#' @param x a value\n#' @export\nf <- function(x) x  # ordinary\n",
+      "note": "roxygen2 reads the block of `#'` lines above a definition and writes the manual page for it, so `#'` is a documentation comment here for the reason Lua's `---` is. R's own parser draws no such distinction: Ground truth, R 4.3.3 `utils::getParseData(parse(file =, keep.source = TRUE))` gives all four lines the same `COMMENT` token, at [0,8), [9,28), [29,39) and [60,70).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 8,
+            "kind": "doc-line",
+            "action": "remove"
+          },
+          {
+            "start": 9,
+            "end": 28,
+            "kind": "doc-line",
+            "action": "remove"
+          },
+          {
+            "start": 29,
+            "end": 39,
+            "kind": "doc-line",
+            "action": "remove"
+          },
+          {
+            "start": 60,
+            "end": 70,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\n\n\nf <- function(x) x  \n"
+      }
+    },
+    {
+      "id": "r-string-spans-lines",
+      "language": "r",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "x <- \"first\n# not a comment\nlast\" # remove\n",
+      "note": "R Language Definition, 10.3.3 and `?Quotes`: a quoted string carries a line break as content, so only the closing quote ends one and every `#` inside it is a byte of the string. Ground truth, R 4.3.3 `utils::getParseData(parse(file =, keep.source = TRUE))`: `STR_CONST` at [5,33) spanning three lines, with the only `COMMENT` at [34,42).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 34,
+            "end": 42,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "x <- \"first\n# not a comment\nlast\" \n"
+      }
+    },
+    {
+      "id": "r-raw-string-forms",
+      "language": "r",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "a <- r\"(paren # x)\"\nb <- R\"[brack # x]\"\nc <- r\"{brace # x}\"\nd <- R'(single # x)'\ne <- 1 # remove\n",
+      "note": "`?Quotes`: a raw string is `r` or `R`, either quote, and one of the three bracket pairs, and it takes no escapes at all. R 4.0.0 added the form. Ground truth, R 4.3.3 `utils::getParseData(parse(file =, keep.source = TRUE))`: four `STR_CONST` tokens at [5,19), [25,39), [45,59) and [65,80), with the only `COMMENT` at [88,96).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 88,
+            "end": 96,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "a <- r\"(paren # x)\"\nb <- R\"[brack # x]\"\nc <- r\"{brace # x}\"\nd <- R'(single # x)'\ne <- 1 \n"
+      }
+    },
+    {
+      "id": "r-raw-string-dashes",
+      "language": "r",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "a <- r\"--(dashes ) # x)--\"\nb <- r\"---[deep ]-- # x]---\"\nc <- 1 # remove\n",
+      "note": "`?Quotes`: any number of dashes may stand between the quote and the opening bracket, and the literal closes only on the matching bracket with the same run of dashes and the same quote — which is what lets the closing bracket itself appear as content. R puts no limit on the run: 100 dashes were measured accepted on R 4.3.3. Ground truth, R 4.3.3 `utils::getParseData(parse(file =, keep.source = TRUE))`: `STR_CONST` at [5,26) and [32,55), with the only `COMMENT` at [63,71).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 63,
+            "end": 71,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "a <- r\"--(dashes ) # x)--\"\nb <- r\"---[deep ]-- # x]---\"\nc <- 1 \n"
+      }
+    },
+    {
+      "id": "r-raw-string-unterminated",
+      "language": "r",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "x <- r\"--(never closed # x)-\"\ny <- 1\n",
+      "note": "`?Quotes`: the closing run of dashes must be as long as the opening one, so a raw string one dash short never closes and swallows the rest of the file. Ground truth, R 4.3.3: the file is refused with `unexpected INCOMPLETE_STRING`, and the transformation writes nothing.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 5,
+            "end": 37
+          }
+        ],
+        "output_utf8": "x <- r\"--(never closed # x)-\"\ny <- 1\n"
+      }
+    },
+    {
+      "id": "r-backtick-identifier",
+      "language": "r",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "`odd # name` <- 1 # remove\n",
+      "note": "R Language Definition, 10.3.2: a name may be written between backquotes, and anything at all may go inside — a `#` included. Ground truth, R 4.3.3 `utils::getParseData(parse(file =, keep.source = TRUE))`: `SYMBOL` `` `odd # name` `` at [0,12), with the only `COMMENT` at [18,26).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 18,
+            "end": 26,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "`odd # name` <- 1 \n"
+      }
+    },
+    {
+      "id": "r-backtick-unterminated",
+      "language": "r",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "`odd # name <- 1\ny <- 2\n",
+      "note": "A backquoted name is lexed like a string and carries a line break as content, so one that never closes runs to the end of the file. Ground truth, R 4.3.3: refused with `unexpected INCOMPLETE_STRING` at column 1 of line 1.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-identifier",
+            "start": 0,
+            "end": 24
+          }
+        ],
+        "output_utf8": "`odd # name <- 1\ny <- 2\n"
+      }
+    },
+    {
+      "id": "r-special-operator",
+      "language": "r",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "x <- 1 %a # b% 2 # remove\ny <- 3 %in% c(1, 2) # also\n",
+      "note": "R 4.3.3 `gram.y`, `SpecialValue`: a `%` runs to the next `%` on the same line and every byte between them is part of the operator's name, so a `#` written inside one is not a comment. Ground truth, R 4.3.3 `utils::getParseData(parse(file =, keep.source = TRUE))`: `SPECIAL` `%a # b%` at [7,14) and `%in%` at [33,37), with `COMMENT` at [17,25) and [46,52).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 17,
+            "end": 25,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 46,
+            "end": 52,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "x <- 1 %a # b% 2 \ny <- 3 %in% c(1, 2) \n"
+      }
+    },
+    {
+      "id": "r-special-operator-unterminated",
+      "language": "r",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "x <- 1 % 2\ny <- 3\n",
+      "note": "R 4.3.3 `gram.y`, `SpecialValue`: the lexer returns `ERROR` when a line break arrives before the second `%`, so an unterminated operator is reported where it is rather than swallowing the lines below it. Ground truth: the file is refused with `unexpected input` at the `2`.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-operator",
+            "start": 7,
+            "end": 10
+          }
+        ],
+        "output_utf8": "x <- 1 % 2\ny <- 3\n"
+      }
+    },
+    {
+      "id": "r-raw-string-prefix-boundary",
+      "language": "r",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "z <- xr\"(a \" b)\" # x\n",
+      "note": "`?Quotes` and R 4.3.3 `gram.y`: the `r` opens a raw string only where it begins a token, so a name in front of it leaves an ordinary string that closes at the second quote — and the quote after that opens one that never closes. Ground truth: R refuses the file with `unexpected string constant` at column 8, the `\"`, and echoes the line cut at `z <- xr\"(a \"`, which is the ordinary string its lexer read there.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 15,
+            "end": 21
+          }
+        ],
+        "output_utf8": "z <- xr\"(a \" b)\" # x\n"
+      }
+    },
+    {
+      "id": "r-unterminated-string",
+      "language": "r",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "x <- \"never closed # x\ny <- 1\n",
+      "note": "A quoted string carries a line break as content, so one that never closes runs to the end of the file and the transformation writes nothing. Ground truth, R 4.3.3: refused with `unexpected INCOMPLETE_STRING`.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 5,
+            "end": 30
+          }
+        ],
+        "output_utf8": "x <- \"never closed # x\ny <- 1\n"
+      }
+    },
+    {
+      "id": "r-nolint-directive",
+      "language": "r",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "x <- 1 # nolint\ny <- 2 # nolint start\nz <- 3 # nolint end\nw <- 4 # ordinary\n",
+      "note": "lintr reads `# nolint`, `# nolint start` and `# nolint end` out of a comment and silences its checks for the line or the region, so a removal keeps all three and takes the ordinary comment beside them. Ground truth, R 4.3.3 `utils::getParseData(parse(file =, keep.source = TRUE))`: `COMMENT` at [7,15), [23,37), [45,57) and [65,75).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 7,
+            "end": 15,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 23,
+            "end": 37,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 45,
+            "end": 57,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 65,
+            "end": 75,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "x <- 1 # nolint\ny <- 2 # nolint start\nz <- 3 # nolint end\nw <- 4 \n"
+      }
+    },
+    {
+      "id": "r-styler-directive",
+      "language": "r",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "# styler: off\nx <- 1\n# styler: on\n# ordinary\n",
+      "note": "styler leaves the code between `# styler: off` and `# styler: on` exactly as it is, so both markers are instructions a removal keeps. Ground truth, R 4.3.3 `utils::getParseData(parse(file =, keep.source = TRUE))`: `COMMENT` at [0,13), [21,33) and [34,44).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 13,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 21,
+            "end": 33,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 34,
+            "end": 44,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "# styler: off\nx <- 1\n# styler: on\n\n"
+      }
+    },
+    {
+      "id": "r-nocov-directive",
+      "language": "r",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "# nocov start\nx <- 1\n# nocov end\n# ordinary\n",
+      "note": "covr excludes the lines between `# nocov start` and `# nocov end` from its coverage report, and `nocov` is the whole word it looks for. Ground truth, R 4.3.3 `utils::getParseData(parse(file =, keep.source = TRUE))`: `COMMENT` at [0,13), [21,32) and [33,43).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 13,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 21,
+            "end": 32,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 33,
+            "end": 43,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "# nocov start\nx <- 1\n# nocov end\n\n"
+      }
+    },
+    {
+      "id": "r-shebang-rscript",
+      "language": "r",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "#!/usr/bin/env Rscript\n# ordinary\nx <- 1\n",
+      "note": "A `#!` line is an ordinary comment to R — `#` opens one and the `!` is content — so what makes the first one a preamble is its position. Ground truth, R 4.3.3 `utils::getParseData(parse(file =, keep.source = TRUE))`: `COMMENT` at [0,22) and [23,33), the same token for both.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 22,
+            "kind": "shebang",
+            "action": "keep"
+          },
+          {
+            "start": 23,
+            "end": 33,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "#!/usr/bin/env Rscript\n\nx <- 1\n"
+      }
+    },
+    {
+      "id": "r-crlf",
+      "language": "r",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "x <- \"a\r\nb\" # one\r\ny <- r\"(c\r\nd)\" # two\r\nz <- 3 # three\r\n",
+      "note": "Every R construct that runs to the end of a line ends at a CRLF pair as it ends at a bare newline, and both string forms carry the pair as content. Ground truth, R 4.3.3 `utils::getParseData(parse(file =, keep.source = TRUE))`, reading the file rather than a string: `COMMENT` at [12,17), [34,39) and [48,55), with `STR_CONST` spanning [5,11) and [24,33) across the pairs.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 12,
+            "end": 17,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 34,
+            "end": 39,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 48,
+            "end": 55,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "x <- \"a\r\nb\" \r\ny <- r\"(c\r\nd)\" \r\nz <- 3 \r\n"
+      }
+    },
+    {
+      "id": "r-columns",
+      "language": "r",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "columns"
+      },
+      "source_utf8": "# alone\nx <- 1 # trailing\n",
+      "note": "The `columns` layout pads each removed comment with as many spaces as it took, so the columns after it do not shift.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 7,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 15,
+            "end": 25,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "       \nx <- 1           \n"
+      }
+    },
+    {
+      "id": "r-compact",
+      "language": "r",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "compact"
+      },
+      "source_utf8": "# alone\nx <- 1 # trailing\n",
+      "note": "The `compact` layout drops the line a removed comment had to itself and the white space it left behind.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 7,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 15,
+            "end": 25,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "x <- 1\n"
+      }
+    },
+    {
+      "id": "dart-nested-block-comment",
+      "language": "dart",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "/* outer /* inner */ still outer */\nvar a = 1; // remove\n",
+      "note": "Dart Language Specification, 17.1 Comments: a `/* */` comment nests, so the inner `*/` closes only the inner `/*` and commenting out a region that already holds a comment works. Ground truth, Dart SDK 3.13.2 `scanString` of `package:_fe_analyzer_shared`: one `MULTI_LINE_COMMENT` at [0,35) -- `tokenizeMultiLineComment` counts `/*` up and `*/` down and ends the token at zero -- and `SINGLE_LINE_COMMENT \"// remove\"` at [47,56). `dart analyze` reports no issues.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 35,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 47,
+            "end": 56,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\nvar a = 1; \n"
+      }
+    },
+    {
+      "id": "dart-doc-forms",
+      "language": "dart",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "/// doc line\n//// four slashes\n//! not dart\n/** doc block */\n/*! bang block */\n// line\nvar a = 1;\n",
+      "note": "Effective Dart, Doc comments: `///` and `/** */` are the documentation forms `dart doc` reads. The scanner decides which at a single byte and reads no further -- `tokenizeSingleLineComment` at the third slash, so a fourth leaves `////` documentation too, and `tokenizeMultiLineComment` at the byte behind `/*`. `//!` and `/*!` are Rust's and Doxygen's markers and document nothing here. Ground truth, Dart SDK 3.13.2 `scanString` of `package:_fe_analyzer_shared`: `DartDocToken` at [0,12) and [13,30), `CommentTokenImpl` at [31,43), `DartDocToken` at [44,60), and `CommentTokenImpl` at [61,78) and [79,86). `dart analyze` reports no issues.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 12,
+            "kind": "doc-line",
+            "action": "remove"
+          },
+          {
+            "start": 13,
+            "end": 30,
+            "kind": "doc-line",
+            "action": "remove"
+          },
+          {
+            "start": 31,
+            "end": 43,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 44,
+            "end": 60,
+            "kind": "doc-block",
+            "action": "remove"
+          },
+          {
+            "start": 61,
+            "end": 78,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 79,
+            "end": 86,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\n\n\n\n\n\nvar a = 1;\n"
+      }
+    },
+    {
+      "id": "dart-triple-quoted-strings",
+      "language": "dart",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "var a = '''\n// not a comment\n''';\nvar b = \"\"\"/* not */\"\"\";\n// remove\n",
+      "note": "Dart Language Specification, 17.6 Strings: a triple-quoted string carries a line break as content, so a `//` written inside one is content and not a comment. Ground truth, Dart SDK 3.13.2 `scanString` of `package:_fe_analyzer_shared`: `STRING \"'''\\n// not a comment\\n'''\"` at [8,32), `STRING \"\\\"\\\"\\\"/* not */\\\"\\\"\\\"\"` at [42,57), and the only `SINGLE_LINE_COMMENT` at [59,68). `dart analyze` reports no issues.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 59,
+            "end": 68,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "var a = '''\n// not a comment\n''';\nvar b = \"\"\"/* not */\"\"\";\n\n"
+      }
+    },
+    {
+      "id": "dart-raw-strings",
+      "language": "dart",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "var a = r'raw \\ // not';\nvar b = r\"\"\"raw3 // not\"\"\";\n// remove\n",
+      "note": "Dart Language Specification, 17.6 Strings: an `r` in front of the quote makes a raw string, which takes no escape and no interpolation, so the `\\` inside one is a character of it rather than something that carries the next byte in. Ground truth, Dart SDK 3.13.2 `scanString` of `package:_fe_analyzer_shared`: `STRING \"r'raw \\\\ // not'\"` at [8,23) and `STRING \"r\\\"\\\"\\\"raw3 // not\\\"\\\"\\\"\"` at [33,51), with the only `SINGLE_LINE_COMMENT` at [53,62). `dart analyze` reports no issues.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 53,
+            "end": 62,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "var a = r'raw \\ // not';\nvar b = r\"\"\"raw3 // not\"\"\";\n\n"
+      }
+    },
+    {
+      "id": "dart-raw-string-prefix-boundary",
+      "language": "dart",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "var a = 1r'x\\';\nvar b = xr'x\\'; // still string';\n// remove\n",
+      "note": "The `r` opens a raw string only where it begins a token (`tokenizeRawStringKeywordOrIdentifier` is reached from the scanner's main switch), so an `r` that continues an identifier is a letter of that identifier and the quote behind it opens an ordinary string -- while a number token always ends before an `r`, which is neither a digit nor a hex digit nor an exponent marker. Ground truth, Dart SDK 3.13.2 `scanString` of `package:_fe_analyzer_shared`: `INT \"1\"` at [8,9) then `STRING \"r'x\\\\'\"` at [9,14), against `IDENTIFIER \"xr\"` at [24,26) then `STRING \"'x\\\\'; // still string'\"` at [26,48) -- the same bytes read as a raw string on one line and as an escaped ordinary string on the other. The only comment is `SINGLE_LINE_COMMENT` at [50,59). This is a token-stream fact and not a program: `dart analyze` refuses both lines a step later with `Expected to find ';'`, because a literal directly behind a number or an identifier parses as nothing, so no file that runs can tell the two readings apart. A scanner still has to, since a wrong reading here would delete bytes out of a string literal in a file someone is halfway through writing.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 50,
+            "end": 59,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "var a = 1r'x\\';\nvar b = xr'x\\'; // still string';\n\n"
+      }
+    },
+    {
+      "id": "dart-interpolation-brace-comment",
+      "language": "dart",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "var a = 'v: ${1 /* c */ + 2}';\n// remove\n",
+      "note": "Dart Language Specification, 17.6.1 String Interpolation: the expression inside `${ ... }` is lexed as code, so a comment written there is a comment. Ground truth, Dart SDK 3.13.2 `scanString` of `package:_fe_analyzer_shared`: `STRING \"'v: \"` at [8,12), `STRING_INTERPOLATION_EXPRESSION \"${\"` at [12,14), `INT` at [14,15), `CommentTokenImpl MULTI_LINE_COMMENT \"/* c */\"` at [16,23), and the string resuming at [28,29). `dart analyze` reports no issues.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 16,
+            "end": 23,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 31,
+            "end": 40,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "var a = 'v: ${1  + 2}';\n\n"
+      }
+    },
+    {
+      "id": "dart-interpolation-line-comment",
+      "language": "dart",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "var a = 'v: ${3 // c\n + 4}';\n// remove\n",
+      "note": "A `//` comment inside an interpolation ends at the line break, and the single-quoted string it stands in carries on below it -- the one way a single-line Dart string crosses a line. Ground truth, Dart SDK 3.13.2 `scanString` of `package:_fe_analyzer_shared`: `STRING_INTERPOLATION_EXPRESSION` at [12,14), `SINGLE_LINE_COMMENT \"// c\"` at [16,20), `PLUS` at [22,23), and the string closing at [26,27), with `hasErrors=false`. `dart analyze` reports no issues.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 16,
+            "end": 20,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 29,
+            "end": 38,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "var a = 'v: ${3 \n + 4}';\n\n"
+      }
+    },
+    {
+      "id": "dart-interpolation-identifier",
+      "language": "dart",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "var x = 1;\nvar y = 2;\nvar a = 'v: $x and $y // still string';\n// remove\n",
+      "note": "Dart Language Specification, 17.6.1: `$identifier` is the short interpolation form, and it opens no brace, so the bytes behind it are string content to the closing quote. Ground truth, Dart SDK 3.13.2 `scanString` of `package:_fe_analyzer_shared`: `STRING_INTERPOLATION_IDENTIFIER \"$\"` at [34,35) and [41,42) with `IDENTIFIER` behind each, then `STRING \" // still string'\"` at [43,60). The only `SINGLE_LINE_COMMENT` is at [62,71). `dart analyze` reports no issues.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 62,
+            "end": 71,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "var x = 1;\nvar y = 2;\nvar a = 'v: $x and $y // still string';\n\n"
+      }
+    },
+    {
+      "id": "dart-adjacent-strings",
+      "language": "dart",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "var a = 'x' 'y' \"z\"; // remove\n",
+      "note": "Dart Language Specification, 17.6: adjacent string literals are concatenated, which makes them separate literals to the lexer rather than one long literal with white space in it. Ground truth, Dart SDK 3.13.2 `scanString` of `package:_fe_analyzer_shared`: three `STRING` tokens at [8,11), [12,15) and [16,19), and `SINGLE_LINE_COMMENT` at [21,30). `dart analyze` reports no issues.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 21,
+            "end": 30,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "var a = 'x' 'y' \"z\"; \n"
+      }
+    },
+    {
+      "id": "dart-symbol-literal-not-comment",
+      "language": "dart",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "var a = #foo;\nvar b = #+;\n// remove\n",
+      "note": "`#` opens a symbol literal in Dart and is never a comment: `tokenizeTag` reads a `#!` line only at `scanOffset == 0` and appends a plain `HASH` token anywhere else. Ground truth, Dart SDK 3.13.2 `scanString` of `package:_fe_analyzer_shared`: `HASH` at [8,9) with `IDENTIFIER \"foo\"` behind it, `HASH` at [22,23) with `PLUS` behind it, and the only `SINGLE_LINE_COMMENT` at [26,35). `dart analyze` reports no issues.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 35,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "var a = #foo;\nvar b = #+;\n\n"
+      }
+    },
+    {
+      "id": "dart-language-version-directive",
+      "language": "dart",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "// @dart = 2.12\n// remove\nvar a = 1;\n",
+      "note": "The language version comment decides which version of the language the file is written in, so removing it would change what the code below it means. The Dart scanner reads it itself rather than a tool (`tokenizeLanguageVersionOrSingleLineComment`), and it is a token of its own. Ground truth, Dart SDK 3.13.2 `scanString` of `package:_fe_analyzer_shared`: `LanguageVersionTokenImpl` at [0,15), against `CommentTokenImpl` at [16,25) for the ordinary comment under it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 15,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 16,
+            "end": 25,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "// @dart = 2.12\n\nvar a = 1;\n"
+      }
+    },
+    {
+      "id": "dart-ignore-directive",
+      "language": "dart",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "// ignore_for_file: unused_import\nvar a = 1; // ignore: unused_local_variable\n// remove\n",
+      "note": "The analyzer silences a diagnostic on the next line with `// ignore:` and for a whole file with `// ignore_for_file:` (`ignore_comments/ignore_info.dart`, which skips the slashes and the spaces and then compares the name), so both are instructions to a tool and are kept. Ground truth, Dart SDK 3.13.2 `scanString` of `package:_fe_analyzer_shared`: three `SINGLE_LINE_COMMENT` tokens, at [0,33), [45,77) and [78,87).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 33,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 45,
+            "end": 77,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 78,
+            "end": 87,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "// ignore_for_file: unused_import\nvar a = 1; // ignore: unused_local_variable\n\n"
+      }
+    },
+    {
+      "id": "dart-format-off-directive",
+      "language": "dart",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "// dart format off\nvar a =    [1, 2];\n// dart format on\n// remove\n",
+      "note": "`dart_style` turns formatting off between these two comments, and it matches them by equality on the whole comment rather than by prefix: `front_end/piece_writer.dart` switches on `comment.text` against `// dart format off` and `// dart format on`. Ground truth, measured on `dart format` from Dart SDK 3.13.2: the region between the two markers came back byte for byte with `0 changed`, while the same file with `//   dart format off` or `/// dart format off` in its place was reformatted. Dart SDK 3.13.2 `scanString` of `package:_fe_analyzer_shared` reports four `SINGLE_LINE_COMMENT` tokens, at [0,18), [38,55) and [56,65) plus none in between.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 18,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 38,
+            "end": 55,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 56,
+            "end": 65,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "// dart format off\nvar a =    [1, 2];\n// dart format on\n\n"
+      }
+    },
+    {
+      "id": "dart-coverage-directive",
+      "language": "dart",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "// coverage:ignore-start\nvar a = 1;\n// coverage:ignore-end\n// remove\n",
+      "note": "`package:coverage` excludes the lines between `// coverage:ignore-start` and `// coverage:ignore-end`, and `coverage:` is protected for every language already rather than by a rule of Dart's own. Ground truth, Dart SDK 3.13.2 `scanString` of `package:_fe_analyzer_shared`: three `SINGLE_LINE_COMMENT` tokens, at [0,24), [36,58) and [59,68).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 24,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 36,
+            "end": 58,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 59,
+            "end": 68,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "// coverage:ignore-start\nvar a = 1;\n// coverage:ignore-end\n\n"
+      }
+    },
+    {
+      "id": "dart-unterminated-nested-comment",
+      "language": "dart",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "var a = 1;\n/* outer /* inner */\n",
+      "note": "A nested `/*` has to be closed as many times as it was opened, so a single `*/` behind two openers leaves the comment running to the end of the file. Ground truth, Dart SDK 3.13.2 `scanString` of `package:_fe_analyzer_shared`: `UnterminatedToken UnterminatedComment` at offset 11, which is the outer `/*`, and no comment token at all in the stream.",
+      "expect": {
+        "valid": false,
+        "comments": [
+          {
+            "start": 11,
+            "end": 32,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [
+          {
+            "code": "unterminated-comment",
+            "start": 11,
+            "end": 32
+          }
+        ],
+        "output_utf8": "var a = 1;\n/* outer /* inner */\n"
+      }
+    },
+    {
+      "id": "dart-unterminated-string",
+      "language": "dart",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "var a = 'open\nvar b = 2; // remove\n",
+      "note": "Dart Language Specification, 17.6: a single-line string may not carry a line break, so one left open ends at the break rather than swallowing the lines below it. Ground truth, Dart SDK 3.13.2 `scanString` of `package:_fe_analyzer_shared`: `UnterminatedString` at offset 8, the recovered `STRING` token ending at the newline at offset 13, and the scanner resuming at `VAR` on the next line -- which is why `// remove` at [25,34) is still reported as a comment here.",
+      "expect": {
+        "valid": false,
+        "comments": [
+          {
+            "start": 25,
+            "end": 34,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 8,
+            "end": 13
+          }
+        ],
+        "output_utf8": "var a = 'open\nvar b = 2; // remove\n"
+      }
+    },
+    {
+      "id": "dart-script-tag",
+      "language": "dart",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "#!/usr/bin/env dart\nvoid main() {} // remove\n",
+      "note": "`tokenizeTag` reads a `#!` line as the script tag only when `scanOffset == 0`, so it is a preamble at the first byte of the file and nothing anywhere else. Ground truth, Dart SDK 3.13.2 `scanString` of `package:_fe_analyzer_shared`: `SCRIPT_TAG` at [0,19) here, against `HASH` and `BANG` tokens for the same bytes when a comment line stands above them. `dart analyze` reports no issues.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 19,
+            "kind": "shebang",
+            "action": "keep"
+          },
+          {
+            "start": 35,
+            "end": 44,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "#!/usr/bin/env dart\nvoid main() {} \n"
+      }
+    },
+    {
+      "id": "dart-crlf",
+      "language": "dart",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "/* block\r\nstill */\r\nvar a = '''x\r\ny''';\r\n// remove\r\n",
+      "note": "Every Dart construct that crosses a line crosses a CRLF pair as it crosses a bare newline, and a line comment ends before the `\\r` rather than at it. Ground truth, Dart SDK 3.13.2 `scanString` of `package:_fe_analyzer_shared`: `MULTI_LINE_COMMENT` at [0,18), `STRING \"'''x\\r\\ny'''\"` at [28,38), and `SINGLE_LINE_COMMENT` at [41,50), with `hasErrors=false`.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 18,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 41,
+            "end": 50,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\r\n\r\nvar a = '''x\r\ny''';\r\n\r\n"
+      }
+    },
+    {
+      "id": "dart-columns",
+      "language": "dart",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "columns"
+      },
+      "source_utf8": "// alone\nvar x = 1; // trailing\n",
+      "note": "The columns layout replaces a comment with spaces instead of closing the gap, so every byte after it keeps the column it had. Ground truth, Dart SDK 3.13.2 `scanString` of `package:_fe_analyzer_shared`: `SINGLE_LINE_COMMENT` at [0,8) and [20,31).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 8,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 20,
+            "end": 31,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "        \nvar x = 1;            \n"
+      }
+    },
+    {
+      "id": "dart-compact",
+      "language": "dart",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "compact"
+      },
+      "source_utf8": "// alone\nvar x = 1; // trailing\n",
+      "note": "The compact layout takes the line a comment stood alone on with it and trims the white space a trailing one left behind. Ground truth, Dart SDK 3.13.2 `scanString` of `package:_fe_analyzer_shared`: `SINGLE_LINE_COMMENT` at [0,8) and [20,31).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 8,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 20,
+            "end": 31,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "var x = 1;\n"
+      }
+    },
+    {
+      "id": "rust-char-literal-across-newline",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "let c = 'ä\n'; // remove\n",
+      "note": "Rust Reference, Tokens: the lookahead that tells a character literal from a lifetime reads up to six bytes past the apostrophe, and it stops at a line terminator. The scanner offers a restart point at the line start behind every terminator, and a restart point promises that nothing decided before it depends on bytes after it, so a window that read across one would let an edit on line 2 rewrite a token on line 1 while an incremental rescan reused it unchanged. What the stop costs is the reading and no report at all, because within line 1 nothing separates an unterminated character literal from a Unicode lifetime: a Rust identifier is `XID_Start XID_Continue*` (Rust Reference, Identifiers) and has been since 1.53, so `'ä` opens a lifetime in `fn f<'ä>() {}` and a loop label in `'ä: loop { break 'ä }` exactly as `'a` does, and each of those is a valid file whose trailing comment must still be found. Ground truth, `rustc` 1.97: this file is rejected with `error[E0762]: unterminated character literal`, pointed at the apostrophe on line 2 rather than this one -- but E0762 is a parser judgement, reached after the lexer has read `'ä` as a lifetime and the parser has found that no lifetime may stand there. This scanner is a lexer with a line-bounded window and has no such judgement to make, so it reports nothing and holds the file valid: over-keeping on a file another tool will reject costs a rejected file one comment, and calling `fn f<'ä>() {}` invalid would cost a valid one its transformation. The reading of line 2 is unchanged either way -- its apostrophe opens nothing, and the comment behind it is found and removed.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 15,
+            "end": 24,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "let c = 'ä\n'; \n"
+      }
+    },
+    {
+      "id": "ocaml-char-literal-across-newline",
+      "language": "ocaml",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "let a = '\n' (* remove *)\nlet b = '\\\n' (* remove *)\n",
+      "note": "The rule `rust-char-literal-across-newline` states, for OCaml's two windows: the two-byte one for a bare character on line 1 and the eight-byte one for an escape on line 3. Neither may run past a line terminator, because `scan_ocaml` offers a restart point at the line start behind it. `ocamlc` 5.5.0 rejects `'\\` before a line break as an `Illegal backslash escape in string or character`, so line 3 gives up nothing valid; line 1 is the one shape OCaml does accept -- an apostrophe, a literal newline, an apostrophe -- and this scanner never read it as a literal anyway, because it ends a character literal at the line. Both block comments are found and removed either way; what changed is that neither line is called unterminated.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 12,
+            "end": 24,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 38,
+            "end": 50,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "let a = '\n' \nlet b = '\\\n' \n"
+      }
+    },
+    {
+      "id": "ruby-alias-percent-s",
+      "language": "ruby",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "alias%s(baz # x) %s(bar)\nputs 1 # remove\n",
+      "note": "Ruby's `parse_percent` tests `IS_lex_state(EXPR_FNAME | EXPR_FITEM)` before it reaches the spacing rule, so `%s` opens a symbol literal after `alias` and `undef` whether or not white space stands before the `%`. Ground truth, Ruby 3.3.12 `Ripper.lex`: this source gives `on_symbeg \"%s(\"` in state `FNAME|FITEM` for both names, with `baz # x` an `on_tstring_content` and `bar` another -- `alias` holds `FNAME|FITEM` across the whole statement, which is why the second name is a symbol too. The `#` inside the first symbol is content, and the only comment in the file is the one on line 2. Only `s` is the exception: `alias%w[...]`, `alias%q(...)`, `alias/.../` and `def%s(...)` are all `on_op` to Ripper and modulo or division here.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 32,
+            "end": 40,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "alias%s(baz # x) %s(bar)\nputs 1 \n"
+      }
+    },
+    {
+      "id": "bom-shebang-dart",
+      "language": "dart",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_base64": "77u/IyEvdXNyL2Jpbi9lbnYgZGFydAp2b2lkIG1haW4oKSB7fSAvLyByZW1vdmUK",
+      "note": "Dart's `tokenizeTag` reads a `#!` line only while `scanOffset == 0`, and the byte order mark is scanned rather than skipped, so a mark in front of the line leaves no `SCRIPT_TAG` -- unlike CPython's `check_bom` and Lua's `skipBOM`, which consume one before the first line is read (`bom-shebang-python`, `bom-shebang-lua`). Ground truth, Dart SDK 3.13.2: this file is rejected with `Expected a declaration, but got '#'`, while the same two lines without the mark compile and run. `#` elsewhere is the symbol-literal operator, so the line is ordinary code here and the only comment is the `//` on line 2.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 38,
+            "end": 47,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_base64": "77u/IyEvdXNyL2Jpbi9lbnYgZGFydAp2b2lkIG1haW4oKSB7fSAK"
+      }
+    },
+    {
+      "id": "bom-shebang-javascript",
+      "language": "javascript",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_base64": "77u/IyEvdXNyL2Jpbi9lbnYgbm9kZQpsZXQgeCA9IDE7IC8vIHJlbW92ZQo=",
+      "note": "ECMA-262, Hashbang Comments: a `#!` comment is only the very first thing in a Script or a Module, and U+FEFF `<ZWNBSP>` is `WhiteSpace` (12.2) that arrives before it. A mark in front of the line therefore leaves no hashbang. Ground truth, Node 26: this file is rejected with `SyntaxError: Invalid or unexpected token` at the `#`, while the same two lines without the mark run and a bare mark on its own is accepted. The line is ordinary code here -- `#`, `!`, then a regular expression and a division -- and the only comment is the `//` on line 2.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 34,
+            "end": 43,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_base64": "77u/IyEvdXNyL2Jpbi9lbnYgbm9kZQpsZXQgeCA9IDE7IAo="
       }
     }
   ]

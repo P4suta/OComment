@@ -8,7 +8,10 @@
 use ocomment_core::{
     CommentKind, Dialect, Disposition, Language, Layout, Policy, ScanOptions, Severity, scan,
 };
-use std::{collections::BTreeSet, str::FromStr};
+use std::{
+    collections::{BTreeSet, HashSet},
+    str::FromStr,
+};
 
 fn serde_name<T: serde::Serialize>(value: &T) -> String {
     serde_json::to_value(value)
@@ -69,7 +72,7 @@ macro_rules! check_stable_names {
 #[test]
 fn language_names_are_stable() {
     let seen = check_stable_names!(Language);
-    assert_eq!(Language::ALL.len(), 20);
+    assert_eq!(Language::ALL.len(), 23);
     assert!(
         !seen.contains("unknown"),
         "Unknown must stay out of the parseable set"
@@ -110,6 +113,12 @@ fn severity_names_are_stable() {
     assert_eq!(Severity::ALL.len(), 4);
 }
 
+/// Every spelling [`Language::from_str`] accepts, written out rather than
+/// generated, so that a rename shows up here as a changed line.
+///
+/// The table is also checked *against* [`Language::aliases`] below: a language
+/// added without a row, or an alias added to that function and nowhere else,
+/// fails here instead of shipping unpinned.
 #[test]
 fn language_aliases_are_pinned() {
     let cases = [
@@ -151,10 +160,35 @@ fn language_aliases_are_pinned() {
         ("yaml", Language::Yaml),
         ("yml", Language::Yaml),
         ("php", Language::Php),
+        ("ruby", Language::Ruby),
+        ("rb", Language::Ruby),
+        ("zig", Language::Zig),
+        ("r", Language::R),
+        ("rscript", Language::R),
+        ("dart", Language::Dart),
     ];
     for (text, expected) in cases {
         assert_eq!(Language::from_str(text), Ok(expected), "`{text}`");
     }
+    // NOTE: The other direction. `cases` is what pins the spellings, so every
+    // NOTE: canonical name and every alias the crate publishes has to be one of
+    // NOTE: its rows -- otherwise a new language, or a new alias for an old
+    // NOTE: one, would be accepted by `from_str` with nothing holding it there.
+    let pinned: HashSet<(&str, Language)> = cases.into_iter().collect();
+    let mut missing = Vec::new();
+    for language in Language::ALL {
+        for spelling in std::iter::once(language.as_str()).chain(language.aliases().iter().copied())
+        {
+            if !pinned.contains(&(spelling, language)) {
+                missing.push(format!("(\"{spelling}\", Language::{language:?})"));
+            }
+        }
+    }
+    assert!(
+        missing.is_empty(),
+        "these spellings are accepted by `Language::from_str` but pinned by no row \
+         of this table: {missing:?}"
+    );
 }
 
 #[test]

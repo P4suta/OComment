@@ -122,6 +122,9 @@ value_enum_wrapper!(LanguageArg, Language, |value| match value {
     Language::Yaml => "YAML documents, including the tool configurations written in it",
     Language::Php => "PHP scripts and templates; the inline HTML around the tags is content",
     Language::Ruby => "Ruby scripts, gem manifests, and the project files named after their tool",
+    Language::Zig => "Zig source files and Zig Object Notation data",
+    Language::R => "R scripts and the `.Rprofile` an R session sources at start-up",
+    Language::Dart => "Dart source files, whose block comments nest",
     Language::Unknown => "An undetected language",
 });
 

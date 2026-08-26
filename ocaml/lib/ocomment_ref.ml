@@ -1,7 +1,7 @@
 type language =
   | Rust | Ocaml | C | Cpp | Go | Java | JavaScript | TypeScript | Python
   | Shell | Html | Css | Jsonc | Sql | Kotlin | Toml | Lua | Yaml | Php | Ruby
-  | Unknown
+  | Zig | R | Dart | Unknown
 
 type dialect =
   | Standard | Jsx | Tsx | ObjectiveC | ObjectiveCpp | GnuC | GnuCpp | Cuda
@@ -88,6 +88,7 @@ let language_of_string value =
   | "css" -> Ok Css | "jsonc" | "json5" -> Ok Jsonc | "sql" -> Ok Sql
   | "kotlin" | "kt" | "kts" -> Ok Kotlin | "toml" -> Ok Toml | "lua" -> Ok Lua
   | "yaml" | "yml" -> Ok Yaml | "php" -> Ok Php | "ruby" | "rb" -> Ok Ruby
+  | "zig" -> Ok Zig | "r" | "rscript" -> Ok R | "dart" -> Ok Dart
   | other -> Error ("unsupported language `" ^ other ^ "`")
 
 let string_of_language = function
@@ -96,7 +97,7 @@ let string_of_language = function
   | Python -> "python" | Shell -> "shell" | Html -> "html" | Css -> "css"
   | Jsonc -> "jsonc" | Sql -> "sql" | Kotlin -> "kotlin" | Toml -> "toml"
   | Lua -> "lua" | Yaml -> "yaml" | Php -> "php" | Ruby -> "ruby"
-  | Unknown -> "unknown"
+  | Zig -> "zig" | R -> "r" | Dart -> "dart" | Unknown -> "unknown"
 
 let string_of_comment_kind = function
   | Line -> "line" | Block -> "block" | DocLine -> "doc-line" | DocBlock -> "doc-block"
@@ -306,6 +307,61 @@ let trim_dashes text =
   let start = loop 0 in
   String.sub text start (length - start)
 
+(* NOTE: ASCII whitespace as u8::is_ascii_whitespace defines it, taken off the
+   end alone: dart_style compares a comment's text, which is trimmed there and
+   not at the front. *)
+let trim_ascii_end text =
+  let rec loop finish =
+    if finish > 0 && ascii_whitespace text.[finish - 1] then loop (finish - 1) else finish in
+  String.sub text 0 (loop (String.length text))
+
+(* NOTE: Dart's language version comment, which the scanner itself reads rather
+   than a tool: "tokenizeLanguageVersionOrSingleLineComment" accepts exactly two
+   slashes -- a third sends it to tokenizeSingleLineComment instead -- then
+   spaces, "@dart" in lower case, spaces, "=", spaces, a run of digits, ".", a
+   second run of digits, spaces, and the end of the line.  Only the space is
+   skipped and not the tab: the scanner compares against $SPACE.
+
+   The comment is honoured only ahead of the first real token of a file, and
+   this is asked of every comment in one.  Reading a later one as an instruction
+   keeps a comment a removal would otherwise take, which is the direction to be
+   wrong in. *)
+let dart_language_version raw =
+  let length = String.length raw in
+  let spaces index =
+    let rec loop cursor =
+      if cursor < length && raw.[cursor] = ' ' then loop (cursor + 1) else cursor in
+    loop index in
+  let digits index =
+    let rec loop cursor =
+      if cursor < length && raw.[cursor] >= '0' && raw.[cursor] <= '9' then loop (cursor + 1)
+      else cursor in
+    let finish = loop index in
+    if finish = index then None else Some finish in
+  let literal index token =
+    let token_length = String.length token in
+    if index + token_length <= length && String.sub raw index token_length = token
+    then Some (index + token_length) else None in
+  match literal 0 "//" with
+  | None -> false
+  | Some index ->
+    if index < length && raw.[index] = '/' then false
+    else match literal (spaces index) "@dart" with
+      | None -> false
+      | Some index ->
+        match literal (spaces index) "=" with
+        | None -> false
+        | Some index ->
+          match digits (spaces index) with
+          | None -> false
+          | Some index ->
+            match literal index "." with
+            | None -> false
+            | Some index ->
+              match digits index with
+              | None -> false
+              | Some index -> spaces index = length
+
 let is_directive language text raw =
   let compact = text |> String.to_seq |>
     Seq.drop_while (fun character -> String.contains "!/*#@ " character) |> String.of_seq in
@@ -373,6 +429,49 @@ let is_directive language text raw =
   | Ruby -> List.exists (fun prefix -> String.starts_with ~prefix compact)
       ["frozen_string_literal:"; "warn_indent:"; "shareable_constant_value:";
        "rubocop:"; "standard:"; "typed:"]
+  (* NOTE: The two comments an R tool reads rather than a reader.  styler turns
+     its formatter off between "# styler: off" and "# styler: on", and the colon
+     carries the marker's own boundary; covr excludes the lines between
+     "# nocov start" and "# nocov end", and "nocov" is the whole word it looks
+     for -- "start", "end" and nothing at all all follow it -- so that one ends
+     at a boundary instead.  lintr's "# nolint" is protected for every language
+     already and is deliberately absent here. *)
+  | R -> opens_with_keyword compact "nocov" ||
+      String.starts_with ~prefix:"styler:" compact
+  (* NOTE: "zig fmt" reads its one instruction by equality rather than by prefix:
+     Render.zig takes two bytes off the trimmed comment, trims the white space
+     that follows, and compares the remainder with "zig fmt: off" and
+     "zig fmt: on".  So "// zig fmt: off please" turns nothing off, and neither
+     does "/// zig fmt: off" or "//// zig fmt: off" -- the first leaves one "/"
+     in front of the phrase and the second two.  "raw" is what tells those
+     apart, because trim_markers takes a "///" off whole; the comparison itself
+     is against the trimmed text, which is folded to lower case here where
+     "zig fmt" is case-sensitive, and folding can only keep a comment a removal
+     would otherwise take. *)
+  | Zig ->
+    String.starts_with ~prefix:"//" raw &&
+    not (String.length raw > 2 && (raw.[2] = '/' || raw.[2] = '!')) &&
+    (text = "zig fmt: off" || text = "zig fmt: on")
+  (* NOTE: Four instructions, and only one of them is addressed to a tool.
+     "// @dart = 2.12" is read by the Dart scanner itself and decides which
+     version of the language the file is written in, so a removal that took it
+     would change what the remaining code means.  "dart format" is matched by
+     equality on the whole comment rather than by prefix, because that is how
+     dart_style matches it: piece_writer.dart switches on comment.text against
+     "// dart format off" and "// dart format on", so "//   dart format off"
+     with a second space and "/// dart format off" with a third slash turn
+     nothing off -- measured on dart format from SDK 3.13.2, which reformatted
+     both.  comment.text is trimmed at the end and not at the front, and this is
+     asked of "raw" for the reason Zig's is: trim_markers takes a "///" off
+     whole and would leave the two spellings indistinguishable.  The analyzer's
+     two ignore comments each carry their own boundary in the colon
+     (ignore_comments/ignore_info.dart). *)
+  | Dart ->
+    dart_language_version raw ||
+    (let phrase = trim_ascii_end raw in
+     phrase = "// dart format off" || phrase = "// dart format on") ||
+    List.exists (fun prefix -> String.starts_with ~prefix compact)
+      ["ignore:"; "ignore_for_file:"]
   | _ -> false
 
 let within_first_two_lines source finish =
@@ -664,21 +763,39 @@ let rust_raw_start_at_quote source quote =
     else Some (!start, hashes)
   end
 
+(* INVARIANT: The two bytes that end a line everywhere a checkpoint may be
+   offered.  A bounded lookahead that decides a token asks this before it reads
+   one byte further: a checkpoint sits at the line start behind a terminator,
+   and it promises that nothing decided before it depends on bytes after it. *)
+let is_line_terminator character = character = '\r' || character = '\n'
+
 (* NOTE: Rust Reference, Lifetimes and loop labels: an apostrophe followed by an
    identifier that no second apostrophe closes is a lifetime, so it opens no
    literal at all and a `//` behind it on the same line is a comment.  What
    tells the two apart is the shape after the quote: an escape closed four bytes
    on, a single byte closed two bytes on, or a non-ASCII character with a quote
-   near enough behind it to be the closing one. *)
+   near enough behind it to be the closing one.
+   INVARIANT: none of those windows may run past a line terminator.  A Rust
+   character literal ends at the line (Rust Reference, Tokens) and `\` before a
+   line terminator is a string continuation rather than a character escape, so
+   every shape a crossing window would have caught is invalid Rust -- and
+   `rustc` 1.97 reads `'<non-ASCII>` with the closing quote on the next line as
+   a lifetime, reporting E0762 against that next line instead. *)
 let rust_char_start source index =
   let length = Bytes.length source in
   index + 1 < length &&
   let next = Bytes.get source (index + 1) in
-  if next = '\\' then index + 3 < length && Bytes.get source (index + 3) = '\''
+  (not (is_line_terminator next)) &&
+  if next = '\\' then
+    index + 3 < length
+    && (not (is_line_terminator (Bytes.get source (index + 2))))
+    && Bytes.get source (index + 3) = '\''
   else if index + 2 < length && Bytes.get source (index + 2) = '\'' then true
   else Char.code next land 0x80 <> 0 &&
     (let limit = min length (index + 6) in
-     let rec loop cursor = cursor < limit && (Bytes.get source cursor = '\'' || loop (cursor + 1)) in
+     let rec loop cursor =
+       cursor < limit && (not (is_line_terminator (Bytes.get source cursor)))
+       && (Bytes.get source cursor = '\'' || loop (cursor + 1)) in
      loop (index + 1))
 
 (* NOTE: One quoted literal, with the diagnostic the language spells for it when
@@ -787,6 +904,17 @@ let scan_slash_unmapped source language options accumulator =
         | None -> loop (quoted_or_error source accumulator index true "string"))
       | Rust when character = '\'' && rust_char_start source index ->
         loop (quoted_or_error source accumulator index false "character literal")
+      (* NOTE: What is left is an apostrophe the window read as no literal, and
+         nothing on its line says whether it opens one.  A Rust identifier is
+         `XID_Start XID_Continue*` (Rust Reference, Identifiers) and has been
+         since 1.53, so `'ä` is as good a lifetime or loop label as `'a` --
+         `fn f<'ä>() {}` and `'ä: loop {}` both compile -- and an unterminated
+         non-ASCII character literal is spelled the same way within one line.
+         `rustc` tells the two apart in the parser, which is where E0762 is
+         raised; this scanner is a lexer with a line-bounded window and cannot.
+         So it reports neither: over-keeping a comment is the safe direction,
+         calling a valid file invalid is not. *)
+      | Rust when character = '\'' -> loop (index + 1)
       (* NOTE: A raw string prefix is only a prefix where no identifier runs
          into it and the delimiter is made of d-chars, so both questions are
          asked before the quote is read as one; otherwise it opens an ordinary
@@ -1182,14 +1310,25 @@ let ocaml_quoted_end source index =
    is.  Anything else leaves the apostrophe an ordinary byte -- of a type
    variable outside a comment, and of the comment's own text inside one, where
    the string that follows it still has to terminate. *)
+(* INVARIANT: The rule `rust_char_start` states, for OCaml's two windows.  `'\`
+   before a line terminator is an illegal backslash escape (`ocamlc` 5.5.0
+   rejects it), so the escaped window gives up nothing valid by stopping there.
+   The bare window costs the one shape OCaml does accept -- an apostrophe, a
+   literal newline, an apostrophe -- which this scanner never read as a literal
+   anyway: it ends a character literal at the line, so that shape used to be
+   reported as an unterminated literal and is now simply not one. *)
 let ocaml_char_start source index =
   let length = Bytes.length source in
-  (index + 2 < length && Bytes.get source (index + 2) = '\'') ||
-  (index + 1 < length && Bytes.get source (index + 1) = '\\' &&
-    let rec has_quote cursor remaining =
-      remaining > 0 && cursor < length &&
-      (Bytes.get source cursor = '\'' || has_quote (cursor + 1) (remaining - 1)) in
-    has_quote (index + 2) 6)
+  index + 1 < length &&
+  let next = Bytes.get source (index + 1) in
+  (not (is_line_terminator next)) &&
+  ((index + 2 < length && Bytes.get source (index + 2) = '\'') ||
+   (next = '\\' &&
+     let rec has_quote cursor remaining =
+       remaining > 0 && cursor < length
+       && (not (is_line_terminator (Bytes.get source cursor)))
+       && (Bytes.get source cursor = '\'' || has_quote (cursor + 1) (remaining - 1)) in
+     has_quote (index + 2) 6))
 
 let scan_ocaml source language options accumulator =
   let rec comment_end index depth =
@@ -1513,6 +1652,390 @@ let scan_lua source language options accumulator =
     add_comment accumulator source language options Line preamble finish;
     loop finish
   end else loop 0
+
+(* NOTE: "///" documents the declaration under it and "//!" the container the
+   file is (Zig Language Reference, Doc comments), which std.zig.Tokenizer tags
+   doc_comment and container_doc_comment.  A fourth slash takes the first back:
+   .doc_comment_start falls to .line_comment when it meets one, so "////" is an
+   ordinary comment and only exactly three slashes document anything.  "//!!"
+   stays a top-level doc comment, because the tokenizer decides that one at the
+   "!" and reads no further. *)
+let zig_line_kind source index =
+  if starts source index "////" then Line
+  else if starts source index "///" || starts source index "//!" then DocLine
+  else Line
+
+(* NOTE: A Zig string and a Zig character literal are one rule: .string_literal
+   and .char_literal of std.zig.Tokenizer differ only in the quote that closes
+   them.  A backslash carries the next byte into the literal, and a real line
+   terminator ends neither -- the tokenizer marks the token invalid at it -- so
+   a quote that never closes is reported at the line break rather than
+   swallowing the lines below it.  A backslash in front of that terminator does
+   not carry it either, for the same reason. *)
+let scan_zig_quoted source accumulator start =
+  let length = Bytes.length source in
+  let quote = Bytes.get source start in
+  let message =
+    if quote = '"' then "unterminated Zig string"
+    else "unterminated Zig character literal" in
+  let carries index =
+    Bytes.get source index = '\\' && index + 1 < length &&
+    Bytes.get source (index + 1) <> '\r' && Bytes.get source (index + 1) <> '\n' in
+  let rec loop index =
+    if index >= length then begin
+      add_error accumulator "unterminated-string" message start index;
+      index
+    end else if carries index then loop (index + 2)
+    else if Bytes.get source index = quote then index + 1
+    else if Bytes.get source index = '\r' || Bytes.get source index = '\n' then begin
+      add_error accumulator "unterminated-string" message start index;
+      index
+    end else loop (index + 1)
+  in loop (start + 1)
+
+(* NOTE: Zig has no block comment at all -- "/*" is the division operator and
+   then multiplication, which std.zig.Tokenizer reports as slash and asterisk --
+   so this is its own small lexer rather than scan_slash with one delimiter
+   taken away.  Everything it has to know ends at a line break: a comment runs
+   to the end of its line, a quoted literal may not cross one, and a multiline
+   string literal is one line of content at a time.
+
+   "\\\\" is the whole opener of such a line, and the tokenizer takes it wherever
+   a token may begin rather than only as the first thing on a line, so that the
+   backslashes of "const b = \\\\text" open one just as an indented pair does.
+   Everything to the end of the line is content, and the next line starts in
+   code again, so consecutive lines are separate tokens the parser joins.  A
+   single backslash is an invalid token to Zig and an ordinary byte here:
+   nothing it could open is a state a comment can hide in.  "@\"quoted\"" needs
+   no rule of its own either -- the "@" is an ordinary byte and what follows it
+   is lexed as the string literal it is spelled as. *)
+let scan_zig source language options accumulator =
+  let length = Bytes.length source in
+  let rec loop index =
+    if index >= length then ()
+    else if starts source index "//" then begin
+      let finish = line_end source (index + 2) in
+      add_comment accumulator source language options (zig_line_kind source index) index finish;
+      loop finish
+    end
+    else if starts source index "\\\\" then loop (line_end source (index + 2))
+    else match Bytes.get source index with
+      | '"' | '\'' -> loop (scan_zig_quoted source accumulator index)
+      | _ -> loop (index + 1)
+  in loop 0
+
+(* NOTE: R's parser has one comment token and calls every "#" line a COMMENT
+   (measured on R 4.3.3: utils::getParseData gives "#' doc" and "# line" the same
+   token name).  "#'" is roxygen2's marker for the prose it turns into a manual
+   page, so it is documentation here for the reason Lua's "---" and Zig's "///"
+   are: the tool that reads it is what makes it one.  Nothing takes the marker
+   back the way a fourth slash does in Zig, so the test is the two bytes and no
+   more. *)
+let r_line_kind source index = if starts source index "#'" then DocLine else Line
+
+(* NOTE: Whether a byte may continue an R name, and so cannot be followed by the
+   "r" that opens a raw string.  SymbolValue (gram.y) reads a name while the
+   bytes are alphanumeric, "." or "_", and it is entered on a multi-byte
+   character as well, so every byte with the high bit set counts here.  Counting
+   one that does not only refuses the raw reading, which falls back to an
+   ordinary string and hides more rather than less. *)
+let is_r_name_byte character =
+  (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') ||
+  (character >= '0' && character <= '9') || character = '.' || character = '_' ||
+  Char.code character >= 0x80
+
+(* NOTE: The end of the R raw string whose quote is at the given index, and
+   whether it closed -- or None when no raw string opens there at all.  The
+   literal is "r" or "R", the quote, a run of dashes, and one of "(", "[" or
+   "{"; it closes on the matching bracket, the same run of dashes, and the same
+   quote (?Quotes; R 4.0.0 and later).  R puts no limit on the dash run -- 100
+   dashes were measured accepted on R 4.3.3 -- so it is copied out of the source
+   rather than counted twice.  The "r" opens the literal only where it begins a
+   token: "xr\"(a)\"" is the name "xr" and then an ordinary string, which is
+   what R's lexer reads there too. *)
+let r_raw_string source quote =
+  let length = Bytes.length source in
+  if quote = 0 then None
+  else
+    let prefix = quote - 1 in
+    let opener = Bytes.get source prefix in
+    if opener <> 'r' && opener <> 'R' then None
+    else if prefix > 0 && is_r_name_byte (Bytes.get source (prefix - 1)) then None
+    else
+      let rec dashes index =
+        if index < length && Bytes.get source index = '-' then dashes (index + 1) else index in
+      let bracket = dashes (quote + 1) in
+      if bracket >= length then None
+      else
+        let closing = match Bytes.get source bracket with
+          | '(' -> Some ')' | '[' -> Some ']' | '{' -> Some '}' | _ -> None in
+        match closing with
+        | None -> None
+        | Some closing ->
+          let close =
+            String.make 1 closing ^
+            Bytes.sub_string source (quote + 1) (bracket - quote - 1) ^
+            String.make 1 (Bytes.get source quote) in
+          Some (match find_from source (bracket + 1) close with
+            | Some relative -> (relative + String.length close, true)
+            | None -> (length, false))
+
+(* NOTE: The end of the R literal that runs to the next unescaped delimiter, and
+   whether that delimiter was there at all.  One function for the two quoted
+   strings and the backquoted name, because R lexes all three the same way: a
+   backslash carries the next byte in -- a line break included, which is why a
+   literal that never closes runs to the end of the file rather than to the end
+   of its line -- and nothing but the delimiter ends them. *)
+let r_delimited_end source start close =
+  let length = Bytes.length source in
+  let rec loop index =
+    if index >= length then (length, false)
+    else match Bytes.get source index with
+      | '\\' -> loop (min (index + 2) length)
+      | character when character = close -> (index + 1, true)
+      | _ -> loop (index + 1)
+  in loop start
+
+(* NOTE: One R script (R Language Definition, 10 Parser; ?Quotes).  "#" opens a
+   comment that runs to the end of the line and that is the whole comment
+   grammar -- there is no block form and no nesting.  What makes this more than
+   a search for "#" is the four literals that carry one as content: a quoted
+   string, a raw string, a backquoted name, and the "%...%" operator.
+
+   Three of the four may cross a line break.  The fourth may not: SpecialValue in
+   gram.y pushes every byte up to the next "%" into the operator's name and
+   returns ERROR at a line break instead, so the name may hold a "#", a quote or
+   a backquote, takes no escapes, and an unterminated one is reported where it is
+   rather than swallowing the rest of the file.
+
+   Where the bytes look like a raw string and are not one -- "r\"<a>\"", whose
+   delimiter is not a bracket -- R refuses the file outright with "malformed raw
+   string literal".  Falling back to the ordinary reading is what happens here
+   instead: it is the same fallback the C++ raw string takes, and it hides the
+   "#" behind a quote rather than exposing it in a file no interpreter would
+   run.
+
+   Measured against the interpreter over the 42 R files the R 4.3.3 distribution
+   ships: every one of the 1,330 comments utils::getParseData reports as a
+   COMMENT token comes back with the same byte span, and no file is called
+   invalid. *)
+let scan_r source language options accumulator =
+  let length = Bytes.length source in
+  let rec loop index =
+    if index >= length then ()
+    else match Bytes.get source index with
+      | '#' ->
+        let finish = line_end source (index + 1) in
+        add_comment accumulator source language options (r_line_kind source index) index finish;
+        loop finish
+      | '"' | '\'' ->
+        let raw = r_raw_string source index in
+        (match raw with
+         | Some (finish, closed) ->
+           if not closed then
+             add_error accumulator "unterminated-string" "unterminated R raw string"
+               (index - 1) finish;
+           loop finish
+         | None ->
+           let finish, closed = r_delimited_end source (index + 1) (Bytes.get source index) in
+           if not closed then
+             add_error accumulator "unterminated-string" "unterminated R string" index finish;
+           loop finish)
+      | '`' ->
+        let finish, closed = r_delimited_end source (index + 1) '`' in
+        if not closed then
+          add_error accumulator "unterminated-identifier" "unterminated R backquoted name"
+            index finish;
+        loop finish
+      | '%' ->
+        let stop = line_end source (index + 1) in
+        let rec percent cursor =
+          if cursor >= stop then None
+          else if Bytes.get source cursor = '%' then Some cursor
+          else percent (cursor + 1) in
+        (match percent (index + 1) with
+         | Some closing -> loop (closing + 1)
+         | None ->
+           add_error accumulator "unterminated-operator" "unterminated R special operator"
+             index stop;
+           loop stop)
+      | _ -> loop (index + 1)
+  in loop 0
+
+(* NOTE: "tokenizeSingleLineComment" (_fe_analyzer_shared,
+   src/scanner/abstract_scanner.dart) reads the byte behind "//" and sets
+   dartdoc when it is a third slash, then reads no further, so a fourth slash
+   leaves "////" a DartDocToken just as "///" is one -- which is where Dart
+   parts company with Lua's "----" and Zig's "////".  "//!" is Rust's inner-doc
+   marker and means nothing here. *)
+let dart_line_kind source index = if starts source index "///" then DocLine else Line
+
+(* NOTE: "tokenizeMultiLineComment" sets dartdoc from the single byte behind
+   "/*", so "/**" opens the documentation comment dart doc reads and "/**/" is
+   an empty one.  "/*!" is Doxygen's marker, which C and C++ honour and Dart
+   does not. *)
+let dart_block_kind source index = if starts source index "/**" then DocBlock else Block
+
+let dart_unterminated_string raw triple =
+  match raw, triple with
+  | true, true -> "unterminated Dart raw multiline string"
+  | true, false -> "unterminated Dart raw string"
+  | false, true -> "unterminated Dart multiline string"
+  | false, false -> "unterminated Dart string"
+
+(* NOTE: A Dart identifier is spelled with ASCII letters, digits, "_" and "$"
+   and nothing wider (Dart Language Specification, 17.4). *)
+let dart_identifier_continue = function
+  | 'a'..'z' | 'A'..'Z' | '0'..'9' | '_' | '$' -> true
+  | _ -> false
+
+(* NOTE: "tokenizeRawStringKeywordOrIdentifier" is reached from the scanner's
+   main switch, so the "r" has to begin a token: an "r" that continues an
+   identifier is a letter of that identifier, and the quote behind it opens an
+   ordinary string.  Only a lower-case "r" does it -- "R'x'" is the identifier
+   "R" and then a string.
+
+   What decides it is the run of identifier bytes ending just before the "r".
+   An empty run means nothing precedes it.  A run that begins with a letter,
+   "_" or "$" is an identifier the "r" continues.  A run that begins with a
+   digit is a number, and a number token always ends before an "r" -- "r" is
+   not a digit, a hex digit, "x", "e", "." or "_" -- so the "r" begins a token
+   there too.  Measured on Dart 3.13.2: "1r'x'" and "0x1r'x'" are a number and
+   then a raw string, while "xr'x'", "_r'x'" and "$r'x'" are one identifier and
+   then an ordinary one. *)
+let dart_raw_string_prefix source quote =
+  quote > 0 && Bytes.get source (quote - 1) = 'r' &&
+  let rec loop cursor =
+    if cursor > 0 && dart_identifier_continue (Bytes.get source (cursor - 1)) then loop (cursor - 1)
+    else cursor in
+  let start = loop (quote - 1) in
+  start = quote - 1 || (match Bytes.get source start with '0'..'9' -> true | _ -> false)
+
+(* NOTE: One Dart string beginning at its opening quote (Dart Language
+   Specification, 17.6 Strings).  The six forms are one rule with two switches:
+   "triple" is three of the same quote, which makes a line break content instead
+   of the end of the literal, and "raw" is the "r" in front of it, which takes
+   away both the backslash escape and "${" interpolation.
+
+   A backslash in an ordinary string carries the next byte in -- that is what
+   hides a "\'" -- but it does not carry a line terminator: tokenizeSingleLineString
+   leaves .string_literal at the break either way, so "'x\<newline>y'" is an
+   unterminated string rather than a continuation.  The closing delimiter is the
+   first unescaped run of it and not the last: "''''x''''" is "'''" then "'x"
+   then "'''" with one quote left over, which is what the Dart scanner reports
+   for those bytes. *)
+let rec scan_dart_string source language options accumulator quote depth =
+  if depth > 256 then begin
+    add_error accumulator "nesting-limit"
+      "Dart string interpolation nesting limit exceeded" quote quote;
+    Bytes.length source
+  end else
+  let length = Bytes.length source in
+  let raw = dart_raw_string_prefix source quote in
+  let start = if raw then quote - 1 else quote in
+  let character = Bytes.get source quote in
+  let triple = quote + 2 < length &&
+    Bytes.get source (quote + 1) = character && Bytes.get source (quote + 2) = character in
+  let width = if triple then 3 else 1 in
+  let delimiter = String.make width character in
+  let carries index =
+    (not raw) && Bytes.get source index = '\\' && index + 1 < length &&
+    Bytes.get source (index + 1) <> '\r' && Bytes.get source (index + 1) <> '\n' in
+  let rec loop index =
+    if index >= length then begin
+      add_error accumulator "unterminated-string" (dart_unterminated_string raw triple)
+        start index;
+      index
+    end else if starts source index delimiter then index + width
+    else if carries index then loop (index + 2)
+    else if (not raw) && starts source index "${" then
+      loop (scan_dart_interpolation source language options accumulator (index + 2) (depth + 1))
+    else if (not triple) && (Bytes.get source index = '\r' || Bytes.get source index = '\n')
+    then begin
+      add_error accumulator "unterminated-string" (dart_unterminated_string raw triple)
+        start index;
+      index
+    end else loop (index + 1)
+  in loop (quote + width)
+
+(* NOTE: One "${ ... }" interpolation, beginning past its "${".  The braces of
+   the expression are counted rather than searched for, because the expression
+   is code: a nested string, a map literal, and a comment may all stand inside
+   one.  A comment written there is a comment -- the Dart scanner attaches it to
+   the token that follows, exactly as it does outside a string -- and a "//" one
+   runs to the end of its line while the string it sits inside carries on
+   below. *)
+and scan_dart_interpolation source language options accumulator index depth =
+  if depth > 256 then begin
+    add_error accumulator "nesting-limit"
+      "Dart string interpolation nesting limit exceeded" index index;
+    Bytes.length source
+  end else
+  let length = Bytes.length source in
+  let rec loop index braces =
+    if index >= length then begin
+      add_error accumulator "unterminated-template-expression"
+        "unterminated Dart string interpolation" index index;
+      index
+    end else if starts source index "//" then begin
+      let finish = line_end source (index + 2) in
+      add_comment accumulator source language options (dart_line_kind source index) index finish;
+      loop finish braces
+    end else if starts source index "/*" then begin
+      let finish, closed = block_end source index true in
+      add_comment accumulator source language options (dart_block_kind source index) index finish;
+      if not closed then add_error accumulator "unterminated-comment"
+        "unterminated Dart block comment" index finish;
+      loop finish braces
+    end else match Bytes.get source index with
+      | '"' | '\'' ->
+        loop (scan_dart_string source language options accumulator index (depth + 1)) braces
+      | '{' -> loop (index + 1) (braces + 1)
+      | '}' -> let remaining = braces - 1 in
+        if remaining = 0 then index + 1 else loop (index + 1) remaining
+      | _ -> loop (index + 1) braces
+  in loop index 1
+
+(* NOTE: One Dart compilation unit (Dart Language Specification, 17.1 Comments).
+   Dart is a C-family syntax with three departures that decide the shape of this
+   scanner rather than of scan_slash: its block comment nests, so "/* /* */ */"
+   is one comment; "//!" and "/*!" document nothing while "////" still does; and
+   "#!" at the very first byte is the script tag, which tokenizeTag reads only
+   when scanOffset = 0 -- a comment on the line above one is enough to take that
+   away.  "#" everywhere else is the operator that opens a symbol literal,
+   "#foo" or "#+", and needs no rule of its own.
+
+   Ground truth for every rule here is scanString of package:_fe_analyzer_shared
+   as the Dart SDK 3.13.2 ships it, read for token kinds and offsets, with
+   dart analyze for acceptance.  Measured against that scanner over the 3,143
+   .dart files of the SDK's own lib/ and of the packages fetched beside it: all
+   147,988 comments it reports come back with the same byte span, and no file is
+   called invalid. *)
+let scan_dart source language options accumulator =
+  let length = Bytes.length source in
+  let rec loop index =
+    if index >= length then ()
+    else if index = 0 && starts source index "#!" then begin
+      let finish = line_end source (index + 2) in
+      add_comment accumulator source language options Line index finish;
+      loop finish
+    end
+    else if starts source index "//" then begin
+      let finish = line_end source (index + 2) in
+      add_comment accumulator source language options (dart_line_kind source index) index finish;
+      loop finish
+    end
+    else if starts source index "/*" then begin
+      let finish, closed = block_end source index true in
+      add_comment accumulator source language options (dart_block_kind source index) index finish;
+      if not closed then add_error accumulator "unterminated-comment"
+        "unterminated Dart block comment" index finish;
+      loop finish
+    end
+    else match Bytes.get source index with
+      | '"' | '\'' -> loop (scan_dart_string source language options accumulator index 0)
+      | _ -> loop (index + 1)
+  in loop 0
 
 type heredoc = { operator : int; delimiter : bytes; strip_tabs : bool }
 
@@ -2530,7 +3053,10 @@ let scan_php source language options accumulator =
    the spacing around the byte says which.  Ruby's lexer tells a local variable
    from a method name by the symbol table it is building, which a scanner has
    not got, so every bare word lands in RubyArgument. *)
-type ruby_state = RubyBegin | RubyArgument | RubyEnd
+(* NOTE: RubyFname is EXPR_FNAME|EXPR_FITEM, where "alias" and "undef" leave
+   Ruby.  It answers every question RubyEnd answers, and one differently:
+   parse_percent opens a symbol literal on "%s" there, spacing or none. *)
+type ruby_state = RubyBegin | RubyArgument | RubyEnd | RubyFname
 
 type ruby_percent = {
   percent_form : char;
@@ -2595,43 +3121,79 @@ let ruby_number_end source index =
   in loop index
 
 (* NOTE: Ruby's keyword table folded onto ruby_state.  "def", "alias" and
-   "undef" are in the first list because the name that follows one may be
-   spelled "/" or "%" -- "def /(other)" defines division -- so nothing opens a
-   literal after them; "class" and "module" are there for the mirror-image
-   reason, that "class <<self" is a singleton class and never a here document.
-   "super", "yield", "not" and "defined?" are in neither, which leaves them
-   where Ruby has them: a command that may take an argument.
+   "undef" refuse a literal because the name that follows one may be spelled "/"
+   or "%" -- "def /(other)" defines division; "class" and "module" are in the
+   first list for the mirror-image reason, that "class <<self" is a singleton
+   class and never a here document.  "alias" and "undef" take RubyFname rather
+   than RubyEnd because they leave Ruby in EXPR_FNAME|EXPR_FITEM, which is one
+   answer wider.  "super", "yield", "not" and "defined?" are in none of the
+   three, which leaves them where Ruby has them: a command that may take an
+   argument.
 
    RubyEnd is a coarser answer than either reason asked for, and it is worth
-   naming what the coarseness costs, because it is the one place this scanner
-   reads fewer bytes into a literal than Ruby does.  RubyEnd answers all four of
-   the state machine's questions at once, so it also decides "/", "%" and "?".
-   After "def", "alias" and "undef" that is Ruby's own answer for "/" and "%",
-   which EXPR_FNAME reads as the method names they are.  After "class" and
-   "module" it is not: EXPR_CLASS expects a value, so Ruby opens a literal there
-   -- "class /x # c/" is one regular expression to Ruby 3.3.12 (Ripper.lex gives
-   on_regexp_beg) and a division with a comment behind it here.  And "?"
-   diverges after all five: "class ?# x" and "def ?# x" are on_CHAR "?#" to Ruby
-   and a comment opener here.  Every one of those spellings is a file Ruby
-   itself refuses -- "class" and "module" take a constant, a "::" or a "<<" in
-   any program that parses, and "def ?# x" is a syntax error -- so the
-   divergence is reachable only where the scan is already reading a broken
-   file.
+   naming what the coarseness costs.  What is measured is this table against
+   Ripper.lex, keyword by keyword: RubyEnd answers all four of the state
+   machine's questions at once, so it also decides "/", "%" and "?", and two
+   readings are where the answer it gives is not Ruby's.  After "def" it is
+   Ruby's own answer for "/" and for every percent literal, which EXPR_FNAME
+   reads as the method names they are, and "def" has no exception: "def%s(foo)"
+   is on_op "%" then on_ident "s" to Ruby 3.3.12.  After "class" and "module" it
+   is not Ruby's answer either: EXPR_CLASS expects a value, so Ruby opens a
+   literal there -- "class /x # c/" is one regular expression to Ruby 3.3.12
+   (Ripper.lex gives on_regexp_beg) and a division with a comment behind it
+   here.  And "?" diverges after all five: "class ?# x" and "def ?# x" are
+   on_CHAR "?#" to Ruby and a comment opener here.  Both of those are spellings
+   Ruby itself refuses -- "class" and "module" take a constant, a "::" or a "<<"
+   in any program that parses, and "def ?# x" is a syntax error -- so both are
+   reachable only where the scan is already reading a broken file, and buying
+   them back with a state of their own, one that keeps the literal readings and
+   refuses only the here document, would add a state to the machine for no
+   program that runs.
 
-   "<<" itself is not a fourth entry on that list, and what keeps it off is not
-   this function.  A header this state refuses is a shift, which reads no fewer
+   RubyFname is the state that does earn its keep, and "%s" after "alias" or
+   "undef" is what buys it: "alias%s(baz # x) %s(bar)" is a file Ruby runs, and
+   Ripper.lex under Ruby 3.3.12 gives on_symbeg "%s(" in state FNAME|FITEM for
+   both names with "baz # x" an on_tstring_content.  Reading that "#" as a
+   comment would remove bytes Ruby has inside a symbol, which is the one
+   direction this scanner may not take.  The rule is about the delimiter and not
+   only the state -- "alias" goes on refusing "/", "<<", "%w" and "%q" in the
+   same breath it accepts "%s" ("alias%w[a]" is on_op "%" to Ripper) -- so
+   ruby_percent_opens asks it rather than ruby_literal_opens alone.
+
+   "<<" itself is not an entry on that list, and what keeps it off is not
+   this function.  A header RubyEnd refuses is a shift, which reads no fewer
    bytes into a literal than Ruby does; a header it allows queues a body, and
    scan_ruby queues it for the physical line the header stands on wherever that
    header was written -- before an interpolation, inside one, inside a nested
    one, or inside an interpolation on another here document's body line.  A
    queue that stopped at an interpolation boundary would read a whole here
-   document body as code, which is a second place this scanner reads fewer bytes
+   document body as code, which would be one more reading that takes fewer bytes
    into a literal than Ruby does, and it is the one the corpus cases named
-   "ruby-heredoc-*-interpolation" hold shut. *)
+   "ruby-heredoc-*-interpolation" hold shut.
+
+   NOTE: RubyEnd is as far as that first half reaches, and "def", "alias" and
+   "undef" are where it stops.  MRI's parser_yylex tries heredoc_identifier on
+   "<<" unless the lexer state is EXPR_DOT|EXPR_CLASS, unless IS_END(), or
+   unless it is an IS_ARG() with no white space in front -- and EXPR_FNAME is in
+   none of those three, so the state "def" leaves Ruby in, and the
+   EXPR_FNAME|EXPR_FITEM that "alias" and "undef" do, still reach a here
+   document.  This table answers RubyEnd for "def" and RubyFname for the other
+   two, and both refuse the header: "def <<EOS" is a shift here and a
+   here-document header to MRI, which is the direction -- fewer bytes into a
+   literal than Ruby takes -- that the rest of this file refuses.  What bounds
+   it is what bounds the "class" and "module" readings above: no program that
+   runs is written that way, because "def" is followed by a method name and
+   "<<EOS" is not one.  "class" and "module" are not part of this exception at
+   all -- EXPR_CLASS is named in that guard, which is what makes "class <<self"
+   a singleton class rather than a here document.  Unlike every other reading in
+   this comment, the "def <<EOS" one is argued from MRI's parse.y alone and has
+   not been put to Ripper.lex: no Ruby 3.3 was available where it was
+   written. *)
 let ruby_state_after_word token =
   match token with
   | "end" | "self" | "nil" | "true" | "false" | "redo" | "retry" | "__FILE__"
-  | "__LINE__" | "__ENCODING__" | "def" | "alias" | "undef" | "class" | "module" -> RubyEnd
+  | "__LINE__" | "__ENCODING__" | "def" | "class" | "module" -> RubyEnd
+  | "alias" | "undef" -> RubyFname
   | "if" | "unless" | "while" | "until" | "case" | "when" | "in" | "and" | "or"
   | "return" | "break" | "next" | "then" | "do" | "else" | "elsif" | "begin"
   | "ensure" | "rescue" | "for" -> RubyBegin
@@ -2647,7 +3209,7 @@ let ruby_state_after_word token =
 let ruby_literal_opens state space_seen source index =
   match state with
   | RubyBegin -> true
-  | RubyEnd -> false
+  | RubyEnd | RubyFname -> false
   | RubyArgument ->
     space_seen && index + 1 < Bytes.length source &&
     (let byte = Bytes.get source (index + 1) in
@@ -2658,7 +3220,15 @@ let ruby_literal_opens state space_seen source index =
    here document that spacing exists to avoid. *)
 let ruby_heredoc_may_open state space_seen =
   match state with
-  | RubyBegin -> true | RubyArgument -> space_seen | RubyEnd -> false
+  | RubyBegin -> true | RubyArgument -> space_seen | RubyEnd | RubyFname -> false
+
+(* NOTE: ruby_literal_opens answers the "%" question everywhere but one:
+   parse_percent tests IS_lex_state(EXPR_FNAME | EXPR_FITEM) before it reaches
+   the spacing rule and opens a symbol literal on "%s" there, so "alias%s(a)"
+   and "alias %s(a)" open one alike.  Only "s" does; "%w", "%q" and the rest
+   fall through to the ordinary answer, which is false in that state. *)
+let ruby_percent_opens state space_seen source index form =
+  (state = RubyFname && form = 's') || ruby_literal_opens state space_seen source index
 
 (* NOTE: Where Ruby's two column-zero markers -- "=begin" and "__END__" -- are
    recognised.  A byte order mark is consumed before the first line is read, so
@@ -2963,12 +3533,21 @@ let scan_ruby source language options accumulator =
         loop (ruby_symbol_end source index) RubyEnd false braces
       | '?' ->
         (match ruby_character_literal_end source index with
-         | Some finish when state <> RubyEnd -> loop finish RubyEnd false braces
+         | Some finish when state <> RubyEnd && state <> RubyFname ->
+           loop finish RubyEnd false braces
          | _ -> loop (index + 1) RubyBegin false braces)
       | '%' ->
         (match ruby_percent_header source index with
-         | Some literal when ruby_literal_opens state space_seen source index ->
-           loop (percent index literal depth) RubyEnd false braces
+         | Some literal
+           when ruby_percent_opens state space_seen source index literal.percent_form ->
+           (* NOTE: "alias" and "undef" hold EXPR_FNAME|EXPR_FITEM across the whole
+              statement rather than only up to the first name: Ripper.lex under
+              Ruby 3.3.12 reports that state again after the ")" of the first
+              symbol, which is what makes "alias%s(a)%s(b # c)" two symbols and
+              not one symbol and a modulo. *)
+           let next_state =
+             if state = RubyFname && literal.percent_form = 's' then RubyFname else RubyEnd in
+           loop (percent index literal depth) next_state false braces
          | _ -> loop (index + 1) RubyBegin false braces)
       | '/' ->
         if ruby_literal_opens state space_seen source index
@@ -3218,6 +3797,9 @@ and scan source language options =
   | Yaml -> scan_yaml source language options accumulator
   | Php -> scan_php source language options accumulator
   | Ruby -> scan_ruby source language options accumulator
+  | Zig -> scan_zig source language options accumulator
+  | Dart -> scan_dart source language options accumulator
+  | R -> scan_r source language options accumulator
   | Html -> scan_html source language options accumulator
   | Unknown -> add_error accumulator "unknown-language" "a language is required" 0 0);
   let comments = List.rev accumulator.comments_rev in

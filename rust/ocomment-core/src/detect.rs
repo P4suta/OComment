@@ -24,33 +24,111 @@ impl Detection {
     }
 }
 
+/// How a `#!` line is searched for one interpreter name.
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum Spelling {
+    /// Anywhere in the line, which is what every name longer than a letter or
+    /// two can afford.
+    Anywhere,
+    /// As a whole word of the line, delimited by the `/` of a path, white
+    /// space, or an option's `-`.
+    Word,
+}
+
 /// The interpreter names a `#!` line is read for, in the order they are tried,
 /// with the language and dialect each one selects.
 ///
-/// The line is searched for each name as a substring rather than split into
-/// words, because an interpreter arrives written a dozen ways: as a path
-/// (`#!/bin/bash`), with a version (`#!/usr/bin/python3.12`), or behind `env`
-/// with options (`#!/usr/bin/env -S node --enable-source-maps`). The order is
-/// therefore part of the rule and not an accident of listing: `bash` and `zsh`
-/// both *contain* `sh`, so each has to be met before it, or every Bash script
-/// on disk would be read as POSIX shell. `luajit` contains `lua`, and `jruby`
-/// and `truffleruby` contain `ruby`, and all three are listed before the name
-/// they contain under the same convention, though those pairs name the same
-/// language whichever of the two is met first.
-const SHEBANGS: [(&str, Language, Dialect); 12] = [
-    ("python", Language::Python, Dialect::Standard),
-    ("bash", Language::Shell, Dialect::Bash53),
-    ("zsh", Language::Shell, Dialect::Zsh),
-    ("luajit", Language::Lua, Dialect::Standard),
-    ("lua", Language::Lua, Dialect::Standard),
-    ("php", Language::Php, Dialect::Standard),
-    ("truffleruby", Language::Ruby, Dialect::Standard),
-    ("jruby", Language::Ruby, Dialect::Standard),
-    ("ruby", Language::Ruby, Dialect::Standard),
-    ("sh", Language::Shell, Dialect::PosixSh),
-    ("node", Language::JavaScript, Dialect::Standard),
-    ("deno", Language::JavaScript, Dialect::Standard),
+/// The line is searched for a [`Spelling::Anywhere`] name as a substring rather
+/// than split into words, because an interpreter arrives written a dozen ways:
+/// as a path (`#!/bin/bash`), with a version (`#!/usr/bin/python3.12`), or
+/// behind `env` with options (`#!/usr/bin/env -S node --enable-source-maps`).
+/// The order is therefore part of the rule and not an accident of listing:
+/// `bash` and `zsh` both *contain* `sh`, so each has to be met before it, or
+/// every Bash script on disk would be read as POSIX shell. `luajit` contains
+/// `lua`, and `jruby` and `truffleruby` contain `ruby`, and all three are
+/// listed before the name they contain under the same convention, though those
+/// pairs name the same language whichever of the two is met first.
+///
+/// `r` is the one name a substring cannot find: littler installs R's scripting
+/// front end under a single letter, and `/usr/` alone carries an `r`, so
+/// searching for it that way would read every `#!/usr/bin/awk` on disk as R.
+/// It is a [`Spelling::Word`] instead, and it is listed last so that every name
+/// spelled out in full is met before a bare letter is considered at all.
+const SHEBANGS: [(&str, Language, Dialect, Spelling); 15] = [
+    (
+        "python",
+        Language::Python,
+        Dialect::Standard,
+        Spelling::Anywhere,
+    ),
+    ("bash", Language::Shell, Dialect::Bash53, Spelling::Anywhere),
+    ("zsh", Language::Shell, Dialect::Zsh, Spelling::Anywhere),
+    (
+        "luajit",
+        Language::Lua,
+        Dialect::Standard,
+        Spelling::Anywhere,
+    ),
+    ("lua", Language::Lua, Dialect::Standard, Spelling::Anywhere),
+    ("php", Language::Php, Dialect::Standard, Spelling::Anywhere),
+    (
+        "truffleruby",
+        Language::Ruby,
+        Dialect::Standard,
+        Spelling::Anywhere,
+    ),
+    (
+        "jruby",
+        Language::Ruby,
+        Dialect::Standard,
+        Spelling::Anywhere,
+    ),
+    (
+        "ruby",
+        Language::Ruby,
+        Dialect::Standard,
+        Spelling::Anywhere,
+    ),
+    (
+        "rscript",
+        Language::R,
+        Dialect::Standard,
+        Spelling::Anywhere,
+    ),
+    (
+        "dart",
+        Language::Dart,
+        Dialect::Standard,
+        Spelling::Anywhere,
+    ),
+    ("sh", Language::Shell, Dialect::PosixSh, Spelling::Anywhere),
+    (
+        "node",
+        Language::JavaScript,
+        Dialect::Standard,
+        Spelling::Anywhere,
+    ),
+    (
+        "deno",
+        Language::JavaScript,
+        Dialect::Standard,
+        Spelling::Anywhere,
+    ),
+    ("r", Language::R, Dialect::Standard, Spelling::Word),
 ];
+
+/// Whether `line` carries `name` as a whole word.
+///
+/// A `#!` line is a path and then arguments, so what separates one word of it
+/// from the next is everything a command name is not: the `/` of a path, white
+/// space, the `-` of an option, and the `#!` itself. `.`, `_` and `+` stay
+/// inside a word, so a version suffix does not split one.
+fn carries_word(line: &str, name: &str) -> bool {
+    line.split(|character: char| {
+        !character.is_ascii_alphanumeric() && !matches!(character, '.' | '_' | '+')
+    })
+    .any(|word| word == name)
+}
 
 /// Every interpreter name [`detect_language`] reads a `#!` line for, in the
 /// order it tries them.
@@ -62,10 +140,11 @@ const SHEBANGS: [(&str, Language, Dialect); 12] = [
 /// stopped agreeing.
 ///
 /// A name matches anywhere in the first line, so these are the substrings to
-/// look for and not the whole words to compare against. The order they come
-/// back in is the order they must be tried in: `bash` and `zsh` both contain
-/// `sh`, so each has to be met before it, or every Bash script on disk would
-/// be read as POSIX shell.
+/// look for and not the whole words to compare against — with the single
+/// exception of `r`, which is one letter and is compared against whole words.
+/// The order they come back in is the order they must be tried in: `bash` and
+/// `zsh` both contain `sh`, so each has to be met before it, or every Bash
+/// script on disk would be read as POSIX shell.
 ///
 /// # Examples
 ///
@@ -83,7 +162,7 @@ const SHEBANGS: [(&str, Language, Dialect); 12] = [
 /// assert_eq!(bash.dialect, ocomment_core::Dialect::Bash53);
 /// ```
 pub fn shebang_interpreters() -> impl Iterator<Item = &'static str> {
-    SHEBANGS.iter().map(|(name, _, _)| *name)
+    SHEBANGS.iter().map(|(name, _, _, _)| *name)
 }
 
 /// Detect a built-in language from filename, shebang, then conservative content hints.
@@ -166,6 +245,21 @@ pub fn detect_language(path: Option<&Path>, source: &[u8]) -> Option<Detection> 
             "rb" | "rbw" | "rake" | "gemspec" | "ru" | "podspec" | "jbuilder" | "thor" | "rbi" => {
                 Some((Language::Ruby, Dialect::Standard))
             }
+            /* NOTE: `.zon` is Zig Object Notation, the data format `@import` and
+             * `build.zig.zon` are written in. It is the same lexer with the
+             * keywords taken away — the same comments, the same string and
+             * multiline string literals — so it is the same scanner, and a
+             * `build.zig.zon` is detected by that suffix rather than by name. */
+            "zig" | "zon" => Some((Language::Zig, Dialect::Standard)),
+            /* NOTE: R is written `.R` about as often as `.r`, and the suffix is
+             * folded before it is looked up here, so both reach the same
+             * scanner. `.Rmd` is deliberately absent: an R Markdown document is
+             * Markdown with R chunks in it, which is a scanner of its own. */
+            "r" => Some((Language::R, Dialect::Standard)),
+            /* NOTE: `.dart` is the only suffix Dart owns. `.dart_tool` names the
+             * per-package build directory rather than a file, and a
+             * `pubspec.yaml` beside it is YAML and is detected as that. */
+            "dart" => Some((Language::Dart, Dialect::Standard)),
             _ => None,
         };
         if let Some((language, dialect)) = by_extension {
@@ -202,6 +296,14 @@ pub fn detect_language(path: Option<&Path>, source: &[u8]) -> Option<Detection> 
             "gemfile" | "rakefile" | "guardfile" | "capfile" | "vagrantfile" | "brewfile"
             | "podfile" | "fastfile" | "appfile" | "berksfile" | "thorfile" | "dangerfile"
             | ".irbrc" | ".pryrc" => Some((Language::Ruby, Dialect::Standard)),
+            /* NOTE: `.Rprofile` is the R script an R session sources at start-up
+             * and the one R file that carries no suffix. `.Renviron` beside it
+             * is deliberately absent: it is a table of `name=value` lines that
+             * R reads without parsing as code, so a `#` in one means nothing to
+             * this scanner. `Rprofile.site` is absent for a second reason — it
+             * is the system-wide profile, which lives outside a project and not
+             * in a checkout. */
+            ".rprofile" => Some((Language::R, Dialect::Standard)),
             _ => None,
         };
         if let Some((language, dialect)) = reserved {
@@ -212,8 +314,13 @@ pub fn detect_language(path: Option<&Path>, source: &[u8]) -> Option<Detection> 
     let first_line = source.split(|byte| *byte == b'\n').next().unwrap_or(source);
     if first_line.starts_with(b"#!") {
         let line = String::from_utf8_lossy(first_line).to_ascii_lowercase();
-        if let Some((_, language, dialect)) =
-            SHEBANGS.iter().find(|(name, _, _)| line.contains(name))
+        if let Some((_, language, dialect, _)) =
+            SHEBANGS
+                .iter()
+                .find(|(name, _, _, spelling)| match spelling {
+                    Spelling::Anywhere => line.contains(name),
+                    Spelling::Word => carries_word(&line, name),
+                })
         {
             return Some(Detection::new(*language, *dialect, "shebang"));
         }

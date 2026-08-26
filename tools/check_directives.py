@@ -488,6 +488,88 @@ SAMPLES: dict[str, Sample] = {
         "# a note about typed: strict",
         KEPT_AS_DIRECTIVE,
     ),
+    # NOTE: `zig fmt` is the only tool that reads a Zig comment, and it reads the
+    # NOTE: whole phrase rather than a prefix of it (`Ast/Render.zig` compares
+    # NOTE: the trimmed comment past `//` with `zig fmt: off` for equality), so
+    # NOTE: letters run on past `off` turn nothing off and must not be
+    # NOTE: protected.
+    "zig fmt:": Sample(
+        "zig",
+        None,
+        f"{SLOT}\n// control\n",
+        "// zig fmt: off",
+        f"// zig fmt: off{NEGATIVE_SUFFIX}",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "styler:": Sample(
+        "r",
+        None,
+        f"{SLOT}\n# control\n",
+        "# styler: off",
+        # NOTE: The colon is the marker's own boundary, so `styler:ish` is still
+        # NOTE: an instruction to the formatter -- one naming a state it does not
+        # NOTE: have. What is left to get wrong is the front of it, which is what
+        # NOTE: a comment merely mentioning the tool takes away.
+        "# a note about styler: off",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "nocov": Sample(
+        "r",
+        None,
+        f"{SLOT}\n# control\n",
+        "# nocov start",
+        # NOTE: `nocov` is the whole word covr looks for -- `start`, `end`, and
+        # NOTE: nothing at all may follow it -- so letters run straight on past
+        # NOTE: it are prose about the tool rather than an instruction to it.
+        f"# nocov{NEGATIVE_SUFFIX}",
+        KEPT_AS_DIRECTIVE,
+    ),
+    # NOTE: `// @dart = 2.12` is the language version comment the Dart scanner
+    # NOTE: reads itself, and it decides which version of the language the file
+    # NOTE: is written in, so a removal that took it would change what the code
+    # NOTE: below it means. The `@dart` has to be followed by `=` and a version,
+    # NOTE: which is what the near-miss takes away.
+    "@dart": Sample(
+        "dart",
+        None,
+        f"{SLOT}\n// control\n",
+        "// @dart = 2.12",
+        f"// @dart{NEGATIVE_SUFFIX}",
+        KEPT_AS_DIRECTIVE,
+    ),
+    # NOTE: `dart_style` matches its two markers by equality on the whole comment
+    # NOTE: rather than by prefix -- `front_end/piece_writer.dart` switches on
+    # NOTE: `comment.text` against `// dart format off` -- so letters run on past
+    # NOTE: `off` turn nothing off. Measured on `dart format` from SDK 3.13.2,
+    # NOTE: which reformatted the near-miss and left the marker's region alone.
+    "dart format": Sample(
+        "dart",
+        None,
+        f"{SLOT}\n// control\n",
+        "// dart format off",
+        f"// dart format off{NEGATIVE_SUFFIX}",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "ignore:": Sample(
+        "dart",
+        None,
+        f"{SLOT}\n// control\n",
+        "// ignore: unused_local_variable",
+        # NOTE: The colon is the marker's own boundary, so `ignore:ish` is still an
+        # NOTE: instruction to the analyzer -- one naming a diagnostic it does not
+        # NOTE: have. What is left to get wrong is the front of it, which is what a
+        # NOTE: comment merely mentioning the mechanism takes away.
+        "// a note about ignore: unused_local_variable",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "ignore_for_file:": Sample(
+        "dart",
+        None,
+        f"{SLOT}\n// control\n",
+        "// ignore_for_file: unused_import",
+        "// a note about ignore_for_file: unused_import",
+        KEPT_AS_DIRECTIVE,
+    ),
     "@schema": Sample(
         "yaml",
         None,

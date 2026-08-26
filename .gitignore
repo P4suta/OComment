@@ -19,3 +19,4 @@ __pycache__/
 /editors/vscode/out/
 /editors/vscode/.vscode-test/
 *.vsix
+/rust/target*/

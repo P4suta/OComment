@@ -119,6 +119,42 @@ RUBY_STRUCTURE = [
     "\"#{", "}\"", "#{ <<EOS }",
 ]
 
+# NOTE: The shapes Zig needs. It is the one built-in language whose multiline
+# NOTE: string has no quote in it at all: a `\\` wherever a token may begin runs
+# NOTE: to the end of that line as content, so a per-byte pool would open one
+# NOTE: about as often as it opens a Lua long bracket. The slash runs are the
+# NOTE: three comment markers and the fourth slash that takes the doc marker
+# NOTE: back, `@"` the quoted identifier that is lexed as a string, and the two
+# NOTE: `zig fmt` phrases the only directive it has.
+ZIG_STRUCTURE = [
+    "\\\\", "////", "///", "//!", "@\"", "zig fmt: off", "zig fmt: on", "'\\''",
+]
+
+# NOTE: The shapes R needs. Its raw string opens on a letter no other language
+# NOTE: uses as a delimiter, so a pool without `r"(` never reaches the one
+# NOTE: literal in the language that takes no escapes; the dashed pair is here
+# NOTE: for the reason Lua's levelled brackets are, since a closing run of the
+# NOTE: wrong length is content. `%in%` and the bare `%` are the operator whose
+# NOTE: name may hold a `#`, `#'` is roxygen2's marker, and the two markers
+# NOTE: after them are the directives styler and covr read.
+R_STRUCTURE = [
+    "r\"(", ")\"", "r\"--(", ")--\"", "R\"[", "]\"", "r\"{", "}\"", "R'(", ")'",
+    "#'", "%in%", "%", "`", "styler: off", "nocov start", "xr\"(",
+]
+
+# NOTE: The shapes Dart needs. Its raw string opens on a letter, and only
+# NOTE: where that letter begins a token, so the pool carries the two near
+# NOTE: misses `xr'` and `1r'` beside the opener itself. `${` is what turns
+# NOTE: the inside of a string back into code, `'''` is the multiline form a
+# NOTE: per-byte alphabet reaches only by coincidence, and the slash runs are
+# NOTE: the two doc markers Dart honours and the two it does not. The last
+# NOTE: three are the instructions a Dart tool reads, two of them matched as
+# NOTE: whole phrases rather than as prefixes.
+DART_STRUCTURE = [
+    "r'", "r\"", "xr'", "1r'", "${", "$a", "#foo", "//!", "/*!", "////",
+    "'''", "// @dart = 2.12", "// dart format off", "ignore_for_file:",
+]
+
 # NOTE: The bytes a lexer is liable to mishandle: NUL, DEL, a byte order mark, a
 # NOTE: no-break space, the two Unicode line terminators, and two characters
 # NOTE: wider than one byte.
@@ -138,6 +174,9 @@ TOKENS = (
     + YAML_STRUCTURE
     + PHP_STRUCTURE
     + RUBY_STRUCTURE
+    + ZIG_STRUCTURE
+    + R_STRUCTURE
+    + DART_STRUCTURE
     + AWKWARD_BYTES
 )
 
