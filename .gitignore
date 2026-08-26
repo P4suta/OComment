@@ -13,3 +13,8 @@ __pycache__/
 .vscode/
 *.swp
 *.tmp
+/editors/vscode/node_modules/
+/editors/vscode/dist/
+/editors/vscode/out/
+/editors/vscode/.vscode-test/
+*.vsix

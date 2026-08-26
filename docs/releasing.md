@@ -11,7 +11,8 @@ Before tagging:
 
 1. Confirm the `ocomment` crate name and every internal adapter name are still
    available on crates.io.
-2. Update all workspace and internal adapter versions together.
+2. Update all workspace and internal adapter versions together, and
+   `editors/vscode/package.json` with them.
 3. Run `./tools/release-check.sh` on the fixed benchmark runner.
 4. Confirm the cross-target smoke jobs and package dry runs are green.
 5. Publish crates in dependency order: runtime layer, wasmi adapter, component
@@ -53,6 +54,36 @@ Renaming the image, dropping an architecture, or moving the `builder` context
 layout — `out/amd64/ocomment` and `out/arm64/ocomment` — breaks pinned pulls
 and the Dockerfile respectively, so treat both as part of the released
 contract, exactly like the archive layout.
+
+## The VS Code extension
+
+`publish-vscode` packages `editors/vscode` after the GitHub release exists,
+signs the `.vsix` with cosign, attaches both to the release, and publishes to
+the Visual Studio Marketplace and to Open VSX. It refuses to run when
+`editors/vscode/package.json` does not carry the tag's version — a Marketplace
+version can never be republished, so the check has to come before the upload
+rather than after. `npm run unit` pins the same file to the workspace crate
+version on every pull request, so the two only have to be bumped together.
+
+Three things are manual and are done once, not per release:
+
+1. Create the `P4suta` publisher on the
+   [Marketplace management page](https://marketplace.visualstudio.com/manage)
+   under an Entra ID tenant, and the matching namespace on
+   [Open VSX](https://open-vsx.org/). The `publisher` field in
+   `package.json` has to equal the Marketplace publisher id.
+2. Create a personal access token for each — an Azure DevOps token with
+   **Marketplace: Manage** for the first, an Open VSX access token for the
+   second — and store them as the `VSCE_PAT` and `OVSX_PAT` secrets of the
+   `vscode-marketplace` environment. They expire; a release that fails at the
+   publish step with a 401 usually means one has.
+3. Sign the Open VSX publisher agreement. Open VSX rejects the first publish
+   until it is signed, and the message says so.
+
+Nothing else in the extension needs a release step: the version, the changelog,
+and the README that becomes the Marketplace page are all in `editors/vscode`
+and travel with the tag. The Marketplace badge in the repository README stays
+grey until the first successful publish.
 
 ## The published GitHub Action
 

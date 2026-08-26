@@ -4,6 +4,7 @@
 [![CodeQL](https://github.com/P4suta/OComment/actions/workflows/codeql.yml/badge.svg)](https://github.com/P4suta/OComment/actions/workflows/codeql.yml)
 [![MSRV 1.88](https://img.shields.io/badge/MSRV-1.88-93450a.svg)](rust/Cargo.toml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
+[![VS Code extension](https://img.shields.io/visual-studio-marketplace/v/P4suta.ocomment?label=VS%20Code&color=0066b8)](https://marketplace.visualstudio.com/items?itemName=P4suta.ocomment)
 
 OComment is a fast, byte-preserving comment checker and remover. The production
 tool is the Rust `ocomment` binary and the public `ocomment-core` library.
@@ -130,6 +131,9 @@ Run `ocomment init config` for the complete default file or `ocomment config
 schema` for its JSON Schema. See [configuration](docs/configuration.md),
 [editor/LSP setup](docs/editors.md), [plugins](docs/plugins.md), and
 [hooks and CI](docs/ci.md).
+
+The official VS Code extension is `P4suta.ocomment`; it launches this binary,
+so install both. Its source is in [`editors/vscode`](editors/vscode/README.md).
 
 ## Partially staged changes
 

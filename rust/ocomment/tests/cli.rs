@@ -583,6 +583,81 @@ fn staged_globs_stay_root_relative_from_a_subdirectory() {
     );
 }
 
+/// `[files]` bounds a walk with more than its two glob lists: `hidden` decides
+/// whether a dot-directory is looked into at all, and `max_size` decides how
+/// much of a file is worth reading. A staged path is a walked path rather than
+/// a named one, so a staged run is bounded by the same two settings — a commit
+/// that touches `.cache/generated.rs` or a two-megabyte fixture must not put
+/// either through a hook that would never have walked into them.
+#[test]
+fn staged_runs_honour_the_hidden_and_size_limits() {
+    let directory = repository();
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        b"version = 1\n\n[files]\nmax_size = 20\n",
+    )
+    .unwrap();
+    fs::create_dir(directory.path().join(".hidden")).unwrap();
+    fs::create_dir(directory.path().join("src")).unwrap();
+    fs::write(directory.path().join(".hidden/x.rs"), b"let a = 1; // x\n").unwrap();
+    fs::write(
+        directory.path().join("big.rs"),
+        b"let big = 3; // past the limit\n",
+    )
+    .unwrap();
+    fs::write(directory.path().join("src/y.rs"), b"let b = 2; // ours\n").unwrap();
+    git(
+        directory.path(),
+        &["add", ".hidden/x.rs", "big.rs", "src/y.rs"],
+    );
+
+    let checked = run(directory.path(), &["check", "--staged"]);
+    let report = String::from_utf8(checked.stdout).unwrap();
+    let summary = String::from_utf8(checked.stderr).unwrap();
+    assert_eq!(
+        checked.status.code(),
+        Some(1),
+        "`check --staged` said:\n{report}{summary}"
+    );
+    assert!(report.contains("src/y.rs"), "{report}");
+    assert!(
+        !report.contains(".hidden/x.rs"),
+        "a hidden staged path was reported while `hidden` is off:\n{report}"
+    );
+    assert!(
+        !report.contains("big.rs"),
+        "a staged blob past `max_size` was reported:\n{report}"
+    );
+    /* NOTE: A size skip is a fact about the run, so it is folded into the summary
+     * under the same short label a walk gives it; a hidden path was never a
+     * candidate and is not a skip at all. */
+    assert!(
+        summary.contains("1 file skipped (too large: 1"),
+        "the oversized staged blob was passed over silently:\n{summary}"
+    );
+
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        b"version = 1\n\n[files]\nmax_size = 20\nhidden = true\n",
+    )
+    .unwrap();
+    let visible = run(directory.path(), &["check", "--staged"]);
+    let report = String::from_utf8(visible.stdout).unwrap();
+    assert_eq!(
+        visible.status.code(),
+        Some(1),
+        "`check --staged` said:\n{report}"
+    );
+    assert!(
+        report.contains(".hidden/x.rs"),
+        "`hidden = true` did not reach the staged run:\n{report}"
+    );
+    assert!(
+        !report.contains("big.rs"),
+        "`hidden = true` also lifted the size limit:\n{report}"
+    );
+}
+
 #[test]
 fn staged_fix_stops_on_existing_block_comment_interior() {
     let directory = repository();
@@ -1756,6 +1831,63 @@ fn sarif_leaves_the_stdin_pseudo_path_unbased() {
     }
 }
 
+/// A relative URI is read as a URI, and RFC 3986 gives a first segment holding
+/// a colon back to the scheme: `c:/a.rs` parses as the scheme `c` rather than
+/// as a path, and a Windows reader sees a drive letter in it besides. A POSIX
+/// checkout is free to hold a directory named `c:`, so the emitter puts the one
+/// `.` segment a URI is allowed to keep in front of that path — `./c:/a.rs`,
+/// still measured from `%SRCROOT%` — and no reader can misread it.
+///
+/// A GitHub annotation is matched against the paths the repository uses rather
+/// than parsed as a URI, so `file=` keeps the plain spelling — with the `%3A`
+/// the annotation format already owes a colon, which is a property delimiter
+/// there.
+#[cfg(unix)]
+#[test]
+fn sarif_disambiguates_a_leading_segment_that_reads_as_a_drive_letter() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::create_dir(directory.path().join("c:")).unwrap();
+    fs::write(
+        directory.path().join("c:/a.rs"),
+        b"let value = 1; // remove\n",
+    )
+    .unwrap();
+
+    let output = run(directory.path(), &["check", "c:/a.rs", "--format", "sarif"]);
+    let report = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "`check --format sarif` said:\n{report}"
+    );
+    let document: serde_json::Value = serde_json::from_str(&report).unwrap();
+    let locations = artifact_locations(&document);
+    assert!(
+        !locations.is_empty(),
+        "the report locates nothing:\n{report}"
+    );
+    for location in &locations {
+        assert_eq!(
+            location["uri"], "./c:/a.rs",
+            "a drive-letter first segment was left ambiguous:\n{report}"
+        );
+        assert_eq!(
+            location["uriBaseId"], "%SRCROOT%",
+            "the disambiguated path lost the base it is measured from:\n{report}"
+        );
+    }
+
+    let annotated = run(
+        directory.path(),
+        &["check", "c:/a.rs", "--format", "github"],
+    );
+    let stdout = String::from_utf8(annotated.stdout).unwrap();
+    assert!(
+        stdout.contains("::notice file=c%3A/a.rs,"),
+        "a GitHub annotation lost the path the repository spells:\n{stdout}"
+    );
+}
+
 /// Every `artifactLocation` in a SARIF document, from the locations a result
 /// reports and from the changes its fix would make.
 fn artifact_locations(document: &serde_json::Value) -> Vec<serde_json::Value> {
@@ -2530,6 +2662,43 @@ fn an_invalid_policy_regex_cannot_inject_escape_sequences() {
     );
 }
 
+/// The same rule for the other pattern a project file carries. A `[files]`
+/// glob is echoed back on the line that rejects it — twice, because `globset`
+/// quotes the glob inside its own parse error — so both halves are folded
+/// before either reaches a terminal.
+#[test]
+fn an_invalid_file_glob_cannot_inject_escape_sequences() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(directory.path().join("a.rs"), b"let x = 1; // remove me\n").unwrap();
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        "version = 1\n[files]\nexclude = [\"\\u001B[2J[\"]\n",
+    )
+    .unwrap();
+
+    let output = run(directory.path(), &["check", "a.rs"]);
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "an invalid glob was accepted:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        !output.stderr.contains(&0x1b),
+        "an escape byte reached the terminal: {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let error = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        error.contains("invalid file glob `\u{fffd}[2J[`"),
+        "the error lost the pattern it rejects:\n{error}"
+    );
+    assert!(
+        error.lines().count() == 1,
+        "the error spread over more than one line:\n{error}"
+    );
+}
+
 /// The GitHub renderer annotates a pull request, and an annotation costs the
 /// reader a line in the checks tab. So it folds a skip away exactly as the
 /// human renderer does: an I/O error and a path the caller named are always
@@ -2573,6 +2742,46 @@ fn github_annotations_fold_walked_skips_away_unless_asked() {
     assert!(
         failure.contains("::error file=gone.rs,title=OComment I/O error::"),
         "an I/O error lost its annotation:\n{failure}"
+    );
+}
+
+/// `-q` trims the human report down to what went wrong; it is a human-format
+/// concept and has no business reaching a machine format. A GitHub annotation
+/// is the product of `--format github`, so a hook that runs quietly still
+/// annotates the path the caller named and the file it could not read — the
+/// walked skip stays folded because `-v`, not `-q`, is what decides that.
+#[test]
+fn quiet_does_not_take_annotations_off_a_machine_format() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(directory.path().join("a.rs"), b"let x = 1; // remove\n").unwrap();
+    fs::write(directory.path().join("notes.md"), b"# notes\n").unwrap();
+
+    let named = run(
+        directory.path(),
+        &["check", "notes.md", "--format", "github", "-q"],
+    );
+    let explicit = String::from_utf8(named.stdout).unwrap();
+    assert!(
+        explicit.contains("::notice file=notes.md,title=OComment skipped file::"),
+        "-q took the annotation off a path the caller named:\n{explicit}"
+    );
+
+    let missing = run(
+        directory.path(),
+        &["check", "gone.rs", "--format", "github", "-q"],
+    );
+    let failure = String::from_utf8(missing.stdout).unwrap();
+    assert!(
+        failure.contains("::error file=gone.rs,title=OComment I/O error::"),
+        "-q took the annotation off an I/O error:\n{failure}"
+    );
+
+    let walked = run(directory.path(), &["check", "--format", "github", "-q"]);
+    let stdout = String::from_utf8(walked.stdout).unwrap();
+    assert!(stdout.contains("::notice file=a.rs"), "{stdout}");
+    assert!(
+        !stdout.contains("notes.md"),
+        "a walked skip was annotated without -v:\n{stdout}"
     );
 }
 

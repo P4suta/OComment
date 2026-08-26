@@ -26,8 +26,8 @@ EXPECTED_ENTRIES = {
 }
 
 # INVARIANT: pre-commit rejects an unknown manifest key only when a consumer runs
-# INVARIANT: the hook, so a typo there ships broken. These are the keys its
-# INVARIANT: manifest schema takes.
+# INVARIANT: the hook, so a typo in the set below ships broken. These are the
+# INVARIANT: keys its manifest schema takes.
 KNOWN_FIELDS = frozenset(
     {
         "additional_dependencies",

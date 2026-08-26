@@ -65,6 +65,22 @@ All notable changes to OComment will be documented here. The project follows
   all --force-protected` and rebuilds it: the Rust workspace builds and
   `ocomment-core` still passes its tests, and the `reference` job does the same
   for the OCaml reference. `CONTRIBUTING.md` documents the tags.
+- An official VS Code extension, `P4suta.ocomment`, under `editors/vscode`. It
+  is a client only: it launches the separately installed `ocomment lsp`,
+  attaches it to the twenty language identifiers OComment scans, and exposes
+  the server's quick fixes, `source.fixAll.ocomment`, code lens, and pull
+  diagnostics, plus `OComment: Remove comments in file`, `... in workspace`,
+  `OComment: Restart server`, `OComment: Show output`, and a status bar count.
+  `ocomment.path` resolves a relative path against the workspace and expands a
+  leading `~`; a missing binary is a notification pointing at the install
+  instructions rather than a silent failure. The extension is disabled in
+  untrusted workspaces, because that setting names an executable it launches.
+  The extension version is the crate version, checked by the extension's own
+  suite on every pull request and against the tag before `publish-vscode` can
+  upload anything. A `vscode` CI job lints, compiles, builds the binary the
+  extension launches, and drives a real VS Code under `xvfb-run`;
+  `publish-vscode` signs the `.vsix` with cosign, attaches it to the release,
+  and publishes to the Marketplace and Open VSX.
 
 ### Changed
 
@@ -101,6 +117,14 @@ All notable changes to OComment will be documented here. The project follows
 
 ### Fixed
 
+- The LSP server places the `shellscript` and `cuda-cpp` language identifiers.
+  Neither parses as an OComment language name, so a buffer the editor called
+  either of them fell back to detection by path and bytes, and one that carried
+  no telling extension — a shell hook with no suffix, a CUDA scratch file — was
+  left `unknown` and answered with `a language is required` instead of its
+  comments. `shellscript` takes the dialect from the path when the path agrees
+  it is a shell script, because that one identifier covers sh, Bash, and zsh
+  alike and `$'...'` is an ANSI-C quoted string in only the last two.
 - `--staged` honours `files.include` and `files.exclude`. It read every path
   `git diff --cached` named, so a commit that touched an excluded tree — a
   vendored crate, generated tooling — was reported by the pre-commit hook, and
@@ -138,7 +162,9 @@ All notable changes to OComment will be documented here. The project follows
 - `--format github` folds a walked skip away unless `-v` asks for it, the way
   the human report already did. A run over a repository annotated every file it
   had no scanner for, so the checks tab filled with notices about Markdown and
-  YAML. An I/O error and a path the caller named are still always annotated.
+  YAML. An I/O error and a path the caller named are still always annotated,
+  `-q` included: `-q` trims the human report, and an annotation is the product
+  of a machine format rather than commentary about it.
 - An invalid `[policy]` regex is reported on one line and in full. The `regex`
   crate writes a parse error over four lines with a caret under the byte it
   stopped at; the report replaced the newlines with U+FFFD instead of folding

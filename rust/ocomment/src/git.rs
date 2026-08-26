@@ -1,6 +1,7 @@
 use crate::{
     atomic::{WritePlan, apply_transaction},
     config::ResolvedConfig,
+    files::SkippedFile,
     output::{
         self, Operation, OutputFormat, Presentation, ProcessedFile, RenderOptions, Verbosity,
     },
@@ -15,7 +16,7 @@ use std::{
     ffi::{OsStr, OsString},
     fs,
     io::Write,
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     process::{Command, Stdio},
 };
 use tempfile::NamedTempFile;
@@ -60,7 +61,7 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
         dry_run,
     } = request;
     let root = repository_root()?;
-    let names = configured_paths(staged_paths(&root, paths)?, resolved)?;
+    let (names, skipped) = configured_paths(&root, staged_paths(&root, paths)?, resolved)?;
     let mut entries = Vec::new();
     for path in names {
         let source = index_blob(&root, &path)?;
@@ -190,7 +191,7 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
     }
     output::render(
         &files,
-        &[],
+        &skipped,
         &RenderOptions {
             format,
             operation,
@@ -358,40 +359,118 @@ fn staged_paths(root: &Path, filters: &[PathBuf]) -> Result<Vec<PathBuf>> {
     Ok(paths)
 }
 
-/// Drop the staged paths `[files]` puts out of bounds.
+/// Drop the staged paths `[files]` puts out of bounds, and say which of them
+/// were passed over.
 ///
 /// `git diff --cached` answers with every path the commit carries, which is a
-/// different question from the one `files.include` and `files.exclude` answer:
-/// a vendored tree the project excludes is still staged on the commit that
-/// updates it. A walk applies the two globs in `files::load_one`, so a staged
-/// run applies them here, and to the same root-relative spelling — `git` names
-/// a staged path relative to the repository root, and `run_target` has already
+/// different question from the one `[files]` answers: a vendored tree the
+/// project excludes is still staged on the commit that updates it. A walk
+/// applies `include` and `exclude` in `files::load_one`, so a staged run
+/// applies them here, and to the same root-relative spelling — `git` names a
+/// staged path relative to the repository root, and `run_target` has already
 /// pointed `resolved.cwd` there for exactly this reason.
 ///
 /// A staged path is a walked path rather than a named one: nobody typed it, so
 /// it never carries the licence an explicit argument does to look past the
-/// project's own limits.
-fn configured_paths(paths: Vec<PathBuf>, resolved: &ResolvedConfig) -> Result<Vec<PathBuf>> {
+/// project's own limits. That is the whole of `[files]` and not just its two
+/// glob lists — `hidden` decides whether a dot-directory is looked into at all
+/// and `max_size` decides how much of a file is worth reading, and a hook that
+/// applied neither would put through a commit exactly what a walk would never
+/// have reached.
+///
+/// The two limits answer differently because they mean differently. A hidden
+/// path was never a candidate, so it leaves no trace; an oversized blob is a
+/// file the run *met* and declined, so it comes back as the same folded "too
+/// large" skip a walk reports, counted in the summary rather than annotated
+/// once per file.
+fn configured_paths(
+    root: &Path,
+    paths: Vec<PathBuf>,
+    resolved: &ResolvedConfig,
+) -> Result<(Vec<PathBuf>, Vec<SkippedFile>)> {
     let include = crate::files::compile_globs(&resolved.config.files.include)?;
     let exclude = crate::files::compile_globs(&resolved.config.files.exclude)?;
-    Ok(paths
-        .into_iter()
-        .filter(|path| {
-            let relative = resolved.relative_to_root(path);
-            (include.is_empty() || include.is_match(&relative)) && !exclude.is_match(&relative)
-        })
-        .collect())
+    let max_size = resolved.config.files.max_size;
+    let mut kept = Vec::new();
+    let mut skipped = Vec::new();
+    for path in paths {
+        let relative = resolved.relative_to_root(&path);
+        if (!include.is_empty() && !include.is_match(&relative)) || exclude.is_match(&relative) {
+            continue;
+        }
+        if !resolved.config.files.hidden && has_hidden_component(&path) {
+            continue;
+        }
+        if index_blob_size(root, &path)? > max_size {
+            skipped.push(SkippedFile {
+                path,
+                reason: format!("larger than {max_size} bytes"),
+                error: false,
+                /* NOTE: Nobody typed this path, so its skip is folded into the summary
+                 * exactly as a walked one is. */
+                explicit: false,
+            });
+            continue;
+        }
+        kept.push(path);
+    }
+    Ok((kept, skipped))
+}
+
+/// Whether any component of a staged path is a hidden name.
+///
+/// `git` names a staged path relative to the repository root, so every
+/// component of it is a real directory or file name — there is no walk root in
+/// front to leave out, the way `ignore` leaves one out. A leading `.` is the
+/// only byte that decides it, so a name that is not UTF-8 is judged on the
+/// bytes it actually has rather than on a lossy reading of them.
+fn has_hidden_component(path: &Path) -> bool {
+    path.components().any(|component| {
+        matches!(component, Component::Normal(name) if name.as_encoded_bytes().starts_with(b"."))
+    })
+}
+
+/// How `git` is asked for the staged version of a path: `:` names the index.
+fn index_specification(path: &Path) -> OsString {
+    let mut specification = OsString::from(":");
+    specification.push(path_for_git(path));
+    specification
+}
+
+/// How large the staged blob is, without reading it.
+///
+/// The size is asked of the index rather than of the working tree, because
+/// `--staged` judges the bytes the commit will carry: a file can be a line
+/// long on disk and a megabyte in the index, or the other way round.
+///
+/// Asking costs one `git` invocation for each path that got past the globs,
+/// next to the three the run already spends on every path it keeps. It buys
+/// the thing `max_size` exists for, which is that an oversized blob is never
+/// brought into memory at all — measuring it from `index_blob`'s answer would
+/// have read it first.
+fn index_blob_size(root: &Path, path: &Path) -> Result<u64> {
+    let mut output = command_output(
+        Command::new("git")
+            .current_dir(root)
+            .arg("cat-file")
+            .arg("-s")
+            .arg(index_specification(path)),
+        &format!("cannot measure staged blob {}", path.display()),
+    )?;
+    trim_line_ending(&mut output);
+    std::str::from_utf8(&output)
+        .ok()
+        .and_then(|text| text.trim().parse().ok())
+        .with_context(|| format!("staged blob {} has no size", path.display()))
 }
 
 fn index_blob(root: &Path, path: &Path) -> Result<Vec<u8>> {
-    let mut specification = OsString::from(":");
-    specification.push(path_for_git(path));
     command_output(
         Command::new("git")
             .current_dir(root)
             .arg("cat-file")
             .arg("blob")
-            .arg(specification),
+            .arg(index_specification(path)),
         &format!("cannot read staged blob {}", path.display()),
     )
 }

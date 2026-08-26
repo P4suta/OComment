@@ -9,6 +9,7 @@ exclude = [
   # ours to rewrite: fixture comments are the test input itself.
   "rust/vendor/**",
   "spec/fixtures/**",
+  "editors/vscode/test-fixtures/**",
   "release-extras/**",
   "benchmarks/**",
 ]

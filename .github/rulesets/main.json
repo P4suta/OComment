@@ -35,6 +35,7 @@
           {"context": "reference"},
           {"context": "docker"},
           {"context": "dogfood"},
+          {"context": "vscode"},
           {"context": "host-smoke (ubuntu-latest)"},
           {"context": "host-smoke (macos-15)"},
           {"context": "host-smoke (windows-2025)"},
@@ -42,6 +43,7 @@
           {"context": "action-smoke (macos-15)"},
           {"context": "action-smoke (windows-2025)"},
           {"context": "Analyze (actions)"},
+          {"context": "Analyze (javascript-typescript)"},
           {"context": "Analyze (python)"},
           {"context": "Analyze (rust)"}
         ],

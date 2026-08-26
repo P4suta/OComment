@@ -50,12 +50,15 @@ SARIF_URI_CASES: tuple[tuple[str, str | None, bool], ...] = (
     ("sub/./doc.rs", SARIF_SRCROOT, False),
     ("sub\\doc.rs", SARIF_SRCROOT, False),
     # NOTE: A first segment of one letter and a colon is read as a drive letter
-    # NOTE: wherever it turns up, and a POSIX checkout may hold a directory
-    # NOTE: named `c:`. A Linux run over `c:/a.rs` really does emit
-    # NOTE: `{"uri": "c:/a.rs", "uriBaseId": "%SRCROOT%"}`, which this rule then
-    # NOTE: turns down; the pair below pins the limitation rather than leaving
-    # NOTE: it to be met for the first time on a failing CI job.
+    # NOTE: wherever it turns up -- and as a URI scheme besides -- while a POSIX
+    # NOTE: checkout is free to hold a directory named `c:`. The emitter says
+    # NOTE: which it meant by keeping one `.` segment in front of that path, and
+    # NOTE: only that path: `./c:/a.rs` is a relative reference to any reader
+    # NOTE: and still resolves against the source root. The bare spelling below
+    # NOTE: is what the two would disagree about, so it stays turned down.
+    ("./c:/a.rs", SARIF_SRCROOT, True),
     ("c:/a.rs", SARIF_SRCROOT, False),
+    ("./c:/a.rs", None, False),
     ("c:/a.rs", None, True),
 )
 
@@ -94,22 +97,37 @@ def check_sarif_region(region: object, where: str, failures: list[str]) -> None:
         failures.append(f"{where} ends on line {end_line} before line {start_line}")
 
 
+def sarif_drive_letter(segment: str) -> bool:
+    """Whether one path segment is read as a drive letter.
+
+    Recognised by shape rather than by platform: any segment of a single letter
+    and a colon counts, which a POSIX checkout is free to spell as an ordinary
+    directory name and RFC 3986 reads as a URI scheme either way.
+    """
+    return len(segment) == 2 and segment[1] == ":" and segment[0].isalpha()
+
+
 def sarif_uri_is_absolute(uri: str) -> bool:
     """Whether a URI already says where it starts, so no base id may.
 
     A POSIX path starts at the root and a Windows one starts at a drive
     letter; the emitter turns the separators of the second around but leaves
     the drive where it found it, so `C:/src/a.rs` is what arrives here.
-
-    The drive is recognised by shape rather than by platform: any first segment
-    of a single letter and a colon counts, which a POSIX checkout is free to
-    spell as an ordinary directory name. A file at `c:/a.rs` on Linux is
-    emitted under `%SRCROOT%` -- correctly, since that resolves -- and read
-    here as a path that already says where it starts, so the two disagree
-    about it. `SARIF_URI_CASES` pins that one case.
     """
-    head = uri.split("/", 1)[0]
-    return uri.startswith("/") or (len(head) == 2 and head[1] == ":" and head[0].isalpha())
+    return uri.startswith("/") or sarif_drive_letter(uri.split("/", 1)[0])
+
+
+def sarif_disambiguated_drive(uri: str) -> bool:
+    """Whether a URI carries the `./` a first segment like `c:` is given.
+
+    A checkout that holds a directory named `c:` has a repository-relative path
+    no reader would take for one, so `output::artifact_location` keeps a single
+    `.` segment in front of it. That is the only `.` segment the emitter ever
+    writes, and it is what tells a reader the path is relative -- and so still
+    measured from `%SRCROOT%` -- rather than rooted at a drive.
+    """
+    head, separator, rest = uri.partition("/")
+    return head == "." and bool(separator) and sarif_drive_letter(rest.split("/", 1)[0])
 
 
 def check_sarif_uri(location: object, where: str, failures: list[str]) -> None:
@@ -128,10 +146,12 @@ def check_sarif_uri(location: object, where: str, failures: list[str]) -> None:
         return
     # NOTE: A code-scanning UI matches the URI against the paths the checkout
     # NOTE: uses, and neither a backslash nor a `.` segment names a file any
-    # NOTE: checkout has.
+    # NOTE: checkout has. The one exception is the `./` the emitter puts in
+    # NOTE: front of a first segment that would read as a drive letter, which
+    # NOTE: is there so the rest of the path is read as a path at all.
     if "\\" in uri:
         failures.append(f"{where}.uri uses a backslash separator: {uri!r}")
-    if uri.startswith("./") or "/./" in uri:
+    if "/./" in uri or (uri.startswith("./") and not sarif_disambiguated_drive(uri)):
         failures.append(f"{where}.uri keeps a `.` segment: {uri!r}")
     # INVARIANT: A relative URI resolves against a base id. Standard input is
     # INVARIANT: not a file, an absolute path already says where it starts, and

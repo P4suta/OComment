@@ -1,0 +1,177 @@
+{
+  "name": "ocomment",
+  "displayName": "OComment",
+  "description": "Fast, byte-preserving comment checker and remover for 15 languages.",
+  "version": "0.1.0",
+  "publisher": "P4suta",
+  "license": "MIT",
+  "author": "OComment contributors",
+  "homepage": "https://github.com/P4suta/OComment/blob/main/editors/vscode/README.md",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/P4suta/OComment.git",
+    "directory": "editors/vscode"
+  },
+  "bugs": {
+    "url": "https://github.com/P4suta/OComment/issues"
+  },
+  "categories": [
+    "Linters"
+  ],
+  "keywords": [
+    "comments",
+    "lsp",
+    "linter",
+    "formatter"
+  ],
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "main": "./dist/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "ocomment.path names an executable this extension launches, so a workspace that can set it can run code."
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "The server reads the workspace from disk, so a virtual file system has nothing for it to scan."
+    }
+  },
+  "activationEvents": [
+    "onLanguage:rust",
+    "onLanguage:ocaml",
+    "onLanguage:c",
+    "onLanguage:cpp",
+    "onLanguage:objective-c",
+    "onLanguage:objective-cpp",
+    "onLanguage:cuda-cpp",
+    "onLanguage:go",
+    "onLanguage:java",
+    "onLanguage:javascript",
+    "onLanguage:javascriptreact",
+    "onLanguage:typescript",
+    "onLanguage:typescriptreact",
+    "onLanguage:python",
+    "onLanguage:shellscript",
+    "onLanguage:html",
+    "onLanguage:css",
+    "onLanguage:jsonc",
+    "onLanguage:sql",
+    "onLanguage:kotlin",
+    "workspaceContains:**/.ocomment.toml"
+  ],
+  "contributes": {
+    "configuration": {
+      "title": "OComment",
+      "properties": {
+        "ocomment.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run the OComment language server. Turning this off stops the server and clears its diagnostics.",
+          "scope": "window"
+        },
+        "ocomment.path": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the ocomment executable. Empty means the first ocomment on PATH.",
+          "scope": "machine-overridable"
+        },
+        "ocomment.extraArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Extra arguments appended after `lsp`, such as `--config` and a path.",
+          "scope": "machine-overridable"
+        },
+        "ocomment.languages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "rust",
+            "ocaml",
+            "c",
+            "cpp",
+            "objective-c",
+            "objective-cpp",
+            "cuda-cpp",
+            "go",
+            "java",
+            "javascript",
+            "javascriptreact",
+            "typescript",
+            "typescriptreact",
+            "python",
+            "shellscript",
+            "html",
+            "css",
+            "jsonc",
+            "sql",
+            "kotlin"
+          ],
+          "description": "Language identifiers the server is attached to.",
+          "scope": "window"
+        },
+        "ocomment.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Log the traffic between VS Code and the OComment server to the output channel.",
+          "scope": "window"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "ocomment.fixActiveDocument",
+        "title": "OComment: Remove comments in file"
+      },
+      {
+        "command": "ocomment.fixWorkspace",
+        "title": "OComment: Remove comments in workspace"
+      },
+      {
+        "command": "ocomment.restartServer",
+        "title": "OComment: Restart server"
+      },
+      {
+        "command": "ocomment.showOutput",
+        "title": "OComment: Show output"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -p ./ -w",
+    "bundle": "node esbuild.mjs",
+    "lint": "eslint .",
+    "unit": "node --test \"out/test/unit/*.test.js\"",
+    "pretest": "npm run compile && npm run bundle",
+    "test": "node ./out/test/runTest.js",
+    "package": "npx --no @vscode/vsce package",
+    "vscode:prepublish": "npm run bundle -- --production"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^10.1.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@types/node": "^22.10.2",
+    "@types/vscode": "^1.96.0",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^3.9.2",
+    "esbuild": "^0.28.2",
+    "eslint": "^9.39.5",
+    "ovsx": "^1.1.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.68.0"
+  }
+}

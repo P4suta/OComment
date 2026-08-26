@@ -51,6 +51,36 @@ updates:
         update-types:
           - minor
           - patch
+  - package-ecosystem: npm
+    directory: /editors/vscode
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:45"
+      timezone: Asia/Tokyo
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - "area: editors"
+    commit-message:
+      prefix: "chore(deps)"
+    ignore:
+      # @types/vscode has to stay on the version engines.vscode names, or the
+      # extension compiles against API the editors it claims to support do not
+      # have.
+      - dependency-name: "@types/vscode"
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
+    groups:
+      npm-non-major:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
   - package-ecosystem: docker
     directory: /
     schedule:

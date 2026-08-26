@@ -1212,10 +1212,39 @@ fn report_uri(path: &Path) -> String {
 fn artifact_location(path: &Path) -> Value {
     let uri = report_uri(path);
     if under_source_root(path) {
+        let uri = if reads_as_a_drive_letter(&uri) {
+            format!("./{uri}")
+        } else {
+            uri
+        };
         json!({"uri": uri, "uriBaseId": SRCROOT})
     } else {
         json!({"uri": uri})
     }
+}
+
+/// Whether a repository-relative URI opens with a segment no reader will take
+/// for a directory name.
+///
+/// A `uri` is read as a URI, and RFC 3986 hands a relative reference's first
+/// segment to the scheme as soon as it holds a colon: `c:/a.rs` parses as the
+/// scheme `c` over the path `/a.rs`, and a Windows reader sees a drive letter
+/// in it besides. A POSIX checkout is free to hold a directory named `c:`, so
+/// the path says which it meant with the one `.` segment the standard keeps
+/// for exactly this: `./c:/a.rs` is a relative reference whatever reads it,
+/// and it still resolves against `%SRCROOT%`.
+///
+/// Only a repository-relative path is treated this way. A GitHub annotation is
+/// matched against the paths the checkout uses rather than parsed as a URI, so
+/// [`report_uri`] leaves the spelling alone and only this document adds to it;
+/// `tools/validate_schemas.py` is the other half of the rule and turns down
+/// the bare form.
+fn reads_as_a_drive_letter(uri: &str) -> bool {
+    let mut head = uri.split('/').next().unwrap_or_default().chars();
+    matches!(
+        (head.next(), head.next(), head.next()),
+        (Some(letter), Some(':'), None) if letter.is_ascii_alphabetic()
+    )
 }
 
 fn under_source_root(path: &Path) -> bool {
@@ -1457,13 +1486,23 @@ fn render_github(
             ))?;
         }
     }
+    /* INVARIANT: `-q` trims the human report down to what went wrong, and there is
+     * no such thing to trim here: an annotation is the *product* of this
+     * format, not commentary about it, and a hook told to work quietly is
+     * still owed the notice for the path its caller named and the error for
+     * the file it could not read. So the visibility rule below is asked at
+     * `Normal` however quiet the run was, and only `-v` widens it. */
+    let visibility = match verbosity {
+        Verbosity::Quiet => Verbosity::Normal,
+        loud => loud,
+    };
     /* NOTE: An annotation costs the reader a line of the checks tab, so a walked
      * skip is folded away here exactly as it is in the human report: a run
      * over a repository with forty Markdown files in it must not post forty
      * notices about them. */
     for item in skipped
         .iter()
-        .filter(|item| skip_is_visible(item, verbosity))
+        .filter(|item| skip_is_visible(item, visibility))
     {
         wrote(writeln!(
             output,
@@ -1633,6 +1672,30 @@ mod tests {
                 "`{outside}` claims to be under the source root"
             );
         }
+    }
+
+    /// A relative reference whose first segment holds a colon is read as a
+    /// scheme, so a checkout that really does hold a directory named `c:` says
+    /// so with the one `.` segment a URI keeps for the purpose. Nothing else
+    /// gains one, and a path that is under no base is left exactly as it was.
+    #[test]
+    fn a_first_segment_that_reads_as_a_drive_letter_is_disambiguated() {
+        let location = artifact_location(Path::new("c:/a.rs"));
+        assert_eq!(location["uri"], json!("./c:/a.rs"));
+        assert_eq!(location["uriBaseId"], json!(SRCROOT));
+        assert_eq!(artifact_location(Path::new("c:"))["uri"], json!("./c:"));
+        for plain in ["a.rs", "sub/doc.rs", "cc:/a.rs", "sub/c:/a.rs"] {
+            assert_eq!(
+                artifact_location(Path::new(plain))["uri"],
+                json!(report_uri(Path::new(plain))),
+                "`{plain}` was disambiguated and had no need of it"
+            );
+        }
+        assert_eq!(
+            artifact_location(Path::new("/tmp/c:/a.rs"))["uri"],
+            json!("/tmp/c:/a.rs"),
+            "a path under no base was rewritten"
+        );
     }
 
     /// Every result points into the rules by index, so the two orders have to

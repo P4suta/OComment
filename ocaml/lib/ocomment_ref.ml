@@ -226,7 +226,7 @@ let is_directive language text raw =
   | Python -> List.exists (fun prefix -> String.starts_with ~prefix compact)
       ["pyright:"; "mypy:"; "ruff:"; "fmt:"]
   | Shell -> List.exists (fun prefix -> String.starts_with ~prefix compact)
-      ["shellcheck"; "syntax="; "hadolint"]
+      ["shellcheck"; "syntax="; "hadolint "]
   | _ -> false
 
 let within_first_two_lines source finish =

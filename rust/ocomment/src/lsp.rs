@@ -1056,6 +1056,16 @@ fn language_from_lsp(id: &str, uri: &Url, source: &[u8]) -> (Language, Dialect) 
         "typescriptreact" => (Language::TypeScript, Dialect::Tsx),
         "objective-c" => (Language::C, Dialect::ObjectiveC),
         "objective-cpp" => (Language::Cpp, Dialect::ObjectiveCpp),
+        "cuda-cpp" => (Language::Cpp, Dialect::Cuda),
+        /* NOTE: One editor id covers sh, Bash, and zsh alike, and the dialects
+         * differ — `$'...'` is an ANSI-C quoted string in the last two only.
+         * The id settles the language, so the dialect is taken from the path
+         * and the bytes whenever they agree it is a shell script at all, and
+         * falls back to the language default when a buffer offers neither. */
+        "shellscript" => (
+            Language::Shell,
+            detected_dialect(uri, source, Language::Shell).unwrap_or(Dialect::Standard),
+        ),
         id => id
             .parse()
             .map(|language| (language, Dialect::Standard))
@@ -1066,6 +1076,15 @@ fn language_from_lsp(id: &str, uri: &Url, source: &[u8]) -> (Language, Dialect) 
                     .unwrap_or((Language::Unknown, Dialect::Standard))
             }),
     }
+}
+
+/// The dialect the path and the bytes imply, when they agree with the language
+/// the client named.
+fn detected_dialect(uri: &Url, source: &[u8], language: Language) -> Option<Dialect> {
+    let path = uri.to_file_path().ok();
+    detect_language(path.as_deref(), source)
+        .filter(|detection| detection.language == language)
+        .map(|detection| detection.dialect)
 }
 
 fn incremental_for_document(

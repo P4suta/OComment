@@ -2172,8 +2172,11 @@ fn directive_name(text: &str, language: Language, raw: &[u8]) -> Option<&'static
         /* NOTE: A Dockerfile is detected as shell, and two of its comment lines are
          * addressed to a tool: `# syntax=` is the parser directive BuildKit
          * reads before it reads the file, and `# hadolint ignore=` turns one
-         * rule of the Dockerfile linter off for the instruction below it. */
-        Language::Shell => ["shellcheck", "syntax=", "hadolint"]
+         * rule of the Dockerfile linter off for the instruction below it.
+         * `hadolint` is the whole word the linter answers to, so the prefix
+         * carries the space that ends it: `# hadolintish note` is prose about
+         * the linter rather than an instruction to it, and stays removable. */
+        Language::Shell => ["shellcheck", "syntax=", "hadolint "]
             .into_iter()
             .find(|prefix| compact.starts_with(prefix)),
         _ => None,

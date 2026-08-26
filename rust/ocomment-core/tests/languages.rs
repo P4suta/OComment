@@ -351,9 +351,14 @@ fn shell_heredocs_and_here_strings_are_not_comments() {
 /// reads before it reads anything else, and `# hadolint ignore=`, which turns
 /// one rule of the Dockerfile linter off for the instruction below it. Removing
 /// either changes what a build does, so neither is explanatory text.
+///
+/// `hadolint` is the whole word the linter answers to, so the prefix carries
+/// the space that ends it. Prose that merely opens with those letters —
+/// `# hadolintish note` — is a comment about the linter rather than an
+/// instruction to it, and stays removable.
 #[test]
 fn dockerfile_parser_and_linter_directives_are_protected() {
-    let source = b"# syntax=docker/dockerfile:1\n# explanatory\n# hadolint ignore=DL3018\nRUN apk add --no-cache musl-dev\n# shellcheck disable=SC2086\n";
+    let source = b"# syntax=docker/dockerfile:1\n# explanatory\n# hadolint ignore=DL3018\n# hadolintish note\nRUN apk add --no-cache musl-dev\n# shellcheck disable=SC2086\n";
     let report = scan(source, Language::Shell, ScanOptions::default());
     assert!(report.valid);
     let kinds: Vec<_> = report.comments.iter().map(|comment| comment.kind).collect();
@@ -363,10 +368,11 @@ fn dockerfile_parser_and_linter_directives_are_protected() {
             CommentKind::Directive,
             CommentKind::Line,
             CommentKind::Directive,
+            CommentKind::Line,
             CommentKind::Directive,
         ]
     );
-    assert_eq!(removable(&report), 1);
+    assert_eq!(removable(&report), 2);
 }
 
 #[test]

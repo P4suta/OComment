@@ -1,5 +1,5 @@
 use crate::config::ResolvedConfig;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use ignore::WalkBuilder;
 use ocomment_core::{DeclarativeProfile, Detection, Dialect, Language, detect_language};
@@ -476,7 +476,22 @@ pub fn profile_for_path(path: &Path, resolved: &ResolvedConfig) -> Option<Declar
 pub(crate) fn compile_globs(patterns: &[String]) -> Result<GlobSet> {
     let mut builder = GlobSetBuilder::new();
     for pattern in patterns {
-        builder.add(Glob::new(pattern).with_context(|| format!("invalid file glob `{pattern}`"))?);
+        let glob = Glob::new(pattern).map_err(|error| {
+            /* INVARIANT: Both halves of this line came out of a file in the project: the
+             * pattern the caller wrote, and a `globset` parse error that
+             * quotes that same pattern straight back. Neither may reach a
+             * terminal verbatim, and the line stays one line. The pattern
+             * keeps the spacing it was written with, because a reader who is
+             * shown something else cannot find it in the file. It is the same
+             * treatment `config::validate_regexes` gives the other pattern a
+             * project file carries. */
+            anyhow!(
+                "invalid file glob `{}`: {}",
+                crate::output::sanitize_path(pattern),
+                crate::output::sanitize_message(&error.to_string())
+            )
+        })?;
+        builder.add(glob);
     }
     builder.build().context("cannot compile file globs")
 }
