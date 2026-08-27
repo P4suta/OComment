@@ -7,7 +7,7 @@ All notable changes to OComment will be documented here. The project follows
 
 ### Added
 
-- Byte-oriented scanners and transformations for 29 built-in languages and the
+- Byte-oriented scanners and transformations for 30 built-in languages and the
   documented dialects.
 - CLI, staged Git fixes, LSP 3.18 server, declarative profiles, and sandboxed
   WASM component plugins.
@@ -67,7 +67,7 @@ All notable changes to OComment will be documented here. The project follows
   for the OCaml reference. `CONTRIBUTING.md` documents the tags.
 - An official VS Code extension, `P4suta.ocomment`, under `editors/vscode`. It
   is a client only: it launches the separately installed `ocomment lsp`,
-  attaches it to the thirty-four language identifiers OComment scans, and
+  attaches it to the thirty-five language identifiers OComment scans, and
   exposes the server's quick fixes, `source.fixAll.ocomment`, code lens, and
   pull diagnostics, plus `OComment: Remove comments in file`, `... in
   workspace`, `OComment: Restart server`, `OComment: Show output`, and a status

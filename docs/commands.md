@@ -131,6 +131,7 @@ Policy:
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
           - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
+          - perl:       Perl scripts and modules, whose quote words and regexes hide a `#`
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -328,6 +329,7 @@ Policy:
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
           - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
+          - perl:       Perl scripts and modules, whose quote words and regexes hide a `#`
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -510,6 +512,7 @@ Policy:
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
           - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
+          - perl:       Perl scripts and modules, whose quote words and regexes hide a `#`
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -684,6 +687,7 @@ Policy:
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
           - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
+          - perl:       Perl scripts and modules, whose quote words and regexes hide a `#`
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -858,6 +862,7 @@ Policy:
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
           - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
+          - perl:       Perl scripts and modules, whose quote words and regexes hide a `#`
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1022,6 +1027,7 @@ Policy:
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
           - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
+          - perl:       Perl scripts and modules, whose quote words and regexes hide a `#`
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1186,6 +1192,7 @@ Policy:
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
           - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
+          - perl:       Perl scripts and modules, whose quote words and regexes hide a `#`
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1366,6 +1373,7 @@ Policy:
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
           - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
+          - perl:       Perl scripts and modules, whose quote words and regexes hide a `#`
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1537,6 +1545,7 @@ Policy:
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
           - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
+          - perl:       Perl scripts and modules, whose quote words and regexes hide a `#`
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1701,6 +1710,7 @@ Policy:
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
           - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
+          - perl:       Perl scripts and modules, whose quote words and regexes hide a `#`
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1874,6 +1884,7 @@ Policy:
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
           - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
+          - perl:       Perl scripts and modules, whose quote words and regexes hide a `#`
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2051,6 +2062,7 @@ Policy:
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
           - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
+          - perl:       Perl scripts and modules, whose quote words and regexes hide a `#`
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2219,6 +2231,7 @@ Policy:
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
           - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
+          - perl:       Perl scripts and modules, whose quote words and regexes hide a `#`
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2383,6 +2396,7 @@ Policy:
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
           - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
+          - perl:       Perl scripts and modules, whose quote words and regexes hide a `#`
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2551,6 +2565,7 @@ Policy:
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
           - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
+          - perl:       Perl scripts and modules, whose quote words and regexes hide a `#`
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2719,6 +2734,7 @@ Policy:
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
           - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
+          - perl:       Perl scripts and modules, whose quote words and regexes hide a `#`
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2887,6 +2903,7 @@ Policy:
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
           - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
+          - perl:       Perl scripts and modules, whose quote words and regexes hide a `#`
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -3057,6 +3074,7 @@ Policy:
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
           - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
+          - perl:       Perl scripts and modules, whose quote words and regexes hide a `#`
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -3221,6 +3239,7 @@ Policy:
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
           - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
+          - perl:       Perl scripts and modules, whose quote words and regexes hide a `#`
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -3385,6 +3404,7 @@ Policy:
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
           - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
+          - perl:       Perl scripts and modules, whose quote words and regexes hide a `#`
 
       --dialect <DIALECT>
           Force this dialect of the selected language

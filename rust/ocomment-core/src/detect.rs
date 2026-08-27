@@ -62,7 +62,7 @@ enum Spelling {
 /// searching for it that way would read every `#!/usr/bin/awk` on disk as R.
 /// It is a [`Spelling::Word`] instead, and it is listed last so that every name
 /// spelled out in full is met before a bare letter is considered at all.
-const SHEBANGS: [(&str, Language, Dialect, Spelling); 19] = [
+const SHEBANGS: [(&str, Language, Dialect, Spelling); 20] = [
     (
         "python",
         Language::Python,
@@ -118,6 +118,12 @@ const SHEBANGS: [(&str, Language, Dialect, Spelling); 19] = [
     (
         "dotnet-script",
         Language::CSharp,
+        Dialect::Standard,
+        Spelling::Anywhere,
+    ),
+    (
+        "perl",
+        Language::Perl,
         Dialect::Standard,
         Spelling::Anywhere,
     ),
@@ -324,6 +330,11 @@ pub fn detect_language(path: Option<&Path>, source: &[u8]) -> Option<Detection> 
              * the fenced-block scan — which is what the note that once kept
              * it from the R entry is now the record of. */
             "md" | "markdown" | "rmd" => Some((Language::Markdown, Dialect::Standard)),
+            /* NOTE: `.pl`, `.pm` and `.t` are Perl — a program, a module and
+             * a test — and so is a `perl` `#!` line. `.pod` is deliberately
+             * absent: a POD document is documentation only, with no code to
+             * scan. */
+            "pl" | "pm" | "t" => Some((Language::Perl, Dialect::Standard)),
             "vue" => Some((Language::Vue, Dialect::Standard)),
             "svelte" => Some((Language::Svelte, Dialect::Standard)),
             "scss" | "sass" => Some((Language::Css, Dialect::Scss)),

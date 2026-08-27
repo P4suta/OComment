@@ -215,6 +215,12 @@ SCSS_STRUCTURE = [
     "// c", "/* c */", "a {", "}",
 ]
 
+PERL_STRUCTURE = [
+    "#", "q{", "q}", "qq{", "qw(", "qx`", "m/", "s/", "tr{", "y{", "/",
+    "<<'EOF'", "<<EOF", "=head1", "=cut", "=begin", "=pod", "//", "=>",
+    "$x", "@y", "%h", "# not", "#c", "\\", "(" , ")", "{", "}", "[", "]",
+]
+
 # NOTE: The bytes a lexer is liable to mishandle: NUL, DEL, a byte order mark, a
 # NOTE: no-break space, the two Unicode line terminators, and two characters
 # NOTE: wider than one byte.
@@ -243,6 +249,7 @@ TOKENS = (
     + VUE_STRUCTURE
     + SVELTE_STRUCTURE
     + SCSS_STRUCTURE
+    + PERL_STRUCTURE
     + AWKWARD_BYTES
 )
 

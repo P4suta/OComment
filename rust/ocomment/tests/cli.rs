@@ -6025,3 +6025,42 @@ fn a_markdown_file_scans_its_fenced_code_blocks() {
         b"# notes\n<!-- note -->\n```rust\n\n```\n`// inline`\n"
     );
 }
+
+/// A Perl file hides the `#` in its quote words and regexes and keeps its POD
+/// opaque, while a division's `#` is a comment.
+#[test]
+fn a_perl_file_hides_quote_words_and_keeps_pod_opaque() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("script.pl");
+    fs::write(
+        &path,
+        b"=head1 NAME\n# not a comment\n=cut\nmy $x = 'a#b';\nmy $y = $x / 2; # division\n",
+    )
+    .unwrap();
+
+    let scanned = run(directory.path(), &["scan", "script.pl", "--format", "json"]);
+    assert_eq!(
+        scanned.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&scanned.stderr)
+    );
+    let document: serde_json::Value = serde_json::from_slice(&scanned.stdout).unwrap();
+    let report = &document["files"][0]["report"];
+    assert_eq!(report["language"], "perl");
+    assert_eq!(report["comments"].as_array().unwrap().len(), 1);
+    assert_eq!(report["comments"][0]["span"]["start"], 64);
+    assert_eq!(report["comments"][0]["span"]["end"], 74);
+
+    let fixed = run(directory.path(), &["fix", "script.pl"]);
+    assert_eq!(
+        fixed.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&fixed.stderr)
+    );
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        b"=head1 NAME\n# not a comment\n=cut\nmy $x = 'a#b';\nmy $y = $x / 2; \n"
+    );
+}

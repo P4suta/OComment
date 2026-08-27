@@ -304,6 +304,7 @@ impl<'a> Scanner<'a> {
             Language::Vue => self.scan_vue(),
             Language::Svelte => self.scan_svelte(),
             Language::Markdown => self.scan_markdown(),
+            Language::Perl => self.scan_perl(),
             Language::Unknown => self.error(
                 "unknown-language",
                 "a language is required",
@@ -4903,6 +4904,330 @@ impl<'a> Scanner<'a> {
         self.scan_sfc(false);
     }
 
+    /// One Perl document.
+    ///
+    /// Perl's lexical surface is almost all quote words: the single and
+    /// double quotes and backticks, the `q`, `qq`, `qw` and `qx` forms, the
+    /// `m`, `s`, `tr` and `y` operators with delimiters of their own, and the
+    /// here-documents, all hide a `#` written inside them, and a POD block is
+    /// opaque. The one place the bytes do not settle the reading is a `/`
+    /// directly after a closing parenthesis, bracket or brace: perl reads
+    /// `f() /a#b/` as a regular expression and `(2) / 2` as a division, and
+    /// only the parse context tells which, so this scanner reports that `/`
+    /// as lexically ambiguous and refuses to edit the file, keeping the `#`
+    /// that would decide the other way out of reach.
+    fn scan_perl(&mut self) {
+        let bytes = self.source;
+        let mut index = 0;
+        let mut regex_allowed: Option<bool> = Some(true);
+        while index < bytes.len() && !self.stopped {
+            if (index == 0 || matches!(bytes[index - 1], b'\n' | b'\r'))
+                && bytes[index] == b'='
+                && bytes
+                    .get(index + 1)
+                    .is_some_and(|byte| byte.is_ascii_alphanumeric() || *byte == b'_')
+            {
+                index = self.scan_perl_pod(index);
+                continue;
+            }
+            if bytes[index] == b'#' {
+                let end = line_end(bytes, index + 1);
+                self.add_comment(index, end, CommentKind::Line);
+                index = end;
+                regex_allowed = Some(true);
+                continue;
+            }
+            if matches!(bytes[index], b'\'' | b'"' | b'`') {
+                index = self.scan_perl_quoted(index);
+                regex_allowed = Some(false);
+                continue;
+            }
+            if bytes[index] == b'<'
+                && bytes.get(index + 1) == Some(&b'<')
+                && let Some(end) = self.scan_perl_heredoc(index)
+            {
+                index = end;
+                regex_allowed = Some(false);
+                continue;
+            }
+            if (index == 0 || !is_perl_word_byte(bytes[index - 1]))
+                && matches!(bytes[index], b'q' | b'm' | b's' | b't' | b'y')
+                && let Some(end) = self.scan_perl_quote_word(index)
+            {
+                index = end;
+                regex_allowed = Some(false);
+                continue;
+            }
+            if bytes[index] == b'/' {
+                match regex_allowed {
+                    Some(true) => {
+                        let end = self.scan_perl_regex(index);
+                        index = end;
+                        regex_allowed = Some(false);
+                    }
+                    Some(false) => {
+                        index += 1;
+                        regex_allowed = Some(true);
+                    }
+                    None => {
+                        let end = self.scan_perl_regex(index);
+                        self.error(
+                            "lexical-ambiguity",
+                            "ambiguous `/` after a closing delimiter: a regex or a division",
+                            ByteSpan::new(index, end),
+                        );
+                        index = end;
+                        regex_allowed = Some(false);
+                    }
+                }
+                continue;
+            }
+            if bytes[index] == b')' || bytes[index] == b']' || bytes[index] == b'}' {
+                index += 1;
+                regex_allowed = None;
+                continue;
+            }
+            if bytes[index] == b'(' || bytes[index] == b'[' || bytes[index] == b'{' {
+                index += 1;
+                regex_allowed = Some(true);
+                continue;
+            }
+            if bytes[index] == b'$' || bytes[index] == b'@' || bytes[index] == b'%' {
+                index += 1;
+                while index < bytes.len() && is_perl_word_byte(bytes[index]) {
+                    index += 1;
+                }
+                regex_allowed = Some(false);
+                continue;
+            }
+            if bytes[index].is_ascii_alphabetic() || bytes[index] == b'_' {
+                let start = index;
+                index += 1;
+                while index < bytes.len() && is_perl_word_byte(bytes[index]) {
+                    index += 1;
+                }
+                let word = &bytes[start..index];
+                regex_allowed = perl_word_allows_regex(word);
+                continue;
+            }
+            if bytes[index].is_ascii_digit() {
+                while index < bytes.len()
+                    && (bytes[index].is_ascii_alphanumeric() || matches!(bytes[index], b'.' | b'_'))
+                {
+                    index += 1;
+                }
+                regex_allowed = Some(false);
+                continue;
+            }
+            match bytes[index] {
+                b'=' | b'+' | b'-' | b'*' | b'%' | b'!' | b'~' | b'&' | b'|' | b'?' | b':'
+                | b',' | b';' | b'<' | b'>' => {
+                    index += 1;
+                    regex_allowed = Some(true);
+                }
+                b'\r' | b'\n' => {
+                    index = consume_newline(bytes, index);
+                    self.add_safe_checkpoint(index);
+                    regex_allowed = Some(true);
+                }
+                _ => index += 1,
+            }
+        }
+    }
+
+    /// One POD block, beginning at the `=` of its marker. The block is opaque
+    /// until a line that opens with `=cut`; a stray `=cut` with nothing open
+    /// is a line like any other.
+    fn scan_perl_pod(&mut self, start: usize) -> usize {
+        let bytes = self.source;
+        let mut index = start;
+        while index < bytes.len() {
+            let line_finish = line_end(bytes, index);
+            if (index == start || bytes.get(index).copied() == Some(b'='))
+                && starts(bytes, index, b"=cut")
+                && index != start
+            {
+                return if line_finish >= bytes.len() {
+                    line_finish
+                } else {
+                    consume_newline(bytes, line_finish)
+                };
+            }
+            if index == start {
+                let pod_line = line_end(bytes, start);
+                if pod_line >= bytes.len() {
+                    return bytes.len();
+                }
+                index = consume_newline(bytes, pod_line);
+                continue;
+            }
+            if line_finish >= bytes.len() {
+                return bytes.len();
+            }
+            index = consume_newline(bytes, line_finish);
+        }
+        bytes.len()
+    }
+
+    /// One Perl string or command substitution, beginning at its quote.
+    fn scan_perl_quoted(&mut self, start: usize) -> usize {
+        let bytes = self.source;
+        let quote = bytes[start];
+        let mut index = start + 1;
+        let mut backslashes = 0usize;
+        while index < bytes.len() {
+            if bytes[index] == b'\\' {
+                backslashes += 1;
+                index += 1;
+                continue;
+            }
+            if bytes[index] == quote {
+                if quote == b'\'' {
+                    if backslashes.is_multiple_of(2) {
+                        return index + 1;
+                    }
+                } else {
+                    return index + 1;
+                }
+            }
+            backslashes = 0;
+            if quote != b'\'' && bytes[index] == b'\\' {
+                index = (index + 1).min(bytes.len());
+            }
+            index += 1;
+        }
+        bytes.len()
+    }
+
+    /// One Perl quote word, here-document or the `m`, `s`, `tr` and `y`
+    /// operators, beginning at the letter that names it, or `None` when the
+    /// letter is a bareword rather than a quote.
+    fn scan_perl_quote_word(&mut self, start: usize) -> Option<usize> {
+        let bytes = self.source;
+        let mut cursor = start;
+        let mut form = Vec::new();
+        form.push(bytes[cursor]);
+        if matches!(bytes[cursor], b'q' | b't')
+            && let Some(&second) = bytes.get(cursor + 1)
+            && ((bytes[cursor] == b'q' && matches!(second, b'q' | b'w' | b'x' | b'r'))
+                || (bytes[cursor] == b't' && second == b'r'))
+        {
+            form.push(second);
+            cursor += 1;
+        }
+        cursor += 1;
+        while cursor < bytes.len() && bytes[cursor].is_ascii_whitespace() && bytes[cursor] != b'\n'
+        {
+            cursor += 1;
+        }
+        let delimiter = bytes.get(cursor).copied()?;
+        if is_perl_word_byte(delimiter) {
+            return None;
+        }
+        let first = perl_section_end(bytes, cursor, delimiter)?;
+        if matches!(form[0], b's' | b't' | b'y') {
+            let second = bytes.get(first).copied()?;
+            if is_perl_word_byte(second) {
+                return None;
+            }
+            let second_end = perl_section_end(bytes, first, second)?;
+            return Some(second_end);
+        }
+        Some(first)
+    }
+
+    /// One Perl here-document, beginning at its `<<`, or `None` when the
+    /// `<<` is the shift operator.
+    fn scan_perl_heredoc(&mut self, start: usize) -> Option<usize> {
+        let bytes = self.source;
+        let mut cursor = start + 2;
+        let indented = bytes.get(cursor) == Some(&b'~');
+        if indented {
+            cursor += 1;
+        }
+        let mut terminator = Vec::new();
+        if matches!(bytes.get(cursor), Some(b'\'' | b'"' | b'`')) {
+            let quote = bytes[cursor];
+            cursor += 1;
+            while cursor < bytes.len() && bytes[cursor] != quote {
+                terminator.push(bytes[cursor]);
+                cursor += 1;
+            }
+            cursor += 1;
+        } else {
+            while cursor < bytes.len() && is_perl_word_byte(bytes[cursor]) {
+                terminator.push(bytes[cursor]);
+                cursor += 1;
+            }
+        }
+        if terminator.is_empty() {
+            return None;
+        }
+        let line_finish = line_end(bytes, cursor);
+        let mut body = if line_finish >= bytes.len() {
+            return Some(bytes.len());
+        } else {
+            consume_newline(bytes, line_finish)
+        };
+        while body < bytes.len() {
+            let line_finish = line_end(bytes, body);
+            let mut content = body;
+            if indented {
+                while content < line_finish && matches!(bytes[content], b' ' | b'\t') {
+                    content += 1;
+                }
+            }
+            if bytes[content..line_finish] == terminator[..] {
+                return Some(if line_finish >= bytes.len() {
+                    line_finish
+                } else {
+                    consume_newline(bytes, line_finish)
+                });
+            }
+            body = if line_finish >= bytes.len() {
+                bytes.len()
+            } else {
+                consume_newline(bytes, line_finish)
+            };
+        }
+        Some(bytes.len())
+    }
+
+    /// One Perl regular expression, beginning at its `/`, to the unescaped
+    /// `/` that closes it — a `/` inside a character class is content — and
+    /// past the modifiers that follow.
+    fn scan_perl_regex(&mut self, start: usize) -> usize {
+        let bytes = self.source;
+        let mut index = start + 1;
+        while index < bytes.len() {
+            if bytes[index] == b'\\' {
+                index = (index + 2).min(bytes.len());
+                continue;
+            }
+            if bytes[index] == b'[' {
+                index += 1;
+                while index < bytes.len() && bytes[index] != b']' {
+                    if bytes[index] == b'\\' {
+                        index = (index + 2).min(bytes.len());
+                    } else {
+                        index += 1;
+                    }
+                }
+                index += 1;
+                continue;
+            }
+            if bytes[index] == b'/' {
+                index += 1;
+                while index < bytes.len() && is_perl_word_byte(bytes[index]) {
+                    index += 1;
+                }
+                return index;
+            }
+            index += 1;
+        }
+        bytes.len()
+    }
+
     /// One Markdown document.
     ///
     /// An HTML comment is a comment, a fenced code block is scanned as the
@@ -5497,13 +5822,13 @@ fn java_text_block_end(source: &[u8], start: usize) -> (usize, bool) {
     let mut index = start.saturating_add(3);
     while index + 2 < source.len() {
         if starts(source, index, b"\"\"\"") {
-            let mut backslashes = 0;
+            let mut backslashes = 0usize;
             let mut cursor = index;
             while cursor > start + 3 && source[cursor - 1] == b'\\' {
                 backslashes += 1;
                 cursor -= 1;
             }
-            if backslashes % 2 == 0 {
+            if backslashes.is_multiple_of(2) {
                 return (index + 3, true);
             }
         }
@@ -5679,46 +6004,33 @@ impl RestartRules {
 /// would read the rest of the tag as ordinary text and find a comment in it
 /// the full scan protected.
 ///
-/// The test is the quote structure. A position with a quote of a kind on each
-/// side of it — each the nearest of its kind, so no quote of the kind lies
-/// between them — sits inside the pair they form: that is how a quoted
-/// attribute is recognised, and it is asked of the offset itself and of every
-/// byte the walk steps over, so the walk crosses only unquoted `<` and `>`.
-/// A suffix scan — whose own source begins at the checkpoint — gives the
-/// same answers, because a checkpoint that is itself sound, as every recorded
-/// one is, sits inside no pair and no tag, so the pairs and tags its walk
-/// meets lie within its bytes.
+/// The test walks back to the nearest `<` and reads the tag forward from it,
+/// exactly as the scan would: the quotes pair and the first unquoted `>`
+/// ends the tag. The offset is refused when the tag is still open there — its
+/// `>` lies beyond it or never comes. A suffix scan — whose own source begins
+/// at the checkpoint — gives the same answer, because a checkpoint that is
+/// itself sound, as every recorded one is, sits inside no tag, so the `<`
+/// its walk meets lies within its bytes.
 fn the_tag_boundary_permits_a_restart(source: &[u8], offset: usize) -> bool {
-    for kind in b"\"'".iter().copied() {
-        if source[..offset]
-            .iter()
-            .rposition(|byte| *byte == kind)
-            .is_some()
-            && source
-                .get(offset + 1..)
-                .is_some_and(|rest| rest.contains(&kind))
-        {
-            return false;
-        }
-    }
     let mut index = offset;
     while index > 0 {
         index -= 1;
-        let quoted = b"\"'".iter().any(|kind| {
-            source[..index]
-                .iter()
-                .rposition(|byte| byte == kind)
-                .is_some()
-                && source
-                    .get(index + 1..)
-                    .is_some_and(|rest| rest.contains(kind))
-        });
-        if !quoted {
-            match source[index] {
-                b'>' => return true,
-                b'<' => return false,
-                _ => {}
+        if source[index] == b'<' {
+            let mut cursor = index + 1;
+            let mut quote = None;
+            while cursor < offset {
+                if let Some(active) = quote {
+                    if source[cursor] == active {
+                        quote = None;
+                    }
+                } else if matches!(source[cursor], b'\'' | b'"') {
+                    quote = Some(source[cursor]);
+                } else if source[cursor] == b'>' {
+                    return true;
+                }
+                cursor += 1;
             }
+            return false;
         }
     }
     true
@@ -8576,6 +8888,101 @@ fn markdown_fence_language(info: &[u8]) -> Option<Language> {
     } else {
         std::str::from_utf8(word).ok()?.parse().ok()
     }
+}
+
+/// A byte a Perl word may carry.
+fn is_perl_word_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || matches!(byte, b'_')
+}
+
+/// Whether the word at the front of a token leaves the next `/` a regex
+/// opener: the functions and operators perl reads a term after.
+fn perl_word_allows_regex(word: &[u8]) -> Option<bool> {
+    matches!(
+        word,
+        b"return"
+            | b"if"
+            | b"unless"
+            | b"while"
+            | b"until"
+            | b"for"
+            | b"foreach"
+            | b"and"
+            | b"or"
+            | b"not"
+            | b"print"
+            | b"printf"
+            | b"say"
+            | b"split"
+            | b"grep"
+            | b"map"
+            | b"join"
+            | b"sort"
+            | b"push"
+            | b"unshift"
+            | b"pop"
+            | b"shift"
+            | b"splice"
+            | b"index"
+            | b"length"
+            | b"substr"
+            | b"chomp"
+            | b"chop"
+            | b"lc"
+            | b"uc"
+    )
+    .then_some(true)
+    .or(Some(false))
+}
+
+/// The byte after one section of a Perl quote word, beginning at its
+/// delimiter: the section closes at the delimiter's mate, nesting for the
+/// paired delimiters, with a `\` carrying the byte behind it in.
+fn perl_section_end(bytes: &[u8], start: usize, delimiter: u8) -> Option<usize> {
+    let close = match delimiter {
+        b'(' => b')',
+        b'[' => b']',
+        b'{' => b'}',
+        b'<' => b'>',
+        other => other,
+    };
+    if delimiter == close {
+        let mut index = start + 1;
+        while index < bytes.len() {
+            if bytes[index] == b'\\' {
+                index = (index + 2).min(bytes.len());
+                continue;
+            }
+            if bytes[index] == delimiter {
+                return Some(index + 1);
+            }
+            index += 1;
+        }
+        return None;
+    }
+    let mut depth = 1usize;
+    let mut index = start + 1;
+    while index < bytes.len() {
+        if bytes[index] == b'\\' {
+            index = (index + 2).min(bytes.len());
+            continue;
+        }
+        if bytes[index] == delimiter {
+            depth += 1;
+            index += 1;
+            continue;
+        }
+        if bytes[index] == close {
+            depth -= 1;
+            index += 1;
+            if depth == 0 {
+                return Some(index);
+            }
+            continue;
+        }
+        index += 1;
+    }
+    None
 }
 
 fn tag_attr_value<'a>(attrs: &'a [u8], name: &[u8]) -> Option<&'a [u8]> {

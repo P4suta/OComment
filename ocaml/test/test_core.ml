@@ -297,6 +297,14 @@ let check_markdown_fences () =
   Alcotest.(check bool) "valid" true report.valid;
   Alcotest.(check int) "only the rust comment" 1 (List.length report.comments)
 
+(* NOTE: Perl's POD blocks are opaque, and its division comments are
+   comments. *)
+let check_perl_pod () =
+  let source = "=head1 NAME\n# not a comment\n=cut\nmy $x = 1; # comment\n" in
+  let report = scan (Bytes.of_string source) Perl default_scan_options in
+  Alcotest.(check bool) "valid" true report.valid;
+  Alcotest.(check int) "only the real comment" 1 (List.length report.comments)
+
 let () = Alcotest.run "ocomment-ref" [
   "core", [
     Alcotest.test_case "transform" `Quick check_transform;
@@ -322,5 +330,6 @@ let () = Alcotest.run "ocomment-ref" [
       check_scala_xml_and_interpolation;
     Alcotest.test_case "vue-component" `Quick check_vue_component;
     Alcotest.test_case "markdown-fences" `Quick check_markdown_fences;
+    Alcotest.test_case "perl-pod" `Quick check_perl_pod;
   ]
 ]

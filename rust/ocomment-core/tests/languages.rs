@@ -4652,16 +4652,12 @@ fn r_is_detected_from_its_extension_reserved_name_and_shebang() {
     /* NOTE: The one-letter name is the reason the `#!` table cannot be searched
      * for it as a substring: `/usr/` carries an `r` and so does every second
      * interpreter path, so this name is compared against whole words. */
-    for line in [
-        b"#!/usr/bin/perl -w\n".as_slice(),
-        b"#!/usr/bin/awk -f\n".as_slice(),
-    ] {
-        assert!(
-            detect_language(None, line).is_none(),
-            "{:?} was read as R",
-            String::from_utf8_lossy(line)
-        );
-    }
+    assert!(
+        detect_language(None, b"#!/usr/bin/awk -f\n").is_none(),
+        "awk was read as R"
+    );
+    let perl = detect_language(None, b"#!/usr/bin/perl -w\n").expect("perl shebang");
+    assert_eq!((perl.language, perl.reason), (Language::Perl, "shebang"));
 }
 
 #[test]
@@ -6802,4 +6798,96 @@ fn markdown_is_detected_from_its_extensions() {
         assert_eq!(found.language, Language::Markdown);
         assert_eq!(found.reason, "extension");
     }
+}
+
+/// A Perl `#` runs to the end of its line, and a POD block is opaque: the
+/// `#` inside `=head1 ... =cut` is documentation text, not a comment.
+///
+/// Ground truth, perl 5.38: the source below passes `perl -c`.
+#[test]
+fn perl_comments_and_pod_blocks() {
+    let source = b"=head1 NAME\n# not a comment\n=cut\nmy $x = 1; # comment\n";
+    let report = scan(source, Language::Perl, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(44, 53));
+}
+
+/// Every Perl string and quote-word form hides a `#` written inside it: the
+/// single and double quotes and backticks, the `q`, `qq`, `qw` and `qx`
+/// forms, the `m`, `s`, `tr` and `y` operators with their own delimiters.
+///
+/// Ground truth, perl 5.38: the source below passes `perl -c`.
+#[test]
+fn perl_strings_and_quote_words_hide_comment_openers() {
+    let source = b"my $a = '# not';\nmy $b = \"# not\";\nmy $c = `# not`;\nmy $d = q{# not};\nmy $e = qq{# not};\nmy $f = qw(a # b);\nmy $g = qx{# not};\nmy $h = m{# not};\nmy $i = s{# not}{x};\nmy $j = tr{a#}{b#};\n# remove\n";
+    let report = scan(source, Language::Perl, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(185, 193));
+}
+
+/// A here-document's body is opaque until the line that names the terminator,
+/// however the terminator was written: plain, quoted, or with the indented
+/// `<<~` form.
+///
+/// Ground truth, perl 5.38: the sources below pass `perl -c`.
+#[test]
+fn perl_heredocs_are_opaque() {
+    let source = b"my $a = <<'EOF';\n# not a comment\nEOF\nmy $b = <<\"EOF\";\n# not a comment\nEOF\nmy $c = <<EOF;\n# not a comment\nEOF\nmy $d = <<~EOF;\n\t# not a comment\n\tEOF\n# remove\n";
+    let report = scan(source, Language::Perl, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(147, 155));
+}
+
+/// A regular expression is scanned as such after `=~` and `!~`, and the `m`,
+/// `s`, `tr` and `qr` forms are scanned with their delimiters, so a `#` in
+/// the pattern is pattern content; a `/` between two operands is a division
+/// and the `#` after it is a comment.
+///
+/// Ground truth, perl 5.38: the source below passes `perl -c`.
+#[test]
+fn perl_regexes_hide_hashes_and_division_comments_are_comments() {
+    let source = b"my $x = 'a#b';\nif ($x =~ /a#b/) { print \"yes\\n\" }\nmy $r = m/a#b/;\nmy $q = qr/a#b/;\nmy $y = $x / 2; # division\n";
+    let report = scan(source, Language::Perl, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(99, 109));
+}
+
+/// A `/` directly after a closing parenthesis is ambiguous — perl reads
+/// `f() /a#b/` as a regex and `(2) / 2` as a division, and only the parse
+/// context tells which — so the scanner reports it as lexically ambiguous
+/// and a fix refuses to touch the file.
+///
+/// Ground truth, perl 5.38: both forms below pass `perl -c`.
+#[test]
+fn perl_an_ambiguous_slash_after_a_closing_delimiter() {
+    let source = b"sub f { 1 }\nf() /a#b/;\nmy $x = (2) / 2; # division\n";
+    let report = scan(source, Language::Perl, ScanOptions::default());
+    assert!(!report.valid);
+    assert!(
+        report
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "lexical-ambiguity")
+    );
+}
+
+/// Perl is detected from `.pl`, `.pm` and `.t`, and from a `perl` `#!` line.
+#[test]
+fn perl_is_detected_from_its_extensions_and_shebang() {
+    for path in [
+        Path::new("script.pl"),
+        Path::new("Module.pm"),
+        Path::new("test.t"),
+    ] {
+        let found = detect_language(Some(path), b"my $x = 1;\n").expect("detected by extension");
+        assert_eq!(found.language, Language::Perl);
+        assert_eq!(found.reason, "extension");
+    }
+    let shebang = detect_language(None, b"#!/usr/bin/env perl\n").expect("detected by shebang");
+    assert_eq!(shebang.language, Language::Perl);
+    assert_eq!(shebang.reason, "shebang");
 }

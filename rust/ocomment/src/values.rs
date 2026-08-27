@@ -134,6 +134,7 @@ value_enum_wrapper!(LanguageArg, Language, |value| match value {
     Language::Svelte => "Svelte components, whose templates are HTML with `{ ... }` code",
     Language::Markdown =>
         "Markdown documents, whose fenced code blocks are scanned as their named languages",
+    Language::Perl => "Perl scripts and modules, whose quote words and regexes hide a `#`",
     Language::Unknown => "An undetected language",
 });
 

@@ -245,3 +245,10 @@ name = "markdown"
 extensions = ["md", "markdown", "rmd"]
 dialects = ["standard"]
 notes = "CommonMark documents; HTML comments are comments, fenced code blocks are scanned as the language their info string names, and inline and indented code are opaque"
+
+[[languages]]
+name = "perl"
+extensions = ["pl", "pm", "t"]
+dialects = ["standard"]
+shebangs = ["perl"]
+notes = "Perl 5.38 lexical forms; quote words and regexes hide a `#`, POD blocks are opaque, and a `/` the parse context alone settles is reported as lexically ambiguous"

@@ -50,7 +50,8 @@ csharp\:"C# source and script files, whose \`#\` lines are preprocessor directiv
 scala\:"Scala source and script files, whose block comments nest and whose XML literals are opaque"
 vue\:"Vue single-file components, whose templates are HTML with \`{{ ... }}\` code"
 svelte\:"Svelte components, whose templates are HTML with \`{ ... }\` code"
-markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"))' \
+markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"
+perl\:"Perl scripts and modules, whose quote words and regexes hide a \`#\`"))' \
 '--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
 jsx\:"JavaScript with JSX elements"
 tsx\:"TypeScript with JSX elements"
@@ -153,7 +154,8 @@ csharp\:"C# source and script files, whose \`#\` lines are preprocessor directiv
 scala\:"Scala source and script files, whose block comments nest and whose XML literals are opaque"
 vue\:"Vue single-file components, whose templates are HTML with \`{{ ... }}\` code"
 svelte\:"Svelte components, whose templates are HTML with \`{ ... }\` code"
-markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"))' \
+markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"
+perl\:"Perl scripts and modules, whose quote words and regexes hide a \`#\`"))' \
 '--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
 jsx\:"JavaScript with JSX elements"
 tsx\:"TypeScript with JSX elements"
@@ -249,7 +251,8 @@ csharp\:"C# source and script files, whose \`#\` lines are preprocessor directiv
 scala\:"Scala source and script files, whose block comments nest and whose XML literals are opaque"
 vue\:"Vue single-file components, whose templates are HTML with \`{{ ... }}\` code"
 svelte\:"Svelte components, whose templates are HTML with \`{ ... }\` code"
-markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"))' \
+markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"
+perl\:"Perl scripts and modules, whose quote words and regexes hide a \`#\`"))' \
 '--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
 jsx\:"JavaScript with JSX elements"
 tsx\:"TypeScript with JSX elements"
@@ -348,7 +351,8 @@ csharp\:"C# source and script files, whose \`#\` lines are preprocessor directiv
 scala\:"Scala source and script files, whose block comments nest and whose XML literals are opaque"
 vue\:"Vue single-file components, whose templates are HTML with \`{{ ... }}\` code"
 svelte\:"Svelte components, whose templates are HTML with \`{ ... }\` code"
-markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"))' \
+markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"
+perl\:"Perl scripts and modules, whose quote words and regexes hide a \`#\`"))' \
 '--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
 jsx\:"JavaScript with JSX elements"
 tsx\:"TypeScript with JSX elements"
@@ -444,7 +448,8 @@ csharp\:"C# source and script files, whose \`#\` lines are preprocessor directiv
 scala\:"Scala source and script files, whose block comments nest and whose XML literals are opaque"
 vue\:"Vue single-file components, whose templates are HTML with \`{{ ... }}\` code"
 svelte\:"Svelte components, whose templates are HTML with \`{ ... }\` code"
-markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"))' \
+markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"
+perl\:"Perl scripts and modules, whose quote words and regexes hide a \`#\`"))' \
 '--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
 jsx\:"JavaScript with JSX elements"
 tsx\:"TypeScript with JSX elements"
@@ -540,7 +545,8 @@ csharp\:"C# source and script files, whose \`#\` lines are preprocessor directiv
 scala\:"Scala source and script files, whose block comments nest and whose XML literals are opaque"
 vue\:"Vue single-file components, whose templates are HTML with \`{{ ... }}\` code"
 svelte\:"Svelte components, whose templates are HTML with \`{ ... }\` code"
-markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"))' \
+markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"
+perl\:"Perl scripts and modules, whose quote words and regexes hide a \`#\`"))' \
 '--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
 jsx\:"JavaScript with JSX elements"
 tsx\:"TypeScript with JSX elements"
@@ -633,7 +639,8 @@ csharp\:"C# source and script files, whose \`#\` lines are preprocessor directiv
 scala\:"Scala source and script files, whose block comments nest and whose XML literals are opaque"
 vue\:"Vue single-file components, whose templates are HTML with \`{{ ... }}\` code"
 svelte\:"Svelte components, whose templates are HTML with \`{ ... }\` code"
-markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"))' \
+markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"
+perl\:"Perl scripts and modules, whose quote words and regexes hide a \`#\`"))' \
 '--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
 jsx\:"JavaScript with JSX elements"
 tsx\:"TypeScript with JSX elements"
@@ -726,7 +733,8 @@ csharp\:"C# source and script files, whose \`#\` lines are preprocessor directiv
 scala\:"Scala source and script files, whose block comments nest and whose XML literals are opaque"
 vue\:"Vue single-file components, whose templates are HTML with \`{{ ... }}\` code"
 svelte\:"Svelte components, whose templates are HTML with \`{ ... }\` code"
-markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"))' \
+markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"
+perl\:"Perl scripts and modules, whose quote words and regexes hide a \`#\`"))' \
 '--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
 jsx\:"JavaScript with JSX elements"
 tsx\:"TypeScript with JSX elements"
@@ -823,7 +831,8 @@ csharp\:"C# source and script files, whose \`#\` lines are preprocessor directiv
 scala\:"Scala source and script files, whose block comments nest and whose XML literals are opaque"
 vue\:"Vue single-file components, whose templates are HTML with \`{{ ... }}\` code"
 svelte\:"Svelte components, whose templates are HTML with \`{ ... }\` code"
-markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"))' \
+markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"
+perl\:"Perl scripts and modules, whose quote words and regexes hide a \`#\`"))' \
 '--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
 jsx\:"JavaScript with JSX elements"
 tsx\:"TypeScript with JSX elements"
@@ -917,7 +926,8 @@ csharp\:"C# source and script files, whose \`#\` lines are preprocessor directiv
 scala\:"Scala source and script files, whose block comments nest and whose XML literals are opaque"
 vue\:"Vue single-file components, whose templates are HTML with \`{{ ... }}\` code"
 svelte\:"Svelte components, whose templates are HTML with \`{ ... }\` code"
-markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"))' \
+markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"
+perl\:"Perl scripts and modules, whose quote words and regexes hide a \`#\`"))' \
 '--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
 jsx\:"JavaScript with JSX elements"
 tsx\:"TypeScript with JSX elements"
@@ -1010,7 +1020,8 @@ csharp\:"C# source and script files, whose \`#\` lines are preprocessor directiv
 scala\:"Scala source and script files, whose block comments nest and whose XML literals are opaque"
 vue\:"Vue single-file components, whose templates are HTML with \`{{ ... }}\` code"
 svelte\:"Svelte components, whose templates are HTML with \`{ ... }\` code"
-markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"))' \
+markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"
+perl\:"Perl scripts and modules, whose quote words and regexes hide a \`#\`"))' \
 '--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
 jsx\:"JavaScript with JSX elements"
 tsx\:"TypeScript with JSX elements"
@@ -1114,7 +1125,8 @@ csharp\:"C# source and script files, whose \`#\` lines are preprocessor directiv
 scala\:"Scala source and script files, whose block comments nest and whose XML literals are opaque"
 vue\:"Vue single-file components, whose templates are HTML with \`{{ ... }}\` code"
 svelte\:"Svelte components, whose templates are HTML with \`{ ... }\` code"
-markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"))' \
+markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"
+perl\:"Perl scripts and modules, whose quote words and regexes hide a \`#\`"))' \
 '--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
 jsx\:"JavaScript with JSX elements"
 tsx\:"TypeScript with JSX elements"
@@ -1208,7 +1220,8 @@ csharp\:"C# source and script files, whose \`#\` lines are preprocessor directiv
 scala\:"Scala source and script files, whose block comments nest and whose XML literals are opaque"
 vue\:"Vue single-file components, whose templates are HTML with \`{{ ... }}\` code"
 svelte\:"Svelte components, whose templates are HTML with \`{ ... }\` code"
-markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"))' \
+markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"
+perl\:"Perl scripts and modules, whose quote words and regexes hide a \`#\`"))' \
 '--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
 jsx\:"JavaScript with JSX elements"
 tsx\:"TypeScript with JSX elements"
@@ -1302,7 +1315,8 @@ csharp\:"C# source and script files, whose \`#\` lines are preprocessor directiv
 scala\:"Scala source and script files, whose block comments nest and whose XML literals are opaque"
 vue\:"Vue single-file components, whose templates are HTML with \`{{ ... }}\` code"
 svelte\:"Svelte components, whose templates are HTML with \`{ ... }\` code"
-markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"))' \
+markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"
+perl\:"Perl scripts and modules, whose quote words and regexes hide a \`#\`"))' \
 '--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
 jsx\:"JavaScript with JSX elements"
 tsx\:"TypeScript with JSX elements"
@@ -1395,7 +1409,8 @@ csharp\:"C# source and script files, whose \`#\` lines are preprocessor directiv
 scala\:"Scala source and script files, whose block comments nest and whose XML literals are opaque"
 vue\:"Vue single-file components, whose templates are HTML with \`{{ ... }}\` code"
 svelte\:"Svelte components, whose templates are HTML with \`{ ... }\` code"
-markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"))' \
+markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"
+perl\:"Perl scripts and modules, whose quote words and regexes hide a \`#\`"))' \
 '--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
 jsx\:"JavaScript with JSX elements"
 tsx\:"TypeScript with JSX elements"
@@ -1489,7 +1504,8 @@ csharp\:"C# source and script files, whose \`#\` lines are preprocessor directiv
 scala\:"Scala source and script files, whose block comments nest and whose XML literals are opaque"
 vue\:"Vue single-file components, whose templates are HTML with \`{{ ... }}\` code"
 svelte\:"Svelte components, whose templates are HTML with \`{ ... }\` code"
-markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"))' \
+markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"
+perl\:"Perl scripts and modules, whose quote words and regexes hide a \`#\`"))' \
 '--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
 jsx\:"JavaScript with JSX elements"
 tsx\:"TypeScript with JSX elements"
@@ -1583,7 +1599,8 @@ csharp\:"C# source and script files, whose \`#\` lines are preprocessor directiv
 scala\:"Scala source and script files, whose block comments nest and whose XML literals are opaque"
 vue\:"Vue single-file components, whose templates are HTML with \`{{ ... }}\` code"
 svelte\:"Svelte components, whose templates are HTML with \`{ ... }\` code"
-markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"))' \
+markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"
+perl\:"Perl scripts and modules, whose quote words and regexes hide a \`#\`"))' \
 '--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
 jsx\:"JavaScript with JSX elements"
 tsx\:"TypeScript with JSX elements"
@@ -1725,7 +1742,8 @@ csharp\:"C# source and script files, whose \`#\` lines are preprocessor directiv
 scala\:"Scala source and script files, whose block comments nest and whose XML literals are opaque"
 vue\:"Vue single-file components, whose templates are HTML with \`{{ ... }}\` code"
 svelte\:"Svelte components, whose templates are HTML with \`{ ... }\` code"
-markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"))' \
+markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"
+perl\:"Perl scripts and modules, whose quote words and regexes hide a \`#\`"))' \
 '--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
 jsx\:"JavaScript with JSX elements"
 tsx\:"TypeScript with JSX elements"
@@ -1819,7 +1837,8 @@ csharp\:"C# source and script files, whose \`#\` lines are preprocessor directiv
 scala\:"Scala source and script files, whose block comments nest and whose XML literals are opaque"
 vue\:"Vue single-file components, whose templates are HTML with \`{{ ... }}\` code"
 svelte\:"Svelte components, whose templates are HTML with \`{ ... }\` code"
-markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"))' \
+markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"
+perl\:"Perl scripts and modules, whose quote words and regexes hide a \`#\`"))' \
 '--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
 jsx\:"JavaScript with JSX elements"
 tsx\:"TypeScript with JSX elements"
@@ -1912,7 +1931,8 @@ csharp\:"C# source and script files, whose \`#\` lines are preprocessor directiv
 scala\:"Scala source and script files, whose block comments nest and whose XML literals are opaque"
 vue\:"Vue single-file components, whose templates are HTML with \`{{ ... }}\` code"
 svelte\:"Svelte components, whose templates are HTML with \`{ ... }\` code"
-markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"))' \
+markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"
+perl\:"Perl scripts and modules, whose quote words and regexes hide a \`#\`"))' \
 '--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
 jsx\:"JavaScript with JSX elements"
 tsx\:"TypeScript with JSX elements"

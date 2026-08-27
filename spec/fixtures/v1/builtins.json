@@ -1656,6 +1656,30 @@
         "diagnostics": [],
         "output_utf8": "text\n<!-- note -->\nmore\n```rust\n\n```\n`// inline`\n"
       }
+    },
+    {
+      "id": "perl-builtin-safe",
+      "language": "perl",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "=head1 NAME\n# not a comment\n=cut\nmy $x = 'a#b';\nif ($x =~ /a#b/) { print \"yes\\n\" }\nmy $y = $x / 2; # division\n",
+      "note": "Perl 5.38: the POD block and the string and regex are opaque \u2014 the `#` inside them is content \u2014 and `$x / 2` is a division whose `# division` is a comment. Ground truth, `perl -c`: the source compiles.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 99,
+            "end": 109,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "=head1 NAME\n# not a comment\n=cut\nmy $x = 'a#b';\nif ($x =~ /a#b/) { print \"yes\\n\" }\nmy $y = $x / 2; \n"
+      }
     }
   ]
 }

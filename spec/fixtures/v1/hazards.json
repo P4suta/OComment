@@ -11166,6 +11166,33 @@
         "comments": [],
         "diagnostics": []
       }
+    },
+    {
+      "id": "perl-ambiguous-slash-after-paren",
+      "language": "perl",
+      "operation": "scan",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "sub f { 1 }\nf() /a#b/;\nmy $x = (2) / 2; # division\n",
+      "note": "Perl 5.38: a `/` directly after a closing parenthesis is settled only by the parse context \u2014 `f() /a#b/` is a regex whose `#` is pattern content, and `(2) / 2` is a division whose `# division` is a comment \u2014 so this scanner reports it as lexically ambiguous, marks the file invalid and refuses to edit it. Ground truth, `perl -c`: both forms compile.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "lexical-ambiguity",
+            "start": 16,
+            "end": 21
+          },
+          {
+            "code": "lexical-ambiguity",
+            "start": 35,
+            "end": 51
+          }
+        ]
+      }
     }
   ]
 }

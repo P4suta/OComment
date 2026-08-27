@@ -1,7 +1,7 @@
 type language =
   | Rust | Ocaml | C | Cpp | Go | Java | JavaScript | TypeScript | Python
   | Shell | Html | Css | Jsonc | Sql | Kotlin | Toml | Lua | Yaml | Php | Ruby
-  | Zig | R | Dart | Swift | CSharp | Scala | Vue | Svelte | Markdown | Unknown
+  | Zig | R | Dart | Swift | CSharp | Scala | Vue | Svelte | Markdown | Perl | Unknown
 
 type dialect =
   | Standard | Jsx | Tsx | ObjectiveC | ObjectiveCpp | GnuC | GnuCpp | Cuda
@@ -95,6 +95,7 @@ let language_of_string value =
   | "vue" -> Ok Vue
   | "svelte" -> Ok Svelte
   | "markdown" -> Ok Markdown
+  | "perl" -> Ok Perl
   | other -> Error ("unsupported language `" ^ other ^ "`")
 
 let string_of_language = function
@@ -109,6 +110,7 @@ let string_of_language = function
   | Vue -> "vue"
   | Svelte -> "svelte"
   | Markdown -> "markdown"
+  | Perl -> "perl"
   | Unknown -> "unknown"
 
 let string_of_comment_kind = function
@@ -5206,6 +5208,233 @@ let vue_style_language lang =
    indented code block is opaque: a "//" or a "/*" in one is code text, not a
    comment.  Every construct is recognised at its own start and read forward,
    so no decision depends on a byte behind a restart. *)
+(* NOTE: One Perl document.  Perl's lexical surface is almost all quote
+   words: the single and double quotes and backticks, the "q", "qq", "qw" and
+   "qx" forms, the "m", "s", "tr" and "y" operators with delimiters of their
+   own, and the here-documents, all hide a "#" written inside them, and a POD
+   block is opaque.  The one place the bytes do not settle the reading is a
+   "/" directly after a closing parenthesis, bracket or brace: perl reads
+   "f() /a#b/" as a regular expression and "(2) / 2" as a division, and only
+   the parse context tells which, so this scanner reports that "/" as
+   lexically ambiguous and refuses to edit the file, keeping the "#" that
+   would decide the other way out of reach. *)
+let scan_perl source language options accumulator =
+  let length = Bytes.length source in
+  let word_byte byte =
+    (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z')
+    || (byte >= '0' && byte <= '9') || byte = '_' in
+  let word_allows_regex word =
+    match word with
+    | "return" | "if" | "unless" | "while" | "until" | "for" | "foreach"
+    | "and" | "or" | "not" | "print" | "printf" | "say" | "split" | "grep"
+    | "map" | "join" | "sort" | "push" | "unshift" | "pop" | "shift"
+    | "splice" | "index" | "length" | "substr" | "chomp" | "chop" | "lc"
+    | "uc" -> true
+    | _ -> false in
+  let section_end start delimiter =
+    let close = match delimiter with
+      | '(' -> ')' | '[' -> ']' | '{' -> '}' | '<' -> '>'
+      | other -> other in
+    if delimiter = close then begin
+      let rec loop index =
+        if index >= length then None
+        else if Bytes.get source index = '\\' then loop (min length (index + 2))
+        else if Bytes.get source index = delimiter then Some (index + 1)
+        else loop (index + 1) in
+      loop (start + 1)
+    end else begin
+      let rec loop index depth =
+        if index >= length then None
+        else if Bytes.get source index = '\\' then loop (min length (index + 2)) depth
+        else if Bytes.get source index = delimiter then loop (index + 1) (depth + 1)
+        else if Bytes.get source index = close then
+          if depth = 1 then Some (index + 1) else loop (index + 1) (depth - 1)
+        else loop (index + 1) depth in
+      loop (start + 1) 1
+    end in
+  let pod start =
+    let rec loop index =
+      if index >= length then length
+      else begin
+        let line_finish = line_end source index in
+        if index = start then begin
+          if line_finish >= length then length
+          else loop (consume_newline source line_finish)
+        end else if starts source index "=cut" then
+          if line_finish >= length then line_finish
+          else consume_newline source line_finish
+        else if line_finish >= length then length
+        else loop (consume_newline source line_finish)
+      end in
+    loop start in
+  let quoted start =
+    let quote = Bytes.get source start in
+    let rec loop index backslashes =
+      if index >= length then length
+      else if Bytes.get source index = '\\' then loop (index + 1) (backslashes + 1)
+      else if Bytes.get source index = quote then
+        if quote = '\'' then
+          if backslashes mod 2 = 0 then index + 1 else loop (index + 1) 0
+        else index + 1
+      else loop (index + 1) 0 in
+    loop (start + 1) 0 in
+  let quote_word start =
+    let letter = Bytes.get source start in
+    let rec skip_space index =
+      if index < length && Bytes.get source index = ' ' then skip_space (index + 1) else index in
+    let second_letter index =
+      if index < length && word_byte (Bytes.get source index) then
+        if (letter = 'q' && (Bytes.get source index = 'q' || Bytes.get source index = 'w'
+                             || Bytes.get source index = 'x' || Bytes.get source index = 'r'))
+           || (letter = 't' && Bytes.get source index = 'r')
+        then (index + 1, true) else (index, false)
+      else (index, false) in
+    let cursor, _doubled = second_letter (start + 1) in
+    let cursor = skip_space cursor in
+    if cursor >= length then None
+    else if word_byte (Bytes.get source cursor) then None
+    else match section_end cursor (Bytes.get source cursor) with
+      | None -> None
+      | Some first ->
+        if letter = 's' || letter = 't' || letter = 'y' then
+          if first >= length then None
+          else if word_byte (Bytes.get source first) then None
+          else Option.map (fun second_end -> second_end) (section_end first (Bytes.get source first))
+        else Some first in
+  let heredoc start =
+    let rec terminator_word index acc =
+      if index < length && word_byte (Bytes.get source index)
+      then terminator_word (index + 1) (acc ^ String.make 1 (Bytes.get source index))
+      else (index, acc) in
+    let cursor = start + 2 in
+    let indented = cursor < length && Bytes.get source cursor = '~' in
+    let cursor = if indented then cursor + 1 else cursor in
+    let cursor, terminator =
+      if cursor < length && (Bytes.get source cursor = '\'' || Bytes.get source cursor = '"'
+                             || Bytes.get source cursor = '`') then begin
+        let quote = Bytes.get source cursor in
+        let rec inner index acc =
+          if index >= length then (length, acc)
+          else if Bytes.get source index = quote then (index + 1, acc)
+          else inner (index + 1) (acc ^ String.make 1 (Bytes.get source index)) in
+        inner (cursor + 1) ""
+      end else terminator_word cursor "" in
+    if terminator = "" then None
+    else begin
+      let line_finish = line_end source cursor in
+      let rec body index =
+        if index >= length then Some length
+        else begin
+          let line_finish = line_end source index in
+          let rec content cursor =
+            if indented && cursor < line_finish && (Bytes.get source cursor = ' '
+                                                    || Bytes.get source cursor = '\t')
+            then content (cursor + 1) else cursor in
+          let content = content index in
+          if Bytes.sub_string source content (line_finish - content) = terminator then
+            Some (if line_finish >= length then line_finish else consume_newline source line_finish)
+          else if line_finish >= length then Some length
+          else body (consume_newline source line_finish)
+        end in
+      if line_finish >= length then Some length else body (consume_newline source line_finish)
+    end in
+  let regex start =
+    let rec loop index =
+      if index >= length then length
+      else if Bytes.get source index = '\\' then loop (min length (index + 2))
+      else if Bytes.get source index = '[' then begin
+        let rec class_index index =
+          if index >= length then length
+          else if Bytes.get source index = ']' then index + 1
+          else if Bytes.get source index = '\\' then class_index (min length (index + 2))
+          else class_index (index + 1) in
+        loop (class_index (index + 1))
+      end
+      else if Bytes.get source index = '/' then begin
+        let rec modifiers index =
+          if index < length && word_byte (Bytes.get source index) then modifiers (index + 1) else index in
+        modifiers (index + 1)
+      end
+      else loop (index + 1) in
+    loop (start + 1) in
+  let rec loop index regex_allowed =
+    if index >= length then ()
+    else if (index = 0 || Bytes.get source (index - 1) = '\n' || Bytes.get source (index - 1) = '\r')
+            && Bytes.get source index = '='
+            && index + 1 < length && word_byte (Bytes.get source (index + 1))
+    then loop (pod index) regex_allowed
+    else if Bytes.get source index = '#' then begin
+      let finish = line_end source (index + 1) in
+      add_comment accumulator source language options Line index finish;
+      loop finish (Some true)
+    end
+    else if Bytes.get source index = '\'' || Bytes.get source index = '"' || Bytes.get source index = '`'
+    then loop (quoted index) (Some false)
+    else if Bytes.get source index = '<' && index + 1 < length && Bytes.get source (index + 1) = '<'
+    then (match heredoc index with
+      | Some finish -> loop finish (Some false)
+      | None -> loop (index + 1) regex_allowed)
+    else if (index = 0 || not (word_byte (Bytes.get source (index - 1))))
+            && (Bytes.get source index = 'q' || Bytes.get source index = 'm'
+                || Bytes.get source index = 's' || Bytes.get source index = 't'
+                || Bytes.get source index = 'y')
+    then (match quote_word index with
+      | Some finish -> loop finish (Some false)
+      | None ->
+        (* NOTE: the letter is a bareword, so the `/` after it is settled by
+           the same rules as after any other word. *)
+        let start = index in
+        let rec ident index =
+          if index < length && word_byte (Bytes.get source index) then ident (index + 1) else index in
+        let finish = ident index in
+        loop finish (Some (word_allows_regex (Bytes.sub_string source start (finish - start)))))
+    else if Bytes.get source index = '/' then begin
+      match regex_allowed with
+      | Some true ->
+        let finish = regex index in
+        loop finish (Some false)
+      | Some false -> loop (index + 1) (Some true)
+      | None ->
+        let finish = regex index in
+        add_error accumulator "lexical-ambiguity"
+          "ambiguous `/` after a closing delimiter: a regex or a division" index finish;
+        loop finish (Some false)
+    end
+    else if Bytes.get source index = ')' || Bytes.get source index = ']' || Bytes.get source index = '}'
+    then loop (index + 1) None
+    else if Bytes.get source index = '(' || Bytes.get source index = '[' || Bytes.get source index = '{'
+    then loop (index + 1) (Some true)
+    else if Bytes.get source index = '$' || Bytes.get source index = '@' || Bytes.get source index = '%'
+    then begin
+      let rec ident index =
+        if index < length && word_byte (Bytes.get source index) then ident (index + 1) else index in
+      loop (ident (index + 1)) (Some false)
+    end
+    else if (Bytes.get source index >= 'a' && Bytes.get source index <= 'z')
+            || (Bytes.get source index >= 'A' && Bytes.get source index <= 'Z')
+            || Bytes.get source index = '_' then begin
+      let start = index in
+      let rec ident index =
+        if index < length && word_byte (Bytes.get source index) then ident (index + 1) else index in
+      let finish = ident index in
+      loop finish (Some (word_allows_regex (Bytes.sub_string source start (finish - start))))
+    end
+    else if Bytes.get source index >= '0' && Bytes.get source index <= '9' then begin
+      let rec digits index =
+        if index < length && word_byte (Bytes.get source index) then digits (index + 1) else index in
+      loop (digits index) (Some false)
+    end
+    else if Bytes.get source index = '=' || Bytes.get source index = '+' || Bytes.get source index = '-'
+            || Bytes.get source index = '*' || Bytes.get source index = '%' || Bytes.get source index = '!'
+            || Bytes.get source index = '~' || Bytes.get source index = '&' || Bytes.get source index = '|'
+            || Bytes.get source index = '?' || Bytes.get source index = ':' || Bytes.get source index = ','
+            || Bytes.get source index = ';' || Bytes.get source index = '<' || Bytes.get source index = '>'
+    then loop (index + 1) (Some true)
+    else if Bytes.get source index = '\r' || Bytes.get source index = '\n'
+    then loop (consume_newline source index) (Some true)
+    else loop (index + 1) regex_allowed
+  in ignore (loop 0 (Some true))
+
 let scan_markdown source language options accumulator =
   let length = Bytes.length source in
   let html_comment index =
@@ -5288,6 +5517,7 @@ let scan_markdown source language options accumulator =
         | CSharp -> scan_csharp child_source embedded options child
         | Scala -> scan_scala child_source embedded options child
         | R -> scan_r child_source embedded options child
+        | Perl -> scan_perl child_source embedded options child
         | Html | Markdown | Vue | Svelte | Unknown -> ());
        List.iter (fun (comment : comment) ->
          accumulator.comments_rev <- { comment with span = { start = comment.span.start + info_finish; finish = comment.span.finish + info_finish } } :: accumulator.comments_rev) (List.rev child.comments_rev);
@@ -5606,6 +5836,7 @@ and scan source language options =
   | Vue -> scan_vue source language options accumulator
   | Svelte -> scan_svelte source language options accumulator
   | Markdown -> scan_markdown source language options accumulator
+  | Perl -> scan_perl source language options accumulator
   | R -> scan_r source language options accumulator
   | Html -> scan_html source language options accumulator
   | Unknown -> add_error accumulator "unknown-language" "a language is required" 0 0);

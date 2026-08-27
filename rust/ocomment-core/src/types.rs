@@ -160,6 +160,11 @@ pub enum Language {
     /// scanned as the language their info string names, and inline and
     /// indented code are opaque.
     Markdown,
+    /// Perl, detected from `.pl`, `.pm` and `.t`, and from a `perl` `#!`
+    /// line. Its quote words, here-documents and regular expressions hide a
+    /// `#`, its POD blocks are opaque, and a `/` the parse context alone
+    /// settles is reported as lexically ambiguous.
+    Perl,
     /// No built-in scanner, and the default.
     ///
     /// Scanning it yields no comments and one `unknown-language` error
@@ -172,7 +177,7 @@ pub enum Language {
 
 impl Language {
     /// Every CLI-visible language; `Unknown` is deliberately excluded.
-    pub const ALL: [Self; 29] = [
+    pub const ALL: [Self; 30] = [
         Self::Rust,
         Self::Ocaml,
         Self::C,
@@ -202,6 +207,7 @@ impl Language {
         Self::Vue,
         Self::Svelte,
         Self::Markdown,
+        Self::Perl,
     ];
 
     /// The canonical name, identical to the serde representation.
@@ -236,6 +242,7 @@ impl Language {
             Self::Vue => "vue",
             Self::Svelte => "svelte",
             Self::Markdown => "markdown",
+            Self::Perl => "perl",
             Self::Unknown => "unknown",
         }
     }
@@ -260,6 +267,7 @@ impl Language {
             | Self::Vue
             | Self::Svelte
             | Self::Markdown
+            | Self::Perl
             | Self::Unknown => &[],
             Self::Cpp => &["c++", "cxx"],
             Self::Go => &["golang"],

@@ -23,8 +23,8 @@ $ ocomment strip --language rust --dialect mysql
 ocomment: unsupported dialect `mysql` for rust; supported: standard
 ```
 
-OComment has 29 built-in languages covering
-75 file extensions and 17 named dialects.
+OComment has 30 built-in languages covering
+78 file extensions and 17 named dialects.
 
 | Language | Extensions | Dialects |
 | --- | --- | --- |
@@ -57,6 +57,7 @@ OComment has 29 built-in languages covering
 | `vue` | `.vue` | `standard` |
 | `svelte` | `.svelte` | `standard` |
 | `markdown` | `.md`, `.markdown`, `.rmd` | `standard` |
+| `perl` | `.pl`, `.pm`, `.t` | `standard` |
 
 ## Detected without an extension
 
@@ -81,6 +82,7 @@ interpreter name appears anywhere on the line.
 | `swift` | — | `swift` |
 | `csharp` | — | `dotnet-script` |
 | `scala` | — | `scala-cli`, `scala` |
+| `perl` | — | `perl` |
 
 ## Anything else
 
@@ -310,6 +312,17 @@ a fenced code block is scanned as the language its info string
 names — ```rust, `{r}` and `c++` all reach their scanners — and an
 inline code span or an indented code block is opaque, so a `//` or
 a `/*` inside one is code text, not a comment.
+
+Perl is scanned conservatively: a `#` runs to the end of its
+line, a POD block is opaque, and every quote word — the single
+and double quotes and backticks, `q`, `qq`, `qw`, `qx`, `m`,
+`s`, `tr` and `y` with delimiters of their own, and the
+here-documents — hides a `#` written inside it. A `/` directly
+after a closing parenthesis, bracket or brace is reported as
+lexically ambiguous: perl reads `f() /a#b/` as a regular
+expression and `(2) / 2` as a division, and only the parse
+context tells which, so the file is called invalid and nothing
+is edited.
 
 YAML is scanned lexically, and `valid` is a lexical answer: the
 shapes a YAML *parser* rejects are not all shapes a lexer can see.
