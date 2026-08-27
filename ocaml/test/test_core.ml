@@ -278,6 +278,16 @@ let check_scala_xml_and_interpolation () =
   Alcotest.(check bool) "valid" true report.valid;
   Alcotest.(check int) "two comments" 2 (List.length report.comments)
 
+(* NOTE: Vue's template is HTML with code in its mustaches, and its script
+   and style bodies are scanned as their own languages; the v-pre directive
+   makes an element's content raw text. *)
+let check_vue_component () =
+  let source =
+    "<div v-pre>{{ x // not }}</div>\n<template>\n<!-- note -->\n</template>\n" in
+  let report = scan (Bytes.of_string source) Vue default_scan_options in
+  Alcotest.(check bool) "valid" true report.valid;
+  Alcotest.(check int) "only the html comment" 1 (List.length report.comments)
+
 let () = Alcotest.run "ocomment-ref" [
   "core", [
     Alcotest.test_case "transform" `Quick check_transform;
@@ -301,5 +311,6 @@ let () = Alcotest.run "ocomment-ref" [
     Alcotest.test_case "php-modes" `Quick check_php_modes;
     Alcotest.test_case "scala-xml-and-interpolation" `Quick
       check_scala_xml_and_interpolation;
+    Alcotest.test_case "vue-component" `Quick check_vue_component;
   ]
 ]

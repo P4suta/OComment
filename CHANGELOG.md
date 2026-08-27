@@ -7,7 +7,7 @@ All notable changes to OComment will be documented here. The project follows
 
 ### Added
 
-- Byte-oriented scanners and transformations for 26 built-in languages and the
+- Byte-oriented scanners and transformations for 28 built-in languages and the
   documented dialects.
 - CLI, staged Git fixes, LSP 3.18 server, declarative profiles, and sandboxed
   WASM component plugins.
@@ -67,7 +67,7 @@ All notable changes to OComment will be documented here. The project follows
   for the OCaml reference. `CONTRIBUTING.md` documents the tags.
 - An official VS Code extension, `P4suta.ocomment`, under `editors/vscode`. It
   is a client only: it launches the separately installed `ocomment lsp`,
-  attaches it to the thirty-one language identifiers OComment scans, and
+  attaches it to the thirty-three language identifiers OComment scans, and
   exposes the server's quick fixes, `source.fixAll.ocomment`, code lens, and
   pull diagnostics, plus `OComment: Remove comments in file`, `... in
   workspace`, `OComment: Restart server`, `OComment: Show output`, and a status
@@ -397,6 +397,20 @@ All notable changes to OComment will be documented here. The project follows
   exactly where the lexer says one does: a `<` preceded by space, tab, line
   feed, `{`, `(` or `>` and followed by an XML name start, `!` or `?`, so
   `x<a>` stays a comparison and `x <a>` opens a literal.
+- Vue and Svelte are built-in languages. A component's `<script>` and
+  `<style>` bodies are scanned as their own languages, the `lang` attribute
+  choosing which — `ts` and `tsx` select TypeScript, `jsx` JavaScript with
+  JSX, and `scss` and the indented `sass` the SCSS dialect — and a `lang`
+  this scanner has no rules for, such as `coffee`, `less` or `pug`, makes
+  the whole block opaque. A template is HTML with code in it: `<!-- ... -->`
+  is an HTML comment, and `{{ ... }}` in Vue or `{ ... }` in Svelte opens an
+  expression whose comments are comments, while a Vue `v-pre` element makes
+  its whole content raw text.
+- SCSS and the indented Sass syntax join CSS as the `scss` dialect: `//`
+  opens a silent comment, `#{ ... }` opens an interpolation whose expression
+  is code, and an unquoted `url( ... )` is read the way dart-sass reads it —
+  a protocol-relative `url(//cdn/x.png)` is URL text, not a comment. `.scss`
+  and `.sass` select the dialect.
 - `//> using` is kept because scala-cli reads a directive line before it reads
   a manifest at all. `.scala` and the `.sc` of a script select the language,
   as do `scala` and `scala-cli` `#!` lines, and `#!` at the very first byte

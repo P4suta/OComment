@@ -695,6 +695,7 @@ pub fn supported_dialects(language: Language) -> &'static [Dialect] {
             Dialect::GnuCpp,
             Dialect::Cuda,
         ],
+        Language::Css => &[Dialect::Standard, Dialect::Scss],
         Language::Shell => &[
             Dialect::Standard,
             Dialect::PosixSh,

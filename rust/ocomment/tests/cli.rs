@@ -5922,3 +5922,47 @@ fn a_scala_file_keeps_its_directive_and_hides_xml_text() {
         b"//> using scala \"3.3.0\"\nval a = <a>// text</a>\nval b = s\"${1 }\" \n\n"
     );
 }
+
+/// A Vue file scans its template, script and style blocks, keeps the
+/// template's HTML comment, and removes a comment from the mustache and from
+/// each embedded language.
+#[test]
+fn a_vue_file_scans_its_template_script_and_style_blocks() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("App.vue");
+    fs::write(
+        &path,
+        b"<template>\n<!-- note -->\n<div>{{ x /* c */ }}</div>\n</template>\n<script setup lang=\"ts\">\n// ts\n</script>\n<style lang=\"scss\">\n// scss\n</style>\n",
+    )
+    .unwrap();
+
+    let scanned = run(directory.path(), &["scan", "App.vue", "--format", "json"]);
+    assert_eq!(
+        scanned.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&scanned.stderr)
+    );
+    let document: serde_json::Value = serde_json::from_slice(&scanned.stdout).unwrap();
+    let report = &document["files"][0]["report"];
+    assert_eq!(report["language"], "vue");
+    assert_eq!(report["comments"].as_array().unwrap().len(), 4);
+    assert_eq!(report["comments"][0]["kind"], "html-comment");
+    assert_eq!(report["comments"][0]["disposition"]["action"], "keep");
+    assert_eq!(report["comments"][1]["span"]["start"], 35);
+    assert_eq!(report["comments"][1]["span"]["end"], 42);
+    assert_eq!(report["comments"][2]["span"]["start"], 89);
+    assert_eq!(report["comments"][3]["span"]["start"], 125);
+
+    let fixed = run(directory.path(), &["fix", "App.vue"]);
+    assert_eq!(
+        fixed.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&fixed.stderr)
+    );
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        b"<template>\n<!-- note -->\n<div>{{ x  }}</div>\n</template>\n<script setup lang=\"ts\">\n\n</script>\n<style lang=\"scss\">\n\n</style>\n"
+    );
+}

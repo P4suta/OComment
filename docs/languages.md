@@ -23,8 +23,8 @@ $ ocomment strip --language rust --dialect mysql
 ocomment: unsupported dialect `mysql` for rust; supported: standard
 ```
 
-OComment has 26 built-in languages covering
-68 file extensions and 16 named dialects.
+OComment has 28 built-in languages covering
+72 file extensions and 17 named dialects.
 
 | Language | Extensions | Dialects |
 | --- | --- | --- |
@@ -39,7 +39,7 @@ OComment has 26 built-in languages covering
 | `python` | `.py`, `.pyw`, `.pyi` | `standard` |
 | `shell` | `.sh` (`posix-sh`), `.bash` (`bash53`), `.zsh` (`zsh`) | `standard`, `posix-sh`, `bash53`, `zsh` |
 | `html` | `.html`, `.htm`, `.xhtml`, `.shtml` | `standard` |
-| `css` | `.css` | `standard` |
+| `css` | `.css`, `.scss` (`scss`), `.sass` (`scss`) | `standard`, `scss` |
 | `jsonc` | `.jsonc`, `.json5` | `standard` |
 | `sql` | `.sql` | `standard`, `postgresql`, `mysql`, `sqlite`, `t-sql`, `oracle` |
 | `kotlin` | `.kt`, `.kts` | `standard` |
@@ -54,6 +54,8 @@ OComment has 26 built-in languages covering
 | `swift` | `.swift` | `standard` |
 | `csharp` | `.cs`, `.csx` | `standard` |
 | `scala` | `.scala`, `.sc` | `standard` |
+| `vue` | `.vue` | `standard` |
+| `svelte` | `.svelte` | `standard` |
 
 ## Detected without an extension
 
@@ -284,6 +286,23 @@ tag matching its root or at a self-closing `/>`. A literal begins
 exactly where the lexer says one does: a `<` preceded by space,
 tab, line feed, `{`, `(` or `>` and followed by an XML name start,
 `!` or `?`.
+
+Vue and Svelte components are HTML with code in the template: a
+`<!-- ... -->` is an HTML comment, and `{{ ... }}` in Vue or
+`{ ... }` in Svelte opens an expression whose comments are
+comments — in Vue, a `v-pre` element makes its whole content raw
+text instead. The `<script>` and `<style>` bodies are scanned as
+their own languages, the `lang` attribute choosing which: `ts` and
+`tsx` select TypeScript, `jsx` JavaScript with JSX, and `scss` and
+the indented `sass` the SCSS dialect. A `lang` this scanner has no
+rules for — `coffee`, `less`, `pug` — makes the whole block opaque.
+
+SCSS and the indented Sass syntax are CSS plus two rules: `//`
+opens a silent comment, and `#{ ... }` opens an interpolation
+whose expression is code. An unquoted `url( ... )` is read the way
+dart-sass reads it — its bytes are URL text until the `)` that
+ends them, a protocol-relative `url(//cdn/x.png)` included — with
+`#{ ... }` inside it code.
 
 YAML is scanned lexically, and `valid` is a lexical answer: the
 shapes a YAML *parser* rejects are not all shapes a lexer can see.

@@ -128,6 +128,8 @@ Policy:
           - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
           - csharp:     C# source and script files, whose `#` lines are preprocessor directives
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
+          - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
+          - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -149,6 +151,7 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
+          - scss:          SCSS and the indented Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -321,6 +324,8 @@ Policy:
           - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
           - csharp:     C# source and script files, whose `#` lines are preprocessor directives
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
+          - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
+          - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -342,6 +347,7 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
+          - scss:          SCSS and the indented Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -499,6 +505,8 @@ Policy:
           - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
           - csharp:     C# source and script files, whose `#` lines are preprocessor directives
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
+          - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
+          - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -520,6 +528,7 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
+          - scss:          SCSS and the indented Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -669,6 +678,8 @@ Policy:
           - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
           - csharp:     C# source and script files, whose `#` lines are preprocessor directives
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
+          - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
+          - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -690,6 +701,7 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
+          - scss:          SCSS and the indented Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -839,6 +851,8 @@ Policy:
           - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
           - csharp:     C# source and script files, whose `#` lines are preprocessor directives
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
+          - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
+          - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -860,6 +874,7 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
+          - scss:          SCSS and the indented Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -999,6 +1014,8 @@ Policy:
           - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
           - csharp:     C# source and script files, whose `#` lines are preprocessor directives
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
+          - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
+          - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1020,6 +1037,7 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
+          - scss:          SCSS and the indented Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -1159,6 +1177,8 @@ Policy:
           - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
           - csharp:     C# source and script files, whose `#` lines are preprocessor directives
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
+          - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
+          - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1180,6 +1200,7 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
+          - scss:          SCSS and the indented Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -1335,6 +1356,8 @@ Policy:
           - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
           - csharp:     C# source and script files, whose `#` lines are preprocessor directives
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
+          - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
+          - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1356,6 +1379,7 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
+          - scss:          SCSS and the indented Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -1502,6 +1526,8 @@ Policy:
           - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
           - csharp:     C# source and script files, whose `#` lines are preprocessor directives
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
+          - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
+          - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1523,6 +1549,7 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
+          - scss:          SCSS and the indented Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -1662,6 +1689,8 @@ Policy:
           - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
           - csharp:     C# source and script files, whose `#` lines are preprocessor directives
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
+          - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
+          - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1683,6 +1712,7 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
+          - scss:          SCSS and the indented Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -1831,6 +1861,8 @@ Policy:
           - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
           - csharp:     C# source and script files, whose `#` lines are preprocessor directives
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
+          - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
+          - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1852,6 +1884,7 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
+          - scss:          SCSS and the indented Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -2004,6 +2037,8 @@ Policy:
           - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
           - csharp:     C# source and script files, whose `#` lines are preprocessor directives
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
+          - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
+          - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2025,6 +2060,7 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
+          - scss:          SCSS and the indented Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -2168,6 +2204,8 @@ Policy:
           - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
           - csharp:     C# source and script files, whose `#` lines are preprocessor directives
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
+          - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
+          - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2189,6 +2227,7 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
+          - scss:          SCSS and the indented Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -2328,6 +2367,8 @@ Policy:
           - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
           - csharp:     C# source and script files, whose `#` lines are preprocessor directives
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
+          - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
+          - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2349,6 +2390,7 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
+          - scss:          SCSS and the indented Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -2492,6 +2534,8 @@ Policy:
           - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
           - csharp:     C# source and script files, whose `#` lines are preprocessor directives
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
+          - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
+          - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2513,6 +2557,7 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
+          - scss:          SCSS and the indented Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -2656,6 +2701,8 @@ Policy:
           - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
           - csharp:     C# source and script files, whose `#` lines are preprocessor directives
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
+          - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
+          - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2677,6 +2724,7 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
+          - scss:          SCSS and the indented Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -2820,6 +2868,8 @@ Policy:
           - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
           - csharp:     C# source and script files, whose `#` lines are preprocessor directives
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
+          - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
+          - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2841,6 +2891,7 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
+          - scss:          SCSS and the indented Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -2986,6 +3037,8 @@ Policy:
           - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
           - csharp:     C# source and script files, whose `#` lines are preprocessor directives
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
+          - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
+          - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -3007,6 +3060,7 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
+          - scss:          SCSS and the indented Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -3146,6 +3200,8 @@ Policy:
           - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
           - csharp:     C# source and script files, whose `#` lines are preprocessor directives
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
+          - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
+          - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -3167,6 +3223,7 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
+          - scss:          SCSS and the indented Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -3306,6 +3363,8 @@ Policy:
           - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
           - csharp:     C# source and script files, whose `#` lines are preprocessor directives
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
+          - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
+          - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -3327,6 +3386,7 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
+          - scss:          SCSS and the indented Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy

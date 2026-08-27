@@ -70,7 +70,7 @@
   "$defs": {
     "strings": { "type": "array", "items": { "type": "string" }, "default": [] },
     "policy": { "enum": ["safe", "legal", "all"], "default": "safe" },
-    "language": { "enum": ["rust", "ocaml", "c", "cpp", "go", "java", "javascript", "typescript", "python", "shell", "html", "css", "jsonc", "sql", "kotlin", "toml", "lua", "yaml", "php", "ruby", "zig", "r", "dart", "swift", "csharp", "scala"] },
+    "language": { "enum": ["rust", "ocaml", "c", "cpp", "go", "java", "javascript", "typescript", "python", "shell", "html", "css", "jsonc", "sql", "kotlin", "toml", "lua", "yaml", "php", "ruby", "zig", "r", "dart", "swift", "csharp", "scala", "vue", "svelte"] },
     "kind": { "enum": ["line", "block", "doc-line", "doc-block", "directive", "license", "html-comment", "shebang", "encoding", "optimizer-hint", "version-comment"] },
     "kinds": { "type": "array", "items": { "$ref": "#/$defs/kind" }, "default": [] },
     "languageConfig": {
@@ -97,7 +97,7 @@
       }
     },
     "dialect": {
-      "enum": ["standard", "jsx", "tsx", "objective-c", "objective-cpp", "gnu-c", "gnu-cpp", "cuda", "posix-sh", "bash53", "zsh", "postgresql", "mysql", "sqlite", "t-sql", "oracle"]
+      "enum": ["standard", "jsx", "tsx", "objective-c", "objective-cpp", "gnu-c", "gnu-cpp", "cuda", "posix-sh", "bash53", "zsh", "postgresql", "mysql", "sqlite", "t-sql", "oracle", "scss"]
     },
     "nonEmptyStrings": {
       "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 }

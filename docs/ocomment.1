@@ -111,6 +111,10 @@ swift: Swift source files, whose block comments nest and whose `#/../#` is a reg
 csharp: C# source and script files, whose `#` lines are preprocessor directives
 .IP \(bu 2
 scala: Scala source and script files, whose block comments nest and whose XML literals are opaque
+.IP \(bu 2
+vue: Vue single\-file components, whose templates are HTML with `{{ ... }}` code
+.IP \(bu 2
+svelte: Svelte components, whose templates are HTML with `{ ... }` code
 .RE
 .TP
 \fB\-\-dialect\fR \fI<DIALECT>\fR
@@ -152,6 +156,8 @@ sqlite: SQLite
 t\-sql: Microsoft Transact\-SQL
 .IP \(bu 2
 oracle: Oracle SQL and PL/SQL
+.IP \(bu 2
+scss: SCSS and the indented Sass syntax
 .RE
 .TP
 \fB\-\-keep\-kind\fR \fI<KIND>\fR

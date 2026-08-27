@@ -198,6 +198,23 @@ SCALA_STRUCTURE = [
     "> <", "\\u0022", "'c'", "'/", "'sym",
 ]
 
+VUE_STRUCTURE = [
+    "{{", "}}", "<!--", "-->", "<template>", "</template>", "<script", "</script>",
+    "<style", "</style>", 'lang="ts"', 'lang="scss"', 'lang="less"', "v-pre",
+    "<div", "</div>", ":title=", "// text", "/* c */",
+]
+
+SVELTE_STRUCTURE = [
+    "{", "}", "{#if", "{/if}", "{#each", "{/each}", "<!--", "-->",
+    "<script", "</script>", "<style", "</style>", 'lang="ts"', 'lang="scss"',
+    "<p>", "</p>", "title=", "// text", "/* c */",
+]
+
+SCSS_STRUCTURE = [
+    "//", "/*", "*/", "#{", "}", "url(", ")", "$x:", 'content: "', "//cdn/",
+    "// c", "/* c */", "a {", "}",
+]
+
 # NOTE: The bytes a lexer is liable to mishandle: NUL, DEL, a byte order mark, a
 # NOTE: no-break space, the two Unicode line terminators, and two characters
 # NOTE: wider than one byte.
@@ -223,6 +240,9 @@ TOKENS = (
     + SWIFT_STRUCTURE
     + CSHARP_STRUCTURE
     + SCALA_STRUCTURE
+    + VUE_STRUCTURE
+    + SVELTE_STRUCTURE
+    + SCSS_STRUCTURE
     + AWKWARD_BYTES
 )
 

@@ -16,5 +16,5 @@
 # Blank lines and `#` lines are ignored; every other line is a name and a
 # decimal count separated by white space.
 
-cases 456
-expectations 456
+cases 462
+expectations 462

@@ -313,6 +313,15 @@ pub fn detect_language(path: Option<&Path>, source: &[u8]) -> Option<Detection> 
              * and `.scala.sc` carries `.sc` as its last suffix and is detected
              * as that. */
             "scala" | "sc" => Some((Language::Scala, Dialect::Standard)),
+            /* NOTE: `.vue` and `.svelte` are the suffixes of single-file
+             * components, whose templates are HTML with code in them and whose
+             * script and style bodies are scanned as their own languages.
+             * `.scss` and `.sass` are the two Sass syntaxes, which share the
+             * one `scss` dialect: both read `//` line comments and `#{ ... }`
+             * interpolation. */
+            "vue" => Some((Language::Vue, Dialect::Standard)),
+            "svelte" => Some((Language::Svelte, Dialect::Standard)),
+            "scss" | "sass" => Some((Language::Css, Dialect::Scss)),
             _ => None,
         };
         if let Some((language, dialect)) = by_extension {

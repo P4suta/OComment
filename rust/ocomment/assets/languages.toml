@@ -95,8 +95,9 @@ notes = "script and style bodies are scanned as JavaScript and CSS"
 
 [[languages]]
 name = "css"
-extensions = ["css"]
-dialects = ["standard"]
+extensions = ["css", "scss", "sass"]
+dialects = ["standard", "scss"]
+extension_dialects = { scss = "scss", sass = "scss" }
 
 [[languages]]
 name = "jsonc"
@@ -226,3 +227,15 @@ extensions = ["scala", "sc"]
 dialects = ["standard"]
 shebangs = ["scala-cli", "scala"]
 notes = "Scala 3.8 lexical forms; block comments nest, an identifier before a quote makes the string interpolate, and an XML literal is opaque text with `{...}` code"
+
+[[languages]]
+name = "vue"
+extensions = ["vue"]
+dialects = ["standard"]
+notes = "Vue single-file components; the template is HTML with `{{ ... }}` code and the script and style bodies are their own languages, the `lang` attribute choosing which"
+
+[[languages]]
+name = "svelte"
+extensions = ["svelte"]
+dialects = ["standard"]
+notes = "Svelte components; the template is HTML with `{ ... }` code and the script and style bodies are their own languages, the `lang` attribute choosing which"

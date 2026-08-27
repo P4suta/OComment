@@ -1542,7 +1542,90 @@
         "diagnostics": [],
         "output_utf8": "val a = \"\"\"a\"\"\"\"\nval b = s\"\"\"${1 \n} \"\"\"\n\nval c = `a//b`\n\n"
       }
+    },
+    {
+      "id": "vue-builtin-safe",
+      "language": "vue",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "<template>\n<!-- note -->\n<div>{{ x /* c */ }}</div>\n</template>\n<script setup lang=\"ts\">\n// ts\nconst n: number = 1\n</script>\n<style lang=\"scss\">\n// scss\n.a { color: red; }\n</style>\n",
+      "note": "Vue single-file components, @vue/compiler-sfc 3.5: the template's `<!-- note -->` is an HTML comment that `safe` keeps as DOM-observable, `{{ ... }}` opens an expression whose `/* c */` is a comment, and the `<script lang=\"ts\">` and `<style lang=\"scss\">` bodies are scanned as TypeScript and as SCSS, whose `//` lines are comments. Ground truth, @vue/compiler-sfc 3.5: the file parses with the comment and expression nodes as reported.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 11,
+            "end": 24,
+            "kind": "html-comment",
+            "action": "keep"
+          },
+          {
+            "start": 35,
+            "end": 42,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 89,
+            "end": 94,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 145,
+            "end": 152,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "<template>\n<!-- note -->\n<div>{{ x  }}</div>\n</template>\n<script setup lang=\"ts\">\n\nconst n: number = 1\n</script>\n<style lang=\"scss\">\n\n.a { color: red; }\n</style>\n"
+      }
+    },
+    {
+      "id": "svelte-builtin-safe",
+      "language": "svelte",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "<script lang=\"ts\">\n// ts\n</script>\n<style lang=\"scss\">\n// scss\n</style>\n<p>{x /* c */}</p>\n<!-- note -->\n",
+      "note": "Svelte components, svelte/compiler 5.56: the `<script lang=\"ts\">` and `<style lang=\"scss\">` bodies are scanned as TypeScript and as SCSS, `{ ... }` in the template opens an expression whose `/* c */` is a comment, and `<!-- note -->` is an HTML comment that `safe` keeps. Ground truth, svelte/compiler 5.56: the file parses with the comment and expression nodes as reported.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 19,
+            "end": 24,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 55,
+            "end": 62,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 78,
+            "end": 85,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 91,
+            "end": 104,
+            "kind": "html-comment",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "<script lang=\"ts\">\n\n</script>\n<style lang=\"scss\">\n\n</style>\n<p>{x }</p>\n<!-- note -->\n"
+      }
     }
   ]
 }
-

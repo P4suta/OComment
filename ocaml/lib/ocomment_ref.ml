@@ -1,11 +1,11 @@
 type language =
   | Rust | Ocaml | C | Cpp | Go | Java | JavaScript | TypeScript | Python
   | Shell | Html | Css | Jsonc | Sql | Kotlin | Toml | Lua | Yaml | Php | Ruby
-  | Zig | R | Dart | Swift | CSharp | Scala | Unknown
+  | Zig | R | Dart | Swift | CSharp | Scala | Vue | Svelte | Unknown
 
 type dialect =
   | Standard | Jsx | Tsx | ObjectiveC | ObjectiveCpp | GnuC | GnuCpp | Cuda
-  | PosixSh | Bash53 | Zsh | PostgreSql | MySql | Sqlite | TSql | Oracle
+  | PosixSh | Bash53 | Zsh | PostgreSql | MySql | Sqlite | TSql | Oracle | Scss
 
 type byte_span = { start : int; finish : int }
 
@@ -92,6 +92,8 @@ let language_of_string value =
   | "swift" -> Ok Swift
   | "csharp" | "cs" | "c#" | "c-sharp" -> Ok CSharp
   | "scala" -> Ok Scala
+  | "vue" -> Ok Vue
+  | "svelte" -> Ok Svelte
   | other -> Error ("unsupported language `" ^ other ^ "`")
 
 let string_of_language = function
@@ -103,6 +105,8 @@ let string_of_language = function
   | Zig -> "zig" | R -> "r" | Dart -> "dart" | Swift -> "swift"
   | CSharp -> "csharp"
   | Scala -> "scala"
+  | Vue -> "vue"
+  | Svelte -> "svelte"
   | Unknown -> "unknown"
 
 let string_of_comment_kind = function
@@ -949,9 +953,88 @@ and scan_kotlin_expression source options accumulator index depth =
     | _ -> loop (index + 1) braces
   in loop index 1
 
+(* NOTE: A byte a CSS identifier may carry, which is what keeps "myurl(" from
+   reading as the "url(" function. *)
+let is_css_identifier_part byte =
+  (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z')
+  || (byte >= '0' && byte <= '9') || byte = '-' || byte = '_'
+
+(* NOTE: One SCSS "#{ ... }" interpolation, beginning past its opening brace.
+   The braces are counted rather than searched for, because the expression is
+   code: a comment written there is a comment, and a string or an unquoted URL
+   written there is scanned as such.  A line comment runs to the end of its
+   line while the interpolation carries on below. *)
+let rec scan_scss_interpolation source options accumulator language index depth =
+  if depth > 256 then begin
+    add_error accumulator "nesting-limit"
+      "SCSS interpolation nesting limit exceeded" index index;
+    Bytes.length source
+  end else begin
+    let length = Bytes.length source in
+    let rec loop cursor braces =
+      if cursor >= length then begin
+        add_error accumulator "unterminated-interpolation"
+          "unterminated SCSS interpolation" cursor cursor;
+        cursor
+      end else if starts source cursor "//" then begin
+        let finish = line_end source (cursor + 2) in
+        add_comment accumulator source language options Line cursor finish;
+        loop finish braces
+      end else if starts source cursor "/*" then begin
+        let finish, closed = block_end source cursor false in
+        let kind = if starts source cursor "/**" || starts source cursor "/*!" then DocBlock else Block in
+        add_comment accumulator source language options kind cursor finish;
+        if not closed then add_error accumulator "unterminated-comment"
+          "unterminated SCSS block comment" cursor finish;
+        loop finish braces
+      end else match scss_url_end source options accumulator language cursor with
+        | Some finish -> loop finish braces
+        | None -> (match Bytes.get source cursor with
+          | '"' | '\'' -> loop (quoted_or_error source accumulator cursor true "CSS string") braces
+          | '{' -> loop (cursor + 1) (braces + 1)
+          | '}' ->
+            if braces = 1 then cursor + 1 else loop (cursor + 1) (braces - 1)
+          | _ -> loop (cursor + 1) braces)
+    in loop index 1
+  end
+
+(* NOTE: The byte after an SCSS "url(" whose content is an unquoted URL,
+   which dart-sass reads as URL bytes until the ")" that ends them -- a "//" or
+   a "/*" in them is URL text, not a comment -- with "#{ ... }" interpolation
+   inside being code.  A quoted URL is an ordinary string and is left to
+   quoted_or_error; an unquoted URL that never closes is a file dart-sass
+   rejects, and reading it as ordinary bytes is the safe half of being wrong. *)
+and scss_url_end source options accumulator language index =
+  let length = Bytes.length source in
+  let url_start index =
+    if index + 4 <= length then begin
+      let byte index expected =
+        let actual = Bytes.get source index in
+        actual = expected || (actual >= 'A' && actual <= 'Z'
+                              && actual = Char.chr (Char.code expected - 32))
+        || (actual >= 'a' && actual <= 'z'
+            && actual = Char.chr (Char.code expected + 32)) in
+      byte index 'u' && byte (index + 1) 'r' && byte (index + 2) 'l'
+      && Bytes.get source (index + 3) = '('
+    end else false in
+  if not (url_start index) then None
+  else if index > 0 && is_css_identifier_part (Bytes.get source (index - 1)) then None
+  else if index + 4 < length
+          && (Bytes.get source (index + 4) = '"' || Bytes.get source (index + 4) = '\'')
+  then None
+  else begin
+    let rec loop cursor =
+      if cursor >= length then None
+      else if Bytes.get source cursor = ')' then Some (cursor + 1)
+      else if starts source cursor "#{" then
+        loop (scan_scss_interpolation source options accumulator language (cursor + 2) 0)
+      else loop (cursor + 1)
+    in loop (index + 4)
+  end
+
 let scan_slash_unmapped source language options accumulator =
   let nested = language = Rust || language = Kotlin in
-  let line_comments = language <> Css in
+  let line_comments = language <> Css || options.dialect = Scss in
   let rec loop index =
     if index >= Bytes.length source then ()
     else if line_comments && starts source index "//" then begin
@@ -1033,6 +1116,14 @@ let scan_slash_unmapped source language options accumulator =
          meant as a comment. *)
       | Jsonc when character = '"' || character = '\'' ->
         loop (quoted_or_error source accumulator index false "JSON string")
+      | Css when options.dialect = Scss && starts source index "#{" ->
+        loop (scan_scss_interpolation source options accumulator language (index + 2) 0)
+      | Css when options.dialect = Scss ->
+        (match scss_url_end source options accumulator language index with
+         | Some finish -> loop finish
+         | None -> if character = '"' || character = '\'' then
+             loop (quoted_or_error source accumulator index true "CSS string")
+           else loop (index + 1))
       | Css when character = '"' || character = '\'' ->
         loop (quoted_or_error source accumulator index true "CSS string")
       | _ -> loop (index + 1)
@@ -4991,6 +5082,291 @@ let scan_ruby source language options accumulator =
     in line index
   in ignore (code 0 false 0)
 
+(* NOTE: The value of the attribute "name" in an attribute list, without its
+   quotes, or None when the list does not carry the attribute with a value.
+   Attributes are separated by white space and their values are quoted or a
+   bare word; the name is matched as a word, so "langx" is not "lang". *)
+let tag_attr_value attrs name =
+  let length = Bytes.length attrs in
+  let word index expected =
+    index < length && index + expected <= length
+    && (let rec loop offset =
+          offset = expected
+          || (Bytes.get attrs (index + offset) = Bytes.get name offset
+              && loop (offset + 1)) in
+        loop 0) in
+  let rec skip_value cursor quote =
+    if cursor >= length then length
+    else if Bytes.get attrs cursor = quote then cursor + 1
+    else skip_value (cursor + 1) quote in
+  let rec loop index =
+    if index >= length then None
+    else if Bytes.get attrs index = ' ' || Bytes.get attrs index = '\t' then loop (index + 1)
+    else if Bytes.get attrs index = '"' || Bytes.get attrs index = '\'' then
+      loop (skip_value (index + 1) (Bytes.get attrs index))
+    else if word index (Bytes.length name) then begin
+      let after = index + Bytes.length name in
+      let boundary = if after < length then Bytes.get attrs after else '>' in
+      if boundary = ' ' || boundary = '\t' || boundary = '=' || boundary = '>' then begin
+        let rec skip index =
+          if index < length && (Bytes.get attrs index = ' ' || Bytes.get attrs index = '\t')
+          then skip (index + 1) else index in
+        let cursor = skip after in
+        if cursor < length && Bytes.get attrs cursor = '=' then begin
+          let cursor = skip (cursor + 1) in
+          if cursor >= length then None
+          else if Bytes.get attrs cursor = '"' || Bytes.get attrs cursor = '\'' then begin
+            let quote = Bytes.get attrs cursor in
+            let inner_start = cursor + 1 in
+            let rec inner cursor =
+              if cursor >= length then None
+              else if Bytes.get attrs cursor = quote then Some (inner_start, cursor)
+              else inner (cursor + 1) in
+            Option.map (fun (start, finish) -> Bytes.sub_string attrs start (finish - start)) (inner inner_start)
+          end else begin
+            let rec word_end cursor =
+              if cursor >= length || Bytes.get attrs cursor = ' ' || Bytes.get attrs cursor = '\t'
+                 || Bytes.get attrs cursor = '>'
+              then cursor else word_end (cursor + 1) in
+            let finish = word_end cursor in
+            Some (Bytes.sub_string attrs cursor (finish - cursor))
+          end
+        end else None
+      end else loop (index + 1)
+    end else loop (index + 1)
+  in loop 0
+
+(* NOTE: Whether an attribute list carries "name" as a bare attribute, which
+   is how Vue's "v-pre" directive is written. *)
+let tag_has_attribute attrs name =
+  let length = Bytes.length attrs in
+  let word index expected =
+    index < length && index + expected <= length
+    && (let rec loop offset =
+          offset = expected
+          || (Bytes.get attrs (index + offset) = Bytes.get name offset
+              && loop (offset + 1)) in
+        loop 0) in
+  let rec skip_value cursor quote =
+    if cursor >= length then length
+    else if Bytes.get attrs cursor = quote then cursor + 1
+    else skip_value (cursor + 1) quote in
+  let rec loop index =
+    if index >= length then false
+    else if Bytes.get attrs index = ' ' || Bytes.get attrs index = '\t' then loop (index + 1)
+    else if Bytes.get attrs index = '"' || Bytes.get attrs index = '\'' then
+      loop (skip_value (index + 1) (Bytes.get attrs index))
+    else if word index (Bytes.length name) then begin
+      let after = index + Bytes.length name in
+      let boundary = if after < length then Bytes.get attrs after else '>' in
+      boundary = ' ' || boundary = '\t' || boundary = '>'
+    end else loop (index + 1)
+  in loop 0
+
+(* NOTE: The language a Vue "<script>" body is written in, from its "lang"
+   attribute; None for a "lang" this scanner has no rules for, which makes the
+   block opaque. *)
+let vue_script_language lang =
+  match Option.map String.lowercase_ascii lang with
+  | None | Some "js" | Some "javascript" -> Some (JavaScript, Standard)
+  | Some "jsx" -> Some (JavaScript, Jsx)
+  | Some "ts" | Some "typescript" -> Some (TypeScript, Standard)
+  | Some "tsx" -> Some (TypeScript, Tsx)
+  | Some _ -> None
+
+(* NOTE: The language a Vue or Svelte "<style>" body is written in, from its
+   "lang" attribute; the default is CSS, "scss" and the indented "sass" select
+   the SCSS dialect, and any other "lang" makes the block opaque. *)
+let vue_style_language lang =
+  match Option.map String.lowercase_ascii lang with
+  | None | Some "css" -> Some (Css, Standard)
+  | Some "scss" | Some "sass" -> Some (Css, Scss)
+  | Some _ -> None
+
+(* NOTE: One Vue or Svelte single-file component.  The top level holds the
+   "<script>" and "<style>" blocks and -- for Vue -- the "<template>" block,
+   and the body of each is scanned as its own language, the "lang" attribute
+   choosing which.  For Svelte the text between the blocks is the template
+   itself, whose every "{ ... }" opens an expression; for Vue the template is
+   the body of its "<template>" element.  A "lang" this scanner has no rules
+   for makes the whole block opaque, and a top-level "<!-- ... -->" is an HTML
+   comment. *)
+let rec scan_vue source language options accumulator = scan_sfc true source language options accumulator
+and scan_svelte source language options accumulator = scan_sfc false source language options accumulator
+and scan_sfc vue source language options accumulator =
+  let length = Bytes.length source in
+  let html_comment index =
+    let finish, closed = match find_from source (index + 4) "-->" with
+      | Some close -> (close + 3, true)
+      | None -> (length, false) in
+    add_comment accumulator source language options HtmlComment index finish;
+    if not closed then add_error accumulator "unterminated-comment"
+      "unterminated HTML comment" index finish;
+    finish in
+  let tag_end index =
+    let rec loop cursor quote =
+      if cursor >= length then None else
+      match quote with
+      | Some active when Bytes.get source cursor = active -> loop (cursor + 1) None
+      | Some _ -> loop (cursor + 1) quote
+      | None when Bytes.get source cursor = '\'' || Bytes.get source cursor = '"' ->
+        loop (cursor + 1) (Some (Bytes.get source cursor))
+      | None when Bytes.get source cursor = '>' -> Some (cursor + 1)
+      | None -> loop (cursor + 1) None in
+    loop (index + 1) None in
+  let tag_boundary = function None -> true | Some character ->
+    character = ' ' || character = '\t' || character = '\n' || character = '\r'
+    || character = '\x0c' || character = '>' || character = '/' in
+  let sfc_block index =
+    if ascii_case_starts source index "<script"
+       && tag_boundary (if index + 7 < length then Some (Bytes.get source (index + 7)) else None)
+    then Some ("script", "script")
+    else if ascii_case_starts source index "<style"
+            && tag_boundary (if index + 6 < length then Some (Bytes.get source (index + 6)) else None)
+    then Some ("style", "style")
+    else if vue && ascii_case_starts source index "<template"
+            && tag_boundary (if index + 9 < length then Some (Bytes.get source (index + 9)) else None)
+    then Some ("template", "template")
+    else None in
+  let find_close start name =
+    let token = "</" ^ name in
+    let rec loop cursor = match ascii_case_find source cursor token with
+      | None -> None
+      | Some candidate ->
+        let after = candidate + String.length token in
+        if tag_boundary (if after < length then Some (Bytes.get source after) else None)
+        then Some candidate else loop after in
+    loop start in
+  let merge offset report =
+    List.iter (fun (comment : comment) ->
+      accumulator.comments_rev <- { comment with span = { start = comment.span.start + offset; finish = comment.span.finish + offset } } :: accumulator.comments_rev) report.comments;
+    List.iter (fun (diagnostic : diagnostic) ->
+      accumulator.diagnostics_rev <- { diagnostic with span = { start = diagnostic.span.start + offset; finish = diagnostic.span.finish + offset } } :: accumulator.diagnostics_rev) report.diagnostics in
+  let run_block name content_start content_finish lang =
+    let resolved = match name with
+      | "script" -> vue_script_language lang
+      | "style" -> vue_style_language lang
+      | "template" ->
+        (match Option.map String.lowercase_ascii lang with
+         | None | Some "html" -> Some (Html, Standard)
+         | Some _ -> None)
+      | _ -> None in
+    match resolved with
+    | Some (Html, _) -> scan_sfc_template vue source language options accumulator content_start content_finish
+    | Some (embedded, dialect) ->
+      let child_source = Bytes.sub source content_start (content_finish - content_start) in
+      let child = { comments_rev = []; diagnostics_rev = []; yaml_blocks_rev = [] } in
+      let child_options = { options with dialect } in
+      (if embedded = JavaScript || embedded = TypeScript
+       then scan_javascript ~offset:content_start child_source embedded child_options child
+       else scan_slash child_source embedded child_options child);
+      merge content_start { language = embedded; comments = List.rev child.comments_rev;
+        diagnostics = List.rev child.diagnostics_rev; valid = true }
+    | None -> () in
+  let rec loop index =
+    if index >= length then ()
+    else if starts source index "<!--" then loop (html_comment index)
+    else if not vue && Bytes.get source index = '{' then
+      loop (scan_js_code source language options accumulator (index + 1) (Some 1) 0)
+    else if Bytes.get source index = '<' then
+      (match sfc_block index with
+       | Some (name, name_bytes) -> (match tag_end index with
+         | None ->
+           add_error accumulator "unterminated-html-tag"
+             "unterminated single-file component start tag" index length
+         | Some tag_finish ->
+           let attrs = Bytes.sub source (index + 1 + String.length name_bytes)
+             (max 0 (tag_finish - 1 - (index + 1 + String.length name_bytes))) in
+           let lang = tag_attr_value attrs (Bytes.of_string "lang") in
+           (match find_close tag_finish name with
+            | None ->
+              add_error accumulator "unterminated-embedded-language"
+                "unterminated single-file component element" index length
+            | Some closing ->
+              run_block name tag_finish closing lang;
+              loop closing))
+       | None ->
+         let candidate =
+           if index + 1 < length then
+             let next = Bytes.get source (index + 1) in
+             (next >= 'a' && next <= 'z') || (next >= 'A' && next <= 'Z')
+             || next = '!' || next = '?'
+             || (next = '/' && index + 2 < length
+                 && let after = Bytes.get source (index + 2) in
+                    (after >= 'a' && after <= 'z') || (after >= 'A' && after <= 'Z'))
+           else false in
+         (if candidate then match tag_end index with
+          | Some finish -> loop finish
+          | None -> loop (index + 1)
+          else loop (index + 1)))
+    else if Bytes.get source index = '\r' || Bytes.get source index = '\n'
+    then loop (consume_newline source index)
+    else loop (index + 1)
+  in loop 0
+
+(* NOTE: The body of a Vue "<template>": HTML with "{{ ... }}" mustaches that
+   are code, and "v-pre" elements whose whole content is raw text. *)
+and scan_sfc_template vue source language options accumulator start finish =
+  let length = Bytes.length source in
+  let html_comment index =
+    let finish, closed = match find_from source (index + 4) "-->" with
+      | Some close -> (close + 3, true)
+      | None -> (length, false) in
+    add_comment accumulator source language options HtmlComment index finish;
+    if not closed then add_error accumulator "unterminated-comment"
+      "unterminated HTML comment" index finish;
+    finish in
+  let tag_end index =
+    let rec loop cursor quote =
+      if cursor >= length then None else
+      match quote with
+      | Some active when Bytes.get source cursor = active -> loop (cursor + 1) None
+      | Some _ -> loop (cursor + 1) quote
+      | None when Bytes.get source cursor = '\'' || Bytes.get source cursor = '"' ->
+        loop (cursor + 1) (Some (Bytes.get source cursor))
+      | None when Bytes.get source cursor = '>' -> Some (cursor + 1)
+      | None -> loop (cursor + 1) None in
+    loop (index + 1) None in
+  let tag_boundary = function None -> true | Some character ->
+    character = ' ' || character = '\t' || character = '\n' || character = '\r'
+    || character = '>' || character = '/' in
+  let find_close start name =
+    let token = "</" ^ name in
+    let rec loop cursor = match ascii_case_find source cursor token with
+      | None -> None
+      | Some candidate ->
+        let after = candidate + String.length token in
+        if tag_boundary (if after < length then Some (Bytes.get source after) else None)
+        then Some candidate else loop after in
+    loop start in
+  let rec loop index =
+    if index >= finish then ()
+    else if starts source index "<!--" then loop (html_comment index)
+    else if vue && starts source index "{{" then
+      loop (scan_js_code source language options accumulator (index + 2) (Some 2) 0)
+    else if Bytes.get source index = '<'
+            && (let next = if index + 1 < length then Bytes.get source (index + 1) else ' ' in
+                (next >= 'a' && next <= 'z') || (next >= 'A' && next <= 'Z')
+                || next = '!' || next = '?')
+    then (match tag_end index with
+       | Some tag_finish ->
+         let rec name_end cursor =
+           if cursor < length && Bytes.get source cursor <> ' '
+              && Bytes.get source cursor <> '\t' && Bytes.get source cursor <> '\n'
+              && Bytes.get source cursor <> '\r' && Bytes.get source cursor <> '>'
+           then name_end (cursor + 1) else cursor in
+         let name_finish = name_end (index + 1) in
+         let attrs = Bytes.sub source name_finish (max 0 (tag_finish - 1 - name_finish)) in
+         if vue && tag_has_attribute attrs (Bytes.of_string "v-pre") then
+           let name = Bytes.sub_string source (index + 1) (name_finish - (index + 1)) in
+           (match find_close tag_finish name with
+            | Some closing -> loop closing
+            | None -> loop (tag_finish + 1))
+         else loop tag_finish
+       | None -> loop (index + 1))
+    else loop (index + 1)
+  in loop start
+
 let rec scan_html source language options accumulator =
   let tag_boundary = function None -> true | Some character ->
     ascii_whitespace character || character = '>' || character = '/' in
@@ -5084,6 +5460,8 @@ and scan source language options =
   | Swift -> scan_swift source language options accumulator
   | CSharp -> scan_csharp source language options accumulator
   | Scala -> scan_scala source language options accumulator
+  | Vue -> scan_vue source language options accumulator
+  | Svelte -> scan_svelte source language options accumulator
   | R -> scan_r source language options accumulator
   | Html -> scan_html source language options accumulator
   | Unknown -> add_error accumulator "unknown-language" "a language is required" 0 0);

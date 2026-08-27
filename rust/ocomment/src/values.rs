@@ -130,6 +130,8 @@ value_enum_wrapper!(LanguageArg, Language, |value| match value {
     Language::CSharp => "C# source and script files, whose `#` lines are preprocessor directives",
     Language::Scala =>
         "Scala source and script files, whose block comments nest and whose XML literals are opaque",
+    Language::Vue => "Vue single-file components, whose templates are HTML with `{{ ... }}` code",
+    Language::Svelte => "Svelte components, whose templates are HTML with `{ ... }` code",
     Language::Unknown => "An undetected language",
 });
 
@@ -150,6 +152,7 @@ value_enum_wrapper!(DialectArg, Dialect, |value| match value {
     Dialect::Sqlite => "SQLite",
     Dialect::TSql => "Microsoft Transact-SQL",
     Dialect::Oracle => "Oracle SQL and PL/SQL",
+    Dialect::Scss => "SCSS and the indented Sass syntax",
 });
 
 value_enum_wrapper!(CommentKindArg, CommentKind, |value| match value {

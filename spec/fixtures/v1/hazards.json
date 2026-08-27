@@ -904,7 +904,7 @@
         "layout": "lines"
       },
       "source_utf8": "x = r\"abc\ny = rb\"def\nz = r\"\"\"ghi\n",
-      "note": "Python reference 2.4.1: a string prefix and the quote after it are one token, so an unterminated literal is reported from the prefix and not from the quote — the same anchor for `r\"`, `rb\"` and `r\"\"\"`.",
+      "note": "Python reference 2.4.1: a string prefix and the quote after it are one token, so an unterminated literal is reported from the prefix and not from the quote \u2014 the same anchor for `r\"`, `rb\"` and `r\"\"\"`.",
       "expect": {
         "valid": false,
         "comments": [],
@@ -1581,7 +1581,7 @@
         "policy": "safe",
         "layout": "columns"
       },
-      "source_utf8": "x\t/*中😀*/y\r\n",
+      "source_utf8": "x\t/*\u4e2d\ud83d\ude00*/y\r\n",
       "note": "Layout `columns` replaces a removed comment with spaces to the same display width; a tab, a wide CJK character, an emoji, and a CRLF ending must all survive unchanged.",
       "expect": {
         "valid": true,
@@ -3410,7 +3410,7 @@
         "policy": "safe",
         "layout": "lines"
       },
-      "source_utf8": "let c = 'ä\\';\n",
+      "source_utf8": "let c = '\u00e4\\';\n",
       "note": "Rust Reference, Tokens (character literals): a character literal holds one character and ends at the line, so this one is never closed -- the `\\` in front of the second apostrophe carries it into the literal as an escape, and no third one arrives before the line break. It is also the shape that tells a literal from a lifetime -- a non-ASCII character with an apostrophe close enough behind it to be the closing quote -- which is why the diagnostic here is `unterminated character literal` and `parity-rust-lifetime-is-not-a-literal` reports nothing at all. Both apostrophes stand on one line because that lookahead stops at a line terminator (`rust-char-literal-across-newline`). Ground truth, `rustc` 1.97: `error[E0762]: unterminated character literal` for this line.",
       "expect": {
         "valid": false,
@@ -3647,7 +3647,7 @@
           }
         ],
         "diagnostics": [],
-        "output_utf8": "// region\n"
+        "output_utf8": "//\u00a0region\n"
       }
     },
     {
@@ -6999,7 +6999,7 @@
         "layout": "lines"
       },
       "source_utf8": "puts \"#{ <<EOS }\"\n# not a comment\nEOS\n# remove\n",
-      "note": "Ruby 3.3 documentation, literals.rdoc: a here document header queues a body for the line under the physical line it stands on, and standing inside an interpolation does not change that. Ground truth, Ruby 3.3.12 Ripper.lex: on_heredoc_beg \"<<EOS\", on_embexpr_end \"}\", on_tstring_end \"\\\"\", on_nl, on_tstring_content \"# not a comment\\n\", on_heredoc_end \"EOS\\n\", on_comment \"# remove\\n\" — the body line is content, so its `#` opens nothing.",
+      "note": "Ruby 3.3 documentation, literals.rdoc: a here document header queues a body for the line under the physical line it stands on, and standing inside an interpolation does not change that. Ground truth, Ruby 3.3.12 Ripper.lex: on_heredoc_beg \"<<EOS\", on_embexpr_end \"}\", on_tstring_end \"\\\"\", on_nl, on_tstring_content \"# not a comment\\n\", on_heredoc_end \"EOS\\n\", on_comment \"# remove\\n\" \u2014 the body line is content, so its `#` opens nothing.",
       "expect": {
         "valid": true,
         "comments": [
@@ -7095,7 +7095,7 @@
         "layout": "lines"
       },
       "source_utf8": "puts <<A\nx #{<<B}\nA\nB\n# a body\nA\n# remove\n",
-      "note": "Ruby 3.3 documentation, literals.rdoc: a here document body line is a physical line like any other, so a header inside an interpolation on it queues for the line under that body line and is read before the outer body resumes. Ground truth, Ruby 3.3.12 Ripper.lex: on_heredoc_beg \"<<A\", on_nl, on_tstring_content \"x \", on_embexpr_beg, on_heredoc_beg \"<<B\", on_embexpr_end, on_tstring_content \"\\n\", on_tstring_content \"A\\n\" — line 3 is B's body, not A's terminator — on_heredoc_end \"B\\n\", on_tstring_content \"# a body\\n\", on_heredoc_end \"A\\n\", on_comment \"# remove\\n\".",
+      "note": "Ruby 3.3 documentation, literals.rdoc: a here document body line is a physical line like any other, so a header inside an interpolation on it queues for the line under that body line and is read before the outer body resumes. Ground truth, Ruby 3.3.12 Ripper.lex: on_heredoc_beg \"<<A\", on_nl, on_tstring_content \"x \", on_embexpr_beg, on_heredoc_beg \"<<B\", on_embexpr_end, on_tstring_content \"\\n\", on_tstring_content \"A\\n\" \u2014 line 3 is B's body, not A's terminator \u2014 on_heredoc_end \"B\\n\", on_tstring_content \"# a body\\n\", on_heredoc_end \"A\\n\", on_comment \"# remove\\n\".",
       "expect": {
         "valid": true,
         "comments": [
@@ -7119,7 +7119,7 @@
         "layout": "lines"
       },
       "source_utf8": "puts \"#{ <<~A } #{ <<-'B' } #{ <<C }\"\n  # not a comment\n  A\n  # not a comment either\n  B\n# nor this\nC\n# remove\n",
-      "note": "Ruby 3.3 documentation, literals.rdoc: the squiggly, dash and quoted header forms behave the same inside an interpolation as outside one — an indented terminator for the first two, and interpolation off under a single-quoted terminator. Ground truth, Ruby 3.3.12 Ripper.lex: on_heredoc_beg \"<<~A\", on_heredoc_beg \"<<-'B'\", on_heredoc_beg \"<<C\", then the three bodies in that order with on_heredoc_end \"  A\\n\", \"  B\\n\" and \"C\\n\", and on_comment \"# remove\\n\" last.",
+      "note": "Ruby 3.3 documentation, literals.rdoc: the squiggly, dash and quoted header forms behave the same inside an interpolation as outside one \u2014 an indented terminator for the first two, and interpolation off under a single-quoted terminator. Ground truth, Ruby 3.3.12 Ripper.lex: on_heredoc_beg \"<<~A\", on_heredoc_beg \"<<-'B'\", on_heredoc_beg \"<<C\", then the three bodies in that order with on_heredoc_end \"  A\\n\", \"  B\\n\" and \"C\\n\", and on_comment \"# remove\\n\" last.",
       "expect": {
         "valid": true,
         "comments": [
@@ -7167,7 +7167,7 @@
         "layout": "lines"
       },
       "source_utf8": "x(<<A, \"#{<<B\n})\n# not a comment\nA\n# nor this\nB\nputs 2 # a comment safe keeps\n",
-      "note": "Ruby 3.3 documentation, literals.rdoc: the drain happens wherever the lexer stands when it reaches the break, so a break inside an interpolation drains the whole queue and the interpolation resumes underneath the bodies. Ground truth, Ruby 3.3.12 Ripper.lex: on_heredoc_beg \"<<A\", on_heredoc_beg \"<<B\", on_nl, on_tstring_content \"})\\n# not a comment\\n\" — A's body swallows the `}` that would have closed the interpolation — on_heredoc_end \"A\\n\", on_tstring_content \"# nor this\\n\", on_heredoc_end \"B\\n\", on_ident \"puts\", on_int \"2\", on_comment \"# a comment safe keeps\\n\". The interpolation never closes, so `ruby -c` reports `unterminated string meets end of file`, the scan is invalid, and `safe` writes nothing.",
+      "note": "Ruby 3.3 documentation, literals.rdoc: the drain happens wherever the lexer stands when it reaches the break, so a break inside an interpolation drains the whole queue and the interpolation resumes underneath the bodies. Ground truth, Ruby 3.3.12 Ripper.lex: on_heredoc_beg \"<<A\", on_heredoc_beg \"<<B\", on_nl, on_tstring_content \"})\\n# not a comment\\n\" \u2014 A's body swallows the `}` that would have closed the interpolation \u2014 on_heredoc_end \"A\\n\", on_tstring_content \"# nor this\\n\", on_heredoc_end \"B\\n\", on_ident \"puts\", on_int \"2\", on_comment \"# a comment safe keeps\\n\". The interpolation never closes, so `ruby -c` reports `unterminated string meets end of file`, the scan is invalid, and `safe` writes nothing.",
       "expect": {
         "valid": false,
         "comments": [
@@ -7453,7 +7453,7 @@
         "layout": "lines"
       },
       "source_utf8": "//// divider\n/// doc\nconst x = 1;\n",
-      "note": "Zig Language Reference, Doc comments: exactly three slashes document anything, and a fourth takes the marker back — `.doc_comment_start` falls to `.line_comment` when it meets one. Ground truth, `std.zig.Tokenizer` 0.16.0: no token at all for `//// divider`, `doc_comment \"/// doc\"` at [13,20). `zig ast-check` accepts the file.",
+      "note": "Zig Language Reference, Doc comments: exactly three slashes document anything, and a fourth takes the marker back \u2014 `.doc_comment_start` falls to `.line_comment` when it meets one. Ground truth, `std.zig.Tokenizer` 0.16.0: no token at all for `//// divider`, `doc_comment \"/// doc\"` at [13,20). `zig ast-check` accepts the file.",
       "expect": {
         "valid": true,
         "comments": [
@@ -7483,7 +7483,7 @@
         "layout": "lines"
       },
       "source_utf8": "const a = 1 /* not a comment */ + 2; // remove\n",
-      "note": "Zig Language Reference, Comments: Zig has one comment form and it is `//`. Ground truth, `std.zig.Tokenizer` 0.16.0: `/*` is `slash` then `asterisk` and `*/` is `asterisk` then `slash`, seven ordinary tokens between the two operands and no comment, so only the `//` behind them is removed. (`zig ast-check` refuses this line for a reason of its own — a binary operator with white space on one side only — and the tokenizer is what decides whether a comment is there.)",
+      "note": "Zig Language Reference, Comments: Zig has one comment form and it is `//`. Ground truth, `std.zig.Tokenizer` 0.16.0: `/*` is `slash` then `asterisk` and `*/` is `asterisk` then `slash`, seven ordinary tokens between the two operands and no comment, so only the `//` behind them is removed. (`zig ast-check` refuses this line for a reason of its own \u2014 a binary operator with white space on one side only \u2014 and the tokenizer is what decides whether a comment is there.)",
       "expect": {
         "valid": true,
         "comments": [
@@ -7603,7 +7603,7 @@
         "layout": "lines"
       },
       "source_utf8": "// zig fmt: off\n// zig fmt: on\n// zig fmt: off please\n",
-      "note": "Zig standard library, `std/zig/Ast/Render.zig`: the formatter takes `\"//\".len` bytes off the trimmed comment, trims the white space behind them, and compares the remainder with `zig fmt: off` and `zig fmt: on` for equality — so the first two lines are instructions a removal keeps and the third, which merely opens with the phrase, is an ordinary comment. `zig ast-check` accepts the file.",
+      "note": "Zig standard library, `std/zig/Ast/Render.zig`: the formatter takes `\"//\".len` bytes off the trimmed comment, trims the white space behind them, and compares the remainder with `zig fmt: off` and `zig fmt: on` for equality \u2014 so the first two lines are instructions a removal keeps and the third, which merely opens with the phrase, is an ordinary comment. `zig ast-check` accepts the file.",
       "expect": {
         "valid": true,
         "comments": [
@@ -7685,7 +7685,7 @@
         "layout": "lines"
       },
       "source_utf8": "//! module\r\nconst a =\r\n    \\\\body // opaque\r\n;\r\n/// doc\r\nconst b = 1; // remove\r\n",
-      "note": "Zig Language Reference, Comments and String Literals: every Zig construct that runs to the end of a line ends at a CRLF pair as it ends at a bare newline — a documentation comment, a multiline string literal line, and an ordinary comment alike. Ground truth, `std.zig.Tokenizer` 0.16.0 ends each of those tokens before the `\\r`, and refuses a `\\r` that no `\\n` follows.",
+      "note": "Zig Language Reference, Comments and String Literals: every Zig construct that runs to the end of a line ends at a CRLF pair as it ends at a bare newline \u2014 a documentation comment, a multiline string literal line, and an ordinary comment alike. Ground truth, `std.zig.Tokenizer` 0.16.0 ends each of those tokens before the `\\r`, and refuses a `\\r` that no `\\n` follows.",
       "expect": {
         "valid": true,
         "comments": [
@@ -7871,7 +7871,7 @@
         "layout": "lines"
       },
       "source_utf8": "a <- r\"--(dashes ) # x)--\"\nb <- r\"---[deep ]-- # x]---\"\nc <- 1 # remove\n",
-      "note": "`?Quotes`: any number of dashes may stand between the quote and the opening bracket, and the literal closes only on the matching bracket with the same run of dashes and the same quote — which is what lets the closing bracket itself appear as content. R puts no limit on the run: 100 dashes were measured accepted on R 4.3.3. Ground truth, R 4.3.3 `utils::getParseData(parse(file =, keep.source = TRUE))`: `STR_CONST` at [5,26) and [32,55), with the only `COMMENT` at [63,71).",
+      "note": "`?Quotes`: any number of dashes may stand between the quote and the opening bracket, and the literal closes only on the matching bracket with the same run of dashes and the same quote \u2014 which is what lets the closing bracket itself appear as content. R puts no limit on the run: 100 dashes were measured accepted on R 4.3.3. Ground truth, R 4.3.3 `utils::getParseData(parse(file =, keep.source = TRUE))`: `STR_CONST` at [5,26) and [32,55), with the only `COMMENT` at [63,71).",
       "expect": {
         "valid": true,
         "comments": [
@@ -7918,7 +7918,7 @@
         "layout": "lines"
       },
       "source_utf8": "`odd # name` <- 1 # remove\n",
-      "note": "R Language Definition, 10.3.2: a name may be written between backquotes, and anything at all may go inside — a `#` included. Ground truth, R 4.3.3 `utils::getParseData(parse(file =, keep.source = TRUE))`: `SYMBOL` `` `odd # name` `` at [0,12), with the only `COMMENT` at [18,26).",
+      "note": "R Language Definition, 10.3.2: a name may be written between backquotes, and anything at all may go inside \u2014 a `#` included. Ground truth, R 4.3.3 `utils::getParseData(parse(file =, keep.source = TRUE))`: `SYMBOL` `` `odd # name` `` at [0,12), with the only `COMMENT` at [18,26).",
       "expect": {
         "valid": true,
         "comments": [
@@ -8018,7 +8018,7 @@
         "layout": "lines"
       },
       "source_utf8": "z <- xr\"(a \" b)\" # x\n",
-      "note": "`?Quotes` and R 4.3.3 `gram.y`: the `r` opens a raw string only where it begins a token, so a name in front of it leaves an ordinary string that closes at the second quote — and the quote after that opens one that never closes. Ground truth: R refuses the file with `unexpected string constant` at column 8, the `\"`, and echoes the line cut at `z <- xr\"(a \"`, which is the ordinary string its lexer read there.",
+      "note": "`?Quotes` and R 4.3.3 `gram.y`: the `r` opens a raw string only where it begins a token, so a name in front of it leaves an ordinary string that closes at the second quote \u2014 and the quote after that opens one that never closes. Ground truth: R refuses the file with `unexpected string constant` at column 8, the `\"`, and echoes the line cut at `z <- xr\"(a \"`, which is the ordinary string its lexer read there.",
       "expect": {
         "valid": false,
         "comments": [],
@@ -8178,7 +8178,7 @@
         "layout": "lines"
       },
       "source_utf8": "#!/usr/bin/env Rscript\n# ordinary\nx <- 1\n",
-      "note": "A `#!` line is an ordinary comment to R — `#` opens one and the `!` is content — so what makes the first one a preamble is its position. Ground truth, R 4.3.3 `utils::getParseData(parse(file =, keep.source = TRUE))`: `COMMENT` at [0,22) and [23,33), the same token for both.",
+      "note": "A `#!` line is an ordinary comment to R \u2014 `#` opens one and the `!` is content \u2014 so what makes the first one a preamble is its position. Ground truth, R 4.3.3 `utils::getParseData(parse(file =, keep.source = TRUE))`: `COMMENT` at [0,22) and [23,33), the same token for both.",
       "expect": {
         "valid": true,
         "comments": [
@@ -8909,8 +8909,8 @@
         "policy": "safe",
         "layout": "lines"
       },
-      "source_utf8": "let c = 'ä\n'; // remove\n",
-      "note": "Rust Reference, Tokens: the lookahead that tells a character literal from a lifetime reads up to six bytes past the apostrophe, and it stops at a line terminator. The scanner offers a restart point at the line start behind every terminator, and a restart point promises that nothing decided before it depends on bytes after it, so a window that read across one would let an edit on line 2 rewrite a token on line 1 while an incremental rescan reused it unchanged. What the stop costs is the reading and no report at all, because within line 1 nothing separates an unterminated character literal from a Unicode lifetime: a Rust identifier is `XID_Start XID_Continue*` (Rust Reference, Identifiers) and has been since 1.53, so `'ä` opens a lifetime in `fn f<'ä>() {}` and a loop label in `'ä: loop { break 'ä }` exactly as `'a` does, and each of those is a valid file whose trailing comment must still be found. Ground truth, `rustc` 1.97: this file is rejected with `error[E0762]: unterminated character literal`, pointed at the apostrophe on line 2 rather than this one -- but E0762 is a parser judgement, reached after the lexer has read `'ä` as a lifetime and the parser has found that no lifetime may stand there. This scanner is a lexer with a line-bounded window and has no such judgement to make, so it reports nothing and holds the file valid: over-keeping on a file another tool will reject costs a rejected file one comment, and calling `fn f<'ä>() {}` invalid would cost a valid one its transformation. The reading of line 2 is unchanged either way -- its apostrophe opens nothing, and the comment behind it is found and removed.",
+      "source_utf8": "let c = '\u00e4\n'; // remove\n",
+      "note": "Rust Reference, Tokens: the lookahead that tells a character literal from a lifetime reads up to six bytes past the apostrophe, and it stops at a line terminator. The scanner offers a restart point at the line start behind every terminator, and a restart point promises that nothing decided before it depends on bytes after it, so a window that read across one would let an edit on line 2 rewrite a token on line 1 while an incremental rescan reused it unchanged. What the stop costs is the reading and no report at all, because within line 1 nothing separates an unterminated character literal from a Unicode lifetime: a Rust identifier is `XID_Start XID_Continue*` (Rust Reference, Identifiers) and has been since 1.53, so `'\u00e4` opens a lifetime in `fn f<'\u00e4>() {}` and a loop label in `'\u00e4: loop { break '\u00e4 }` exactly as `'a` does, and each of those is a valid file whose trailing comment must still be found. Ground truth, `rustc` 1.97: this file is rejected with `error[E0762]: unterminated character literal`, pointed at the apostrophe on line 2 rather than this one -- but E0762 is a parser judgement, reached after the lexer has read `'\u00e4` as a lifetime and the parser has found that no lifetime may stand there. This scanner is a lexer with a line-bounded window and has no such judgement to make, so it reports nothing and holds the file valid: over-keeping on a file another tool will reject costs a rejected file one comment, and calling `fn f<'\u00e4>() {}` invalid would cost a valid one its transformation. The reading of line 2 is unchanged either way -- its apostrophe opens nothing, and the comment behind it is found and removed.",
       "expect": {
         "valid": true,
         "comments": [
@@ -8922,7 +8922,7 @@
           }
         ],
         "diagnostics": [],
-        "output_utf8": "let c = 'ä\n'; \n"
+        "output_utf8": "let c = '\u00e4\n'; \n"
       }
     },
     {
@@ -8933,8 +8933,8 @@
         "policy": "safe",
         "layout": "lines"
       },
-      "source_utf8": "fn f<'ä>() {} // remove\n",
-      "note": "Rust Reference, Identifiers: an identifier is `XID_Start XID_Continue*` and has been since 1.53, so `'ä` names a lifetime exactly as `'a` does. The line-bounded window that tells a character literal from a lifetime cannot tell those two apart -- within one line an unterminated non-ASCII character literal is spelled the same way -- so it reports neither, which is what leaves this file valid and its trailing comment removable. Ground truth, `rustc` 1.97.1: the file compiles, with `warning: function `f` is never used` and no error, so a scanner that called it invalid would refuse to transform a file the compiler accepts.",
+      "source_utf8": "fn f<'\u00e4>() {} // remove\n",
+      "note": "Rust Reference, Identifiers: an identifier is `XID_Start XID_Continue*` and has been since 1.53, so `'\u00e4` names a lifetime exactly as `'a` does. The line-bounded window that tells a character literal from a lifetime cannot tell those two apart -- within one line an unterminated non-ASCII character literal is spelled the same way -- so it reports neither, which is what leaves this file valid and its trailing comment removable. Ground truth, `rustc` 1.97.1: the file compiles, with `warning: function `f` is never used` and no error, so a scanner that called it invalid would refuse to transform a file the compiler accepts.",
       "expect": {
         "valid": true,
         "comments": [
@@ -8956,8 +8956,8 @@
         "policy": "safe",
         "layout": "lines"
       },
-      "source_utf8": "'ä: loop { break 'ä } // remove\n",
-      "note": "Rust Reference, Loop labels: a loop label is written with the lifetime-or-label token, so `'ä` labels a loop and breaks out of it exactly as `'a` would. Two apostrophes on one line each open nothing here, for the reason `rust-unicode-lifetime-generic` gives, and the comment behind them is still found. Ground truth, `rustc` 1.97.1: `fn main() { 'ä: loop { break 'ä } }` compiles with no error.",
+      "source_utf8": "'\u00e4: loop { break '\u00e4 } // remove\n",
+      "note": "Rust Reference, Loop labels: a loop label is written with the lifetime-or-label token, so `'\u00e4` labels a loop and breaks out of it exactly as `'a` would. Two apostrophes on one line each open nothing here, for the reason `rust-unicode-lifetime-generic` gives, and the comment behind them is still found. Ground truth, `rustc` 1.97.1: `fn main() { '\u00e4: loop { break '\u00e4 } }` compiles with no error.",
       "expect": {
         "valid": true,
         "comments": [
@@ -9310,7 +9310,7 @@
         "layout": "lines"
       },
       "source_utf8": "let a = \"x\"#/y // z/#\nlet b = 1 // remove\n",
-      "note": "The run of `#` that closes a string belongs to the string only when a run opened it: `Lexer.Cursor.advanceIfStringDelimiter` returns on `delimiterLength == 0` before it looks at a byte, so the `#` behind the closing quote of `\"x\"` opens the `#/ ... /#` that follows and the `//` inside that literal is pattern rather than a comment. Taking it for the string instead would report a comment over regular expression bytes and remove them. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): `stringQuote` at [10,11), `regexPoundDelimiter` at [11,12), `regexLiteralPattern(\"y // z\")` at [13,19), and the only `lineComment` at [32,41). The juxtaposition is a parse error there — `consecutive statements on a line must be separated by newline or ';'` — and the lexing of it is what this case pins.",
+      "note": "The run of `#` that closes a string belongs to the string only when a run opened it: `Lexer.Cursor.advanceIfStringDelimiter` returns on `delimiterLength == 0` before it looks at a byte, so the `#` behind the closing quote of `\"x\"` opens the `#/ ... /#` that follows and the `//` inside that literal is pattern rather than a comment. Taking it for the string instead would report a comment over regular expression bytes and remove them. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): `stringQuote` at [10,11), `regexPoundDelimiter` at [11,12), `regexLiteralPattern(\"y // z\")` at [13,19), and the only `lineComment` at [32,41). The juxtaposition is a parse error there \u2014 `consecutive statements on a line must be separated by newline or ';'` \u2014 and the lexing of it is what this case pins.",
       "expect": {
         "valid": true,
         "comments": [
@@ -9406,7 +9406,7 @@
         "layout": "lines"
       },
       "source_utf8": "let a = / b\\//\nlet c = 1\n",
-      "note": "The one rule of Swift's bare `/ ... /` literal that cannot be had from the bytes alone, recorded rather than hidden. Whether a `/` in an ambiguous position opens a literal is settled in Swift by the parser: where an expression is *required* the lexer takes the literal and diagnoses what is wrong with it, and where an operator would also parse it gives up instead. A scanner with no parser cannot tell the two apart, so this one reads a literal exactly where the book's own conditions hold — a prefix-operator position, no leading space or tab, no line terminator, a closing `/` that no unescaped blank precedes and no comment opener follows. Every source that decides differently is one `swiftc` rejects, and this is that source: Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets) lexes `/ b\\\\//` as a `regexLiteralPattern` at [9,13) and reports `bare slash regex literal may not start with space`, while the scan below reads the `//` at [12,14) as a line comment. A file that compiles never reaches the case; a file that does not can lose the two bytes of a comment opener that the compiler was going to reject anyway.",
+      "note": "The one rule of Swift's bare `/ ... /` literal that cannot be had from the bytes alone, recorded rather than hidden. Whether a `/` in an ambiguous position opens a literal is settled in Swift by the parser: where an expression is *required* the lexer takes the literal and diagnoses what is wrong with it, and where an operator would also parse it gives up instead. A scanner with no parser cannot tell the two apart, so this one reads a literal exactly where the book's own conditions hold \u2014 a prefix-operator position, no leading space or tab, no line terminator, a closing `/` that no unescaped blank precedes and no comment opener follows. Every source that decides differently is one `swiftc` rejects, and this is that source: Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets) lexes `/ b\\\\//` as a `regexLiteralPattern` at [9,13) and reports `bare slash regex literal may not start with space`, while the scan below reads the `//` at [12,14) as a line comment. A file that compiles never reaches the case; a file that does not can lose the two bytes of a comment opener that the compiler was going to reject anyway.",
       "expect": {
         "valid": true,
         "comments": [
@@ -9460,7 +9460,7 @@
         "layout": "lines"
       },
       "source_utf8": "let a = /x//y/\nlet b = 1\n",
-      "note": "When the closing delimiter of a bare literal would be the first byte of a comment, the comment wins outright rather than the literal ending one byte earlier: `RegexLiteralLexer.tryEatEnding` returns `.unterminated` on a `*` or `/` behind the closing slash, `\"We prefer to lex the comment as it's more likely than not that is what the user is expecting\"`. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): no regex token, and one `lineComment` at [10,14) — `//y/` — with no parser diagnostic.",
+      "note": "When the closing delimiter of a bare literal would be the first byte of a comment, the comment wins outright rather than the literal ending one byte earlier: `RegexLiteralLexer.tryEatEnding` returns `.unterminated` on a `*` or `/` behind the closing slash, `\"We prefer to lex the comment as it's more likely than not that is what the user is expecting\"`. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): no regex token, and one `lineComment` at [10,14) \u2014 `//y/` \u2014 with no parser diagnostic.",
       "expect": {
         "valid": true,
         "comments": [
@@ -9568,7 +9568,7 @@
         "layout": "lines"
       },
       "source_utf8": "// swift-format-ignore-file\n// control\n",
-      "note": "`swift-format` reads three spellings of its ignore comment — the bare marker, a `:` and a rule name, and the `-file` that widens it to the whole file. Measured on `swift-format` 6.3.3: `// swift-format-ignore` and `// swift-format-ignore-file` both leave `let    a     = 1` unformatted, while `// swift-format-ignoreish note` reformats it. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): `lineComment` at [0,27) and [28,38).",
+      "note": "`swift-format` reads three spellings of its ignore comment \u2014 the bare marker, a `:` and a rule name, and the `-file` that widens it to the whole file. Measured on `swift-format` 6.3.3: `// swift-format-ignore` and `// swift-format-ignore-file` both leave `let    a     = 1` unformatted, while `// swift-format-ignoreish note` reformats it. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): `lineComment` at [0,27) and [28,38).",
       "expect": {
         "valid": true,
         "comments": [
@@ -9711,7 +9711,7 @@
         "layout": "lines"
       },
       "source_utf8": "let a = 'x // not'\n// remove\n",
-      "note": "`'` is no delimiter of the language — the Swift book's Lexical Structure has no single-quoted literal and no character literal at all — but it is one in the compiler, which lexes `'...'` as a `singleQuote` string so that it can offer the fix-it that turns it into a `\"...\"` one. Following the lexer keeps the `//` inside such a literal from being removed out of a file that is already broken, and costs a valid file nothing, because no `'` can stand in Swift code outside a string, a comment or a regular expression literal. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): one `stringSegment` at [9,17) and the only `lineComment` at [19,28), with the diagnostic `Single-quoted string literal found, use '\\\"'`.",
+      "note": "`'` is no delimiter of the language \u2014 the Swift book's Lexical Structure has no single-quoted literal and no character literal at all \u2014 but it is one in the compiler, which lexes `'...'` as a `singleQuote` string so that it can offer the fix-it that turns it into a `\"...\"` one. Following the lexer keeps the `//` inside such a literal from being removed out of a file that is already broken, and costs a valid file nothing, because no `'` can stand in Swift code outside a string, a comment or a regular expression literal. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): one `stringSegment` at [9,17) and the only `lineComment` at [19,28), with the diagnostic `Single-quoted string literal found, use '\\\"'`.",
       "expect": {
         "valid": true,
         "comments": [
@@ -11049,7 +11049,107 @@
         "diagnostics": [],
         "output_utf8": "val a = s\"x$\"y\"\nval b = s\"$$lit\"\n\n"
       }
+    },
+    {
+      "id": "scss-protocol-relative-url",
+      "language": "css",
+      "dialect": "scss",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": ".b { background: url(//cdn/x.png) no-repeat }\n// yes\n",
+      "note": "dart-sass 1.93: an unquoted `url( ... )` is a URL even when it opens with `//` \u2014 `url(//cdn/x.png)` is a protocol-relative URL, not a silent comment \u2014 so the URL bytes are protected and only the `// yes` after the rule is a comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 46,
+            "end": 52,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": ".b { background: url(//cdn/x.png) no-repeat }\n\n"
+      }
+    },
+    {
+      "id": "vue-v-pre-raw-text",
+      "language": "vue",
+      "operation": "scan",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "<div v-pre>{{ x // not }}</div>\n<template>\n<!-- note -->\n</template>\n",
+      "note": "@vue/compiler-sfc 3.5: the `v-pre` directive makes an element's content raw text, so the mustache it holds is not code and the `//` in it is not a comment; the `<!-- note -->` in the template is an HTML comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 43,
+            "end": 56,
+            "kind": "html-comment",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "vue-unknown-embedded-language",
+      "language": "vue",
+      "operation": "scan",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "<style lang=\"less\">\n// not a comment\n</style>\n<template>\n<!-- note -->\n</template>\n",
+      "note": "@vue/compiler-sfc 3.5 accepts a `<style lang=\"less\">` block, and this scanner has no rules for Less, so the block is opaque \u2014 a `//` that Less would read as a comment is protected \u2014 while the `<!-- note -->` in the template is an HTML comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 57,
+            "end": 70,
+            "kind": "html-comment",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "svelte-line-comment-in-expression",
+      "language": "svelte",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "<p>{x // c\n}</p>\n<!-- note -->\n",
+      "note": "svelte/compiler 5.56: `{ ... }` in the template opens an expression, so the `// c` inside one is a comment that runs to the end of its line while the expression carries on below; `<!-- note -->` is an HTML comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 6,
+            "end": 10,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 17,
+            "end": 30,
+            "kind": "html-comment",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "<p>{x \n}</p>\n<!-- note -->\n"
+      }
     }
-
   ]
 }

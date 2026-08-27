@@ -147,6 +147,14 @@ pub enum Language {
     /// is interpolated when an identifier stands directly before its quote,
     /// and a `<` with the shape of an XML literal opens one.
     Scala,
+    /// Vue, detected from the `.vue` of a single-file component. Its template
+    /// is HTML with `{{ ... }}` code, and its `<script>` and `<style>` bodies
+    /// are scanned as their own languages, the `lang` attribute choosing which.
+    Vue,
+    /// Svelte, detected from the `.svelte` of a component. Its template is
+    /// HTML with `{ ... }` code, and its `<script>` and `<style>` bodies are
+    /// scanned as their own languages.
+    Svelte,
     /// No built-in scanner, and the default.
     ///
     /// Scanning it yields no comments and one `unknown-language` error
@@ -159,7 +167,7 @@ pub enum Language {
 
 impl Language {
     /// Every CLI-visible language; `Unknown` is deliberately excluded.
-    pub const ALL: [Self; 26] = [
+    pub const ALL: [Self; 28] = [
         Self::Rust,
         Self::Ocaml,
         Self::C,
@@ -186,6 +194,8 @@ impl Language {
         Self::Swift,
         Self::CSharp,
         Self::Scala,
+        Self::Vue,
+        Self::Svelte,
     ];
 
     /// The canonical name, identical to the serde representation.
@@ -217,6 +227,8 @@ impl Language {
             Self::Swift => "swift",
             Self::CSharp => "csharp",
             Self::Scala => "scala",
+            Self::Vue => "vue",
+            Self::Svelte => "svelte",
             Self::Unknown => "unknown",
         }
     }
@@ -238,6 +250,8 @@ impl Language {
             | Self::Dart
             | Self::Swift
             | Self::Scala
+            | Self::Vue
+            | Self::Svelte
             | Self::Unknown => &[],
             Self::Cpp => &["c++", "cxx"],
             Self::Go => &["golang"],
@@ -338,11 +352,14 @@ pub enum Dialect {
     TSql,
     /// Oracle, which adds `q'[...]'` quoted literals.
     Oracle,
+    /// SCSS and the indented Sass syntax: CSS with `//` line comments and
+    /// `#{ ... }` interpolation.
+    Scss,
 }
 
 impl Dialect {
     /// Every CLI-visible dialect.
-    pub const ALL: [Self; 16] = [
+    pub const ALL: [Self; 17] = [
         Self::Standard,
         Self::Jsx,
         Self::Tsx,
@@ -359,6 +376,7 @@ impl Dialect {
         Self::Sqlite,
         Self::TSql,
         Self::Oracle,
+        Self::Scss,
     ];
 
     /// The canonical name, identical to the serde representation.
@@ -380,6 +398,7 @@ impl Dialect {
             Self::Sqlite => "sqlite",
             Self::TSql => "t-sql",
             Self::Oracle => "oracle",
+            Self::Scss => "scss",
         }
     }
 
@@ -394,7 +413,8 @@ impl Dialect {
             | Self::Zsh
             | Self::MySql
             | Self::Sqlite
-            | Self::Oracle => &[],
+            | Self::Oracle
+            | Self::Scss => &[],
             Self::ObjectiveC => &["objc"],
             Self::ObjectiveCpp => &["objective-c++", "objcpp"],
             Self::GnuC => &["gnuc"],

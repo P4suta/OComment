@@ -6444,3 +6444,248 @@ fn scala_layouts_leave_a_line_columns_or_nothing() {
     );
     assert_eq!(compact.output, b"val x = 1\n");
 }
+
+/// SCSS is CSS plus one comment marker: `//` opens a silent comment that dart-
+/// sass reads, while standard CSS has no such thing — `//` in a `.css` file is
+/// text, and a `/* */` comment is a comment in both.
+///
+/// Ground truth, dart-sass 1.93: the first source compiles under `syntax:
+/// scss` and the `// line` is a silent comment; under plain CSS the same bytes
+/// leave `// line` as a selector that fails to parse.
+#[test]
+fn scss_line_comments_only_in_the_dialect() {
+    let source = b"// line\n.a { color: red; /* block */ }\n";
+    let plain = scan(source, Language::Css, options(Dialect::Standard));
+    assert_eq!(
+        plain
+            .comments
+            .iter()
+            .map(|comment| (comment.span.start, comment.span.end, comment.kind))
+            .collect::<Vec<_>>(),
+        vec![(25, 36, CommentKind::Block)]
+    );
+    let scss = scan(source, Language::Css, options(Dialect::Scss));
+    assert_eq!(
+        scss.comments
+            .iter()
+            .map(|comment| (comment.span.start, comment.span.end, comment.kind))
+            .collect::<Vec<_>>(),
+        vec![(0, 7, CommentKind::Line), (25, 36, CommentKind::Block),]
+    );
+}
+
+/// The expression inside an SCSS `#{ ... }` interpolation is code, so a
+/// comment written there is a comment — a line one runs to the end of its line
+/// while the block continues below.
+///
+/// Ground truth, dart-sass 1.93: `#{$x /* c */}` compiles with the comment
+/// read as code, and so does `#{$y // c` followed by a line break.
+#[test]
+fn scss_interpolation_is_code_and_carries_comments() {
+    let source = b"$x: 1;\n.a { width: #{$x /* c */} }\n.b { height: #{$y // c\n} }\n";
+    let report = scan(source, Language::Css, options(Dialect::Scss));
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(
+        report
+            .comments
+            .iter()
+            .map(|comment| (comment.span.start, comment.span.end))
+            .collect::<Vec<_>>(),
+        vec![(24, 31), (53, 57)]
+    );
+}
+
+/// SCSS strings hide comment openers as CSS strings do, and an unquoted
+/// `url(...)` is a URL even when it opens with `//` — dart-sass reads
+/// `url(//cdn/x.png)` as a protocol-relative URL, not as a comment, so the
+/// bytes of one are protected.
+///
+/// Ground truth, dart-sass 1.93: the source below compiles under `syntax:
+/// scss` and the only comment is the silent one at the end of the file.
+#[test]
+fn scss_strings_and_urls_hide_comment_openers() {
+    let source = b".a::before { content: \"// no\" }\n.b { background: url(//cdn/x.png) no-repeat }\n.c { content: 'x /* no */' }\n// yes\n";
+    let report = scan(source, Language::Css, options(Dialect::Scss));
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(107, 113));
+}
+
+/// `.scss` and `.sass` — the SCSS and the indented syntax, which dart-sass
+/// reads with the same comment rules — select the `scss` dialect.
+#[test]
+fn scss_is_detected_from_its_extensions() {
+    for path in [Path::new("site.scss"), Path::new("site.sass")] {
+        let found = detect_language(Some(path), b"$x: 1\n").expect("detected by extension");
+        assert_eq!(found.language, Language::Css);
+        assert_eq!(found.dialect, Dialect::Scss);
+        assert_eq!(found.reason, "extension");
+    }
+}
+
+/// A Vue single-file component's template is HTML with code in its mustaches:
+/// `<!-- ... -->` is an HTML comment, `{{ ... }}` opens an expression whose
+/// comments are comments, and `//` in the text between elements is text.
+///
+/// Ground truth, `@vue/compiler-sfc` 3.5: the source below parses with the
+/// HTML comment and the `/* c */` inside the mustache as comments, and `//`
+/// in the text is text.
+#[test]
+fn vue_template_comments_and_mustaches_are_handled() {
+    let source = b"<template>\n<!-- note -->\n<div>{{ x /* c */ }} // text</div>\n</template>\n";
+    let report = scan(source, Language::Vue, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(
+        report
+            .comments
+            .iter()
+            .map(|comment| (comment.span.start, comment.span.end, comment.kind))
+            .collect::<Vec<_>>(),
+        vec![
+            (11, 24, CommentKind::HtmlComment),
+            (35, 42, CommentKind::Block),
+        ]
+    );
+}
+
+/// A Vue single-file component's `<script>` and `<style>` bodies are scanned
+/// as their own languages, the `lang` attribute choosing which: `ts` selects
+/// TypeScript and `scss` selects the SCSS dialect, whose `//` comments are
+/// comments that plain CSS would read as text.
+///
+/// Ground truth, `@vue/compiler-sfc` 3.5: the source below parses with the
+/// three comment lines as comments of their languages.
+#[test]
+fn vue_script_and_style_blocks_are_embedded() {
+    let source = b"<script setup lang=\"ts\">\n// ts\n</script>\n<style>\n/* css */\n// not css\n</style>\n<style lang=\"scss\">\n// scss\n</style>\n";
+    let report = scan(source, Language::Vue, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(
+        report
+            .comments
+            .iter()
+            .map(|comment| (comment.span.start, comment.span.end, comment.kind))
+            .collect::<Vec<_>>(),
+        vec![
+            (25, 30, CommentKind::Line),
+            (49, 58, CommentKind::Block),
+            (99, 106, CommentKind::Line),
+        ]
+    );
+}
+
+/// A `lang` this scanner has no rules for makes the block opaque: a
+/// `<script lang="coffee">`, a `<style lang="less">` and a
+/// `<template lang="pug">` are read to their close tags without looking for
+/// comments inside.
+#[test]
+fn vue_unknown_embedded_languages_are_opaque() {
+    let source = b"<script lang=\"coffee\">\n# not a comment\n</script>\n<style lang=\"less\">\n// not a comment\n</style>\n<template lang=\"pug\">\n// not a comment\n</template>\n";
+    let report = scan(source, Language::Vue, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert!(report.comments.is_empty(), "{:?}", report.comments);
+}
+
+/// The `v-pre` directive makes an element's content raw text, so the mustache
+/// it holds is not code and the `//` in it is not a comment.
+///
+/// Ground truth, `@vue/compiler-sfc` 3.5: `<div v-pre>{{ x // c }}</div>`
+/// parses with the whole content as one text node.
+#[test]
+fn vue_v_pre_elements_are_opaque() {
+    let source = b"<div v-pre>{{ x // not }}</div>\n<template>\n<!-- note -->\n</template>\n";
+    let report = scan(source, Language::Vue, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(43, 56));
+    assert_eq!(report.comments[0].kind, CommentKind::HtmlComment);
+}
+
+/// Vue is detected from the `.vue` of a single-file component.
+#[test]
+fn vue_is_detected_from_its_extension() {
+    let found = detect_language(Some(Path::new("App.vue")), b"<template></template>\n")
+        .expect("detected by extension");
+    assert_eq!(found.language, Language::Vue);
+    assert_eq!(found.reason, "extension");
+}
+
+/// A Svelte component's template is HTML with code in its braces: every
+/// `{ ... }` opens an expression whose comments are comments — a line one runs
+/// to the end of its line — and `<!-- ... -->` is an HTML comment.
+///
+/// Ground truth, `svelte/compiler` 5.56: the source below parses with the
+/// `/* c */` and `// d` as comments of their expressions and the HTML comment
+/// as a comment node.
+#[test]
+fn svelte_expressions_and_comments_in_the_template() {
+    let source = b"<p>{x /* c */}</p>\n<!-- note -->\n<p>{y // d\n}</p>\n";
+    let report = scan(source, Language::Svelte, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(
+        report
+            .comments
+            .iter()
+            .map(|comment| (comment.span.start, comment.span.end, comment.kind))
+            .collect::<Vec<_>>(),
+        vec![
+            (6, 13, CommentKind::Block),
+            (19, 32, CommentKind::HtmlComment),
+            (39, 43, CommentKind::Line),
+        ]
+    );
+}
+
+/// A Svelte component's `<script>` and `<style>` bodies are scanned as their
+/// own languages, the `lang` attribute choosing which.
+#[test]
+fn svelte_script_and_style_blocks_are_embedded() {
+    let source =
+        b"<script lang=\"ts\">\n// ts\n</script>\n<style lang=\"scss\">\n// scss\n</style>\n";
+    let report = scan(source, Language::Svelte, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(
+        report
+            .comments
+            .iter()
+            .map(|comment| (comment.span.start, comment.span.end, comment.kind))
+            .collect::<Vec<_>>(),
+        vec![(19, 24, CommentKind::Line), (55, 62, CommentKind::Line),]
+    );
+}
+
+/// Svelte is detected from the `.svelte` of a component.
+#[test]
+fn svelte_is_detected_from_its_extension() {
+    let found = detect_language(Some(Path::new("App.svelte")), b"<p>x</p>\n")
+        .expect("detected by extension");
+    assert_eq!(found.language, Language::Svelte);
+    assert_eq!(found.reason, "extension");
+}
+
+/// The three layouts leave a Vue file a line, columns, or nothing.
+#[test]
+fn vue_layouts_leave_a_line_columns_or_nothing() {
+    let source = b"<template>\n<!-- alone -->\n</template>\n";
+    let options = TransformOptions {
+        scan: ScanOptions {
+            policy: Policy::All,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let lines = transform(source, Language::Vue, options);
+    assert_eq!(lines.output, b"<template>\n\n</template>\n");
+    let compact = transform(
+        source,
+        Language::Vue,
+        TransformOptions {
+            layout: Layout::Compact,
+            scan: ScanOptions {
+                policy: Policy::All,
+                ..Default::default()
+            },
+        },
+    );
+    assert_eq!(compact.output, b"<template>\n</template>\n");
+}

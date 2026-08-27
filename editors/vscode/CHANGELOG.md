@@ -8,7 +8,7 @@ follow the repository's tags.
 
 ### Added
 
-- First release. Launches `ocomment lsp` and attaches it to the thirty-one
+- First release. Launches `ocomment lsp` and attaches it to the thirty-three
   language identifiers OComment scans, including `objective-c`,
   `objective-cpp`, `cuda-cpp`, `javascriptreact`, `typescriptreact`, and
   `shellscript`.

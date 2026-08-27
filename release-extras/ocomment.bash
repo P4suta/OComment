@@ -186,11 +186,11 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala vue svelte" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -244,11 +244,11 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala vue svelte" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -302,11 +302,11 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala vue svelte" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -360,11 +360,11 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala vue svelte" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -418,11 +418,11 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala vue svelte" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -476,11 +476,11 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala vue svelte" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -534,11 +534,11 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala vue svelte" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -886,11 +886,11 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala vue svelte" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -944,11 +944,11 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala vue svelte" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -1002,11 +1002,11 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala vue svelte" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -1060,11 +1060,11 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala vue svelte" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -1118,11 +1118,11 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala vue svelte" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -1188,11 +1188,11 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala vue svelte" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -1358,11 +1358,11 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala vue svelte" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -1416,11 +1416,11 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala vue svelte" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -1474,11 +1474,11 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala vue svelte" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -1532,11 +1532,11 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala vue svelte" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -1590,11 +1590,11 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala vue svelte" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -1648,11 +1648,11 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala vue svelte" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -1706,11 +1706,11 @@ _ocomment() {
                     return 0
                     ;;
                 --language)
-                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala vue svelte" -- "${cur}"))
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)

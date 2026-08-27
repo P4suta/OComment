@@ -301,6 +301,8 @@ impl<'a> Scanner<'a> {
             Language::Swift => self.scan_swift(),
             Language::CSharp => self.scan_csharp(),
             Language::Scala => self.scan_scala(),
+            Language::Vue => self.scan_vue(),
+            Language::Svelte => self.scan_svelte(),
             Language::Unknown => self.error(
                 "unknown-language",
                 "a language is required",
@@ -364,6 +366,10 @@ impl<'a> Scanner<'a> {
             && (self.offset > 0 || self.restart_rules.permit_restart_at(self.source, local))
             && (self.restart_rules.language != Language::Scala
                 || the_scala_xml_boundary_permits_a_restart(self.source, local))
+            && (!matches!(
+                self.restart_rules.language,
+                Language::Html | Language::Vue | Language::Svelte
+            ) || the_tag_boundary_permits_a_restart(self.source, local))
     }
 
     /// Offer `local` as a restart point, if it may stand as one.
@@ -428,7 +434,9 @@ impl<'a> Scanner<'a> {
         let bytes = self.source;
         let mut index = 0;
         while index < bytes.len() {
-            let Some(next) = next_c_family_trigger(bytes, index, self.language) else {
+            let Some(next) =
+                next_c_family_trigger(bytes, index, self.language, self.options.dialect)
+            else {
                 self.add_safe_newlines(index, bytes.len());
                 break;
             };
@@ -437,7 +445,9 @@ impl<'a> Scanner<'a> {
                 break;
             }
             index = next;
-            if starts(bytes, index, b"//") && self.language != Language::Css {
+            if starts(bytes, index, b"//")
+                && !(self.language == Language::Css && self.options.dialect != Dialect::Scss)
+            {
                 let end = line_end(bytes, index + 2);
                 self.add_comment(index, end, line_kind(bytes, index));
                 index = end;
@@ -457,12 +467,119 @@ impl<'a> Scanner<'a> {
                 index = end;
                 continue;
             }
+            if self.language == Language::Css && self.options.dialect == Dialect::Scss {
+                if starts(bytes, index, b"#{") {
+                    index = self.scan_scss_interpolation(index + 2, 0);
+                    continue;
+                }
+                if let Some(end) = self.scss_url_end(index) {
+                    index = end;
+                    continue;
+                }
+            }
             if let Some(end) = self.special_c_string(index) {
                 index = end;
                 continue;
             }
             index += 1;
         }
+    }
+
+    /// The byte after an SCSS `url(` whose content is an unquoted URL, which
+    /// dart-sass reads as URL bytes until the `)` that ends them — a `//` or a
+    /// `/*` in them is URL text, not a comment — with `#{ ... }` interpolation
+    /// inside being code. A quoted URL is an ordinary string and is left to
+    /// [`Self::special_c_string`]; an unquoted URL that never closes is a file
+    /// dart-sass rejects, and reading it as ordinary bytes is the safe half of
+    /// being wrong.
+    fn scss_url_end(&mut self, index: usize) -> Option<usize> {
+        if !starts_ascii_case(&self.source[index..], b"url(") {
+            return None;
+        }
+        if index > 0 && is_css_identifier_part(self.source[index - 1]) {
+            return None;
+        }
+        let bytes = self.source;
+        let mut cursor = index + 4;
+        if matches!(bytes.get(cursor), Some(b'"' | b'\'')) {
+            return None;
+        }
+        while cursor < bytes.len() {
+            if bytes[cursor] == b')' {
+                return Some(cursor + 1);
+            }
+            if starts(bytes, cursor, b"#{") {
+                cursor = self.scan_scss_interpolation(cursor + 2, 0);
+                continue;
+            }
+            cursor += 1;
+        }
+        None
+    }
+
+    /// One SCSS `#{ ... }` interpolation, beginning past its opening brace.
+    ///
+    /// The braces are counted rather than searched for, because the
+    /// expression is code: a comment written there is a comment, and a string
+    /// or an unquoted URL written there is scanned as such. A line comment
+    /// runs to the end of its line while the interpolation carries on below.
+    fn scan_scss_interpolation(&mut self, mut index: usize, depth: usize) -> usize {
+        if depth > 256 {
+            self.error(
+                "nesting-limit",
+                "SCSS interpolation nesting limit exceeded",
+                ByteSpan::new(index, index),
+            );
+            return self.source.len();
+        }
+        let bytes = self.source;
+        let mut braces = 1usize;
+        while index < bytes.len() {
+            if starts(bytes, index, b"//") {
+                let end = line_end(bytes, index + 2);
+                self.add_comment(index, end, CommentKind::Line);
+                index = end;
+                continue;
+            }
+            if starts(bytes, index, b"/*") {
+                let (end, closed) = block_end(bytes, index, b"/*", b"*/", false);
+                self.add_comment(index, end, block_kind(bytes, index));
+                if !closed {
+                    self.error(
+                        "unterminated-comment",
+                        "unterminated SCSS block comment",
+                        ByteSpan::new(index, end),
+                    );
+                }
+                index = end;
+                continue;
+            }
+            if let Some(end) = self.scss_url_end(index) {
+                index = end;
+                continue;
+            }
+            match bytes[index] {
+                b'"' | b'\'' => index = self.quoted_or_error(index, true, "CSS string"),
+                b'{' => {
+                    braces += 1;
+                    index += 1;
+                }
+                b'}' => {
+                    braces -= 1;
+                    index += 1;
+                    if braces == 0 {
+                        return index;
+                    }
+                }
+                _ => index += 1,
+            }
+        }
+        self.error(
+            "unterminated-interpolation",
+            "unterminated SCSS interpolation",
+            ByteSpan::new(index, index),
+        );
+        index
     }
 
     fn special_c_string(&mut self, index: usize) -> Option<usize> {
@@ -4772,9 +4889,200 @@ impl<'a> Scanner<'a> {
             }
         }
     }
-}
 
-/// The `keep_regex` and `remove_regex` sets of one [`ScanOptions`], compiled.
+    fn scan_vue(&mut self) {
+        self.scan_sfc(true);
+    }
+
+    fn scan_svelte(&mut self) {
+        self.scan_sfc(false);
+    }
+
+    /// One Vue or Svelte single-file component.
+    ///
+    /// The top level holds the `<script>` and `<style>` blocks and — for Vue —
+    /// the `<template>` block, and the body of each is scanned as its own
+    /// language, the `lang` attribute choosing which. For Svelte the text
+    /// between the blocks is the template itself, whose every `{ ... }` opens
+    /// an expression; for Vue the template is the body of its `<template>`
+    /// element. A `lang` this scanner has no rules for makes the whole block
+    /// opaque, and a top-level `<!-- ... -->` is an HTML comment.
+    fn scan_sfc(&mut self, vue: bool) {
+        let bytes = self.source;
+        let mut index = 0;
+        while index < bytes.len() && !self.stopped {
+            if starts(bytes, index, b"<!--") {
+                let end = if let Some(relative) = find_subslice(&bytes[index + 4..], b"-->") {
+                    index + 4 + relative + 3
+                } else {
+                    self.error(
+                        "unterminated-comment",
+                        "unterminated HTML comment",
+                        ByteSpan::new(index, bytes.len()),
+                    );
+                    bytes.len()
+                };
+                self.add_comment(index, end, CommentKind::HtmlComment);
+                index = end;
+                continue;
+            }
+            if bytes[index] == b'{' && !vue {
+                index = self.scan_js_code(index + 1, Some(1), 0);
+                continue;
+            }
+            if bytes[index] == b'<' {
+                if let Some(end) = self.scan_sfc_block(index, vue) {
+                    index = end;
+                    continue;
+                }
+                if html_tag_candidate(bytes, index)
+                    && let Some(end) = html_tag_end(bytes, index)
+                {
+                    index = end;
+                    continue;
+                }
+            }
+            if matches!(bytes[index], b'\r' | b'\n') {
+                index = consume_newline(bytes, index);
+                self.add_safe_checkpoint(index);
+            } else {
+                index += 1;
+            }
+        }
+    }
+
+    /// One `<script>`, `<style>` or — for Vue — `<template>` block beginning
+    /// at its start tag, scanned for its embedded language, or `None` when
+    /// the tag there opens none of them.
+    fn scan_sfc_block(&mut self, start: usize, vue: bool) -> Option<usize> {
+        let bytes = self.source;
+        let rest = &bytes[start..];
+        let name: &[u8] = if starts_ascii_case(rest, b"<script")
+            && tag_boundary(rest.get(7).copied())
+        {
+            b"script"
+        } else if starts_ascii_case(rest, b"<style") && tag_boundary(rest.get(6).copied()) {
+            b"style"
+        } else if vue && starts_ascii_case(rest, b"<template") && tag_boundary(rest.get(9).copied())
+        {
+            b"template"
+        } else {
+            return None;
+        };
+        let Some(tag_end) = html_tag_end(bytes, start) else {
+            self.error(
+                "unterminated-html-tag",
+                "unterminated single-file component start tag",
+                ByteSpan::new(start, bytes.len()),
+            );
+            return Some(bytes.len());
+        };
+        let attrs = &bytes[start + 1 + name.len()..tag_end.saturating_sub(1)];
+        let lang = tag_attr_value(attrs, b"lang");
+        let Some(close) = find_html_close(bytes, tag_end, name) else {
+            self.error(
+                "unterminated-embedded-language",
+                "unterminated single-file component element",
+                ByteSpan::new(start, bytes.len()),
+            );
+            return Some(bytes.len());
+        };
+        let content_start = tag_end;
+        let content_end = close;
+        let resolved = match name {
+            b"script" => vue_script_language(lang),
+            b"style" => vue_style_language(lang),
+            b"template" => {
+                let html = lang.is_none_or(|value| {
+                    let lower = value.to_ascii_lowercase();
+                    lower == b"html"
+                });
+                if html {
+                    Some((Language::Html, Dialect::Standard))
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+        match resolved {
+            Some((Language::Html, _)) => {
+                /* NOTE: the template is scanned on the scanner itself, because
+                 * it is the same language — Vue or Svelte — and the mustache
+                 * code it holds is JavaScript. */
+                self.scan_sfc_template(vue, content_start, content_end);
+            }
+            Some((language, dialect)) => {
+                let mut child_options = self.options.clone();
+                child_options.dialect = dialect;
+                let mut child = Scanner::child(
+                    &bytes[content_start..content_end],
+                    language,
+                    child_options,
+                    self.offset + content_start,
+                );
+                match language {
+                    Language::JavaScript | Language::TypeScript => child.scan_javascript(),
+                    Language::Css => child.scan_c_family(),
+                    _ => {}
+                }
+                self.merge_child(child);
+            }
+            None => {}
+        }
+        Some(content_end)
+    }
+
+    /// The body of a Vue `<template>`: HTML with `{{ ... }}` mustaches that
+    /// are code, and `v-pre` elements whose whole content is raw text.
+    fn scan_sfc_template(&mut self, vue: bool, start: usize, end: usize) {
+        let bytes = self.source;
+        let mut index = start;
+        while index < end {
+            if starts(bytes, index, b"<!--") {
+                let end = if let Some(relative) = find_subslice(&bytes[index + 4..], b"-->") {
+                    index + 4 + relative + 3
+                } else {
+                    self.error(
+                        "unterminated-comment",
+                        "unterminated HTML comment",
+                        ByteSpan::new(index, bytes.len()),
+                    );
+                    bytes.len()
+                };
+                self.add_comment(index, end, CommentKind::HtmlComment);
+                index = end;
+                continue;
+            }
+            if starts(bytes, index, b"{{") && vue {
+                index = self.scan_js_code(index + 2, Some(2), 0);
+                continue;
+            }
+            if bytes[index] == b'<'
+                && html_tag_candidate(bytes, index)
+                && let Some(tag_end) = html_tag_end(bytes, index)
+            {
+                let name_end = index
+                    + 1
+                    + bytes[index + 1..]
+                        .iter()
+                        .take_while(|byte| !byte.is_ascii_whitespace() && **byte != b'>')
+                        .count();
+                let attrs = &bytes[name_end..tag_end.saturating_sub(1)];
+                if vue && tag_has_attribute(attrs, b"v-pre") {
+                    let name = &bytes[index + 1..name_end];
+                    if let Some(close) = find_html_close(bytes, tag_end, name) {
+                        index = close;
+                        continue;
+                    }
+                }
+                index = tag_end;
+                continue;
+            }
+            index += 1;
+        }
+    }
+}
 ///
 /// Compiling a regex set is far more expensive than matching against it, and
 /// every comment scanned under one set of options is matched against the very
@@ -5206,20 +5514,67 @@ impl RestartRules {
             && the_preamble_permits_a_restart(source, self.language, offset)
             && (self.language != Language::Scala
                 || the_scala_xml_boundary_permits_a_restart(source, offset))
+            && (!matches!(
+                self.language,
+                Language::Html | Language::Vue | Language::Svelte
+            ) || the_tag_boundary_permits_a_restart(source, offset))
     }
 }
 
-/// Whether a Scala restart at `offset` may stand next to the byte there.
+/// Whether a restart at `offset` may stand next to an HTML-style tag.
 ///
-/// The XML literal's trigger reads the byte *behind* its `<`: the lexer's
-/// `XMLSTART` needs a space, tab, line feed, `{`, `(` or `>` before it and an
-/// XML name start, `!` or `?` after it, and a suffix scan begins at the
-/// checkpoint with no byte behind it to read. A line that opens with a `<`
-/// that could begin a literal is therefore exactly where a checkpoint cannot
-/// stand: the full scan would read the literal and protect its text, and the
-/// rescan from the checkpoint could not know it was a literal and would remove
-/// a comment out of it. Refusing the checkpoint costs a rescan; permitting it
-/// loses a user's bytes.
+/// A `<` ... `>` tag is read forward from its `<` — with its quoted attribute
+/// values — and the whole of it is consumed, so no checkpoint stands inside
+/// one in a full scan. But a checkpoint recorded by an earlier revision can
+/// sit where an edit grew a tag across it, and a rescan that begins there
+/// would read the rest of the tag as ordinary text and find a comment in it
+/// the full scan protected.
+///
+/// The test is the quote structure. A position with a quote of a kind on each
+/// side of it — each the nearest of its kind, so no quote of the kind lies
+/// between them — sits inside the pair they form: that is how a quoted
+/// attribute is recognised, and it is asked of the offset itself and of every
+/// byte the walk steps over, so the walk crosses only unquoted `<` and `>`.
+/// A suffix scan — whose own source begins at the checkpoint — gives the
+/// same answers, because a checkpoint that is itself sound, as every recorded
+/// one is, sits inside no pair and no tag, so the pairs and tags its walk
+/// meets lie within its bytes.
+fn the_tag_boundary_permits_a_restart(source: &[u8], offset: usize) -> bool {
+    for kind in b"\"'".iter().copied() {
+        if source[..offset]
+            .iter()
+            .rposition(|byte| *byte == kind)
+            .is_some()
+            && source
+                .get(offset + 1..)
+                .is_some_and(|rest| rest.contains(&kind))
+        {
+            return false;
+        }
+    }
+    let mut index = offset;
+    while index > 0 {
+        index -= 1;
+        let quoted = b"\"'".iter().any(|kind| {
+            source[..index]
+                .iter()
+                .rposition(|byte| byte == kind)
+                .is_some()
+                && source
+                    .get(index + 1..)
+                    .is_some_and(|rest| rest.contains(kind))
+        });
+        if !quoted {
+            match source[index] {
+                b'>' => return true,
+                b'<' => return false,
+                _ => {}
+            }
+        }
+    }
+    true
+}
+
 fn the_scala_xml_boundary_permits_a_restart(source: &[u8], offset: usize) -> bool {
     if source.get(offset) != Some(&b'<') {
         return true;
@@ -8026,6 +8381,122 @@ fn html_tag_candidate(bytes: &[u8], start: usize) -> bool {
     }
 }
 
+/// The value of the attribute `name` in an attribute list, without its
+/// quotes, or `None` when the list does not carry the attribute with a value.
+///
+/// Attributes are separated by white space and their values are quoted or a
+/// bare word; the name is matched as a word, so `langx` is not `lang`.
+fn tag_attr_value<'a>(attrs: &'a [u8], name: &[u8]) -> Option<&'a [u8]> {
+    let mut index = 0;
+    while index < attrs.len() {
+        if attrs[index].is_ascii_whitespace() {
+            index += 1;
+            continue;
+        }
+        if matches!(attrs[index], b'"' | b'\'') {
+            let quote = attrs[index];
+            index += 1;
+            while index < attrs.len() && attrs[index] != quote {
+                index += 1;
+            }
+            index += 1;
+            continue;
+        }
+        if attrs[index..].starts_with(name) {
+            let after = index + name.len();
+            let boundary = attrs.get(after).copied().unwrap_or(b'>');
+            if boundary.is_ascii_whitespace() || matches!(boundary, b'=' | b'>') {
+                let mut cursor = after;
+                while cursor < attrs.len() && attrs[cursor].is_ascii_whitespace() {
+                    cursor += 1;
+                }
+                if attrs.get(cursor) == Some(&b'=') {
+                    cursor += 1;
+                    while cursor < attrs.len() && attrs[cursor].is_ascii_whitespace() {
+                        cursor += 1;
+                    }
+                    return match attrs.get(cursor) {
+                        Some(b'"' | b'\'') => {
+                            let quote = attrs[cursor];
+                            let inner_start = cursor + 1;
+                            let inner_end = inner_start
+                                + attrs[inner_start..]
+                                    .iter()
+                                    .position(|byte| *byte == quote)?;
+                            Some(&attrs[inner_start..inner_end])
+                        }
+                        Some(_) => {
+                            let word_end = cursor
+                                + attrs[cursor..]
+                                    .iter()
+                                    .position(|byte| byte.is_ascii_whitespace() || *byte == b'>')
+                                    .unwrap_or(attrs.len() - cursor);
+                            Some(&attrs[cursor..word_end])
+                        }
+                        None => None,
+                    };
+                }
+            }
+        }
+        index += 1;
+    }
+    None
+}
+
+/// Whether an attribute list carries `name` as a bare attribute, which is how
+/// Vue's `v-pre` directive is written.
+fn tag_has_attribute(attrs: &[u8], name: &[u8]) -> bool {
+    let mut index = 0;
+    while index < attrs.len() {
+        if attrs[index].is_ascii_whitespace() {
+            index += 1;
+            continue;
+        }
+        if matches!(attrs[index], b'"' | b'\'') {
+            let quote = attrs[index];
+            index += 1;
+            while index < attrs.len() && attrs[index] != quote {
+                index += 1;
+            }
+            index += 1;
+            continue;
+        }
+        if attrs[index..].starts_with(name) {
+            let after = index + name.len();
+            let boundary = attrs.get(after).copied().unwrap_or(b'>');
+            if boundary.is_ascii_whitespace() || boundary == b'>' {
+                return true;
+            }
+        }
+        index += 1;
+    }
+    false
+}
+
+/// The language a Vue `<script>` body is written in, from its `lang`
+/// attribute; `None` for a `lang` this scanner has no rules for, which makes
+/// the block opaque.
+fn vue_script_language(lang: Option<&[u8]>) -> Option<(Language, Dialect)> {
+    match lang.map(|value| value.to_ascii_lowercase()).as_deref() {
+        None | Some(b"js" | b"javascript") => Some((Language::JavaScript, Dialect::Standard)),
+        Some(b"jsx") => Some((Language::JavaScript, Dialect::Jsx)),
+        Some(b"ts" | b"typescript") => Some((Language::TypeScript, Dialect::Standard)),
+        Some(b"tsx") => Some((Language::TypeScript, Dialect::Tsx)),
+        Some(_) => None,
+    }
+}
+
+/// The language a Vue or Svelte `<style>` body is written in, from its `lang`
+/// attribute; the default is CSS, `scss` and the indented `sass` select the
+/// SCSS dialect, and any other `lang` makes the block opaque.
+fn vue_style_language(lang: Option<&[u8]>) -> Option<(Language, Dialect)> {
+    match lang.map(|value| value.to_ascii_lowercase()).as_deref() {
+        None | Some(b"css") => Some((Language::Css, Dialect::Standard)),
+        Some(b"scss" | b"sass") => Some((Language::Css, Dialect::Scss)),
+        Some(_) => None,
+    }
+}
+
 fn html_embedded_start(bytes: &[u8], start: usize) -> Option<(&'static [u8], Language)> {
     let rest = &bytes[start..];
     if starts_ascii_case(rest, b"<script") && tag_boundary(rest.get(7).copied()) {
@@ -8871,15 +9342,32 @@ fn contains_line_splice(bytes: &[u8]) -> bool {
     false
 }
 
-fn next_c_family_trigger(bytes: &[u8], start: usize, language: Language) -> Option<usize> {
+fn next_c_family_trigger(
+    bytes: &[u8],
+    start: usize,
+    language: Language,
+    dialect: Dialect,
+) -> Option<usize> {
     let remaining = bytes.get(start..)?;
     let primary = match language {
         Language::Go => remaining
             .iter()
             .position(|byte| matches!(byte, b'/' | b'"' | b'\'' | b'`')),
+        /* NOTE: SCSS adds the `#` of its `#{ ... }` interpolation and the `u`
+         * of its unquoted `url( ... )` to the bytes the scan jumps to, because
+         * both open a region whose `//` is not a comment. */
+        Language::Css if dialect == Dialect::Scss => remaining
+            .iter()
+            .position(|byte| matches!(byte, b'/' | b'"' | b'\'' | b'#' | b'u' | b'U')),
         _ => memchr3(b'/', b'"', b'\'', remaining),
     }?;
     Some(start + primary)
+}
+
+/// A byte a CSS identifier may carry, which is what keeps `myurl(` from
+/// reading as the `url(` function.
+fn is_css_identifier_part(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_')
 }
 
 struct MappedBytes {
