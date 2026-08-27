@@ -63,23 +63,3 @@ jobs:
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
         with:
           path: target/book
-
-  deploy-pages:
-    # Pages serves one site, so a deploy is never cancelled halfway and never
-    # races another: this group is deliberately separate from the workflow's.
-    concurrency:
-      group: pages
-      cancel-in-progress: false
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: docs
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    permissions:
-      pages: write # Publish the built book as this repository's Pages site.
-      id-token: write # Prove to the Pages API which workflow run is deploying.
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5
