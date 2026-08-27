@@ -8926,6 +8926,52 @@
       }
     },
     {
+      "id": "rust-unicode-lifetime-generic",
+      "language": "rust",
+      "operation": "scan",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "fn f<'ä>() {} // remove\n",
+      "note": "Rust Reference, Identifiers: an identifier is `XID_Start XID_Continue*` and has been since 1.53, so `'ä` names a lifetime exactly as `'a` does. The line-bounded window that tells a character literal from a lifetime cannot tell those two apart -- within one line an unterminated non-ASCII character literal is spelled the same way -- so it reports neither, which is what leaves this file valid and its trailing comment removable. Ground truth, `rustc` 1.97.1: the file compiles, with `warning: function `f` is never used` and no error, so a scanner that called it invalid would refuse to transform a file the compiler accepts.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 15,
+            "end": 24,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "rust-unicode-loop-label",
+      "language": "rust",
+      "operation": "scan",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "'ä: loop { break 'ä } // remove\n",
+      "note": "Rust Reference, Loop labels: a loop label is written with the lifetime-or-label token, so `'ä` labels a loop and breaks out of it exactly as `'a` would. Two apostrophes on one line each open nothing here, for the reason `rust-unicode-lifetime-generic` gives, and the comment behind them is still found. Ground truth, `rustc` 1.97.1: `fn main() { 'ä: loop { break 'ä } }` compiles with no error.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 24,
+            "end": 33,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
       "id": "ocaml-char-literal-across-newline",
       "language": "ocaml",
       "operation": "transform",
@@ -9004,6 +9050,803 @@
       }
     },
     {
+      "id": "swift-nested-block-comment",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "/* outer /* inner */ still outer */\nlet a = 1 // remove\n",
+      "note": "The Swift Programming Language, Lexical Structure (Comments): a `/* */` comment nests, so the inner `*/` closes only the inner `/*` and commenting out a region that already holds a comment works. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): one `blockComment` at [0,35) and a `lineComment` at [46,55), with no parser diagnostic.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 35,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 46,
+            "end": 55,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\nlet a = 1 \n"
+      }
+    },
+    {
+      "id": "swift-doc-forms",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "/// doc\n//// four\n//! not swift\n/** doc */\n/*! bang */\n/**/\n/***/\n// line\nlet a = 1\n",
+      "note": "Swift's documentation markers are `///` and `/**`, and a fourth slash does not take the first away while the `/` that closes `/**/` takes the second: the empty block comment's second `*` is the first byte of its own terminator. `//!` is Rust's inner-doc marker and `/*!` Doxygen's, and neither documents anything here. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): `docLineComment` at [0,7) and [8,17), `lineComment` at [18,31), `docBlockComment` at [32,42), `blockComment` at [43,54) and [55,59), `docBlockComment` at [60,65), and `lineComment` at [66,73), with no parser diagnostic.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 7,
+            "kind": "doc-line",
+            "action": "remove"
+          },
+          {
+            "start": 8,
+            "end": 17,
+            "kind": "doc-line",
+            "action": "remove"
+          },
+          {
+            "start": 18,
+            "end": 31,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 32,
+            "end": 42,
+            "kind": "doc-block",
+            "action": "remove"
+          },
+          {
+            "start": 43,
+            "end": 54,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 55,
+            "end": 59,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 60,
+            "end": 65,
+            "kind": "doc-block",
+            "action": "remove"
+          },
+          {
+            "start": 66,
+            "end": 73,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\n\n\n\n\n\n\n\nlet a = 1\n"
+      }
+    },
+    {
+      "id": "swift-interpolation-comment",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "let a = \"v: \\( 1 /* c */ + 2 )\"  // remove\n",
+      "note": "The Swift Programming Language, Lexical Structure (String Literals): the expression inside a `\\( ... )` interpolation is lexed as code, so a comment written there is a comment. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): `blockComment` at [17,24) between the `stringSegment` at [9,12) and the one at [30,30), with the trailing `lineComment` at [33,42) and no parser diagnostic.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 17,
+            "end": 24,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 33,
+            "end": 42,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "let a = \"v: \\( 1  + 2 )\"  \n"
+      }
+    },
+    {
+      "id": "swift-multiline-string",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "let a = \"\"\"\n// not\n\"\"\"\n// remove\n",
+      "note": "A `\"\"\"` literal carries line breaks as content, so a `//` written on one of its lines is a string segment rather than a comment. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): `multilineStringQuote` at [8,11) and [19,22) around a `stringSegment` at [12,18), with the only `lineComment` at [23,32) and no parser diagnostic.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 23,
+            "end": 32,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "let a = \"\"\"\n// not\n\"\"\"\n\n"
+      }
+    },
+    {
+      "id": "swift-raw-string-hashes",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "let a = ##\"a \"# // not\"##\n// remove\n",
+      "note": "A run of `#` in front of the quote renames the closing delimiter with it, so a `\"#` inside a `##\"..\"##` literal is content and only `\"##` ends one. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): `rawStringPoundDelimiter(\"##\")` at [8,10) and [23,25) around one `stringSegment` at [11,22), with the only `lineComment` at [26,35) and no parser diagnostic.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 35,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "let a = ##\"a \"# // not\"##\n\n"
+      }
+    },
+    {
+      "id": "swift-raw-multiline",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "let a = #\"\"\"\n// not \\(1)\n\"\"\"#\n// remove\n",
+      "note": "The hashes rename the escape as well as the delimiter, so in a `#\"\"\"...\"\"\"#` literal a bare `\\(` opens no interpolation and the `//` beside it stays content. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): `rawStringPoundDelimiter` at [8,9) and [28,29), `multilineStringQuote` at [9,12) and [25,28), one `stringSegment` at [13,24), and the only `lineComment` at [30,39), with no parser diagnostic.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 30,
+            "end": 39,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "let a = #\"\"\"\n// not \\(1)\n\"\"\"#\n\n"
+      }
+    },
+    {
+      "id": "swift-raw-interpolation",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "let a = #\"v: \\#( 1 /* c */ ) and \\(1)\"#  // remove\n",
+      "note": "With one hash the interpolation opener is `\\#(` and a bare `\\(` is two characters of content, so one of the two in this literal turns the string back into code and the other does not. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): `rawStringPoundDelimiter` at [14,15) opening the interpolation whose `blockComment` is at [19,26), the `stringSegment` at [28,37) holding the bare `\\(1)`, and the trailing `lineComment` at [41,50), with no parser diagnostic.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 19,
+            "end": 26,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 41,
+            "end": 50,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "let a = #\"v: \\#( 1  ) and \\(1)\"#  \n"
+      }
+    },
+    {
+      "id": "swift-raw-quote-only",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "let a = #\"\"\"#\n// remove\n",
+      "note": "`#\"\"\"#` is the one shape that reads as two things at once, and it is the single-line raw string holding one quote rather than a multi-line literal left open: `Lexer.Cursor.advanceIfMultilineStringDelimiter` reads the rest of the line from the third quote for a closing `\"` and the opening run of `#`, and refuses multi-line mode when it finds one. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): `stringQuote` at [9,10) and [11,12) around a `stringSegment(\"\\\"\")` at [10,11), with the only `lineComment` at [14,23) and no parser diagnostic.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 14,
+            "end": 23,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "let a = #\"\"\"#\n\n"
+      }
+    },
+    {
+      "id": "swift-string-pound-boundary",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "let a = \"x\"#/y // z/#\nlet b = 1 // remove\n",
+      "note": "The run of `#` that closes a string belongs to the string only when a run opened it: `Lexer.Cursor.advanceIfStringDelimiter` returns on `delimiterLength == 0` before it looks at a byte, so the `#` behind the closing quote of `\"x\"` opens the `#/ ... /#` that follows and the `//` inside that literal is pattern rather than a comment. Taking it for the string instead would report a comment over regular expression bytes and remove them. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): `stringQuote` at [10,11), `regexPoundDelimiter` at [11,12), `regexLiteralPattern(\"y // z\")` at [13,19), and the only `lineComment` at [32,41). The juxtaposition is a parse error there — `consecutive statements on a line must be separated by newline or ';'` — and the lexing of it is what this case pins.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 32,
+            "end": 41,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "let a = \"x\"#/y // z/#\nlet b = 1 \n"
+      }
+    },
+    {
+      "id": "swift-extended-regex-literal",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "let a = #/https://x/#  // remove\n",
+      "note": "The Swift Programming Language, Lexical Structure (Regular Expression Literals): an extended literal delimited by `#/` and `/#` may hold an unescaped `/`, which is what makes a `//` in the middle of a pattern possible at all. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): `regexLiteralPattern(\"https://x\")` at [10,19) between `regexSlash` tokens, with the only `lineComment` at [23,32) and no parser diagnostic.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 23,
+            "end": 32,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "let a = #/https://x/#  \n"
+      }
+    },
+    {
+      "id": "swift-extended-regex-multiline",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "let a = #/\n  x y\n/#\n// remove\n",
+      "note": "An extended literal whose opener ends its line spans lines, which `RegexLiteralLexer` decides by reading blanks and then a line terminator behind the `#/`. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): one `regexLiteralPattern` at [10,17) carrying both line breaks, with the only `lineComment` at [20,29) and no parser diagnostic.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 20,
+            "end": 29,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "let a = #/\n  x y\n/#\n\n"
+      }
+    },
+    {
+      "id": "swift-bare-regex-literal",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "let a = /a\\//;print(1) // remove\n",
+      "note": "A bare `/.../` literal ends at the first unescaped `/`, and a backslash carries the byte behind it in, so the last two bytes of `/a\\//` spell `//` without opening a comment. This is the byte-removal hazard the rule exists for: reading that `//` as a comment would delete `;print(1)`. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): `regexSlash` at [8,9) and [12,13) around `regexLiteralPattern(\"a\\\\/\")` at [9,12), the code `;print(1)` after it, and the only `lineComment` at [23,32), with no parser diagnostic.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 23,
+            "end": 32,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "let a = /a\\//;print(1) \n"
+      }
+    },
+    {
+      "id": "swift-bare-regex-limitation",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "let a = / b\\//\nlet c = 1\n",
+      "note": "The one rule of Swift's bare `/ ... /` literal that cannot be had from the bytes alone, recorded rather than hidden. Whether a `/` in an ambiguous position opens a literal is settled in Swift by the parser: where an expression is *required* the lexer takes the literal and diagnoses what is wrong with it, and where an operator would also parse it gives up instead. A scanner with no parser cannot tell the two apart, so this one reads a literal exactly where the book's own conditions hold — a prefix-operator position, no leading space or tab, no line terminator, a closing `/` that no unescaped blank precedes and no comment opener follows. Every source that decides differently is one `swiftc` rejects, and this is that source: Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets) lexes `/ b\\\\//` as a `regexLiteralPattern` at [9,13) and reports `bare slash regex literal may not start with space`, while the scan below reads the `//` at [12,14) as a line comment. A file that compiles never reaches the case; a file that does not can lose the two bytes of a comment opener that the compiler was going to reject anyway.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 12,
+            "end": 14,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "let a = / b\\\nlet c = 1\n"
+      }
+    },
+    {
+      "id": "swift-division-not-regex",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "let a = 1 / 2 // remove\nlet b = a/a/a // remove\n",
+      "note": "The Swift Programming Language, Lexical Structure (Operators): an operator with white space on both sides or on neither is binary, and a regular expression literal may only stand where a prefix operator may, so neither `/` here opens one. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): `lineComment` at [14,23) and [38,47), no regex token at all, and no parser diagnostic.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 14,
+            "end": 23,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 38,
+            "end": 47,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "let a = 1 / 2 \nlet b = a/a/a \n"
+      }
+    },
+    {
+      "id": "swift-regex-comment-wins",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "let a = /x//y/\nlet b = 1\n",
+      "note": "When the closing delimiter of a bare literal would be the first byte of a comment, the comment wins outright rather than the literal ending one byte earlier: `RegexLiteralLexer.tryEatEnding` returns `.unterminated` on a `*` or `/` behind the closing slash, `\"We prefer to lex the comment as it's more likely than not that is what the user is expecting\"`. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): no regex token, and one `lineComment` at [10,14) — `//y/` — with no parser diagnostic.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 10,
+            "end": 14,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "let a = /x\nlet b = 1\n"
+      }
+    },
+    {
+      "id": "swift-compiler-directive-not-comment",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "#if DEBUG\nlet a = 1 // remove\n#endif\n#warning(\"x // y\")\n",
+      "note": "`#if`, `#endif` and `#warning` are compiler directives and not comments, and the `//` inside the string a `#warning` takes is a string segment. Only the `#` runs that carry a quote or a slash behind them open a literal here. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): one `lineComment` at [20,29), the `stringSegment` at [47,53), and no parser diagnostic.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 20,
+            "end": 29,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "#if DEBUG\nlet a = 1 \n#endif\n#warning(\"x // y\")\n"
+      }
+    },
+    {
+      "id": "swift-tools-version-directive",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "// swift-tools-version:5.9\n// control\n",
+      "note": "SwiftPM reads the tools version out of the first line of a `Package.swift` before it reads the manifest at all, so a removal that took it would leave a package that no longer builds. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): `lineComment` at [0,26) and [27,37), which the scanner tells apart by their text and not by their shape.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 26,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 27,
+            "end": 37,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "// swift-tools-version:5.9\n\n"
+      }
+    },
+    {
+      "id": "swift-swiftlint-directive",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "// swiftlint:disable force_cast\n// control\n",
+      "note": "SwiftLint reads `// swiftlint:` out of a comment and silences its rules for the file or the line, and the colon is the marker's own boundary. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): `lineComment` at [0,31) and [32,42).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 31,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 32,
+            "end": 42,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "// swiftlint:disable force_cast\n\n"
+      }
+    },
+    {
+      "id": "swift-format-ignore-directive",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "// swift-format-ignore-file\n// control\n",
+      "note": "`swift-format` reads three spellings of its ignore comment — the bare marker, a `:` and a rule name, and the `-file` that widens it to the whole file. Measured on `swift-format` 6.3.3: `// swift-format-ignore` and `// swift-format-ignore-file` both leave `let    a     = 1` unformatted, while `// swift-format-ignoreish note` reformats it. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): `lineComment` at [0,27) and [28,38).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 27,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 28,
+            "end": 38,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "// swift-format-ignore-file\n\n"
+      }
+    },
+    {
+      "id": "swift-mark-is-not-a-directive",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "// MARK: - Section\n// control\n",
+      "note": "`// MARK:` is read by Xcode to build a jump bar, which is an aid to a reader rather than to a build, so it is an ordinary comment here and a project that wants it kept says so with a `keep_regex` of its own. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): `lineComment` at [0,18) and [19,29).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 18,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 19,
+            "end": 29,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\n\n"
+      }
+    },
+    {
+      "id": "swift-unterminated-nested",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "/* open /* inner */\nlet a = 1\n",
+      "note": "A nested block comment needs as many `*/` as it opened `/*`, so one `*/` closes only the inner one and the rest of the file is comment. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): one `blockComment` running to the end of the file at [0,30), with the diagnostic `unterminated '/*' comment`.",
+      "expect": {
+        "valid": false,
+        "comments": [
+          {
+            "start": 0,
+            "end": 30,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [
+          {
+            "code": "unterminated-comment",
+            "start": 0,
+            "end": 30
+          }
+        ],
+        "output_utf8": "/* open /* inner */\nlet a = 1\n"
+      }
+    },
+    {
+      "id": "swift-unterminated-multiline",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "let a = \"\"\"\nopen\nlet b = 2\n",
+      "note": "A `\"\"\"` literal that no closing delimiter ends runs to the end of the file, so nothing under it is scanned as code and nothing is edited. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): `multilineStringQuote` at [8,11) and `stringSegment` tokens running to [27,27), with the diagnostic `expected '\"\"\"' to end string literal`.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 8,
+            "end": 27
+          }
+        ],
+        "output_utf8": "let a = \"\"\"\nopen\nlet b = 2\n"
+      }
+    },
+    {
+      "id": "swift-unterminated-extended-regex",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "let a = #/\nopen\nlet b = 2 // remove\n",
+      "note": "An extended literal that opens a multi-line one and never closes gives its lines back rather than swallowing the file: `RegexLiteralLexer` resumes at the first newline, \"so we don't want to skip over what is likely otherwise valid Swift code\". Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): an empty `regexLiteralPattern` at [10,10) and the `lineComment` three lines under it at [26,35), with the diagnostic `expected '/#' to end regex literal`.",
+      "expect": {
+        "valid": false,
+        "comments": [
+          {
+            "start": 26,
+            "end": 35,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [
+          {
+            "code": "unterminated-regex",
+            "start": 8,
+            "end": 10
+          }
+        ],
+        "output_utf8": "let a = #/\nopen\nlet b = 2 // remove\n"
+      }
+    },
+    {
+      "id": "swift-single-quoted-recovery",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "let a = 'x // not'\n// remove\n",
+      "note": "`'` is no delimiter of the language — the Swift book's Lexical Structure has no single-quoted literal and no character literal at all — but it is one in the compiler, which lexes `'...'` as a `singleQuote` string so that it can offer the fix-it that turns it into a `\"...\"` one. Following the lexer keeps the `//` inside such a literal from being removed out of a file that is already broken, and costs a valid file nothing, because no `'` can stand in Swift code outside a string, a comment or a regular expression literal. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): one `stringSegment` at [9,17) and the only `lineComment` at [19,28), with the diagnostic `Single-quoted string literal found, use '\\\"'`.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 19,
+            "end": 28,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "let a = 'x // not'\n\n"
+      }
+    },
+    {
+      "id": "swift-shebang",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "#!/usr/bin/env swift\n// remove\nlet a = 1\n",
+      "note": "A `#!` line is Swift's script preamble on the first line and two operators anywhere else, so it is protected in the one place it means anything. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): a `shebang` token at [0,20) and a `lineComment` at [21,30), with no parser diagnostic; the same `#!` on line 2 comes back as `pound`, `exclamationMark` and two `binaryOperator` tokens.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 20,
+            "kind": "shebang",
+            "action": "keep"
+          },
+          {
+            "start": 21,
+            "end": 30,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "#!/usr/bin/env swift\n\nlet a = 1\n"
+      }
+    },
+    {
+      "id": "swift-crlf",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "/* block\r\nstill */\r\nlet a = \"\"\"\r\nx\r\n\"\"\"\r\nlet b = #/\r\n  x\r\n/#\r\n// remove\r\n",
+      "note": "Every Swift construct that crosses a line crosses a CRLF pair as it crosses a bare newline: a block comment, a multi-line string, a multi-line extended regular expression literal, and the line comment that ends before the `\\r` rather than at it. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): `blockComment` at [0,18), `multilineStringQuote` at [28,31) and [36,39), the regex tokens at [49,60), and the only `lineComment` at [62,71), with no parser diagnostic.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 18,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 62,
+            "end": 71,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\r\n\r\nlet a = \"\"\"\r\nx\r\n\"\"\"\r\nlet b = #/\r\n  x\r\n/#\r\n\r\n"
+      }
+    },
+    {
+      "id": "swift-columns",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "columns"
+      },
+      "source_utf8": "// alone\nlet x = 1 // trailing\n",
+      "note": "The columns layout replaces a comment with spaces instead of closing the gap, so every byte after it keeps the column it had. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): `lineComment` at [0,8) and [19,30).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 8,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 19,
+            "end": 30,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "        \nlet x = 1            \n"
+      }
+    },
+    {
+      "id": "swift-compact",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "compact"
+      },
+      "source_utf8": "// alone\nlet x = 1 // trailing\n",
+      "note": "The compact layout takes the line a comment stood alone on with it and trims the white space a trailing one left behind. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): `lineComment` at [0,8) and [19,30).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 8,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 19,
+            "end": 30,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "let x = 1\n"
+      }
+    },
+    {
       "id": "bom-shebang-javascript",
       "language": "javascript",
       "operation": "transform",
@@ -9026,6 +9869,1187 @@
         "diagnostics": [],
         "output_base64": "77u/IyEvdXNyL2Jpbi9lbnYgbm9kZQpsZXQgeCA9IDE7IAo="
       }
+    },
+    {
+      "id": "csharp-doc-forms",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "/// doc\n//// four\n//! not csharp\n/** doc */\n/*! bang */\n/**/\n/***/\n/*** three */\n// line\nclass C { }\n",
+      "note": "C# has two documentation markers and each one has a spelling that takes it back: a fourth slash, and a third star. `//!` is Rust's inner-doc marker and `/*!` Doxygen's, and neither documents anything here. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): `SingleLineDocumentationCommentTrivia` at [0,8), `SingleLineCommentTrivia` at [8,17) and [18,32), `MultiLineDocumentationCommentTrivia` at [33,43), `MultiLineCommentTrivia` at [44,55), [56,60), [61,66) and [67,80), and `SingleLineCommentTrivia` at [81,88).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 7,
+            "kind": "doc-line",
+            "action": "remove"
+          },
+          {
+            "start": 8,
+            "end": 17,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 18,
+            "end": 32,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 33,
+            "end": 43,
+            "kind": "doc-block",
+            "action": "remove"
+          },
+          {
+            "start": 44,
+            "end": 55,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 56,
+            "end": 60,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 61,
+            "end": 66,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 67,
+            "end": 80,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 81,
+            "end": 88,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\n\n\n\n\n\n\n\n\nclass C { }\n"
+      }
+    },
+    {
+      "id": "csharp-non-nested-block",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "/* outer /* inner */ still outer */\nvar a = 1; // remove\n",
+      "note": "A C# block comment does not nest: ECMA-334 6.3.3 gives `/*` no meaning inside one, so the first `*/` closes it and the bytes behind it are code. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): one `MultiLineCommentTrivia` at [0,20) and a `SingleLineCommentTrivia` at [47,56), with CS1003 against the code the tail of the outer comment turned into.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 20,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 47,
+            "end": 56,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": " still outer */\nvar a = 1; \n"
+      }
+    },
+    {
+      "id": "csharp-verbatim-string-quotes",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "var s = @\"quote \"\" inside // no\"; // remove\n",
+      "note": "A verbatim string spells its quote `\"\"` rather than escaping it, so the literal runs past the doubled pair and the `//` inside it is content. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): one `StringLiteralToken` at [8,31) and a `SingleLineCommentTrivia` at [34,43).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 34,
+            "end": 43,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "var s = @\"quote \"\" inside // no\"; \n"
+      }
+    },
+    {
+      "id": "csharp-verbatim-multiline",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "var s = @\"first // no\nsecond */ no\"; // remove\n",
+      "note": "A verbatim string carries a line break as content, so neither the `//` on its first line nor the `*/` on its second is a delimiter. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): one `StringLiteralToken` at [8,34) and a `SingleLineCommentTrivia` at [37,46).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 37,
+            "end": 46,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "var s = @\"first // no\nsecond */ no\"; \n"
+      }
+    },
+    {
+      "id": "csharp-verbatim-identifier",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "var @class = 1; // remove\n",
+      "note": "`@` in front of anything but a quote is the verbatim identifier of ECMA-334 6.4.3 and opens no literal at all, so the keyword it escapes is code and the comment behind it is a comment. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): an `IdentifierToken` `@class` at [4,10) and a `SingleLineCommentTrivia` at [16,25).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 16,
+            "end": 25,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "var @class = 1; \n"
+      }
+    },
+    {
+      "id": "csharp-interpolated-braces-escape",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "var s = $\"{{literal}} // no {x} tail\"; // remove\n",
+      "note": "`{{` and `}}` are how an interpolated string writes a brace, so they open no hole and the text between them is text. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): `InterpolatedStringTextToken` `{{literal}} // no ` at [10,27), a hole at [27,30), and the only `SingleLineCommentTrivia` at [39,48).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 39,
+            "end": 48,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "var s = $\"{{literal}} // no {x} tail\"; \n"
+      }
+    },
+    {
+      "id": "csharp-interpolated-hole-comment",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "var s = $\"v={x /* hole */} // no\"; // remove\n",
+      "note": "An interpolation hole is code, so a comment written inside one is a comment while the `//` in the text around it is not. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): `MultiLineCommentTrivia` at [15,25) and `SingleLineCommentTrivia` at [35,44), with ` // no` lexed as `InterpolatedStringTextToken`.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 15,
+            "end": 25,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 35,
+            "end": 44,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "var s = $\"v={x } // no\"; \n"
+      }
+    },
+    {
+      "id": "csharp-interpolated-hole-newline",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "var s = $\"v={x // hole\n}\"; // remove\n",
+      "note": "C# 11 let the expression in a hole span lines, so a `//` comment written in one runs to the end of its line and the single-line string it sits inside carries on below. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): `SingleLineCommentTrivia` at [15,22) and [27,36), with the interpolated string closing at [24,25).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 15,
+            "end": 22,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 27,
+            "end": 36,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "var s = $\"v={x \n}\"; \n"
+      }
+    },
+    {
+      "id": "csharp-interpolated-format-clause",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "var s = $\"{x:D4 // no}\"; // remove\n",
+      "note": "A `:` where no bracket of the hole is open ends the expression and opens the format clause, which is text to the closing brace. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): `InterpolatedStringTextToken` `D4 // no` at [13,21) and the only `SingleLineCommentTrivia` at [25,34).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 25,
+            "end": 34,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "var s = $\"{x:D4 // no}\"; \n"
+      }
+    },
+    {
+      "id": "csharp-verbatim-interpolated",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "var s = $@\"a {x} // no\nb\"; var t = @$\"c\"; // remove\n",
+      "note": "`$@` and `@$` spell the same literal, a verbatim string with holes: the line break is content and the `//` behind the hole is text. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): `InterpolatedVerbatimStringStartToken` at [8,11) and [34,37), and the only `SingleLineCommentTrivia` at [42,51).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 42,
+            "end": 51,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "var s = $@\"a {x} // no\nb\"; var t = @$\"c\"; \n"
+      }
+    },
+    {
+      "id": "csharp-raw-string-quotes",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "var s = \"\"\"\"three \"\"\" inside // no\"\"\"\"; // remove\n",
+      "note": "A raw string closes at the first run of at least as many quotes as its opener carried, so a run of three inside a four-quote literal is content and the `//` beside it is too. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): one `SingleLineRawStringLiteralToken` at [8,38) and a `SingleLineCommentTrivia` at [40,49).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 40,
+            "end": 49,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "var s = \"\"\"\"three \"\"\" inside // no\"\"\"\"; \n"
+      }
+    },
+    {
+      "id": "csharp-raw-multiline",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "var s = \"\"\"\n  body // no\n  \"\"\"; // remove\n",
+      "note": "A raw string whose opener ends its line carries line breaks, so the `//` on the line under it is content. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): one `MultiLineRawStringLiteralToken` at [8,30) and a `SingleLineCommentTrivia` at [32,41).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 32,
+            "end": 41,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "var s = \"\"\"\n  body // no\n  \"\"\"; \n"
+      }
+    },
+    {
+      "id": "csharp-raw-interpolated-dollar",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "var s = $$\"\"\"{not a hole} {{x /* hole */}} // no\"\"\"; // remove\n",
+      "note": "A run of `n` `$` in front of a raw string makes `n` braces the thing that opens a hole, so a single `{` is content and `{{` is code. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): `InterpolatedStringTextToken` `{not a hole} ` at [13,26), `OpenBraceToken` `{{` at [26,28), `MultiLineCommentTrivia` at [30,40), `CloseBraceToken` `}}` at [40,42), and `SingleLineCommentTrivia` at [53,62).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 30,
+            "end": 40,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 53,
+            "end": 62,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "var s = $$\"\"\"{not a hole} {{x }} // no\"\"\"; \n"
+      }
+    },
+    {
+      "id": "csharp-utf8-literal",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "var s = \"bytes // no\"u8; // remove\n",
+      "note": "The `u8` suffix of a UTF-8 literal follows the closing quote, so it changes nothing about where the string ends or what it hides. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): one `Utf8StringLiteralToken` at [8,23) and a `SingleLineCommentTrivia` at [25,34).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 25,
+            "end": 34,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "var s = \"bytes // no\"u8; \n"
+      }
+    },
+    {
+      "id": "csharp-string-escape-carries-a-newline",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "var s = \"a\\\nb // no\"; // remove\n",
+      "note": "A `\\` in a plain string carries the character behind it in whatever it is, a line terminator included: `ScanEscapeSequence` takes one character and raises CS1009 when it spells no escape, so the literal carries on below and the `//` on the second line is content. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): one `StringLiteralToken` at [8,20) with CS1009 at [10,12), and a `SingleLineCommentTrivia` at [22,31).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 22,
+            "end": 31,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "var s = \"a\\\nb // no\"; \n"
+      }
+    },
+    {
+      "id": "csharp-character-literals",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "char a = '/'; char b = '\\''; char c = '\"'; // remove\n",
+      "note": "A character literal hides a comment opener as a string does, and the two spellings that make that hard are the escaped apostrophe and the quote. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): three `CharacterLiteralToken` at [9,12), [23,27) and [38,41), and one `SingleLineCommentTrivia` at [43,52).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 43,
+            "end": 52,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "char a = '/'; char b = '\\''; char c = '\"'; \n"
+      }
+    },
+    {
+      "id": "csharp-preprocessor-if-with-comment",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "#if DEBUG // kept\nvar a = 1; // remove\n#endif // tail\n",
+      "note": "ECMA-334 6.5.1 ends a directive with `PP_Whitespace? SINGLE_LINE_COMMENT? New_Line`, so a `//` at the end of an `#if` or an `#endif` is a comment. The body is scanned as ordinary code: Roslyn reports it as one `DisabledTextTrivia` because it compiled with `DEBUG` undefined, but which symbols a build defines is not in the file, and a comment inside `#if DEBUG` is a comment in every build that defines it -- which is how `#if 0` is read for C and C++ here too. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): `SingleLineCommentTrivia` at [10,17) and [46,53), and `DisabledTextTrivia` at [18,39).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 10,
+            "end": 17,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 29,
+            "end": 38,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 46,
+            "end": 53,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "#if DEBUG \nvar a = 1; \n#endif \n"
+      }
+    },
+    {
+      "id": "csharp-region-text-not-comment",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "#region Name // not a comment\n#endregion // a comment\n",
+      "note": "`#region` and `#endregion` take the rest of their line as the label an editor folds under, and Roslyn lexes a `//` there as a comment only when it opens that label. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): `PreprocessingMessageTrivia` at [8,29) and `SingleLineCommentTrivia` at [41,53).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 41,
+            "end": 53,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "#region Name // not a comment\n#endregion \n"
+      }
+    },
+    {
+      "id": "csharp-pragma-text",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "#pragma warning disable 1591 // a comment\nvar a = 1; // remove\n",
+      "note": "`#pragma` is lexed as tokens rather than as a message, so the `//` behind its arguments is the one comment a directive line may carry. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): `SingleLineCommentTrivia` at [29,41) and [53,62).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 29,
+            "end": 41,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 53,
+            "end": 62,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "#pragma warning disable 1591 \nvar a = 1; \n"
+      }
+    },
+    {
+      "id": "csharp-line-directive-string",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "#line 1 \"a//b.cs\" // tail\nvar a = 1; // remove\n",
+      "note": "A `\"` on a directive line opens a string -- the file name of `#line` and the three arguments of `#pragma checksum` are written that way -- so the `//` inside it is out of reach while the one behind it is a comment. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): a `StringLiteralToken` at [8,17) and `SingleLineCommentTrivia` at [18,25) and [37,46).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 18,
+            "end": 25,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 37,
+            "end": 46,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "#line 1 \"a//b.cs\" \nvar a = 1; \n"
+      }
+    },
+    {
+      "id": "csharp-error-message-not-comment",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "#error boom // no\n",
+      "note": "`#error` and `#warning` carry the text their diagnostic quotes, which ECMA-334 6.5.1 writes as `Input_Character*`: every byte to the end of the line, whatever it spells. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): one `PreprocessingMessageTrivia` at [7,17) and no comment trivia, with CS1029 quoting `boom // no` whole.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "diagnostics": [],
+        "output_utf8": "#error boom // no\n"
+      }
+    },
+    {
+      "id": "csharp-directive-block-comment-is-not-one",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "#if A /* no */ && B\n#endif\nvar a = 1; // remove\n",
+      "note": "A directive line ends with an optional *single-line* comment and nothing else, so a `/*` on one opens no comment: Roslyn raises CS1025 against it and reports no trivia at all. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): the only `SingleLineCommentTrivia` is at [38,47), with CS1025 at [6,7).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 38,
+            "end": 47,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "#if A /* no */ && B\n#endif\nvar a = 1; \n"
+      }
+    },
+    {
+      "id": "csharp-hash-after-code-is-not-a-directive",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "var a = 1; #if X // no\n#endif\n",
+      "note": "A `#` that some other byte on its line came before is CS1040, and Roslyn makes the whole rest of that line one bad token with no comment in it. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): no comment trivia, and CS1040 at [11,12) and [23,24).",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "diagnostics": [],
+        "output_utf8": "var a = 1; #if X // no\n#endif\n"
+      }
+    },
+    {
+      "id": "csharp-unicode-line-terminator",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_base64": "dmFyIGEgPSAxOyAvLyBj4oCodmFyIGIgPSAyOyAvLyByZW1vdmUK",
+      "note": "ECMA-334 6.3.1 writes `New_Line_Character` as five characters rather than two, so a U+2028 ends a `//` comment as a line feed does and the code behind it on the same physical line is code. A scanner that read on past it would take that code with the comment. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): `SingleLineCommentTrivia` at [11,15) and [29,38), with `var b = 2;` lexed as tokens between them.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 11,
+            "end": 15,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 29,
+            "end": 38,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_base64": "dmFyIGEgPSAxOyDigKh2YXIgYiA9IDI7IAo="
+      }
+    },
+    {
+      "id": "csharp-auto-generated-directive",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "// <auto-generated/>\nvar a = 1; // remove\n",
+      "note": "Roslyn's own `GeneratedCodeUtilities.BeginsWithAutoGeneratedComment` searches the `//` and `/* */` comments in front of a file's first token for `<auto-generated`, and a file it finds one in is exempt from every analyzer that opts out of generated code. Ground truth, that function as the .NET SDK 10.0.400 ships it: `true` for `// <auto-generated/>` and `/* <auto-generated> */`, and `false` once the `<` is gone.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 20,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 32,
+            "end": 41,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "// <auto-generated/>\nvar a = 1; \n"
+      }
+    },
+    {
+      "id": "csharp-resharper-directive",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "// ReSharper disable once UnusedMember.Local\nvar a = 1; // remove\n",
+      "note": "`// ReSharper disable` and `// ReSharper restore` bound the region a JetBrains inspection is turned off over, so a removal that took one would turn the inspection back on. The two verbs are what tells the instruction from prose that opens with the same word. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): `SingleLineCommentTrivia` at [0,44) and [56,65).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 44,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 56,
+            "end": 65,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "// ReSharper disable once UnusedMember.Local\nvar a = 1; \n"
+      }
+    },
+    {
+      "id": "csharp-csharpier-directive",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "// csharpier-ignore\nvar a =    1; // remove\n",
+      "note": "CSharpier matches this marker on the whole text of a `//` comment rather than by prefix. Ground truth, `csharpier` 1.3.0: `// csharpier-ignore`, `// csharpier-ignore-start` and `// csharpier-ignore-end` each left `int    a     =    1;` unformatted, while `//  csharpier-ignore` with a second space, `// csharpier-ignore some text`, `/* csharpier-ignore */` and `/// csharpier-ignore` all reformatted it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 19,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 34,
+            "end": 43,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "// csharpier-ignore\nvar a =    1; \n"
+      }
+    },
+    {
+      "id": "csharp-csx-shebang",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "#!/usr/bin/env dotnet-script\nvar a = 1; // remove\n",
+      "note": "A `#!` line is the script preamble of a `.csx` file at the very first byte and a directive line anywhere else, so it is protected in the one place it means anything. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships, parsing with `SourceCodeKind.Script`: a `ShebangDirectiveTrivia` at [0,29) and a `SingleLineCommentTrivia` at [40,49); the same `#!` on line 2 is still a shebang and raises CS9378, `'#!' must be the first characters on the first line of the file`.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 28,
+            "kind": "shebang",
+            "action": "keep"
+          },
+          {
+            "start": 40,
+            "end": 49,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "#!/usr/bin/env dotnet-script\nvar a = 1; \n"
+      }
+    },
+    {
+      "id": "csharp-unterminated-verbatim",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "var s = @\"open\nvar b = 2;\n",
+      "note": "A verbatim string that no quote closes runs to the end of the file, so nothing under it is scanned as code and nothing is edited. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): one `StringLiteralToken` running from [8,26) with CS1039, `Unterminated string literal`.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 8,
+            "end": 26
+          }
+        ],
+        "output_utf8": "var s = @\"open\nvar b = 2;\n"
+      }
+    },
+    {
+      "id": "csharp-unterminated-raw",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "var s = \"\"\"\nopen\nvar b = 2;\n",
+      "note": "A raw string whose opener ended its line carries line breaks, so one that no delimiter closes runs to the end of the file. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): one `MultiLineRawStringLiteralToken` running to [28,28) with CS8997, `Unterminated raw string literal.`",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 8,
+            "end": 28
+          }
+        ],
+        "output_utf8": "var s = \"\"\"\nopen\nvar b = 2;\n"
+      }
+    },
+    {
+      "id": "csharp-unterminated-block",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "/* open\nvar a = 1;\n",
+      "note": "A block comment that no `*/` closes runs to the end of the file, which is what makes it worth refusing to edit: everything under it would otherwise be removed as comment. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): one `MultiLineCommentTrivia` at [0,19) with CS1035, `End-of-file found, '*/' expected`.",
+      "expect": {
+        "valid": false,
+        "comments": [
+          {
+            "start": 0,
+            "end": 19,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [
+          {
+            "code": "unterminated-comment",
+            "start": 0,
+            "end": 19
+          }
+        ],
+        "output_utf8": "/* open\nvar a = 1;\n"
+      }
+    },
+    {
+      "id": "csharp-crlf",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "/* block\r\nstill */\r\nvar a = @\"x\r\ny\";\r\nvar b = \"\"\"\r\nz\r\n\"\"\";\r\n#if A // kept\r\n#endif\r\n// remove\r\n",
+      "note": "Every C# construct that crosses a line crosses a CRLF pair as it crosses a bare newline: a block comment, a verbatim string, a multi-line raw string, and the two line comments that end before the `\\r` rather than at it. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): `MultiLineCommentTrivia` at [0,18), a `StringLiteralToken` at [28,37), a `MultiLineRawStringLiteralToken` at [47,60), and `SingleLineCommentTrivia` at [66,73) and [83,92).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 18,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 66,
+            "end": 73,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 83,
+            "end": 92,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\r\n\r\nvar a = @\"x\r\ny\";\r\nvar b = \"\"\"\r\nz\r\n\"\"\";\r\n#if A \r\n#endif\r\n\r\n"
+      }
+    },
+    {
+      "id": "csharp-columns",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "columns"
+      },
+      "source_utf8": "// alone\nvar x = 1; // trailing\n",
+      "note": "The columns layout replaces a comment with spaces instead of closing the gap, so every byte after it keeps the column it had. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): `SingleLineCommentTrivia` at [0,8) and [20,31).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 8,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 20,
+            "end": 31,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "        \nvar x = 1;            \n"
+      }
+    },
+    {
+      "id": "csharp-compact",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "compact"
+      },
+      "source_utf8": "// alone\nvar x = 1; // trailing\n",
+      "note": "The compact layout takes the line a comment stood alone on with it and trims the white space a trailing one left behind. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): `SingleLineCommentTrivia` at [0,8) and [20,31).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 8,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 20,
+            "end": 31,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "var x = 1;\n"
+      }
+    },
+    {
+      "id": "csharp-byte-order-mark-directive",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_base64": "77u/I3ByYWdtYSB3YXJuaW5nIGRpc2FibGUgMTU5MSAvLyBhIGNvbW1lbnQKdmFyIGEgPSAxOyAvLyByZW1vdmUK",
+      "note": "A byte order mark is consumed before the first line is read, so the `#` behind one is still the first non-blank byte of its line and still opens a pre-processing directive -- which is what makes the `//` at the end of that line a comment. A scanner that counted the mark as a byte of the line would read the `#` as the bad token Roslyn reports at CS1040 instead, and find no comment on the line at all. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): `SingleLineCommentTrivia` at [32,44) and [56,65), with no CS1040.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 32,
+            "end": 44,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 56,
+            "end": 65,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_base64": "77u/I3ByYWdtYSB3YXJuaW5nIGRpc2FibGUgMTU5MSAKdmFyIGEgPSAxOyAK"
+      }
+    },
+    {
+      "id": "csharp-conditional-section-limitation",
+      "language": "csharp",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "#if false\n' not C# at all\n#endif\nvar a = 1; // remove\n",
+      "note": "The one rule that cannot be had from the bytes alone: a conditional section is scanned as ordinary code, because which symbols a build defines is not in the file, and code is what an `#if DEBUG` body is in every build that defines the symbol. The price is a section written to be skipped rather than compiled -- prose, or another language -- whose bytes are not C#: the apostrophe below opens a character literal that its line does not close, so the file is called invalid and no edit is offered for it, where Roslyn reports the whole section as one `DisabledTextTrivia` and finds nothing in it. Refusing to edit is the safe half of being wrong. Measured over the 70,630 C# files of dotnet/runtime, dotnet/roslyn, dotnet/aspnetcore, dotnet/efcore, Newtonsoft.Json, Serilog and ImageSharp, two files are affected -- both of them a block of prose under an `#if false` -- and they are the only two this scanner calls invalid that Roslyn does not. Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships (`CSharpSyntaxTree.ParseText` with `LanguageVersion.Preview`, read for the comment trivia and their UTF-8 offsets): `DisabledTextTrivia` at [10,26) and one `SingleLineCommentTrivia` at [44,53).",
+      "expect": {
+        "valid": false,
+        "comments": [
+          {
+            "start": 44,
+            "end": 53,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 10,
+            "end": 25
+          }
+        ],
+        "output_utf8": "#if false\n' not C# at all\n#endif\nvar a = 1; // remove\n"
+      }
+    },
+    {
+      "id": "python-prefixed-string-in-fstring-expression",
+      "language": "python",
+      "operation": "scan",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "f\"{r\"x\n",
+      "note": "Python reference 2.4.1: a string prefix and the quote after it are one token, so an unterminated `r\"` inside an f-string replacement field is reported from the `r` and not from the quote, exactly as at the top level. Fuzz-found: the Rust engine reported the prefixless span while the OCaml reference reported the token's.",
+      "expect": {
+        "valid": false,
+        "comments": [],
+        "diagnostics": [
+          {
+            "code": "unterminated-string",
+            "start": 3,
+            "end": 6
+          },
+          {
+            "code": "unterminated-fstring-expression",
+            "start": 7,
+            "end": 7
+          },
+          {
+            "code": "unterminated-string",
+            "start": 0,
+            "end": 7
+          }
+        ]
+      }
+    },
+    {
+      "id": "scala-triple-quote-run",
+      "language": "scala",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "val a = \"\"\"a\"\"\"\"\nval b = \"\"\"\"\"\"\n// remove\n",
+      "note": "The Scala 3.8 lexer's isTripleQuote: a run of quotes closes a triple-quoted string on its first three and makes any further quotes of the run part of the string's value, so `\"\"\"a\"\"\"\"` is the string `a\"` and `\"\"\"\"\"\"` the empty string. That is where Scala parts company with Kotlin's existing scanner, which closes on the first three of a run and leaves a stray quote behind. Ground truth, scalac 3.8.4: both literals print their values without a diagnostic and the only comment is `// remove` at [32,41).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 32,
+            "end": 41,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "val a = \"\"\"a\"\"\"\"\nval b = \"\"\"\"\"\"\n\n"
+      }
+    },
+    {
+      "id": "scala-backquoted-identifier",
+      "language": "scala",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "val `a//b` = 1\nval c = `x /* y */`\n// remove\n",
+      "note": "The Scala 3.8 lexer's getBackquotedIdent: a backquoted identifier may hold any bytes but a backtick, `//` and `/* */` included, so the region between the two backticks is opaque. Ground truth, scalac 3.8.4: the first identifier parses (only `a//b` not being defined is an error) and the only comment is `// remove` at [35,44).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 35,
+            "end": 44,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "val `a//b` = 1\nval c = `x /* y */`\n\n"
+      }
+    },
+    {
+      "id": "scala-xml-literal-text",
+      "language": "scala",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "val a = <a>// text</a>\nval b = <a><!-- note --></a>\nval c = <a>{x // code\n}</a>\n// remove\n",
+      "note": "The Scala 3.8 lexer emits an XMLSTART token and the parser re-reads the literal with an XML scanner, so element text is not code: a `//` in it is protected. The `<!-- ... -->` inside a literal is an XML comment, and `{ ... }` is code, so the `// code` inside one is a comment. Ground truth, scalac 3.8.4: the file parses (only `scala.xml` is missing) and the comments are `<!-- note -->` at [34,47), `// code` at [66,73) and `// remove` at [80,89).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 34,
+            "end": 47,
+            "kind": "html-comment",
+            "action": "keep"
+          },
+          {
+            "start": 66,
+            "end": 73,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 80,
+            "end": 89,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "val a = <a>// text</a>\nval b = <a><!-- note --></a>\nval c = <a>{x \n}</a>\n\n"
+      }
+    },
+    {
+      "id": "scala-keyword-and-number-strings",
+      "language": "scala",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "def f = return\"ok ${1 // not}\"\nval g = 1\"x // not\"\n// remove\n",
+      "note": "The Scala 3.8 lexer turns an identifier directly before a quote into INTERPOLATIONID, and a keyword and a number are not identifiers, so the string after `return` and after `1` is plain and its `${ ... }` is content. Ground truth, scalac 3.8.4: neither `// not` is a comment (the first file fails to typecheck and the second is a syntax error, both for other reasons) and the only comment is `// remove` at [51,60).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 51,
+            "end": 60,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "def f = return\"ok ${1 // not}\"\nval g = 1\"x // not\"\n\n"
+      }
+    },
+    {
+      "id": "scala-dollar-escape-in-interpolated-string",
+      "language": "scala",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "val a = s\"x$\"y\"\nval b = s\"$$lit\"\n// remove\n",
+      "note": "The Scala 3.8 lexer's getStringPart: inside an interpolated string `$$` writes a literal `$` and `$\"` a literal quote, so the `\"` that closes `s\"x$\"y\"` is the third quote of the line. Ground truth, scalac 3.8.4: the two strings print `x\"y` and `$lit` and the only comment is `// remove` at [33,42).",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 33,
+            "end": 42,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "val a = s\"x$\"y\"\nval b = s\"$$lit\"\n\n"
+      }
     }
+
   ]
 }

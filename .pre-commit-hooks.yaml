@@ -11,7 +11,7 @@
   entry: ocomment check
   language: system
   types: [text]
-  files: '(?i)\.(bash|c|cc|cjs|cpp|css|cts|cu|cuh|cxx|dart|gemspec|go|h|hh|hpp|htm|html|hxx|java|jbuilder|js|json5|jsonc|jsx|kt|kts|lua|m|mjs|ml|mli|mlt|mm|mts|php|phpt|phtml|podspec|py|pyi|pyw|r|rake|rb|rbi|rbw|rockspec|rs|ru|sh|shtml|sql|thor|toml|ts|tsx|xhtml|yaml|yml|zig|zon|zsh)$'
+  files: '(?i)\.(bash|c|cc|cjs|cpp|cs|css|csx|cts|cu|cuh|cxx|dart|gemspec|go|h|hh|hpp|htm|html|hxx|java|jbuilder|js|json5|jsonc|jsx|kt|kts|lua|m|mjs|ml|mli|mlt|mm|mts|php|phpt|phtml|podspec|py|pyi|pyw|r|rake|rb|rbi|rbw|rockspec|rs|ru|sc|scala|sh|shtml|sql|swift|thor|toml|ts|tsx|xhtml|yaml|yml|zig|zon|zsh)$'
 - id: ocomment-fix
   name: ocomment fix
   description: 'Remove comments from the staged source files in place; exit 1 from the following ocomment-check run, or a file pre-commit sees modified, blocks the commit until the result is reviewed and staged.'
@@ -19,4 +19,4 @@
   language: system
   types: [text]
   require_serial: true
-  files: '(?i)\.(bash|c|cc|cjs|cpp|css|cts|cu|cuh|cxx|dart|gemspec|go|h|hh|hpp|htm|html|hxx|java|jbuilder|js|json5|jsonc|jsx|kt|kts|lua|m|mjs|ml|mli|mlt|mm|mts|php|phpt|phtml|podspec|py|pyi|pyw|r|rake|rb|rbi|rbw|rockspec|rs|ru|sh|shtml|sql|thor|toml|ts|tsx|xhtml|yaml|yml|zig|zon|zsh)$'
+  files: '(?i)\.(bash|c|cc|cjs|cpp|cs|css|csx|cts|cu|cuh|cxx|dart|gemspec|go|h|hh|hpp|htm|html|hxx|java|jbuilder|js|json5|jsonc|jsx|kt|kts|lua|m|mjs|ml|mli|mlt|mm|mts|php|phpt|phtml|podspec|py|pyi|pyw|r|rake|rb|rbi|rbw|rockspec|rs|ru|sc|scala|sh|shtml|sql|swift|thor|toml|ts|tsx|xhtml|yaml|yml|zig|zon|zsh)$'

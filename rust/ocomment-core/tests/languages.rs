@@ -5117,3 +5117,1330 @@ fn dart_layouts_leave_a_line_columns_or_nothing() {
     );
     assert_eq!(compact.output, b"var x = 1;\n");
 }
+
+/// Swift's eight comment forms and the two markers that make one
+/// documentation.
+///
+/// `///` documents and a fourth slash does not take that away, exactly as in
+/// Dart; `/**` documents *except* when the third byte is the `/` that closes
+/// it, because `/**/` is the empty block comment and not an unfinished
+/// documentation one. `//!` is Rust's inner-doc marker and `/*!` is Doxygen's,
+/// and neither means anything in Swift.
+///
+/// Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain over the
+/// source below: `docLineComment` at `[0,12)` and `[13,30)`, `lineComment` at
+/// `[31,44)`, `docBlockComment` at `[45,61)`, `blockComment` at `[62,79)` and
+/// `[80,84)`, `docBlockComment` at `[85,90)`, and `lineComment` at `[91,98)`,
+/// with no parser diagnostic.
+#[test]
+fn swift_comment_forms_carry_their_kinds() {
+    let source = b"/// doc line\n//// four slashes\n//! not swift\n/** doc block */\n/*! bang block */\n/**/\n/***/\n// line\nlet a = 1\n";
+    let report = scan(source, Language::Swift, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(
+        report
+            .comments
+            .iter()
+            .map(|comment| (comment.span.start, comment.span.end, comment.kind))
+            .collect::<Vec<_>>(),
+        vec![
+            (0, 12, CommentKind::DocLine),
+            (13, 30, CommentKind::DocLine),
+            (31, 44, CommentKind::Line),
+            (45, 61, CommentKind::DocBlock),
+            (62, 79, CommentKind::Block),
+            (80, 84, CommentKind::Block),
+            (85, 90, CommentKind::DocBlock),
+            (91, 98, CommentKind::Line),
+        ]
+    );
+    /* NOTE: eight, not six: `Policy::Safe` removes a documentation comment as
+     * readily as an ordinary one — what it protects is the preamble and the
+     * directive — so the two markers decide the reported kind here rather than
+     * the disposition. */
+    assert_eq!(removable(&report), 8);
+}
+
+/// A Swift block comment nests, so the inner `*/` closes only the inner `/*`
+/// and commenting out a region that already holds a comment works.
+///
+/// Ground truth, SwiftSyntax 6.3.3: one `blockComment` at `[0,35)` and a
+/// `lineComment` at `[46,55)`, with no parser diagnostic.
+#[test]
+fn swift_block_comments_nest() {
+    let source = b"/* outer /* inner */ still outer */\nlet a = 1 // remove\n";
+    let report = scan(source, Language::Swift, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 2, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(0, 35));
+    assert_eq!(report.comments[0].kind, CommentKind::Block);
+    assert_eq!(report.comments[1].span, ByteSpan::new(46, 55));
+}
+
+/// Every Swift string form hides a comment opener written inside it.
+///
+/// There are four, and a run of `#` doubles each of them: `"..."`,
+/// `"""..."""`, and the raw spellings `#"..."#` and `#"""..."""#`, with as many
+/// hashes as the writer likes. `#"""#` is the one shape that reads as two
+/// things at once and is the single-line raw string holding one quote.
+///
+/// Ground truth, SwiftSyntax 6.3.3 over the source below: one comment in the
+/// whole file, `lineComment` at `[149,158)`, and no parser diagnostic — every
+/// `//` above it is a `stringSegment`.
+#[test]
+fn swift_string_literals_hide_comment_openers() {
+    let source = b"let a = \"// not\"\nlet b = \"/* not */\"\nlet c = #\"// not\"#\nlet d = ##\"a \"# // not\"##\nlet e = \"\"\"\n// not\n\"\"\"\nlet f = #\"\"\"\n// not \\(1)\n\"\"\"#\nlet g = #\"\"\"#\n// remove\n";
+    let report = scan(source, Language::Swift, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(149, 158));
+    assert_eq!(removable(&report), 1);
+}
+
+/// The run of `#` that closes a string belongs to the string only when a run
+/// opened it, and one byte more than that only when there is one.
+///
+/// `Lexer.Cursor.advanceIfStringDelimiter` returns on `delimiterLength == 0`
+/// before it looks at a byte, so the `#` behind the closing quote of `"x"` is
+/// not part of the string — it opens the `#/ ... /#` that follows, and the `//`
+/// inside that literal is pattern rather than a comment. With a run in front of
+/// the quote the same function consumes a `hashes + 1`-th pound before it stops
+/// counting, which `swiftc` then calls `too many '#' characters in closing
+/// delimiter`; taking that byte too keeps the scan standing where the lexer
+/// stands on a file that is already broken.
+///
+/// Ground truth, SwiftSyntax 6.3.3 over the first source: `stringQuote` at
+/// [10,11), `regexPoundDelimiter` at [11,12), `regexLiteralPattern("y // z")`
+/// at [13,19), and the only `lineComment` at [32,41). Over the second:
+/// `rawStringPoundDelimiter("##")` at [12,14) for a literal one `#` opened, and
+/// the only `lineComment` at [29,38), beside the diagnostic `too many '#'
+/// characters in closing delimiter`.
+#[test]
+fn a_swift_string_delimiter_takes_the_pounds_its_own_run_earned() {
+    let plain = b"let a = \"x\"#/y // z/#\nlet b = 1 // remove\n";
+    let report = scan(plain, Language::Swift, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(32, 41));
+
+    let raw = b"let a = #\"x\"##/y/#\nlet b = 1 // remove\n";
+    let report = scan(raw, Language::Swift, ScanOptions::default());
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(29, 38));
+}
+
+/// The expression inside a `\( ... )` interpolation is code, so a comment
+/// written there is a comment.
+///
+/// A single-line string carries no line break, so only a block comment fits
+/// inside one of its interpolations; a multi-line string's interpolation may
+/// hold a `//` comment, which ends at its line while the string carries on
+/// below. A raw string renames the opener with its hashes, so `\#(` opens an
+/// interpolation in a `#"..."#` literal and a bare `\(` is content.
+///
+/// Ground truth, SwiftSyntax 6.3.3: `blockComment` at `[17,24)` with the
+/// trailing `lineComment` at `[33,42)` for the first source; `lineComment` at
+/// `[20,27)` and `[39,48)` for the second; `blockComment` at `[19,26)` and
+/// `lineComment` at `[41,50)` for the third. None carries a diagnostic.
+#[test]
+fn swift_interpolation_is_code_and_carries_comments() {
+    let single = b"let a = \"v: \\( 1 /* c */ + 2 )\"  // remove\n";
+    let report = scan(single, Language::Swift, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(
+        report
+            .comments
+            .iter()
+            .map(|comment| (comment.span.start, comment.span.end))
+            .collect::<Vec<_>>(),
+        vec![(17, 24), (33, 42)]
+    );
+
+    let multiline = b"let a = \"\"\"\nv: \\( 1 // gone\n + 2 )\n\"\"\"\n// remove\n";
+    let report = scan(multiline, Language::Swift, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(
+        report
+            .comments
+            .iter()
+            .map(|comment| (comment.span.start, comment.span.end))
+            .collect::<Vec<_>>(),
+        vec![(20, 27), (39, 48)]
+    );
+
+    let raw = b"let a = #\"v: \\#( 1 /* c */ ) and \\(1)\"#  // remove\n";
+    let report = scan(raw, Language::Swift, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(
+        report
+            .comments
+            .iter()
+            .map(|comment| (comment.span.start, comment.span.end))
+            .collect::<Vec<_>>(),
+        vec![(19, 26), (41, 50)]
+    );
+}
+
+/// A regular expression literal is the one Swift construct that carries a `//`
+/// without a quote in front of it.
+///
+/// `#/ ... /#` is the extended form, which may hold an unescaped `/` and, when
+/// its opener ends the line, may span lines; `/ ... /` is the bare form, whose
+/// content ends at the first unescaped `/` — and whose last two bytes may still
+/// spell `//`, because `/a\//` is a literal whose content is `a\/`. A scanner
+/// that read either as a comment would delete the rest of the line.
+///
+/// Ground truth, SwiftSyntax 6.3.3 over the source below: `lineComment` at
+/// `[23,32)` and `[56,65)`, and no other comment and no diagnostic — the four
+/// literals come back as `regexSlash`, `regexPoundDelimiter` and
+/// `regexLiteralPattern` tokens.
+#[test]
+fn swift_regex_literals_hide_comment_openers() {
+    let source = b"let a = /a\\//;print(1) // remove\nlet b = #/https://x/#  // remove\nlet c = ##/a/#b/##\nlet d = #/\n  x y\n/#\n";
+    let report = scan(source, Language::Swift, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(
+        report
+            .comments
+            .iter()
+            .map(|comment| (comment.span.start, comment.span.end))
+            .collect::<Vec<_>>(),
+        vec![(23, 32), (56, 65)]
+    );
+    assert_eq!(
+        transform(source, Language::Swift, TransformOptions::default()).output,
+        b"let a = /a\\//;print(1) \nlet b = #/https://x/#  \nlet c = ##/a/#b/##\nlet d = #/\n  x y\n/#\n"
+    );
+}
+
+/// A `/` that stands where a binary operator does divides, and a `/` whose
+/// closing partner would open a comment leaves the comment alone.
+///
+/// The Swift book decides prefix from binary by the white space around the
+/// operator, so `a/a/a` is two divisions while `f(/y/)` passes a regular
+/// expression; and the compiler prefers the comment when a literal would end on
+/// one, so `/a//b/` is the operator `/`, the name `a`, and the line comment
+/// `//b/`.
+///
+/// Ground truth, SwiftSyntax 6.3.3 over the first source: `lineComment` at
+/// `[34,43)`, `[58,67)` and `[83,92)`, with no diagnostic at all. The second
+/// source is the one the book cannot decide alone, and its comment is at
+/// `[83,87)`.
+#[test]
+fn swift_division_is_not_a_regex_literal() {
+    let source =
+        b"func f(_ r: Any) {}\nlet a = 1 / 2 // remove\nlet b = a/a/a // remove\nlet c = f(/y/) // remove\n";
+    let report = scan(source, Language::Swift, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(
+        report
+            .comments
+            .iter()
+            .map(|comment| (comment.span.start, comment.span.end))
+            .collect::<Vec<_>>(),
+        vec![(34, 43), (58, 67), (83, 92)]
+    );
+
+    let comment_wins = b"let a = 1 / 2 // remove\nlet b = a/a/a // remove\nlet c = f(/y/) // remove\nlet d = /a//b/\n";
+    let report = scan(comment_wins, Language::Swift, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(
+        report
+            .comments
+            .last()
+            .expect("the last line carries a comment")
+            .span,
+        ByteSpan::new(83, 87)
+    );
+}
+
+/// Every Swift construct left open is an error, so nothing is edited until
+/// `force_invalid` says to edit what is known anyway.
+///
+/// Ground truth, SwiftSyntax 6.3.3: the five sources below are the five
+/// diagnostics `unterminated '/*' comment`, `expected '"' to end string
+/// literal`, `expected '"""' to end string literal`, `expected '"#' to end
+/// string literal` and `expected '/#' to end regex literal`.
+#[test]
+fn every_unterminated_swift_construct_stops_a_fix_until_it_is_forced() {
+    for (source, code) in [
+        (
+            b"/* open /* inner */\nlet a = 1\n".as_slice(),
+            "unterminated-comment",
+        ),
+        (
+            b"let a = \"open\nlet b = 2 // remove\n".as_slice(),
+            "unterminated-string",
+        ),
+        (
+            b"let a = \"\"\"\nopen\nlet b = 2\n".as_slice(),
+            "unterminated-string",
+        ),
+        (
+            b"let a = #\"open\nlet b = 2 // remove\n".as_slice(),
+            "unterminated-string",
+        ),
+        (
+            b"let a = #/\nopen\nlet b = 2 // remove\n".as_slice(),
+            "unterminated-regex",
+        ),
+        (
+            b"let a = #/abc\nlet b = 1 // remove\n".as_slice(),
+            "unterminated-regex",
+        ),
+        /* NOTE: `lexPatternCharacter` reads an escaped byte through the same
+         * switch as an unescaped one and its line-terminator arm does not ask
+         * which it is, so a `\` before a line break closes nothing.
+         * SwiftSyntax 6.3.3 ends `regexLiteralPattern "x\\"` at `[10,12)` for
+         * these bytes and reports `lineComment` at `[28,37)`. */
+        (
+            b"let a = #/x\\\nyz/#\nlet b = 1 // remove\n".as_slice(),
+            "unterminated-regex",
+        ),
+        (b"let a = \"v: \\( 1\n".as_slice(), "unterminated-string"),
+    ] {
+        let result = transform(source, Language::Swift, TransformOptions::default());
+        assert!(
+            !result.report.valid,
+            "{:?} was accepted",
+            String::from_utf8_lossy(source)
+        );
+        assert!(
+            result
+                .report
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == code),
+            "{:?} reported {:?}",
+            String::from_utf8_lossy(source),
+            result.report.diagnostics
+        );
+        assert!(
+            result.edits.is_empty(),
+            "{:?} was edited anyway",
+            String::from_utf8_lossy(source)
+        );
+    }
+    /* NOTE: an extended regular expression literal that opens a multi-line one
+     * and never closes gives its lines back rather than swallowing the file, so
+     * the comment three lines under it is still found and the diagnostic covers
+     * the opener alone. SwiftSyntax 6.3.3 reports `lineComment` at `[26,35)`
+     * for these bytes beside the `expected '/#'` diagnostic. */
+    let recovered = scan(
+        b"let a = #/\nopen\nlet b = 2 // remove\n",
+        Language::Swift,
+        ScanOptions::default(),
+    );
+    assert_eq!(recovered.comments.len(), 1, "{:?}", recovered.comments);
+    assert_eq!(recovered.comments[0].span, ByteSpan::new(26, 35));
+    assert_eq!(recovered.diagnostics[0].span, ByteSpan::new(8, 10));
+
+    /* NOTE: an opener that does not end its line opens a single-line literal
+     * instead, which ends at the line terminator rather than reading on.
+     * SwiftSyntax 6.3.3 reports `regexLiteralPattern "abc"` at `[10,13)` and
+     * `lineComment` at `[24,33)` for these bytes. */
+    let one_line = scan(
+        b"let a = #/abc\nlet b = 1 // remove\n",
+        Language::Swift,
+        ScanOptions::default(),
+    );
+    assert_eq!(one_line.comments.len(), 1, "{:?}", one_line.comments);
+    assert_eq!(one_line.comments[0].span, ByteSpan::new(24, 33));
+    assert_eq!(one_line.diagnostics[0].span, ByteSpan::new(8, 13));
+
+    let forced = transform(
+        b"let a = #\"open\nlet b = 2 // remove\n",
+        Language::Swift,
+        TransformOptions {
+            scan: ScanOptions {
+                force_invalid: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    );
+    assert!(!forced.report.valid);
+    assert_eq!(forced.output, b"let a = #\"open\nlet b = 2 \n");
+}
+
+/// Every marker a Swift tool reads out of a comment is kept where an ordinary
+/// comment is removed.
+///
+/// `// swift-tools-version:` is read by SwiftPM before it reads the manifest at
+/// all, so removing it leaves a package that no longer builds; the other three
+/// name the tool that reads them. `// MARK:` is not one of them: Xcode reads it
+/// to build a jump bar, which is an aid to a reader rather than to a build.
+///
+/// Ground truth, `swift-format` 6.3.3: `// swift-format-ignore` and
+/// `// swift-format-ignore-file` both leave `let    a     = 1` unformatted,
+/// while `// swift-format-ignoreish note` reformats it to `let a = 1`.
+#[test]
+fn swift_directives_are_kept_and_a_near_miss_is_not() {
+    let source = b"// swift-tools-version:5.9\n// swiftlint:disable all\n// swiftformat:disable redundantSelf\n// swift-format-ignore\n// swift-format-ignore-file\n// MARK: - Section\n// ordinary\n";
+    let report = scan(source, Language::Swift, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(
+        report
+            .comments
+            .iter()
+            .map(|comment| comment.kind)
+            .collect::<Vec<_>>(),
+        vec![
+            CommentKind::Directive,
+            CommentKind::Directive,
+            CommentKind::Directive,
+            CommentKind::Directive,
+            CommentKind::Directive,
+            CommentKind::Line,
+            CommentKind::Line,
+        ]
+    );
+    assert_eq!(removable(&report), 2);
+
+    let near_miss = scan(
+        b"// swift-format-ignoreish note\n// swiftlintish note\n",
+        Language::Swift,
+        ScanOptions::default(),
+    );
+    assert_eq!(removable(&near_miss), 2, "{:?}", near_miss.comments);
+}
+
+/// A `#!` line is Swift's script preamble on the first line and two operators
+/// anywhere else, so it is protected in the one place it means anything.
+///
+/// Ground truth, SwiftSyntax 6.3.3: a `shebang` token at `[0,20)` in the first
+/// source, and in the second `pound`, `exclamationMark` and two
+/// `binaryOperator` tokens with the diagnostic `expected identifier in macro
+/// expansion`.
+#[test]
+fn swift_shebang_is_a_preamble_only_on_the_first_line() {
+    let first = scan(
+        b"#!/usr/bin/env swift\n// remove\nlet a = 1\n",
+        Language::Swift,
+        ScanOptions::default(),
+    );
+    assert!(first.valid, "diagnostics: {:?}", first.diagnostics);
+    assert_eq!(first.comments.len(), 2, "{:?}", first.comments);
+    assert_eq!(first.comments[0].kind, CommentKind::Shebang);
+    assert!(matches!(
+        first.comments[0].disposition,
+        Disposition::Keep { .. }
+    ));
+    assert_eq!(removable(&first), 1);
+
+    let second = scan(
+        b"let a = 1\n#!/usr/bin/env swift\n",
+        Language::Swift,
+        ScanOptions::default(),
+    );
+    assert!(second.comments.is_empty(), "{:?}", second.comments);
+}
+
+/// Every Swift construct that crosses a line crosses a CRLF pair as it crosses
+/// a bare newline: a nested block comment, a multi-line string, a multi-line
+/// extended regular expression literal, and the line comment that ends before
+/// the `\r` rather than at it.
+///
+/// Ground truth, SwiftSyntax 6.3.3 over the source below: `blockComment` at
+/// `[0,18)` and `lineComment` at `[62,71)`, with no parser diagnostic.
+#[test]
+fn swift_multi_line_constructs_survive_crlf_line_endings() {
+    let source = b"/* block\r\nstill */\r\nlet a = \"\"\"\r\nx\r\n\"\"\"\r\nlet b = #/\r\n  x\r\n/#\r\n// remove\r\n";
+    let result = transform(source, Language::Swift, TransformOptions::default());
+    assert!(
+        result.report.valid,
+        "diagnostics: {:?}",
+        result.report.diagnostics
+    );
+    assert_eq!(
+        result
+            .report
+            .comments
+            .iter()
+            .map(|comment| (comment.span.start, comment.span.end))
+            .collect::<Vec<_>>(),
+        vec![(0, 18), (62, 71)]
+    );
+    assert_eq!(
+        result.output,
+        b"\r\n\r\nlet a = \"\"\"\r\nx\r\n\"\"\"\r\nlet b = #/\r\n  x\r\n/#\r\n\r\n"
+    );
+
+    let unterminated = scan(
+        b"let a = \"open\r\nlet b = 2\r\n",
+        Language::Swift,
+        ScanOptions::default(),
+    );
+    assert!(!unterminated.valid);
+    assert_eq!(unterminated.diagnostics.len(), 1);
+    assert_eq!(unterminated.diagnostics[0].code, "unterminated-string");
+}
+
+/// Swift is detected from `.swift` and from a `#!` line naming the interpreter.
+///
+/// `Package.swift` is the one file name a Swift package must spell exactly, and
+/// it carries the extension, so no reserved name is needed for it. The
+/// interpreter is met before `sh`, which a toolchain path contains.
+#[test]
+fn swift_is_detected_from_its_extension_and_shebang() {
+    for name in ["App.swift", "Package.swift", "Sources/Main.SWIFT"] {
+        let found = detect_language(Some(Path::new(name)), b"")
+            .unwrap_or_else(|| panic!("`{name}` is detected as nothing"));
+        assert_eq!(
+            (found.language, found.dialect, found.reason),
+            (Language::Swift, Dialect::Standard, "extension"),
+            "`{name}`"
+        );
+    }
+    for line in [
+        b"#!/usr/bin/env swift\n".as_slice(),
+        b"#!/usr/share/swift/usr/bin/swift\n".as_slice(),
+    ] {
+        let found = detect_language(None, line).unwrap_or_else(|| {
+            panic!("{:?} is detected as nothing", String::from_utf8_lossy(line))
+        });
+        assert_eq!(
+            (found.language, found.reason),
+            (Language::Swift, "shebang"),
+            "{:?}",
+            String::from_utf8_lossy(line)
+        );
+    }
+}
+
+#[test]
+fn swift_layouts_leave_a_line_columns_or_nothing() {
+    let source = b"// alone\nlet x = 1 // trailing\n";
+    let lines = transform(source, Language::Swift, TransformOptions::default());
+    assert_eq!(lines.output, b"\nlet x = 1 \n");
+    let columns = transform(
+        source,
+        Language::Swift,
+        TransformOptions {
+            layout: Layout::Columns,
+            ..Default::default()
+        },
+    );
+    let padded = format!("{}\nlet x = 1 {}\n", " ".repeat(8), " ".repeat(11));
+    assert_eq!(columns.output, padded.as_bytes());
+    let compact = transform(
+        source,
+        Language::Swift,
+        TransformOptions {
+            layout: Layout::Compact,
+            ..Default::default()
+        },
+    );
+    assert_eq!(compact.output, b"let x = 1\n");
+}
+
+/// C# has two documentation markers and each one has a spelling that takes it
+/// back: a fourth slash and a third star.
+///
+/// Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships
+/// (`CSharpSyntaxTree.ParseText`, read for the comment trivia and their UTF-8
+/// offsets): `SingleLineDocumentationCommentTrivia` at [0,8),
+/// `SingleLineCommentTrivia` at [8,17) and [18,32),
+/// `MultiLineDocumentationCommentTrivia` at [33,43), `MultiLineCommentTrivia`
+/// at [44,55), [56,60), [61,66) and [67,80), and `SingleLineCommentTrivia` at
+/// [81,88).
+#[test]
+fn csharp_comment_forms_carry_their_kinds() {
+    let source = b"/// doc\n//// four\n//! not csharp\n/** doc */\n/*! bang */\n/**/\n/***/\n/*** three */\n// line\nclass C { }\n";
+    let report = scan(source, Language::CSharp, ScanOptions::default());
+    assert!(report.valid, "{:?}", report.diagnostics);
+    let found: Vec<(usize, usize, CommentKind)> = report
+        .comments
+        .iter()
+        .map(|comment| (comment.span.start, comment.span.end, comment.kind))
+        .collect();
+    assert_eq!(
+        found,
+        vec![
+            (0, 7, CommentKind::DocLine),
+            (8, 17, CommentKind::Line),
+            (18, 32, CommentKind::Line),
+            (33, 43, CommentKind::DocBlock),
+            (44, 55, CommentKind::Block),
+            (56, 60, CommentKind::Block),
+            (61, 66, CommentKind::Block),
+            (67, 80, CommentKind::Block),
+            (81, 88, CommentKind::Line),
+        ]
+    );
+    assert_eq!(removable(&report), 9);
+}
+
+/// A C# block comment does not nest: ECMA-334 6.3.3 states that `/*` has no
+/// special meaning inside one, so the first `*/` closes it and the bytes behind
+/// are code.
+///
+/// Ground truth, Roslyn 10.0.400: one `MultiLineCommentTrivia` at [0,20) and a
+/// `SingleLineCommentTrivia` at [47,56), with `CS1003` on the code the tail of
+/// the outer comment turned into.
+#[test]
+fn csharp_block_comments_do_not_nest() {
+    let source = b"/* outer /* inner */ still outer */\nint a = 1; // remove\n";
+    let report = scan(source, Language::CSharp, ScanOptions::default());
+    assert!(report.valid, "{:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 2);
+    assert_eq!(report.comments[0].span, ByteSpan::new(0, 20));
+    assert_eq!(report.comments[1].span, ByteSpan::new(47, 56));
+}
+
+/// Every C# literal that is not a comment hides a comment opener: the ordinary
+/// string with its `\` escape, the character literal — including the one whose
+/// content is a quote — and the `u8` suffix that makes a string a byte span.
+///
+/// Ground truth, Roslyn 10.0.400: one `SingleLineCommentTrivia` at [108,117),
+/// with the four literals lexed as `StringLiteralToken`,
+/// `CharacterLiteralToken` and `Utf8StringLiteralToken`.
+#[test]
+fn csharp_string_literals_hide_comment_openers() {
+    let source = b"var a = \"x // no\";\nvar b = \"esc \\\" // no\";\nvar c = '/'; var d = '\\''; var e = '\"';\nvar f = \"bytes // no\"u8; // remove\n";
+    let report = scan(source, Language::CSharp, ScanOptions::default());
+    assert!(report.valid, "{:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(108, 117));
+}
+
+/// A verbatim string spans lines, doubles its quote instead of escaping it, and
+/// carries a `\` as content; `@` in front of anything but a quote is a verbatim
+/// *identifier* and opens no literal at all.
+///
+/// Ground truth, Roslyn 10.0.400: one `StringLiteralToken` at [8,60) and an
+/// `IdentifierToken` `@class`, with a single `SingleLineCommentTrivia` at
+/// [47,56).
+#[test]
+fn csharp_verbatim_strings_span_lines_and_double_their_quote() {
+    let source =
+        b"var s = @\"quote \"\" inside // no\nsecond */ no\"; // remove\nvar t = @class;\n";
+    let report = scan(source, Language::CSharp, ScanOptions::default());
+    assert!(report.valid, "{:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(47, 56));
+}
+
+/// An interpolation hole is code and a comment written in one is a comment,
+/// while `{{` is an escaped brace and the format clause behind a `:` is text.
+///
+/// Ground truth, Roslyn 10.0.400: `MultiLineCommentTrivia` at [15,25),
+/// `SingleLineCommentTrivia` at [92,99) — the hole comment inside a verbatim
+/// interpolated string, which runs to the end of its line while the string
+/// carries on below — and `SingleLineCommentTrivia` at [139,148). The `// no`
+/// runs are `InterpolatedStringTextToken`, and so is the `// format` behind the
+/// `:` of the last hole.
+#[test]
+fn csharp_interpolation_is_code_and_carries_comments() {
+    let source = b"var a = $\"v={x /* hole */} // no\";\nvar b = $\"{{literal}} // no {y} tail\";\nvar c = $@\"raw {z // line\n} // no\";\nvar d = $\"{w:D4 // format}\"; // remove\n";
+    let report = scan(source, Language::CSharp, ScanOptions::default());
+    assert!(report.valid, "{:?}", report.diagnostics);
+    let found: Vec<ByteSpan> = report.comments.iter().map(|comment| comment.span).collect();
+    assert_eq!(
+        found,
+        vec![
+            ByteSpan::new(15, 25),
+            ByteSpan::new(92, 99),
+            ByteSpan::new(139, 148),
+        ]
+    );
+}
+
+/// A raw string literal is opaque until a run of at least as many quotes as its
+/// opener carried comes back, and a `$$` raw interpolated one needs two braces
+/// to open a hole — so a single `{` in it is content and `{{` is code.
+///
+/// Ground truth, Roslyn 10.0.400: `SingleLineRawStringLiteralToken` at [8,38),
+/// `MultiLineRawStringLiteralToken` at [48,71),
+/// `InterpolatedSingleLineRawStringStartToken` `$$"""` with
+/// `InterpolatedStringTextToken` `{not a hole} `, `OpenBraceToken` `{{`, a
+/// `MultiLineCommentTrivia` at [102,112) and `SingleLineCommentTrivia` at
+/// [125,134).
+#[test]
+fn csharp_raw_strings_are_opaque_until_their_delimiter_returns() {
+    let source = b"var a = \"\"\"\"three \"\"\" inside // no\"\"\"\";\nvar b = \"\"\"\n  body // no\n  \"\"\";\nvar c = $$\"\"\"{not a hole} {{x /* hole */}} // no\"\"\"; // remove\n";
+    let report = scan(source, Language::CSharp, ScanOptions::default());
+    assert!(report.valid, "{:?}", report.diagnostics);
+    let found: Vec<ByteSpan> = report.comments.iter().map(|comment| comment.span).collect();
+    assert_eq!(
+        found,
+        vec![ByteSpan::new(102, 112), ByteSpan::new(125, 134)]
+    );
+}
+
+/// A preprocessor directive line carries at most one comment, and only the
+/// `//` kind: ECMA-334 6.5.1 ends a directive with
+/// `PP_Whitespace? SINGLE_LINE_COMMENT? New_Line`, so `/*` opens nothing there,
+/// a `"` on the line is a string that hides a `//` of its own, and the four
+/// directives that take a message — `#error`, `#warning`, `#region` and
+/// `#endregion` — take the rest of the line as text unless a `//` opens it.
+///
+/// Ground truth, Roslyn 10.0.400: `SingleLineCommentTrivia` at [10,17),
+/// [36,43), [85,97), [127,141), [178,190) and [202,211), with
+/// `PreprocessingMessageTrivia` at [52,73) and [149,159).
+#[test]
+fn csharp_preprocessor_lines_carry_at_most_a_line_comment() {
+    let source = b"#if DEBUG // kept\nint a = 1;\n#endif // tail\n#region Name // not a comment\n#endregion // a comment\n#pragma warning disable 1591 // pragma tail\n#error boom // no\n#line 1 \"a//b.cs\" // line tail\nint b = 2; // remove\n";
+    let report = scan(source, Language::CSharp, ScanOptions::default());
+    assert!(report.valid, "{:?}", report.diagnostics);
+    let found: Vec<ByteSpan> = report.comments.iter().map(|comment| comment.span).collect();
+    assert_eq!(
+        found,
+        vec![
+            ByteSpan::new(10, 17),
+            ByteSpan::new(36, 43),
+            ByteSpan::new(85, 97),
+            ByteSpan::new(127, 141),
+            ByteSpan::new(178, 190),
+            ByteSpan::new(202, 211),
+        ]
+    );
+    /* NOTE: a `///` on a directive line is an ordinary line comment: the
+     * directive lexer has no documentation trivia at all, which Roslyn 10.0.400
+     * reports as `SingleLineCommentTrivia` for these bytes. */
+    let slashes = scan(
+        b"#if A /// three\n#endif\n",
+        Language::CSharp,
+        ScanOptions::default(),
+    );
+    assert_eq!(slashes.comments.len(), 1, "{:?}", slashes.comments);
+    assert_eq!(slashes.comments[0].kind, CommentKind::Line);
+}
+
+/// Every construct C# can leave open is reported, no edit is offered for a file
+/// that holds one, and `force_invalid` still applies the edits that are safe.
+///
+/// Ground truth, Roslyn 10.0.400: the six sources below raise `CS1035`
+/// (`End-of-file found, '*/' expected`), `CS1010` (`Newline in constant`) twice,
+/// `CS1039` (`Unterminated string literal`), and `CS8997`
+/// (`Unterminated raw string literal.`) twice.
+#[test]
+fn every_unterminated_csharp_construct_stops_a_fix_until_it_is_forced() {
+    for (source, code) in [
+        (b"/* open\nint a = 1;\n".as_slice(), "unterminated-comment"),
+        (
+            b"var a = \"open\nvar b = 2; // remove\n".as_slice(),
+            "unterminated-string",
+        ),
+        (
+            b"var a = 'x\nvar b = 2; // remove\n".as_slice(),
+            "unterminated-string",
+        ),
+        (
+            b"var a = @\"open\nvar b = 2; // remove\n".as_slice(),
+            "unterminated-string",
+        ),
+        (
+            b"var a = \"\"\"open\nvar b = 2; // remove\n".as_slice(),
+            "unterminated-string",
+        ),
+        (
+            b"var a = \"\"\"\nopen\nvar b = 2;\n".as_slice(),
+            "unterminated-string",
+        ),
+        (
+            b"var a = $\"{ 1\nvar b = 2;\n".as_slice(),
+            "unterminated-interpolation",
+        ),
+    ] {
+        let result = transform(source, Language::CSharp, TransformOptions::default());
+        assert!(
+            !result.report.valid,
+            "{:?} was accepted",
+            String::from_utf8_lossy(source)
+        );
+        assert!(
+            result
+                .report
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == code),
+            "{:?} reported {:?}",
+            String::from_utf8_lossy(source),
+            result.report.diagnostics
+        );
+        assert!(
+            result.edits.is_empty(),
+            "{:?} was edited anyway",
+            String::from_utf8_lossy(source)
+        );
+    }
+    /* NOTE: a verbatim string left open swallows the rest of the file, so the
+     * one a forced run can still edit is the plain string, which ends at its
+     * line — Roslyn raises CS1010 there and reports the `// remove` under it as
+     * a comment all the same. */
+    let forced = transform(
+        b"var a = \"open\nvar b = 2; // remove\n",
+        Language::CSharp,
+        TransformOptions {
+            scan: ScanOptions {
+                force_invalid: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    );
+    assert!(!forced.report.valid);
+    assert_eq!(forced.output, b"var a = \"open\nvar b = 2; \n");
+}
+
+/// Every marker a C# tool reads out of a comment is kept where an ordinary
+/// comment is removed.
+///
+/// `<auto-generated` is what Roslyn's own `BeginsWithAutoGeneratedComment`
+/// searches the leading comments of a file for, and a file it finds it in is
+/// exempt from every analyzer that opts out of generated code; `// ReSharper
+/// disable`/`restore` bound the region an inspection is turned off over; and
+/// `// csharpier-ignore` leaves the member under it unformatted.
+///
+/// Ground truth: Roslyn 10.0.400's `Roslyn.Utilities.GeneratedCodeUtilities`
+/// answers `true` for `// <auto-generated/>` and `/* <auto-generated> */` and
+/// `false` once the `<` is gone; `csharpier` 1.3.0 left `int    a     =    1;`
+/// unformatted under `// csharpier-ignore` and `// csharpier-ignore-start` and
+/// reformatted it under `// csharpier-ignoreish note`, under
+/// `// csharpier-ignore some text`, and under `//  csharpier-ignore` with a
+/// second space.
+#[test]
+fn csharp_directives_are_kept_and_a_near_miss_is_not() {
+    let source = b"// <auto-generated/>\n// ReSharper disable once UnusedMember.Local\n// ReSharper restore All\n// csharpier-ignore\n// csharpier-ignore-start\n// csharpier-ignore-end\n// ordinary\n";
+    let report = scan(source, Language::CSharp, ScanOptions::default());
+    assert!(report.valid, "{:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 7, "{:?}", report.comments);
+    for comment in &report.comments[..6] {
+        assert_eq!(
+            comment.kind,
+            CommentKind::Directive,
+            "{:?} was not a directive",
+            comment
+        );
+    }
+    assert_eq!(report.comments[6].kind, CommentKind::Line);
+    assert_eq!(removable(&report), 1);
+
+    let near = scan(
+        b"// a note about auto-generated code\n// a note about ReSharper disable once\n// csharpier-ignoreish note\n//  csharpier-ignore\n",
+        Language::CSharp,
+        ScanOptions::default(),
+    );
+    assert_eq!(removable(&near), 4, "{:?}", near.comments);
+}
+
+/// `#!` is the script preamble only at the very first byte, which is where
+/// Roslyn reports a `ShebangDirectiveTrivia` and where `dotnet-script` reads
+/// one.
+///
+/// Ground truth, Roslyn 10.0.400 with `SourceCodeKind.Script`:
+/// `ShebangDirectiveTrivia` at [0,29) for the first source, and `CS9378`
+/// (`'#!' must be the first characters on the first line of the file`) for the
+/// second.
+#[test]
+fn csharp_shebang_is_a_preamble_only_on_the_first_line() {
+    let first = scan(
+        b"#!/usr/bin/env dotnet-script\nvar a = 1; // remove\n",
+        Language::CSharp,
+        ScanOptions::default(),
+    );
+    assert_eq!(first.comments.len(), 2, "{:?}", first.comments);
+    assert_eq!(first.comments[0].kind, CommentKind::Shebang);
+    assert!(!first.comments[0].disposition.is_remove());
+    assert_eq!(removable(&first), 1);
+
+    let later = scan(
+        b"var a = 1;\n#!/usr/bin/env dotnet-script\n",
+        Language::CSharp,
+        ScanOptions::default(),
+    );
+    assert!(later.comments.is_empty(), "{:?}", later.comments);
+}
+
+/// Every multi-line C# construct is written once more with CRLF endings, which
+/// the transformation has to leave where they are.
+#[test]
+fn csharp_multi_line_constructs_survive_crlf_line_endings() {
+    for line in [
+        b"/* open\r\nclose */ // remove\r\n".as_slice(),
+        b"var a = @\"one\r\ntwo\"; // remove\r\n",
+        b"var a = \"\"\"\r\n  body\r\n  \"\"\"; // remove\r\n",
+        b"var a = $\"{ x // hole\r\n}\"; // remove\r\n",
+        b"#if A // kept\r\n#endif // remove\r\n",
+    ] {
+        let result = transform(line, Language::CSharp, TransformOptions::default());
+        assert!(
+            result.report.valid,
+            "{:?} was rejected: {:?}",
+            String::from_utf8_lossy(line),
+            result.report.diagnostics
+        );
+        assert!(
+            result.output.ends_with(b" \r\n"),
+            "{:?} became {:?}",
+            String::from_utf8_lossy(line),
+            String::from_utf8_lossy(&result.output)
+        );
+        assert_eq!(
+            result.output.iter().filter(|byte| **byte == b'\r').count(),
+            line.iter().filter(|byte| **byte == b'\r').count(),
+            "{:?} lost a carriage return",
+            String::from_utf8_lossy(line)
+        );
+    }
+}
+
+/// A byte order mark is consumed before the first line is read, so the `#`
+/// behind one still opens a pre-processing directive and the `//` at the end of
+/// that line is still a comment.
+///
+/// Ground truth, Roslyn 10.0.400: `SingleLineCommentTrivia` at [32,44) and
+/// [56,65), with no CS1040 — where the same file without the mark is lexed
+/// identically three bytes lower.
+#[test]
+fn a_csharp_byte_order_mark_leaves_a_directive_line_a_directive_line() {
+    let marked = scan(
+        b"\xef\xbb\xbf#pragma warning disable 1591 // a comment\nvar a = 1; // remove\n",
+        Language::CSharp,
+        ScanOptions::default(),
+    );
+    assert!(marked.valid, "{:?}", marked.diagnostics);
+    let found: Vec<ByteSpan> = marked.comments.iter().map(|comment| comment.span).collect();
+    assert_eq!(found, vec![ByteSpan::new(32, 44), ByteSpan::new(56, 65)]);
+
+    /* NOTE: three bytes that merely look like a mark, one line down, are three
+     * ordinary bytes: the `#` behind them is not the first non-blank byte of
+     * its line, which is CS1040 and carries no comment. */
+    let inner = scan(
+        b"var a = 1;\n\xef\xbb\xbf#pragma warning disable 1591 // no\n",
+        Language::CSharp,
+        ScanOptions::default(),
+    );
+    assert!(inner.comments.is_empty(), "{:?}", inner.comments);
+}
+
+/// C# is detected from `.cs` and from the `.csx` of a script, and from a `#!`
+/// line naming `dotnet-script`, the front end that runs one.
+#[test]
+fn csharp_is_detected_from_its_extensions_and_shebang() {
+    for name in ["Program.cs", "build.csx", "Sources/Main.CS"] {
+        let found = detect_language(Some(Path::new(name)), b"").expect("detected");
+        assert_eq!(found.language, Language::CSharp, "{name}");
+        assert_eq!(found.dialect, Dialect::Standard, "{name}");
+        assert_eq!(found.reason, "extension", "{name}");
+    }
+    let shebang = detect_language(None, b"#!/usr/bin/env dotnet-script\n").expect("detected");
+    assert_eq!(shebang.language, Language::CSharp);
+    assert_eq!(shebang.reason, "shebang");
+}
+
+#[test]
+fn csharp_layouts_leave_a_line_columns_or_nothing() {
+    let source = b"// alone\nvar x = 1; // trailing\n";
+    let lines = transform(source, Language::CSharp, TransformOptions::default());
+    assert_eq!(lines.output, b"\nvar x = 1; \n");
+    let columns = transform(
+        source,
+        Language::CSharp,
+        TransformOptions {
+            layout: Layout::Columns,
+            ..Default::default()
+        },
+    );
+    let padded = format!("{}\nvar x = 1; {}\n", " ".repeat(8), " ".repeat(11));
+    assert_eq!(columns.output, padded.as_bytes());
+    let compact = transform(
+        source,
+        Language::CSharp,
+        TransformOptions {
+            layout: Layout::Compact,
+            ..Default::default()
+        },
+    );
+    assert_eq!(compact.output, b"var x = 1;\n");
+}
+
+/// A Scala comment's kind follows the comment reader of the Scala 3 compiler:
+/// a comment is documentation exactly when its raw text starts with `/**`
+/// (`Comment.isDocComment`), so `/**/` and `/***/` are documentation comments
+/// and `///` — which scaladoc does not read — is an ordinary line comment.
+///
+/// Ground truth, scalac 3.8.4 over the source below: the compiler reports the
+/// same nine comments with the same spans, and `///`, `////` and `//!` all come
+/// back as plain line comments while `/**/` and `/***/` are doc comments.
+#[test]
+fn scala_comment_forms_carry_their_kinds() {
+    let source = b"/// doc line\n//// four\n//! bang\n/** doc */\n/**/\n/***/\n/*! block */\n/* plain */\n// line\nlet a = 1\n";
+    let report = scan(source, Language::Scala, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(
+        report
+            .comments
+            .iter()
+            .map(|comment| (comment.span.start, comment.span.end, comment.kind))
+            .collect::<Vec<_>>(),
+        vec![
+            (0, 12, CommentKind::Line),
+            (13, 22, CommentKind::Line),
+            (23, 31, CommentKind::Line),
+            (32, 42, CommentKind::DocBlock),
+            (43, 47, CommentKind::DocBlock),
+            (48, 53, CommentKind::DocBlock),
+            (54, 66, CommentKind::Block),
+            (67, 78, CommentKind::Block),
+            (79, 86, CommentKind::Line),
+        ]
+    );
+}
+
+/// A Scala block comment nests, so the inner `*/` closes only the inner `/*`
+/// and commenting out a region that already holds a comment works.
+///
+/// Ground truth, scalac 3.8.4 over the source below: one block comment at
+/// `[0,35)` and a line comment at `[46,55)`, with no diagnostic.
+#[test]
+fn scala_block_comments_nest() {
+    let source = b"/* outer /* inner */ still outer */\nlet a = 1 // remove\n";
+    let report = scan(source, Language::Scala, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 2, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(0, 35));
+    assert_eq!(report.comments[0].kind, CommentKind::Block);
+    assert_eq!(report.comments[1].span, ByteSpan::new(46, 55));
+}
+
+/// Every Scala string form hides a comment opener written inside it: the plain
+/// `"..."`, the multiline `"""..."""`, and each of them interpolated, where the
+/// interpolator is any identifier directly before the quote — `s`, `raw`, or a
+/// custom one such as `xml`.
+///
+/// Ground truth, scalac 3.8.4 over the source below: one comment in the whole
+/// file, `// remove` at `[142,151)`, and no diagnostic — every `//` above it is
+/// string content.
+#[test]
+fn scala_string_literals_hide_comment_openers() {
+    let source = b"val a = \"// not\"\nval b = \"/* not */\"\nval c = s\"// not\"\nval d = raw\"// not\"\nval e = xml\"// not\"\nval f = \"\"\"\n// not\n\"\"\"\nval g = s\"\"\"\n// not\n\"\"\"\n// remove\n";
+    let report = scan(source, Language::Scala, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(142, 151));
+    assert_eq!(removable(&report), 1);
+}
+
+/// A run of quotes at the end of a Scala triple-quoted string is a closer of
+/// three and then content: the lexer's `isTripleQuote` consumes the first
+/// three quotes of the run and puts any further ones into the string value, so
+/// `"""a""""` is the string `a"` and `""""""` the empty string — while Kotlin's
+/// existing scanner reads the first three quotes of a run as the closer and
+/// leaves a stray quote for a new literal.
+///
+/// Ground truth, scalac 3.8.4: `val a = """a""""` prints `a"` and `""""""` is
+/// an empty string, both without a diagnostic.
+#[test]
+fn scala_triple_quotes_close_on_the_first_three_of_a_run() {
+    let source = b"val a = \"\"\"a\"\"\"\"\nval b = \"\"\"\"\"\"\n// remove\n";
+    let report = scan(source, Language::Scala, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(32, 41));
+}
+
+/// The expression inside a Scala `${ ... }` interpolation is code, so a comment
+/// written there is a comment; the interpolation nests, and a string written
+/// inside one is a string.
+///
+/// Ground truth, scalac 3.8.4 over the source below: `/* c */` at `[14,21)`,
+/// `// c` at `[55,59)` and `/* d */` at `[90,97)`, plus the two `// remove`
+/// comments, with no diagnostic.
+#[test]
+fn scala_interpolation_is_code_and_carries_comments() {
+    let source = b"val a = s\"${1 /* c */ + 2}\"  // remove\nval b = s\"\"\"${1 // c\n+ 2}\"\"\"\nval c = s\"${s\"a\"} ${1 /* d */}\"\n// remove\n";
+    let report = scan(source, Language::Scala, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(
+        report
+            .comments
+            .iter()
+            .map(|comment| (comment.span.start, comment.span.end))
+            .collect::<Vec<_>>(),
+        vec![(14, 21), (29, 38), (55, 59), (90, 97), (100, 109)]
+    );
+}
+
+/// A string without an interpolator does not interpolate: `$` is content, so
+/// `${ ... }` in a plain string — single-line or triple-quoted — is text, and a
+/// `//` inside it is not a comment.
+///
+/// Ground truth, scalac 3.8.4 over the source below: the file compiles and the
+/// only comment is `// remove` at `[64,73)`.
+#[test]
+fn scala_plain_strings_do_not_interpolate() {
+    let source =
+        b"val a = \"price ${x // not} $y\"\nval b = \"\"\"triple ${x // not}\"\"\"\n// remove\n";
+    let report = scan(source, Language::Scala, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(64, 73));
+}
+
+/// Inside an interpolated string, `$$` writes a literal `$` and `$"` a literal
+/// quote — the quote after a `$` never closes the string — so the `"` that
+/// closes `s"x$"y"` is the third quote of the line.
+///
+/// Ground truth, scalac 3.8.4: `s"x$"y"` is the string `x"y` and `s"$$lit"`
+/// the string `$lit`, with the only comment `// remove` at `[33,42)`.
+#[test]
+fn scala_dollar_is_an_escape_inside_an_interpolated_string() {
+    let source = b"val a = s\"x$\"y\"\nval b = s\"$$lit\"\n// remove\n";
+    let report = scan(source, Language::Scala, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(33, 42));
+}
+
+/// Only an identifier opens an interpolated string: the compiler's lexer turns
+/// an identifier directly before a quote into `INTERPOLATIONID` and reads the
+/// rest as parts, so a keyword — which is its own token — and a number leave
+/// the quote to a plain string whose `${ ... }` is content.
+///
+/// Ground truth, scalac 3.8.4: in `def f = return"ok ${1 // not}"` the string
+/// after `return` is plain (the file fails to typecheck, not to parse), and in
+/// `val g = 1"x // not"` the string after the number is plain (a syntax error,
+/// because two literals sit side by side); neither `//` is a comment.
+#[test]
+fn scala_keywords_and_numbers_do_not_interpolate() {
+    let source = b"def f = return\"ok ${1 // not}\"\nval g = 1\"x // not\"\n// remove\n";
+    let report = scan(source, Language::Scala, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(51, 60));
+}
+
+/// A backquoted identifier may hold any bytes but a backtick, `//` included, so
+/// the scanner treats the region between two backticks as opaque; a backtick
+/// that never closes is an unterminated identifier.
+///
+/// Ground truth, scalac 3.8.4: `` val `a//b` = 1 `` parses (the error is that
+/// `a//b` is not defined, not that the comment opener is read as one), and the
+/// only comment in the file is `// remove` at `[35,44)`.
+#[test]
+fn scala_backquoted_identifiers_hide_comment_openers() {
+    let source = b"val `a//b` = 1\nval c = `x /* y */`\n// remove\n";
+    let report = scan(source, Language::Scala, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(35, 44));
+}
+
+/// An XML literal is the one Scala construct whose text is not code: the
+/// compiler's *lexer* reports a `//` in XML text as a comment — its XMLSTART
+/// token hands the region to the parser, which re-reads it with an XML scanner
+/// — so reading the text as comments would remove bytes that change the value
+/// of a valid program. This scanner follows the parser: element text, CDATA
+/// and processing instructions are opaque, `{ ... }` in text or an attribute
+/// is code, `<!-- ... -->` is an XML comment, and the literal ends at the
+/// close tag matching its root or at a self-closing `/>`.
+///
+/// Ground truth, scalac 3.8.4 over the source below: the file parses (the only
+/// errors are `scala.xml` not being on the classpath), and the comments are
+/// `<!-- note -->`, `/* code */` at `[95,105)`, `// line` at `[110,117)`,
+/// `/* attr */` at `[225,235)` and `// remove` at `[243,252)`.
+#[test]
+fn scala_xml_literals_hide_their_text_comment_openers() {
+    let source = b"val a = <a>// text</a>\nval b = <a href=\"x//y\">t</a>\nval c = <a><!-- note --></a>\nval d = <a>{x /* code */} {y // line\n+ 1}</a>\nval e = <a><![CDATA[<b>//x]]></a>\nval f = <a/><br/>\nval g = <a><b>// deep</b></a>\nval h = <a x={1 /* attr */}>t</a>\n// remove\n";
+    let report = scan(source, Language::Scala, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(
+        report
+            .comments
+            .iter()
+            .map(|comment| (comment.span.start, comment.span.end, comment.kind))
+            .collect::<Vec<_>>(),
+        vec![
+            (63, 76, CommentKind::HtmlComment),
+            (95, 105, CommentKind::Block),
+            (110, 117, CommentKind::Line),
+            (225, 235, CommentKind::Block),
+            (243, 252, CommentKind::Line),
+        ]
+    );
+}
+
+/// An XML literal begins exactly where the compiler's lexer says one does: a
+/// `<` preceded by space, tab, line feed, `{`, `(` or `>` and followed by an
+/// XML name start, `!` or `?`. `x<a>` has an `x` before the `<` and is a
+/// comparison, so the `//` after it is a comment; `x <a>` and `a ><b>` begin
+/// literals whose text is protected.
+///
+/// Ground truth, scalac 3.8.4 over the source below: `x<a> // c` leaves the
+/// `// c` as a line comment, `x <a>// text</a>` begins an XML literal at the
+/// `<`, and `a ><b>y</b>` begins one at the `<` after the `>`; the first and
+/// third files are rejected by the parser (`$XMLSTART$< found`) but the second
+/// parses.
+#[test]
+fn scala_xml_literals_begin_where_the_lexer_says() {
+    let source = b"val a = x<a> // c\nval b = x <a>// text</a>\nval c = a ><b>y</b>\n// remove\n";
+    let report = scan(source, Language::Scala, ScanOptions::default());
+    assert_eq!(
+        report
+            .comments
+            .iter()
+            .map(|comment| (comment.span.start, comment.span.end))
+            .collect::<Vec<_>>(),
+        vec![(13, 17), (63, 72)]
+    );
+}
+
+/// An XML literal inside a `${ ... }` expression is an XML literal too, so its
+/// text is protected even though the braces around it are code.
+///
+/// Ground truth, scalac 3.8.4: `s"${<b>// text</b>}"` parses (only `scala.xml`
+/// is missing), and the only comment is `// remove` at `[29,38)`.
+#[test]
+fn scala_xml_inside_an_interpolation_is_opaque() {
+    let source = b"val a = s\"${<b>// text</b>}\"\n// remove\n";
+    let report = scan(source, Language::Scala, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(29, 38));
+}
+
+/// Every unterminated Scala construct stops a fix until it is forced: an
+/// unclosed string, a triple-quoted string that never closes, a block comment
+/// with no `*/`, a backtick with no mate, and a `${ ... }` whose brace never
+/// comes back.
+#[test]
+fn every_unterminated_scala_construct_stops_a_fix_until_it_is_forced() {
+    for source in [
+        b"val a = \"unterminated\n// remove\n".as_slice(),
+        b"val b = \"\"\"\n// remove\n",
+        b"val c = /* unterminated\n// remove\n",
+        b"val d = `unterminated\n// remove\n",
+        b"val e = s\"${x\n// remove\n",
+    ] {
+        let report = scan(source, Language::Scala, ScanOptions::default());
+        assert!(!report.valid, "{:?}", report.diagnostics);
+    }
+}
+
+/// `//> using` opens the directive scala-cli reads before it reads the file,
+/// so it is kept by every policy; a comment that only looks like one is not.
+#[test]
+fn scala_directives_are_kept_and_a_near_miss_is_not() {
+    let source =
+        b"//> using scala \"3.3.0\"\n//> using\n//> usingless\n// using scala\n// remove\n";
+    let report = scan(source, Language::Scala, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(
+        report
+            .comments
+            .iter()
+            .map(|comment| (comment.span.start, comment.span.end, comment.kind))
+            .collect::<Vec<_>>(),
+        vec![
+            (0, 23, CommentKind::Directive),
+            (24, 33, CommentKind::Directive),
+            (34, 47, CommentKind::Line),
+            (48, 62, CommentKind::Line),
+            (63, 72, CommentKind::Line),
+        ]
+    );
+    assert_eq!(removable(&report), 3);
+}
+
+/// A `#!` line is a preamble only when the file opens with it, and the
+/// interpreter name is either `scala` or `scala-cli`.
+#[test]
+fn scala_shebang_is_a_preamble_only_on_the_first_line() {
+    let first = b"#!/usr/bin/env scala\n// remove\n";
+    let report = scan(first, Language::Scala, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 2, "{:?}", report.comments);
+    assert_eq!(report.comments[0].kind, CommentKind::Shebang);
+    assert_eq!(report.comments[0].span, ByteSpan::new(0, 20));
+    assert_eq!(report.comments[1].span, ByteSpan::new(21, 30));
+
+    let cli = b"#!/usr/bin/env scala-cli\n// remove\n";
+    let report = scan(cli, Language::Scala, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments[0].kind, CommentKind::Shebang);
+    assert_eq!(report.comments[0].span, ByteSpan::new(0, 24));
+
+    let later = b"// not shebang\n#!/usr/bin/env scala\n// remove\n";
+    let report = scan(later, Language::Scala, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 2, "{:?}", report.comments);
+    assert_eq!(report.comments[0].kind, CommentKind::Line);
+    assert_eq!(report.comments[0].span, ByteSpan::new(0, 14));
+}
+
+/// Multi-line Scala constructs survive CRLF line endings: the block comment,
+/// the triple-quoted string and the XML literal all span the pair.
+#[test]
+fn scala_multi_line_constructs_survive_crlf_line_endings() {
+    let source = b"/* outer\r\n/* inner */\r\nstill outer */\r\nval a = \"\"\"\r\ntriple // not\r\n\"\"\"\r\nval b = <a>// text</a>\r\n// remove\r\n";
+    let report = scan(source, Language::Scala, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 2, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(0, 37));
+    assert_eq!(report.comments[0].kind, CommentKind::Block);
+    assert_eq!(report.comments[1].span, ByteSpan::new(96, 105));
+    assert_eq!(report.comments[1].kind, CommentKind::Line);
+}
+
+/// A character literal or symbol holds a single character or an identifier, so
+/// it can never hide a `//`; the `/` in `'/'` is not a comment opener.
+#[test]
+fn scala_characters_and_symbols_do_not_hide_anything() {
+    let source = b"val a = '/'\nval b = 'c'\nval c = 'sym\n// remove\n";
+    let report = scan(source, Language::Scala, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(37, 46));
+}
+
+/// Scala is detected from `.scala`, from the `.sc` of a script, and from a
+/// `scala` or `scala-cli` `#!` line.
+#[test]
+fn scala_is_detected_from_its_extensions_and_shebang() {
+    for (path, extension) in [
+        (Some(Path::new("build.scala")), Language::Scala),
+        (Some(Path::new("script.sc")), Language::Scala),
+    ] {
+        let found = detect_language(path, b"let a = 1\n").expect("detected by extension");
+        assert_eq!(found.language, extension);
+        assert_eq!(found.reason, "extension");
+    }
+    for line in [
+        b"#!/usr/bin/env scala\n".as_slice(),
+        b"#!/usr/bin/env -S scala-cli shebang\n",
+        b"#!/usr/bin/env scala-cli\n",
+    ] {
+        let found = detect_language(None, line).expect("detected by shebang");
+        assert_eq!(found.language, Language::Scala);
+        assert_eq!(found.reason, "shebang");
+    }
+}
+
+/// The three layouts leave a Scala file a line, columns, or nothing.
+#[test]
+fn scala_layouts_leave_a_line_columns_or_nothing() {
+    let source = b"// alone\nval x = 1 // trailing\n";
+    let lines = transform(source, Language::Scala, TransformOptions::default());
+    assert_eq!(lines.output, b"\nval x = 1 \n");
+    let columns = transform(
+        source,
+        Language::Scala,
+        TransformOptions {
+            layout: Layout::Columns,
+            ..Default::default()
+        },
+    );
+    let padded = format!("{}\nval x = 1 {}\n", " ".repeat(8), " ".repeat(11));
+    assert_eq!(columns.output, padded.as_bytes());
+    let compact = transform(
+        source,
+        Language::Scala,
+        TransformOptions {
+            layout: Layout::Compact,
+            ..Default::default()
+        },
+    );
+    assert_eq!(compact.output, b"val x = 1\n");
+}

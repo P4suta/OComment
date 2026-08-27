@@ -20,7 +20,8 @@ vim.lsp.config.ocomment = {
   filetypes = {
     "rust", "ocaml", "c", "cpp", "go", "java", "javascript",
     "typescript", "python", "sh", "html", "css", "jsonc", "sql", "kotlin",
-    "toml", "lua", "yaml", "php", "ruby", "zig", "r", "dart",
+    "toml", "lua", "yaml", "php", "ruby", "zig", "r", "dart", "swift", "cs",
+    "scala",
   },
   root_markers = { ".ocomment.toml", ".git" },
 }
@@ -68,11 +69,11 @@ Install **OComment** from the Marketplace, or from Open VSX. The extension is
 a client only: it launches the `ocomment` binary, which has to be installed
 separately and on `PATH`, or named by `ocomment.path`.
 
-It attaches to twenty-eight language identifiers — `rust`, `ocaml`, `c`,
+It attaches to thirty-one language identifiers — `rust`, `ocaml`, `c`,
 `cpp`, `objective-c`, `objective-cpp`, `cuda-cpp`, `go`, `java`, `javascript`,
 `javascriptreact`, `typescript`, `typescriptreact`, `python`, `shellscript`,
 `html`, `css`, `jsonc`, `sql`, `kotlin`, `toml`, `lua`, `yaml`, `php`,
-`ruby`, `zig`, `r`, and `dart` — and contributes
+`ruby`, `zig`, `r`, `dart`, `swift`, `csharp`, and `scala` — and contributes
 `OComment: Remove comments in file`, `... in workspace`, `OComment: Restart
 server`, and `OComment: Show output`, plus a status bar count of the removable
 comments in the open files.

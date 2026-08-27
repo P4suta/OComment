@@ -1274,6 +1274,41 @@ fn next_line_start(source: &[u8], start: usize) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every language identifier the VS Code extension attaches the server to
+    /// has to reach a built-in language here.
+    ///
+    /// The two lists are written in different vocabularies: `Language` is named
+    /// after the language and an editor identifier after whatever the editor
+    /// calls it, and the two agree for most of them by luck rather than by
+    /// construction — `objective-c`, `cuda-cpp`, `javascriptreact` and
+    /// `shellscript` do not agree at all, which is what
+    /// [`language_from_lsp`]'s arms are for. Nothing else notices when they
+    /// stop agreeing: the extension still activates for the identifier, the
+    /// server still opens the document, and the scan comes back with the
+    /// `unknown-language` diagnostic and no comments. So the selector is read
+    /// here rather than trusted.
+    #[test]
+    fn every_editor_language_identifier_reaches_a_built_in_language() {
+        let manifest: serde_json::Value =
+            serde_json::from_str(include_str!("../../../editors/vscode/package.json"))
+                .expect("package.json parses");
+        let identifiers =
+            manifest["contributes"]["configuration"]["properties"]["ocomment.languages"]["default"]
+                .as_array()
+                .expect("`ocomment.languages` has an array default");
+        let uri = Url::parse("file:///buffer").expect("a well-formed URI");
+        assert!(!identifiers.is_empty());
+        for value in identifiers {
+            let id = value.as_str().expect("a language identifier is a string");
+            let (language, _) = language_from_lsp(id, &uri, b"");
+            assert!(
+                Language::ALL.contains(&language),
+                "the editor identifier `{id}` reaches {language}, which has no built-in scanner"
+            );
+        }
+    }
+
     #[test]
     fn position_round_trip_all_encodings() {
         let source = "a😀b\rnext\r\n二\nlast".as_bytes();

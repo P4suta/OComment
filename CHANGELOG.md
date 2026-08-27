@@ -7,7 +7,7 @@ All notable changes to OComment will be documented here. The project follows
 
 ### Added
 
-- Byte-oriented scanners and transformations for 23 built-in languages and the
+- Byte-oriented scanners and transformations for 26 built-in languages and the
   documented dialects.
 - CLI, staged Git fixes, LSP 3.18 server, declarative profiles, and sandboxed
   WASM component plugins.
@@ -67,7 +67,7 @@ All notable changes to OComment will be documented here. The project follows
   for the OCaml reference. `CONTRIBUTING.md` documents the tags.
 - An official VS Code extension, `P4suta.ocomment`, under `editors/vscode`. It
   is a client only: it launches the separately installed `ocomment lsp`,
-  attaches it to the twenty-eight language identifiers OComment scans, and
+  attaches it to the thirty-one language identifiers OComment scans, and
   exposes the server's quick fixes, `source.fixAll.ocomment`, code lens, and
   pull diagnostics, plus `OComment: Remove comments in file`, `... in
   workspace`, `OComment: Restart server`, `OComment: Show output`, and a status
@@ -254,6 +254,163 @@ All notable changes to OComment will be documented here. The project follows
   `dart_style` compares rather than as a prefix; and the analyzer's `// ignore:`
   and `// ignore_for_file:` are kept as well. `.dart` and a `dart` `#!` line
   select it; it has no dialects and no reserved file names.
+- Swift is a built-in language. Its block comment nests as Dart's does; `///`
+  and `/** */` are documentation comments, where `////` still is one and the
+  empty `/**/` is not — its second `*` is the first byte of its own terminator —
+  and `//!` and `/*!` document nothing. Four string forms hide a `//`: single
+  line or `"""`, each of them raw or not, where raw is a run of `#` in front of
+  the quote. Those hashes do not take the escape and the interpolation away,
+  they rename them: with one hash the escape is `\#`, `\#(` opens the
+  interpolation, the closing delimiter needs the same run behind the quote, and
+  a bare `\(` is content. `#"""#` is the shape that reads as two things at once
+  and is the single-line raw string holding one quote. The interpolation is
+  code, so a comment written inside a string is a comment.
+- Swift is the second built-in language with a regular expression literal —
+  JavaScript's is the other — and the first whose literal may span lines and
+  hold an *unescaped* `/`. It is a byte-removal hazard rather than a curiosity:
+  `#/https://x/#` carries a `//` outright, and the bare `/a\//` ends with two
+  slashes because its content is `a\/`, so a scanner that read either as a
+  comment would delete the rest of the line. The extended form closes on `/#`,
+  and it opens a multi-line literal exactly when its opener ends the line; the
+  bare `/ ... /` ends at the first unescaped `/`, never crosses a line, and may
+  not open with a space or a tab. Whether a `/` in an ambiguous position opens
+  a literal at all is settled in Swift by the parser, and this is a lexer: it
+  reads one exactly where a prefix operator may stand and where the content
+  closes on the same line, and `docs/languages.md` records that every case
+  which decides differently from the compiler is a file `swiftc` rejects, where
+  the compiler is lexing a literal it has already diagnosed and the scanner
+  reads the comment inside it instead; `swift-bare-regex-limitation` is the
+  corpus case that records one. `'` is no delimiter of the language, but the
+  compiler lexes `'...'` anyway so that it can offer a fix-it, and the scanner
+  follows it for the same reason: it costs a valid file nothing and keeps a
+  `//` inside one out of a removal. `// swift-tools-version:` is kept because
+  SwiftPM reads it before it reads a manifest at all, and `// swiftlint:`,
+  `// swiftformat:` and `// swift-format-ignore` are kept as the instructions
+  their tools read;
+  `// MARK:` is not one of them. `.swift` and a `swift` `#!` line select it —
+  the interpreter is met before `sh`, which a toolchain path contains — and it
+  has no dialects and no reserved file names. Ground truth is the SwiftSyntax
+  parser the Swift 6.3.3 toolchain ships: over the 3,962 Swift files of
+  swift-syntax, swift-format, swift-nio, swift-algorithms, swift-collections,
+  swift-experimental-string-processing, swift-protobuf,
+  swift-composable-architecture and the toolchain's own module interfaces, all
+  207,959 comments it reports come back with the same byte span and kind, and
+  no file is called invalid.
+- C# is a built-in language, and the first whose *lines* are lexed two ways. A
+  line whose first non-blank byte is `#` is a pre-processing directive, and
+  ECMA-334 6.5.1 ends one with `PP_Whitespace? SINGLE_LINE_COMMENT? New_Line`: a
+  `//` is the only comment it can carry, a `/*` on it opens nothing at all, and
+  a `"` opens a string that takes no `\` escape and ends at the line, which is
+  what keeps the `//` inside `#line 1 "a//b.cs"` out of a removal. `#error`,
+  `#warning`, `#region` and `#endregion` take the rest of their line as a
+  message instead, so `#region // x` carries a comment and `#region x // y` does
+  not. A `#` that some other byte on its line came before is not a directive and
+  carries no comment either, which is what Roslyn makes of one. A conditional
+  section is scanned as ordinary code rather than skipped, for the reason `#if 0`
+  is in C and C++: which symbols a build defines is not in the file.
+- C# writes a string eight ways — plain, verbatim, raw, and each of those
+  interpolated — and the three rules differ in what closes them. A plain one
+  takes the `\` escape, which carries the character behind it in whatever it is,
+  a line terminator included, so `"a\` and a line feed is a string that carries
+  on below; a verbatim `@"..."` spells its quote `""`, takes no escape at all,
+  and carries line breaks; and a raw one is opaque until a run of at least as
+  many quotes as its opener carried comes back, carrying line breaks only when
+  its opener ends a line. Interpolation is a switch on top of all three rather
+  than a fourth rule: a run of `n` `$` in front of the quote makes a run of `n`
+  braces the thing that opens a hole, so a single `{` is content in a `$$"""`
+  literal and `{{` is code. A hole is code, so a comment written in one is a
+  comment and may carry a line break the text around it could not — C# 11 let an
+  expression span lines — while the format clause behind the first `:` of a hole
+  is text again, which is why the `//` in `$"{x:D4 // n}"` is not a comment.
+  `@` in front of anything but a quote is a verbatim identifier and opens no
+  literal.
+- C# counts five line terminators where every other C-family scanner here counts
+  two: ECMA-334 6.3.1 adds U+0085, U+2028 and U+2029, and Roslyn ends a `//`
+  comment, a string and a character literal at all five. A scanner that read on
+  past one would swallow the code behind it on the same physical line and a
+  removal would take that code with it, so the scanner ends a line at all five —
+  and still offers a restart point after `\r` and `\n` alone, because the
+  incremental engine's line rules are written in those two.
+- `///` and `/** */` are C#'s documentation comments, each with a spelling that
+  takes it back: `////` is an ordinary line comment, as it is in Java and unlike
+  Dart and Swift, and `/**/`, `/***/` and `/*** x */` are ordinary block
+  comments. `/*!` is Doxygen's marker and documents nothing here, and a block
+  comment does not nest. `// <auto-generated/>` is kept because Roslyn's own
+  `GeneratedCodeUtilities.BeginsWithAutoGeneratedComment` searches the comments
+  in front of a file's first token for it and exempts a file that carries one
+  from every analyzer that opts out of generated code; `// ReSharper disable` and
+  `// ReSharper restore` are kept as the bounds of the region an inspection is
+  turned off over; and `// csharpier-ignore`, `-start` and `-end` are kept as the
+  whole comments CSharpier compares against. `.cs` and `.csx` select the
+  language, as does a `dotnet-script` `#!` line, and `#!` at the very first byte
+  is the script preamble; it has no dialects and no reserved file names. Ground
+  truth is the Roslyn lexer the .NET SDK 10.0.400 ships, with `csharpier` 1.3.0
+  for the formatter marker: over the 70,630 C# files of dotnet/runtime,
+  dotnet/roslyn, dotnet/aspnetcore, dotnet/efcore, Newtonsoft.Json, Serilog and
+  ImageSharp, all 1,946,012 comments it reports come back with the same byte
+  span and the same kind. Four of those files are called invalid: two are not
+  C# at all — one is Visual Basic under a `.cs` name and one a deliberate
+  parser-error fixture, and Roslyn raises 236 and 4 errors against them — and
+  two are the conditional-section limitation above, an apostrophe in a block of
+  prose written under an `#if false`. 23,510 of those files were additionally
+  stripped of every comment and handed back to Roslyn: all 650,360 removals
+  left a file that still parses with no error, so no code byte was read as
+  comment.
+- The C++ raw-string delimiter search is bounded by the d-char class instead of
+  searching the document for a `(` that may never come, so a stray `R"` in C++
+  code no longer costs every line under it its restart point. The four give-up
+  paths whose bytes the scan then consumes — an unterminated OCaml quoted
+  string, C++ raw string, PostgreSQL dollar quote and Oracle q-quote — record
+  nothing, which leaves only the reads the scan really does rewind behind
+  recording one: the here-document delimiter parse and Swift's two searches for
+  the end of a regular expression literal. `ocaml_quoted_string` no longer
+  records the byte the scan is standing on, which `scan_ocaml` asks of every
+  byte of a document. Full-scan results are unchanged; what changes is how many
+  checkpoints an incremental rescan may start from.
+- Scala is a built-in language. Its block comment nests as Dart's does, and the
+  documentation comment is the one the Scala 3 compiler's comment reader
+  answers to: a comment is documentation exactly when its text starts with
+  `/**` (`Comment.isDocComment`), so `/**/` and `/***/` are documentation
+  comments and `///` — which scaladoc does not read — is an ordinary line
+  comment, as is `//!`.
+- A Scala string is interpolated exactly when an identifier stands directly
+  before its quote: the compiler's lexer turns that identifier into
+  `INTERPOLATIONID`, so `s"..."`, `raw"..."` and a custom interpolator such as
+  `xml"..."` interpolate, while a keyword — its own token — and a number leave
+  the quote to a plain string whose `$` is content. Inside an interpolated
+  string `$$` and `$"` write a literal `$` and `"` — the quote after a `$`
+  never closes the string — and `${ ... }` opens an expression that is code,
+  so a comment written there is a comment and may carry a line break a
+  single-line string's text could not. A triple-quoted string closes on the
+  first three quotes of a run and makes any further quotes of the run part of
+  its value, so `"""a""""` is the string `a"`, which is where Scala parts
+  company with Kotlin's existing scanner; a backquoted identifier may hold
+  `//` without it being a comment; and a character literal or symbol holds a
+  single character or an identifier, so it can never hide one.
+- The XML literal is the one Scala construct whose text is not code: the
+  compiler's lexer emits an `XMLSTART` token at the `<` and the parser
+  re-reads the literal with an XML scanner, so this scanner follows the
+  parser — a `//` in element text is protected rather than removed. Element
+  text, CDATA and processing instructions are opaque, `{ ... }` in text or an
+  attribute is code, `<!-- ... -->` is an XML comment, and the literal ends at
+  the close tag matching its root or at a self-closing `/>`. A literal begins
+  exactly where the lexer says one does: a `<` preceded by space, tab, line
+  feed, `{`, `(` or `>` and followed by an XML name start, `!` or `?`, so
+  `x<a>` stays a comparison and `x <a>` opens a literal.
+- `//> using` is kept because scala-cli reads a directive line before it reads
+  a manifest at all. `.scala` and the `.sc` of a script select the language,
+  as do `scala` and `scala-cli` `#!` lines, and `#!` at the very first byte
+  (a byte order mark permitting) is the script preamble; `.sbt` is
+  deliberately absent, a build definition being a file of its own. It has no
+  dialects and no reserved file names. Ground truth is the lexer and parser of
+  the Scala 3.8.4 toolchain, read for the comment spans and kinds over the
+  2,115 Scala files of ammonite, munit, scala-js and scalafmt: of the 1,768
+  files that hold a comment, all 18,555 this scanner reports come back with
+  the same byte span and the same documentation classification, except for
+  three files that hold an XML literal, where the compiler's lexer reports a
+  `//` in the element text as a comment and the parser reads it as text — this
+  scanner follows the parser and protects it — and one file whose opening
+  copyright comment is classified as a licence rather than documentation.
 - `tools/fuzz_differential.py`, an on-demand cross-implementation fuzz. It
   builds random sources out of the delimiters, escapes, quotes and directive
   words the built-in scanners care about, asks both implementations across
@@ -603,16 +760,16 @@ All notable changes to OComment will be documented here. The project follows
 - A safe checkpoint may only stand where no decision made before it read past
   it, and that is a mechanism now rather than an audit. Every lookahead that
   can read beyond the byte the scan resumes at reports the furthest one it
-  consulted -- the here-document delimiter parse, the search for the `|` that
+  consulted — the here-document delimiter parse, the search for the `|` that
   ends an OCaml `{tag|`, the second `$` of a PostgreSQL dollar quote, the `(`
   of a C++ raw string, the `'` of an Oracle q-quote, and the bounded windows
-  that tell a character literal from a lifetime -- and `add_safe_checkpoint`
+  that tell a character literal from a lifetime — and `add_safe_checkpoint`
   refuses any position below that watermark, the end of the document included,
   because an append is an edit exactly there. Shell's quoted here-document
   delimiter is the shape that asked for it: `<<"EO`, a line break and `F"` name
   the delimiter `EO\nF`, so the parse has no line bound at all, and the path
   that gives up on an unterminated quote rewinds the scan to the byte after the
-  operator and lexes those bytes again -- which reached the same end only
+  operator and lexes those bytes again — which reached the same end only
   because two lexers happened to agree, which is a coincidence and not a
   guarantee. The checkpoint-soundness property asserts the watermark per
   language before it tries any restart, and caught OCaml offering three

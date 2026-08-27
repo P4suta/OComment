@@ -105,6 +105,12 @@ zig: Zig source files and Zig Object Notation data
 r: R scripts and the `.Rprofile` an R session sources at start\-up
 .IP \(bu 2
 dart: Dart source files, whose block comments nest
+.IP \(bu 2
+swift: Swift source files, whose block comments nest and whose `#/../#` is a regex
+.IP \(bu 2
+csharp: C# source and script files, whose `#` lines are preprocessor directives
+.IP \(bu 2
+scala: Scala source and script files, whose block comments nest and whose XML literals are opaque
 .RE
 .TP
 \fB\-\-dialect\fR \fI<DIALECT>\fR

@@ -47,14 +47,22 @@ enum Spelling {
 /// every Bash script on disk would be read as POSIX shell. `luajit` contains
 /// `lua`, and `jruby` and `truffleruby` contain `ruby`, and all three are
 /// listed before the name they contain under the same convention, though those
-/// pairs name the same language whichever of the two is met first.
+/// pairs name the same language whichever of the two is met first. `swift` is
+/// listed there for the first reason rather than the second: a toolchain
+/// installs it under `/usr/share/swift/usr/bin/swift`, and that path carries an
+/// `sh` of its own.
+///
+/// `dotnet-script` is listed there for the first reason as well: the front end
+/// that runs a `.csx` file is installed under a name that carries no `sh`, but
+/// the `#!` line reaching it is written `#!/usr/bin/env dotnet-script`, and
+/// `env` is what every other name has to be met in front of too.
 ///
 /// `r` is the one name a substring cannot find: littler installs R's scripting
 /// front end under a single letter, and `/usr/` alone carries an `r`, so
 /// searching for it that way would read every `#!/usr/bin/awk` on disk as R.
 /// It is a [`Spelling::Word`] instead, and it is listed last so that every name
 /// spelled out in full is met before a bare letter is considered at all.
-const SHEBANGS: [(&str, Language, Dialect, Spelling); 15] = [
+const SHEBANGS: [(&str, Language, Dialect, Spelling); 19] = [
     (
         "python",
         Language::Python,
@@ -98,6 +106,30 @@ const SHEBANGS: [(&str, Language, Dialect, Spelling); 15] = [
     (
         "dart",
         Language::Dart,
+        Dialect::Standard,
+        Spelling::Anywhere,
+    ),
+    (
+        "swift",
+        Language::Swift,
+        Dialect::Standard,
+        Spelling::Anywhere,
+    ),
+    (
+        "dotnet-script",
+        Language::CSharp,
+        Dialect::Standard,
+        Spelling::Anywhere,
+    ),
+    (
+        "scala-cli",
+        Language::Scala,
+        Dialect::Standard,
+        Spelling::Anywhere,
+    ),
+    (
+        "scala",
+        Language::Scala,
         Dialect::Standard,
         Spelling::Anywhere,
     ),
@@ -260,6 +292,27 @@ pub fn detect_language(path: Option<&Path>, source: &[u8]) -> Option<Detection> 
              * per-package build directory rather than a file, and a
              * `pubspec.yaml` beside it is YAML and is detected as that. */
             "dart" => Some((Language::Dart, Dialect::Standard)),
+            /* NOTE: `.swift` is the only suffix Swift owns, and `Package.swift`
+             * carries it, so the one file name a Swift package is required to
+             * spell exactly needs no reserved-name rule of its own.
+             * `.swiftinterface` is deliberately absent: it is a generated
+             * module interface rather than a checked-in source file, and
+             * `.swiftmodule` beside it is a binary. */
+            "swift" => Some((Language::Swift, Dialect::Standard)),
+            /* NOTE: `.csx` is a C# script, which `dotnet script` and the C#
+             * interactive window read: the same lexical rules with a `#!` line
+             * allowed at the first byte and statements at the top level.
+             * `.cshtml` and `.razor` are deliberately absent: a Razor page is
+             * markup with C# blocks in it, which is a scanner of its own, and
+             * `.csproj` beside them is XML. */
+            "cs" | "csx" => Some((Language::CSharp, Dialect::Standard)),
+            /* NOTE: `.scala` is the language's own suffix and `.sc` the script
+             * suffix scala-cli reads, which share the one scanner. `.sbt` is
+             * deliberately absent: a build definition is a file of its own
+             * with a leading-blank `//` convention that no source file shares,
+             * and `.scala.sc` carries `.sc` as its last suffix and is detected
+             * as that. */
+            "scala" | "sc" => Some((Language::Scala, Dialect::Standard)),
             _ => None,
         };
         if let Some((language, dialect)) = by_extension {

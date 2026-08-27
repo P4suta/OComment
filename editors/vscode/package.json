@@ -1,7 +1,7 @@
 {
   "name": "ocomment",
   "displayName": "OComment",
-  "description": "Fast, byte-preserving comment checker and remover for 23 languages.",
+  "description": "Fast, byte-preserving comment checker and remover for 26 languages.",
   "version": "0.1.0",
   "publisher": "P4suta",
   "license": "MIT",
@@ -67,6 +67,9 @@
     "onLanguage:zig",
     "onLanguage:r",
     "onLanguage:dart",
+    "onLanguage:swift",
+    "onLanguage:csharp",
+    "onLanguage:scala",
     "workspaceContains:**/.ocomment.toml"
   ],
   "contributes": {
@@ -127,7 +130,10 @@
             "ruby",
             "zig",
             "r",
-            "dart"
+            "dart",
+            "swift",
+            "csharp",
+            "scala"
           ],
           "description": "Language identifiers the server is attached to.",
           "scope": "window"

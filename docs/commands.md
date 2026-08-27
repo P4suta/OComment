@@ -125,6 +125,9 @@ Policy:
           - zig:        Zig source files and Zig Object Notation data
           - r:          R scripts and the `.Rprofile` an R session sources at start-up
           - dart:       Dart source files, whose block comments nest
+          - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
+          - csharp:     C# source and script files, whose `#` lines are preprocessor directives
+          - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -315,6 +318,9 @@ Policy:
           - zig:        Zig source files and Zig Object Notation data
           - r:          R scripts and the `.Rprofile` an R session sources at start-up
           - dart:       Dart source files, whose block comments nest
+          - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
+          - csharp:     C# source and script files, whose `#` lines are preprocessor directives
+          - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -490,6 +496,9 @@ Policy:
           - zig:        Zig source files and Zig Object Notation data
           - r:          R scripts and the `.Rprofile` an R session sources at start-up
           - dart:       Dart source files, whose block comments nest
+          - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
+          - csharp:     C# source and script files, whose `#` lines are preprocessor directives
+          - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -657,6 +666,9 @@ Policy:
           - zig:        Zig source files and Zig Object Notation data
           - r:          R scripts and the `.Rprofile` an R session sources at start-up
           - dart:       Dart source files, whose block comments nest
+          - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
+          - csharp:     C# source and script files, whose `#` lines are preprocessor directives
+          - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -824,6 +836,9 @@ Policy:
           - zig:        Zig source files and Zig Object Notation data
           - r:          R scripts and the `.Rprofile` an R session sources at start-up
           - dart:       Dart source files, whose block comments nest
+          - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
+          - csharp:     C# source and script files, whose `#` lines are preprocessor directives
+          - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -981,6 +996,9 @@ Policy:
           - zig:        Zig source files and Zig Object Notation data
           - r:          R scripts and the `.Rprofile` an R session sources at start-up
           - dart:       Dart source files, whose block comments nest
+          - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
+          - csharp:     C# source and script files, whose `#` lines are preprocessor directives
+          - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1138,6 +1156,9 @@ Policy:
           - zig:        Zig source files and Zig Object Notation data
           - r:          R scripts and the `.Rprofile` an R session sources at start-up
           - dart:       Dart source files, whose block comments nest
+          - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
+          - csharp:     C# source and script files, whose `#` lines are preprocessor directives
+          - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1311,6 +1332,9 @@ Policy:
           - zig:        Zig source files and Zig Object Notation data
           - r:          R scripts and the `.Rprofile` an R session sources at start-up
           - dart:       Dart source files, whose block comments nest
+          - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
+          - csharp:     C# source and script files, whose `#` lines are preprocessor directives
+          - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1475,6 +1499,9 @@ Policy:
           - zig:        Zig source files and Zig Object Notation data
           - r:          R scripts and the `.Rprofile` an R session sources at start-up
           - dart:       Dart source files, whose block comments nest
+          - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
+          - csharp:     C# source and script files, whose `#` lines are preprocessor directives
+          - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1632,6 +1659,9 @@ Policy:
           - zig:        Zig source files and Zig Object Notation data
           - r:          R scripts and the `.Rprofile` an R session sources at start-up
           - dart:       Dart source files, whose block comments nest
+          - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
+          - csharp:     C# source and script files, whose `#` lines are preprocessor directives
+          - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1798,6 +1828,9 @@ Policy:
           - zig:        Zig source files and Zig Object Notation data
           - r:          R scripts and the `.Rprofile` an R session sources at start-up
           - dart:       Dart source files, whose block comments nest
+          - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
+          - csharp:     C# source and script files, whose `#` lines are preprocessor directives
+          - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1968,6 +2001,9 @@ Policy:
           - zig:        Zig source files and Zig Object Notation data
           - r:          R scripts and the `.Rprofile` an R session sources at start-up
           - dart:       Dart source files, whose block comments nest
+          - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
+          - csharp:     C# source and script files, whose `#` lines are preprocessor directives
+          - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2129,6 +2165,9 @@ Policy:
           - zig:        Zig source files and Zig Object Notation data
           - r:          R scripts and the `.Rprofile` an R session sources at start-up
           - dart:       Dart source files, whose block comments nest
+          - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
+          - csharp:     C# source and script files, whose `#` lines are preprocessor directives
+          - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2286,6 +2325,9 @@ Policy:
           - zig:        Zig source files and Zig Object Notation data
           - r:          R scripts and the `.Rprofile` an R session sources at start-up
           - dart:       Dart source files, whose block comments nest
+          - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
+          - csharp:     C# source and script files, whose `#` lines are preprocessor directives
+          - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2447,6 +2489,9 @@ Policy:
           - zig:        Zig source files and Zig Object Notation data
           - r:          R scripts and the `.Rprofile` an R session sources at start-up
           - dart:       Dart source files, whose block comments nest
+          - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
+          - csharp:     C# source and script files, whose `#` lines are preprocessor directives
+          - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2608,6 +2653,9 @@ Policy:
           - zig:        Zig source files and Zig Object Notation data
           - r:          R scripts and the `.Rprofile` an R session sources at start-up
           - dart:       Dart source files, whose block comments nest
+          - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
+          - csharp:     C# source and script files, whose `#` lines are preprocessor directives
+          - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2769,6 +2817,9 @@ Policy:
           - zig:        Zig source files and Zig Object Notation data
           - r:          R scripts and the `.Rprofile` an R session sources at start-up
           - dart:       Dart source files, whose block comments nest
+          - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
+          - csharp:     C# source and script files, whose `#` lines are preprocessor directives
+          - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2932,6 +2983,9 @@ Policy:
           - zig:        Zig source files and Zig Object Notation data
           - r:          R scripts and the `.Rprofile` an R session sources at start-up
           - dart:       Dart source files, whose block comments nest
+          - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
+          - csharp:     C# source and script files, whose `#` lines are preprocessor directives
+          - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -3089,6 +3143,9 @@ Policy:
           - zig:        Zig source files and Zig Object Notation data
           - r:          R scripts and the `.Rprofile` an R session sources at start-up
           - dart:       Dart source files, whose block comments nest
+          - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
+          - csharp:     C# source and script files, whose `#` lines are preprocessor directives
+          - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -3246,6 +3303,9 @@ Policy:
           - zig:        Zig source files and Zig Object Notation data
           - r:          R scripts and the `.Rprofile` an R session sources at start-up
           - dart:       Dart source files, whose block comments nest
+          - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
+          - csharp:     C# source and script files, whose `#` lines are preprocessor directives
+          - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
 
       --dialect <DIALECT>
           Force this dialect of the selected language

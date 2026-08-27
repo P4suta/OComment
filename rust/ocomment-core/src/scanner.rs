@@ -298,6 +298,9 @@ impl<'a> Scanner<'a> {
             Language::Zig => self.scan_zig(),
             Language::R => self.scan_r(),
             Language::Dart => self.scan_dart(),
+            Language::Swift => self.scan_swift(),
+            Language::CSharp => self.scan_csharp(),
+            Language::Scala => self.scan_scala(),
             Language::Unknown => self.error(
                 "unknown-language",
                 "a language is required",
@@ -359,6 +362,8 @@ impl<'a> Scanner<'a> {
     fn checkpoint_is_restartable(&self, local: usize) -> bool {
         local <= self.restart_rules.first_block_scalar
             && (self.offset > 0 || self.restart_rules.permit_restart_at(self.source, local))
+            && (self.restart_rules.language != Language::Scala
+                || the_scala_xml_boundary_permits_a_restart(self.source, local))
     }
 
     /// Offer `local` as a restart point, if it may stand as one.
@@ -1043,7 +1048,13 @@ impl<'a> Scanner<'a> {
                 } else if triple {
                     self.scan_python_delimited(index, quote_start, true)
                 } else {
-                    self.quoted_or_error(quote_start, false, "Python string")
+                    /* NOTE: `index` rather than `quote_start`: a prefix and the
+                     * quote after it are one token (Python reference 2.4.1), so
+                     * an unterminated `r"` inside a replacement field is
+                     * reported from the `r`, the way the delimited reader
+                     * reports every other string and the OCaml reference
+                     * reports this one. */
+                    self.scan_python_delimited(index, quote_start, false)
                 };
                 continue;
             }
@@ -2656,6 +2667,1258 @@ impl<'a> Scanner<'a> {
         index
     }
 
+    /// One Swift source file (The Swift Programming Language, Lexical
+    /// Structure: Comments, String Literals, Regular Expression Literals).
+    ///
+    /// Swift is a C-family syntax with four departures that decide the shape of
+    /// this scanner rather than of [`Self::scan_c_family`]:
+    ///
+    /// * its block comment *nests*, so `/* /* */ */` is one comment;
+    /// * `//!` and `/*!` document nothing — Swift's markers are `///` and
+    ///   `/**` — while `////` still documents ([`swift_line_kind`]) and the
+    ///   empty `/**/` does not ([`swift_block_kind`]);
+    /// * `'` is not a delimiter at all, so an apostrophe hides nothing; and
+    /// * a `/` may open a regular expression literal, which is the one
+    ///   construct here that can carry a `//` without a quote in front of it.
+    ///
+    /// A string is the other construct that hides a comment opener, and Swift
+    /// writes it four ways: single-line or multi-line, each raw or not, where
+    /// raw is a run of `#` in front of the quote that also has to come back
+    /// behind it ([`Self::scan_swift_string`]).
+    ///
+    /// The start of a line is a restart point only when the scan reaches it
+    /// here, at the top level: a multi-line string, a nested block comment, an
+    /// extended regular expression literal and an interpolation with a comment
+    /// inside it all carry a line break.
+    ///
+    /// Ground truth for every rule below is the SwiftSyntax parser the Swift
+    /// 6.3.3 toolchain ships (`SwiftParser.Parser.parse`, read for token kinds
+    /// and the `lineComment`/`blockComment`/`docLineComment`/`docBlockComment`
+    /// trivia and their UTF-8 offsets), with `swift-frontend -dump-parse
+    /// -swift-version 6` for what the compiler makes of the same bytes.
+    ///
+    /// Measured against that parser over the 3,962 Swift files of swift-syntax,
+    /// swift-format, swift-nio, swift-algorithms, swift-collections,
+    /// swift-experimental-string-processing, swift-protobuf,
+    /// swift-composable-architecture and the toolchain's own module interfaces:
+    /// all 207,959 comments it reports come back here with the same byte span
+    /// and the same kind, and no file is called invalid.
+    fn scan_swift(&mut self) {
+        let bytes = self.source;
+        let mut index = 0;
+        while index < bytes.len() && !self.stopped {
+            /* NOTE: SwiftSyntax reports a `shebang` token only at offset 0; the
+             * same `#!` on line 2 comes back as `pound`, `exclamationMark` and
+             * two operators. `#` elsewhere opens a compiler directive, a raw
+             * string, or an extended regular expression literal, and the last
+             * two are the ones that hide anything. */
+            if index == 0 && self.offset == 0 && starts(bytes, index, b"#!") {
+                let end = line_end(bytes, index + 2);
+                self.add_comment(index, end, CommentKind::Line);
+                index = end;
+                continue;
+            }
+            if let Some(end) = self.scan_swift_lexeme(index, 0) {
+                index = end;
+                continue;
+            }
+            if matches!(bytes[index], b'\r' | b'\n') {
+                index = consume_newline(bytes, index);
+                self.add_safe_checkpoint(index);
+            } else {
+                index += 1;
+            }
+        }
+    }
+
+    /// One Swift comment, string, or regular expression literal beginning at
+    /// `index`, or `None` when the byte there opens none of them.
+    ///
+    /// This is the whole of Swift's lexical surface that a comment can hide
+    /// behind or be, which is why the top level and the inside of an
+    /// interpolation ask one function for it: an interpolation is code, and a
+    /// comment written there is a comment exactly as it is outside one.
+    fn scan_swift_lexeme(&mut self, index: usize, depth: usize) -> Option<usize> {
+        let bytes = self.source;
+        if starts(bytes, index, b"//") {
+            let end = line_end(bytes, index + 2);
+            self.add_comment(index, end, swift_line_kind(bytes, index));
+            return Some(end);
+        }
+        if starts(bytes, index, b"/*") {
+            let (end, closed) = block_end(bytes, index, b"/*", b"*/", true);
+            self.add_comment(index, end, swift_block_kind(bytes, index));
+            if !closed {
+                self.error(
+                    "unterminated-comment",
+                    "unterminated Swift block comment",
+                    ByteSpan::new(index, end),
+                );
+            }
+            return Some(end);
+        }
+        if bytes[index] == b'/' {
+            let mut reach = Reach::default();
+            let regex = swift_bare_regex(bytes, index, &mut reach);
+            self.consult(reach);
+            return regex;
+        }
+        if bytes[index] == b'#' {
+            let mut reach = Reach::default();
+            let hashes = swift_hash_run(bytes, index, &mut reach);
+            self.consult(reach);
+            let opener = index + hashes;
+            if bytes.get(opener) == Some(&b'/') {
+                return Some(self.scan_swift_extended_regex(index, hashes));
+            }
+            if bytes.get(opener) == Some(&b'"') {
+                return Some(self.scan_swift_string(index, hashes, depth));
+            }
+            /* NOTE: the run opens neither, and the whole of it is taken rather
+             * than one byte of it: a shorter run inside this one ends at the
+             * same byte, so if that byte is neither a quote nor a slash then no
+             * suffix of the run opens a literal either. Taking it whole also
+             * keeps a line of `#` from being re-read once per byte. */
+            return Some(opener);
+        }
+        /* NOTE: `'` is no delimiter in the language — the Swift book's Lexical
+         * Structure has no single-quoted literal and no character literal at
+         * all — but it is one in the compiler, which lexes `'...'` as a
+         * `singleQuote` string so that it can offer the fix-it that turns it
+         * into a `"..."` one (`Lexer.Cursor.lexStringQuote`). A file holding
+         * one is rejected by `swiftc` either way, and following the lexer
+         * rather than the grammar is what keeps a `//` inside such a literal
+         * from being read as a comment and removed out of a file that is
+         * already broken. No `'` can stand in Swift code outside a string, a
+         * comment or a regular expression literal, all three of which are
+         * settled above, so this costs a valid file nothing. */
+        if matches!(bytes[index], b'"' | b'\'') {
+            return Some(self.scan_swift_string(index, 0, depth));
+        }
+        None
+    }
+
+    /// One Swift string literal, beginning at the first `#` of a raw one and at
+    /// the quote of any other.
+    ///
+    /// The four forms are one rule with two switches. `multiline` is three
+    /// quotes, which makes a line break content instead of the end of the
+    /// literal; `hashes` is the run of `#` in front of the quote, which is what
+    /// makes a string raw. A raw string does not take away the escape and the
+    /// interpolation — it *renames* them: with `n` hashes the escape is `\` and
+    /// `n` hashes, so `\#n` is a newline and `\#(` opens an interpolation in a
+    /// `#"..."#` literal while a bare `\(` is two characters of content. The
+    /// closing delimiter is renamed with it, and needs the same `n` hashes
+    /// behind the quote, which is what lets a raw string carry a quote.
+    ///
+    /// A `\` in an ordinary string carries the next byte in — that is what
+    /// hides a `\"` — but it does not carry a line terminator, so `"x\` and a
+    /// line break is an unterminated string rather than a continuation.
+    fn scan_swift_string(&mut self, start: usize, hashes: usize, depth: usize) -> usize {
+        if depth > 256 {
+            self.error(
+                "nesting-limit",
+                "Swift string interpolation nesting limit exceeded",
+                ByteSpan::new(start, start),
+            );
+            return self.source.len();
+        }
+        let bytes = self.source;
+        let quote = start + hashes;
+        let delimiter = bytes[quote];
+        let multiline = delimiter == b'"' && swift_multiline_string(bytes, quote, hashes);
+        let width = if multiline { 3 } else { 1 };
+        let mut index = quote + width;
+        while index < bytes.len() {
+            if let Some(end) = swift_string_close(bytes, index, delimiter, multiline, hashes) {
+                return end;
+            }
+            if bytes[index] == b'\\' && swift_hashes_at(bytes, index + 1, hashes) {
+                let escaped = index + 1 + hashes;
+                if bytes.get(escaped) == Some(&b'(') {
+                    index = self.scan_swift_interpolation(escaped + 1, depth + 1);
+                    continue;
+                }
+                if !matches!(bytes.get(escaped), None | Some(b'\r' | b'\n')) {
+                    index = escaped + 1;
+                    continue;
+                }
+            }
+            if !multiline && matches!(bytes[index], b'\r' | b'\n') {
+                self.error(
+                    "unterminated-string",
+                    swift_unterminated_string(delimiter, hashes > 0, multiline),
+                    ByteSpan::new(start, index),
+                );
+                return index;
+            }
+            index += 1;
+        }
+        self.error(
+            "unterminated-string",
+            swift_unterminated_string(delimiter, hashes > 0, multiline),
+            ByteSpan::new(start, index),
+        );
+        index
+    }
+
+    /// One `\( ... )` interpolation, beginning past its opening parenthesis.
+    ///
+    /// The parentheses of the expression are counted rather than searched for,
+    /// because the expression is code: a nested string, a tuple, a call, and a
+    /// comment may all stand inside one. SwiftSyntax reports a comment written
+    /// there as `lineComment` or `blockComment` trivia exactly as it does
+    /// outside a string, and a `//` one runs to the end of its line while the
+    /// multi-line string it sits inside carries on below.
+    fn scan_swift_interpolation(&mut self, mut index: usize, depth: usize) -> usize {
+        if depth > 256 {
+            self.error(
+                "nesting-limit",
+                "Swift string interpolation nesting limit exceeded",
+                ByteSpan::new(index, index),
+            );
+            return self.source.len();
+        }
+        let bytes = self.source;
+        let mut parentheses = 1usize;
+        while index < bytes.len() {
+            if let Some(end) = self.scan_swift_lexeme(index, depth) {
+                index = end;
+                continue;
+            }
+            match bytes[index] {
+                b'(' => {
+                    parentheses += 1;
+                    index += 1;
+                }
+                b')' => {
+                    parentheses -= 1;
+                    index += 1;
+                    if parentheses == 0 {
+                        return index;
+                    }
+                }
+                _ => index += 1,
+            }
+        }
+        self.error(
+            "unterminated-interpolation",
+            "unterminated Swift string interpolation",
+            ByteSpan::new(index, index),
+        );
+        index
+    }
+
+    /// One extended regular expression literal `#/ ... /#`, beginning at its
+    /// first `#`.
+    ///
+    /// This is the form that may carry an unescaped `/`, which is exactly why
+    /// it exists: `#/https://x/#` is a regular expression with a `//` in the
+    /// middle of it, and a scanner that read that `//` as a comment would
+    /// delete the rest of the line. The closing delimiter is a `/` and at least
+    /// the run of `#` the opener carried — extra ones are taken with it — so a
+    /// `/#` inside a `##/ ... /##` literal is content, and a `\` carries the
+    /// byte behind it in: `#/a\/#b/#` closes at the *second* `/#`.
+    ///
+    /// It is also the only form that may span lines, and only when it opens
+    /// one: SwiftSyntax's `RegexLiteralLexer` enters multi-line mode when the
+    /// opener is followed by blanks and then a line terminator, and in every
+    /// other case a line terminator inside the pattern ends the literal
+    /// unterminated. A multi-line literal that never closes gives its lines
+    /// back rather than swallowing the file — the lexer resumes at the first
+    /// newline, "so we don't want to skip over what is likely otherwise valid
+    /// Swift code" — and that is the one read here the scan rewinds behind, so
+    /// it is the one this reports.
+    fn scan_swift_extended_regex(&mut self, start: usize, hashes: usize) -> usize {
+        let bytes = self.source;
+        let mut reach = Reach::default();
+        let opener = start + hashes + 1;
+        let mut probe = opener;
+        while matches!(bytes.get(probe), Some(b' ' | b'\t')) {
+            probe += 1;
+        }
+        reach.byte(probe);
+        let multiline = bytes
+            .get(probe)
+            .is_some_and(|byte| is_line_terminator(*byte));
+        let mut index = if multiline { probe } else { opener };
+        while index < bytes.len() {
+            if !multiline && is_line_terminator(bytes[index]) {
+                break;
+            }
+            if bytes[index] == b'\\' {
+                /* NOTE: `lexPatternCharacter` reads the escaped byte through the
+                 * same switch as an unescaped one, and its line-terminator arm
+                 * does not ask whether an escape carried it there, so a `\`
+                 * before a line break ends a single-line literal rather than
+                 * joining the line under it on. */
+                let escaped = index + 1;
+                if !multiline
+                    && bytes
+                        .get(escaped)
+                        .is_some_and(|byte| is_line_terminator(*byte))
+                {
+                    index = escaped;
+                    break;
+                }
+                index = (escaped + 1).min(bytes.len());
+                continue;
+            }
+            if bytes[index] == b'/' && swift_hashes_at(bytes, index + 1, hashes) {
+                let mut end = index + 1;
+                while bytes.get(end) == Some(&b'#') {
+                    end += 1;
+                }
+                /* NOTE: the run of `#` is taken whole — `tryEatEnding` consumes
+                 * every one of them — so the byte that ended it is read one past
+                 * where the scan resumes, and an append at the end of the
+                 * document is exactly the edit that would put another `#` there. */
+                reach.byte(end);
+                self.consult(reach);
+                return end;
+            }
+            index += 1;
+        }
+        let end = if multiline {
+            /* NOTE: the search crossed every line under the opener and the scan
+             * takes them back, so an append at the end of the document — which
+             * could close this literal — has to withdraw the checkpoint it
+             * would otherwise reuse the whole prefix from. */
+            reach.end_of(bytes);
+            probe
+        } else {
+            reach.byte(index);
+            index
+        };
+        self.consult(reach);
+        self.error(
+            "unterminated-regex",
+            "unterminated Swift extended regular expression literal",
+            ByteSpan::new(start, end),
+        );
+        end
+    }
+
+    /// One C# source file (ECMA-334 6.3 Lexical analysis: comments, literals;
+    /// 6.5 Pre-processing directives).
+    ///
+    /// C# is a C-family syntax with three departures that decide the shape of
+    /// this scanner rather than of [`Self::scan_c_family`]:
+    ///
+    /// * a line whose first non-blank byte is `#` is a *pre-processing
+    ///   directive*, and the rest of it is not ordinary code:
+    ///   ([`Self::scan_csharp_directive`]);
+    /// * a string is written eight ways — plain, verbatim, raw, and each of
+    ///   those interpolated — and only the plain one takes a `\` escape
+    ///   ([`Self::scan_csharp_string`]); and
+    /// * an interpolation hole is code, so a comment written in one is a
+    ///   comment ([`Self::scan_csharp_hole`]), while the format clause behind
+    ///   its `:` is text again.
+    ///
+    /// The start of a line is a restart point only when the scan reaches it
+    /// here, at the top level: a verbatim string, a multi-line raw string, a
+    /// block comment and an interpolation hole all carry a line break.
+    ///
+    /// NOTE: a conditional section is scanned as ordinary code rather than
+    /// skipped. Roslyn reports the body of an `#if` whose symbol is undefined
+    /// as one `DisabledTextTrivia` blob and finds no comment in it, but which
+    /// symbols a build defines is not in the file, and a comment inside `#if
+    /// DEBUG` is a comment in every build that defines it. C and C++ read `#if
+    /// 0` the same way here for the same reason.
+    ///
+    /// Ground truth for every rule below is the Roslyn lexer the .NET SDK
+    /// 10.0.400 ships (`CSharpSyntaxTree.ParseText` with
+    /// `LanguageVersion.Preview`, read for the comment, disabled-text and
+    /// pre-processing-message trivia and their UTF-8 offsets, and for the token
+    /// each literal was lexed as).
+    ///
+    /// Measured against that lexer over the 70,630 C# files of dotnet/runtime,
+    /// dotnet/roslyn, dotnet/aspnetcore, dotnet/efcore, Newtonsoft.Json,
+    /// Serilog and ImageSharp: all 1,946,012 comments it reports come back here
+    /// with the same byte span and the same kind. Four of those files are
+    /// called invalid — two are not C# at all, and two are the conditional
+    /// section a `'` in prose costs, which
+    /// `spec/fixtures/v1/hazards.json` records as
+    /// `csharp-conditional-section-limitation`. 23,510 of the files were
+    /// stripped of every comment and handed back to Roslyn, and all 650,360
+    /// removals left a file that still parses with no error.
+    fn scan_csharp(&mut self) {
+        let bytes = self.source;
+        /* NOTE: a byte order mark is consumed before the first line is read, so
+         * the `#` behind one is still the first non-blank byte of its line and
+         * still opens a directive — Roslyn reports the comment at the end of
+         * `<BOM>#pragma warning disable 1591 // c` and this has to as well.
+         * Only a full scan skips it: a suffix that happens to open with those
+         * three bytes carries no mark, and the full scan of that document read
+         * them as three ordinary bytes too. */
+        let mut index = if self.offset == 0 {
+            byte_order_mark_width(bytes)
+        } else {
+            0
+        };
+        /* NOTE: whether every byte of this line so far is blank, which is what
+         * makes a `#` a directive rather than the bad token Roslyn reports at
+         * CS1040. It is carried rather than searched for backwards because a
+         * line of `#` would otherwise cost one scan of the line per byte, and
+         * a restart begins at a line start, where `true` is the answer. */
+        let mut blank_line = true;
+        while index < bytes.len() && !self.stopped {
+            /* NOTE: Roslyn reports a `ShebangDirectiveTrivia` for a `#!` at any
+             * directive position and then raises CS9378 unless it stands at the
+             * very first byte, which is also the only place `dotnet-script`
+             * reads one. Only that first byte is the preamble here; the same
+             * bytes lower down are a directive line whose message is opaque. */
+            if index == 0 && self.offset == 0 && starts(bytes, index, b"#!") {
+                let end = csharp_line_end(bytes, index + 2);
+                self.add_comment(index, end, CommentKind::Line);
+                index = end;
+                blank_line = false;
+                continue;
+            }
+            if bytes[index] == b'#' {
+                index = self.scan_csharp_directive(index, blank_line);
+                blank_line = false;
+                continue;
+            }
+            if let Some(end) = self.scan_csharp_lexeme(index, 0) {
+                index = end;
+                blank_line = false;
+                continue;
+            }
+            if matches!(bytes[index], b'\r' | b'\n') {
+                index = consume_newline(bytes, index);
+                self.add_safe_checkpoint(index);
+                blank_line = true;
+                continue;
+            }
+            /* NOTE: a restart is offered after a `\r` or a `\n` alone, though
+             * three more characters end a line to this lexer. The incremental
+             * engine's line rules — the CRLF pair, the preamble window — are
+             * written in those two bytes, and a checkpoint after a U+2028 would
+             * be a line start only one of the two agreed on. Refusing it costs
+             * a rescan the chance to begin there and nothing else. */
+            if let Some(width) = csharp_unicode_line_terminator_width(bytes, index) {
+                index += width;
+                blank_line = true;
+                continue;
+            }
+            blank_line = blank_line && is_csharp_blank(bytes[index]);
+            index += 1;
+        }
+    }
+
+    /// One C# comment, string, or character literal beginning at `index`, or
+    /// `None` when the byte there opens none of them.
+    ///
+    /// This is the whole of C#'s lexical surface that a comment can hide behind
+    /// or be, which is why the top level and the inside of an interpolation
+    /// hole ask one function for it: a hole is code, and a comment written
+    /// there is a comment exactly as it is outside one.
+    fn scan_csharp_lexeme(&mut self, index: usize, depth: usize) -> Option<usize> {
+        let bytes = self.source;
+        if starts(bytes, index, b"//") {
+            let end = csharp_line_end(bytes, index + 2);
+            self.add_comment(index, end, csharp_line_kind(bytes, index));
+            return Some(end);
+        }
+        if starts(bytes, index, b"/*") {
+            /* NOTE: ECMA-334 6.3.3: `/*` has no special meaning inside a
+             * delimited comment, so the first `*/` closes it however many
+             * openers stand in front. */
+            let (end, closed) = block_end(bytes, index, b"/*", b"*/", false);
+            self.add_comment(index, end, csharp_block_kind(bytes, index));
+            if !closed {
+                self.error(
+                    "unterminated-comment",
+                    "unterminated C# block comment",
+                    ByteSpan::new(index, end),
+                );
+            }
+            return Some(end);
+        }
+        if bytes[index] == b'\'' {
+            return Some(self.scan_csharp_character(index));
+        }
+        if !matches!(bytes[index], b'"' | b'@' | b'$') {
+            return None;
+        }
+        let mut reach = Reach::default();
+        let prefix = csharp_literal_prefix(bytes, index, &mut reach);
+        self.consult(reach);
+        match prefix {
+            Some(prefix) => Some(self.scan_csharp_string(prefix, depth)),
+            /* NOTE: a run of `$` and `@` that no quote follows opens no literal,
+             * and the whole of it is taken rather than one byte of it: a shorter
+             * run inside this one ends at the same byte, so if that byte is no
+             * quote then no suffix of the run opens a string either. `@x` is the
+             * verbatim identifier of ECMA-334 6.4.3 and `$` outside a literal is
+             * no C# token at all. */
+            None => Some(csharp_prefix_end(bytes, index)),
+        }
+    }
+
+    /// One `'x'` character literal, beginning at its opening quote.
+    ///
+    /// A `\` carries the byte behind it in — that is what hides a `'\''`, and
+    /// Roslyn 10.0.400 lexes `'\` and a line feed and a `'` as one
+    /// `CharacterLiteralToken` spanning the break — while an unescaped line
+    /// terminator ends the literal unterminated, which it reports as CS1010,
+    /// `Newline in constant`.
+    fn scan_csharp_character(&mut self, start: usize) -> usize {
+        let bytes = self.source;
+        let mut index = start + 1;
+        while index < bytes.len() {
+            if bytes[index] == b'\\' {
+                index = (index + 2).min(bytes.len());
+                continue;
+            }
+            if bytes[index] == b'\'' {
+                return index + 1;
+            }
+            if csharp_line_terminator_width(bytes, index).is_some() {
+                self.error(
+                    "unterminated-string",
+                    "unterminated C# character literal",
+                    ByteSpan::new(start, index),
+                );
+                return index;
+            }
+            index += 1;
+        }
+        self.error(
+            "unterminated-string",
+            "unterminated C# character literal",
+            ByteSpan::new(start, index),
+        );
+        index
+    }
+
+    /// One pre-processing directive line, beginning at its `#`.
+    ///
+    /// ECMA-334 6.5.1 ends every directive with
+    /// `PP_New_Line : PP_Whitespace? SINGLE_LINE_COMMENT? New_Line`, so a `//`
+    /// is the one comment a directive line can carry: `/*` opens nothing there
+    /// and neither does `'`. A `"` still opens a string — that is the file name
+    /// of `#line` and the three arguments of `#pragma checksum` — and it takes
+    /// no `\` escape and ends at the line either way, which is what keeps the
+    /// `//` inside `#line 1 "a//b.cs"` out of reach.
+    ///
+    /// Four directives take the rest of their line as a message instead:
+    /// `#error` and `#warning` carry the text a diagnostic quotes, and
+    /// `#region` and `#endregion` the label an editor folds under. Roslyn lexes
+    /// a `//` there as a comment only when it opens the message, so
+    /// `#region // x` carries a comment and `#region x // y` does not.
+    ///
+    /// `line_initial` is false for a `#` that some other byte on its line came
+    /// before. Roslyn raises CS1040 for that one and makes the whole rest of
+    /// the line a single bad token, with no comment in it, so nothing is
+    /// reported here either.
+    fn scan_csharp_directive(&mut self, index: usize, line_initial: bool) -> usize {
+        let bytes = self.source;
+        let end = csharp_line_end(bytes, index);
+        if !line_initial {
+            return end;
+        }
+        /* NOTE: `#` and its keyword may stand apart — `PP_Kind` opens with
+         * `PP_Whitespace?` — so `#  region` is the directive `#region`. */
+        let mut cursor = index + 1;
+        while cursor < end && is_csharp_blank(bytes[cursor]) {
+            cursor += 1;
+        }
+        let name = cursor;
+        while cursor < end && bytes[cursor].is_ascii_alphabetic() {
+            cursor += 1;
+        }
+        if csharp_directive_takes_a_message(&bytes[name..cursor]) {
+            while cursor < end && is_csharp_blank(bytes[cursor]) {
+                cursor += 1;
+            }
+            if starts(bytes, cursor, b"//") {
+                /* NOTE: the directive lexer has no documentation trivia, so a
+                 * `///` on this line is the ordinary line comment Roslyn reports
+                 * it as. */
+                self.add_comment(cursor, end, CommentKind::Line);
+            }
+            return end;
+        }
+        /* NOTE: every other directive is lexed as tokens, so the line is walked
+         * for the two that matter. A `//` cannot straddle the end of the line:
+         * what ends one is never a `/`. */
+        let mut token = index + 1;
+        while token < end {
+            if starts(bytes, token, b"//") {
+                self.add_comment(token, end, CommentKind::Line);
+                return end;
+            }
+            if bytes[token] == b'"' {
+                token += 1;
+                while token < end && bytes[token] != b'"' {
+                    token += 1;
+                }
+                /* NOTE: Roslyn's `ScanStringLiteral` takes an `inDirective`
+                 * flag that turns the `\` escape off, so `"a\"` closes at its
+                 * second quote and the `b` behind it is a token of its own.
+                 * A string left open ends at the line, with CS1010. */
+                token = (token + 1).min(end);
+                continue;
+            }
+            token += 1;
+        }
+        end
+    }
+
+    /// One C# string literal, beginning at the first byte of its `$` and `@`
+    /// prefix and at the quote of a plain one.
+    ///
+    /// The eight forms are three rules and one switch. A *plain* string takes
+    /// the `\` escape and ends at its line; a *verbatim* one spells its quote
+    /// `""`, takes no escape, and carries line breaks; a *raw* one is opaque
+    /// until a run of at least as many quotes as its opener carried comes back,
+    /// and carries line breaks only when its opener ends a line. The switch is
+    /// the `$` run: with none the braces are content, with `n` of them a run of
+    /// `n` braces opens a hole.
+    ///
+    /// A plain interpolated string is the one form whose *text* stops at a line
+    /// terminator while its *holes* do not: C# 11 let an expression inside one
+    /// span lines, which is why a `//` comment written in a hole runs to the
+    /// end of its line and the string carries on below.
+    fn scan_csharp_string(&mut self, prefix: CsharpPrefix, depth: usize) -> usize {
+        if depth > 256 {
+            self.error(
+                "nesting-limit",
+                "C# string interpolation nesting limit exceeded",
+                ByteSpan::new(prefix.start, prefix.start),
+            );
+            return self.source.len();
+        }
+        match prefix.form {
+            CsharpStringForm::Raw => self.scan_csharp_raw_string(prefix, depth),
+            CsharpStringForm::Verbatim => self.scan_csharp_verbatim_string(prefix, depth),
+            CsharpStringForm::Plain => self.scan_csharp_plain_string(prefix, depth),
+        }
+    }
+
+    /// One plain `"..."` string, interpolated when a `$` stands in front of it.
+    fn scan_csharp_plain_string(&mut self, prefix: CsharpPrefix, depth: usize) -> usize {
+        let bytes = self.source;
+        let mut index = prefix.quote + 1;
+        while index < bytes.len() {
+            match bytes[index] {
+                /* NOTE: a `\` carries the byte behind it in whatever it is, a
+                 * line terminator included: `ScanEscapeSequence` takes one
+                 * character and raises CS1009 when it spells no escape, so
+                 * `"p\` and a line feed is a string that carries on below and
+                 * not one left open. A CRLF pair still ends it — only the `\r`
+                 * is carried — which is why this counts bytes rather than
+                 * characters. */
+                b'\\' => index = (index + 2).min(bytes.len()),
+                b'"' => return index + 1,
+                b'{' if prefix.dollars > 0 => {
+                    if bytes.get(index + 1) == Some(&b'{') {
+                        index += 2;
+                        continue;
+                    }
+                    index = self.scan_csharp_hole(index + 1, prefix.dollars, depth + 1);
+                }
+                b'}' if prefix.dollars > 0 && bytes.get(index + 1) == Some(&b'}') => index += 2,
+                _ if csharp_line_terminator_width(bytes, index).is_some() => {
+                    self.error(
+                        "unterminated-string",
+                        csharp_unterminated_string(prefix.form, prefix.dollars > 0),
+                        ByteSpan::new(prefix.start, index),
+                    );
+                    return index;
+                }
+                _ => index += 1,
+            }
+        }
+        self.error(
+            "unterminated-string",
+            csharp_unterminated_string(prefix.form, prefix.dollars > 0),
+            ByteSpan::new(prefix.start, index),
+        );
+        index
+    }
+
+    /// One verbatim `@"..."` string, interpolated when a `$` stands with it.
+    ///
+    /// `""` is how such a literal spells a quote, so the closing delimiter is
+    /// the first quote no second quote follows, and a `\` is content.
+    fn scan_csharp_verbatim_string(&mut self, prefix: CsharpPrefix, depth: usize) -> usize {
+        let bytes = self.source;
+        let mut index = prefix.quote + 1;
+        while index < bytes.len() {
+            match bytes[index] {
+                b'"' if bytes.get(index + 1) == Some(&b'"') => index += 2,
+                b'"' => return index + 1,
+                b'{' if prefix.dollars > 0 => {
+                    if bytes.get(index + 1) == Some(&b'{') {
+                        index += 2;
+                        continue;
+                    }
+                    index = self.scan_csharp_hole(index + 1, prefix.dollars, depth + 1);
+                }
+                b'}' if prefix.dollars > 0 && bytes.get(index + 1) == Some(&b'}') => index += 2,
+                _ => index += 1,
+            }
+        }
+        self.error(
+            "unterminated-string",
+            csharp_unterminated_string(prefix.form, prefix.dollars > 0),
+            ByteSpan::new(prefix.start, index),
+        );
+        index
+    }
+
+    /// One raw `"""..."""` string, interpolated when a `$` run stands with it.
+    ///
+    /// The closing delimiter is the first run of at least as many quotes as the
+    /// opener carried, and the whole run is taken: Roslyn ends
+    /// `"""abc""""` at its fourth closing quote and raises CS8998 rather than
+    /// leaving one behind. A run shorter than the opener's is content, which is
+    /// what lets a raw string carry `"""`.
+    ///
+    /// The opener decides whether line breaks are content: when only blanks
+    /// stand between it and the end of its line the literal is the multi-line
+    /// form, and otherwise a line terminator ends it unterminated with CS8997.
+    /// Roslyn ends a multi-line one at the first run all the same, raising
+    /// CS9000 when that run does not stand on a line of its own, so the search
+    /// here is the same one either way.
+    fn scan_csharp_raw_string(&mut self, prefix: CsharpPrefix, depth: usize) -> usize {
+        let bytes = self.source;
+        let multiline = csharp_multiline_raw_string(bytes, prefix.quote + prefix.quotes);
+        let mut index = prefix.quote + prefix.quotes;
+        while index < bytes.len() {
+            match bytes[index] {
+                b'"' => {
+                    let mut end = index;
+                    while bytes.get(end) == Some(&b'"') {
+                        end += 1;
+                    }
+                    if end - index >= prefix.quotes {
+                        /* NOTE: the run is taken whole, so the byte that ended
+                         * it is read one past where the scan resumes — and an
+                         * append at the end of the document is exactly the edit
+                         * that would put another quote there. */
+                        let mut reach = Reach::default();
+                        reach.byte(end);
+                        self.consult(reach);
+                        return end;
+                    }
+                    index = end;
+                }
+                b'{' if prefix.dollars > 0 => {
+                    let mut run = index;
+                    while bytes.get(run) == Some(&b'{') {
+                        run += 1;
+                    }
+                    if run - index < prefix.dollars {
+                        index = run;
+                        continue;
+                    }
+                    /* NOTE: a run longer than the `$` run spends its first
+                     * braces as content and its last `dollars` on the hole,
+                     * which is how `$"""{{x}}"""` writes a literal `{` in front
+                     * of one — Roslyn reports the first brace as
+                     * `InterpolatedStringTextToken` and the second as
+                     * `OpenBraceToken`. */
+                    index = self.scan_csharp_hole(run, prefix.dollars, depth + 1);
+                }
+                _ if !multiline && csharp_line_terminator_width(bytes, index).is_some() => {
+                    self.error(
+                        "unterminated-string",
+                        csharp_unterminated_string(prefix.form, prefix.dollars > 0),
+                        ByteSpan::new(prefix.start, index),
+                    );
+                    return index;
+                }
+                _ => index += 1,
+            }
+        }
+        self.error(
+            "unterminated-string",
+            csharp_unterminated_string(prefix.form, prefix.dollars > 0),
+            ByteSpan::new(prefix.start, index),
+        );
+        index
+    }
+
+    /// One interpolation hole, beginning past the `braces` opening braces.
+    ///
+    /// The brackets of the expression are counted rather than searched for,
+    /// because the expression is code: a nested string, a collection
+    /// expression, a lambda, and a comment may all stand inside one. Roslyn
+    /// reports a comment written there as `SingleLineCommentTrivia` or
+    /// `MultiLineCommentTrivia` exactly as it does outside a string.
+    ///
+    /// A `:` where no bracket is open ends the expression and opens the format
+    /// clause, which is text to the end of the hole: `$"{x:D4 // n}"` holds no
+    /// comment. That is Roslyn's rule down to the case that surprises a reader,
+    /// `$"{global::X}"`, whose first `:` opens a format clause of its own.
+    fn scan_csharp_hole(&mut self, mut index: usize, braces: usize, depth: usize) -> usize {
+        if depth > 256 {
+            self.error(
+                "nesting-limit",
+                "C# string interpolation nesting limit exceeded",
+                ByteSpan::new(index, index),
+            );
+            return self.source.len();
+        }
+        let bytes = self.source;
+        let mut open = 0usize;
+        while index < bytes.len() {
+            if let Some(end) = self.scan_csharp_lexeme(index, depth) {
+                index = end;
+                continue;
+            }
+            match bytes[index] {
+                b'(' | b'[' | b'{' => {
+                    open += 1;
+                    index += 1;
+                }
+                b')' | b']' => {
+                    open = open.saturating_sub(1);
+                    index += 1;
+                }
+                b'}' => {
+                    if open > 0 {
+                        open -= 1;
+                        index += 1;
+                        continue;
+                    }
+                    let (next, closed) = csharp_hole_close(bytes, index, braces);
+                    if closed {
+                        return next;
+                    }
+                    index = next;
+                }
+                b':' if open == 0 => return self.scan_csharp_format(index, braces),
+                _ => index += 1,
+            }
+        }
+        self.error(
+            "unterminated-interpolation",
+            "unterminated C# string interpolation",
+            ByteSpan::new(index, index),
+        );
+        index
+    }
+
+    /// The format clause of an interpolation hole, beginning at its `:`.
+    ///
+    /// Everything to the closing braces of the hole is text — Roslyn lexes it
+    /// as one `InterpolatedStringTextToken` — so no comment is reported here
+    /// and no nested literal is lexed.
+    fn scan_csharp_format(&mut self, mut index: usize, braces: usize) -> usize {
+        let bytes = self.source;
+        while index < bytes.len() {
+            if bytes[index] == b'}' {
+                let (next, closed) = csharp_hole_close(bytes, index, braces);
+                if closed {
+                    return next;
+                }
+                index = next;
+                continue;
+            }
+            index += 1;
+        }
+        self.error(
+            "unterminated-interpolation",
+            "unterminated C# string interpolation",
+            ByteSpan::new(index, index),
+        );
+        index
+    }
+
+    fn scan_scala(&mut self) {
+        let bytes = self.source;
+        let mut index = if self.offset == 0 {
+            byte_order_mark_width(bytes)
+        } else {
+            0
+        };
+        while index < bytes.len() && !self.stopped {
+            /* NOTE: Scala has no `#` comment of its own, so a `#!` line is the
+             * only shape a `#` is part of, and it is a preamble only at the
+             * very first byte — a byte order mark permitting — which is also
+             * the only place scala-cli reads one. The same bytes lower down are
+             * ordinary code. */
+            if self.offset == 0
+                && index == byte_order_mark_width(bytes)
+                && starts(bytes, index, b"#!")
+            {
+                let end = line_end(bytes, index + 2);
+                self.add_comment(index, end, CommentKind::Line);
+                index = end;
+                continue;
+            }
+            if let Some(end) = self.scan_scala_lexeme(index, 0) {
+                index = end;
+                continue;
+            }
+            if matches!(bytes[index], b'\r' | b'\n') {
+                index = consume_newline(bytes, index);
+                self.add_safe_checkpoint(index);
+            } else {
+                index += 1;
+            }
+        }
+    }
+
+    /// One Scala comment, string, backquoted identifier, or XML literal
+    /// beginning at `index`, or `None` when the byte there opens none of them.
+    ///
+    /// This is the whole of Scala's lexical surface that a comment can hide
+    /// behind or be, which is why the top level and the inside of a `${ ... }`
+    /// interpolation or of an XML literal's braces ask one function for it:
+    /// both are code, and a comment written there is a comment exactly as it is
+    /// outside one.
+    fn scan_scala_lexeme(&mut self, index: usize, depth: usize) -> Option<usize> {
+        let bytes = self.source;
+        if starts(bytes, index, b"//") {
+            let end = line_end(bytes, index + 2);
+            self.add_comment(index, end, scala_line_kind(bytes, index));
+            return Some(end);
+        }
+        if starts(bytes, index, b"/*") {
+            let (end, closed) = block_end(bytes, index, b"/*", b"*/", true);
+            self.add_comment(index, end, scala_block_kind(bytes, index));
+            if !closed {
+                self.error(
+                    "unterminated-comment",
+                    "unterminated Scala block comment",
+                    ByteSpan::new(index, end),
+                );
+            }
+            return Some(end);
+        }
+        if bytes[index] == b'"' {
+            return Some(self.scan_scala_string(index, depth));
+        }
+        /* NOTE: a backquoted identifier may hold any bytes but a backtick,
+         * `//` included — `` val `a//b` = 1 `` is one identifier — and ends at
+         * its line, which is what keeps it from swallowing the source below. */
+        if bytes[index] == b'`' {
+            return Some(self.scala_backquoted_identifier(index));
+        }
+        if bytes[index] == b'<' && scala_is_xml_start(bytes, index) {
+            return Some(self.scan_scala_xml(index, depth));
+        }
+        None
+    }
+
+    /// One Scala string literal, beginning at its opening quote.
+    ///
+    /// A string is interpolated exactly when an identifier stands directly
+    /// before its quote — the compiler's lexer turns that identifier into
+    /// `INTERPOLATIONID` — so `s"..."`, `raw"..."`, a custom interpolator such
+    /// as `xml"..."`, and each of them triple-quoted are the interpolated
+    /// forms, and every other quote opens a plain string whose `$` is content.
+    /// Inside an interpolated string `$$` and `$"` write a literal `$` and `"`,
+    /// `${ ... }` opens an expression that is code, and `$` followed by an
+    /// identifier starts another expression; the compiler rejects any other
+    /// `$`, and this scanner reads it as content, which costs a comment nothing
+    /// and keeps a broken file scannable. A `\` carries the byte behind it in
+    /// a single-line string — that is what hides a `\"` — and means nothing in
+    /// a triple-quoted one.
+    ///
+    /// A triple-quoted string closes on the first three quotes of a run, and
+    /// any further quotes of the run are part of the string's value: the
+    /// lexer's `isTripleQuote` consumes the first three and `putChar`s the
+    /// rest, so `"""a""""` is the string `a"` and ends after the run of four.
+    /// That is where Scala parts company with Kotlin's existing scanner, which
+    /// closes on the first three of a run and leaves a stray quote behind.
+    fn scan_scala_string(&mut self, start: usize, depth: usize) -> usize {
+        if depth > 256 {
+            self.error(
+                "nesting-limit",
+                "Scala string interpolation nesting limit exceeded",
+                ByteSpan::new(start, start),
+            );
+            return self.source.len();
+        }
+        let bytes = self.source;
+        let interpolated = scala_interpolator(bytes, start);
+        let triple = starts(bytes, start, b"\"\"\"");
+        let mut index = start + if triple { 3 } else { 1 };
+        while index < bytes.len() {
+            if interpolated && bytes[index] == b'$' {
+                match bytes.get(index + 1) {
+                    Some(b'$' | b'"') => {
+                        index += 2;
+                        continue;
+                    }
+                    Some(b'{') => {
+                        index = self.scan_scala_expression(index + 2, depth + 1);
+                        continue;
+                    }
+                    Some(&byte) if scala_identifier_start(byte) => {
+                        index += 2;
+                        while index < bytes.len() && scala_identifier_part(bytes[index]) {
+                            index += 1;
+                        }
+                        continue;
+                    }
+                    _ => {
+                        index += 1;
+                        continue;
+                    }
+                }
+            }
+            if bytes[index] == b'"' {
+                if triple {
+                    let run = index + count_run(bytes, index, b'"');
+                    if run - index >= 3 {
+                        return run;
+                    }
+                } else {
+                    return index + 1;
+                }
+            } else if bytes[index] == b'\\' {
+                if !triple {
+                    index = (index + 2).min(bytes.len());
+                    continue;
+                }
+            } else if !triple && matches!(bytes[index], b'\r' | b'\n') {
+                self.error(
+                    "unterminated-string",
+                    "unterminated Scala string",
+                    ByteSpan::new(start, index),
+                );
+                return index;
+            }
+            index += 1;
+        }
+        self.error(
+            "unterminated-string",
+            if triple {
+                "unterminated Scala multi-line string"
+            } else {
+                "unterminated Scala string"
+            },
+            ByteSpan::new(start, index),
+        );
+        index
+    }
+
+    /// One `${ ... }` expression or the inside of an XML literal's braces,
+    /// beginning past the opening brace.
+    ///
+    /// The braces are counted rather than searched for, because the expression
+    /// is code: a nested string, a tuple, a call, and a comment may all stand
+    /// inside one, and a string or an XML literal written there is scanned as
+    /// such. The compiler reports a comment written inside an interpolation as
+    /// a comment exactly as it does outside a string, and a `//` one runs to
+    /// the end of its line while a multi-line string carries on below.
+    fn scan_scala_expression(&mut self, mut index: usize, depth: usize) -> usize {
+        if depth > 256 {
+            self.error(
+                "nesting-limit",
+                "Scala string interpolation nesting limit exceeded",
+                ByteSpan::new(index, index),
+            );
+            return self.source.len();
+        }
+        let bytes = self.source;
+        let mut braces = 1usize;
+        while index < bytes.len() {
+            if let Some(end) = self.scan_scala_lexeme(index, depth) {
+                index = end;
+                continue;
+            }
+            match bytes[index] {
+                b'{' => {
+                    braces += 1;
+                    index += 1;
+                }
+                b'}' => {
+                    braces -= 1;
+                    index += 1;
+                    if braces == 0 {
+                        return index;
+                    }
+                }
+                _ => index += 1,
+            }
+        }
+        self.error(
+            "unterminated-template-expression",
+            "unterminated Scala string-template expression",
+            ByteSpan::new(index, index),
+        );
+        index
+    }
+
+    /// One backquoted identifier, beginning at its opening backtick.
+    ///
+    /// The compiler's `getBackquotedIdent` reads to the next backtick and ends
+    /// at a line terminator, which it reports as `unclosed quoted identifier`;
+    /// this scanner follows both.
+    fn scala_backquoted_identifier(&mut self, start: usize) -> usize {
+        let bytes = self.source;
+        let mut index = start + 1;
+        while index < bytes.len() {
+            if bytes[index] == b'`' {
+                return index + 1;
+            }
+            if matches!(bytes[index], b'\r' | b'\n') {
+                self.error(
+                    "unterminated-identifier",
+                    "unclosed quoted identifier",
+                    ByteSpan::new(start, index),
+                );
+                return index;
+            }
+            index += 1;
+        }
+        self.error(
+            "unterminated-identifier",
+            "unclosed quoted identifier",
+            ByteSpan::new(start, index),
+        );
+        index
+    }
+
+    /// One XML literal, beginning at the `<` that opened it.
+    ///
+    /// The compiler's *lexer* emits an `XMLSTART` token for the `<` and then
+    /// hands the literal to the parser, which re-reads it with an XML scanner:
+    /// element text, CDATA and processing instructions are *not* code, and a
+    /// `//` in them is a byte the lexer alone would call a comment. This
+    /// scanner follows the parser, so text and the construct bodies are
+    /// opaque, `{ ... }` in text or an attribute is code, `<!-- ... -->` is an
+    /// XML comment, and the literal ends at the close tag matching its root or
+    /// at a self-closing `/>`. A literal whose root never closes is a file the
+    /// parser rejects, and the rest of it is read as opaque content, which is
+    /// the safe half of being wrong: a comment below a broken literal is
+    /// over-kept rather than removed out of one that parses.
+    fn scan_scala_xml(&mut self, start: usize, depth: usize) -> usize {
+        let bytes = self.source;
+        let Some((mut index, self_closing, root_start, root_end)) =
+            self.scala_xml_tag(start, depth)
+        else {
+            return bytes.len();
+        };
+        if self_closing {
+            return index;
+        }
+        let mut stack = vec![(root_start, root_end)];
+        while index < bytes.len() {
+            if bytes[index] == b'{' {
+                index = self.scan_scala_expression(index + 1, depth + 1);
+                continue;
+            }
+            if bytes[index] != b'<' {
+                index += 1;
+                continue;
+            }
+            if starts(bytes, index, b"<!--") {
+                let Some(relative) = find_subslice(&bytes[index + 4..], b"-->") else {
+                    return bytes.len();
+                };
+                let end = index + 4 + relative + 3;
+                self.add_comment(index, end, CommentKind::HtmlComment);
+                index = end;
+                continue;
+            }
+            if starts(bytes, index, b"<![CDATA[") {
+                let Some(relative) = find_subslice(&bytes[index + 9..], b"]]>") else {
+                    return bytes.len();
+                };
+                index = index + 9 + relative + 3;
+                continue;
+            }
+            if starts(bytes, index, b"<?") {
+                let Some(relative) = find_subslice(&bytes[index + 2..], b"?>") else {
+                    return bytes.len();
+                };
+                index = index + 2 + relative + 2;
+                continue;
+            }
+            if starts(bytes, index, b"</") {
+                let name_start = index + 2;
+                if name_start < bytes.len() && xml_name_start(bytes[name_start]) {
+                    let name_end = name_start + xml_name_len(&bytes[name_start..]);
+                    let Some(close_end) = skip_xml_tag_tail(bytes, name_end) else {
+                        return bytes.len();
+                    };
+                    if bytes[name_start..name_end]
+                        == bytes[stack.last().unwrap().0..stack.last().unwrap().1]
+                    {
+                        stack.pop();
+                        if stack.is_empty() {
+                            return close_end;
+                        }
+                        index = close_end;
+                        continue;
+                    }
+                }
+                index += 2;
+                continue;
+            }
+            if starts(bytes, index, b"<!") {
+                let Some(relative) = find_subslice(&bytes[index + 2..], b">") else {
+                    return bytes.len();
+                };
+                index = index + 2 + relative + 1;
+                continue;
+            }
+            if index + 1 < bytes.len() && xml_name_start(bytes[index + 1]) {
+                let Some((after, self_closing, name_start, name_end)) =
+                    self.scala_xml_tag(index, depth)
+                else {
+                    return bytes.len();
+                };
+                if !self_closing {
+                    stack.push((name_start, name_end));
+                }
+                index = after;
+                continue;
+            }
+            index += 1;
+        }
+        bytes.len()
+    }
+
+    /// One XML tag beginning at its `<`, returning where it ends, whether it
+    /// is self-closing, and the range of its name.
+    fn scala_xml_tag(&mut self, start: usize, depth: usize) -> Option<(usize, bool, usize, usize)> {
+        let bytes = self.source;
+        let mut index = start + 1;
+        if index >= bytes.len() || !xml_name_start(bytes[index]) {
+            return None;
+        }
+        let name_start = index;
+        index += xml_name_len(&bytes[index..]);
+        let name_end = index;
+        loop {
+            if index >= bytes.len() {
+                return None;
+            }
+            match bytes[index] {
+                b'>' => return Some((index + 1, false, name_start, name_end)),
+                b'/' if bytes.get(index + 1) == Some(&b'>') => {
+                    return Some((index + 2, true, name_start, name_end));
+                }
+                b'"' | b'\'' => {
+                    let quote = bytes[index];
+                    index += 1;
+                    while index < bytes.len() && bytes[index] != quote {
+                        index += 1;
+                    }
+                    if index >= bytes.len() {
+                        return None;
+                    }
+                    index += 1;
+                }
+                b'{' => {
+                    index = self.scan_scala_expression(index + 1, depth + 1);
+                }
+                _ => index += 1,
+            }
+        }
+    }
+
     fn scan_shell(&mut self) {
         let _ = self.scan_shell_region(0, None, 0);
     }
@@ -3941,6 +5204,30 @@ impl RestartRules {
             && offset <= self.first_block_scalar
             && the_line_ending_permits_a_restart(source, offset)
             && the_preamble_permits_a_restart(source, self.language, offset)
+            && (self.language != Language::Scala
+                || the_scala_xml_boundary_permits_a_restart(source, offset))
+    }
+}
+
+/// Whether a Scala restart at `offset` may stand next to the byte there.
+///
+/// The XML literal's trigger reads the byte *behind* its `<`: the lexer's
+/// `XMLSTART` needs a space, tab, line feed, `{`, `(` or `>` before it and an
+/// XML name start, `!` or `?` after it, and a suffix scan begins at the
+/// checkpoint with no byte behind it to read. A line that opens with a `<`
+/// that could begin a literal is therefore exactly where a checkpoint cannot
+/// stand: the full scan would read the literal and protect its text, and the
+/// rescan from the checkpoint could not know it was a literal and would remove
+/// a comment out of it. Refusing the checkpoint costs a rescan; permitting it
+/// loses a user's bytes.
+fn the_scala_xml_boundary_permits_a_restart(source: &[u8], offset: usize) -> bool {
+    if source.get(offset) != Some(&b'<') {
+        return true;
+    }
+    match source.get(offset + 1) {
+        Some(b'!' | b'?') => false,
+        Some(&byte) => !(byte.is_ascii_alphabetic() || matches!(byte, b'_') || byte >= 0x80),
+        None => true,
     }
 }
 
@@ -4327,6 +5614,89 @@ fn directive_name(text: &str, language: Language, raw: &[u8]) -> Option<&'static
                 .into_iter()
                 .find(|prefix| compact.starts_with(prefix))
         }
+        /* NOTE: Four instructions, and only one of them is addressed to a
+         * formatter. `// swift-tools-version:` is the first line of a
+         * `Package.swift`, and SwiftPM reads it before it reads any of the
+         * manifest: it decides which version of the package description the
+         * file is written against, so a removal that took it would leave a
+         * package that no longer builds. The other three name the tool that
+         * reads them and carry their own boundary — a colon for `swiftlint:`
+         * and `swiftformat:`, and for `swift-format-ignore` the end of the
+         * comment, a colon, or the `-file` that widens it to the whole file.
+         * Measured on `swift-format` 6.3.3: `// swift-format-ignore` and
+         * `// swift-format-ignore-file` both leave `let    a     = 1` alone,
+         * and `// swift-format-ignoreish note` reformats it. `// MARK:` is
+         * deliberately absent: Xcode reads it to build a jump bar, so it is
+         * addressed to a reader rather than to a build, and a project that
+         * wants it kept says so with a `keep_regex`. */
+        Language::Swift => {
+            if let Some(name) = ["swift-tools-version:", "swiftlint:", "swiftformat:"]
+                .into_iter()
+                .find(|prefix| compact.starts_with(prefix))
+            {
+                return Some(name);
+            }
+            let rest = compact.strip_prefix("swift-format-ignore")?;
+            let tail = rest.strip_prefix("-file").unwrap_or(rest);
+            (tail.is_empty()
+                || tail.starts_with(':')
+                || tail.starts_with(|character: char| character.is_ascii_whitespace()))
+            .then_some("swift-format-ignore")
+        }
+        /* NOTE: Three instructions, and the first is the one a *compiler* reads.
+         * Roslyn's `GeneratedCodeUtilities.BeginsWithAutoGeneratedComment`
+         * searches the `//` and `/* */` comments in front of a file's first
+         * token for `<auto-generated` — the legacy `<autogenerated` with it —
+         * and a file it finds one in is exempt from every analyzer that opts
+         * out of generated code, so a removal that took it would turn a
+         * generated file into a hand-written one and light up the diagnostics
+         * it was written to escape. That search is `contains` rather than a
+         * prefix, and it is followed here: the `<` is the marker's own
+         * boundary, and prose about generated code carries none. Roslyn asks
+         * for it in the leading trivia alone and asks case-sensitively; both
+         * are widened here, because a comment that merely *reads* like the
+         * marker is a comment a reader meant as one.
+         *
+         * `// ReSharper disable` and `// ReSharper restore` bound the region an
+         * inspection is turned off over, and only those two verbs are
+         * instructions — the whitespace between the tool and its verb is what
+         * tells them from prose that opens with the same letters.
+         * `// csharpier-ignore` is matched on the whole comment rather than by
+         * prefix, because that is how CSharpier matches it: measured on
+         * `csharpier` 1.3.0, `// csharpier-ignore`, `// csharpier-ignore-start`
+         * and `// csharpier-ignore-end` each left `int    a     =    1;`
+         * unformatted, while `//  csharpier-ignore` with a second space,
+         * `// csharpier-ignore some text`, `/* csharpier-ignore */` and
+         * `/// csharpier-ignore` all reformatted it. */
+        Language::CSharp => {
+            if text.contains("<auto-generated") || text.contains("<autogenerated") {
+                return Some("<auto-generated");
+            }
+            if let Some(rest) = compact.strip_prefix("resharper") {
+                let verb = rest.trim_start_matches([' ', '\t']);
+                if verb.len() < rest.len()
+                    && (verb.starts_with("disable") || verb.starts_with("restore"))
+                {
+                    return Some("ReSharper");
+                }
+            }
+            matches!(
+                raw,
+                b"// csharpier-ignore" | b"// csharpier-ignore-start" | b"// csharpier-ignore-end"
+            )
+            .then_some("csharpier-ignore")
+        }
+        /* NOTE: scala-cli reads a directive line before it reads the manifest
+         * at all, and the directive is `//>` followed by a space and a name,
+         * of which `using` is the one that configures the build. `compact` is
+         * the comment with its markers stripped, so `//> using` is `> using`,
+         * and the boundary is what keeps a comment that only opens with the
+         * same letters — `//> usingless`, or `//>> using` with one `>` more —
+         * from being kept as one. */
+        Language::Scala => (compact == "> using"
+            || compact.starts_with("> using ")
+            || compact.starts_with("> using\t"))
+        .then_some("//> using"),
         _ => None,
     }
 }
@@ -4402,6 +5772,679 @@ fn dart_line_kind(bytes: &[u8], index: usize) -> CommentKind {
 /// not, for the reason [`dart_line_kind`] gives.
 fn dart_block_kind(bytes: &[u8], index: usize) -> CommentKind {
     if starts(bytes, index, b"/**") {
+        CommentKind::DocBlock
+    } else {
+        CommentKind::Block
+    }
+}
+
+/// The kind of a Swift line comment.
+///
+/// Swift's documentation marker is `///`, and a fourth slash does not take it
+/// away: SwiftSyntax reports `////` as `docLineComment` exactly as it reports
+/// `///`, which is where Swift keeps company with Dart and parts company with
+/// Lua's `----` and Zig's `////`. `//!` is Rust's inner-doc marker and means
+/// nothing here, so a comment opening with it is an ordinary line comment —
+/// reading it as documentation would hide it from [`crate::Policy::Safe`] in a
+/// language that never wrote it as one.
+fn swift_line_kind(bytes: &[u8], index: usize) -> CommentKind {
+    if starts(bytes, index, b"///") {
+        CommentKind::DocLine
+    } else {
+        CommentKind::Line
+    }
+}
+
+/// The kind of a Swift block comment.
+///
+/// `/**` opens the documentation comment DocC reads, with one exception that
+/// the third `*` is not there to open anything: `/**/` is the *empty* block
+/// comment, whose second `*` is the first byte of its own terminator.
+/// SwiftSyntax reports `/**/` as `blockComment` and `/***/` as
+/// `docBlockComment`, and this follows it. `/*!` is Doxygen's marker, which C
+/// and C++ honour and Swift does not, for the reason [`swift_line_kind`] gives.
+fn swift_block_kind(bytes: &[u8], index: usize) -> CommentKind {
+    if starts(bytes, index, b"/**") && !starts(bytes, index, b"/**/") {
+        CommentKind::DocBlock
+    } else {
+        CommentKind::Block
+    }
+}
+
+/// The name of the Swift string form that was left open, so the diagnostic says
+/// which of the five a reader has to go and close. The fifth is the
+/// single-quoted literal the compiler lexes and then rejects, which carries
+/// neither a hash nor a multi-line spelling.
+const fn swift_unterminated_string(delimiter: u8, raw: bool, multiline: bool) -> &'static str {
+    if delimiter == b'\'' {
+        return "unterminated Swift single-quoted string";
+    }
+    match (raw, multiline) {
+        (true, true) => "unterminated Swift raw multiline string",
+        (true, false) => "unterminated Swift raw string",
+        (false, true) => "unterminated Swift multiline string",
+        (false, false) => "unterminated Swift string",
+    }
+}
+
+/// Whether `count` `#` bytes stand at `index`, and the byte behind them is not
+/// a `#` as well.
+///
+/// The run has to be *exactly* `count` long for a delimiter to close: a `"#`
+/// inside a `##"..."##` literal is content, and only `"##` ends it. A longer run
+/// still closes it, because the extra hashes are the content that follows the
+/// delimiter rather than part of it, which is why the byte behind is not
+/// examined.
+fn swift_hashes_at(bytes: &[u8], index: usize, count: usize) -> bool {
+    (0..count).all(|offset| bytes.get(index + offset) == Some(&b'#'))
+}
+
+/// The end of a string with `hashes` hashes if its delimiter closes at
+/// `index`, or `None` when it does not.
+///
+/// NOTE: a *raw* delimiter takes one `#` more than it needs when one is there.
+/// `Lexer.Cursor.advanceIfStringDelimiter` counts pounds with the advance in
+/// the loop *condition* and the count test in its body, so it consumes a
+/// `hashes + 1`-th before it stops — and then `swiftc` calls the literal an
+/// error, `too many '#' characters in closing delimiter`. Taking that byte too
+/// is what keeps this scan standing where the lexer stands on a file that is
+/// already broken; a file that closes its raw strings correctly never reaches
+/// the case at all. An ordinary string takes none: the same function returns on
+/// `delimiterLength == 0` before it looks at a byte, so the `#` behind the
+/// closing quote of `"x"#/y/#` opens the regular expression literal that
+/// follows rather than belonging to the string — which is the difference
+/// between reading the `//` inside that literal as pattern and reading it as a
+/// comment.
+fn swift_string_close(
+    bytes: &[u8],
+    index: usize,
+    delimiter: u8,
+    multiline: bool,
+    hashes: usize,
+) -> Option<usize> {
+    let width = if multiline { 3 } else { 1 };
+    let closes = (0..width).all(|offset| bytes.get(index + offset) == Some(&delimiter))
+        && swift_hashes_at(bytes, index + width, hashes);
+    if !closes {
+        return None;
+    }
+    let end = index + width + hashes;
+    let extra = hashes > 0 && bytes.get(end) == Some(&b'#');
+    Some(end + usize::from(extra))
+}
+
+/// The length of the run of `#` beginning at `index`.
+///
+/// INVARIANT: a `#` in Swift opens a compiler directive, a macro, a raw string,
+/// or an extended regular expression literal, and only the last two carry a run
+/// of them. What decides which is the byte behind the run, so this reads the
+/// class and one byte more rather than searching for a quote that may never
+/// come — the bound is what the reach is for. A `#` run holds no line
+/// terminator, so the watermark it leaves never crosses the line the run stands
+/// on, and the lines under it keep their checkpoints.
+fn swift_hash_run(bytes: &[u8], index: usize, reach: &mut Reach) -> usize {
+    let mut end = index;
+    while bytes.get(end) == Some(&b'#') {
+        end += 1;
+    }
+    /* NOTE: the byte that ended the run decided this, and a `get` that came
+     * back `None` at the end of the document decided it just the same. */
+    reach.byte(end);
+    end - index
+}
+
+/// Whether the `/` at `index` stands where a *binary* operator does, and can
+/// therefore open no regular expression literal.
+///
+/// The Swift book (Lexical Structure, Operators) decides this from the white
+/// space around an operator: one with white space on both sides or on neither
+/// is binary, and one with white space on the left alone is prefix. For that
+/// rule `(`, `[` and `{` before an operator count as white space, and so do
+/// `,`, `;` and `:`. A regular expression literal may only stand where a prefix
+/// operator may, so `a /b/ c` opens one and `a/b/c` is three divisions —
+/// measured with `swift-frontend -dump-parse -swift-version 6`, which reports a
+/// `regex_literal_expr` for the first and none for the second.
+///
+/// The end of a block comment is white space as well: `1 /* c *//a/` opens a
+/// literal, because the `/` that closes the comment is not a token the `/`
+/// behind it could bind to.
+fn swift_is_left_bound(bytes: &[u8], index: usize) -> bool {
+    let Some(previous) = index.checked_sub(1).map(|behind| bytes[behind]) else {
+        return false;
+    };
+    /* NOTE: the set is SwiftSyntax's `Lexer.Cursor.isLeftBound` as the Swift
+     * 6.3.3 toolchain ships it, which is the book's rule with two more bytes
+     * that are white space in fact: a NUL, and the second byte of a U+00A0
+     * no-break space. */
+    match previous {
+        b' ' | b'\t' | b'\r' | b'\n' | 0 => false,
+        b'(' | b'[' | b'{' | b',' | b';' | b':' => false,
+        b'/' => index < 2 || bytes[index - 2] != b'*',
+        0xa0 => index < 2 || bytes[index - 2] != 0xc2,
+        _ => true,
+    }
+}
+
+/// Whether the quotes at `quote` open a *multi-line* string literal.
+///
+/// Three quotes are the multi-line delimiter, with one exception that only a
+/// raw string can spell: `#"""#` is the single-line raw string whose one
+/// character of content is a quote, and not a multi-line literal left open.
+/// SwiftSyntax decides it in `Lexer.Cursor.advanceIfMultilineStringDelimiter`,
+/// and only for a raw string: from the *third* quote it reads the rest of the
+/// line for a `"` carrying the opening run of `#` behind it, and a literal that
+/// closes on its own line that way is a single-line one.
+///
+/// This is a read of the line the literal opens on and no further, and the scan
+/// takes every byte of it either way — a multi-line literal reaches past the
+/// line and a single-line one ends inside it, but neither hands those bytes
+/// back — so there is nothing here for a checkpoint to lose.
+fn swift_multiline_string(bytes: &[u8], quote: usize, hashes: usize) -> bool {
+    if !starts(bytes, quote, b"\"\"\"") {
+        return false;
+    }
+    if hashes == 0 {
+        return true;
+    }
+    let mut cursor = quote + 2;
+    while bytes
+        .get(cursor)
+        .is_some_and(|byte| !is_line_terminator(*byte))
+    {
+        if bytes[cursor] == b'"' && swift_hashes_at(bytes, cursor + 1, hashes) {
+            return false;
+        }
+        cursor += 1;
+    }
+    true
+}
+
+/// The end of the bare regular expression literal `/ ... /` opening at `index`,
+/// or `None` when those bytes open none.
+///
+/// The Swift book (Lexical Structure, Regular Expression Literals) states the
+/// rule this follows: a literal *can't begin with an unescaped tab or space*,
+/// and it *can't contain an unescaped forward slash, a carriage return, or a
+/// line feed*. So the first unescaped `/` is the closing delimiter, the search
+/// for it never leaves the line the literal opened on, and a backslash carries
+/// the byte behind it in — `/a\//` is a literal whose content is `a\/`, which
+/// is exactly the shape that makes this rule worth having: its last two bytes
+/// spell `//`, and a scanner that read them as a comment would delete the rest
+/// of the line.
+///
+/// Two more conditions come from the compiler rather than from the book, and
+/// both were measured with `swift-frontend -dump-parse -swift-version 6`. The
+/// closing delimiter may not be *preceded* by an unescaped space or tab, so
+/// `/b /` opens nothing while `/a\ /` does. And when the closing delimiter
+/// would be the first byte of a comment the comment wins outright, rather than
+/// the literal ending one byte earlier: `/a//b/` is `/a` and then the line
+/// comment `//b/`, and `/a/*b*/` is `/a` and then the block comment `/*b*/`.
+///
+/// What is left after all of that is a lookahead the scan rewinds behind, so it
+/// reports every byte it read. It stops at the first line terminator, so the
+/// reach it leaves reaches no further than the line start under it — except
+/// when the document simply ends, which is a decision an append would change
+/// and is recorded as such.
+fn swift_bare_regex(bytes: &[u8], index: usize, reach: &mut Reach) -> Option<usize> {
+    if swift_is_left_bound(bytes, index) {
+        return None;
+    }
+    reach.byte(index + 1);
+    match bytes.get(index + 1) {
+        None | Some(b' ' | b'\t' | b'\r' | b'\n') => return None,
+        Some(_) => {}
+    }
+    let mut cursor = index + 1;
+    let mut blank = false;
+    while cursor < bytes.len() {
+        match bytes[cursor] {
+            b'\\' => {
+                reach.byte(cursor + 1);
+                if matches!(bytes.get(cursor + 1), None | Some(b'\r' | b'\n')) {
+                    return None;
+                }
+                blank = false;
+                cursor += 2;
+            }
+            b'\r' | b'\n' => {
+                reach.byte(cursor);
+                return None;
+            }
+            b'/' => {
+                reach.byte(cursor + 1);
+                if blank || matches!(bytes.get(cursor + 1), Some(b'/' | b'*')) {
+                    return None;
+                }
+                return Some(cursor + 1);
+            }
+            byte => {
+                blank = matches!(byte, b' ' | b'\t');
+                cursor += 1;
+            }
+        }
+    }
+    /* NOTE: no line terminator and no closing delimiter, so this read to the end
+     * of the document and the scan takes those bytes back. An append is an edit
+     * exactly at the end, and appending a `/` would close this literal, so the
+     * checkpoint an append reuses the whole prefix from is the one to withdraw. */
+    reach.end_of(bytes);
+    None
+}
+
+/// Which of C#'s three string rules a literal follows.
+///
+/// The three differ in what closes them and in what an escape is: a plain
+/// string takes `\` and ends at its line, a verbatim one spells its quote `""`
+/// and carries line breaks, and a raw one is opaque until a run of at least as
+/// many quotes as its opener carried comes back. Interpolation is a switch on
+/// top of all three rather than a fourth rule.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CsharpStringForm {
+    /// `"..."`, and `$"..."` with one `$`.
+    Plain,
+    /// `@"..."`, `$@"..."` and `@$"..."`.
+    Verbatim,
+    /// `"""..."""`, `$"""..."""` and every literal a run of two `$` or more
+    /// opens, which Roslyn lexes as a raw one whatever its quote run holds.
+    Raw,
+}
+
+/// The opener of one C# string literal: where it begins, where its quote run
+/// begins and how long that run is, how many `$` stood in front of it, and
+/// which of the three rules it follows.
+#[derive(Clone, Copy, Debug)]
+struct CsharpPrefix {
+    /// The first byte of the literal, `$` and `@` included.
+    start: usize,
+    /// The first `"`.
+    quote: usize,
+    /// The length of the opening run of `"`, which is the length a closing run
+    /// of a raw literal must match or beat.
+    quotes: usize,
+    /// How many `$` opened it, which is how many braces open one of its holes.
+    /// Zero for a literal that interpolates nothing.
+    dollars: usize,
+    form: CsharpStringForm,
+}
+
+/// One past the run of `$` and `@` at `index`, which is where a scan that found
+/// no literal behind them resumes.
+fn csharp_prefix_end(bytes: &[u8], index: usize) -> usize {
+    let mut end = index;
+    while matches!(bytes.get(end), Some(b'$' | b'@')) {
+        end += 1;
+    }
+    end
+}
+
+/// The literal a run of `$` and `@` and then a run of `"` opens at `index`, or
+/// `None` when no quote follows the prefix and those bytes open none.
+///
+/// Which rule applies is decided the way Roslyn's lexer decides it, and the
+/// order of the three tests is the part that is not obvious. Two `$` or more
+/// make a literal raw whatever else it carries — `$$"a"` is lexed as a raw
+/// interpolated string with a one-quote delimiter and CS9004 rather than as a
+/// plain one — while a single `@` makes it verbatim even in front of three
+/// quotes: Roslyn reports `@"""x"""` as one `StringLiteralToken` whose content
+/// is `"x"`, two escaped quotes around a letter.
+///
+/// INVARIANT: the quote run is read whole and the byte behind it with it, which
+/// is a bounded read of a run that can hold no line terminator, so the
+/// watermark it leaves never reaches past the line the literal opens on.
+fn csharp_literal_prefix(bytes: &[u8], index: usize, reach: &mut Reach) -> Option<CsharpPrefix> {
+    let mut cursor = index;
+    let mut dollars = 0;
+    let mut ats = 0;
+    while let Some(byte) = bytes.get(cursor) {
+        match byte {
+            b'$' => dollars += 1,
+            b'@' => ats += 1,
+            _ => break,
+        }
+        cursor += 1;
+    }
+    if bytes.get(cursor) != Some(&b'"') {
+        /* NOTE: the byte that ended the run decided this, and a `get` that came
+         * back `None` at the end of the document decided it just the same. */
+        reach.byte(cursor);
+        return None;
+    }
+    let mut quotes = 0;
+    while bytes.get(cursor + quotes) == Some(&b'"') {
+        quotes += 1;
+    }
+    reach.byte(cursor + quotes);
+    let form = if dollars >= 2 {
+        CsharpStringForm::Raw
+    } else if ats > 0 {
+        CsharpStringForm::Verbatim
+    } else if quotes >= 3 {
+        CsharpStringForm::Raw
+    } else {
+        CsharpStringForm::Plain
+    };
+    Some(CsharpPrefix {
+        start: index,
+        quote: cursor,
+        quotes,
+        dollars,
+        form,
+    })
+}
+
+/// Whether the raw string whose content begins at `content` carries its line
+/// breaks, which it does when only blanks stand between its opening quote run
+/// and the end of that line.
+///
+/// This is a read of the line the literal opens on and no further, and the scan
+/// takes every byte of it either way — the blanks are content of a multi-line
+/// literal and content of a single-line one alike, and the byte that ends them
+/// is the closing quote run, a brace, or the line terminator the literal ends
+/// at — so there is nothing here for a checkpoint to lose.
+fn csharp_multiline_raw_string(bytes: &[u8], content: usize) -> bool {
+    let mut cursor = content;
+    while cursor < bytes.len() {
+        if csharp_line_terminator_width(bytes, cursor).is_some() {
+            return true;
+        }
+        if !is_csharp_blank(bytes[cursor]) {
+            return false;
+        }
+        cursor += 1;
+    }
+    false
+}
+
+/// Where a `}` at `index` leaves an interpolation hole that `braces` braces
+/// close: the end of the hole and `true` when the run is long enough, and one
+/// past the run it did hold with `false` when it is not.
+///
+/// The run is read no further than `braces`, so the close consumes exactly what
+/// it read and a run too short is consumed whole; neither hands a byte back.
+fn csharp_hole_close(bytes: &[u8], index: usize, braces: usize) -> (usize, bool) {
+    let mut run = index;
+    while run - index < braces && bytes.get(run) == Some(&b'}') {
+        run += 1;
+    }
+    if run - index == braces {
+        (index + braces, true)
+    } else {
+        (run, false)
+    }
+}
+
+/// The width of the line terminator at `index`, or `None` when there is none.
+///
+/// ECMA-334 6.3.1 writes `New_Line_Character` as five characters rather than
+/// two: the carriage return and line feed every language here has, and U+0085,
+/// U+2028 and U+2029 besides. Roslyn's lexer ends a `//` comment, a string and
+/// a character literal at all five, which is exactly why this is not
+/// [`line_end`]: a comment read on past a U+2028 would swallow the code behind
+/// it and a removal would take that code with it.
+fn csharp_line_terminator_width(bytes: &[u8], index: usize) -> Option<usize> {
+    csharp_unicode_line_terminator_width(bytes, index)
+        .or_else(|| unicode_line_terminator_width(bytes, index))
+}
+
+/// The width of the *non-ASCII* line terminator at `index`, or `None`.
+///
+/// U+2028 and U+2029 are the two JavaScript shares, and U+0085 the one it does
+/// not: a C# source encoded in UTF-8 spells the next-line character `\xc2\x85`.
+fn csharp_unicode_line_terminator_width(bytes: &[u8], index: usize) -> Option<usize> {
+    match bytes.get(index) {
+        Some(0xc2) if bytes.get(index + 1) == Some(&0x85) => Some(2),
+        Some(0xe2)
+            if bytes.get(index + 1) == Some(&0x80)
+                && matches!(bytes.get(index + 2), Some(0xa8 | 0xa9)) =>
+        {
+            Some(3)
+        }
+        _ => None,
+    }
+}
+
+/// One past the end of the line `index` stands on, counting every one of C#'s
+/// five line terminators. See [`csharp_line_terminator_width`].
+fn csharp_line_end(bytes: &[u8], mut index: usize) -> usize {
+    while index < bytes.len() && csharp_line_terminator_width(bytes, index).is_none() {
+        index += 1;
+    }
+    index
+}
+
+/// The kind of a Scala line comment.
+///
+/// The comment reader of the Scala 3 compiler classifies a comment as
+/// documentation when its raw text starts with `/**` (`Comment.isDocComment`),
+/// and a line comment cannot, so `///` — which scaladoc does not read — and
+/// `//!` are ordinary line comments, unlike Dart's and Swift's third slash.
+fn scala_line_kind(_bytes: &[u8], _index: usize) -> CommentKind {
+    CommentKind::Line
+}
+
+/// The kind of a Scala block comment: documentation exactly when its raw text
+/// starts with `/**`, which is what `Comment.isDocComment` answers, so `/**/`
+/// and `/***/` are documentation comments — their second `*` is content — and
+/// `/*!` is Doxygen's marker, which Scala does not honour.
+fn scala_block_kind(bytes: &[u8], index: usize) -> CommentKind {
+    if starts(bytes, index, b"/**") {
+        CommentKind::DocBlock
+    } else {
+        CommentKind::Block
+    }
+}
+
+/// Whether the quote at `quote` opens an *interpolated* string.
+///
+/// The compiler's lexer turns an identifier standing directly before a quote
+/// into `INTERPOLATIONID` (`fetchToken` checks `ch == '"' && token ==
+/// IDENTIFIER` after reading an identifier), and a keyword is its own token,
+/// so `s"..."` and `raw"..."` and a custom interpolator interpolate and
+/// `return"..."` does not. A number is not an identifier either, so the run
+/// of identifier characters is read back from the quote and refused when it
+/// begins with a digit.
+fn scala_interpolator(bytes: &[u8], quote: usize) -> bool {
+    let mut start = quote;
+    while start > 0 && scala_identifier_part(bytes[start - 1]) {
+        start -= 1;
+    }
+    if start == quote || !scala_identifier_start(bytes[start]) {
+        return false;
+    }
+    !scala_is_keyword(&bytes[start..quote])
+}
+
+/// Whether `word` is a hard Scala keyword, which is its own token and does not
+/// interpolate a string after it. Soft keywords — `as`, `derives`, `end`,
+/// `extension`, `infix`, `inline`, `opaque`, `using` — are identifiers in the
+/// lexer, so they are interpolators like any other.
+fn scala_is_keyword(word: &[u8]) -> bool {
+    matches!(
+        word,
+        b"abstract"
+            | b"case"
+            | b"catch"
+            | b"class"
+            | b"def"
+            | b"do"
+            | b"else"
+            | b"enum"
+            | b"export"
+            | b"extends"
+            | b"final"
+            | b"finally"
+            | b"for"
+            | b"given"
+            | b"if"
+            | b"implicit"
+            | b"import"
+            | b"lazy"
+            | b"match"
+            | b"new"
+            | b"object"
+            | b"open"
+            | b"override"
+            | b"package"
+            | b"private"
+            | b"protected"
+            | b"return"
+            | b"sealed"
+            | b"then"
+            | b"throw"
+            | b"trait"
+            | b"transparent"
+            | b"try"
+            | b"type"
+            | b"val"
+            | b"var"
+            | b"while"
+            | b"with"
+            | b"yield"
+    )
+}
+
+/// The first byte of a Scala identifier; `$` is one, because `$anonfun` is.
+fn scala_identifier_start(byte: u8) -> bool {
+    byte.is_ascii_alphabetic() || matches!(byte, b'_' | b'$')
+}
+
+/// A byte an identifier may carry after its first.
+fn scala_identifier_part(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'$')
+}
+
+/// Whether the `<` at `index` opens an XML literal, which is exactly where the
+/// compiler's lexer emits `XMLSTART`: the byte before it is space, tab, line
+/// feed, `{`, `(` or `>` — a token boundary, and not the `x` of `x<a>` — and
+/// the byte after it is an XML name start, `!` or `?`. The name start is the
+/// lexer's own `xml.Utility.isNameStart`, which answers to letters and `_`
+/// and *not* to `:` — that is what keeps `_ <: Suite` a type bound and `x<a>`
+/// a literal — and a byte with the high bit is read as a letter too, which
+/// costs a comparison nothing and gives a literal a chance to protect text. A
+/// byte order is read from the start of the file, so a `<` at its very
+/// beginning is preceded by the space the lexer defaults to. A bare `\r` is
+/// not a boundary: `<a>` after one is a comparison, exactly as the lexer
+/// reads it.
+fn scala_is_xml_start(bytes: &[u8], index: usize) -> bool {
+    let before = if index > 0 { bytes[index - 1] } else { b' ' };
+    if !matches!(before, b' ' | b'\t' | b'\n' | b'{' | b'(' | b'>') {
+        return false;
+    }
+    match bytes.get(index + 1) {
+        Some(b'!' | b'?') => true,
+        Some(&byte) => byte.is_ascii_alphabetic() || matches!(byte, b'_') || byte >= 0x80,
+        None => false,
+    }
+}
+
+/// The first byte of an XML name: XML 1.0 `NameStartChar`, of which the ASCII
+/// alphabet, `_` and `:` are the bytes a source file actually writes. A byte
+/// with the high bit is read as one too — it may be a non-ASCII letter — which
+/// costs a comparison nothing and gives a literal a chance to protect text.
+fn xml_name_start(byte: u8) -> bool {
+    byte.is_ascii_alphabetic() || matches!(byte, b'_' | b':') || byte >= 0x80
+}
+
+/// The length of the XML name beginning at `index`, in bytes.
+fn xml_name_len(bytes: &[u8]) -> usize {
+    let mut index = 0;
+    while index < bytes.len() && xml_name_char(bytes[index]) {
+        index += 1;
+    }
+    index
+}
+
+/// A byte an XML name may carry after its first.
+fn xml_name_char(byte: u8) -> bool {
+    xml_name_start(byte) || byte.is_ascii_digit() || matches!(byte, b'-' | b'.')
+}
+
+/// The byte after the tail of a closing XML tag: the name already read, and
+/// whatever white space and `>` end the tag, if the `>` is there at all.
+fn skip_xml_tag_tail(bytes: &[u8], mut index: usize) -> Option<usize> {
+    while matches!(bytes.get(index), Some(b' ' | b'\t' | b'\r' | b'\n')) {
+        index += 1;
+    }
+    (bytes.get(index) == Some(&b'>')).then_some(index + 1)
+}
+
+/// The length of the run of `byte` beginning at `index`.
+fn count_run(bytes: &[u8], index: usize, byte: u8) -> usize {
+    let mut end = index;
+    while bytes.get(end) == Some(&byte) {
+        end += 1;
+    }
+    end - index
+}
+
+/// Whether `byte` is white space that a pre-processing directive may stand
+/// behind, and that leaves the line it is on still blank.
+///
+/// ECMA-334 6.5.1 writes `PP_Whitespace` as `Whitespace_Character+`, and a
+/// vertical tab and a form feed are two of those: Roslyn's `IsWhitespace`
+/// answers to both, and to the space and tab a file is actually indented with.
+///
+/// NOTE: the `Zs` category is deliberately not here. Roslyn does count a
+/// no-break space as white space in front of a directive, so a line indented
+/// with one is a directive line there and an ordinary line here — which costs
+/// that line the one comment a directive may carry and nothing else, where
+/// reading a `#` no compiler would as a directive would cost the rest of the
+/// line. No C# file is indented that way; being wrong in the direction that
+/// keeps a comment is what this picks.
+const fn is_csharp_blank(byte: u8) -> bool {
+    matches!(byte, b' ' | b'\t' | 0x0b | 0x0c)
+}
+
+/// Whether the directive named `name` takes the rest of its line as a message.
+///
+/// `#error` and `#warning` carry the text their diagnostic quotes and `#region`
+/// and `#endregion` the label an editor folds under, and ECMA-334 6.5.1 writes
+/// all four as `Input_Character*` — every byte to the end of the line,
+/// whatever it spells. Roslyn still lexes a `//` that *opens* the message as a
+/// comment, which is the one case this distinction has to keep.
+fn csharp_directive_takes_a_message(name: &[u8]) -> bool {
+    matches!(name, b"error" | b"warning" | b"region" | b"endregion")
+}
+
+/// The name of the C# string form that was left open, so the diagnostic says
+/// which of the six a reader has to go and close.
+const fn csharp_unterminated_string(form: CsharpStringForm, interpolated: bool) -> &'static str {
+    match (form, interpolated) {
+        (CsharpStringForm::Plain, false) => "unterminated C# string",
+        (CsharpStringForm::Plain, true) => "unterminated C# interpolated string",
+        (CsharpStringForm::Verbatim, false) => "unterminated C# verbatim string",
+        (CsharpStringForm::Verbatim, true) => "unterminated C# interpolated verbatim string",
+        (CsharpStringForm::Raw, false) => "unterminated C# raw string",
+        (CsharpStringForm::Raw, true) => "unterminated C# interpolated raw string",
+    }
+}
+
+/// The kind of a C# line comment.
+///
+/// `///` is the XML documentation comment of ECMA-334 6.3.3, and a fourth slash
+/// takes it back: Roslyn's lexer asks for `///` and then that the byte behind
+/// is no slash, so `////` is the ordinary comment a reader rules a section off
+/// with — which is where C# parts company with Dart and Swift and keeps company
+/// with Java. `//!` is Rust's inner-doc marker and means nothing here.
+fn csharp_line_kind(bytes: &[u8], index: usize) -> CommentKind {
+    if starts(bytes, index, b"///") && bytes.get(index + 3) != Some(&b'/') {
+        CommentKind::DocLine
+    } else {
+        CommentKind::Line
+    }
+}
+
+/// The kind of a C# block comment.
+///
+/// `/**` opens the delimited documentation comment, with two spellings that are
+/// not there to open anything: `/**/` is the *empty* block comment, whose
+/// second `*` is the first byte of its own terminator, and `/***` is a rule of
+/// stars. Roslyn asks for `/**` and then that the byte behind is neither `*`
+/// nor `/`, and reports `/**/`, `/***/` and `/*** x */` as `MultiLineComment`
+/// where `/** x */` is `MultiLineDocumentationComment`. `/*!` is Doxygen's
+/// marker, which C and C++ honour and C# does not.
+fn csharp_block_kind(bytes: &[u8], index: usize) -> CommentKind {
+    if starts(bytes, index, b"/**") && !matches!(bytes.get(index + 3), Some(b'*' | b'/')) {
         CommentKind::DocBlock
     } else {
         CommentKind::Block
@@ -5365,29 +7408,20 @@ fn cpp_raw_string(bytes: &[u8], index: usize, reach: &mut Reach) -> Option<(usiz
         return None;
     };
     let delimiter_start = index + prefix.len();
-    let Some(open) = bytes[delimiter_start..]
-        .iter()
-        .position(|byte| *byte == b'(')
-        .map(|relative| relative + delimiter_start)
-    else {
-        /* NOTE: no `(` anywhere leaves this quote an ordinary one, decided out
-         * of every byte behind it. */
-        reach.end_of(bytes);
-        return None;
-    };
+    /* INVARIANT: as in `ocaml_quoted_string`, and for the same reason. The
+     * delimiter of a raw string literal is a run of at most 16 d-chars and the
+     * `(` stands directly behind it ([lex.string]), so this reads that class
+     * and one byte more rather than searching the document for a `(` that may
+     * never come. An ordinary `R"` in the code then costs the lines under it
+     * nothing. */
+    let mut open = delimiter_start;
+    while open < delimiter_start + 16 && bytes.get(open).is_some_and(|byte| is_cpp_d_char(*byte)) {
+        open += 1;
+    }
+    /* NOTE: the byte that ended the class decided this, and a `get` that came
+     * back `None` at the end of the document decided it just the same. */
     reach.byte(open);
-    /* NOTE: [lex.string]: a d-char is any member of the basic source character
-     * set except space, `(`, `)`, `\`, and the control characters horizontal
-     * tab, vertical tab, form feed and new-line. The vertical tab is in that
-     * list and is not in `u8::is_ascii_whitespace`, so it is named here. */
-    if open - delimiter_start > 16
-        || bytes[delimiter_start..open].iter().any(|byte| {
-            matches!(
-                byte,
-                b' ' | b'(' | b')' | b'\\' | b'\t' | 0x0b | 0x0c | b'\n' | b'\r'
-            )
-        })
-    {
+    if bytes.get(open) != Some(&b'(') {
         return None;
     }
     let mut close = Vec::with_capacity(open - delimiter_start + 2);
@@ -5400,11 +7434,27 @@ fn cpp_raw_string(bytes: &[u8], index: usize, reach: &mut Reach) -> Option<(usiz
             reach.through(end);
             (end, true)
         }
-        None => {
-            reach.end_of(bytes);
-            (bytes.len(), false)
-        }
+        /* NOTE: nothing is recorded here, and nothing is read past either: the
+         * scan takes every byte this search crossed, so a rescan from a later
+         * checkpoint would meet the same open literal and reach the same
+         * answer. `parse_heredoc` is the one give-up path whose search the scan
+         * then rewinds behind, which is why the `end_of` there is the one that
+         * carries weight. */
+        None => (bytes.len(), false),
     })
+}
+
+/// Whether `byte` may stand in the delimiter of a C++ raw string literal.
+///
+/// [lex.string]: a d-char is any member of the basic source character set
+/// except space, `(`, `)`, `\`, and the control characters horizontal tab,
+/// vertical tab, form feed and new-line. The vertical tab is in that list and
+/// is not in `u8::is_ascii_whitespace`, so it is named here.
+const fn is_cpp_d_char(byte: u8) -> bool {
+    !matches!(
+        byte,
+        b' ' | b'(' | b')' | b'\\' | b'\t' | 0x0b | 0x0c | b'\n' | b'\r'
+    )
 }
 
 fn cpp_raw_start_at_quote(bytes: &[u8], quote: usize) -> Option<usize> {
@@ -5475,7 +7525,11 @@ fn ocaml_comment_end(bytes: &[u8], start: usize, reach: &mut Reach) -> (usize, b
 }
 
 fn ocaml_quoted_string(bytes: &[u8], index: usize, reach: &mut Reach) -> Option<(usize, bool)> {
-    reach.byte(index);
+    /* NOTE: the byte at `index` is the one the scan stands on and consumes
+     * whichever way this goes, so reading it is no lookahead and nothing is
+     * recorded for it. `scan_ocaml` asks this of every byte of a document, and
+     * recording each one would push the watermark along in front of the scan
+     * and take away every checkpoint the language has. */
     if bytes.get(index) != Some(&b'{') {
         return None;
     }
@@ -5509,10 +7563,9 @@ fn ocaml_quoted_string(bytes: &[u8], index: usize, reach: &mut Reach) -> Option<
             reach.through(end);
             (end, true)
         }
-        None => {
-            reach.end_of(bytes);
-            (bytes.len(), false)
-        }
+        /* NOTE: nothing is recorded here, for the reason `cpp_raw_string`
+         * gives: the scan consumes every byte this search crossed. */
+        None => (bytes.len(), false),
     })
 }
 
@@ -5826,10 +7879,9 @@ fn sql_dollar_quote_end(bytes: &[u8], start: usize, reach: &mut Reach) -> Option
             reach.through(end);
             (end, true)
         }
-        None => {
-            reach.end_of(bytes);
-            (bytes.len(), false)
-        }
+        /* NOTE: nothing is recorded here, for the reason `cpp_raw_string`
+         * gives: the scan consumes every byte this search crossed. */
+        None => (bytes.len(), false),
     })
 }
 
@@ -5854,10 +7906,9 @@ fn oracle_q_quote_end(bytes: &[u8], start: usize, reach: &mut Reach) -> Option<(
             reach.through(end);
             (end, true)
         }
-        None => {
-            reach.end_of(bytes);
-            (bytes.len(), false)
-        }
+        /* NOTE: nothing is recorded here, for the reason `cpp_raw_string`
+         * gives: the scan consumes every byte this search crossed. */
+        None => (bytes.len(), false),
     })
 }
 
@@ -7060,18 +9111,34 @@ mod tests {
     /// ordinary byte costs the rest of the document its restart points. An
     /// OCaml quoted-string tag is `[a-z_]*` and is followed by `|` (OCaml
     /// manual, Lexical conventions); a PostgreSQL dollar-quote tag is an
-    /// identifier or nothing and is followed by `$` (PostgreSQL 4.1.2.4). Each
-    /// search therefore gives up at the first byte outside its class, and an
-    /// ordinary `{` or `$` in the code leaves the lines under it their
-    /// checkpoints.
+    /// identifier or nothing and is followed by `$` (PostgreSQL 4.1.2.4); a C++
+    /// raw-string delimiter is at most 16 d-chars and is followed by `(`
+    /// ([lex.string]). Each search therefore gives up at the first byte outside
+    /// its class, and an ordinary `{`, `$` or `R"` in the code leaves the lines
+    /// under it their checkpoints.
     #[test]
     fn a_class_bounded_tag_search_keeps_the_checkpoints_under_it() {
         // NOTE: `{aa` opens no quoted string: the tag class stops at the line
-        // NOTE: terminator, which is not the `|` a tag needs behind it.
+        // NOTE: terminator, which is not the `|` a tag needs behind it. The
+        // NOTE: byte the scan stands on is not recorded, so asking this of
+        // NOTE: every byte of the document does not drag the watermark along
+        // NOTE: behind the scan: the `{` on line 1 is the only thing that reads
+        // NOTE: ahead here, and the lines under it keep the watermark it left.
         let ocaml = b"let x = {aa\n(* c *)\ny\n";
         assert_eq!(
             scan_checkpoint_watermarks(ocaml, Language::Ocaml, ScanOptions::default()),
-            [(0, 0), (12, 12), (20, 20), (22, 22)]
+            [(0, 0), (12, 12), (20, 12), (22, 12)]
+        );
+
+        // NOTE: `R"x y"` opens no raw string: the d-char class stops at the
+        // NOTE: space, which is not the `(` a delimiter needs behind it. The
+        // NOTE: search that used to answer that read the whole document looking
+        // NOTE: for a `(`, which took every checkpoint below it away.
+        let cpp = b"char* s = R\"x y\";\n// c\nz\n";
+        assert_eq!(cpp[13], b' ');
+        assert_eq!(
+            scan_checkpoint_watermarks(cpp, Language::Cpp, ScanOptions::default()),
+            [(0, 0), (18, 14), (23, 14), (25, 14)]
         );
 
         // NOTE: `a$b` opens no dollar-quoted string: the tag class stops at the
@@ -7102,6 +9169,100 @@ mod tests {
                 }
             ),
             [(0, 0), (16, 9), (21, 9), (23, 9)]
+        );
+    }
+
+    /// What Swift's three lookaheads cost the lines under them.
+    ///
+    /// INVARIANT: two of them are bounded and one is not, and the difference is
+    /// whether the scan rewinds behind what they read. A `#` run stops at the
+    /// first byte outside its class, and a bare `/ ... /` may hold no line
+    /// terminator (The Swift Programming Language, Lexical Structure), so
+    /// neither can reach past the line it stands on and the lines under it keep
+    /// their checkpoints. An extended `#/ ... /#` that opens a multi-line
+    /// literal and never closes is the one that cannot be bounded: it reads to
+    /// the end of the document, hands the lines back, and lexes them again as
+    /// code — so every checkpoint under it is withdrawn, the end of the
+    /// document included, because appending a `/#` would close it.
+    #[test]
+    fn swift_lookaheads_pay_for_what_they_read() {
+        // NOTE: `#if` opens no literal: the run of `#` stops at the `i`, which
+        // NOTE: is neither the quote of a raw string nor the slash of a regular
+        // NOTE: expression literal.
+        let directive = b"let a = #if x\n// c\ny\n";
+        assert_eq!(
+            scan_checkpoint_watermarks(directive, Language::Swift, ScanOptions::default()),
+            [(0, 0), (14, 10), (19, 10), (21, 10)]
+        );
+
+        // NOTE: `1 / 2` opens no literal either, and gives up at the space one
+        // NOTE: byte behind the slash rather than reading the line at all.
+        let division = b"let a = 1 / 2\n// c\nx\n";
+        assert_eq!(
+            scan_checkpoint_watermarks(division, Language::Swift, ScanOptions::default()),
+            [(0, 0), (14, 12), (19, 12), (21, 12)]
+        );
+
+        // NOTE: `(/x y` opens none: the closing delimiter would be preceded by
+        // NOTE: an unescaped space, and there is none on the line in any case.
+        // NOTE: The search reads the terminator to know it must stop there,
+        // NOTE: which leaves the line start behind it standing.
+        let candidate = b"let a = (/x y\n// c\nz\n";
+        assert_eq!(candidate[13], b'\n');
+        assert_eq!(
+            scan_checkpoint_watermarks(candidate, Language::Swift, ScanOptions::default()),
+            [(0, 0), (14, 14), (19, 14), (21, 14)]
+        );
+
+        // NOTE: the unbounded one, and the only checkpoint left is the offset a
+        // NOTE: restart there *is* the full scan from.
+        let unterminated = b"let a = #/\n// c\nz\n";
+        assert_eq!(
+            scan_checkpoint_watermarks(unterminated, Language::Swift, ScanOptions::default()),
+            [(0, 0)]
+        );
+    }
+
+    /// Every C# lookahead is bounded by the run it is reading, so the line
+    /// starts under one keep their restart points.
+    #[test]
+    fn csharp_lookaheads_pay_for_what_they_read() {
+        // NOTE: `@x` opens no literal: the run of `$` and `@` stops at the `x`,
+        // NOTE: which is not the quote every string form needs. The byte that
+        // NOTE: ended the run is the one byte read past where the scan resumes.
+        let identifier = b"var a = @x;\n// c\ny\n";
+        assert_eq!(identifier[9], b'x');
+        assert_eq!(
+            scan_checkpoint_watermarks(identifier, Language::CSharp, ScanOptions::default()),
+            [(0, 0), (12, 10), (17, 10), (19, 10)]
+        );
+
+        // NOTE: a raw string's closing run is taken whole, so the byte that
+        // NOTE: ended it is read one past the resume point — and the read that
+        // NOTE: decided the literal spans lines costs nothing on top, because
+        // NOTE: the scan takes every byte of that line either way.
+        let raw = b"var a = \"\"\"\n  x\n  \"\"\";\n// c\ny\n";
+        assert_eq!(raw[21], b';');
+        assert_eq!(
+            scan_checkpoint_watermarks(raw, Language::CSharp, ScanOptions::default()),
+            [(0, 0), (23, 22), (28, 22), (30, 22)]
+        );
+
+        // NOTE: a directive line is a plain forward scan of one line, so it
+        // NOTE: reports nothing and the line under it keeps its restart point.
+        let directive = b"#if x // c\nvar a = 1;\n";
+        assert_eq!(
+            scan_checkpoint_watermarks(directive, Language::CSharp, ScanOptions::default()),
+            [(0, 0), (11, 0), (22, 0)]
+        );
+
+        // NOTE: a verbatim string that never closes swallows the file, and the
+        // NOTE: only checkpoint left is the offset a restart there *is* the full
+        // NOTE: scan from.
+        let unterminated = b"var a = @\"open\n// c\nz\n";
+        assert_eq!(
+            scan_checkpoint_watermarks(unterminated, Language::CSharp, ScanOptions::default()),
+            [(0, 0)]
         );
     }
 
@@ -7141,5 +9302,70 @@ mod tests {
         assert_eq!(report.comments.len(), 2);
         assert!(!report.comments[0].disposition.is_remove());
         assert!(report.comments[1].disposition.is_remove());
+    }
+
+    /// A Scala checkpoint may not stand directly before a `<` that could open
+    /// an XML literal: the literal's trigger reads the byte *behind* its `<`,
+    /// and a rescan that begins there has no byte behind it to read. A line
+    /// that opens with one therefore offers no restart point, while a line
+    /// that opens with a `<` no literal could begin at keeps its checkpoint.
+    #[test]
+    fn a_scala_xml_boundary_keeps_its_checkpoint_away_from_the_literal() {
+        // NOTE: `<a>` after a newline is an XML literal: the checkpoint after
+        // NOTE: the newline is refused, and the text of the literal is opaque
+        // NOTE: in a full scan and in a rescan from any earlier checkpoint.
+        let xml = b"x\n<a>// text</a>\ny\n";
+        assert_eq!(
+            scan_checkpoint_watermarks(xml, Language::Scala, ScanOptions::default()),
+            [(0, 0), (17, 0), (19, 0)]
+        );
+        let (_, checkpoints) =
+            scan_with_checkpoints(xml, Language::Scala, ScanOptions::default(), 0);
+        assert_eq!(checkpoints, vec![0, 17, 19]);
+        for point in &checkpoints {
+            let (suffix, _) = scan_with_checkpoints(
+                &xml[*point..],
+                Language::Scala,
+                ScanOptions::default(),
+                *point,
+            );
+            assert!(suffix.comments.is_empty(), "restarting at {point}");
+        }
+
+        // NOTE: `<1` cannot begin a literal (a digit is no XML name start), so
+        // NOTE: the line keeps its checkpoint and the `//` under it is a
+        // NOTE: comment in a full scan and in a rescan from it alike.
+        let operator = b"x\n<1 + 2\n// c\ny\n";
+        assert_eq!(
+            scan_checkpoint_watermarks(operator, Language::Scala, ScanOptions::default()),
+            [(0, 0), (2, 0), (9, 0), (14, 0), (16, 0)]
+        );
+        let (_, checkpoints) =
+            scan_with_checkpoints(operator, Language::Scala, ScanOptions::default(), 0);
+        assert_eq!(checkpoints, vec![0, 2, 9, 14, 16]);
+        for point in &checkpoints {
+            let (suffix, _) = scan_with_checkpoints(
+                &operator[*point..],
+                Language::Scala,
+                ScanOptions::default(),
+                *point,
+            );
+            assert!(
+                suffix
+                    .comments
+                    .iter()
+                    .all(|comment| comment.span.start >= *point),
+                "restarting at {point}"
+            );
+        }
+
+        // NOTE: `<` after a bare `\r` is no literal (a `\r` is not a trigger
+        // NOTE: byte), so the checkpoint the `\r` earns is refused all the
+        // NOTE: same: a rescan from it would not know the `\r` was there.
+        let cr = b"\r<?php //go:build\nz\n";
+        assert_eq!(
+            scan_checkpoint_watermarks(cr, Language::Scala, ScanOptions::default()),
+            [(0, 0), (18, 0), (20, 0)]
+        );
     }
 }

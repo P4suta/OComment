@@ -230,7 +230,17 @@ JSONL, SARIF, and GitHub output. All user-facing text is English.
   fixtures the language adds in the same commit that adds them — and the
   editor clients: `editors/vscode/package.json` lists the identifiers the
   extension attaches to in both `activationEvents` and the `ocomment.languages`
-  default, and `docs/editors.md` names and counts them. The two
+  default, and `docs/editors.md` names and counts them. An editor identifier is
+  written in the editor's vocabulary rather than in this one, so it also has to
+  *reach* the language: `language_from_lsp` in `rust/ocomment/src/lsp.rs` parses
+  it as a `Language` and carries an arm for each one that does not agree —
+  `objective-c`, `cuda-cpp`, `javascriptreact`, `shellscript`. Nothing else
+  notices when a new identifier agrees with nothing: the extension activates,
+  the server opens the document, and the scan comes back with the
+  `unknown-language` diagnostic and no comments, which reads like a language
+  that was never added at all.
+  `every_editor_language_identifier_reaches_a_built_in_language` in that file
+  reads the selector and fails instead. The two
   published JSON schemas carry the vocabulary rather than deriving it:
   `spec/config.schema.json` enumerates the languages a configuration may name
   and `spec/result.schema.json` the ones a report may carry, which is the same
@@ -316,6 +326,16 @@ JSONL, SARIF, and GitHub output. All user-facing text is English.
   `rust/ocomment-core/tests/source_guards.rs` reads both of them and fails a
   `prop_oneof!` arm that spells a literal of its own, so an opener added to one
   suite alone is refused rather than silently leaving the other blind to it.
+- A language whose *lexer* ends a line on more than `\r` and `\n` still offers a
+  checkpoint after those two alone. C# is the one that has more — ECMA-334 6.3.1
+  counts U+0085, U+2028 and U+2029 besides, and Roslyn ends a `//` comment at all
+  five, so the scanner has to as well or a removal would swallow the code behind
+  one on the same physical line. The *restart* rules are a different question:
+  `the_line_ending_permits_a_restart` and the preamble window are written in `\r`
+  and `\n`, and the incremental engine consults them over the edited bytes, so a
+  checkpoint after a U+2028 would be a line start only one of the two agreed on.
+  Refusing it costs a rescan the chance to begin there and nothing else, which is
+  the same trade JavaScript makes for its own two.
 - A lookahead that can read past the byte the scan resumes at takes `&mut Reach`
   and records every byte it consults — the failed `get` at the end of the
   document included, because deciding that the document ends there is a decision

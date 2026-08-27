@@ -125,6 +125,11 @@ value_enum_wrapper!(LanguageArg, Language, |value| match value {
     Language::Zig => "Zig source files and Zig Object Notation data",
     Language::R => "R scripts and the `.Rprofile` an R session sources at start-up",
     Language::Dart => "Dart source files, whose block comments nest",
+    Language::Swift =>
+        "Swift source files, whose block comments nest and whose `#/../#` is a regex",
+    Language::CSharp => "C# source and script files, whose `#` lines are preprocessor directives",
+    Language::Scala =>
+        "Scala source and script files, whose block comments nest and whose XML literals are opaque",
     Language::Unknown => "An undetected language",
 });
 

@@ -70,7 +70,20 @@ pub const BYTES: &[u8] = b"\n\r/*'\"#`{}<>=[]-|?\\$%()@:!~";
 /// its raw string openers, whose `r` is a letter no per-byte alphabet carries
 /// and which take neither an escape nor an interpolation, and the interpolation
 /// opener itself: a `${` turns the inside of a string back into code, and a
-/// comment written there is one more state a restart must not land inside.
+/// comment written there is one more state a restart must not land inside. The
+/// five Swift fragments after them are its raw-string and extended-regex
+/// delimiters with the escape the hashes rename: `#"` and `"#` open and close
+/// the raw string whose escape is `\#(`, and `#/` and `/#` the regular
+/// expression literal that may hold an unescaped `/` and may span lines. Each
+/// is two or more bytes that have to arrive in that order, and each opens a
+/// state a restart must not land inside. The seven C# fragments at the end are
+/// its four string openers, the brace pair that is an escape in one form and a
+/// hole in another, and two directive words: an `@` and a quote and a `$@` and
+/// a quote carry line breaks, a `$` and a quote carries a hole that may, a run
+/// of two `$` in front of three quotes needs two braces to open one, and a line
+/// whose first non-blank byte opens a directive is lexed by rules of its own.
+/// Each is a state a restart must not land inside, and none of them is a shape
+/// a per-byte alphabet assembles.
 #[doc(hidden)]
 pub const TOKENS: &[&[u8]] = &[
     b"coding:",
@@ -119,4 +132,16 @@ pub const TOKENS: &[&[u8]] = &[
     b"r'",
     b"r'''",
     b"${",
+    b"#\"",
+    b"\"#",
+    b"\\#(",
+    b"#/",
+    b"/#",
+    b"@\"",
+    b"$\"",
+    b"$@\"",
+    b"$$\"\"\"",
+    b"{{",
+    b"#if ",
+    b"#region ",
 ];

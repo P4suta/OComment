@@ -205,3 +205,24 @@ extensions = ["dart"]
 dialects = ["standard"]
 shebangs = ["dart"]
 notes = "Dart 3.13 lexical forms; block comments nest and `${...}` is code"
+
+[[languages]]
+name = "swift"
+extensions = ["swift"]
+dialects = ["standard"]
+shebangs = ["swift"]
+notes = "Swift 6 lexical forms; block comments nest and `#/.../#` is a regular expression literal"
+
+[[languages]]
+name = "csharp"
+extensions = ["cs", "csx"]
+dialects = ["standard"]
+shebangs = ["dotnet-script"]
+notes = "C# 13 lexical forms; a line opening with `#` is a preprocessor directive and carries at most a `//` comment"
+
+[[languages]]
+name = "scala"
+extensions = ["scala", "sc"]
+dialects = ["standard"]
+shebangs = ["scala-cli", "scala"]
+notes = "Scala 3.8 lexical forms; block comments nest, an identifier before a quote makes the string interpolate, and an XML literal is opaque text with `{...}` code"

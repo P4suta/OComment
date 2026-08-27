@@ -266,6 +266,18 @@ let check_php_modes () =
   Alcotest.(check int) "at the //" 34 (List.hd report.comments).span.start;
   Alcotest.(check int) "ends at the ?>" 44 (List.hd report.comments).span.finish
 
+
+(* NOTE: Scala's XML literal is the one construct where the compiler's lexer and
+   parser disagree: the lexer reports a "//" in the element text as a comment
+   and the parser reads it as text.  The scanner follows the parser, and the
+   comment inside the interpolation is code. *)
+let check_scala_xml_and_interpolation () =
+  let source =
+    "val a = <a>// text</a>\nval b = s\"${1 /* keep */}\" // remove\n" in
+  let report = scan (Bytes.of_string source) Scala default_scan_options in
+  Alcotest.(check bool) "valid" true report.valid;
+  Alcotest.(check int) "two comments" 2 (List.length report.comments)
+
 let () = Alcotest.run "ocomment-ref" [
   "core", [
     Alcotest.test_case "transform" `Quick check_transform;
@@ -287,5 +299,7 @@ let () = Alcotest.run "ocomment-ref" [
     Alcotest.test_case "yaml-structural-trail" `Quick check_yaml_structural_trail;
     Alcotest.test_case "yaml-phantom-header" `Quick check_yaml_phantom_header;
     Alcotest.test_case "php-modes" `Quick check_php_modes;
+    Alcotest.test_case "scala-xml-and-interpolation" `Quick
+      check_scala_xml_and_interpolation;
   ]
 ]

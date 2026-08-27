@@ -134,6 +134,19 @@ pub enum Language {
     /// Dart, detected from `.dart` and from a `dart` `#!` line. Its block
     /// comments nest.
     Dart,
+    /// Swift, detected from `.swift` and from a `swift` `#!` line. Its block
+    /// comments nest and `#/ ... /#` is an opaque regular expression literal.
+    Swift,
+    /// C#, detected from `.cs` and from the `.csx` of a script. A line whose
+    /// first non-blank byte is `#` is a preprocessor directive and carries at
+    /// most a `//` comment.
+    #[serde(rename = "csharp")]
+    CSharp,
+    /// Scala, detected from `.scala` and from the `.sc` of a script, and from
+    /// a `scala` or `scala-cli` `#!` line. Its block comments nest, a string
+    /// is interpolated when an identifier stands directly before its quote,
+    /// and a `<` with the shape of an XML literal opens one.
+    Scala,
     /// No built-in scanner, and the default.
     ///
     /// Scanning it yields no comments and one `unknown-language` error
@@ -146,7 +159,7 @@ pub enum Language {
 
 impl Language {
     /// Every CLI-visible language; `Unknown` is deliberately excluded.
-    pub const ALL: [Self; 23] = [
+    pub const ALL: [Self; 26] = [
         Self::Rust,
         Self::Ocaml,
         Self::C,
@@ -170,6 +183,9 @@ impl Language {
         Self::Zig,
         Self::R,
         Self::Dart,
+        Self::Swift,
+        Self::CSharp,
+        Self::Scala,
     ];
 
     /// The canonical name, identical to the serde representation.
@@ -198,6 +214,9 @@ impl Language {
             Self::Zig => "zig",
             Self::R => "r",
             Self::Dart => "dart",
+            Self::Swift => "swift",
+            Self::CSharp => "csharp",
+            Self::Scala => "scala",
             Self::Unknown => "unknown",
         }
     }
@@ -217,6 +236,8 @@ impl Language {
             | Self::Php
             | Self::Zig
             | Self::Dart
+            | Self::Swift
+            | Self::Scala
             | Self::Unknown => &[],
             Self::Cpp => &["c++", "cxx"],
             Self::Go => &["golang"],
@@ -234,6 +255,12 @@ impl Language {
              * command they type reaches the same scanner. GitHub Linguist
              * publishes it as an alias of R for the same reason. */
             Self::R => &["rscript"],
+            /* NOTE: `c#` is the language's own name, and `cs` the suffix its
+             * files carry and the identifier every editor knows it by. The
+             * third spelling a project writes, `c-sharp`, needs no row of its
+             * own: [`FromStr`] folds `-` and `_` out of a spelling before it
+             * looks it up, so those letters already reach the canonical name. */
+            Self::CSharp => &["cs", "c#"],
         }
     }
 }
