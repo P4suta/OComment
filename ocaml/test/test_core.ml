@@ -288,6 +288,15 @@ let check_vue_component () =
   Alcotest.(check bool) "valid" true report.valid;
   Alcotest.(check int) "only the html comment" 1 (List.length report.comments)
 
+(* NOTE: Markdown's fenced code blocks are scanned as the language their
+   info string names, and its inline code is opaque. *)
+let check_markdown_fences () =
+  let source =
+    "```rust\n// c\n```\n`// inline`\n" in
+  let report = scan (Bytes.of_string source) Markdown default_scan_options in
+  Alcotest.(check bool) "valid" true report.valid;
+  Alcotest.(check int) "only the rust comment" 1 (List.length report.comments)
+
 let () = Alcotest.run "ocomment-ref" [
   "core", [
     Alcotest.test_case "transform" `Quick check_transform;
@@ -312,5 +321,6 @@ let () = Alcotest.run "ocomment-ref" [
     Alcotest.test_case "scala-xml-and-interpolation" `Quick
       check_scala_xml_and_interpolation;
     Alcotest.test_case "vue-component" `Quick check_vue_component;
+    Alcotest.test_case "markdown-fences" `Quick check_markdown_fences;
   ]
 ]

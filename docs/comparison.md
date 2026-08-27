@@ -15,7 +15,7 @@ job you have.
 | --- | --- | --- | --- | --- | --- |
 | What it is | A comment checker and remover | A Node.js library and CLI for stripping comments | A Node.js library for stripping comments | A line counter, with a comment-stripping side output | A C preprocessor |
 | Built to | Report, gate, and remove comments under a policy | Strip comments from JavaScript-style source | Strip comments while preserving string literals | Count lines of code | Preprocess C-family translation units |
-| Language coverage | [28 languages and 17 dialects](languages.md), plus declarative profiles and WebAssembly plugins | JavaScript and other C-style syntaxes | JavaScript, JSON, CSS, HTML | Very broad, from its own per-language comment table | C, C++, Objective-C, and their preprocessed inputs |
+| Language coverage | [29 languages and 17 dialects](languages.md), plus declarative profiles and WebAssembly plugins | JavaScript and other C-style syntaxes | JavaScript, JSON, CSS, HTML | Very broad, from its own per-language comment table | C, C++, Objective-C, and their preprocessed inputs |
 | Keeps tool directives by default | Yes — shebangs, encoding preambles, `//go:build`, lint controls, optimiser hints, MySQL versioned comments | Documents an option for keeping `/*!` "protected" comments | Documents an option for keeping `/*!` "protected" comments | Not a stated goal | Not a stated goal |
 | Configurable per path | Yes, `[[overrides]]` globs in `.ocomment.toml` | Through the calling program | Through the calling program | No | No |
 | Check-only mode with a CI exit code | Yes, `ocomment check` | No | No | No | No |

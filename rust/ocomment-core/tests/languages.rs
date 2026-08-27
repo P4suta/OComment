@@ -4616,9 +4616,18 @@ fn r_is_detected_from_its_extension_reserved_name_and_shebang() {
         (profile.language, profile.reason),
         (Language::R, "reserved-filename")
     );
-    /* NOTE: `.Rmd` is a Markdown document with R chunks in it, and `.Renviron`
-     * is a table of `name=value` lines rather than R code, so neither is R. */
-    for name in ["report.Rmd", ".Renviron", "Rprofile.site"] {
+    /* NOTE: `.Rmd` is a Markdown document with R chunks in it, and this
+     * scanner now reads those chunks, so it is detected as Markdown rather
+     * than as R. `.Renviron` is a table of `name=value` lines rather than R
+     * code, and `Rprofile.site` is site configuration rather than a profile,
+     * so neither is R. */
+    let rmd = detect_language(Some(Path::new("report.Rmd")), b"").expect("`.Rmd`");
+    assert_eq!(
+        (rmd.language, rmd.reason),
+        (Language::Markdown, "extension"),
+        "`.Rmd` is R Markdown, scanned as Markdown"
+    );
+    for name in [".Renviron", "Rprofile.site"] {
         assert!(
             detect_language(Some(Path::new(name)), b"").is_none(),
             "`{name}` was detected as a language"
@@ -6688,4 +6697,109 @@ fn vue_layouts_leave_a_line_columns_or_nothing() {
         },
     );
     assert_eq!(compact.output, b"<template>\n</template>\n");
+}
+
+/// An HTML comment in Markdown is an HTML block per CommonMark 4.6, so it is
+/// a comment that `safe` keeps as DOM-observable; it may span lines.
+///
+/// Ground truth, `commonmark` 0.31: the source below parses with the comment
+/// as one `html_block` node.
+#[test]
+fn markdown_html_comments_are_comments() {
+    let source = b"text\n<!-- note -->\nmore\n<!--\nsecond\n-->\n";
+    let report = scan(source, Language::Markdown, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(
+        report
+            .comments
+            .iter()
+            .map(|comment| (comment.span.start, comment.span.end, comment.kind))
+            .collect::<Vec<_>>(),
+        vec![
+            (5, 18, CommentKind::HtmlComment),
+            (24, 39, CommentKind::HtmlComment),
+        ]
+    );
+}
+
+/// A fenced code block is scanned as the language its info string names: the
+/// `// c` inside a `rust` fence and the `# c` inside a `ruby` fence are
+/// comments of those languages.
+///
+/// Ground truth, `commonmark` 0.31: the fences parse as `code_block` nodes
+/// with the info strings `rust` and `ruby`.
+#[test]
+fn markdown_fenced_code_blocks_are_scanned_per_language() {
+    let source = b"```rust\n// c\n```\n~~~ruby\n# c\n~~~\ntext\n";
+    let report = scan(source, Language::Markdown, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(
+        report
+            .comments
+            .iter()
+            .map(|comment| (comment.span.start, comment.span.end, comment.kind))
+            .collect::<Vec<_>>(),
+        vec![(8, 12, CommentKind::Line), (25, 28, CommentKind::Line)]
+    );
+}
+
+/// A fence whose info string names no language — or names none at all — is
+/// opaque: its body holds no comment this scanner may take.
+#[test]
+fn markdown_unknown_fences_are_opaque() {
+    let source = b"```nope\n// not\n```\n```\n/* not */\n```\n";
+    let report = scan(source, Language::Markdown, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert!(report.comments.is_empty(), "{:?}", report.comments);
+}
+
+/// Inline code spans and indented code blocks are opaque: the `//` and
+/// `/* */` inside them are code text, not comments, while a comment outside
+/// them is a comment.
+///
+/// Ground truth, `commonmark` 0.31: the spans parse as `code` and
+/// `code_block` nodes, and `//` in the prose is text — Markdown has no line
+/// comment of its own.
+#[test]
+fn markdown_inline_and_indented_code_are_opaque() {
+    let source = b"`// not`\n    /* not */\n    more\n\ntext // real\n";
+    let report = scan(source, Language::Markdown, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert!(report.comments.is_empty(), "{:?}", report.comments);
+}
+
+/// A fence closes only at a run of its own marker at least as long as its
+/// own: the `// c` under a four-backtick closer is a comment, and a line of
+/// three backticks inside a three-backtick block closes it, leaving the
+/// `// not` below it text.
+///
+/// Ground truth, `commonmark` 0.31: the first source's code block carries the
+/// `// c` line and the second's ends at the first closer.
+#[test]
+fn markdown_fences_close_only_at_their_own_marker() {
+    let source = b"```rust\n// c\n````\n";
+    let report = scan(source, Language::Markdown, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(report.comments[0].span, ByteSpan::new(8, 12));
+
+    let source = b"```rust\n```\n// not\n";
+    let report = scan(source, Language::Markdown, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    assert!(report.comments.is_empty(), "{:?}", report.comments);
+}
+
+/// Markdown is detected from `.md`, `.markdown` and the `.Rmd` of an R
+/// Markdown document, whose `{r}` chunk headers name R.
+#[test]
+fn markdown_is_detected_from_its_extensions() {
+    for path in [
+        Path::new("README.md"),
+        Path::new("index.markdown"),
+        Path::new("report.Rmd"),
+    ] {
+        let found = detect_language(Some(path), b"text\n").expect("detected by extension");
+        assert_eq!(found.language, Language::Markdown);
+        assert_eq!(found.reason, "extension");
+    }
 }

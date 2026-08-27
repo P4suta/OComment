@@ -1626,6 +1626,36 @@
         "diagnostics": [],
         "output_utf8": "<script lang=\"ts\">\n\n</script>\n<style lang=\"scss\">\n\n</style>\n<p>{x }</p>\n<!-- note -->\n"
       }
+    },
+    {
+      "id": "markdown-builtin-safe",
+      "language": "markdown",
+      "operation": "transform",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "text\n<!-- note -->\nmore\n```rust\n// c\n```\n`// inline`\n",
+      "note": "CommonMark 0.31: `<!-- note -->` is an HTML block that `safe` keeps as DOM-observable, a ```rust fence is scanned as Rust so the `// c` inside is a comment, and an inline code span is opaque. Ground truth, the `commonmark` package: the comment parses as one `html_block` and the fence as a `code_block` with info `rust`.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 5,
+            "end": 18,
+            "kind": "html-comment",
+            "action": "keep"
+          },
+          {
+            "start": 32,
+            "end": 36,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "text\n<!-- note -->\nmore\n```rust\n\n```\n`// inline`\n"
+      }
     }
   ]
 }

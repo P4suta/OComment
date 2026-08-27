@@ -239,3 +239,9 @@ name = "svelte"
 extensions = ["svelte"]
 dialects = ["standard"]
 notes = "Svelte components; the template is HTML with `{ ... }` code and the script and style bodies are their own languages, the `lang` attribute choosing which"
+
+[[languages]]
+name = "markdown"
+extensions = ["md", "markdown", "rmd"]
+dialects = ["standard"]
+notes = "CommonMark documents; HTML comments are comments, fenced code blocks are scanned as the language their info string names, and inline and indented code are opaque"

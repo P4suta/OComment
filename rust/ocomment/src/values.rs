@@ -132,6 +132,8 @@ value_enum_wrapper!(LanguageArg, Language, |value| match value {
         "Scala source and script files, whose block comments nest and whose XML literals are opaque",
     Language::Vue => "Vue single-file components, whose templates are HTML with `{{ ... }}` code",
     Language::Svelte => "Svelte components, whose templates are HTML with `{ ... }` code",
+    Language::Markdown =>
+        "Markdown documents, whose fenced code blocks are scanned as their named languages",
     Language::Unknown => "An undetected language",
 });
 

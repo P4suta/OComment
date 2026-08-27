@@ -58,7 +58,8 @@ swift\t'Swift source files, whose block comments nest and whose `#/../#` is a re
 csharp\t'C# source and script files, whose `#` lines are preprocessor directives'
 scala\t'Scala source and script files, whose block comments nest and whose XML literals are opaque'
 vue\t'Vue single-file components, whose templates are HTML with `{{ ... }}` code'
-svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'"
+svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'
+markdown\t'Markdown documents, whose fenced code blocks are scanned as their named languages'"
 complete -c ocomment -n "__fish_ocomment_needs_command" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -168,7 +169,8 @@ swift\t'Swift source files, whose block comments nest and whose `#/../#` is a re
 csharp\t'C# source and script files, whose `#` lines are preprocessor directives'
 scala\t'Scala source and script files, whose block comments nest and whose XML literals are opaque'
 vue\t'Vue single-file components, whose templates are HTML with `{{ ... }}` code'
-svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'"
+svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'
+markdown\t'Markdown documents, whose fenced code blocks are scanned as their named languages'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -265,7 +267,8 @@ swift\t'Swift source files, whose block comments nest and whose `#/../#` is a re
 csharp\t'C# source and script files, whose `#` lines are preprocessor directives'
 scala\t'Scala source and script files, whose block comments nest and whose XML literals are opaque'
 vue\t'Vue single-file components, whose templates are HTML with `{{ ... }}` code'
-svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'"
+svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'
+markdown\t'Markdown documents, whose fenced code blocks are scanned as their named languages'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -364,7 +367,8 @@ swift\t'Swift source files, whose block comments nest and whose `#/../#` is a re
 csharp\t'C# source and script files, whose `#` lines are preprocessor directives'
 scala\t'Scala source and script files, whose block comments nest and whose XML literals are opaque'
 vue\t'Vue single-file components, whose templates are HTML with `{{ ... }}` code'
-svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'"
+svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'
+markdown\t'Markdown documents, whose fenced code blocks are scanned as their named languages'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -461,7 +465,8 @@ swift\t'Swift source files, whose block comments nest and whose `#/../#` is a re
 csharp\t'C# source and script files, whose `#` lines are preprocessor directives'
 scala\t'Scala source and script files, whose block comments nest and whose XML literals are opaque'
 vue\t'Vue single-file components, whose templates are HTML with `{{ ... }}` code'
-svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'"
+svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'
+markdown\t'Markdown documents, whose fenced code blocks are scanned as their named languages'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -558,7 +563,8 @@ swift\t'Swift source files, whose block comments nest and whose `#/../#` is a re
 csharp\t'C# source and script files, whose `#` lines are preprocessor directives'
 scala\t'Scala source and script files, whose block comments nest and whose XML literals are opaque'
 vue\t'Vue single-file components, whose templates are HTML with `{{ ... }}` code'
-svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'"
+svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'
+markdown\t'Markdown documents, whose fenced code blocks are scanned as their named languages'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -653,7 +659,8 @@ swift\t'Swift source files, whose block comments nest and whose `#/../#` is a re
 csharp\t'C# source and script files, whose `#` lines are preprocessor directives'
 scala\t'Scala source and script files, whose block comments nest and whose XML literals are opaque'
 vue\t'Vue single-file components, whose templates are HTML with `{{ ... }}` code'
-svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'"
+svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'
+markdown\t'Markdown documents, whose fenced code blocks are scanned as their named languages'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -748,7 +755,8 @@ swift\t'Swift source files, whose block comments nest and whose `#/../#` is a re
 csharp\t'C# source and script files, whose `#` lines are preprocessor directives'
 scala\t'Scala source and script files, whose block comments nest and whose XML literals are opaque'
 vue\t'Vue single-file components, whose templates are HTML with `{{ ... }}` code'
-svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'"
+svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'
+markdown\t'Markdown documents, whose fenced code blocks are scanned as their named languages'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -846,7 +854,8 @@ swift\t'Swift source files, whose block comments nest and whose `#/../#` is a re
 csharp\t'C# source and script files, whose `#` lines are preprocessor directives'
 scala\t'Scala source and script files, whose block comments nest and whose XML literals are opaque'
 vue\t'Vue single-file components, whose templates are HTML with `{{ ... }}` code'
-svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'"
+svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'
+markdown\t'Markdown documents, whose fenced code blocks are scanned as their named languages'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -941,7 +950,8 @@ swift\t'Swift source files, whose block comments nest and whose `#/../#` is a re
 csharp\t'C# source and script files, whose `#` lines are preprocessor directives'
 scala\t'Scala source and script files, whose block comments nest and whose XML literals are opaque'
 vue\t'Vue single-file components, whose templates are HTML with `{{ ... }}` code'
-svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'"
+svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'
+markdown\t'Markdown documents, whose fenced code blocks are scanned as their named languages'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -1036,7 +1046,8 @@ swift\t'Swift source files, whose block comments nest and whose `#/../#` is a re
 csharp\t'C# source and script files, whose `#` lines are preprocessor directives'
 scala\t'Scala source and script files, whose block comments nest and whose XML literals are opaque'
 vue\t'Vue single-file components, whose templates are HTML with `{{ ... }}` code'
-svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'"
+svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'
+markdown\t'Markdown documents, whose fenced code blocks are scanned as their named languages'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -1141,7 +1152,8 @@ swift\t'Swift source files, whose block comments nest and whose `#/../#` is a re
 csharp\t'C# source and script files, whose `#` lines are preprocessor directives'
 scala\t'Scala source and script files, whose block comments nest and whose XML literals are opaque'
 vue\t'Vue single-file components, whose templates are HTML with `{{ ... }}` code'
-svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'"
+svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'
+markdown\t'Markdown documents, whose fenced code blocks are scanned as their named languages'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -1236,7 +1248,8 @@ swift\t'Swift source files, whose block comments nest and whose `#/../#` is a re
 csharp\t'C# source and script files, whose `#` lines are preprocessor directives'
 scala\t'Scala source and script files, whose block comments nest and whose XML literals are opaque'
 vue\t'Vue single-file components, whose templates are HTML with `{{ ... }}` code'
-svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'"
+svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'
+markdown\t'Markdown documents, whose fenced code blocks are scanned as their named languages'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -1331,7 +1344,8 @@ swift\t'Swift source files, whose block comments nest and whose `#/../#` is a re
 csharp\t'C# source and script files, whose `#` lines are preprocessor directives'
 scala\t'Scala source and script files, whose block comments nest and whose XML literals are opaque'
 vue\t'Vue single-file components, whose templates are HTML with `{{ ... }}` code'
-svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'"
+svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'
+markdown\t'Markdown documents, whose fenced code blocks are scanned as their named languages'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -1426,7 +1440,8 @@ swift\t'Swift source files, whose block comments nest and whose `#/../#` is a re
 csharp\t'C# source and script files, whose `#` lines are preprocessor directives'
 scala\t'Scala source and script files, whose block comments nest and whose XML literals are opaque'
 vue\t'Vue single-file components, whose templates are HTML with `{{ ... }}` code'
-svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'"
+svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'
+markdown\t'Markdown documents, whose fenced code blocks are scanned as their named languages'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -1521,7 +1536,8 @@ swift\t'Swift source files, whose block comments nest and whose `#/../#` is a re
 csharp\t'C# source and script files, whose `#` lines are preprocessor directives'
 scala\t'Scala source and script files, whose block comments nest and whose XML literals are opaque'
 vue\t'Vue single-file components, whose templates are HTML with `{{ ... }}` code'
-svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'"
+svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'
+markdown\t'Markdown documents, whose fenced code blocks are scanned as their named languages'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -1616,7 +1632,8 @@ swift\t'Swift source files, whose block comments nest and whose `#/../#` is a re
 csharp\t'C# source and script files, whose `#` lines are preprocessor directives'
 scala\t'Scala source and script files, whose block comments nest and whose XML literals are opaque'
 vue\t'Vue single-file components, whose templates are HTML with `{{ ... }}` code'
-svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'"
+svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'
+markdown\t'Markdown documents, whose fenced code blocks are scanned as their named languages'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -1718,7 +1735,8 @@ swift\t'Swift source files, whose block comments nest and whose `#/../#` is a re
 csharp\t'C# source and script files, whose `#` lines are preprocessor directives'
 scala\t'Scala source and script files, whose block comments nest and whose XML literals are opaque'
 vue\t'Vue single-file components, whose templates are HTML with `{{ ... }}` code'
-svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'"
+svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'
+markdown\t'Markdown documents, whose fenced code blocks are scanned as their named languages'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -1813,7 +1831,8 @@ swift\t'Swift source files, whose block comments nest and whose `#/../#` is a re
 csharp\t'C# source and script files, whose `#` lines are preprocessor directives'
 scala\t'Scala source and script files, whose block comments nest and whose XML literals are opaque'
 vue\t'Vue single-file components, whose templates are HTML with `{{ ... }}` code'
-svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'"
+svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'
+markdown\t'Markdown documents, whose fenced code blocks are scanned as their named languages'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'
@@ -1908,7 +1927,8 @@ swift\t'Swift source files, whose block comments nest and whose `#/../#` is a re
 csharp\t'C# source and script files, whose `#` lines are preprocessor directives'
 scala\t'Scala source and script files, whose block comments nest and whose XML literals are opaque'
 vue\t'Vue single-file components, whose templates are HTML with `{{ ... }}` code'
-svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'"
+svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'
+markdown\t'Markdown documents, whose fenced code blocks are scanned as their named languages'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
 jsx\t'JavaScript with JSX elements'
 tsx\t'TypeScript with JSX elements'

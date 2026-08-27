@@ -13,7 +13,7 @@ classification, diagnostics, edits, transformed bytes, and source maps.
 
 OComment supports Rust, OCaml, C, C++, Go, Java, JavaScript, TypeScript, Python,
 Shell, HTML, CSS, JSONC, SQL, Kotlin, TOML, Lua, YAML, PHP, Ruby, Zig, R, Dart,
-Swift, C#, Scala, Vue, and Svelte.
+Swift, C#, Scala, Vue, Svelte, and Markdown.
 JSX/TSX,
 Objective-C/C++,
 GNU C/C++, CUDA, POSIX sh, Bash 5.3, zsh, PostgreSQL, MySQL, SQLite, T-SQL, and

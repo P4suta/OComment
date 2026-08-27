@@ -130,6 +130,7 @@ Policy:
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
+          - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -326,6 +327,7 @@ Policy:
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
+          - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -507,6 +509,7 @@ Policy:
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
+          - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -680,6 +683,7 @@ Policy:
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
+          - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -853,6 +857,7 @@ Policy:
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
+          - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1016,6 +1021,7 @@ Policy:
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
+          - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1179,6 +1185,7 @@ Policy:
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
+          - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1358,6 +1365,7 @@ Policy:
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
+          - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1528,6 +1536,7 @@ Policy:
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
+          - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1691,6 +1700,7 @@ Policy:
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
+          - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -1863,6 +1873,7 @@ Policy:
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
+          - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2039,6 +2050,7 @@ Policy:
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
+          - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2206,6 +2218,7 @@ Policy:
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
+          - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2369,6 +2382,7 @@ Policy:
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
+          - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2536,6 +2550,7 @@ Policy:
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
+          - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2703,6 +2718,7 @@ Policy:
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
+          - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -2870,6 +2886,7 @@ Policy:
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
+          - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -3039,6 +3056,7 @@ Policy:
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
+          - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -3202,6 +3220,7 @@ Policy:
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
+          - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
 
       --dialect <DIALECT>
           Force this dialect of the selected language
@@ -3365,6 +3384,7 @@ Policy:
           - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
           - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
           - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
+          - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
 
       --dialect <DIALECT>
           Force this dialect of the selected language

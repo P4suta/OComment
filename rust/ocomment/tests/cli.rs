@@ -1330,26 +1330,26 @@ fn a_whole_tree_staged_pathspec_keeps_the_project_limits() {
 ///
 /// The rule is the walk's: what a run merely came across is folded into the
 /// end-of-run summary, and what the caller asked about is answered directly.
-/// `ocomment check --staged notes.md` that says only "nothing to check" reads
+/// `ocomment check --staged notes.unknownext` that says only "nothing to check" reads
 /// as a clean file rather than as a file with no scanner.
 #[test]
 fn a_named_staged_path_without_a_scanner_gets_its_own_line() {
     let directory = repository();
-    fs::write(directory.path().join("notes.md"), b"# notes\n").unwrap();
-    git(directory.path(), &["add", "notes.md"]);
+    fs::write(directory.path().join("notes.unknownext"), b"# notes\n").unwrap();
+    git(directory.path(), &["add", "notes.unknownext"]);
 
-    let named = run(directory.path(), &["check", "--staged", "notes.md"]);
+    let named = run(directory.path(), &["check", "--staged", "notes.unknownext"]);
     let report = String::from_utf8(named.stdout).unwrap();
     assert_eq!(named.status.code(), Some(0), "{report}");
     assert!(
-        report.contains(&format!("notes.md: skipped: {NO_LANGUAGE}")),
+        report.contains(&format!("notes.unknownext: skipped: {NO_LANGUAGE}")),
         "a staged path the caller named was passed over without a word:\n{report}"
     );
 
     let bare = run(directory.path(), &["check", "--staged"]);
     let folded = String::from_utf8(bare.stdout).unwrap();
     assert!(
-        !folded.contains("notes.md: skipped"),
+        !folded.contains("notes.unknownext: skipped"),
         "a staged path nobody named was listed per file:\n{folded}"
     );
 }
@@ -1362,10 +1362,13 @@ fn a_named_staged_path_without_a_scanner_gets_its_own_line() {
 #[test]
 fn staged_blobs_without_a_scanner_are_counted_in_the_summary() {
     let directory = repository();
-    fs::write(directory.path().join("notes.md"), b"# notes\n").unwrap();
+    fs::write(directory.path().join("notes.unknownext"), b"# notes\n").unwrap();
     fs::write(directory.path().join("image.dat"), b"\x89PNG\0\r\n").unwrap();
     fs::write(directory.path().join("y.rs"), b"let b = 2; // ours\n").unwrap();
-    git(directory.path(), &["add", "notes.md", "image.dat", "y.rs"]);
+    git(
+        directory.path(),
+        &["add", "notes.unknownext", "image.dat", "y.rs"],
+    );
 
     let checked = run(directory.path(), &["check", "--staged"]);
     let report = String::from_utf8(checked.stdout).unwrap();
@@ -1383,14 +1386,14 @@ fn staged_blobs_without_a_scanner_are_counted_in_the_summary() {
     /* NOTE: Nobody typed either path, so neither is annotated on a line of its
      * own until `-v` asks for the list. */
     assert!(
-        !report.contains("notes.md") && !report.contains("image.dat"),
+        !report.contains("notes.unknownext") && !report.contains("image.dat"),
         "a folded skip was reported per file:\n{report}"
     );
 
     let verbose = run(directory.path(), &["check", "--staged", "-v"]);
     let listed = String::from_utf8(verbose.stdout).unwrap();
     assert!(
-        listed.contains(&format!("notes.md: skipped: {NO_LANGUAGE}")),
+        listed.contains(&format!("notes.unknownext: skipped: {NO_LANGUAGE}")),
         "-v did not list the staged path with no language:\n{listed}"
     );
     assert!(
@@ -3064,13 +3067,13 @@ fn directory_walks_fold_skipped_files_into_the_summary() {
         b"let x = 1; // remove\n",
     )
     .unwrap();
-    fs::write(directory.path().join("notes.md"), b"# notes\n").unwrap();
+    fs::write(directory.path().join("notes.unknownext"), b"# notes\n").unwrap();
     let output = run(directory.path(), &["check", "."]);
     assert_eq!(output.status.code(), Some(1));
     let stdout = String::from_utf8(output.stdout).unwrap();
     let stderr = String::from_utf8(output.stderr).unwrap();
     assert!(
-        !stdout.contains("notes.md"),
+        !stdout.contains("notes.unknownext"),
         "a walked skip was listed individually:\n{stdout}"
     );
     assert!(
@@ -3087,12 +3090,12 @@ fn verbose_lists_the_folded_skips() {
         b"let x = 1; // remove\n",
     )
     .unwrap();
-    fs::write(directory.path().join("notes.md"), b"# notes\n").unwrap();
+    fs::write(directory.path().join("notes.unknownext"), b"# notes\n").unwrap();
     let output = run(directory.path(), &["check", "-v", "."]);
     assert_eq!(output.status.code(), Some(1));
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(
-        stdout.contains(&format!("notes.md: skipped: {NO_LANGUAGE}")),
+        stdout.contains(&format!("notes.unknownext: skipped: {NO_LANGUAGE}")),
         "verbose check output is:\n{stdout}"
     );
 }
@@ -3100,12 +3103,12 @@ fn verbose_lists_the_folded_skips() {
 #[test]
 fn an_explicit_unknown_language_argument_is_still_listed() {
     let directory = tempfile::tempdir().unwrap();
-    fs::write(directory.path().join("notes.md"), b"# notes\n").unwrap();
-    let output = run(directory.path(), &["check", "notes.md"]);
+    fs::write(directory.path().join("notes.unknownext"), b"# notes\n").unwrap();
+    let output = run(directory.path(), &["check", "notes.unknownext"]);
     assert_eq!(output.status.code(), Some(0));
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(
-        stdout.contains(&format!("notes.md: skipped: {NO_LANGUAGE}")),
+        stdout.contains(&format!("notes.unknownext: skipped: {NO_LANGUAGE}")),
         "check output is:\n{stdout}"
     );
 }
@@ -3597,30 +3600,30 @@ fn an_invalid_file_glob_cannot_inject_escape_sequences() {
 fn github_annotations_fold_walked_skips_away_unless_asked() {
     let directory = tempfile::tempdir().unwrap();
     fs::write(directory.path().join("a.rs"), b"let x = 1; // remove\n").unwrap();
-    fs::write(directory.path().join("notes.md"), b"# notes\n").unwrap();
+    fs::write(directory.path().join("notes.unknownext"), b"# notes\n").unwrap();
 
     let quiet = run(directory.path(), &["check", "--format", "github"]);
     let stdout = String::from_utf8(quiet.stdout).unwrap();
     assert!(stdout.contains("::notice file=a.rs"), "{stdout}");
     assert!(
-        !stdout.contains("notes.md"),
+        !stdout.contains("notes.unknownext"),
         "a walked skip was annotated without -v:\n{stdout}"
     );
 
     let loud = run(directory.path(), &["check", "--format", "github", "-v"]);
     let verbose = String::from_utf8(loud.stdout).unwrap();
     assert!(
-        verbose.contains("::notice file=notes.md,title=OComment skipped file::"),
+        verbose.contains("::notice file=notes.unknownext,title=OComment skipped file::"),
         "-v lost the walked skip:\n{verbose}"
     );
 
     let named = run(
         directory.path(),
-        &["check", "notes.md", "--format", "github"],
+        &["check", "notes.unknownext", "--format", "github"],
     );
     let explicit = String::from_utf8(named.stdout).unwrap();
     assert!(
-        explicit.contains("::notice file=notes.md,title=OComment skipped file::"),
+        explicit.contains("::notice file=notes.unknownext,title=OComment skipped file::"),
         "a path the caller named lost its annotation:\n{explicit}"
     );
 
@@ -3644,15 +3647,15 @@ fn github_annotations_fold_walked_skips_away_unless_asked() {
 fn quiet_does_not_take_annotations_off_a_machine_format() {
     let directory = tempfile::tempdir().unwrap();
     fs::write(directory.path().join("a.rs"), b"let x = 1; // remove\n").unwrap();
-    fs::write(directory.path().join("notes.md"), b"# notes\n").unwrap();
+    fs::write(directory.path().join("notes.unknownext"), b"# notes\n").unwrap();
 
     let named = run(
         directory.path(),
-        &["check", "notes.md", "--format", "github", "-q"],
+        &["check", "notes.unknownext", "--format", "github", "-q"],
     );
     let explicit = String::from_utf8(named.stdout).unwrap();
     assert!(
-        explicit.contains("::notice file=notes.md,title=OComment skipped file::"),
+        explicit.contains("::notice file=notes.unknownext,title=OComment skipped file::"),
         "-q took the annotation off a path the caller named:\n{explicit}"
     );
 
@@ -3670,7 +3673,7 @@ fn quiet_does_not_take_annotations_off_a_machine_format() {
     let stdout = String::from_utf8(walked.stdout).unwrap();
     assert!(stdout.contains("::notice file=a.rs"), "{stdout}");
     assert!(
-        !stdout.contains("notes.md"),
+        !stdout.contains("notes.unknownext"),
         "a walked skip was annotated without -v:\n{stdout}"
     );
 }
@@ -3882,13 +3885,16 @@ fn a_named_skip_is_not_counted_twice_in_the_summary() {
         b"let x = 1; // remove\n",
     )
     .unwrap();
-    fs::write(directory.path().join("notes.md"), b"# notes\n").unwrap();
-    let output = run(directory.path(), &["check", "sample.rs", "notes.md"]);
+    fs::write(directory.path().join("notes.unknownext"), b"# notes\n").unwrap();
+    let output = run(
+        directory.path(),
+        &["check", "sample.rs", "notes.unknownext"],
+    );
     assert_eq!(output.status.code(), Some(1));
     let stdout = String::from_utf8(output.stdout).unwrap();
     let stderr = String::from_utf8(output.stderr).unwrap();
     assert!(
-        stdout.contains(&format!("notes.md: skipped: {NO_LANGUAGE}")),
+        stdout.contains(&format!("notes.unknownext: skipped: {NO_LANGUAGE}")),
         "check output is:\n{stdout}"
     );
     assert_eq!(
@@ -3903,7 +3909,7 @@ fn a_named_skip_is_not_counted_twice_in_the_summary() {
 #[test]
 fn a_run_that_scans_nothing_reports_the_skips_instead() {
     let directory = tempfile::tempdir().unwrap();
-    fs::write(directory.path().join("notes.md"), b"# notes\n").unwrap();
+    fs::write(directory.path().join("notes.unknownext"), b"# notes\n").unwrap();
     let output = run(directory.path(), &["check", "."]);
     assert_eq!(output.status.code(), Some(0));
     assert_eq!(
@@ -3998,13 +4004,13 @@ fn quiet_scan_still_writes_the_listing() {
 #[test]
 fn a_run_of_only_named_skips_does_not_repeat_them() {
     let directory = tempfile::tempdir().unwrap();
-    fs::write(directory.path().join("notes.md"), b"# notes\n").unwrap();
-    let output = run(directory.path(), &["check", "notes.md"]);
+    fs::write(directory.path().join("notes.unknownext"), b"# notes\n").unwrap();
+    let output = run(directory.path(), &["check", "notes.unknownext"]);
     assert_eq!(output.status.code(), Some(0));
     assert!(
         String::from_utf8(output.stdout)
             .unwrap()
-            .contains(&format!("notes.md: skipped: {NO_LANGUAGE}"))
+            .contains(&format!("notes.unknownext: skipped: {NO_LANGUAGE}"))
     );
     assert_eq!(
         String::from_utf8(output.stderr).unwrap(),
@@ -4209,10 +4215,10 @@ fn fix_dry_run_on_a_clean_file_reports_nothing_to_fix() {
 #[test]
 fn fix_dry_run_lists_a_skipped_path_the_way_fix_does() {
     let directory = tempfile::tempdir().unwrap();
-    fs::write(directory.path().join("notes.md"), b"# notes\n").unwrap();
+    fs::write(directory.path().join("notes.unknownext"), b"# notes\n").unwrap();
 
-    let skip = format!("notes.md: skipped: {NO_LANGUAGE}\n");
-    let previewed = run(directory.path(), &["fix", "--dry-run", "notes.md"]);
+    let skip = format!("notes.unknownext: skipped: {NO_LANGUAGE}\n");
+    let previewed = run(directory.path(), &["fix", "--dry-run", "notes.unknownext"]);
     assert_eq!(previewed.status.code(), Some(0));
     assert_eq!(
         String::from_utf8(previewed.stdout).unwrap(),
@@ -4225,14 +4231,14 @@ fn fix_dry_run_lists_a_skipped_path_the_way_fix_does() {
         "the preview never said why it had nothing to fix"
     );
 
-    let fixed = run(directory.path(), &["fix", "notes.md"]);
+    let fixed = run(directory.path(), &["fix", "notes.unknownext"]);
     assert_eq!(
         String::from_utf8(fixed.stdout).unwrap(),
         skip,
         "`fix` stopped listing the skip on standard output"
     );
 
-    let diffed = run(directory.path(), &["diff", "notes.md"]);
+    let diffed = run(directory.path(), &["diff", "notes.unknownext"]);
     assert_eq!(diffed.status.code(), Some(0));
     assert_eq!(
         String::from_utf8(diffed.stdout).unwrap(),
@@ -4636,20 +4642,32 @@ fn progress_clears_the_counter_only_when_one_was_drawn() {
 #[test]
 fn an_empty_run_summarizes_itself_in_the_vocabulary_of_its_command() {
     let directory = tempfile::tempdir().unwrap();
-    fs::write(directory.path().join("notes.md"), b"# notes\n").unwrap();
+    fs::write(directory.path().join("notes.unknownext"), b"# notes\n").unwrap();
     /* NOTE: `fix --dry-run` keeps its standard output for the patch, so the named
      * skip it met stands on standard error directly above the summary this
      * test is about; every other command reports the skip elsewhere. */
-    let skip = format!("notes.md: skipped: {NO_LANGUAGE}\n");
+    let skip = format!("notes.unknownext: skipped: {NO_LANGUAGE}\n");
     for (arguments, expected) in [
-        (vec!["check", "notes.md"], "Nothing to check.\n".to_owned()),
-        (vec!["fix", "notes.md"], "Nothing to fix.\n".to_owned()),
         (
-            vec!["fix", "--dry-run", "notes.md"],
+            vec!["check", "notes.unknownext"],
+            "Nothing to check.\n".to_owned(),
+        ),
+        (
+            vec!["fix", "notes.unknownext"],
+            "Nothing to fix.\n".to_owned(),
+        ),
+        (
+            vec!["fix", "--dry-run", "notes.unknownext"],
             format!("{skip}Nothing to fix.\n"),
         ),
-        (vec!["diff", "notes.md"], "Nothing to diff.\n".to_owned()),
-        (vec!["scan", "notes.md"], "Nothing to scan.\n".to_owned()),
+        (
+            vec!["diff", "notes.unknownext"],
+            "Nothing to diff.\n".to_owned(),
+        ),
+        (
+            vec!["scan", "notes.unknownext"],
+            "Nothing to scan.\n".to_owned(),
+        ),
     ] {
         let output = run(directory.path(), &arguments);
         assert_eq!(output.status.code(), Some(0), "`ocomment {arguments:?}`");
@@ -4679,14 +4697,14 @@ fn an_unknown_language_skip_says_how_to_force_one() {
         b"let x = 1; // remove\n",
     )
     .unwrap();
-    fs::write(directory.path().join("notes.md"), b"# notes\n").unwrap();
+    fs::write(directory.path().join("notes.unknownext"), b"# notes\n").unwrap();
     let output = run(directory.path(), &["check", "-v", "."]);
     assert_eq!(output.status.code(), Some(1));
     let stdout = String::from_utf8(output.stdout).unwrap();
     let stderr = String::from_utf8(output.stderr).unwrap();
     assert!(
         stdout.contains(
-            "notes.md: skipped: no built-in language for this file \
+            "notes.unknownext: skipped: no built-in language for this file \
              (see `ocomment languages`; use --language to force)"
         ),
         "the skip line never said what to do about it:\n{stdout}"
@@ -5964,5 +5982,46 @@ fn a_vue_file_scans_its_template_script_and_style_blocks() {
     assert_eq!(
         fs::read(&path).unwrap(),
         b"<template>\n<!-- note -->\n<div>{{ x  }}</div>\n</template>\n<script setup lang=\"ts\">\n\n</script>\n<style lang=\"scss\">\n\n</style>\n"
+    );
+}
+
+/// A Markdown file scans its fenced code blocks as their named languages and
+/// keeps its HTML comment, while inline code stays opaque.
+#[test]
+fn a_markdown_file_scans_its_fenced_code_blocks() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("README.md");
+    fs::write(
+        &path,
+        b"# notes\n<!-- note -->\n```rust\n// c\n```\n`// inline`\n",
+    )
+    .unwrap();
+
+    let scanned = run(directory.path(), &["scan", "README.md", "--format", "json"]);
+    assert_eq!(
+        scanned.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&scanned.stderr)
+    );
+    let document: serde_json::Value = serde_json::from_slice(&scanned.stdout).unwrap();
+    let report = &document["files"][0]["report"];
+    assert_eq!(report["language"], "markdown");
+    assert_eq!(report["comments"].as_array().unwrap().len(), 2);
+    assert_eq!(report["comments"][0]["kind"], "html-comment");
+    assert_eq!(report["comments"][0]["disposition"]["action"], "keep");
+    assert_eq!(report["comments"][1]["span"]["start"], 30);
+    assert_eq!(report["comments"][1]["span"]["end"], 34);
+
+    let fixed = run(directory.path(), &["fix", "README.md"]);
+    assert_eq!(
+        fixed.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&fixed.stderr)
+    );
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        b"# notes\n<!-- note -->\n```rust\n\n```\n`// inline`\n"
     );
 }

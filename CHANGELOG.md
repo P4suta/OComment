@@ -7,7 +7,7 @@ All notable changes to OComment will be documented here. The project follows
 
 ### Added
 
-- Byte-oriented scanners and transformations for 28 built-in languages and the
+- Byte-oriented scanners and transformations for 29 built-in languages and the
   documented dialects.
 - CLI, staged Git fixes, LSP 3.18 server, declarative profiles, and sandboxed
   WASM component plugins.
@@ -67,7 +67,7 @@ All notable changes to OComment will be documented here. The project follows
   for the OCaml reference. `CONTRIBUTING.md` documents the tags.
 - An official VS Code extension, `P4suta.ocomment`, under `editors/vscode`. It
   is a client only: it launches the separately installed `ocomment lsp`,
-  attaches it to the thirty-three language identifiers OComment scans, and
+  attaches it to the thirty-four language identifiers OComment scans, and
   exposes the server's quick fixes, `source.fixAll.ocomment`, code lens, and
   pull diagnostics, plus `OComment: Remove comments in file`, `... in
   workspace`, `OComment: Restart server`, `OComment: Show output`, and a status
@@ -411,6 +411,12 @@ All notable changes to OComment will be documented here. The project follows
   is code, and an unquoted `url( ... )` is read the way dart-sass reads it —
   a protocol-relative `url(//cdn/x.png)` is URL text, not a comment. `.scss`
   and `.sass` select the dialect.
+- Markdown is a built-in language, scanned per CommonMark: an HTML comment
+  is a comment that `safe` keeps as DOM-observable, a fenced code block is
+  scanned as the language its info string names — a ```rust fence as Rust, a
+  `{r}` chunk as R — and an inline code span or an indented code block is
+  opaque, so a `//` or a `/*` inside one is code text, not a comment. `.md`,
+  `.markdown` and the `.Rmd` of an R Markdown document select it.
 - `//> using` is kept because scala-cli reads a directive line before it reads
   a manifest at all. `.scala` and the `.sc` of a script select the language,
   as do `scala` and `scala-cli` `#!` lines, and `#!` at the very first byte

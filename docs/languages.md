@@ -23,8 +23,8 @@ $ ocomment strip --language rust --dialect mysql
 ocomment: unsupported dialect `mysql` for rust; supported: standard
 ```
 
-OComment has 28 built-in languages covering
-72 file extensions and 17 named dialects.
+OComment has 29 built-in languages covering
+75 file extensions and 17 named dialects.
 
 | Language | Extensions | Dialects |
 | --- | --- | --- |
@@ -56,6 +56,7 @@ OComment has 28 built-in languages covering
 | `scala` | `.scala`, `.sc` | `standard` |
 | `vue` | `.vue` | `standard` |
 | `svelte` | `.svelte` | `standard` |
+| `markdown` | `.md`, `.markdown`, `.rmd` | `standard` |
 
 ## Detected without an extension
 
@@ -303,6 +304,12 @@ whose expression is code. An unquoted `url( ... )` is read the way
 dart-sass reads it — its bytes are URL text until the `)` that
 ends them, a protocol-relative `url(//cdn/x.png)` included — with
 `#{ ... }` inside it code.
+
+Markdown is scanned per CommonMark: an HTML comment is a comment,
+a fenced code block is scanned as the language its info string
+names — ```rust, `{r}` and `c++` all reach their scanners — and an
+inline code span or an indented code block is opaque, so a `//` or
+a `/*` inside one is code text, not a comment.
 
 YAML is scanned lexically, and `valid` is a lexical answer: the
 shapes a YAML *parser* rejects are not all shapes a lexer can see.

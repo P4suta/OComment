@@ -285,8 +285,8 @@ pub fn detect_language(path: Option<&Path>, source: &[u8]) -> Option<Detection> 
             "zig" | "zon" => Some((Language::Zig, Dialect::Standard)),
             /* NOTE: R is written `.R` about as often as `.r`, and the suffix is
              * folded before it is looked up here, so both reach the same
-             * scanner. `.Rmd` is deliberately absent: an R Markdown document is
-             * Markdown with R chunks in it, which is a scanner of its own. */
+             * scanner. `.Rmd` is R Markdown and is detected as Markdown, whose
+             * fenced-block scan reads its `{r}` chunks as R. */
             "r" => Some((Language::R, Dialect::Standard)),
             /* NOTE: `.dart` is the only suffix Dart owns. `.dart_tool` names the
              * per-package build directory rather than a file, and a
@@ -319,6 +319,11 @@ pub fn detect_language(path: Option<&Path>, source: &[u8]) -> Option<Detection> 
              * `.scss` and `.sass` are the two Sass syntaxes, which share the
              * one `scss` dialect: both read `//` line comments and `#{ ... }`
              * interpolation. */
+            /* NOTE: `.md` and `.markdown` are Markdown, and so is `.Rmd` —
+             * an R Markdown document, whose `{r}` chunk headers name R for
+             * the fenced-block scan — which is what the note that once kept
+             * it from the R entry is now the record of. */
+            "md" | "markdown" | "rmd" => Some((Language::Markdown, Dialect::Standard)),
             "vue" => Some((Language::Vue, Dialect::Standard)),
             "svelte" => Some((Language::Svelte, Dialect::Standard)),
             "scss" | "sass" => Some((Language::Css, Dialect::Scss)),

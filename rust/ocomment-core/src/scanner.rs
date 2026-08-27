@@ -303,6 +303,7 @@ impl<'a> Scanner<'a> {
             Language::Scala => self.scan_scala(),
             Language::Vue => self.scan_vue(),
             Language::Svelte => self.scan_svelte(),
+            Language::Markdown => self.scan_markdown(),
             Language::Unknown => self.error(
                 "unknown-language",
                 "a language is required",
@@ -514,7 +515,11 @@ impl<'a> Scanner<'a> {
             }
             cursor += 1;
         }
-        None
+        /* NOTE: the URL never closes, which is a file dart-sass rejects. The
+         * scan reads the rest of it as URL bytes rather than rewinding: the
+         * interpolation inside has already reported its comments, and a
+         * rewind would read them a second time. */
+        Some(bytes.len())
     }
 
     /// One SCSS `#{ ... }` interpolation, beginning past its opening brace.
@@ -4898,6 +4903,150 @@ impl<'a> Scanner<'a> {
         self.scan_sfc(false);
     }
 
+    /// One Markdown document.
+    ///
+    /// An HTML comment is a comment, a fenced code block is scanned as the
+    /// language its info string names — an unknown or absent language leaves
+    /// the block opaque — and an inline code span or an indented code block
+    /// is opaque: a `//` or a `/*` in one is code text, not a comment. Every
+    /// construct is recognised at its own start and read forward, so no
+    /// decision depends on a byte behind a checkpoint.
+    fn scan_markdown(&mut self) {
+        let bytes = self.source;
+        let mut index = 0;
+        while index < bytes.len() && !self.stopped {
+            if starts(bytes, index, b"<!--") {
+                let end = if let Some(relative) = find_subslice(&bytes[index + 4..], b"-->") {
+                    index + 4 + relative + 3
+                } else {
+                    self.error(
+                        "unterminated-comment",
+                        "unterminated HTML comment",
+                        ByteSpan::new(index, bytes.len()),
+                    );
+                    bytes.len()
+                };
+                self.add_comment(index, end, CommentKind::HtmlComment);
+                index = end;
+                continue;
+            }
+            if index == 0 || bytes[index - 1] == b'\n' {
+                let mut cursor = index;
+                while cursor < bytes.len() && bytes[cursor] == b' ' {
+                    cursor += 1;
+                }
+                let indent = cursor - index;
+                if indent >= 4 {
+                    index = self.scan_markdown_indented(cursor);
+                    continue;
+                }
+                if indent <= 3 && cursor < bytes.len() && matches!(bytes[cursor], b'`' | b'~') {
+                    let marker = bytes[cursor];
+                    let run = count_run(bytes, cursor, marker);
+                    if run >= 3 {
+                        index = self.scan_markdown_fence(cursor, marker, run);
+                        continue;
+                    }
+                }
+            }
+            if bytes[index] == b'`' {
+                index = markdown_inline_code_end(bytes, index);
+                continue;
+            }
+            if matches!(bytes[index], b'\r' | b'\n') {
+                index = consume_newline(bytes, index);
+                self.add_safe_checkpoint(index);
+            } else {
+                index += 1;
+            }
+        }
+    }
+
+    /// One fenced code block, beginning at its opening run of backticks or
+    /// tildes. The body is scanned as the language its info string names, or
+    /// as nothing when the string names none; the block ends at a line of the
+    /// same marker with a run at least as long as the opener's, and a block
+    /// that never closes is a file CommonMark reads to its end, so the rest
+    /// of the document is opaque.
+    fn scan_markdown_fence(&mut self, opener: usize, marker: u8, run: usize) -> usize {
+        let bytes = self.source;
+        let info_start = opener + run;
+        let info_end = line_end(bytes, info_start);
+        let language = markdown_fence_language(&bytes[info_start..info_end]);
+        let mut cursor = info_end;
+        let closer = loop {
+            if cursor >= bytes.len() {
+                break None;
+            }
+            let mut line = cursor;
+            let mut spaces = 0;
+            while line < bytes.len() && bytes[line] == b' ' && spaces < 3 {
+                line += 1;
+                spaces += 1;
+            }
+            if bytes.get(line) == Some(&marker) {
+                let closer_run = count_run(bytes, line, marker);
+                if closer_run >= run {
+                    let mut after = line + closer_run;
+                    while after < bytes.len() && bytes[after] == b' ' {
+                        after += 1;
+                    }
+                    if after >= bytes.len() || matches!(bytes[after], b'\r' | b'\n') {
+                        break Some((line, consume_newline(bytes, after).min(bytes.len())));
+                    }
+                }
+            }
+            let line_finish = line_end(bytes, cursor);
+            if line_finish >= bytes.len() {
+                break None;
+            }
+            cursor = consume_newline(bytes, line_finish);
+        };
+        let content_end = closer.map_or(bytes.len(), |(line, _)| line);
+        if let Some(language) = language
+            && !matches!(
+                language,
+                Language::Html | Language::Vue | Language::Svelte | Language::Markdown
+            )
+        {
+            let mut child = Scanner::child(
+                &bytes[info_end..content_end],
+                language,
+                self.options.clone(),
+                self.offset + info_end,
+            );
+            child.scan_language();
+            self.merge_child(child);
+        }
+        closer.map_or(bytes.len(), |(_, resume)| resume)
+    }
+
+    /// One indented code block, beginning at its first non-space byte. The
+    /// block holds every following line that is blank or indented at least
+    /// four spaces, and all of it is opaque.
+    fn scan_markdown_indented(&mut self, start: usize) -> usize {
+        let bytes = self.source;
+        let mut index = start;
+        while index < bytes.len() {
+            let line_finish = line_end(bytes, index);
+            let mut cursor = index;
+            let mut spaces = 0;
+            while cursor < line_finish && bytes[cursor] == b' ' {
+                cursor += 1;
+                spaces += 1;
+            }
+            let blank = cursor >= line_finish || matches!(bytes[cursor], b'\r');
+            if !blank && spaces < 4 {
+                return index;
+            }
+            if line_finish >= bytes.len() {
+                return bytes.len();
+            }
+            index = consume_newline(bytes, line_finish);
+        }
+        bytes.len()
+    }
+
     /// One Vue or Svelte single-file component.
     ///
     /// The top level holds the `<script>` and `<style>` blocks and — for Vue —
@@ -8386,6 +8535,49 @@ fn html_tag_candidate(bytes: &[u8], start: usize) -> bool {
 ///
 /// Attributes are separated by white space and their values are quoted or a
 /// bare word; the name is matched as a word, so `langx` is not `lang`.
+/// The end of an inline code span beginning at a run of backticks: the span
+/// closes at the next run of exactly the same length, per CommonMark 6.1, so
+/// a shorter or longer run is code text. An unterminated span runs to the
+/// end of the document, as CommonMark reads it.
+fn markdown_inline_code_end(bytes: &[u8], index: usize) -> usize {
+    let run = count_run(bytes, index, b'`');
+    let mut cursor = index + run;
+    while cursor < bytes.len() {
+        if bytes[cursor] == b'`' {
+            let next = count_run(bytes, cursor, b'`');
+            if next == run {
+                return cursor + next;
+            }
+            cursor += next;
+        } else {
+            cursor += 1;
+        }
+    }
+    bytes.len()
+}
+
+/// The language a fenced code block's info string names: the first word of
+/// the string, with the braces of an R Markdown chunk header taken off —
+/// `` ```{r} `` is R — resolved through the same spellings the CLI accepts.
+fn markdown_fence_language(info: &[u8]) -> Option<Language> {
+    let trimmed = info.trim_ascii();
+    let mut word = trimmed;
+    if word.first() == Some(&b'{') {
+        let end = word.iter().position(|byte| *byte == b'}')?;
+        word = &word[1..end];
+    }
+    let end = word
+        .iter()
+        .position(|byte| byte.is_ascii_whitespace())
+        .unwrap_or(word.len());
+    let word = &word[..end];
+    if word.is_empty() {
+        None
+    } else {
+        std::str::from_utf8(word).ok()?.parse().ok()
+    }
+}
+
 fn tag_attr_value<'a>(attrs: &'a [u8], name: &[u8]) -> Option<&'a [u8]> {
     let mut index = 0;
     while index < attrs.len() {

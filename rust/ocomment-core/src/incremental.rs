@@ -402,12 +402,18 @@ impl IncrementalDocument {
             .collect();
         safe_checkpoints.extend(suffix_checkpoints);
         if let Some((old_convergence, new_convergence)) = reused_tail {
+            /* INVARIANT: the converged tail's checkpoints come from the previous
+             * revision, and an edit can grow a lexical construct — a `<` tag,
+             * a quote pair, an XML literal — across one, so each is re-asked
+             * against the edited document exactly as a candidate restart is. */
+            let rules = RestartRules::of(&next, self.language);
             safe_checkpoints.extend(
                 self.safe_checkpoints
                     .iter()
                     .copied()
                     .filter(|point| *point > old_convergence)
-                    .map(|point| new_convergence + point - old_convergence),
+                    .map(|point| new_convergence + point - old_convergence)
+                    .filter(|point| rules.permit_restart_at(&next, *point)),
             );
         }
         safe_checkpoints.dedup();

@@ -11150,6 +11150,22 @@
         "diagnostics": [],
         "output_utf8": "<p>{x \n}</p>\n<!-- note -->\n"
       }
+    },
+    {
+      "id": "markdown-fences-and-inline-code",
+      "language": "markdown",
+      "operation": "scan",
+      "options": {
+        "policy": "safe",
+        "layout": "lines"
+      },
+      "source_utf8": "```nope\n// not a comment\n```\n`// not either`\n    /* nor this */\n",
+      "note": "CommonMark 0.31: a fence whose info string names no language, an inline code span and an indented code block are all opaque \u2014 the `//` and `/*` inside them are code text, not comments \u2014 while a fence that names a language is scanned as it.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "diagnostics": []
+      }
     }
   ]
 }

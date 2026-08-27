@@ -155,6 +155,11 @@ pub enum Language {
     /// HTML with `{ ... }` code, and its `<script>` and `<style>` bodies are
     /// scanned as their own languages.
     Svelte,
+    /// Markdown, detected from `.md`, `.markdown` and the `.Rmd` of an R
+    /// Markdown document. HTML comments are comments, fenced code blocks are
+    /// scanned as the language their info string names, and inline and
+    /// indented code are opaque.
+    Markdown,
     /// No built-in scanner, and the default.
     ///
     /// Scanning it yields no comments and one `unknown-language` error
@@ -167,7 +172,7 @@ pub enum Language {
 
 impl Language {
     /// Every CLI-visible language; `Unknown` is deliberately excluded.
-    pub const ALL: [Self; 28] = [
+    pub const ALL: [Self; 29] = [
         Self::Rust,
         Self::Ocaml,
         Self::C,
@@ -196,6 +201,7 @@ impl Language {
         Self::Scala,
         Self::Vue,
         Self::Svelte,
+        Self::Markdown,
     ];
 
     /// The canonical name, identical to the serde representation.
@@ -229,6 +235,7 @@ impl Language {
             Self::Scala => "scala",
             Self::Vue => "vue",
             Self::Svelte => "svelte",
+            Self::Markdown => "markdown",
             Self::Unknown => "unknown",
         }
     }
@@ -252,6 +259,7 @@ impl Language {
             | Self::Scala
             | Self::Vue
             | Self::Svelte
+            | Self::Markdown
             | Self::Unknown => &[],
             Self::Cpp => &["c++", "cxx"],
             Self::Go => &["golang"],
