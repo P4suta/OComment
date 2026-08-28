@@ -4,7 +4,7 @@
     "architecture": "x86_64",
     "cpu": "Intel Core i7-7700K @ 4.20GHz",
     "threads": 8,
-    "profile": "release, thin LTO, stripped",
+    "profile": "release, opt-level=s, thin LTO, stripped",
     "recorded": "2026-08-25"
   },
   "metrics": {
