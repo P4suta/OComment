@@ -107,9 +107,14 @@ def main() -> int:
         "environment: benchmark",
         "ocomment-benchmark, ephemeral",
         "runs-on: ubuntu-latest",
+        "DISPATCH_SHA: ${{ github.sha }}",
     ):
         if required not in benchmark:
             failures.append(f"benchmark workflow is missing {required!r}")
+    if benchmark.count("ref: ${{ github.sha }}") != 2:
+        failures.append("both benchmark checkouts must use the immutable workflow dispatch SHA")
+    if "needs.verify-commit.outputs.commit_sha" in benchmark:
+        failures.append("benchmark must not execute a user-derived job output on a self-hosted runner")
 
     codeql = (ROOT / ".github/workflows/codeql.yml").read_text(encoding="utf-8")
     if "language: javascript-typescript" not in codeql:

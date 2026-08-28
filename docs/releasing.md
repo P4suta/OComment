@@ -26,8 +26,10 @@ succeed does the reviewer-protected `release` environment allow `finalize` to
 make the GitHub release public. Do not publish crates by hand between those
 jobs; that defeats the resumable state the workflow verifies.
 
-The benchmark workflow is manual-only. Enter the full 40-character commit SHA;
-a hosted runner resolves and checks that exact commit before the
+The benchmark workflow is manual-only. Select the branch or tag to benchmark in
+the workflow's **Run workflow** ref picker, then enter that ref's full
+40-character commit SHA. A hosted runner requires the input SHA, the immutable
+workflow-dispatch SHA, and the checked-out commit to agree before the
 reviewer-protected `benchmark` environment lets an ephemeral runner execute it.
 The runner uses labels `self-hosted`, `linux`, `x64`, `ocomment-benchmark`, and
 `ephemeral`. `tools/release_gate.py` enforces a 20 ms median cold
