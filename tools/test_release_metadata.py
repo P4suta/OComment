@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import json
 import pathlib
 import subprocess
 import sys
@@ -22,7 +21,6 @@ class ReleaseMetadataTests(unittest.TestCase):
         (root / "rust/ocomment-core").mkdir(parents=True)
         (root / "rust/ocomment-plugin-sdk").mkdir()
         (root / "rust/ocomment").mkdir()
-        (root / "editors/vscode").mkdir(parents=True)
         (root / "rust/Cargo.toml").write_text(
             '[workspace]\nmembers = []\n[workspace.package]\nversion = "0.1.0"\n',
             encoding="utf-8",
@@ -39,13 +37,7 @@ class ReleaseMetadataTests(unittest.TestCase):
         (root / "rust/Cargo.lock").write_text(
             f"version = 4\n{packages}", encoding="utf-8"
         )
-        (root / "editors/vscode/package.json").write_text(
-            json.dumps({"version": "0.1.0"}), encoding="utf-8"
-        )
         (root / "CHANGELOG.md").write_text("## 0.1.0\n", encoding="utf-8")
-        (root / "editors/vscode/CHANGELOG.md").write_text(
-            "## [0.1.0]\n", encoding="utf-8"
-        )
         return root
 
     def test_complete_fixture_passes(self) -> None:
@@ -54,13 +46,25 @@ class ReleaseMetadataTests(unittest.TestCase):
     def test_version_mismatch_is_rejected(self) -> None:
         failures = release_metadata.metadata_failures(self.fixture(), "0.2.0")
         self.assertTrue(any("workspace version" in failure for failure in failures))
-        self.assertTrue(any("package.json version" in failure for failure in failures))
+        self.assertTrue(any("Cargo.lock" in failure for failure in failures))
 
-    def test_missing_changelog_entry_is_rejected(self) -> None:
+    def test_missing_cli_changelog_entry_is_rejected(self) -> None:
         root = self.fixture()
         (root / "CHANGELOG.md").write_text("## Unreleased\n", encoding="utf-8")
         failures = release_metadata.metadata_failures(root, "0.1.0")
         self.assertIn("CHANGELOG.md has no 0.1.0 release heading", failures)
+
+    def test_vscode_metadata_is_not_a_cli_release_input(self) -> None:
+        root = self.fixture()
+        extension = root / "editors/vscode"
+        extension.mkdir(parents=True)
+        (extension / "package.json").write_text(
+            '{"version":"9.9.9"}\n', encoding="utf-8"
+        )
+        (extension / "CHANGELOG.md").write_text(
+            "# No CLI release heading here\n", encoding="utf-8"
+        )
+        self.assertEqual(release_metadata.metadata_failures(root, "0.1.0"), [])
 
     def test_side_branch_tag_is_rejected(self) -> None:
         root = self.fixture()

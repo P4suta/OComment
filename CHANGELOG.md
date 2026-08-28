@@ -67,8 +67,8 @@ All notable changes to OComment will be documented here. The project follows
   all --force-protected` and rebuilds it: the Rust workspace builds and
   `ocomment-core` still passes its tests, and the `reference` job does the same
   for the OCaml reference. `CONTRIBUTING.md` documents the tags.
-- An official VS Code extension, `P4suta.ocomment`, under `editors/vscode`. It
-  is a client only: it launches the separately installed `ocomment lsp`,
+- A source-only VS Code extension under `editors/vscode`. It is a client only:
+  it launches the separately installed `ocomment lsp`,
   attaches it to the thirty-five language identifiers OComment scans, and
   exposes the server's quick fixes, `source.fixAll.ocomment`, code lens, and
   pull diagnostics, plus `OComment: Remove comments in file`, `... in
@@ -77,13 +77,11 @@ All notable changes to OComment will be documented here. The project follows
   expands a leading `~`; a missing binary is a notification pointing at the
   install instructions rather than a silent failure. The extension is disabled
   in untrusted workspaces, because that setting names an executable it
-  launches. The extension version is the crate version, checked by the
-  extension's own suite on every pull request and against the tag before
-  `publish-vscode` can upload anything. A `vscode` CI job lints, compiles,
-  builds the binary the extension launches, and drives a real VS Code under
-  `xvfb-run`; `publish-vscode` signs the `.vsix` with cosign, attaches it to
-  the release, and publishes to the Marketplace and Open VSX. The extension
-  holds one file system watcher for its lifetime rather than one per start, and
+  launches. A `vscode` CI job lints, compiles, builds the binary the extension
+  launches, drives a real VS Code under `xvfb-run`, and packages a test VSIX.
+  The CLI v0.1.0 release does not attach or publish that artifact; extension
+  versioning and publication are independent. The extension holds one file
+  system watcher for its lifetime rather than one per start, and
   every start, stop, and restart is queued behind the last, so a settings
   change during a restart cannot leave a second server running with nothing
   holding it.
@@ -450,7 +448,7 @@ All notable changes to OComment will be documented here. The project follows
 - Every written-out count of languages, and of the editor language identifiers
   the VS Code extension attaches to, is checked against `Language::ALL` and
   against the extension's own selector. Six sentences across the documentation,
-  the changelogs, and the Marketplace description said a number nothing
+  the changelogs, and the extension description said a number nothing
   verified; three of them were already wrong. The claims are matched with the
   file's line wrapping collapsed, so re-flowing a paragraph is not a failure
   and changing what it says is. The extension's `activationEvents` are checked

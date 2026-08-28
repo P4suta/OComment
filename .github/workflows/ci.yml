@@ -265,8 +265,8 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run compile
-      # NOTE: The manifest suite is what pins the extension version to the crate
-      # NOTE: version, so it runs before anything is built from either of them.
+      # NOTE: The manifest suite checks the independently versioned extension's
+      # NOTE: packaging, activation, commands, and language selector before build.
       - run: npm run unit
       - name: Build the ocomment the extension launches
         working-directory: ${{ github.workspace }}
@@ -277,7 +277,7 @@ jobs:
       # NOTE: `npm test` downloads a real VS Code and drives it, so it needs a
       # NOTE: display; the runner has no X server of its own.
       - run: xvfb-run -a npm test
-      - name: Package the extension the release would publish
+      - name: Package the source-only extension
         run: npm run package -- --out ocomment.vsix
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

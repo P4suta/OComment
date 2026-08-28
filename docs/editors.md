@@ -73,9 +73,20 @@ configuration used by your Zed version.
 
 ## VS Code
 
-Install **OComment** from the Marketplace, or from Open VSX. The extension is
-a client only: it launches the `ocomment` binary, which has to be installed
-separately and on `PATH`, or named by `ocomment.path`.
+The extension is currently source-only and is not distributed through the
+Visual Studio Marketplace, Open VSX, or GitHub Releases. To build a local VSIX
+from a checkout:
+
+```sh
+cd editors/vscode
+npm ci
+npm run package -- --out ocomment.vsix
+code --install-extension ocomment.vsix
+```
+
+This local build is a client only: it launches the `ocomment` binary, which has
+to be installed separately and on `PATH`, or named by `ocomment.path`. The
+extension's version and any future publication are independent of CLI tags.
 
 It attaches to thirty-five language identifiers — `rust`, `ocaml`, `c`,
 `cpp`, `objective-c`, `objective-cpp`, `cuda-cpp`, `go`, `java`, `javascript`,
@@ -96,7 +107,8 @@ comments in the open files.
 ```
 
 `[lsp].on_save = true` in `.ocomment.toml` does the same thing for everyone
-working in the repository, rather than for one editor. The source is under
+working in the repository, rather than for one editor. The source and its
+development notes are under
 [`editors/vscode`](https://github.com/P4suta/OComment/blob/main/editors/vscode/README.md).
 
 The extension is disabled in untrusted workspaces, because `ocomment.path`

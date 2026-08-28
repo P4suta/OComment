@@ -123,14 +123,23 @@ def main() -> int:
     ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     if "chmod 0755 release/binaries/out/amd64/ocomment" not in ci:
         failures.append("Docker CI does not reproduce the released archive's executable mode")
+    for required in (
+        "  vscode:",
+        "npm run lint",
+        "npm run compile",
+        "npm run unit",
+        "xvfb-run -a npm test",
+        "npm run package -- --out ocomment.vsix",
+        "name: ocomment-vsix",
+    ):
+        if required not in ci:
+            failures.append(f"VS Code CI is missing {required!r}")
 
     release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
     for required in (
         "metadata:",
         "draft-release:",
         "publish-container:",
-        "publish-vscode-marketplace:",
-        "publish-open-vsx:",
         "publish-crates:",
         "finalize:",
         "environment: release",
@@ -139,6 +148,37 @@ def main() -> int:
     ):
         if required not in release:
             failures.append(f"release workflow is missing {required!r}")
+    for forbidden in (
+        "build-vscode:",
+        "publish-vscode-marketplace:",
+        "publish-open-vsx:",
+        "vscode-marketplace",
+        "editors/vscode",
+        ".vsix",
+        "VSCE_PAT",
+        "OVSX_PAT",
+    ):
+        if forbidden in release:
+            failures.append(f"CLI release workflow still contains {forbidden!r}")
+    finalize = re.search(
+        r"(?ms)^  finalize:\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:\n|\Z)", release
+    )
+    if finalize is not None:
+        needs = re.search(
+            r"(?m)^    needs:\n(?P<items>(?:^      - [^\n]+\n)+)",
+            finalize.group("body"),
+        )
+        actual_needs = (
+            re.findall(r"(?m)^      - ([^\n]+)$", needs.group("items"))
+            if needs is not None
+            else []
+        )
+        if actual_needs != ["publish-container", "publish-crates"]:
+            failures.append(
+                "release finalize must depend only on publish-container and publish-crates"
+            )
+    if "  draft-release:\n    needs: build\n" not in release:
+        failures.append("draft release must depend only on the CLI archive build")
     if 'chmod 0755 "release/binaries/out/$2/ocomment"' not in release:
         failures.append("release workflow does not preserve archive executable mode")
 
