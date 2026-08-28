@@ -1,7 +1,10 @@
 use crate::{
-    ByteSpan, Language, Layout, ScanOptions, ScanReport, Severity, TransformOptions,
-    TransformResult,
-    scanner::{RestartRules, preamble_is_settled, scan_until_checkpoint, scan_with_checkpoints},
+    ByteSpan, Language, Layout, PreparedScanner, ScanOptions, ScanReport, Severity,
+    TransformOptions, TransformResult,
+    scanner::{
+        RestartRules, preamble_is_settled, scan_until_checkpoint_prepared,
+        scan_with_checkpoints_prepared,
+    },
     transform::transform_report,
 };
 use thiserror::Error;
@@ -93,6 +96,7 @@ pub struct IncrementalDocument {
     source: Vec<u8>,
     language: Language,
     options: ScanOptions,
+    prepared: PreparedScanner,
     report: ScanReport,
     checkpoints: Vec<usize>,
     safe_checkpoints: Vec<usize>,
@@ -131,14 +135,16 @@ impl IncrementalDocument {
     /// `version` is the client's revision number for these bytes; every later
     /// [`Self::apply_changes`] has to advance on it.
     pub fn new(source: Vec<u8>, language: Language, options: ScanOptions, version: i64) -> Self {
+        let prepared = PreparedScanner::lossy(options.clone());
         let (report, safe_checkpoints) =
-            scan_with_checkpoints(&source, language, options.clone(), 0);
+            scan_with_checkpoints_prepared(&source, language, &prepared, 0);
         let checkpoints = line_checkpoints(&source);
         let last_rescan = ByteSpan::new(0, source.len());
         Self {
             source,
             language,
             options,
+            prepared,
             report,
             checkpoints,
             safe_checkpoints,
@@ -315,10 +321,10 @@ impl IncrementalDocument {
              * convergence point: lexical lookahead that reaches past the cut
              * would otherwise decide differently than it does in the real
              * document and the rescan would lose comments or diagnostics. */
-            let (report, checkpoints, converged) = scan_until_checkpoint(
+            let (report, checkpoints, converged) = scan_until_checkpoint_prepared(
                 &next[safe_start..],
                 self.language,
-                self.options.clone(),
+                &self.prepared,
                 safe_start,
                 new_convergence,
             );
@@ -332,10 +338,10 @@ impl IncrementalDocument {
             }
         }
         let (mut suffix, suffix_checkpoints, rescan_end) = partial.unwrap_or_else(|| {
-            let (report, checkpoints) = scan_with_checkpoints(
+            let (report, checkpoints) = scan_with_checkpoints_prepared(
                 &next[safe_start..],
                 self.language,
-                self.options.clone(),
+                &self.prepared,
                 safe_start,
             );
             (report, checkpoints, next.len())
@@ -613,6 +619,35 @@ mod tests {
         assert_eq!(endpoint(source, source.len()), source.len());
         assert_eq!(endpoint(b"", usize::MAX), 0);
         assert!(endpoint(source, 12345) <= source.len());
+    }
+
+    #[test]
+    fn an_unmatched_markdown_code_span_withdraws_later_line_checkpoints() {
+        let mut document = IncrementalDocument::new(
+            b"text ```open\nnext".to_vec(),
+            Language::Markdown,
+            ScanOptions::default(),
+            1,
+        );
+        assert_eq!(document.safe_checkpoints(), [0]);
+        let end = document.source().len();
+        document
+            .apply_changes(
+                &[DocumentChange {
+                    span: ByteSpan::new(end, end),
+                    replacement: b"```".to_vec(),
+                }],
+                2,
+            )
+            .unwrap();
+        let (expected, expected_checkpoints) = scan_with_checkpoints(
+            document.source(),
+            Language::Markdown,
+            ScanOptions::default(),
+            0,
+        );
+        assert_eq!(document.report(), &expected);
+        assert_eq!(document.safe_checkpoints(), expected_checkpoints);
     }
 
     proptest! {

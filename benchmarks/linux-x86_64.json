@@ -4,8 +4,8 @@
     "architecture": "x86_64",
     "cpu": "Intel Core i7-7700K @ 4.20GHz",
     "threads": 8,
-    "profile": "release, thin LTO, stripped",
-    "recorded": "2026-08-25"
+    "profile": "release, opt-level=s, thin LTO, stripped",
+    "recorded": "2026-08-28"
   },
   "metrics": {
     "version_median_ms": 2.0,
@@ -13,6 +13,12 @@
     "c_mib_per_second": 1200.0,
     "javascript_mib_per_second": 275.0,
     "shell_mib_per_second": 370.0,
-    "typos_ratio": 0.28
+    "typos_ratio": 0.28,
+    "self_scan_median_ms": 15.0,
+    "quiet_check_peak_rss_mib": 75.0,
+    "dense_human_median_ms": 35.0,
+    "dense_json_peak_rss_mib": 28.0,
+    "dense_sarif_peak_rss_mib": 21.0,
+    "regex_many_files_median_ms": 40.0
   }
 }

@@ -2,9 +2,9 @@
 
 # Languages and dialects
 
-`spec/languages.toml` is the canonical table. The `files:` pattern of the
-published pre-commit hooks is generated from it, `tools/check_hooks.py` fails
-when the two drift apart, and the table below is generated from the same file.
+`spec/languages.toml` is the canonical table. The table below is generated from
+that file, while the published pre-commit hooks pass every text file to the CLI
+detector so reserved names and extensionless shebang scripts are covered too.
 The binary embeds that same file, so `ocomment languages` prints these rows in
 columns and `ocomment languages --format json` prints them as JSON.
 
@@ -24,7 +24,7 @@ ocomment: unsupported dialect `mysql` for rust; supported: standard
 ```
 
 OComment has 30 built-in languages covering
-78 file extensions and 17 named dialects.
+78 file extensions and 18 named dialects.
 
 | Language | Extensions | Dialects |
 | --- | --- | --- |
@@ -39,7 +39,7 @@ OComment has 30 built-in languages covering
 | `python` | `.py`, `.pyw`, `.pyi` | `standard` |
 | `shell` | `.sh` (`posix-sh`), `.bash` (`bash53`), `.zsh` (`zsh`) | `standard`, `posix-sh`, `bash53`, `zsh` |
 | `html` | `.html`, `.htm`, `.xhtml`, `.shtml` | `standard` |
-| `css` | `.css`, `.scss` (`scss`), `.sass` (`scss`) | `standard`, `scss` |
+| `css` | `.css`, `.scss` (`scss`), `.sass` (`sass`) | `standard`, `scss`, `sass` |
 | `jsonc` | `.jsonc`, `.json5` | `standard` |
 | `sql` | `.sql` | `standard`, `postgresql`, `mysql`, `sqlite`, `t-sql`, `oracle` |
 | `kotlin` | `.kt`, `.kts` | `standard` |
@@ -63,8 +63,11 @@ OComment has 30 built-in languages covering
 
 A file whose extension decides nothing is looked up by its whole name, and a
 file with no name at all — a script on standard input — is read from its `#!`
-line. A name is matched without regard to case, and a shebang matches when the
-interpreter name appears anywhere on the line.
+line. A name is matched without regard to case. A direct shebang uses only the
+executable basename; for `/usr/bin/env`, options, assignments, `--`, and
+`-S`/`--split-string` are consumed to find the executable it actually launches.
+Parent directories, option values, and program arguments are never searched for
+an interpreter-looking name.
 
 | Language | File names | Shebangs |
 | --- | --- | --- |

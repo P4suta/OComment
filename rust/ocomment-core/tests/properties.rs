@@ -123,6 +123,24 @@ proptest! {
         let right = second % modulus;
         let span = ByteSpan::new(left.min(right), left.max(right));
         for language in Language::ALL {
+            let original = scan(&source, language, ScanOptions::default());
+            prop_assert!(
+                original.comments.iter().all(|comment|
+                    comment.span.start <= comment.span.end && comment.span.end <= source.len()),
+                "comment span outside source for {}: {:?}",
+                language,
+                original.comments,
+            );
+            prop_assert!(
+                original.diagnostics.iter().all(|diagnostic|
+                    diagnostic.span.start <= diagnostic.span.end && diagnostic.span.end <= source.len()),
+                "diagnostic span outside source for {}: {:?}",
+                language,
+                original.diagnostics,
+            );
+            let transformed = transform(&source, language, TransformOptions::default());
+            prop_assert!(transformed.edits.iter().all(|edit|
+                edit.span.start <= edit.span.end && edit.span.end <= source.len()));
             let mut document = IncrementalDocument::new(
                 source.clone(),
                 language,
@@ -133,13 +151,33 @@ proptest! {
                 span,
                 replacement: replacement.clone(),
             }], 2).unwrap();
+            let full = scan(document.source(), language, ScanOptions::default());
+            prop_assert!(full.comments.iter().all(|comment|
+                comment.span.start <= comment.span.end && comment.span.end <= document.source().len()));
+            prop_assert!(full.diagnostics.iter().all(|diagnostic|
+                diagnostic.span.start <= diagnostic.span.end && diagnostic.span.end <= document.source().len()));
             prop_assert_eq!(
                 document.report(),
-                &scan(document.source(), language, ScanOptions::default()),
+                &full,
                 "incremental mismatch for {} at {:?}",
                 language,
                 span,
             );
+        }
+        for dialect in [ocomment_core::Dialect::Scss, ocomment_core::Dialect::Sass] {
+            let options = ScanOptions { dialect, ..ScanOptions::default() };
+            let report = scan(&source, Language::Css, options.clone());
+            prop_assert!(report.comments.iter().all(|comment|
+                comment.span.start <= comment.span.end && comment.span.end <= source.len()));
+            prop_assert!(report.diagnostics.iter().all(|diagnostic|
+                diagnostic.span.start <= diagnostic.span.end && diagnostic.span.end <= source.len()));
+            let transformed = transform(
+                &source,
+                Language::Css,
+                TransformOptions { scan: options, ..TransformOptions::default() },
+            );
+            prop_assert!(transformed.edits.iter().all(|edit|
+                edit.span.start <= edit.span.end && edit.span.end <= source.len()));
         }
     }
 

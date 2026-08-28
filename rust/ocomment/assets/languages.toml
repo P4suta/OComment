@@ -4,56 +4,65 @@ version = 1
 # NOTE: for.
 # NOTE:
 # NOTE: `extensions` holds every suffix that selects the language, without the
-# NOTE: dot, and `dialects` every dialect it accepts, in the order the binary
+# NOTE: dot, `editor_ids` the identifiers editor clients send to the LSP, and
+# NOTE: `dialects` every dialect it accepts, in the order the binary
 # NOTE: lists them when it refuses one. An extension that selects a dialect
 # NOTE: other than `standard` says so in `extension_dialects`; `reserved_names`
 # NOTE: and `shebangs` are the whole file names and interpreter names that
 # NOTE: select the language when the extension does not decide it. `notes` is a
 # NOTE: remark for the human listing.
 # NOTE:
-# NOTE: The `files:` pattern of the published pre-commit hooks is generated
-# NOTE: from the extensions here (tools/check_hooks.py), docs/languages.md is
-# NOTE: generated from the whole table (tools/gen_docs.py), and `ocomment
-# NOTE: languages` prints the copy the binary embeds.
+# NOTE: Published pre-commit hooks pass every text file to the detector;
+# NOTE: tools/check_hooks.py rejects a manifest-level extension filter.
+# NOTE: docs/languages.md is generated from the whole table
+# NOTE: (tools/gen_docs.py), and `ocomment languages` prints the copy the
+# NOTE: binary embeds.
 # NOTE: rust/ocomment/tests/spec_languages.rs checks every claim below against
 # NOTE: the detector and the binary.
 
 [[languages]]
 name = "rust"
+editor_ids = ["rust"]
 extensions = ["rs"]
 dialects = ["standard"]
 
 [[languages]]
 name = "ocaml"
+editor_ids = ["ocaml"]
 extensions = ["ml", "mli", "mlt"]
 dialects = ["standard"]
 notes = "OCaml 5.5 lexical forms"
 
 [[languages]]
 name = "c"
+editor_ids = ["c", "objective-c"]
 extensions = ["c", "h", "m"]
 dialects = ["standard", "objective-c", "gnu-c"]
 extension_dialects = { m = "objective-c" }
 
 [[languages]]
 name = "cpp"
+editor_ids = ["cpp", "objective-cpp", "cuda-cpp"]
 extensions = ["cc", "cpp", "cxx", "hh", "hpp", "hxx", "mm", "cu", "cuh"]
 dialects = ["standard", "objective-cpp", "gnu-cpp", "cuda"]
 extension_dialects = { mm = "objective-cpp", cu = "cuda", cuh = "cuda" }
 
 [[languages]]
 name = "go"
+editor_ids = ["go"]
 extensions = ["go"]
 dialects = ["standard"]
 
 [[languages]]
 name = "java"
+editor_ids = ["java"]
 extensions = ["java"]
 dialects = ["standard"]
 notes = "Unicode escape translation"
 
 [[languages]]
 name = "javascript"
+editor_ids = ["javascript", "javascriptreact"]
 extensions = ["js", "mjs", "cjs", "jsx"]
 dialects = ["standard", "jsx"]
 extension_dialects = { jsx = "jsx" }
@@ -61,18 +70,21 @@ shebangs = ["node", "deno"]
 
 [[languages]]
 name = "typescript"
+editor_ids = ["typescript", "typescriptreact"]
 extensions = ["ts", "mts", "cts", "tsx"]
 dialects = ["standard", "tsx"]
 extension_dialects = { tsx = "tsx" }
 
 [[languages]]
 name = "python"
+editor_ids = ["python"]
 extensions = ["py", "pyw", "pyi"]
 dialects = ["standard"]
 shebangs = ["python"]
 
 [[languages]]
 name = "shell"
+editor_ids = ["shellscript"]
 extensions = ["sh", "bash", "zsh"]
 dialects = ["standard", "posix-sh", "bash53", "zsh"]
 extension_dialects = { sh = "posix-sh", bash = "bash53", zsh = "zsh" }
@@ -89,34 +101,40 @@ shebangs = ["sh", "bash", "zsh"]
 
 [[languages]]
 name = "html"
+editor_ids = ["html"]
 extensions = ["html", "htm", "xhtml", "shtml"]
 dialects = ["standard"]
 notes = "script and style bodies are scanned as JavaScript and CSS"
 
 [[languages]]
 name = "css"
+editor_ids = ["css"]
 extensions = ["css", "scss", "sass"]
-dialects = ["standard", "scss"]
-extension_dialects = { scss = "scss", sass = "scss" }
+dialects = ["standard", "scss", "sass"]
+extension_dialects = { scss = "scss", sass = "sass" }
 
 [[languages]]
 name = "jsonc"
+editor_ids = ["jsonc"]
 extensions = ["jsonc", "json5"]
 dialects = ["standard"]
 reserved_names = ["tsconfig.json", "jsconfig.json"]
 
 [[languages]]
 name = "sql"
+editor_ids = ["sql"]
 extensions = ["sql"]
 dialects = ["standard", "postgresql", "mysql", "sqlite", "t-sql", "oracle"]
 
 [[languages]]
 name = "kotlin"
+editor_ids = ["kotlin"]
 extensions = ["kt", "kts"]
 dialects = ["standard"]
 
 [[languages]]
 name = "toml"
+editor_ids = ["toml"]
 extensions = ["toml"]
 dialects = ["standard"]
 reserved_names = [
@@ -130,6 +148,7 @@ notes = "TOML v1.0.0 lexical forms"
 
 [[languages]]
 name = "lua"
+editor_ids = ["lua"]
 extensions = ["lua", "rockspec"]
 dialects = ["standard"]
 shebangs = ["lua", "luajit"]
@@ -137,6 +156,7 @@ notes = "Lua 5.4 lexical forms"
 
 [[languages]]
 name = "yaml"
+editor_ids = ["yaml"]
 extensions = ["yml", "yaml"]
 dialects = ["standard"]
 reserved_names = [
@@ -148,6 +168,7 @@ notes = "YAML 1.2.2 lexical forms"
 
 [[languages]]
 name = "php"
+editor_ids = ["php"]
 extensions = ["php", "phtml", "phpt"]
 dialects = ["standard"]
 shebangs = ["php"]
@@ -155,6 +176,7 @@ notes = "PHP 8 lexical forms; the inline HTML around the tags is opaque"
 
 [[languages]]
 name = "ruby"
+editor_ids = ["ruby"]
 extensions = [
     "rb",
     "rbw",
@@ -188,12 +210,14 @@ notes = "Ruby 3.3 lexical forms"
 
 [[languages]]
 name = "zig"
+editor_ids = ["zig"]
 extensions = ["zig", "zon"]
 dialects = ["standard"]
 notes = "Zig 0.16 lexical forms; no block comment, so `/*` is two operators"
 
 [[languages]]
 name = "r"
+editor_ids = ["r"]
 extensions = ["r"]
 dialects = ["standard"]
 reserved_names = [".Rprofile"]
@@ -202,6 +226,7 @@ notes = "R 4.3 lexical forms; `%op%` is opaque and `r\"(...)\"` is a raw string"
 
 [[languages]]
 name = "dart"
+editor_ids = ["dart"]
 extensions = ["dart"]
 dialects = ["standard"]
 shebangs = ["dart"]
@@ -209,6 +234,7 @@ notes = "Dart 3.13 lexical forms; block comments nest and `${...}` is code"
 
 [[languages]]
 name = "swift"
+editor_ids = ["swift"]
 extensions = ["swift"]
 dialects = ["standard"]
 shebangs = ["swift"]
@@ -216,6 +242,7 @@ notes = "Swift 6 lexical forms; block comments nest and `#/.../#` is a regular e
 
 [[languages]]
 name = "csharp"
+editor_ids = ["csharp"]
 extensions = ["cs", "csx"]
 dialects = ["standard"]
 shebangs = ["dotnet-script"]
@@ -223,6 +250,7 @@ notes = "C# 13 lexical forms; a line opening with `#` is a preprocessor directiv
 
 [[languages]]
 name = "scala"
+editor_ids = ["scala"]
 extensions = ["scala", "sc"]
 dialects = ["standard"]
 shebangs = ["scala-cli", "scala"]
@@ -230,24 +258,28 @@ notes = "Scala 3.8 lexical forms; block comments nest, an identifier before a qu
 
 [[languages]]
 name = "vue"
+editor_ids = ["vue"]
 extensions = ["vue"]
 dialects = ["standard"]
 notes = "Vue single-file components; the template is HTML with `{{ ... }}` code and the script and style bodies are their own languages, the `lang` attribute choosing which"
 
 [[languages]]
 name = "svelte"
+editor_ids = ["svelte"]
 extensions = ["svelte"]
 dialects = ["standard"]
 notes = "Svelte components; the template is HTML with `{ ... }` code and the script and style bodies are their own languages, the `lang` attribute choosing which"
 
 [[languages]]
 name = "markdown"
+editor_ids = ["markdown"]
 extensions = ["md", "markdown", "rmd"]
 dialects = ["standard"]
 notes = "CommonMark documents; HTML comments are comments, fenced code blocks are scanned as the language their info string names, and inline and indented code are opaque"
 
 [[languages]]
 name = "perl"
+editor_ids = ["perl"]
 extensions = ["pl", "pm", "t"]
 dialects = ["standard"]
 shebangs = ["perl"]

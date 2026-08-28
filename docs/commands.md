@@ -153,7 +153,8 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
-          - scss:          SCSS and the indented Sass syntax
+          - scss:          SCSS
+          - sass:          The indentation-based Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -351,7 +352,8 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
-          - scss:          SCSS and the indented Sass syntax
+          - scss:          SCSS
+          - sass:          The indentation-based Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -534,7 +536,8 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
-          - scss:          SCSS and the indented Sass syntax
+          - scss:          SCSS
+          - sass:          The indentation-based Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -709,7 +712,8 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
-          - scss:          SCSS and the indented Sass syntax
+          - scss:          SCSS
+          - sass:          The indentation-based Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -884,7 +888,8 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
-          - scss:          SCSS and the indented Sass syntax
+          - scss:          SCSS
+          - sass:          The indentation-based Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -1049,7 +1054,8 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
-          - scss:          SCSS and the indented Sass syntax
+          - scss:          SCSS
+          - sass:          The indentation-based Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -1214,7 +1220,8 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
-          - scss:          SCSS and the indented Sass syntax
+          - scss:          SCSS
+          - sass:          The indentation-based Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -1395,7 +1402,8 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
-          - scss:          SCSS and the indented Sass syntax
+          - scss:          SCSS
+          - sass:          The indentation-based Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -1567,7 +1575,8 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
-          - scss:          SCSS and the indented Sass syntax
+          - scss:          SCSS
+          - sass:          The indentation-based Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -1732,7 +1741,8 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
-          - scss:          SCSS and the indented Sass syntax
+          - scss:          SCSS
+          - sass:          The indentation-based Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -1906,7 +1916,8 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
-          - scss:          SCSS and the indented Sass syntax
+          - scss:          SCSS
+          - sass:          The indentation-based Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -2084,7 +2095,8 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
-          - scss:          SCSS and the indented Sass syntax
+          - scss:          SCSS
+          - sass:          The indentation-based Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -2253,7 +2265,8 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
-          - scss:          SCSS and the indented Sass syntax
+          - scss:          SCSS
+          - sass:          The indentation-based Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -2418,7 +2431,8 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
-          - scss:          SCSS and the indented Sass syntax
+          - scss:          SCSS
+          - sass:          The indentation-based Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -2587,7 +2601,8 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
-          - scss:          SCSS and the indented Sass syntax
+          - scss:          SCSS
+          - sass:          The indentation-based Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -2756,7 +2771,8 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
-          - scss:          SCSS and the indented Sass syntax
+          - scss:          SCSS
+          - sass:          The indentation-based Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -2925,7 +2941,8 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
-          - scss:          SCSS and the indented Sass syntax
+          - scss:          SCSS
+          - sass:          The indentation-based Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -3096,7 +3113,8 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
-          - scss:          SCSS and the indented Sass syntax
+          - scss:          SCSS
+          - sass:          The indentation-based Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -3261,7 +3279,8 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
-          - scss:          SCSS and the indented Sass syntax
+          - scss:          SCSS
+          - sass:          The indentation-based Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy
@@ -3426,7 +3445,8 @@ Policy:
           - sqlite:        SQLite
           - t-sql:         Microsoft Transact-SQL
           - oracle:        Oracle SQL and PL/SQL
-          - scss:          SCSS and the indented Sass syntax
+          - scss:          SCSS
+          - sass:          The indentation-based Sass syntax
 
       --keep-kind <KIND>
           Comma-separated comment kinds to protect on top of the policy

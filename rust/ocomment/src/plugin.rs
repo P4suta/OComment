@@ -1,7 +1,8 @@
 use crate::{config::PluginsConfig, output::wrote};
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use ocomment_core::{
-    ByteSpan, CommentKind, Language, TransformOptions, TransformResult, transform_spans,
+    ByteSpan, CommentKind, Language, PreparedScanner, ScanReport, TransformOptions, TransformPlan,
+    TransformResult,
 };
 use ocomment_plugin_sdk::{API_VERSION, PluginComment, validate_comments};
 use serde::{Deserialize, Serialize};
@@ -202,6 +203,53 @@ impl PluginHost {
         path: &Path,
         options: TransformOptions,
     ) -> Result<TransformResult> {
+        let prepared = PreparedScanner::new(options.scan.clone())
+            .context("cannot prepare plugin comment policy")?;
+        Ok(self
+            .transform_plan(name, source, language, path, &options, &prepared)?
+            .finish(source))
+    }
+
+    pub fn transform_plan(
+        &self,
+        name: &str,
+        source: &[u8],
+        language: &str,
+        path: &Path,
+        options: &TransformOptions,
+        prepared: &PreparedScanner,
+    ) -> Result<TransformPlan> {
+        debug_assert_eq!(prepared.options(), &options.scan);
+        let spans = self.scan_plugin_spans(name, source, language, path, options)?;
+        prepared
+            .transform_spans_plan(source, Language::Unknown, &spans, options.layout)
+            .with_context(|| format!("plugin `{name}` spans failed host validation"))
+    }
+
+    pub fn scan_report(
+        &self,
+        name: &str,
+        source: &[u8],
+        language: &str,
+        path: &Path,
+        options: &TransformOptions,
+        prepared: &PreparedScanner,
+    ) -> Result<ScanReport> {
+        debug_assert_eq!(prepared.options(), &options.scan);
+        let spans = self.scan_plugin_spans(name, source, language, path, options)?;
+        prepared
+            .scan_spans(source, Language::Unknown, &spans)
+            .with_context(|| format!("plugin `{name}` spans failed host validation"))
+    }
+
+    fn scan_plugin_spans(
+        &self,
+        name: &str,
+        source: &[u8],
+        language: &str,
+        path: &Path,
+        options: &TransformOptions,
+    ) -> Result<Vec<(ByteSpan, CommentKind)>> {
         let runtime = self
             .runtime
             .as_ref()
@@ -280,12 +328,10 @@ impl PluginHost {
         let comments = parse_scan_result(name, &results[0])?;
         validate_comments(source.len(), api, &comments)
             .with_context(|| format!("plugin `{name}` returned unsafe comment spans"))?;
-        let spans: Vec<_> = comments
+        Ok(comments
             .into_iter()
             .map(|comment| (comment.span, comment.kind))
-            .collect();
-        transform_spans(source, Language::Unknown, &spans, options)
-            .with_context(|| format!("plugin `{name}` spans failed host validation"))
+            .collect())
     }
 }
 

@@ -24,148 +24,265 @@ impl Detection {
     }
 }
 
-/// How a `#!` line is searched for one interpreter name.
+/// How an executable basename is compared with one interpreter name.
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum Spelling {
-    /// Anywhere in the line, which is what every name longer than a letter or
-    /// two can afford.
-    Anywhere,
-    /// As a whole word of the line, delimited by the `/` of a path, white
-    /// space, or an option's `-`.
-    Word,
+    /// The basename is the interpreter name, ignoring ASCII case.
+    Exact,
+    /// The name, or that basename followed only by a numeric version such as
+    /// `python3.12` or `lua5.4`.
+    NumericVersion,
 }
 
 /// The interpreter names a `#!` line is read for, in the order they are tried,
 /// with the language and dialect each one selects.
 ///
-/// The line is searched for a [`Spelling::Anywhere`] name as a substring rather
-/// than split into words, because an interpreter arrives written a dozen ways:
-/// as a path (`#!/bin/bash`), with a version (`#!/usr/bin/python3.12`), or
-/// behind `env` with options (`#!/usr/bin/env -S node --enable-source-maps`).
-/// The order is therefore part of the rule and not an accident of listing:
-/// `bash` and `zsh` both *contain* `sh`, so each has to be met before it, or
-/// every Bash script on disk would be read as POSIX shell. `luajit` contains
-/// `lua`, and `jruby` and `truffleruby` contain `ruby`, and all three are
-/// listed before the name they contain under the same convention, though those
-/// pairs name the same language whichever of the two is met first. `swift` is
-/// listed there for the first reason rather than the second: a toolchain
-/// installs it under `/usr/share/swift/usr/bin/swift`, and that path carries an
-/// `sh` of its own.
-///
-/// `dotnet-script` is listed there for the first reason as well: the front end
-/// that runs a `.csx` file is installed under a name that carries no `sh`, but
-/// the `#!` line reaching it is written `#!/usr/bin/env dotnet-script`, and
-/// `env` is what every other name has to be met in front of too.
-///
-/// `r` is the one name a substring cannot find: littler installs R's scripting
-/// front end under a single letter, and `/usr/` alone carries an `r`, so
-/// searching for it that way would read every `#!/usr/bin/awk` on disk as R.
-/// It is a [`Spelling::Word`] instead, and it is listed last so that every name
-/// spelled out in full is met before a bare letter is considered at all.
+/// Only the executable basename is compared. Interpreter-looking parent
+/// directories and arguments are data, not evidence. `env` is handled before
+/// this table: its options and assignments are consumed until the executable
+/// it will launch is reached.
 const SHEBANGS: [(&str, Language, Dialect, Spelling); 20] = [
     (
         "python",
         Language::Python,
         Dialect::Standard,
-        Spelling::Anywhere,
+        Spelling::NumericVersion,
     ),
-    ("bash", Language::Shell, Dialect::Bash53, Spelling::Anywhere),
-    ("zsh", Language::Shell, Dialect::Zsh, Spelling::Anywhere),
+    ("bash", Language::Shell, Dialect::Bash53, Spelling::Exact),
+    ("zsh", Language::Shell, Dialect::Zsh, Spelling::Exact),
+    ("luajit", Language::Lua, Dialect::Standard, Spelling::Exact),
     (
-        "luajit",
+        "lua",
         Language::Lua,
         Dialect::Standard,
-        Spelling::Anywhere,
+        Spelling::NumericVersion,
     ),
-    ("lua", Language::Lua, Dialect::Standard, Spelling::Anywhere),
-    ("php", Language::Php, Dialect::Standard, Spelling::Anywhere),
+    ("php", Language::Php, Dialect::Standard, Spelling::Exact),
     (
         "truffleruby",
         Language::Ruby,
         Dialect::Standard,
-        Spelling::Anywhere,
+        Spelling::Exact,
     ),
-    (
-        "jruby",
-        Language::Ruby,
-        Dialect::Standard,
-        Spelling::Anywhere,
-    ),
-    (
-        "ruby",
-        Language::Ruby,
-        Dialect::Standard,
-        Spelling::Anywhere,
-    ),
-    (
-        "rscript",
-        Language::R,
-        Dialect::Standard,
-        Spelling::Anywhere,
-    ),
-    (
-        "dart",
-        Language::Dart,
-        Dialect::Standard,
-        Spelling::Anywhere,
-    ),
-    (
-        "swift",
-        Language::Swift,
-        Dialect::Standard,
-        Spelling::Anywhere,
-    ),
+    ("jruby", Language::Ruby, Dialect::Standard, Spelling::Exact),
+    ("ruby", Language::Ruby, Dialect::Standard, Spelling::Exact),
+    ("rscript", Language::R, Dialect::Standard, Spelling::Exact),
+    ("dart", Language::Dart, Dialect::Standard, Spelling::Exact),
+    ("swift", Language::Swift, Dialect::Standard, Spelling::Exact),
     (
         "dotnet-script",
         Language::CSharp,
         Dialect::Standard,
-        Spelling::Anywhere,
+        Spelling::Exact,
     ),
-    (
-        "perl",
-        Language::Perl,
-        Dialect::Standard,
-        Spelling::Anywhere,
-    ),
+    ("perl", Language::Perl, Dialect::Standard, Spelling::Exact),
     (
         "scala-cli",
         Language::Scala,
         Dialect::Standard,
-        Spelling::Anywhere,
+        Spelling::Exact,
     ),
-    (
-        "scala",
-        Language::Scala,
-        Dialect::Standard,
-        Spelling::Anywhere,
-    ),
-    ("sh", Language::Shell, Dialect::PosixSh, Spelling::Anywhere),
+    ("scala", Language::Scala, Dialect::Standard, Spelling::Exact),
+    ("sh", Language::Shell, Dialect::PosixSh, Spelling::Exact),
     (
         "node",
         Language::JavaScript,
         Dialect::Standard,
-        Spelling::Anywhere,
+        Spelling::Exact,
     ),
     (
         "deno",
         Language::JavaScript,
         Dialect::Standard,
-        Spelling::Anywhere,
+        Spelling::Exact,
     ),
-    ("r", Language::R, Dialect::Standard, Spelling::Word),
+    ("r", Language::R, Dialect::Standard, Spelling::Exact),
 ];
 
-/// Whether `line` carries `name` as a whole word.
+/// The executable one `#!` line actually launches.
 ///
-/// A `#!` line is a path and then arguments, so what separates one word of it
-/// from the next is everything a command name is not: the `/` of a path, white
-/// space, the `-` of an option, and the `#!` itself. `.`, `_` and `+` stay
-/// inside a word, so a version suffix does not split one.
-fn carries_word(line: &str, name: &str) -> bool {
-    line.split(|character: char| {
-        !character.is_ascii_alphanumeric() && !matches!(character, '.' | '_' | '+')
-    })
-    .any(|word| word == name)
+/// A direct shebang contributes only its first token. When that token is
+/// `env`, options and assignments are consumed according to `env`'s command
+/// line instead. This deliberately never searches parent directories, option
+/// values, assignments, or arguments for an interpreter-looking substring.
+fn shebang_executable(line: &[u8]) -> Option<String> {
+    let text = std::str::from_utf8(line.strip_prefix(b"#!")?).ok()?;
+    let mut words: Vec<String> = text.split_ascii_whitespace().map(str::to_owned).collect();
+    let direct = words.first()?;
+    if executable_basename(direct) != Some("env") {
+        return Some(direct.clone());
+    }
+    words.remove(0);
+    env_executable(words)
+}
+
+fn env_executable(mut words: Vec<String>) -> Option<String> {
+    let mut index = 0usize;
+    while index < words.len() {
+        let word = &words[index];
+        if word == "--" {
+            return words.get(index + 1).cloned();
+        }
+        if word == "-S" || word == "--split-string" {
+            let split = words.get(index + 1..)?.join(" ");
+            words = split_env_string(&split)?;
+            index = 0;
+            continue;
+        }
+        if let Some(value) = word
+            .strip_prefix("--split-string=")
+            .or_else(|| word.strip_prefix("-S").filter(|value| !value.is_empty()))
+        {
+            let mut split = value.to_owned();
+            if let Some(rest) = words.get(index + 1..)
+                && !rest.is_empty()
+            {
+                split.push(' ');
+                split.push_str(&rest.join(" "));
+            }
+            words = split_env_string(&split)?;
+            index = 0;
+            continue;
+        }
+        if matches!(
+            word.as_str(),
+            "-u" | "--unset" | "-C" | "--chdir" | "-a" | "--argv0"
+        ) {
+            index = index.checked_add(2)?;
+            continue;
+        }
+        if ["-u", "-C", "-a"]
+            .iter()
+            .any(|option| word.starts_with(option) && word.len() > option.len())
+            || ["--unset=", "--chdir=", "--argv0="]
+                .iter()
+                .any(|option| word.starts_with(option))
+        {
+            index += 1;
+            continue;
+        }
+        if matches!(
+            word.as_str(),
+            "-i" | "--ignore-environment"
+                | "-0"
+                | "--null"
+                | "-v"
+                | "--debug"
+                | "--block-signal"
+                | "--default-signal"
+                | "--ignore-signal"
+                | "--list-signal-handling"
+        ) || ["--block-signal=", "--default-signal=", "--ignore-signal="]
+            .iter()
+            .any(|option| word.starts_with(option))
+        {
+            index += 1;
+            continue;
+        }
+        if word.starts_with('-') {
+            /* NOTE: Guessing whether an unknown option consumes the next token can
+             * turn its value into an interpreter. Unknown syntax is therefore
+             * deliberately undetected. */
+            return None;
+        }
+        if is_env_assignment(word) {
+            index += 1;
+            continue;
+        }
+        return Some(word.clone());
+    }
+    None
+}
+
+/// Split the string accepted by `env -S`. This is the small shell-like part of
+/// `env`'s interface: ASCII whitespace separates words, quotes group it, and a
+/// backslash quotes the following character. An unfinished quote or escape is
+/// invalid and fails closed.
+fn split_env_string(text: &str) -> Option<Vec<String>> {
+    let mut words = Vec::new();
+    let mut word = String::new();
+    let mut started = false;
+    let mut quote = None;
+    let mut escaped = false;
+    for character in text.chars() {
+        if escaped {
+            word.push(character);
+            started = true;
+            escaped = false;
+            continue;
+        }
+        match quote {
+            Some(mark) if character == mark => quote = None,
+            Some('\'') => {
+                word.push(character);
+                started = true;
+            }
+            Some('"') if character == '\\' => escaped = true,
+            Some('"') => {
+                word.push(character);
+                started = true;
+            }
+            Some(_) => unreachable!("only quote characters are stored"),
+            None if character == '\\' => escaped = true,
+            None if matches!(character, '\'' | '"') => {
+                quote = Some(character);
+                started = true;
+            }
+            None if character.is_ascii_whitespace() => {
+                if started {
+                    words.push(std::mem::take(&mut word));
+                    started = false;
+                }
+            }
+            None => {
+                word.push(character);
+                started = true;
+            }
+        }
+    }
+    if quote.is_some() || escaped {
+        return None;
+    }
+    if started {
+        words.push(word);
+    }
+    Some(words)
+}
+
+fn is_env_assignment(word: &str) -> bool {
+    let Some((name, _)) = word.split_once('=') else {
+        return false;
+    };
+    let mut characters = name.chars();
+    characters
+        .next()
+        .is_some_and(|first| first == '_' || first.is_ascii_alphabetic())
+        && characters.all(|character| character == '_' || character.is_ascii_alphanumeric())
+}
+
+fn executable_basename(executable: &str) -> Option<&str> {
+    executable
+        .rsplit('/')
+        .next()
+        .filter(|name| !name.is_empty())
+}
+
+fn interpreter_matches(basename: &str, name: &str, spelling: Spelling) -> bool {
+    let basename = basename.to_ascii_lowercase();
+    match spelling {
+        Spelling::Exact => basename == name,
+        Spelling::NumericVersion => basename.strip_prefix(name).is_some_and(|suffix| {
+            let mut characters = suffix.chars();
+            let first = characters.next();
+            let last = suffix.chars().next_back();
+            suffix.is_empty()
+                || (first.is_some_and(|character| character.is_ascii_digit())
+                    && last.is_some_and(|character| character.is_ascii_digit())
+                    && suffix
+                        .chars()
+                        .all(|character| character.is_ascii_digit() || character == '.'))
+        }),
+    }
 }
 
 /// Every interpreter name [`detect_language`] reads a `#!` line for, in the
@@ -177,12 +294,8 @@ fn carries_word(line: &str, name: &str) -> bool {
 /// will actually answer to instead of against a second list that may have
 /// stopped agreeing.
 ///
-/// A name matches anywhere in the first line, so these are the substrings to
-/// look for and not the whole words to compare against — with the single
-/// exception of `r`, which is one letter and is compared against whole words.
-/// The order they come back in is the order they must be tried in: `bash` and
-/// `zsh` both contain `sh`, so each has to be met before it, or every Bash
-/// script on disk would be read as POSIX shell.
+/// These are executable basenames, not substrings to search for in an entire
+/// shebang. The Python and Lua entries also accept a numeric version suffix.
 ///
 /// # Examples
 ///
@@ -322,9 +435,9 @@ pub fn detect_language(path: Option<&Path>, source: &[u8]) -> Option<Detection> 
             /* NOTE: `.vue` and `.svelte` are the suffixes of single-file
              * components, whose templates are HTML with code in them and whose
              * script and style bodies are scanned as their own languages.
-             * `.scss` and `.sass` are the two Sass syntaxes, which share the
-             * one `scss` dialect: both read `//` line comments and `#{ ... }`
-             * interpolation. */
+             * `.scss` and `.sass` are the two Sass syntaxes. They share
+             * interpolation and silent comments, but the latter is
+             * indentation-based and therefore has its own dialect. */
             /* NOTE: `.md` and `.markdown` are Markdown, and so is `.Rmd` —
              * an R Markdown document, whose `{r}` chunk headers name R for
              * the fenced-block scan — which is what the note that once kept
@@ -337,7 +450,8 @@ pub fn detect_language(path: Option<&Path>, source: &[u8]) -> Option<Detection> 
             "pl" | "pm" | "t" => Some((Language::Perl, Dialect::Standard)),
             "vue" => Some((Language::Vue, Dialect::Standard)),
             "svelte" => Some((Language::Svelte, Dialect::Standard)),
-            "scss" | "sass" => Some((Language::Css, Dialect::Scss)),
+            "scss" => Some((Language::Css, Dialect::Scss)),
+            "sass" => Some((Language::Css, Dialect::Sass)),
             _ => None,
         };
         if let Some((language, dialect)) = by_extension {
@@ -390,18 +504,13 @@ pub fn detect_language(path: Option<&Path>, source: &[u8]) -> Option<Detection> 
     }
 
     let first_line = source.split(|byte| *byte == b'\n').next().unwrap_or(source);
-    if first_line.starts_with(b"#!") {
-        let line = String::from_utf8_lossy(first_line).to_ascii_lowercase();
-        if let Some((_, language, dialect, _)) =
-            SHEBANGS
-                .iter()
-                .find(|(name, _, _, spelling)| match spelling {
-                    Spelling::Anywhere => line.contains(name),
-                    Spelling::Word => carries_word(&line, name),
-                })
-        {
-            return Some(Detection::new(*language, *dialect, "shebang"));
-        }
+    if let Some(executable) = shebang_executable(first_line)
+        && let Some(basename) = executable_basename(&executable)
+        && let Some((_, language, dialect, _)) = SHEBANGS
+            .iter()
+            .find(|(name, _, _, spelling)| interpreter_matches(basename, name, *spelling))
+    {
+        return Some(Detection::new(*language, *dialect, "shebang"));
     }
 
     let prefix = &source[..source.len().min(4096)];
@@ -418,6 +527,9 @@ pub fn detect_language(path: Option<&Path>, source: &[u8]) -> Option<Detection> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    type ExpectedDetection = Option<(Language, Dialect)>;
+
     #[test]
     fn extensions_and_shebangs() {
         assert_eq!(
@@ -432,5 +544,108 @@ mod tests {
                 .language,
             Language::Python
         );
+    }
+
+    #[test]
+    fn shebang_uses_only_the_executable_basename() {
+        let cases: &[(&[u8], ExpectedDetection)] = &[
+            (
+                b"#!/opt/python/bin/ruby -w\n",
+                Some((Language::Ruby, Dialect::Standard)),
+            ),
+            (
+                b"#!/usr/share/swift/usr/bin/swift\n",
+                Some((Language::Swift, Dialect::Standard)),
+            ),
+            (
+                b"#!/usr/bin/python3.12 -I\n",
+                Some((Language::Python, Dialect::Standard)),
+            ),
+            (b"#!/opt/python/bin/custom\n", None),
+            (b"#!/usr/bin/custom ruby python node\n", None),
+            (b"#!/usr/bin/myenv python3\n", None),
+            (b"#!/usr/bin/python-wrapper\n", None),
+            (b"#!/usr/bin/python3.\n", None),
+            (b"#!/usr/bin/bashful\n", None),
+        ];
+        for (line, expected) in cases {
+            let actual = detect_language(None, line)
+                .map(|detection| (detection.language, detection.dialect));
+            assert_eq!(
+                actual,
+                *expected,
+                "shebang: {}",
+                String::from_utf8_lossy(line)
+            );
+        }
+    }
+
+    #[test]
+    fn env_options_assignments_and_separator_reach_only_the_command() {
+        let cases: &[(&[u8], Language)] = &[
+            (
+                b"#!/usr/bin/env -i LANG=C -- python3 -I\n",
+                Language::Python,
+            ),
+            (b"#!/usr/bin/env -u python -- ruby -w\n", Language::Ruby),
+            (
+                b"#!/usr/bin/env --unset=python LUA=perl lua\n",
+                Language::Lua,
+            ),
+            (b"#!/usr/bin/env -C /python -- node\n", Language::JavaScript),
+            (b"#!/usr/bin/env PYTHON=python perl -w\n", Language::Perl),
+            (
+                b"#!/usr/bin/env --argv0=python dotnet-script\n",
+                Language::CSharp,
+            ),
+        ];
+        for (line, expected) in cases {
+            let detection = detect_language(None, line)
+                .unwrap_or_else(|| panic!("did not detect {}", String::from_utf8_lossy(line)));
+            assert_eq!(
+                detection.language,
+                *expected,
+                "shebang: {}",
+                String::from_utf8_lossy(line)
+            );
+        }
+
+        for line in [
+            b"#!/usr/bin/env PYTHON=python custom ruby\n".as_slice(),
+            b"#!/usr/bin/env -u python custom node\n",
+            b"#!/usr/bin/env --unknown python\n",
+        ] {
+            assert!(
+                detect_language(None, line).is_none(),
+                "an env value or argument was mistaken for a command: {}",
+                String::from_utf8_lossy(line)
+            );
+        }
+    }
+
+    #[test]
+    fn env_split_string_finds_its_first_command_word() {
+        let cases: &[(&[u8], Language)] = &[
+            (b"#!/usr/bin/env -S python3 -I\n", Language::Python),
+            (b"#!/usr/bin/env --split-string=ruby -w\n", Language::Ruby),
+            (
+                b"#!/usr/bin/env --split-string=node --no-warnings\n",
+                Language::JavaScript,
+            ),
+            (
+                b"#!/usr/bin/env -S LANG=C -- scala-cli shebang\n",
+                Language::Scala,
+            ),
+        ];
+        for (line, expected) in cases {
+            let detection = detect_language(None, line)
+                .unwrap_or_else(|| panic!("did not detect {}", String::from_utf8_lossy(line)));
+            assert_eq!(
+                detection.language,
+                *expected,
+                "shebang: {}",
+                String::from_utf8_lossy(line)
+            );
+        }
     }
 }

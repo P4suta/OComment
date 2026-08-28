@@ -23,11 +23,13 @@
 //!   independent OCaml implementation is compared against this one byte for
 //!   byte.
 //!
-//! # The three calls
+//! # Scanning and transforming
 //!
-//! [`scan`] reports. [`transform`] reports and also gives you the bytes.
-//! [`apply_edits`] is the last step of `transform`, exposed on its own for a
-//! caller that wants to filter or postpone the edits.
+//! [`scan`] reports. [`transform_plan`] reports and plans edits without
+//! materializing output, while [`transform`] also gives you the bytes and
+//! source map. [`PreparedScanner`] compiles policy regular expressions once
+//! for a multi-file caller. [`apply_edits`] is the last byte-building step,
+//! exposed on its own for a caller that wants to filter or postpone the edits.
 //!
 //! ```
 //! use ocomment_core::{CommentKind, Language, ScanOptions, scan};
@@ -162,8 +164,8 @@ pub use profile::{
     StringDelimiter, scan_profile, transform_profile, validate_profile,
 };
 pub use scanner::{
-    DispositionPatterns, explain_comment, explain_comment_with, explain_disposition,
-    explain_disposition_with, scan,
+    DispositionPatterns, PreparedScanner, explain_comment, explain_comment_with,
+    explain_disposition, explain_disposition_with, scan,
 };
-pub use transform::{apply_edits, transform, transform_spans};
+pub use transform::{apply_edits, transform, transform_plan, transform_spans};
 pub use types::*;

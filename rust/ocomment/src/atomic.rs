@@ -1,33 +1,35 @@
 use anyhow::{Context, Result, anyhow, bail};
 use std::{
+    borrow::Cow,
     fs,
     io::Write,
     path::{Path, PathBuf},
 };
-use tempfile::NamedTempFile;
+use tempfile::{NamedTempFile, TempPath};
 
-pub struct WritePlan {
+pub struct WritePlan<'a> {
     pub path: PathBuf,
-    pub original: Vec<u8>,
-    pub replacement: Vec<u8>,
+    pub original: Cow<'a, [u8]>,
+    pub replacement: Cow<'a, [u8]>,
 }
 
-struct Prepared {
-    plan: WritePlan,
-    temporary: Option<NamedTempFile>,
+struct Prepared<'a> {
+    plan: WritePlan<'a>,
+    temporary: Option<TempPath>,
     backup: PathBuf,
 }
 
 /// Prepare every file first, then commit with rollback backups in each source directory.
-pub fn apply_transaction(plans: Vec<WritePlan>) -> Result<()> {
+pub fn apply_transaction(plans: Vec<WritePlan<'_>>) -> Result<()> {
     if plans.is_empty() {
         return Ok(());
     }
     let mut prepared = Vec::with_capacity(plans.len());
     for (sequence, plan) in plans.into_iter().enumerate() {
+        reject_symlink(&plan.path, "transaction preparation")?;
         let current = fs::read(&plan.path)
             .with_context(|| format!("cannot re-read {}", plan.path.display()))?;
-        if current != plan.original {
+        if current != plan.original.as_ref() {
             bail!(
                 "{} changed while it was being checked; no files were modified",
                 plan.path.display()
@@ -40,10 +42,14 @@ pub fn apply_transaction(plans: Vec<WritePlan>) -> Result<()> {
                 plan.path.display()
             )
         })?;
-        temporary.write_all(&plan.replacement)?;
+        temporary.write_all(plan.replacement.as_ref())?;
         let permissions = fs::metadata(&plan.path)?.permissions();
         temporary.as_file().set_permissions(permissions)?;
         temporary.as_file_mut().sync_all()?;
+        /* NOTE: Holding every NamedTempFile handle until commit makes the
+         * prepare-before-commit guarantee consume one descriptor per file.
+         * TempPath retains cleanup ownership while closing the descriptor. */
+        let temporary = temporary.into_temp_path();
         let name = plan
             .path
             .file_name()
@@ -53,7 +59,7 @@ pub fn apply_transaction(plans: Vec<WritePlan>) -> Result<()> {
             ".{name}.ocomment-rollback-{}-{sequence}",
             std::process::id()
         ));
-        if backup.exists() {
+        if backup.symlink_metadata().is_ok() {
             /* INVARIANT: The journal holds the file as it was before the interrupted
              * run, so deleting it unread can be the loss the rollback existed
              * to prevent. */
@@ -96,10 +102,11 @@ pub fn apply_transaction(plans: Vec<WritePlan>) -> Result<()> {
     Ok(())
 }
 
-fn commit_one(item: &mut Prepared) -> Result<()> {
+fn commit_one(item: &mut Prepared<'_>) -> Result<()> {
+    reject_symlink(&item.plan.path, "transaction commit")?;
     let current = fs::read(&item.plan.path)
         .with_context(|| format!("cannot recheck {} before commit", item.plan.path.display()))?;
-    if current != item.plan.original {
+    if current != item.plan.original.as_ref() {
         bail!(
             "{} changed after transaction preparation",
             item.plan.path.display()
@@ -124,15 +131,32 @@ fn commit_one(item: &mut Prepared) -> Result<()> {
     Ok(())
 }
 
-fn rollback(items: &[Prepared]) -> Result<()> {
+fn rollback(items: &[Prepared<'_>]) -> Result<()> {
     for item in items.iter().rev() {
-        if item.backup.exists() {
-            if item.plan.path.exists() {
+        if item.backup.symlink_metadata().is_ok() {
+            if item.plan.path.symlink_metadata().is_ok() {
                 fs::remove_file(&item.plan.path)?;
             }
             fs::rename(&item.backup, &item.plan.path)?;
             sync_parent(&item.plan.path)?;
         }
+    }
+    Ok(())
+}
+
+/// Refuse to turn a symbolic link into an ordinary file. Reads may opt into
+/// following links, but an in-place rewrite would replace the directory entry
+/// rather than atomically update its target, which is neither interpretation a
+/// caller can safely assume.
+fn reject_symlink(path: &Path, phase: &str) -> Result<()> {
+    let metadata = path
+        .symlink_metadata()
+        .with_context(|| format!("cannot inspect {} during {phase}", path.display()))?;
+    if metadata.file_type().is_symlink() {
+        bail!(
+            "refusing to rewrite symbolic link {} during {phase}; no files were modified",
+            path.display()
+        );
     }
     Ok(())
 }
@@ -163,8 +187,8 @@ mod tests {
         let permissions = fs::metadata(&path).unwrap().permissions();
         apply_transaction(vec![WritePlan {
             path: path.clone(),
-            original: b"old".to_vec(),
-            replacement: b"new".to_vec(),
+            original: Cow::Borrowed(b"old"),
+            replacement: Cow::Borrowed(b"new"),
         }])
         .unwrap();
         assert_eq!(fs::read(&path).unwrap(), b"new");
@@ -193,8 +217,8 @@ mod tests {
 
         let error = apply_transaction(vec![WritePlan {
             path: path.clone(),
-            original: b"old".to_vec(),
-            replacement: b"new".to_vec(),
+            original: Cow::Borrowed(b"old"),
+            replacement: Cow::Borrowed(b"new"),
         }])
         .unwrap_err();
 
@@ -207,5 +231,42 @@ mod tests {
             )
         );
         assert_eq!(fs::read(&path).unwrap(), b"old", "the file was rewritten");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlink_aborts_the_whole_transaction_without_replacing_link_or_target() {
+        use std::os::unix::fs::symlink;
+
+        let directory = tempfile::tempdir().unwrap();
+        let ordinary = directory.path().join("ordinary.rs");
+        let target = directory.path().join("target.rs");
+        let link = directory.path().join("link.rs");
+        fs::write(&ordinary, b"ordinary old").unwrap();
+        fs::write(&target, b"target old").unwrap();
+        symlink("target.rs", &link).unwrap();
+
+        let error = apply_transaction(vec![
+            WritePlan {
+                path: ordinary.clone(),
+                original: Cow::Borrowed(b"ordinary old"),
+                replacement: Cow::Borrowed(b"ordinary new"),
+            },
+            WritePlan {
+                path: link.clone(),
+                original: Cow::Borrowed(b"target old"),
+                replacement: Cow::Borrowed(b"target new"),
+            },
+        ])
+        .unwrap_err();
+
+        assert!(
+            error
+                .to_string()
+                .contains("refusing to rewrite symbolic link")
+        );
+        assert_eq!(fs::read(&ordinary).unwrap(), b"ordinary old");
+        assert_eq!(fs::read(&target).unwrap(), b"target old");
+        assert!(link.symlink_metadata().unwrap().file_type().is_symlink());
     }
 }

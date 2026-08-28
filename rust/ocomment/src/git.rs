@@ -3,29 +3,31 @@ use crate::{
     config::ResolvedConfig,
     files::SkippedFile,
     output::{
-        self, Operation, OutputFormat, Presentation, ProcessedFile, RenderOptions, Verbosity,
+        self, Operation, OutputFormat, Presentation, ProcessedFile, ProcessedResult, RenderOptions,
+        Verbosity,
     },
     plugin::PluginHost,
 };
 use anyhow::{Context, Result, anyhow, bail};
 use ocomment_core::{
-    ByteSpan, CommentKind, Diagnostic, Edit, Severity, SourceMap, TransformResult, apply_edits,
-    detect_language, transform,
+    ByteSpan, CommentKind, Diagnostic, Edit, PreparedScanner, Severity, TransformPlan, apply_edits,
+    detect_language,
 };
 use std::{
-    collections::BTreeSet,
+    borrow::Cow,
+    collections::{BTreeSet, HashMap},
     ffi::{OsStr, OsString},
     fs,
     io::Write,
     path::{Component, Path, PathBuf},
     process::{Command, Stdio},
+    sync::Arc,
 };
 use tempfile::NamedTempFile;
 
 struct IndexEntry {
     path: PathBuf,
     mode: String,
-    source: Vec<u8>,
     processed: ProcessedFile,
 }
 
@@ -63,8 +65,12 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
     } = request;
     let root = repository_root()?;
     let (blobs, mut skipped) = configured_paths(&root, staged_paths(&root, paths)?, resolved)?;
+    let materialize_output = operation == Operation::Fix
+        || (operation == Operation::Diff && format == OutputFormat::Human);
+    let materialize_source_map = matches!(format, OutputFormat::Json | OutputFormat::Jsonl);
+    let mut scanners = HashMap::new();
     let mut entries = Vec::new();
-    for StagedBlob { path, named } in blobs {
+    for StagedBlob { path, named, mode } in blobs {
         let source = index_blob(&root, &path)?;
         if source.iter().take(8192).any(|byte| *byte == 0) {
             /* NOTE: A walk says why it passed a file over, and so does this: a hook
@@ -85,14 +91,41 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
                 reason: "command-line",
             })
             .or_else(|| detect_language(Some(&path), &source));
-        let profile = detection
-            .is_none()
+        let detected_language = detection
+            .as_ref()
+            .map_or(ocomment_core::Language::Unknown, |value| value.language);
+        let detected_dialect = detection
+            .as_ref()
+            .map_or(ocomment_core::Dialect::Standard, |value| value.dialect);
+        let (language, options) = resolved.for_path(&path, detected_language, detected_dialect)?;
+        if !resolved.language_is_enabled(language) {
+            skipped.push(skipped_blob(
+                path,
+                "language disabled by configuration".to_owned(),
+                named,
+            ));
+            continue;
+        }
+        let scanner = if let Some(scanner) = scanners.get(&options.scan) {
+            Arc::clone(scanner)
+        } else {
+            let scanner = Arc::new(
+                PreparedScanner::new(options.scan.clone())
+                    .context("cannot prepare staged comment policy")?,
+            );
+            scanners.insert(options.scan.clone(), Arc::clone(&scanner));
+            scanner
+        };
+        let profile = (language == ocomment_core::Language::Unknown)
             .then(|| crate::files::profile_for_path(&path, resolved))
             .flatten();
-        let routed_plugin = (detection.is_none() && profile.is_none())
+        let routed_plugin = (language == ocomment_core::Language::Unknown && profile.is_none())
             .then(|| crate::files::plugin_for_path(&path, resolved))
             .flatten();
-        if detection.is_none() && profile.is_none() && routed_plugin.is_none() {
+        if language == ocomment_core::Language::Unknown
+            && profile.is_none()
+            && routed_plugin.is_none()
+        {
             skipped.push(skipped_blob(
                 path,
                 crate::files::NO_LANGUAGE.to_owned(),
@@ -100,22 +133,9 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
             ));
             continue;
         }
-        let language = detection
-            .as_ref()
-            .map_or(ocomment_core::Language::Unknown, |value| value.language);
-        let dialect = detection
-            .as_ref()
-            .map_or(ocomment_core::Dialect::Standard, |value| value.dialect);
-        let (mut language, mut options) = resolved.for_path(&path, language, dialect);
-        if let Some(value) = forced_language {
-            language = value;
-        }
-        if let Some(value) = forced_dialect {
-            crate::config::validate_dialect(language, value)?;
-            options.scan.dialect = value;
-        }
         let full = if let Some(profile) = &profile {
-            ocomment_core::transform_profile(&source, profile, options)
+            scanner
+                .transform_profile_plan(&source, profile, options.layout)
                 .expect("profiles were validated while loading configuration")
         } else if let Some(name) = &routed_plugin {
             let language_name = path
@@ -123,16 +143,17 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
                 .and_then(|value| value.to_str())
                 .unwrap_or("unknown")
                 .to_ascii_lowercase();
-            plugin_host.transform(name, &source, &language_name, &path, options)?
+            plugin_host.transform_plan(name, &source, &language_name, &path, &options, &scanner)?
         } else {
-            transform(&source, language, options)
+            scanner.transform_plan(&source, language, options.layout)
         };
         let ranges = added_line_ranges(&root, &path)?;
+        let lines = LineNumberIndex::new(&source);
         let mut selected_comments = Vec::new();
         let mut conflict = None;
         for comment in &full.report.comments {
-            let start_line = line_number(&source, comment.span.start);
-            let end_line = line_number(&source, comment.span.end.saturating_sub(1));
+            let start_line = lines.line_number(comment.span.start);
+            let end_line = lines.line_number(comment.span.end.saturating_sub(1));
             let starts_added = ranges.iter().any(|range| range.contains(&start_line));
             let intersects = ranges
                 .iter()
@@ -151,7 +172,7 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
             .edits
             .iter()
             .filter(|edit| {
-                let line = line_number(&source, edit.span.start);
+                let line = lines.line_number(edit.span.start);
                 ranges.iter().any(|range| range.contains(&line))
             })
             .cloned()
@@ -166,23 +187,25 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
                 severity: Severity::Error, span,
             });
         }
-        let transformed = apply_edits(&source, &selected_edits);
-        let source_map = SourceMap::from_edits(source.len(), &selected_edits);
+        let selected = TransformPlan {
+            edits: selected_edits,
+            report,
+        };
+        let result = ProcessedResult::plan(
+            &source,
+            selected,
+            materialize_output,
+            materialize_source_map,
+        );
         let processed = ProcessedFile {
             path: path.clone(),
-            source: source.clone(),
+            source,
             language,
-            result: TransformResult {
-                output: transformed,
-                edits: selected_edits,
-                report,
-                source_map,
-            },
+            result,
         };
         entries.push(IndexEntry {
-            mode: index_mode(&root, &path)?,
+            mode,
             path,
-            source,
             processed,
         });
     }
@@ -191,13 +214,13 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
      * reading them, so the two arrive interleaved by nothing at all; a
      * machine format publishes this list, which owes its reader one order. */
     skipped.sort_by(|left, right| left.path.cmp(&right.path));
-    let files: Vec<_> = entries
+    let invalid = entries
         .iter()
-        .map(|entry| entry.processed.clone())
-        .collect();
-    let invalid = output::invalid(&files);
-    let staged_conflict = files.iter().any(|file| {
-        file.result
+        .any(|entry| !entry.processed.result.report.valid);
+    let staged_conflict = entries.iter().any(|entry| {
+        entry
+            .processed
+            .result
             .report
             .diagnostics
             .iter()
@@ -208,6 +231,7 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
     if applied {
         fix_index(&root, &entries, index_only)?;
     }
+    let files: Vec<_> = entries.into_iter().map(|entry| entry.processed).collect();
     output::render(
         &files,
         &skipped,
@@ -236,7 +260,7 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
 fn fix_index(root: &Path, entries: &[IndexEntry], index_only: bool) -> Result<()> {
     let changed: Vec<_> = entries
         .iter()
-        .filter(|entry| entry.source != entry.processed.result.output)
+        .filter(|entry| entry.processed.result.changed())
         .collect();
     if changed.is_empty() {
         return Ok(());
@@ -264,7 +288,7 @@ fn fix_index(root: &Path, entries: &[IndexEntry], index_only: bool) -> Result<()
     let temporary_path = temporary_index.into_temp_path();
 
     for entry in &changed {
-        let oid = hash_object(root, &entry.processed.result.output)?;
+        let oid = hash_object(root, entry.processed.result.output())?;
         let path = path_for_git(&entry.path);
         let status = Command::new("git")
             .current_dir(root)
@@ -288,16 +312,16 @@ fn fix_index(root: &Path, entries: &[IndexEntry], index_only: bool) -> Result<()
                     working_path.display()
                 )
             })?;
-            let replacement = if working == entry.source {
-                entry.processed.result.output.clone()
+            let replacement = if working == entry.processed.source {
+                Cow::Borrowed(entry.processed.result.output())
             } else {
-                map_edits_uniquely(&entry.source, &working, &entry.processed.result.edits).with_context(|| {
+                Cow::Owned(map_edits_uniquely(&entry.processed.source, &working, &entry.processed.result.edits).with_context(|| {
                     format!("unstaged changes in {} make the staged fix ambiguous; no files were modified (use --index-only)", entry.path.display())
-                })?
+                })?)
             };
             plans.push(WritePlan {
                 path: working_path,
-                original: working,
+                original: Cow::Owned(working),
                 replacement,
             });
         }
@@ -306,8 +330,8 @@ fn fix_index(root: &Path, entries: &[IndexEntry], index_only: bool) -> Result<()
      * rolls working-tree files and index back together on any rename failure. */
     plans.push(WritePlan {
         path: index_path,
-        original: original_index,
-        replacement: replacement_index,
+        original: Cow::Owned(original_index),
+        replacement: Cow::Owned(replacement_index),
     });
     apply_transaction(plans)
 }
@@ -371,6 +395,7 @@ struct StagedPaths {
 struct StagedBlob {
     path: PathBuf,
     named: bool,
+    mode: String,
 }
 
 /// Ask `git` what is staged, one question for each pathspec.
@@ -519,6 +544,19 @@ fn configured_paths(
         if !explicit && !resolved.config.files.hidden && has_hidden_component(&path) {
             continue;
         }
+        /* NOTE: Read the index mode before asking Git for blob bytes. A
+         * symlink's blob is its target spelling and a gitlink names a commit,
+         * neither of which is source text. */
+        let mode = index_mode(root, &path)?;
+        let special = match mode.as_str() {
+            "120000" => Some("symbolic link"),
+            "160000" => Some("Git submodule link"),
+            _ => None,
+        };
+        if let Some(reason) = special {
+            skipped.push(skipped_blob(path, reason.to_owned(), explicit));
+            continue;
+        }
         if !explicit && index_blob_size(root, &path)? > max_size {
             skipped.push(SkippedFile {
                 path,
@@ -533,6 +571,7 @@ fn configured_paths(
         kept.push(StagedBlob {
             path,
             named: explicit,
+            mode,
         });
     }
     Ok((kept, skipped))
@@ -662,12 +701,28 @@ fn added_line_ranges(root: &Path, path: &Path) -> Result<Vec<std::ops::Range<usi
     Ok(ranges)
 }
 
-fn line_number(source: &[u8], offset: usize) -> usize {
-    source[..offset.min(source.len())]
-        .iter()
-        .filter(|byte| **byte == b'\n')
-        .count()
-        + 1
+struct LineNumberIndex {
+    starts: Vec<usize>,
+    source_len: usize,
+}
+
+impl LineNumberIndex {
+    fn new(source: &[u8]) -> Self {
+        let starts = source
+            .iter()
+            .enumerate()
+            .filter_map(|(index, byte)| (*byte == b'\n').then_some(index + 1))
+            .collect();
+        Self {
+            starts,
+            source_len: source.len(),
+        }
+    }
+
+    fn line_number(&self, offset: usize) -> usize {
+        let offset = offset.min(self.source_len);
+        self.starts.partition_point(|start| *start <= offset) + 1
+    }
 }
 
 fn hash_object(root: &Path, bytes: &[u8]) -> Result<String> {
@@ -740,6 +795,23 @@ fn bytes_to_path(bytes: &[u8]) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn staged_line_index_matches_the_previous_walk_at_every_offset() {
+        for source in [&b""[..], &b"a\n\nb\r\nc\r"[..], &b"\nfirst\nsecond\n"[..]] {
+            let lines = LineNumberIndex::new(source);
+            for offset in 0..=source.len() + 2 {
+                let bounded = offset.min(source.len());
+                let expected = source[..bounded]
+                    .iter()
+                    .filter(|byte| **byte == b'\n')
+                    .count()
+                    + 1;
+                assert_eq!(lines.line_number(offset), expected);
+            }
+        }
+    }
+
     #[test]
     fn unique_context_mapping_preserves_unstaged_prefix() {
         let index = b"a\nlet x; /* remove */\nz\n";

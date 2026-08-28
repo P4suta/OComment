@@ -10,6 +10,7 @@ interface Manifest {
 	version: string;
 	engines: { vscode: string };
 	main: string;
+	scripts: Record<string, string>;
 	activationEvents: string[];
 	contributes: {
 		configuration: {
@@ -22,6 +23,11 @@ interface Manifest {
 const manifest = JSON.parse(
 	readFileSync(join(extensionRoot, "package.json"), "utf8"),
 ) as Manifest;
+
+test("the bundled extension is packaged without a second dependency tree", () => {
+	assert.equal(manifest.main, "./dist/extension.js");
+	assert.match(manifest.scripts.package, /(?:^|\s)--no-dependencies(?:\s|$)/u);
+});
 
 test("the extension is versioned with the crate it launches", () => {
 	// NOTE: `publish-vscode` refuses to publish a Marketplace version that is

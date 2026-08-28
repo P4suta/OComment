@@ -368,14 +368,16 @@ pub enum Dialect {
     TSql,
     /// Oracle, which adds `q'[...]'` quoted literals.
     Oracle,
-    /// SCSS and the indented Sass syntax: CSS with `//` line comments and
-    /// `#{ ... }` interpolation.
+    /// SCSS: CSS with `//` line comments and `#{ ... }` interpolation.
     Scss,
+    /// The indentation-based Sass syntax. Silent comments also own their
+    /// more-deeply-indented body lines.
+    Sass,
 }
 
 impl Dialect {
     /// Every CLI-visible dialect.
-    pub const ALL: [Self; 17] = [
+    pub const ALL: [Self; 18] = [
         Self::Standard,
         Self::Jsx,
         Self::Tsx,
@@ -393,6 +395,7 @@ impl Dialect {
         Self::TSql,
         Self::Oracle,
         Self::Scss,
+        Self::Sass,
     ];
 
     /// The canonical name, identical to the serde representation.
@@ -415,6 +418,7 @@ impl Dialect {
             Self::TSql => "t-sql",
             Self::Oracle => "oracle",
             Self::Scss => "scss",
+            Self::Sass => "sass",
         }
     }
 
@@ -430,7 +434,8 @@ impl Dialect {
             | Self::MySql
             | Self::Sqlite
             | Self::Oracle
-            | Self::Scss => &[],
+            | Self::Scss
+            | Self::Sass => &[],
             Self::ObjectiveC => &["objc"],
             Self::ObjectiveCpp => &["objective-c++", "objcpp"],
             Self::GnuC => &["gnuc"],
@@ -1038,7 +1043,7 @@ impl FromStr for Layout {
 /// Everything that decides what a scan finds and what it does with it.
 ///
 /// [`Self::default`] is the [`Policy::Safe`] policy with no overrides.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ScanOptions {
     /// Which kinds survive by default.
@@ -1077,7 +1082,7 @@ impl Default for ScanOptions {
 }
 
 /// A [`ScanOptions`] and what to leave behind in place of each removal.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct TransformOptions {
     /// What to find and what to decide about it.
@@ -1222,6 +1227,20 @@ impl SourceMap {
             .last()
             .and_then(|segment| (offset == segment.output.end).then_some(segment.original.end))
     }
+}
+
+/// The scan and edits of a transformation, before output bytes are built.
+///
+/// Planning is the useful half of a transformation for a checker, a report
+/// renderer, or a caller that wants to inspect or filter edits. It deliberately
+/// carries neither a copy of the transformed source nor a source map. Call
+/// [`Self::finish`] only when those materialized results are needed.
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub struct TransformPlan {
+    /// The edits selected by the scan, sorted and non-overlapping.
+    pub edits: Vec<Edit>,
+    /// The scan those edits were decided from.
+    pub report: ScanReport,
 }
 
 /// The bytes a transformation would write, and the account of how.

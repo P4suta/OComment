@@ -3,23 +3,36 @@
 Tags named `vMAJOR.MINOR.PATCH` run the release workflow. It builds and smoke
 tests Linux x86_64/aarch64 GNU and musl, macOS Intel/Apple Silicon, and Windows
 x64 archives. Archives contain the binary, licenses, README, man page, and shell
-completions. The publish job creates checksums, an SPDX JSON SBOM, keyless
-Sigstore signatures, and GitHub build-provenance attestations before uploading
-the release assets.
+completions. The workflow builds the VSIX from the same tag, then creates a
+draft release containing every archive, VSIX, checksum, SPDX JSON SBOM,
+package-manager definition, keyless Sigstore signature, and GitHub
+build-provenance attestation.
 
 Before tagging:
 
-1. Confirm the `ocomment` crate name and every internal adapter name are still
-   available on crates.io.
-2. Update all workspace and internal adapter versions together, and
-   `editors/vscode/package.json` with them.
-3. Run `./tools/release-check.sh` on the fixed benchmark runner.
-4. Confirm the cross-target smoke jobs and package dry runs are green.
-5. Publish crates in dependency order: runtime layer, wasmi adapter, component
-   layer, core, plugin SDK, then CLI.
+1. Update all workspace and internal adapter versions together, update
+   `editors/vscode/package.json`, and add the version to both changelogs.
+2. Run `./tools/release-check.sh` and confirm the cross-target smoke jobs and
+   six expanded-crate artifact checks are green.
+3. Confirm the publishing secrets, publisher agreements, GHCR visibility, and
+   required environment reviewers from the checklist below are ready.
 
-The fixed runner uses labels `self-hosted`, `linux`, `x64`, and
-`ocomment-benchmark`. `tools/release_gate.py` enforces a 20 ms median cold
+Publishing is workflow-owned. After the draft exists, crates.io, GHCR, Visual
+Studio Marketplace, and Open VSX run as independent retryable jobs using the
+already-built artifacts. `tools/publish-crates.sh` reads every package name and
+version from Cargo metadata, skips an exact version already visible in the
+registry, and resumes in dependency order. Only after all four destinations
+succeed does the reviewer-protected `release` environment allow `finalize` to
+make the GitHub release public. Do not publish crates by hand between those
+jobs; that defeats the resumable state the workflow verifies.
+
+The benchmark workflow is manual-only. Select the branch or tag to benchmark in
+the workflow's **Run workflow** ref picker, then enter that ref's full
+40-character commit SHA. A hosted runner requires the input SHA, the immutable
+workflow-dispatch SHA, and the checked-out commit to agree before the
+reviewer-protected `benchmark` environment lets an ephemeral runner execute it.
+The runner uses labels `self-hosted`, `linux`, `x64`, `ocomment-benchmark`, and
+`ephemeral`. `tools/release_gate.py` enforces a 20 ms median cold
 `--version`, 500 MiB/s for simple scanners, 200 MiB/s for JavaScript and Shell,
 a 25 MiB stripped binary, and a maximum 5% regression from the checked-in
 machine baseline. If `typos` is installed it also checks that a no-op repository
@@ -36,7 +49,7 @@ same target-qualified archives.
 ## The container image
 
 `publish-container` pushes `ghcr.io/p4suta/ocomment` for `linux/amd64` and
-`linux/arm64` after the GitHub release exists. It does not rebuild the tag: it
+`linux/arm64` after the draft release exists. It does not rebuild the tag: it
 downloads the two `*-unknown-linux-musl` archives the matrix already produced
 and feeds them to the Dockerfile through the buildx named context `builder`, so
 the image and the archives contain the same bytes. The image is tagged
@@ -57,9 +70,9 @@ contract, exactly like the archive layout.
 
 ## The VS Code extension
 
-`publish-vscode` packages `editors/vscode` after the GitHub release exists,
-signs the `.vsix` with cosign, attaches both to the release, and publishes to
-the Visual Studio Marketplace and to Open VSX. It refuses to run when
+`build-vscode` packages `editors/vscode` before the draft is created. The draft
+job signs and attests that exact `.vsix`; two independent publish jobs then send
+the same bytes to Visual Studio Marketplace and Open VSX. It refuses to run when
 `editors/vscode/package.json` does not carry the tag's version — a Marketplace
 version can never be republished, so the check has to come before the upload
 rather than after. `npm run unit` pins the same file to the workspace crate
@@ -133,7 +146,8 @@ outputs, or verdict rules is therefore a version bump like any other, and
 `docs/ci.md` documents the surface those pins are buying.
 
 The action downloads `ocomment-<target>.tar.gz` (or the Windows `.zip`), the
-combined `SHA256SUMS`, and — when `gh` is on the runner — the build-provenance
-attestation. Renaming a release asset, dropping a musl target, or changing the
+combined `SHA256SUMS`, and the build-provenance attestation. Verification fails
+closed when `gh` is unavailable unless the caller explicitly opts out with
+`verify-attestation: false`. Renaming a release asset, dropping a musl target, or changing the
 `ocomment-<target>/` leading directory breaks every pinned workflow, so treat
 the archive layout as part of the released contract.

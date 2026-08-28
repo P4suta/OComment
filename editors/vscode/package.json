@@ -186,7 +186,7 @@
     "unit": "node --test \"out/test/unit/*.test.js\"",
     "pretest": "npm run compile && npm run bundle",
     "test": "node ./out/test/runTest.js",
-    "package": "npx --no @vscode/vsce package",
+    "package": "npx --no @vscode/vsce package --no-dependencies",
     "vscode:prepublish": "npm run bundle -- --production"
   },
   "dependencies": {

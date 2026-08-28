@@ -69,6 +69,120 @@ def no_op_ratio(binary: pathlib.Path, typos: str) -> float:
         return ocomment / reference
 
 
+def peak_rss_mib(
+    command: list[str], runs: int, accepted: set[int], cwd: pathlib.Path
+) -> float:
+    """Median GNU time maximum RSS for an otherwise silenced command."""
+    time_binary = pathlib.Path("/usr/bin/time")
+    if not time_binary.is_file():
+        raise RuntimeError("the fixed Linux runner needs /usr/bin/time for RSS gates")
+    samples = []
+    for _ in range(runs):
+        with tempfile.NamedTemporaryFile(prefix="ocomment-rss-") as measured:
+            completed = subprocess.run(
+                [
+                    str(time_binary),
+                    "--quiet",
+                    "--format=%M",
+                    f"--output={measured.name}",
+                    *command,
+                ],
+                cwd=cwd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+            if completed.returncode not in accepted:
+                raise RuntimeError(
+                    f"command exited {completed.returncode}: {' '.join(command)}"
+                )
+            measured.seek(0)
+            samples.append(float(measured.read().decode("ascii").strip()) / 1024.0)
+    return statistics.median(samples)
+
+
+def write_to_size(path: pathlib.Path, fragment: bytes, size: int) -> None:
+    chunk = fragment * max(1, (1024 * 1024) // len(fragment))
+    remaining = size
+    with path.open("wb") as output:
+        while remaining:
+            part = chunk[:remaining]
+            output.write(part)
+            remaining -= len(part)
+
+
+def cli_workloads(binary: pathlib.Path) -> dict[str, float]:
+    metrics: dict[str, float] = {}
+    metrics["self_scan_median_ms"] = (
+        median_command(
+            [str(binary), "check", ".", "--quiet"], 7, {0, 1}, ROOT
+        )
+        * 1000.0
+    )
+
+    with tempfile.TemporaryDirectory(prefix="ocomment-quiet-rss-") as raw:
+        root = pathlib.Path(raw)
+        write_to_size(
+            root / "large.rs", b"let value: usize = 42;\n", 64 * 1024 * 1024
+        )
+        metrics["quiet_check_peak_rss_mib"] = peak_rss_mib(
+            [str(binary), "check", "large.rs", "--quiet"], 3, {0}, root
+        )
+
+    with tempfile.TemporaryDirectory(prefix="ocomment-dense-") as raw:
+        root = pathlib.Path(raw)
+        human = root / "dense-human.rs"
+        human.write_bytes(b"let value = 1; // removable\n" * 40_000)
+        metrics["dense_human_median_ms"] = (
+            median_command(
+                [
+                    str(binary),
+                    "scan",
+                    human.name,
+                    "--format",
+                    "human",
+                    "--no-preview",
+                    "--quiet",
+                ],
+                3,
+                {0},
+                root,
+            )
+            * 1000.0
+        )
+        machine = root / "dense-machine.rs"
+        machine.write_bytes(b"let value = 1; // removable\n" * 100_000)
+        metrics["dense_json_peak_rss_mib"] = peak_rss_mib(
+            [str(binary), "check", machine.name, "--format", "json", "--quiet"],
+            3,
+            {1},
+            root,
+        )
+        metrics["dense_sarif_peak_rss_mib"] = peak_rss_mib(
+            [str(binary), "check", machine.name, "--format", "sarif", "--quiet"],
+            3,
+            {1},
+            root,
+        )
+
+    with tempfile.TemporaryDirectory(prefix="ocomment-regex-files-") as raw:
+        root = pathlib.Path(raw)
+        (root / ".ocomment.toml").write_text(
+            'version = 1\n[policy]\nkeep_regex = ["SPDX-License-Identifier"]\n'
+            'remove_regex = ["removable|TODO"]\n',
+            encoding="utf-8",
+        )
+        for index in range(2_000):
+            (root / f"small-{index:04}.rs").write_bytes(
+                b"let value = 1; // removable\n"
+            )
+        metrics["regex_many_files_median_ms"] = (
+            median_command([str(binary), "check", ".", "--quiet"], 5, {1}, root)
+            * 1000.0
+        )
+    return metrics
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -113,6 +227,7 @@ def main() -> int:
             scanner, "shell", args.size_mib, args.scan_runs
         ),
     }
+    metrics.update(cli_workloads(binary))
     typos = shutil.which("typos")
     if typos:
         metrics["typos_ratio"] = no_op_ratio(binary, typos)
@@ -122,6 +237,12 @@ def main() -> int:
         "version_median_ms": 20.0,
         "binary_mib": 25.0,
         "typos_ratio": 1.5,
+        "self_scan_median_ms": 17.3,
+        "quiet_check_peak_rss_mib": 90.0,
+        "dense_human_median_ms": 1000.0,
+        "dense_json_peak_rss_mib": 100.0,
+        "dense_sarif_peak_rss_mib": 100.0,
+        "regex_many_files_median_ms": 1000.0,
     }
     minima = {
         "c_mib_per_second": 500.0,

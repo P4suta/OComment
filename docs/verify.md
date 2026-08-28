@@ -36,9 +36,10 @@ The trailing `*` in the first pattern brings the archive's `.sha256` and its
 sha256sum --ignore-missing --check SHA256SUMS
 ```
 
-`SHA256SUMS` covers every archive, the SPDX SBOM, and the generated Homebrew,
-Scoop, and WinGet definitions of that release, so `--ignore-missing` is what
-lets it pass when you downloaded one of them. On macOS the command is
+`SHA256SUMS` covers every archive, per-archive checksum, the VSIX, the SPDX SBOM,
+and the generated Homebrew, Scoop, and WinGet definitions of that release, so
+`--ignore-missing` is what lets it pass when you downloaded one of them. The
+combined checksum file itself is signed and attested. On macOS the command is
 `shasum -a 256`, and in PowerShell it is `Get-FileHash`.
 
 ## Check the provenance attestation

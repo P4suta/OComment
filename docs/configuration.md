@@ -53,6 +53,11 @@ skip hidden files, binary files, symlinks, and files larger than 32 MiB. An
 explicit file or directory bypasses the hidden and size limits. Binary and
 symlink safety checks still apply.
 
+Setting `files.follow_symlinks = true` permits read-only `check`, `scan`,
+`diff`, and `fix --dry-run` operations to follow links. A real `fix`, including
+an interactive one, refuses the whole transaction with exit code 2 if any
+selected path is a symbolic link; neither the link nor its target is changed.
+
 A command that names no path walks the current directory under those normal
 limits; naming a path explicitly (`ocomment .`, `ocomment src`) is a request
 rather than a default, so it bypasses the hidden-file and size limits.
@@ -60,6 +65,11 @@ rather than a default, so it bypasses the hidden-file and size limits.
 `files.include`, `files.exclude`, and every `[[overrides]].paths` glob is
 relative to the project root — the directory holding `.ocomment.toml`, or the
 repository above it — however deep in the tree the command is run from.
+
+Passing `--config FILE` replaces normal XDG and project discovery: only the
+built-in defaults and that file are loaded. Its parent directory becomes the
+root for globs and the plugin lock, while path arguments written on the command
+line remain relative to the directory in which OComment was invoked.
 
 ## Layouts
 

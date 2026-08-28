@@ -140,7 +140,11 @@ let check_unicode_and_vertical_tab () =
   let result = transform (Bytes.of_string "\x0b// note\nx = 1\n") Rust
     { default_transform_options with layout = Compact } in
   Alcotest.(check string) "the vertical tab is not blank" "\x0b\nx = 1\n"
-    (Bytes.to_string result.output)
+    (Bytes.to_string result.output);
+  let report = scan (Bytes.of_string "// swift-format-ignore\x0b#error ") Swift
+    default_scan_options in
+  Alcotest.(check bool) "vertical tab ends a swift-format marker" true
+    ((List.hd report.comments).kind = Directive)
 
 (* NOTE: YAML 1.2.2, 8.1: the body of a block scalar is every following line
    more indented than the node it hangs off, so a "#" inside it is content of
@@ -305,6 +309,120 @@ let check_perl_pod () =
   Alcotest.(check bool) "valid" true report.valid;
   Alcotest.(check int) "only the real comment" 1 (List.length report.comments)
 
+let raw_comments source (report : scan_report) =
+  List.map (fun (comment : comment) ->
+    Bytes.sub_string source comment.span.start (comment.span.finish - comment.span.start))
+    report.comments
+
+let check_sass_and_scss_compounds () =
+  let scss = Bytes.of_string
+    ".a { x: \"#{1 /* string */}\"; y: url( \"#{2 /* url */}\" ); z: url(foo\\)bar//opaque); // outer\n }" in
+  let report = scan scss Css { default_scan_options with dialect = Scss } in
+  Alcotest.(check bool) "scss valid" true report.valid;
+  Alcotest.(check (list string)) "scss comments"
+    ["/* string */"; "/* url */"; "// outer"] (raw_comments scss report);
+  let sass = Bytes.of_string
+    ".a\n  // parent\n    color: red\n      width: 1px\n  color: blue\n// root\n  nested: yes\n.b\n" in
+  let report = scan sass Css { default_scan_options with dialect = Sass } in
+  Alcotest.(check bool) "sass valid" true report.valid;
+  Alcotest.(check (list string)) "sass comment bodies"
+    ["// parent\n    color: red\n      width: 1px"; "// root\n  nested: yes"]
+    (raw_comments sass report);
+  let nested = scan (Bytes.of_string "#{#{") Css
+    { default_scan_options with dialect = Sass } in
+  Alcotest.(check bool) "nested interpolation is invalid" false nested.valid;
+  Alcotest.(check int) "nested interpolation reports once" 1
+    (List.length nested.diagnostics)
+
+let check_kotlin_multi_dollar_and_quote_runs () =
+  let source = Bytes.of_string
+    "val a = \"\"\"opaque\"\"\"\"// after run\nval b = $$\"\"\"${ /* opaque */ 1 } $${ run { /* code */ } }\"\"\" // tail\n" in
+  let report = scan source Kotlin default_scan_options in
+  Alcotest.(check bool) "kotlin valid" true report.valid;
+  Alcotest.(check (list string)) "kotlin comments"
+    ["// after run"; "/* code */"; "// tail"] (raw_comments source report)
+
+let check_scala_characters_and_symbols () =
+  let source = Bytes.of_string
+    "val slash = '/'// after char\nval quote = '\\''// after escape\nval double = '\"'// after double quote\nval symbol = 'name // after symbol\n" in
+  let report = scan source Scala default_scan_options in
+  Alcotest.(check bool) "scala valid" true report.valid;
+  Alcotest.(check (list string)) "scala comments"
+    ["// after char"; "// after escape"; "// after double quote"; "// after symbol"]
+    (raw_comments source report)
+
+let check_markdown_commonmark_boundaries () =
+  let source = Bytes.of_string
+    "before\r    <!-- opaque cr -->\r\n    <!-- opaque crlf -->\nnext\n```rust `bad\n// not a Rust fence\n```\n```{r, echo=FALSE}\n# r comment\n```\n` unmatched\n<!-- visible -->\n" in
+  let report = scan source Markdown default_scan_options in
+  Alcotest.(check bool) "markdown valid" true report.valid;
+  Alcotest.(check (list string)) "markdown comments"
+    ["# r comment"; "<!-- visible -->"] (raw_comments source report)
+
+let check_perl_compound_opaque_constructs () =
+  let source = Bytes.of_string
+    "print $#items, $^X, $!, $1; # variables\nmy $q = \"escaped \\\" # opaque\"; # quote\n$x =~ s/foo#one/bar#two/g; # substitution\n$x =~ tr/a#b/c#d/; # transliteration\nprint <<  \"ONE\", <<~'TWO';\n# first\nONE\n  # second\n  TWO\n=pod\n# pod\n=cutlery\n# still pod\n=cut\nformat STDOUT =\n@<<<<\n# picture\n.\n# after format\n__DATA__\n# data\n" in
+  let report = scan source Perl default_scan_options in
+  Alcotest.(check bool) "perl valid" true report.valid;
+  Alcotest.(check (list string)) "perl comments"
+    ["# variables"; "# quote"; "# substitution"; "# transliteration";
+     "# after format"] (raw_comments source report);
+  let false_queue = Bytes.of_string
+    "print <<'REAL', \"<<FAKE\"; # <<ALSO\n# body\nREAL\n# after\n" in
+  let report = scan false_queue Perl default_scan_options in
+  Alcotest.(check (list string)) "only real heredoc declarations queue"
+    ["# <<ALSO"; "# after"] (raw_comments false_queue report);
+  let shift = Bytes.of_string "my $x = 1 << 2; # once\n" in
+  let report = scan shift Perl default_scan_options in
+  Alcotest.(check (list string)) "failed heredoc probe does not duplicate"
+    ["# once"] (raw_comments shift report);
+  let false_format = Bytes.of_string
+    "// swift-format-ignore=head1</div>//!#nullable enable" in
+  let report = scan false_format Perl default_scan_options in
+  Alcotest.(check (list string)) "format is not recognized inside an expression"
+    ["#nullable enable"] (raw_comments false_format report);
+  let ambiguous = Bytes.of_string "// dart format offq}//!:title=" in
+  let report = scan ambiguous Perl default_scan_options in
+  Alcotest.(check bool) "false format does not hide slash ambiguity" false report.valid;
+  Alcotest.(check bool) "slash ambiguity remains visible" true
+    (List.exists (fun (diagnostic : diagnostic) ->
+       diagnostic.code = "lexical-ambiguity") report.diagnostics)
+
+let check_sfc_exact_attributes_and_sass () =
+  let vue = Bytes.of_string
+    "<template data-lang=\"pug\"><div data-v-pre v-if=\"ok /* directive */\" title=\"/* opaque */\">{{ 1 /* mustache */ }}</div><div v-pre><div></div><!-- opaque --></div><!-- outer --></template>" in
+  let report = scan vue Vue default_scan_options in
+  Alcotest.(check bool) "vue valid" true report.valid;
+  Alcotest.(check (list string)) "vue comments"
+    ["/* directive */"; "/* mustache */"; "<!-- outer -->"]
+    (raw_comments vue report);
+  let svelte = Bytes.of_string
+    "<button title=\"/* opaque */\" data-pattern={/}>/.test(x) /* regex attribute */} on:click={() => { /* attribute */ }}>x</button>{ 1 /* body */ }" in
+  let report = scan svelte Svelte default_scan_options in
+  Alcotest.(check bool) "svelte valid" true report.valid;
+  Alcotest.(check (list string)) "svelte comments"
+    ["/* regex attribute */"; "/* attribute */"; "/* body */"]
+    (raw_comments svelte report);
+  let malformed_svelte = Bytes.of_string "<div x={1 /* once */}" in
+  let report = scan malformed_svelte Svelte default_scan_options in
+  Alcotest.(check bool) "malformed ordinary Svelte tag stays valid" true report.valid;
+  Alcotest.(check (list string)) "failed Svelte tag probe rolls back before rescan"
+    ["/* once */"] (raw_comments malformed_svelte report);
+  let sass_style = Bytes.of_string
+    "<style lang=\"sass\">\n// parent\n  color: red\n</style><p>{/* svelte */}</p>" in
+  let report = scan sass_style Svelte default_scan_options in
+  Alcotest.(check (list string)) "SFC Sass dialect"
+    ["// parent\n  color: red"; "/* svelte */"] (raw_comments sass_style report)
+
+let check_all_spans_are_bounded () =
+  let source = Bytes.of_string ") /[" in
+  let report = scan source Perl default_scan_options in
+  let bounded span = span.start <= span.finish && span.finish <= Bytes.length source in
+  Alcotest.(check bool) "comment bounds" true
+    (List.for_all (fun (comment : comment) -> bounded comment.span) report.comments);
+  Alcotest.(check bool) "diagnostic bounds" true
+    (List.for_all (fun (diagnostic : diagnostic) -> bounded diagnostic.span) report.diagnostics)
+
 let () = Alcotest.run "ocomment-ref" [
   "core", [
     Alcotest.test_case "transform" `Quick check_transform;
@@ -331,5 +449,12 @@ let () = Alcotest.run "ocomment-ref" [
     Alcotest.test_case "vue-component" `Quick check_vue_component;
     Alcotest.test_case "markdown-fences" `Quick check_markdown_fences;
     Alcotest.test_case "perl-pod" `Quick check_perl_pod;
+    Alcotest.test_case "sass-and-scss-compounds" `Quick check_sass_and_scss_compounds;
+    Alcotest.test_case "kotlin-multi-dollar" `Quick check_kotlin_multi_dollar_and_quote_runs;
+    Alcotest.test_case "scala-characters" `Quick check_scala_characters_and_symbols;
+    Alcotest.test_case "markdown-commonmark" `Quick check_markdown_commonmark_boundaries;
+    Alcotest.test_case "perl-compounds" `Quick check_perl_compound_opaque_constructs;
+    Alcotest.test_case "sfc-attributes-and-sass" `Quick check_sfc_exact_attributes_and_sass;
+    Alcotest.test_case "span-bounds" `Quick check_all_spans_are_bounded;
   ]
 ]

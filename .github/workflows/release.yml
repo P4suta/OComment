@@ -15,17 +15,34 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  prepare:
+  metadata:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # NOTE: stable toolchain action
+      - run: cargo build --manifest-path rust/Cargo.toml --release --locked -p ocomment
+      - name: Verify every release version and the tag ancestry
+        run: >-
+          python3 tools/release_metadata.py
+          --tag "${GITHUB_REF_NAME}"
+          --binary rust/target/release/ocomment
+
+  prepare:
+    needs: metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # NOTE: stable toolchain action
       - run: cargo build --manifest-path rust/Cargo.toml --release --locked -p ocomment
       - run: python3 tools/release_extras.py --binary rust/target/release/ocomment
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-extras
           path: release-extras/
@@ -84,18 +101,18 @@ jobs:
     env:
       TARGET: ${{ matrix.target }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # NOTE: stable toolchain action
         with:
           targets: ${{ matrix.target }}
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: release-extras
           path: release-extras
       - id: package
-        uses: taiki-e/upload-rust-binary-action@f0d45ae91ee7b8ee928de7a9d04d893a08bcbec6 # v1
+        uses: taiki-e/upload-rust-binary-action@f0d45ae91ee7b8ee928de7a9d04d893a08bcbec6 # v1.30.2
         with:
           bin: ocomment
           package: ocomment
@@ -121,7 +138,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: '& "rust/target/$env:TARGET/release/ocomment.exe" --version'
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ocomment-${{ matrix.target }}
           path: |
@@ -130,27 +147,55 @@ jobs:
             ${{ steps.package.outputs.sha256 }}
           if-no-files-found: error
 
-  publish-release:
-    needs: build
+  build-vscode:
+    needs: metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: editors/vscode
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: editors/vscode/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run compile
+      - run: npm run unit
+      - name: Package the exact extension artifact
+        run: npm run package -- --out "ocomment-${GITHUB_REF_NAME}.vsix"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ocomment-vscode
+          path: editors/vscode/ocomment-${{ github.ref_name }}.vsix
+          if-no-files-found: error
+
+  draft-release:
+    needs: [build, build-vscode]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      actions: read # Download artifacts produced by the build matrix.
-      artifact-metadata: write # Attach artifact attestations to uploaded assets.
-      attestations: write # Publish build provenance attestations.
-      contents: write # Create the immutable GitHub release for the pushed tag.
-      id-token: write # Obtain keyless Sigstore identities for signing.
+      actions: read # NOTE: Download artifacts produced by the build matrix.
+      artifact-metadata: write # NOTE: Attach artifact attestations to uploaded assets.
+      attestations: write # NOTE: Publish build provenance attestations.
+      contents: write # NOTE: Create the immutable GitHub release for the pushed tag.
+      id-token: write # NOTE: Obtain keyless Sigstore identities for signing.
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: ocomment-*
           path: release
           merge-multiple: true
       - name: Generate SPDX SBOM
-        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
           path: release
           format: spdx-json
@@ -165,50 +210,77 @@ jobs:
           --repository "$GITHUB_REPOSITORY"
       - name: Generate combined checksums
         working-directory: release
-        run: >-
-          sha256sum ocomment-*.tar.gz ocomment-*.zip ocomment.spdx.json
-          ocomment.rb ocomment-scoop.json ocomment.winget.yaml > SHA256SUMS
+        run: |
+          set -euo pipefail
+          sha256sum \
+            ocomment-*.tar.gz \
+            ocomment-*.zip \
+            ocomment-*.vsix \
+            ocomment-*.sha256 \
+            ocomment.spdx.json \
+            ocomment.rb \
+            ocomment-scoop.json \
+            ocomment.winget.yaml >SHA256SUMS
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
       - name: Sign every release subject
         shell: bash
         run: |
+          set -euo pipefail
           while IFS= read -r -d '' asset; do
             cosign sign-blob --yes --bundle "${asset}.sigstore.json" "$asset"
-          done < <(find release -maxdepth 1 -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.spdx.json' -o -name '*.rb' -o -name '*-scoop.json' -o -name '*.winget.yaml' -o -name 'SHA256SUMS' \) -print0)
+          done < <(find release -maxdepth 1 -type f ! -name '*.sigstore.json' -print0)
       - name: Attest build provenance
-        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
             release/*.tar.gz
             release/*.zip
-      - name: Create immutable GitHub release
+            release/*.vsix
+            release/*.sha256
+            release/*.spdx.json
+            release/*.rb
+            release/*-scoop.json
+            release/*.winget.yaml
+            release/SHA256SUMS
+      - name: Create or refresh the draft GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" release/* --generate-notes --verify-tag
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft >release-state; then
+            if [ "$(cat release-state)" != "true" ]; then
+              echo "::error::${GITHUB_REF_NAME} is already public; refusing to replace its assets"
+              exit 2
+            fi
+            gh release upload "$GITHUB_REF_NAME" release/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" release/* \
+              --draft --generate-notes --verify-tag
+          fi
 
   publish-container:
-    needs: publish-release
+    needs: draft-release
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      actions: read # Download the musl archives the build matrix produced.
-      attestations: write # Publish build provenance for the pushed image.
-      contents: read # Read the Dockerfile and the licences out of the tag.
-      id-token: write # Obtain keyless Sigstore identities for signing.
-      packages: write # Push the image into this repository's GHCR namespace.
+      actions: read # NOTE: Download the musl archives the build matrix produced.
+      attestations: write # NOTE: Publish build provenance for the pushed image.
+      contents: read # NOTE: Read the Dockerfile and the licences out of the tag.
+      id-token: write # NOTE: Obtain keyless Sigstore identities for signing.
+      packages: write # NOTE: Push the image into this repository's GHCR namespace.
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: ocomment-*-unknown-linux-musl
           path: musl
           merge-multiple: true
-      # The image ships the binaries this release already built, smoke tested,
-      # signed, and published as archives rather than a second compilation of
-      # the same tag. `builder` below is the buildx named context the Dockerfile
-      # copies from, so this layout is the whole contract between them.
+      # NOTE: The image ships the binaries this release already built, smoke tested,
+      # NOTE: signed, and published as archives rather than a second compilation of
+      # NOTE: the same tag. `builder` below is the buildx named context the Dockerfile
+      # NOTE: copies from, so this layout is the whole contract between them.
       - name: Lay the released musl binaries out as the `builder` context
         shell: bash
         run: |
@@ -221,20 +293,20 @@ jobs:
           }
           extract x86_64-unknown-linux-musl amd64
           extract aarch64-unknown-linux-musl arm64
-      # GHCR rejects an uppercase path, and this repository has one.
+      # NOTE: GHCR rejects an uppercase path, and this repository has one.
       - name: Resolve the GHCR image name
         id: image
         shell: bash
         run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >>"$GITHUB_OUTPUT"
-      - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
-      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
-      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+      - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: meta
-        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ steps.image.outputs.name }}
           tags: |
@@ -247,7 +319,7 @@ jobs:
             org.opencontainers.image.licenses=MIT OR Apache-2.0
             org.opencontainers.image.documentation=https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/docs/docker.md
       - id: build
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           build-contexts: builder=release/binaries
@@ -266,89 +338,113 @@ jobs:
           IMAGE: ${{ steps.image.outputs.name }}
         run: cosign sign --yes "${IMAGE}@${DIGEST}"
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-name: ${{ steps.image.outputs.name }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
 
-  publish-vscode:
-    needs: publish-release
+  publish-vscode-marketplace:
+    needs: draft-release
     runs-on: ubuntu-latest
     environment: vscode-marketplace
     timeout-minutes: 30
-    permissions:
-      contents: write # Attach the signed .vsix to the release for this tag.
-      id-token: write # Obtain keyless Sigstore identities for signing.
     defaults:
       run:
         working-directory: editors/vscode
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: editors/vscode/package-lock.json
-      # A Marketplace version cannot be republished, so a version that is not
-      # the tag has to stop the job before anything is uploaded rather than
-      # after. `npm run unit` below checks the same file against the crate
-      # version; this checks it against the tag being released.
-      - name: The Marketplace version is the tag
-        run: |
-          set -euo pipefail
-          manifest=$(node -p "require('./package.json').version")
-          if [ "v${manifest}" != "${GITHUB_REF_NAME}" ]; then
-            echo "::error::editors/vscode/package.json is ${manifest}, but the tag is ${GITHUB_REF_NAME}"
-            exit 1
-          fi
       - run: npm ci
-      - run: npm run lint
-      - run: npm run compile
-      - run: npm run unit
-      - name: Package the extension
-        run: npx --no @vscode/vsce package --out "ocomment-${GITHUB_REF_NAME}.vsix"
-      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
-      - name: Sign the extension
-        run: |
-          set -euo pipefail
-          cosign sign-blob --yes \
-            --bundle "ocomment-${GITHUB_REF_NAME}.vsix.sigstore.json" \
-            "ocomment-${GITHUB_REF_NAME}.vsix"
-      # The Marketplace serves its own copy, so the release keeps the exact
-      # bytes that were signed and published, for anyone who wants to verify
-      # an installed extension against this tag.
-      - name: Attach the extension and its signature to the release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          gh release upload "$GITHUB_REF_NAME" \
-            "ocomment-${GITHUB_REF_NAME}.vsix" \
-            "ocomment-${GITHUB_REF_NAME}.vsix.sigstore.json"
-      # Both publishers read their token out of the environment, so neither is
-      # passed on a command line where the runner would log it.
-      - name: Publish to the Visual Studio Marketplace
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ocomment-vscode
+          path: editors/vscode
+      - name: Publish the draft's exact VSIX to Visual Studio Marketplace
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
-        run: npx --no @vscode/vsce publish --packagePath "ocomment-${GITHUB_REF_NAME}.vsix"
-      - name: Publish to Open VSX
+        run: |
+          set -euo pipefail
+          version=${GITHUB_REF_NAME#v}
+          if npx --no @vscode/vsce show P4suta.ocomment --json >marketplace.json 2>/dev/null &&
+            node -e '
+              const extension = require("./marketplace.json");
+              if (!extension.versions?.some(entry => entry.version === process.argv[1])) process.exit(1);
+            ' "${version}"
+          then
+            echo "Visual Studio Marketplace already has P4suta.ocomment@${version}"
+          else
+            npx --no @vscode/vsce publish \
+              --packagePath "ocomment-${GITHUB_REF_NAME}.vsix"
+          fi
+
+  publish-open-vsx:
+    needs: draft-release
+    runs-on: ubuntu-latest
+    environment: vscode-marketplace
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: editors/vscode
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: editors/vscode/package-lock.json
+      - run: npm ci
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ocomment-vscode
+          path: editors/vscode
+      - name: Publish the draft's exact VSIX to Open VSX
         env:
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
-        run: npx --no ovsx publish "ocomment-${GITHUB_REF_NAME}.vsix"
+        run: >-
+          npx --no ovsx publish
+          --skip-duplicate
+          "ocomment-${GITHUB_REF_NAME}.vsix"
 
   publish-crates:
-    needs: publish-release
+    needs: draft-release
     runs-on: ubuntu-latest
     environment: crates-io
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # NOTE: stable toolchain action
       - run: ./tools/publish-crates.sh
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  finalize:
+    needs:
+      - publish-container
+      - publish-vscode-marketplace
+      - publish-open-vsx
+      - publish-crates
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 10
+    permissions:
+      contents: write # NOTE: Publish the already complete draft release.
+    steps:
+      - name: Publish the completed draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release edit "${GITHUB_REF_NAME}"
+          --repo "${GITHUB_REPOSITORY}"
+          --draft=false
+          --latest

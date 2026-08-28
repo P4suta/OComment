@@ -4,7 +4,8 @@
 # NOTE: no shell, no package manager, no libc. docs/docker.md says what a
 # NOTE: caller gives up for that, and how a published image is verified.
 
-FROM rust:1.88-alpine AS builder
+# NOTE: Docker Hub index digest for the multi-platform rust:1.88-alpine image.
+FROM rust:1.88-alpine@sha256:9dfaae478ecd298b6b5a039e1f2cc4fc040fc818a2de9aa78fa714dea036574d AS builder
 ARG TARGETARCH
 # NOTE: musl-dev is deliberately unpinned: the version that matters is the one
 # NOTE: the pinned `rust:1.88-alpine` tag resolves to, and pinning a package

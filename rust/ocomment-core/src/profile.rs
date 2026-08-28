@@ -1,6 +1,6 @@
 use crate::{
-    ByteSpan, Comment, CommentKind, Diagnostic, Language, ScanOptions, ScanReport, Severity,
-    TransformOptions, TransformResult,
+    ByteSpan, Comment, CommentKind, Diagnostic, Language, Layout, PreparedScanner, ScanOptions,
+    ScanReport, Severity, TransformOptions, TransformPlan, TransformResult,
     scanner::{DispositionPatterns, disposition},
 };
 use serde::{Deserialize, Serialize};
@@ -290,9 +290,46 @@ pub fn scan_profile(
     profile: &DeclarativeProfile,
     options: ScanOptions,
 ) -> Result<ScanReport, ProfileError> {
-    validate_profile(profile)?;
-    let patterns = DispositionPatterns::compile(&options)
+    let prepared = PreparedScanner::new(options)
         .map_err(|error| ProfileError::InvalidPolicyRegex(error.to_string()))?;
+    prepared.scan_profile(source, profile)
+}
+
+impl PreparedScanner {
+    /// Scan a declarative profile with this scanner's already-compiled policy.
+    pub fn scan_profile(
+        &self,
+        source: &[u8],
+        profile: &DeclarativeProfile,
+    ) -> Result<ScanReport, ProfileError> {
+        scan_profile_with(source, profile, self.options(), &self.patterns)
+    }
+
+    /// Plan a declarative-profile transformation without materializing its
+    /// output bytes or source map.
+    pub fn transform_profile_plan(
+        &self,
+        source: &[u8],
+        profile: &DeclarativeProfile,
+        layout: Layout,
+    ) -> Result<TransformPlan, ProfileError> {
+        let report = self.scan_profile(source, profile)?;
+        Ok(crate::transform::plan_report(
+            source,
+            report,
+            layout,
+            self.options().force_invalid,
+        ))
+    }
+}
+
+fn scan_profile_with(
+    source: &[u8],
+    profile: &DeclarativeProfile,
+    options: &ScanOptions,
+    patterns: &DispositionPatterns,
+) -> Result<ScanReport, ProfileError> {
+    validate_profile(profile)?;
     let mut comments = Vec::new();
     let mut diagnostics = Vec::new();
     let mut index = 0;
@@ -348,8 +385,8 @@ pub fn scan_profile(
                 end,
                 delimiter.kind,
                 profile,
-                &options,
-                &patterns,
+                options,
+                patterns,
             ));
             index = end;
             continue;
@@ -382,8 +419,8 @@ pub fn scan_profile(
                 index,
                 delimiter.kind,
                 profile,
-                &options,
-                &patterns,
+                options,
+                patterns,
             ));
             if depth != 0 {
                 diagnostics.push(Diagnostic {
@@ -420,8 +457,11 @@ pub fn transform_profile(
     profile: &DeclarativeProfile,
     options: TransformOptions,
 ) -> Result<TransformResult, ProfileError> {
-    let report = scan_profile(source, profile, options.scan.clone())?;
-    Ok(crate::transform::transform_report(source, report, options))
+    let prepared = PreparedScanner::new(options.scan)
+        .map_err(|error| ProfileError::InvalidPolicyRegex(error.to_string()))?;
+    Ok(prepared
+        .transform_profile_plan(source, profile, options.layout)?
+        .finish(source))
 }
 
 fn profile_comment(

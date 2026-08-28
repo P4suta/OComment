@@ -155,7 +155,8 @@ value_enum_wrapper!(DialectArg, Dialect, |value| match value {
     Dialect::Sqlite => "SQLite",
     Dialect::TSql => "Microsoft Transact-SQL",
     Dialect::Oracle => "Oracle SQL and PL/SQL",
-    Dialect::Scss => "SCSS and the indented Sass syntax",
+    Dialect::Scss => "SCSS",
+    Dialect::Sass => "The indentation-based Sass syntax",
 });
 
 value_enum_wrapper!(CommentKindArg, CommentKind, |value| match value {

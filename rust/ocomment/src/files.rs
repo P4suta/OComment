@@ -2,7 +2,9 @@ use crate::config::ResolvedConfig;
 use anyhow::{Context, Result, anyhow};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use ignore::WalkBuilder;
-use ocomment_core::{DeclarativeProfile, Detection, Dialect, Language, detect_language};
+use ocomment_core::{
+    DeclarativeProfile, Detection, Dialect, Language, TransformOptions, detect_language,
+};
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -14,6 +16,9 @@ pub struct SourceFile {
     pub source: Vec<u8>,
     pub language: Language,
     pub dialect: Dialect,
+    /// The path-resolved policy and layout used for this source. Resolution is
+    /// part of discovery so the parallel scan does not repeat it.
+    pub options: TransformOptions,
     pub profile: Option<DeclarativeProfile>,
     pub plugin: Option<String>,
 }
@@ -33,6 +38,10 @@ pub struct SkippedFile {
 pub struct Discovery {
     pub files: Vec<SourceFile>,
     pub skipped: Vec<SkippedFile>,
+    /// A configuration resolution failure applies to the run rather than to
+    /// one unreadable path. It is carried out of the walk and returned after
+    /// traversal unwinds, instead of being reported as an I/O skip.
+    fatal: Option<anyhow::Error>,
 }
 
 /// The path standard input is reported under. It is not a real file name: the
@@ -107,21 +116,22 @@ pub fn stdin_source(
     else {
         return Err(skipped(STDIN_LANGUAGE_HELP, true));
     };
-    if forced_language.is_none()
-        && resolved
-            .config
-            .languages
-            .get(language.as_str())
-            .and_then(|item| item.enabled)
-            == Some(false)
-    {
+    let (language, options) = resolved
+        .for_path(
+            Path::new(STDIN_PATH),
+            language,
+            forced_dialect.unwrap_or(dialect),
+        )
+        .map_err(|error| skipped(&error.to_string(), true))?;
+    if forced_language.is_none() && !resolved.language_is_enabled(language) {
         return Err(skipped("language disabled by configuration", false));
     }
     Ok(SourceFile {
         path: PathBuf::from(STDIN_PATH),
         source: bytes,
         language,
-        dialect: forced_dialect.unwrap_or(dialect),
+        dialect: options.scan.dialect,
+        options,
         profile: None,
         plugin: None,
     })
@@ -266,6 +276,9 @@ fn discover_with_scope(
             });
         }
     }
+    if let Some(error) = discovery.fatal.take() {
+        return Err(error);
+    }
     discovery
         .files
         .sort_by(|left, right| left.path.cmp(&right.path));
@@ -388,16 +401,25 @@ fn load_one(
             reason: "command-line",
         })
         .or_else(|| detect_language(Some(path), &source));
-    if forced_language.is_none()
-        && built_in.as_ref().is_some_and(|detection| {
-            resolved
-                .config
-                .languages
-                .get(detection.language.as_str())
-                .and_then(|language| language.enabled)
-                == Some(false)
-        })
-    {
+    let Detection {
+        language: detected_language,
+        dialect: detected_dialect,
+        ..
+    } = built_in.unwrap_or(Detection {
+        language: Language::Unknown,
+        dialect: Dialect::Standard,
+        reason: "configuration-routing",
+    });
+    let (language, options) = match resolved.for_path(path, detected_language, detected_dialect) {
+        Ok(value) => value,
+        Err(error) => {
+            if discovery.fatal.is_none() {
+                discovery.fatal = Some(error);
+            }
+            return;
+        }
+    };
+    if !resolved.language_is_enabled(language) {
         discovery.skipped.push(SkippedFile {
             path: path.to_path_buf(),
             reason: "language disabled by configuration".into(),
@@ -406,23 +428,16 @@ fn load_one(
         });
         return;
     }
-    let profile = if built_in.is_none() {
+    let profile = if language == Language::Unknown {
         profile_for_path(path, resolved)
     } else {
         None
     };
-    let plugin = if built_in.is_none() && profile.is_none() {
+    let plugin = if language == Language::Unknown && profile.is_none() {
         plugin_for_path(path, resolved)
     } else {
         None
     };
-    let Detection {
-        language, dialect, ..
-    } = built_in.unwrap_or(Detection {
-        language: Language::Unknown,
-        dialect: Dialect::Standard,
-        reason: "declarative-profile",
-    });
     if language == Language::Unknown && profile.is_none() && plugin.is_none() {
         discovery.skipped.push(SkippedFile {
             path: path.to_path_buf(),
@@ -436,7 +451,8 @@ fn load_one(
         path: path.to_path_buf(),
         source,
         language,
-        dialect: forced_dialect.unwrap_or(dialect),
+        dialect: options.scan.dialect,
+        options,
         profile,
         plugin,
     });

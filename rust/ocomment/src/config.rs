@@ -169,13 +169,16 @@ impl Source {
     fn describe(&self, origin: Option<&Path>) -> String {
         match self {
             Self::Global => match origin {
-                Some(path) => format!("[policy] in {}", path.display()),
+                Some(path) => format!(
+                    "[policy] in {}",
+                    crate::output::sanitize_path(&path.display().to_string())
+                ),
                 None => "built-in defaults".to_owned(),
             },
             Self::Language(name) => format!("[languages.{name}]"),
-            Self::Override { index, paths } => {
-                format!("[[overrides]] #{index}, paths = {paths:?}")
-            }
+            Self::Override { index, paths } => crate::output::sanitize_message(&format!(
+                "[[overrides]] #{index}, paths = {paths:?}"
+            )),
             Self::Cli { flag } => format!("{flag} on the command line"),
         }
     }
@@ -202,6 +205,8 @@ type PolicyOrigins = BTreeMap<&'static str, PathBuf>;
 /// have been written in.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CliOverrides {
+    pub language: Option<Language>,
+    pub dialect: Option<Dialect>,
     pub policy: bool,
     pub layout: bool,
     /// Where the `--keep-kind` values start in `policy.keep_kind`: the command
@@ -392,15 +397,47 @@ impl ResolvedConfig {
         relative.to_string_lossy().replace('\\', "/")
     }
 
+    pub fn language_is_enabled(&self, language: Language) -> bool {
+        self.cli_overrides.language.is_some()
+            || self
+                .config
+                .languages
+                .get(language.as_str())
+                .and_then(|item| item.enabled)
+                != Some(false)
+    }
+
     pub fn for_path(
         &self,
         path: &Path,
         language: Language,
         dialect: Dialect,
-    ) -> (Language, TransformOptions) {
+    ) -> Result<(Language, TransformOptions)> {
         let normalized = self.relative_to_root(path);
         let mut chosen_language = language;
         let mut chosen_dialect = dialect;
+        /* NOTE: Language is selected before its language-specific policy is
+         * applied. A language change without an accompanying dialect starts at
+         * that language's standard dialect instead of carrying (for example)
+         * `tsx` into a Rust scan. */
+        for override_ in &self.overrides {
+            if override_
+                .matchers
+                .iter()
+                .any(|matcher| matcher.is_match(&normalized))
+                && let Some(value) = override_.value.language
+                && value != chosen_language
+            {
+                chosen_language = value;
+                chosen_dialect = Dialect::Standard;
+            }
+        }
+        if let Some(value) = self.cli_overrides.language
+            && value != chosen_language
+        {
+            chosen_language = value;
+            chosen_dialect = Dialect::Standard;
+        }
         let mut policy = self.config.policy.mode;
         let mut layout = self.config.policy.layout;
         let mut keep = self.config.policy.keep_kind.clone();
@@ -408,7 +445,7 @@ impl ResolvedConfig {
         let mut keep_regex = self.config.policy.keep_regex.clone();
         let mut remove_regex = self.config.policy.remove_regex.clone();
 
-        if let Some(language_config) = self.config.languages.get(language.as_str()) {
+        if let Some(language_config) = self.config.languages.get(chosen_language.as_str()) {
             if let Some(value) = language_config.dialect {
                 chosen_dialect = value;
             }
@@ -429,9 +466,6 @@ impl ResolvedConfig {
                 .iter()
                 .any(|matcher| matcher.is_match(&normalized))
             {
-                if let Some(value) = override_.value.language {
-                    chosen_language = value;
-                }
                 if let Some(value) = override_.value.dialect {
                     chosen_dialect = value;
                 }
@@ -447,6 +481,17 @@ impl ResolvedConfig {
                 extend_unique(&mut remove_regex, &override_.value.remove_regex);
             }
         }
+        if self.cli_overrides.policy {
+            policy = self.config.policy.mode;
+        }
+        if self.cli_overrides.layout {
+            layout = self.config.policy.layout;
+        }
+        if let Some(value) = self.cli_overrides.dialect {
+            chosen_dialect = value;
+        }
+        validate_dialect(chosen_language, chosen_dialect)
+            .context("invalid effective language/dialect selection")?;
         let scan = ScanOptions {
             policy,
             dialect: chosen_dialect,
@@ -457,7 +502,7 @@ impl ResolvedConfig {
             keep_regex,
             remove_regex,
         };
-        (chosen_language, TransformOptions { scan, layout })
+        Ok((chosen_language, TransformOptions { scan, layout }))
     }
 
     /// The same answer as [`Self::for_path`], with a record of where each
@@ -473,15 +518,13 @@ impl ResolvedConfig {
         path: &Path,
         language: Language,
         dialect: Dialect,
-    ) -> (Language, TransformOptions, PolicyTrace) {
-        let (chosen_language, options) = self.for_path(path, language, dialect);
+    ) -> Result<(Language, TransformOptions, PolicyTrace)> {
+        let (chosen_language, options) = self.for_path(path, language, dialect)?;
         let normalized = self.relative_to_root(path);
         let mut layers = Vec::new();
-        /* NOTE: `for_path` looks the language table up under the language it was
-         * handed, not under the one an override may have changed it to. */
-        if let Some(config) = self.config.languages.get(language.as_str()) {
+        if let Some(config) = self.config.languages.get(chosen_language.as_str()) {
             layers.push(TracedLayer {
-                source: Source::Language(language.as_str().to_owned()),
+                source: Source::Language(chosen_language.as_str().to_owned()),
                 policy: config.policy,
                 layout: config.layout,
                 keep_kind: &config.keep_kind,
@@ -560,20 +603,64 @@ impl ResolvedConfig {
                 trace.layout = layer.source.clone();
             }
         }
-        (chosen_language, options, trace)
+        /* NOTE: Flags are the final layer. Starting the trace at CLI and then
+         * replaying path layers would claim that a value which never won did. */
+        if cli.policy {
+            trace.policy = Source::Cli { flag: "--policy" };
+        }
+        if cli.layout {
+            trace.layout = Source::Cli { flag: "--layout" };
+        }
+        Ok((chosen_language, options, trace))
     }
 }
 
 pub fn load(explicit: Option<&Path>) -> Result<ResolvedConfig> {
     let cwd = env::current_dir().context("cannot determine current directory")?;
-    let project_path = locate_project(&cwd);
-    let root = project_path
+    load_from(&cwd, explicit)
+}
+
+/// Resolve configuration as though the command were invoked from `cwd`,
+/// without changing the process-wide current directory. LSP workspace folders
+/// use this to keep discovery and glob roots independent.
+pub fn load_from(cwd: &Path, explicit: Option<&Path>) -> Result<ResolvedConfig> {
+    let cwd = if cwd.is_absolute() {
+        lexical(cwd)
+    } else {
+        lexical(&env::current_dir()?.join(cwd))
+    };
+    let explicit_path = explicit.map(|path| {
+        let joined = if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            cwd.join(path)
+        };
+        lexical(&joined)
+    });
+    /* NOTE: `--config` is discovery's replacement, not one more layer on top
+     * of whatever happens to surround the caller. Its own directory is the
+     * root for globs and the plugin lock. */
+    let project_path = explicit_path
+        .is_none()
+        .then(|| locate_project(&cwd))
+        .flatten();
+    let user_path = explicit_path
+        .is_none()
+        .then(user_config_path)
+        .flatten()
+        .filter(|path| path.is_file());
+    let root = explicit_path
         .as_deref()
         .and_then(Path::parent)
         .map(Path::to_path_buf)
+        .or_else(|| {
+            project_path
+                .as_deref()
+                .and_then(Path::parent)
+                .map(Path::to_path_buf)
+        })
         .or_else(|| locate_repository(&cwd))
         .unwrap_or_else(|| cwd.clone());
-    let user_path = user_config_path().filter(|path| path.is_file());
     let mut merged: toml::Value = toml::from_str(&toml::to_string(&Config::default())?)?;
     let mut trace = ConfigTrace::default();
     let mut origins = PolicyOrigins::new();
@@ -597,7 +684,7 @@ pub fn load(explicit: Option<&Path>) -> Result<ResolvedConfig> {
         );
         trace.project = Some(path.clone());
     }
-    if let Some(path) = explicit {
+    if let Some(path) = &explicit_path {
         merge_layer(
             &mut merged,
             &mut origins,
@@ -695,7 +782,7 @@ pub fn supported_dialects(language: Language) -> &'static [Dialect] {
             Dialect::GnuCpp,
             Dialect::Cuda,
         ],
-        Language::Css => &[Dialect::Standard, Dialect::Scss],
+        Language::Css => &[Dialect::Standard, Dialect::Scss, Dialect::Sass],
         Language::Shell => &[
             Dialect::Standard,
             Dialect::PosixSh,
@@ -1012,9 +1099,12 @@ mod tests {
         };
         let path = root.join("nested/a.rs");
 
-        let (language, options) = resolved.for_path(&path, Language::Rust, Dialect::Standard);
-        let (traced_language, traced_options, trace) =
-            resolved.for_path_traced(&path, Language::Rust, Dialect::Standard);
+        let (language, options) = resolved
+            .for_path(&path, Language::Rust, Dialect::Standard)
+            .unwrap();
+        let (traced_language, traced_options, trace) = resolved
+            .for_path_traced(&path, Language::Rust, Dialect::Standard)
+            .unwrap();
         assert_eq!(traced_language, language);
         assert_eq!(traced_options, options);
 

@@ -13,9 +13,9 @@
 //! block is recorded.
 
 use ocomment_core::{
-    ByteSpan, CommentKind, DeclarativeProfile, Disposition, Edit, Language, Layout, ScanReport,
-    TransformOptions, TransformResult, apply_edits, scan, scan_profile, transform,
-    transform_profile, transform_spans,
+    ByteSpan, CommentKind, DeclarativeProfile, Disposition, Edit, Language, Layout,
+    PreparedScanner, ScanReport, TransformOptions, TransformResult, apply_edits, scan,
+    scan_profile, transform, transform_profile, transform_spans,
 };
 use serde_json::{Value, json};
 use std::{collections::BTreeSet, fs, path::PathBuf, str::FromStr};
@@ -294,32 +294,74 @@ fn run(case: &Value, source: &[u8]) -> Outcome {
         .unwrap_or("transform");
     let options = options(case);
     match operation {
-        "scan" => Outcome {
-            report: Some(scan(source, language(case), options.scan)),
-            output: None,
-        },
-        "transform" => {
-            Outcome::transformed(case, source, transform(source, language(case), options))
+        "scan" => {
+            let legacy = scan(source, language(case), options.scan.clone());
+            if let Ok(prepared) = PreparedScanner::new(options.scan) {
+                assert_eq!(
+                    prepared.scan(source, language(case)),
+                    legacy,
+                    "{}",
+                    id(case)
+                );
+            }
+            Outcome {
+                report: Some(legacy),
+                output: None,
+            }
         }
-        "transform-spans" => Outcome::transformed(
-            case,
-            source,
-            transform_spans(source, language(case), &spans(case), options)
-                .unwrap_or_else(|error| panic!("{}: {error}", id(case))),
-        ),
-        "scan-profile" => Outcome {
-            report: Some(
-                scan_profile(source, &profile(case), options.scan)
-                    .unwrap_or_else(|error| panic!("{}: {error}", id(case))),
-            ),
-            output: None,
-        },
-        "transform-profile" => Outcome::transformed(
-            case,
-            source,
-            transform_profile(source, &profile(case), options)
-                .unwrap_or_else(|error| panic!("{}: {error}", id(case))),
-        ),
+        "transform" => {
+            let legacy = transform(source, language(case), options.clone());
+            if let Ok(prepared) = PreparedScanner::new(options.scan) {
+                let planned = prepared
+                    .transform_plan(source, language(case), options.layout)
+                    .finish(source);
+                assert_eq!(planned, legacy, "{}", id(case));
+            }
+            Outcome::transformed(case, source, legacy)
+        }
+        "transform-spans" => {
+            let spans = spans(case);
+            let legacy = transform_spans(source, language(case), &spans, options.clone())
+                .unwrap_or_else(|error| panic!("{}: {error}", id(case)));
+            if let Ok(prepared) = PreparedScanner::new(options.scan) {
+                let planned = prepared
+                    .transform_spans_plan(source, language(case), &spans, options.layout)
+                    .unwrap_or_else(|error| panic!("{}: {error}", id(case)))
+                    .finish(source);
+                assert_eq!(planned, legacy, "{}", id(case));
+            }
+            Outcome::transformed(case, source, legacy)
+        }
+        "scan-profile" => {
+            let profile = profile(case);
+            let legacy = scan_profile(source, &profile, options.scan.clone())
+                .unwrap_or_else(|error| panic!("{}: {error}", id(case)));
+            if let Ok(prepared) = PreparedScanner::new(options.scan) {
+                assert_eq!(
+                    prepared.scan_profile(source, &profile).unwrap(),
+                    legacy,
+                    "{}",
+                    id(case)
+                );
+            }
+            Outcome {
+                report: Some(legacy),
+                output: None,
+            }
+        }
+        "transform-profile" => {
+            let profile = profile(case);
+            let legacy = transform_profile(source, &profile, options.clone())
+                .unwrap_or_else(|error| panic!("{}: {error}", id(case)));
+            if let Ok(prepared) = PreparedScanner::new(options.scan) {
+                let planned = prepared
+                    .transform_profile_plan(source, &profile, options.layout)
+                    .unwrap()
+                    .finish(source);
+                assert_eq!(planned, legacy, "{}", id(case));
+            }
+            Outcome::transformed(case, source, legacy)
+        }
         "apply_edits" => Outcome {
             report: None,
             output: Some(apply_edits(source, &edits(case))),

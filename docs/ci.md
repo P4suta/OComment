@@ -125,17 +125,16 @@ entry with `stages: [pre-commit]`.
 
 ### Keeping the hook manifest honest
 
-The `files:` pattern in `.pre-commit-hooks.yaml` is generated from the
-extensions in `spec/languages.toml`, so a new language cannot leave the hooks
-scanning the old file set. `tools/check_hooks.py` regenerates the pattern and
-fails on any drift; it also rejects a manifest key pre-commit does not define
-and a hook missing `id`, `name`, `entry`, or `language`, because pre-commit
-itself only complains when a consumer runs the hook. CI runs it next to
-`tools/check_embedded_specs.py`.
+Both published hooks use `types: [text]` and intentionally have no `files:`
+regex. Pre-commit selects the text files and OComment's own detector decides
+which ones it understands. That keeps reserved names such as `Dockerfile` and
+extensionless shebang scripts on the same path as an ordinary CLI run.
+`tools/check_hooks.py` rejects any manifest-level `files:` filter, an unknown
+manifest key, or a hook missing `id`, `name`, `entry`, or `language`. CI runs it
+next to `tools/check_embedded_specs.py`.
 
 ```sh
-python3 tools/check_hooks.py                  # NOTE: fail on drift
-python3 tools/check_hooks.py --print-pattern  # NOTE: the regex the hooks must carry
+python3 tools/check_hooks.py
 ```
 
 ## GitHub Action
@@ -202,7 +201,7 @@ category, so it does not collide with other tools' results.
 | `fail-on-findings` | `"true"` | Fail the step on exit 1. Exit 2 always fails. |
 | `upload-sarif` | `"false"` | Upload the SARIF file to code scanning. |
 | `sarif-file` | `ocomment.sarif` | Where SARIF output is written. |
-| `verify-attestation` | `"true"` | Run `gh attestation verify` on the archive when `gh` is available. |
+| `verify-attestation` | `"true"` | Run `gh attestation verify`; the action fails closed when `gh` is unavailable. Set `false` only as an explicit opt-out. |
 | `binary-path` | `""` | Use an already-built binary and download nothing. |
 | `working-directory` | `.` | Directory the command runs in. |
 | `token` | `${{ github.token }}` | Used to resolve the latest release and verify attestations. |
@@ -237,9 +236,12 @@ Every downloaded archive is checked against the release `SHA256SUMS` before it
 is unpacked, and the run stops with exit 2 on a mismatch or on an archive that
 the checksum file does not list. With `verify-attestation: "true"` — the
 default — the archive is also checked against its GitHub build-provenance
-attestation with `gh attestation verify --repo P4suta/OComment`. Runners
-without the `gh` CLI log a warning and continue; runners with it fail the step
-when the attestation does not verify.
+attestation with `gh attestation verify --repo P4suta/OComment`. A runner
+without the `gh` CLI fails closed; `verify-attestation: "false"` is the only
+explicit opt-out. The action also validates SARIF structure before invoking the
+upload action, and reports a CLI exit 2 before any upload failure can obscure
+it. Inputs and binary version output containing line breaks are rejected before
+they can become workflow outputs.
 
 Runner platforms map to the published targets as follows. Linux uses the
 statically linked musl archives, so no glibc version is required.

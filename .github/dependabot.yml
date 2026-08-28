@@ -67,9 +67,9 @@ updates:
     commit-message:
       prefix: "chore(deps)"
     ignore:
-      # @types/vscode has to stay on the version engines.vscode names, or the
-      # extension compiles against API the editors it claims to support do not
-      # have.
+      # NOTE: @types/vscode has to stay on the version engines.vscode names, or the
+      # NOTE: extension compiles against API the editors it claims to support do not
+      # NOTE: have.
       - dependency-name: "@types/vscode"
       - dependency-name: "*"
         update-types:
@@ -97,8 +97,8 @@ updates:
     commit-message:
       prefix: "chore(deps)"
     ignore:
-      # The builder stage is pinned to the MSRV toolchain on purpose; a major
-      # or minor Rust bump is a deliberate change, not a dependency update.
+      # NOTE: The builder stage is pinned to the MSRV toolchain on purpose; a major
+      # NOTE: or minor Rust bump is a deliberate change, not a dependency update.
       - dependency-name: rust
         update-types:
           - version-update:semver-major

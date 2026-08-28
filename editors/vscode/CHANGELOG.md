@@ -6,6 +6,8 @@ follow the repository's tags.
 
 ## Unreleased
 
+## 0.1.0
+
 ### Added
 
 - First release. Launches `ocomment lsp` and attaches it to the thirty-five

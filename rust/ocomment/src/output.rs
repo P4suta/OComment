@@ -4,13 +4,15 @@ use crate::{
 };
 use anyhow::Result;
 use clap::ValueEnum;
+#[cfg(test)]
+use ocomment_core::TransformResult;
 use ocomment_core::{
-    ByteSpan, Comment, CommentKind, Disposition, DispositionExplanation, DispositionPatterns,
-    Language, Policy, ScanOptions, TransformResult, explain_comment_with,
+    ByteSpan, Comment, CommentKind, Disposition, DispositionExplanation, DispositionPatterns, Edit,
+    Language, Policy, ScanOptions, ScanReport, SourceMap, TransformPlan, explain_comment_with,
 };
-use serde::Serialize;
+use serde::{Serialize, Serializer, ser::SerializeSeq};
 use serde_json::{Value, json};
-use similar::{ChangeTag, TextDiff};
+use similar::{Algorithm, ChangeTag, capture_diff_slices, group_diff_ops};
 use std::{
     collections::BTreeMap,
     io::{self, BufWriter, Write},
@@ -115,7 +117,7 @@ impl Summary {
             if !file.result.report.valid {
                 summary.invalid_files += 1;
             }
-            if file.source != file.result.output {
+            if file.result.changed() {
                 summary.files_changed += 1;
                 if operation == Operation::Fix {
                     summary.comments_removed += removable;
@@ -213,7 +215,80 @@ pub struct ProcessedFile {
     pub path: PathBuf,
     pub source: Vec<u8>,
     pub language: Language,
-    pub result: TransformResult,
+    pub result: ProcessedResult,
+}
+
+/// The stages of a core transformation retained by the CLI.
+///
+/// Reports are always present. Edits, a source map, and transformed bytes are
+/// materialized only for the commands and output formats that consume them.
+#[derive(Clone, Debug)]
+pub struct ProcessedResult {
+    pub report: ScanReport,
+    pub edits: Vec<Edit>,
+    pub source_map: Option<SourceMap>,
+    output: Option<Vec<u8>>,
+    changed: bool,
+}
+
+impl ProcessedResult {
+    pub fn report(report: ScanReport, changed: bool) -> Self {
+        Self {
+            report,
+            edits: Vec::new(),
+            source_map: None,
+            output: None,
+            changed,
+        }
+    }
+
+    pub fn plan(
+        source: &[u8],
+        plan: TransformPlan,
+        materialize_output: bool,
+        materialize_source_map: bool,
+    ) -> Self {
+        let changed = plan.edits.iter().any(|edit| {
+            source.get(edit.span.start..edit.span.end) != Some(edit.replacement.as_slice())
+        });
+        let output = materialize_output.then(|| plan.output(source));
+        let source_map = materialize_source_map.then(|| plan.source_map(source.len()));
+        Self {
+            report: plan.report,
+            edits: plan.edits,
+            source_map,
+            output,
+            changed,
+        }
+    }
+
+    #[cfg(test)]
+    pub fn complete(result: TransformResult) -> Self {
+        let changed = !result.edits.is_empty();
+        Self {
+            report: result.report,
+            edits: result.edits,
+            source_map: Some(result.source_map),
+            output: Some(result.output),
+            changed,
+        }
+    }
+
+    pub const fn changed(&self) -> bool {
+        self.changed
+    }
+
+    pub fn output(&self) -> &[u8] {
+        self.output
+            .as_deref()
+            .expect("this operation requested transformed source bytes")
+    }
+
+    pub fn source_map(&self) -> &SourceMap {
+        self.source_map
+            .as_ref()
+            .expect("this output format requested a source map")
+    }
 }
 
 #[derive(Serialize)]
@@ -223,7 +298,7 @@ struct JsonFile<'a> {
     changed: bool,
     report: &'a ocomment_core::ScanReport,
     edits: &'a [ocomment_core::Edit],
-    source_map: &'a ocomment_core::SourceMap,
+    source_map: &'a SourceMap,
 }
 
 /// The one-line label for a comment OComment would delete.
@@ -670,27 +745,46 @@ fn render_human(
     let quiet = options.verbosity == Verbosity::Quiet;
     let verbose = options.verbosity == Verbosity::Verbose;
     for file in files {
-        if operation == Operation::Diff && file.source != file.result.output {
+        if operation == Operation::Diff && file.result.changed() {
             /* NOTE: The patch is the product of `diff`, so `-q` keeps it and drops
              * only the summary that follows on standard error. */
-            wrote(write!(
-                output,
-                "{}",
-                unified_diff(&file.path, &file.source, &file.result.output)
-            ))?;
+            wrote(output.write_all(&unified_diff(
+                &file.path,
+                &file.source,
+                file.result.output(),
+            )))?;
             continue;
         }
+        let reports_comments = match operation {
+            Operation::Scan => !file.result.report.comments.is_empty(),
+            Operation::Fix => false,
+            Operation::Check | Operation::Diff if quiet => false,
+            Operation::Check | Operation::Diff if options.explain => {
+                !file.result.report.comments.is_empty()
+            }
+            Operation::Check | Operation::Diff => file
+                .result
+                .report
+                .comments
+                .iter()
+                .any(|comment| comment.disposition.is_remove()),
+        };
+        let lines = (!file.result.report.diagnostics.is_empty() || reports_comments)
+            .then(|| LineIndex::new(&file.source));
         for diagnostic in &file.result.report.diagnostics {
-            let (line, column) = line_column(&file.source, diagnostic.span.start);
+            let (line, column) = lines
+                .as_ref()
+                .expect("a diagnostic requested a line index")
+                .line_column(diagnostic.span.start);
             wrote(writeln!(
                 output,
                 "{}:{line}:{column}: {}{}[{}]{}: {}",
                 display_path(&file.path, presentation.hyperlinks),
                 color("\x1b[31m", presentation.color),
                 diagnostic.severity,
-                diagnostic.code,
+                sanitize_message(&diagnostic.code),
                 color("\x1b[0m", presentation.color),
-                diagnostic.message
+                sanitize_message(&diagnostic.message)
             ))?;
         }
         let explainer = options
@@ -702,7 +796,10 @@ fn render_human(
         if operation == Operation::Scan {
             // NOTE: The listing is the product of `scan`; `-q` keeps it too.
             for comment in &file.result.report.comments {
-                let (line, column) = line_column(&file.source, comment.span.start);
+                let (line, column) = lines
+                    .as_ref()
+                    .expect("a scan listing requested a line index")
+                    .line_column(comment.span.start);
                 wrote(writeln!(
                     output,
                     "{}:{line}:{column}: {} {} {}..{}{}",
@@ -718,7 +815,7 @@ fn render_human(
         } else if quiet {
             continue;
         } else if operation == Operation::Fix {
-            if options.applied && file.source != file.result.output {
+            if options.applied && file.result.changed() {
                 wrote(writeln!(
                     output,
                     "fixed {}: removed {}",
@@ -735,7 +832,10 @@ fn render_human(
                 if !options.explain && !removable {
                     continue;
                 }
-                let (line, column) = line_column(&file.source, comment.span.start);
+                let (line, column) = lines
+                    .as_ref()
+                    .expect("a finding requested a line index")
+                    .line_column(comment.span.start);
                 wrote(writeln!(
                     output,
                     "{}:{line}:{column}: {}{}{}{}",
@@ -857,7 +957,7 @@ pub(crate) fn skip_lines(
                 "{}: {}: {}",
                 display_path(&item.path, presentation.hyperlinks),
                 if item.error { "error" } else { "skipped" },
-                item.reason
+                sanitize_message(&item.reason)
             )
         })
         .collect()
@@ -1087,7 +1187,13 @@ fn display_path(path: &Path, hyperlinks: bool) -> String {
         return display;
     }
     let absolute = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-    let target = percent_encode(&absolute.to_string_lossy());
+    #[cfg(unix)]
+    let target = {
+        use std::os::unix::ffi::OsStrExt;
+        percent_encode(absolute.as_os_str().as_bytes())
+    };
+    #[cfg(not(unix))]
+    let target = percent_encode(absolute.to_string_lossy().as_bytes());
     format!("\x1b]8;;file://{target}\x1b\\{display}\x1b]8;;\x1b\\")
 }
 
@@ -1101,18 +1207,23 @@ fn display_path(path: &Path, hyperlinks: bool) -> String {
 /// than characters, so the encoding is done over the UTF-8 the name is spelled
 /// in: a `%XX` pair is defined as a byte, and half an encoded character is not
 /// a character a terminal can put back together.
-fn percent_encode(path: &str) -> String {
+fn percent_encode(path: impl AsRef<[u8]>) -> String {
+    let path = path.as_ref();
     let mut encoded = String::with_capacity(path.len());
-    for byte in path.bytes() {
+    for byte in path.iter().copied() {
         if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~' | b'/') {
             encoded.push(char::from(byte));
         } else {
-            encoded.push('%');
-            encoded.push(HEX[usize::from(byte >> 4)]);
-            encoded.push(HEX[usize::from(byte & 0xf)]);
+            push_percent_encoded(&mut encoded, byte);
         }
     }
     encoded
+}
+
+fn push_percent_encoded(output: &mut String, byte: u8) {
+    output.push('%');
+    output.push(HEX[usize::from(byte >> 4)]);
+    output.push(HEX[usize::from(byte & 0xf)]);
 }
 
 /// The digits a percent-encoded byte is spelled with. RFC 3986 asks for the
@@ -1126,20 +1237,63 @@ fn render_json(
     files: &[ProcessedFile],
     skipped: &[SkippedFile],
 ) -> Result<()> {
-    let values: Vec<_> = files.iter().map(json_file).collect();
-    let skipped: Vec<_> = skipped
-        .iter()
-        .map(|item| {
-            json!({"path": item.path.to_string_lossy(), "reason": item.reason, "error": item.error})
-        })
-        .collect();
+    #[derive(Serialize)]
+    struct Document<'a> {
+        version: u8,
+        files: JsonFiles<'a>,
+        skipped: JsonSkipped<'a>,
+    }
     serde_json::to_writer_pretty(
         &mut *output,
-        &json!({"version": 1, "files": values, "skipped": skipped}),
+        &Document {
+            version: 1,
+            files: JsonFiles(files),
+            skipped: JsonSkipped(skipped),
+        },
     )
     .map_err(write_error)?;
     wrote(writeln!(output))?;
     Ok(())
+}
+
+struct JsonFiles<'a>(&'a [ProcessedFile]);
+
+impl Serialize for JsonFiles<'_> {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut sequence = serializer.serialize_seq(Some(self.0.len()))?;
+        for file in self.0 {
+            sequence.serialize_element(&json_file(file))?;
+        }
+        sequence.end()
+    }
+}
+
+struct JsonSkipped<'a>(&'a [SkippedFile]);
+
+impl Serialize for JsonSkipped<'_> {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        #[derive(Serialize)]
+        struct Entry<'a> {
+            path: std::borrow::Cow<'a, str>,
+            reason: &'a str,
+            error: bool,
+        }
+        let mut sequence = serializer.serialize_seq(Some(self.0.len()))?;
+        for item in self.0 {
+            sequence.serialize_element(&Entry {
+                path: item.path.to_string_lossy(),
+                reason: &item.reason,
+                error: item.error,
+            })?;
+        }
+        sequence.end()
+    }
 }
 
 fn render_jsonl(
@@ -1166,10 +1320,10 @@ fn json_file(file: &ProcessedFile) -> JsonFile<'_> {
     JsonFile {
         path: file.path.to_string_lossy().into_owned(),
         language: file.language,
-        changed: file.source != file.result.output,
+        changed: file.result.changed(),
         report: &file.result.report,
         edits: &file.result.edits,
-        source_map: &file.result.source_map,
+        source_map: file.result.source_map(),
     }
 }
 
@@ -1191,23 +1345,119 @@ const SRCROOT: &str = "%SRCROOT%";
 const DIAGNOSTIC_DESCRIPTION: &str =
     "A problem OComment met while scanning the file; the message on the result says what it was.";
 
-/// The spelling a machine format reports a path under.
+/// The repository spelling a machine format reports a path under.
 ///
-/// A SARIF `artifactLocation.uri` and the `file=` of a GitHub annotation are
-/// both matched against the paths the repository uses, so a reported path is
-/// spelled the way the repository spells it: forward slashes on every
-/// platform, and none of the `.` segments a walk root or a typed target leaves
-/// behind — `sub/./doc.rs` names a file no checkout has. What a relative path
-/// is measured *from* is said separately, by [`artifact_location`].
-fn report_uri(path: &Path) -> String {
-    let text = path.to_string_lossy().replace('\\', "/");
-    let trimmed: Vec<&str> = text.split('/').filter(|segment| *segment != ".").collect();
-    if trimmed.is_empty() {
+/// GitHub's `file=` property is a repository path, while SARIF wants a URI.
+/// Both start from this byte-preserving spelling: platform separators become
+/// `/`, and `.` segments left by a typed path are removed. Keeping this layer
+/// separate prevents URI escaping from being mistaken for a repository name.
+fn report_path_bytes(path: &Path) -> Vec<u8> {
+    #[cfg(unix)]
+    let bytes = {
+        use std::os::unix::ffi::OsStrExt;
+        path.as_os_str().as_bytes().to_vec()
+    };
+    #[cfg(not(unix))]
+    let bytes = path.to_string_lossy().replace('\\', "/").into_bytes();
+
+    let segments: Vec<&[u8]> = bytes
+        .split(|byte| *byte == b'/')
+        .filter(|segment| *segment != b".")
+        .collect();
+    if segments.is_empty() {
         /* NOTE: The path was `.` (or `./`) and naming nothing at all would be worse
          * than naming the directory. */
-        return text;
+        return bytes;
     }
-    trimmed.join("/")
+    let mut normalized = Vec::with_capacity(bytes.len());
+    for (index, segment) in segments.into_iter().enumerate() {
+        if index > 0 {
+            normalized.push(b'/');
+        }
+        normalized.extend_from_slice(segment);
+    }
+    normalized
+}
+
+/// Turn a repository path into UTF-8 without replacing a Unix filename byte.
+/// Invalid byte sequences use `%XX`; valid Unicode keeps its semantic value.
+fn report_path(path: &Path) -> String {
+    lossless_text(&report_path_bytes(path))
+}
+
+fn lossless_text(mut bytes: &[u8]) -> String {
+    let mut text = String::with_capacity(bytes.len());
+    while !bytes.is_empty() {
+        match std::str::from_utf8(bytes) {
+            Ok(valid) => {
+                text.push_str(valid);
+                break;
+            }
+            Err(error) => {
+                let valid = error.valid_up_to();
+                text.push_str(
+                    std::str::from_utf8(&bytes[..valid])
+                        .expect("the UTF-8 error identifies a valid prefix"),
+                );
+                let invalid = error.error_len().unwrap_or(bytes.len() - valid);
+                for byte in &bytes[valid..valid + invalid] {
+                    push_percent_encoded(&mut text, *byte);
+                }
+                bytes = &bytes[valid + invalid..];
+            }
+        }
+    }
+    text
+}
+
+/// The URI spelling SARIF requires. Unlike a GitHub annotation property it is
+/// an RFC 3986 reference, so spaces, controls, literal percent signs, and raw
+/// Unix filename bytes are percent-encoded exactly once.
+fn sarif_uri(path: &Path) -> String {
+    if path == Path::new(STDIN_PATH) {
+        return STDIN_PATH.to_owned();
+    }
+    let mut encoded = String::new();
+    for byte in report_path_bytes(path) {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~' | b'/' | b':') {
+            encoded.push(char::from(byte));
+        } else {
+            push_percent_encoded(&mut encoded, byte);
+        }
+    }
+    encoded
+}
+
+/// Encode a GitHub workflow-command `file=` property from path bytes. This is
+/// not URI encoding: GitHub decodes its small `%25`/`%0D`/`%0A` command
+/// alphabet before matching the repository path. Invalid UTF-8 has no command
+/// representation, so it remains visible and non-lossy as `%XX` instead of
+/// silently becoming U+FFFD.
+fn github_path(path: &Path) -> String {
+    let bytes = report_path_bytes(path);
+    let mut escaped = String::with_capacity(bytes.len());
+    let mut remaining = bytes.as_slice();
+    while !remaining.is_empty() {
+        match std::str::from_utf8(remaining) {
+            Ok(valid) => {
+                escaped.push_str(&github_escape(valid));
+                break;
+            }
+            Err(error) => {
+                let valid = error.valid_up_to();
+                escaped.push_str(&github_escape(
+                    std::str::from_utf8(&remaining[..valid])
+                        .expect("the UTF-8 error identifies a valid prefix"),
+                ));
+                let invalid = error.error_len().unwrap_or(remaining.len() - valid);
+                for byte in &remaining[valid..valid + invalid] {
+                    push_percent_encoded(&mut escaped, *byte);
+                }
+                remaining = &remaining[valid + invalid..];
+            }
+        }
+    }
+    escaped
 }
 
 /// The SARIF `artifactLocation` for a reported path.
@@ -1220,9 +1470,10 @@ fn report_uri(path: &Path) -> String {
 /// standard input is reported under is not a file at all — each of those is
 /// reported as it stands, with no base id claiming otherwise.
 fn artifact_location(path: &Path) -> Value {
-    let uri = report_uri(path);
+    let repository_path = report_path(path);
+    let uri = sarif_uri(path);
     if under_source_root(path) {
-        let uri = if reads_as_a_drive_letter(&uri) {
+        let uri = if reads_as_a_drive_letter(&repository_path) {
             format!("./{uri}")
         } else {
             uri
@@ -1246,7 +1497,7 @@ fn artifact_location(path: &Path) -> Value {
 ///
 /// Only a repository-relative path is treated this way. A GitHub annotation is
 /// matched against the paths the checkout uses rather than parsed as a URI, so
-/// [`report_uri`] leaves the spelling alone and only this document adds to it;
+/// [`report_path`] leaves the spelling alone and only this document adds to it;
 /// `tools/validate_schemas.py` is the other half of the rule and turns down
 /// the bare form.
 fn reads_as_a_drive_letter(uri: &str) -> bool {
@@ -1322,12 +1573,19 @@ impl SarifRules {
         index
     }
 
-    fn kind(&mut self, kind: CommentKind) -> usize {
+    fn kind(&self, kind: CommentKind) -> usize {
         let id = format!("removable-{kind}");
         *self
             .indices
             .get(&id)
             .expect("every comment kind is described")
+    }
+
+    fn index(&self, id: &str) -> usize {
+        *self
+            .indices
+            .get(id)
+            .expect("every emitted SARIF result has a prepared rule")
     }
 }
 
@@ -1342,77 +1600,129 @@ fn sentence_case(code: &str) -> String {
     }
 }
 
+fn sarif_level(severity: ocomment_core::Severity) -> &'static str {
+    match severity {
+        ocomment_core::Severity::Error => "error",
+        ocomment_core::Severity::Warning => "warning",
+        ocomment_core::Severity::Info | ocomment_core::Severity::Hint => "note",
+    }
+}
+
+/// A SARIF result array serialized one finding at a time. Keeping the rule
+/// table separate lets the header be finalized first without retaining a
+/// `serde_json::Value` for every comment in the run.
+struct SarifResults<'a> {
+    files: &'a [ProcessedFile],
+    skipped: &'a [SkippedFile],
+    rules: &'a SarifRules,
+}
+
+impl Serialize for SarifResults<'_> {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut results = serializer.serialize_seq(None)?;
+        for file in self.files {
+            if file.result.report.diagnostics.is_empty()
+                && !file
+                    .result
+                    .report
+                    .comments
+                    .iter()
+                    .any(|comment| comment.disposition.is_remove())
+            {
+                continue;
+            }
+            let location = artifact_location(&file.path);
+            let lines = LineIndex::new(&file.source);
+            for comment in file
+                .result
+                .report
+                .comments
+                .iter()
+                .filter(|comment| comment.disposition.is_remove())
+            {
+                let (line, column) = lines.line_column(comment.span.start);
+                let (end_line, end_column) = lines.line_column(comment.span.end);
+                let (fix_span, replacement) = fix_for_span(file, comment.span);
+                let (fix_line, fix_column) = lines.line_column(fix_span.start);
+                let (fix_end_line, fix_end_column) = lines.line_column(fix_span.end);
+                let kind = comment.kind.as_str();
+                results.serialize_element(&json!({
+                    "ruleId": format!("removable-{kind}"),
+                    "ruleIndex": self.rules.kind(comment.kind),
+                    "level": "note",
+                    "message": {"text": removable_label(comment.kind)},
+                    "locations": [{"physicalLocation": {
+                        "artifactLocation": location.clone(),
+                        "region": {"startLine": line, "startColumn": column,
+                            "endLine": end_line, "endColumn": end_column}
+                    }}],
+                    "fixes": [{
+                        "description": {"text": "Remove comment with OComment"},
+                        "artifactChanges": [{
+                            "artifactLocation": location.clone(),
+                            "replacements": [{"deletedRegion": {
+                                "startLine": fix_line, "startColumn": fix_column,
+                                "endLine": fix_end_line, "endColumn": fix_end_column
+                            }, "insertedContent": {"text": replacement}}]
+                        }]
+                    }]
+                }))?;
+            }
+            for diagnostic in &file.result.report.diagnostics {
+                let (line, column) = lines.line_column(diagnostic.span.start);
+                let (end_line, end_column) = lines.line_column(diagnostic.span.end);
+                let level = sarif_level(diagnostic.severity);
+                results.serialize_element(&json!({
+                    "ruleId": diagnostic.code,
+                    "ruleIndex": self.rules.index(&diagnostic.code),
+                    "level": level,
+                    "message": {"text": diagnostic.message},
+                    "locations": [{"physicalLocation": {
+                        "artifactLocation": location.clone(),
+                        "region": {"startLine": line, "startColumn": column,
+                            "endLine": end_line, "endColumn": end_column}
+                    }}]
+                }))?;
+            }
+        }
+        for item in self.skipped {
+            let (id, level) = if item.error {
+                ("io-error", "error")
+            } else {
+                ("skipped-file", "note")
+            };
+            results.serialize_element(&json!({
+                "ruleId": id,
+                "ruleIndex": self.rules.index(id),
+                "level": level,
+                "message": {"text": item.reason},
+                "locations": [{"physicalLocation": {
+                    "artifactLocation": artifact_location(&item.path)
+                }}]
+            }))?;
+        }
+        results.end()
+    }
+}
+
 fn render_sarif(
     output: &mut impl Write,
     files: &[ProcessedFile],
     skipped: &[SkippedFile],
 ) -> Result<()> {
     let mut rules = SarifRules::new();
-    let mut results = Vec::new();
     for file in files {
-        let location = artifact_location(&file.path);
-        for comment in file
-            .result
-            .report
-            .comments
-            .iter()
-            .filter(|comment| comment.disposition.is_remove())
-        {
-            let (line, column) = line_column(&file.source, comment.span.start);
-            let (end_line, end_column) = line_column(&file.source, comment.span.end);
-            let (fix_span, replacement) = fix_for_span(file, comment.span);
-            let (fix_line, fix_column) = line_column(&file.source, fix_span.start);
-            let (fix_end_line, fix_end_column) = line_column(&file.source, fix_span.end);
-            let kind = comment.kind.as_str();
-            let index = rules.kind(comment.kind);
-            results.push(json!({
-                "ruleId": format!("removable-{kind}"),
-                "ruleIndex": index,
-                "level": "note",
-                "message": {"text": removable_label(comment.kind)},
-                "locations": [{"physicalLocation": {
-                    "artifactLocation": location.clone(),
-                    "region": {"startLine": line, "startColumn": column,
-                        "endLine": end_line, "endColumn": end_column}
-                }}],
-                "fixes": [{
-                    "description": {"text": "Remove comment with OComment"},
-                    "artifactChanges": [{
-                        "artifactLocation": location.clone(),
-                        "replacements": [{"deletedRegion": {
-                            "startLine": fix_line, "startColumn": fix_column,
-                            "endLine": fix_end_line, "endColumn": fix_end_column
-                        }, "insertedContent": {"text": replacement}}]
-                    }]
-                }]
-            }));
-        }
         for diagnostic in &file.result.report.diagnostics {
-            let (line, column) = line_column(&file.source, diagnostic.span.start);
-            let (end_line, end_column) = line_column(&file.source, diagnostic.span.end);
-            let level = match diagnostic.severity {
-                ocomment_core::Severity::Error => "error",
-                ocomment_core::Severity::Warning => "warning",
-                ocomment_core::Severity::Info | ocomment_core::Severity::Hint => "note",
-            };
-            let index = rules.describe(
+            rules.describe(
                 &diagnostic.code,
-                level,
+                sarif_level(diagnostic.severity),
                 &sentence_case(&diagnostic.code),
                 DIAGNOSTIC_DESCRIPTION,
                 TOOL_INFORMATION_URI,
             );
-            results.push(json!({
-                "ruleId": diagnostic.code,
-                "ruleIndex": index,
-                "level": level,
-                "message": {"text": diagnostic.message},
-                "locations": [{"physicalLocation": {
-                    "artifactLocation": location.clone(),
-                    "region": {"startLine": line, "startColumn": column,
-                        "endLine": end_line, "endColumn": end_column}
-                }}]
-            }));
         }
     }
     for item in skipped {
@@ -1431,28 +1741,58 @@ fn render_sarif(
                 "A file OComment did not scan; the message on the result says why it was left alone.",
             )
         };
-        let index = rules.describe(id, level, short, full, TOOL_INFORMATION_URI);
-        results.push(json!({
-            "ruleId": id,
-            "ruleIndex": index,
-            "level": level,
-            "message": {"text": item.reason},
-            "locations": [{"physicalLocation": {
-                "artifactLocation": artifact_location(&item.path)
-            }}]
-        }));
+        rules.describe(id, level, short, full, TOOL_INFORMATION_URI);
     }
-    let sarif = json!({
-        "version": "2.1.0",
-        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
-        "runs": [{"tool": {"driver": {
-            "name": "ocomment",
-            "version": env!("CARGO_PKG_VERSION"),
-            "informationUri": TOOL_INFORMATION_URI,
-            "rules": rules.entries
-        }}, "results": results}]
-    });
-    serde_json::to_writer_pretty(&mut *output, &sarif).map_err(write_error)?;
+
+    #[derive(Serialize)]
+    struct Document<'a> {
+        version: &'static str,
+        #[serde(rename = "$schema")]
+        schema: &'static str,
+        runs: &'a [Run<'a>],
+    }
+    #[derive(Serialize)]
+    struct Run<'a> {
+        tool: Tool<'a>,
+        results: SarifResults<'a>,
+    }
+    #[derive(Serialize)]
+    struct Tool<'a> {
+        driver: Driver<'a>,
+    }
+    #[derive(Serialize)]
+    struct Driver<'a> {
+        name: &'static str,
+        version: &'static str,
+        #[serde(rename = "informationUri")]
+        information_uri: &'static str,
+        rules: &'a [Value],
+    }
+
+    let runs = [Run {
+        tool: Tool {
+            driver: Driver {
+                name: "ocomment",
+                version: env!("CARGO_PKG_VERSION"),
+                information_uri: TOOL_INFORMATION_URI,
+                rules: &rules.entries,
+            },
+        },
+        results: SarifResults {
+            files,
+            skipped,
+            rules: &rules,
+        },
+    }];
+    serde_json::to_writer_pretty(
+        &mut *output,
+        &Document {
+            version: "2.1.0",
+            schema: "https://json.schemastore.org/sarif-2.1.0.json",
+            runs: &runs,
+        },
+    )
+    .map_err(write_error)?;
     wrote(writeln!(output))?;
     Ok(())
 }
@@ -1497,6 +1837,17 @@ fn render_github(
     verbosity: Verbosity,
 ) -> Result<()> {
     for file in files {
+        if file.result.report.diagnostics.is_empty()
+            && !file
+                .result
+                .report
+                .comments
+                .iter()
+                .any(|comment| comment.disposition.is_remove())
+        {
+            continue;
+        }
+        let lines = LineIndex::new(&file.source);
         for comment in file
             .result
             .report
@@ -1504,20 +1855,20 @@ fn render_github(
             .iter()
             .filter(|comment| comment.disposition.is_remove())
         {
-            let (line, column) = line_column(&file.source, comment.span.start);
+            let (line, column) = lines.line_column(comment.span.start);
             wrote(writeln!(
                 output,
                 "::notice file={},line={line},col={column}::{}",
-                github_escape(&report_uri(&file.path)),
+                github_path(&file.path),
                 removable_label(comment.kind)
             ))?;
         }
         for diagnostic in &file.result.report.diagnostics {
-            let (line, column) = line_column(&file.source, diagnostic.span.start);
+            let (line, column) = lines.line_column(diagnostic.span.start);
             wrote(writeln!(
                 output,
                 "::error file={},line={line},col={column},title={}::{}",
-                github_escape(&report_uri(&file.path)),
+                github_path(&file.path),
                 github_escape(&diagnostic.code),
                 github_escape(&diagnostic.message)
             ))?;
@@ -1545,7 +1896,7 @@ fn render_github(
             output,
             "::{} file={},title={}::{}",
             if item.error { "error" } else { "notice" },
-            github_escape(&report_uri(&item.path)),
+            github_path(&item.path),
             if item.error {
                 "OComment I/O error"
             } else {
@@ -1557,31 +1908,35 @@ fn render_github(
     Ok(())
 }
 
-pub fn unified_diff(path: &Path, original: &[u8], transformed: &[u8]) -> String {
-    let old = String::from_utf8_lossy(original);
-    let new = String::from_utf8_lossy(transformed);
-    let display = path.to_string_lossy().replace('\\', "/");
-    let mut output = format!("--- a/{display}\n+++ b/{display}\n");
-    let diff = TextDiff::from_lines(&old, &new);
-    for group in diff.grouped_ops(3) {
+pub fn unified_diff(path: &Path, original: &[u8], transformed: &[u8]) -> Vec<u8> {
+    let old = byte_lines(original);
+    let new = byte_lines(transformed);
+    let mut output = Vec::new();
+    output.extend_from_slice(b"--- ");
+    output.extend_from_slice(&git_patch_path(b"a/", path));
+    output.extend_from_slice(b"\n+++ ");
+    output.extend_from_slice(&git_patch_path(b"b/", path));
+    output.push(b'\n');
+    let ops = capture_diff_slices(Algorithm::Myers, &old, &new);
+    for group in group_diff_ops(ops, 3) {
         let old_start = group.first().map_or(0, |op| op.old_range().start) + 1;
         let new_start = group.first().map_or(0, |op| op.new_range().start) + 1;
         let old_len: usize = group.iter().map(|op| op.old_range().len()).sum();
         let new_len: usize = group.iter().map(|op| op.new_range().len()).sum();
-        output.push_str(&format!(
-            "@@ -{old_start},{old_len} +{new_start},{new_len} @@\n"
-        ));
+        output.extend_from_slice(
+            format!("@@ -{old_start},{old_len} +{new_start},{new_len} @@\n").as_bytes(),
+        );
         for op in group {
-            for change in diff.iter_changes(&op) {
+            for change in op.iter_changes(&old, &new) {
                 let prefix = match change.tag() {
-                    ChangeTag::Delete => '-',
-                    ChangeTag::Insert => '+',
-                    ChangeTag::Equal => ' ',
+                    ChangeTag::Delete => b'-',
+                    ChangeTag::Insert => b'+',
+                    ChangeTag::Equal => b' ',
                 };
                 output.push(prefix);
-                output.push_str(change.value());
-                if !change.value().ends_with('\n') {
-                    output.push_str("\n\\ No newline at end of file\n");
+                output.extend_from_slice(change.value());
+                if !change.value().ends_with(b"\n") {
+                    output.extend_from_slice(b"\n\\ No newline at end of file\n");
                 }
             }
         }
@@ -1589,41 +1944,137 @@ pub fn unified_diff(path: &Path, original: &[u8], transformed: &[u8]) -> String 
     output
 }
 
-pub(crate) fn line_column(source: &[u8], offset: usize) -> (usize, usize) {
-    let offset = offset.min(source.len());
-    let mut line = 1usize;
-    let mut start = 0usize;
-    let mut index = 0usize;
-    while index < offset {
-        if source[index] == b'\r' {
-            index += if source.get(index + 1) == Some(&b'\n') && index + 1 < offset {
-                2
-            } else {
-                1
-            };
-            line += 1;
-            start = index;
-        } else if source[index] == b'\n' {
-            index += 1;
-            line += 1;
-            start = index;
-        } else {
-            index += 1;
+/// Split on the byte Git treats as a line ending without decoding or replacing
+/// any other byte. The newline remains in each item so the resulting patch can
+/// reconstruct the source exactly.
+fn byte_lines(bytes: &[u8]) -> Vec<&[u8]> {
+    let mut lines = Vec::new();
+    let mut start = 0;
+    for (index, byte) in bytes.iter().enumerate() {
+        if *byte == b'\n' {
+            lines.push(&bytes[start..=index]);
+            start = index + 1;
         }
     }
-    (line, offset - start + 1)
+    if start < bytes.len() {
+        lines.push(&bytes[start..]);
+    }
+    lines
+}
+
+/// Spell a patch header path the way Git's parser accepts it. Ordinary names
+/// stay readable; bytes that could terminate or corrupt the header use Git's
+/// C-style quoting, including three-digit octal escapes for non-UTF-8 bytes.
+fn git_patch_path(prefix: &[u8], path: &Path) -> Vec<u8> {
+    #[cfg(unix)]
+    let bytes = {
+        use std::os::unix::ffi::OsStrExt;
+        path.as_os_str().as_bytes().to_vec()
+    };
+    #[cfg(not(unix))]
+    let bytes = path.to_string_lossy().replace('\\', "/").into_bytes();
+
+    let mut full = Vec::with_capacity(prefix.len() + bytes.len());
+    full.extend_from_slice(prefix);
+    full.extend_from_slice(&bytes);
+    let quoted = full
+        .iter()
+        .any(|byte| *byte < b' ' || *byte >= 0x7f || matches!(*byte, b'"' | b'\\'));
+    if !quoted {
+        return full;
+    }
+    let mut output = Vec::with_capacity(full.len() + 2);
+    output.push(b'"');
+    for byte in full {
+        match byte {
+            b'\n' => output.extend_from_slice(br"\n"),
+            b'\r' => output.extend_from_slice(br"\r"),
+            b'\t' => output.extend_from_slice(br"\t"),
+            0x08 => output.extend_from_slice(br"\b"),
+            0x0c => output.extend_from_slice(br"\f"),
+            b'"' => output.extend_from_slice(br#"\""#),
+            b'\\' => output.extend_from_slice(br"\\"),
+            b' '..=b'~' => output.push(byte),
+            _ => output.extend_from_slice(format!("\\{byte:03o}").as_bytes()),
+        }
+    }
+    output.push(b'"');
+    output
+}
+
+/// A reusable byte-offset index for the CLI's one-based line and column
+/// coordinates.
+///
+/// `after_first` preserves the established answer for an offset on the LF of
+/// a CRLF pair: that offset is already on the following line, while an offset
+/// after the pair begins its column after both bytes.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct LineIndex {
+    /// `(after_first << 1) | is_crlf`. Packing the CRLF bit keeps the index to
+    /// one machine word per logical line break even though an offset on the
+    /// LF and an offset after it have different column starts.
+    breaks: Vec<usize>,
+    source_len: usize,
+}
+
+impl LineIndex {
+    pub(crate) fn new(source: &[u8]) -> Self {
+        let mut breaks = Vec::new();
+        let mut index = 0usize;
+        while index < source.len() {
+            if source[index] == b'\r' {
+                let after_first = index + 1;
+                let crlf = source.get(index + 1) == Some(&b'\n');
+                breaks.push((after_first << 1) | usize::from(crlf));
+                index = after_first + usize::from(crlf);
+            } else if source[index] == b'\n' {
+                index += 1;
+                breaks.push(index << 1);
+            } else {
+                index += 1;
+            }
+        }
+        Self {
+            breaks,
+            source_len: source.len(),
+        }
+    }
+
+    pub(crate) fn line_column(&self, offset: usize) -> (usize, usize) {
+        let offset = offset.min(self.source_len);
+        let line_breaks = self
+            .breaks
+            .partition_point(|line_break| (*line_break >> 1) <= offset);
+        let start = line_breaks.checked_sub(1).map_or(0, |index| {
+            let encoded = self.breaks[index];
+            ((encoded >> 1) + (encoded & 1)).min(offset)
+        });
+        (line_breaks + 1, offset - start + 1)
+    }
 }
 
 fn github_escape(text: &str) -> String {
-    text.replace('%', "%25")
-        .replace('\r', "%0D")
-        .replace('\n', "%0A")
-        .replace(':', "%3A")
-        .replace(',', "%2C")
+    let mut escaped = String::with_capacity(text.len());
+    for character in text.chars() {
+        match character {
+            '%' => escaped.push_str("%25"),
+            '\r' => escaped.push_str("%0D"),
+            '\n' => escaped.push_str("%0A"),
+            ':' => escaped.push_str("%3A"),
+            ',' => escaped.push_str("%2C"),
+            character if is_control(character) => {
+                for byte in character.to_string().bytes() {
+                    push_percent_encoded(&mut escaped, byte);
+                }
+            }
+            character => escaped.push(character),
+        }
+    }
+    escaped
 }
 
 pub fn changed(files: &[ProcessedFile]) -> bool {
-    files.iter().any(|file| file.source != file.result.output)
+    files.iter().any(|file| file.result.changed())
 }
 pub fn invalid(files: &[ProcessedFile]) -> bool {
     files.iter().any(|file| !file.result.report.valid)
@@ -1637,6 +2088,54 @@ fn _span(_: ByteSpan) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn linear_line_column(source: &[u8], offset: usize) -> (usize, usize) {
+        let offset = offset.min(source.len());
+        let mut line = 1usize;
+        let mut start = 0usize;
+        let mut index = 0usize;
+        while index < offset {
+            if source[index] == b'\r' {
+                index += if source.get(index + 1) == Some(&b'\n') && index + 1 < offset {
+                    2
+                } else {
+                    1
+                };
+                line += 1;
+                start = index;
+            } else if source[index] == b'\n' {
+                index += 1;
+                line += 1;
+                start = index;
+            } else {
+                index += 1;
+            }
+        }
+        (line, offset - start + 1)
+    }
+
+    #[test]
+    fn line_index_matches_the_previous_walk_at_every_offset() {
+        let alphabet = *b"x\r\n";
+        for length in 0..=7usize {
+            let variants = 3usize.pow(length as u32);
+            for mut variant in 0..variants {
+                let mut source = Vec::with_capacity(length);
+                for _ in 0..length {
+                    source.push(alphabet[variant % alphabet.len()]);
+                    variant /= alphabet.len();
+                }
+                let lines = LineIndex::new(&source);
+                for offset in 0..=source.len() + 2 {
+                    assert_eq!(
+                        lines.line_column(offset),
+                        linear_line_column(&source, offset),
+                        "source={source:?}, offset={offset}"
+                    );
+                }
+            }
+        }
+    }
 
     /// The frame around a hyperlink target is written in escape bytes, so a
     /// name carrying one of its own would close the frame early and be read as
@@ -1674,20 +2173,46 @@ mod tests {
     /// `artifactLocation.uri` against the checkout. A Windows separator and a
     /// `.` segment both name a file no checkout has.
     #[test]
-    fn report_uri_spells_a_path_the_way_a_repository_does() {
-        assert_eq!(report_uri(Path::new("./a.rs")), "a.rs");
-        assert_eq!(report_uri(Path::new("sub/./doc.rs")), "sub/doc.rs");
-        assert_eq!(report_uri(Path::new("./sub/./doc.rs")), "sub/doc.rs");
-        assert_eq!(report_uri(Path::new(r"sub\doc.rs")), "sub/doc.rs");
-        assert_eq!(report_uri(Path::new(r".\sub\.\doc.rs")), "sub/doc.rs");
+    fn report_path_spells_a_path_the_way_a_repository_does() {
+        assert_eq!(report_path(Path::new("./a.rs")), "a.rs");
+        assert_eq!(report_path(Path::new("sub/./doc.rs")), "sub/doc.rs");
+        assert_eq!(report_path(Path::new("./sub/./doc.rs")), "sub/doc.rs");
+        #[cfg(windows)]
+        {
+            assert_eq!(report_path(Path::new(r"sub\doc.rs")), "sub/doc.rs");
+            assert_eq!(report_path(Path::new(r".\sub\.\doc.rs")), "sub/doc.rs");
+        }
+        #[cfg(unix)]
+        {
+            /* NOTE: On Unix a backslash is a filename byte, not a separator. */
+            assert_eq!(report_path(Path::new(r"sub\doc.rs")), r"sub\doc.rs");
+            assert_eq!(sarif_uri(Path::new(r"sub\doc.rs")), "sub%5Cdoc.rs");
+        }
         /* NOTE: A path that leaves the tree, an absolute one, and standard input are
          * all left as they are; only the separators are normalised. */
-        assert_eq!(report_uri(Path::new("../sibling/a.rs")), "../sibling/a.rs");
-        assert_eq!(report_uri(Path::new("/tmp/a.rs")), "/tmp/a.rs");
-        assert_eq!(report_uri(Path::new(r"C:\src\a.rs")), "C:/src/a.rs");
-        assert_eq!(report_uri(Path::new(STDIN_PATH)), STDIN_PATH);
+        assert_eq!(report_path(Path::new("../sibling/a.rs")), "../sibling/a.rs");
+        assert_eq!(report_path(Path::new("/tmp/a.rs")), "/tmp/a.rs");
+        assert_eq!(report_path(Path::new(STDIN_PATH)), STDIN_PATH);
         // NOTE: Naming the working directory as nothing at all would be worse.
-        assert_eq!(report_uri(Path::new(".")), ".");
+        assert_eq!(report_path(Path::new(".")), ".");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn machine_path_encoders_preserve_raw_unix_bytes_without_sharing_syntax() {
+        use std::{ffi::OsString, os::unix::ffi::OsStringExt};
+
+        let path = PathBuf::from(OsString::from_vec(b"odd \xff,\n\x1b.rs".to_vec()));
+        assert_eq!(sarif_uri(&path), "odd%20%FF%2C%0A%1B.rs");
+        assert_eq!(github_path(&path), "odd %FF%2C%0A%1B.rs");
+        assert!(!sarif_uri(&path).contains('\u{fffd}'));
+        assert!(!github_path(&path).contains('\u{fffd}'));
+
+        let raw_invalid = PathBuf::from(OsString::from_vec(b"odd \xff.rs".to_vec()));
+        let literal_percent = Path::new("odd %FF.rs");
+        assert_eq!(github_path(&raw_invalid), "odd %FF.rs");
+        assert_eq!(github_path(literal_percent), "odd %25FF.rs");
+        assert_ne!(github_path(literal_percent), github_path(&raw_invalid));
     }
 
     /// `%SRCROOT%` says the path is measured from the root of the checkout, so
@@ -1724,7 +2249,7 @@ mod tests {
         for plain in ["a.rs", "sub/doc.rs", "cc:/a.rs", "sub/c:/a.rs"] {
             assert_eq!(
                 artifact_location(Path::new(plain))["uri"],
-                json!(report_uri(Path::new(plain))),
+                json!(sarif_uri(Path::new(plain))),
                 "`{plain}` was disambiguated and had no need of it"
             );
         }

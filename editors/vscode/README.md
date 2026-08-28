@@ -1,10 +1,10 @@
 # OComment for VS Code
 
-Fast, byte-preserving comment checking and removal for Rust, OCaml, C, C++,
-Go, Java, JavaScript, TypeScript, Python, Shell, HTML, CSS, JSONC, SQL,
-Kotlin, TOML, Lua, YAML, PHP, Ruby, Zig, R, Dart, and Swift — including the
-JSX/TSX,
-Objective-C/C++, and CUDA dialects.
+Fast, byte-preserving comment checking and removal for Rust, OCaml, C, C++, Go,
+Java, JavaScript, TypeScript, Python, Shell, HTML, CSS, JSONC, SQL, Kotlin,
+TOML, Lua, YAML, PHP, Ruby, Zig, R, Dart, Swift, C#, Scala, Vue, Svelte,
+Markdown, and Perl — including the JSX/TSX, Objective-C/C++, CUDA, SCSS, and
+Sass dialects.
 
 Removable comments appear as hints. Removing them is a code action, never a
 formatting pass, so nothing happens to a file until you ask for it.
@@ -16,8 +16,13 @@ bundle one. Install the binary and make sure it is on your `PATH`:
 
 ```sh
 cargo install ocomment --locked
-# NOTE: or: docker pull ghcr.io/p4suta/ocomment
 ```
+
+The container image is intended for one-shot CLI checks. A VS Code language
+client must launch a long-running host executable and communicate with it over
+standard input/output, so pulling the Docker image alone does not install the
+binary this extension needs. Use a container only through a wrapper that keeps
+those streams and workspace paths intact; the ordinary setup is a host binary.
 
 Release archives for Linux, macOS, and Windows are attached to every
 [GitHub release](https://github.com/P4suta/OComment/releases). If the binary

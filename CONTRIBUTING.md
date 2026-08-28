@@ -56,6 +56,9 @@ opam exec -- dune runtest --root ocaml
 opam exec -- ./tools/differential.sh
 python3 tools/check_embedded_specs.py
 python3 tools/check_hooks.py
+python3 tools/check_editor_ids.py
+python3 tools/check_ci_contracts.py
+python3 -m unittest tools/test_release_metadata.py tools/test_publish_crates.py
 python3 tools/check_directives.py
 python3 tools/validate_schemas.py
 python3 tools/yaml_roundtrip.py
@@ -217,9 +220,10 @@ JSONL, SARIF, and GitHub output. All user-facing text is English.
 - Add tests for observable behavior and update user-facing documentation.
 - Regenerate checked-in schemas, WIT, man pages, or completions when their source
   changes; `tools/check_embedded_specs.py` checks shared embedded assets.
-- Adding a language to `spec/languages.toml` also changes the published
-  pre-commit hooks; `tools/check_hooks.py --print-pattern` regenerates the
-  `files:` regex that `.pre-commit-hooks.yaml` must carry. It changes what this
+- Adding a language to `spec/languages.toml` does not require a second
+  pre-commit extension list: `.pre-commit-hooks.yaml` sends every text file to
+  the CLI detector, and `tools/check_hooks.py` rejects a filter that would hide
+  reserved names or extensionless shebang scripts. It changes what this
   repository checks about itself as well: a file the new scanner now reads is a
   file whose comments have to carry a tag, so run a bare `ocomment` before
   opening the change. Two more things count the languages rather than reading

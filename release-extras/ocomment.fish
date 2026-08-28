@@ -77,7 +77,8 @@ mysql\t'MySQL, including its executable versioned comments'
 sqlite\t'SQLite'
 t-sql\t'Microsoft Transact-SQL'
 oracle\t'Oracle SQL and PL/SQL'
-scss\t'SCSS and the indented Sass syntax'"
+scss\t'SCSS'
+sass\t'The indentation-based Sass syntax'"
 complete -c ocomment -n "__fish_ocomment_needs_command" -l keep-kind -d 'Comma-separated comment kinds to protect on top of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -189,7 +190,8 @@ mysql\t'MySQL, including its executable versioned comments'
 sqlite\t'SQLite'
 t-sql\t'Microsoft Transact-SQL'
 oracle\t'Oracle SQL and PL/SQL'
-scss\t'SCSS and the indented Sass syntax'"
+scss\t'SCSS'
+sass\t'The indentation-based Sass syntax'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l keep-kind -d 'Comma-separated comment kinds to protect on top of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -288,7 +290,8 @@ mysql\t'MySQL, including its executable versioned comments'
 sqlite\t'SQLite'
 t-sql\t'Microsoft Transact-SQL'
 oracle\t'Oracle SQL and PL/SQL'
-scss\t'SCSS and the indented Sass syntax'"
+scss\t'SCSS'
+sass\t'The indentation-based Sass syntax'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l keep-kind -d 'Comma-separated comment kinds to protect on top of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -389,7 +392,8 @@ mysql\t'MySQL, including its executable versioned comments'
 sqlite\t'SQLite'
 t-sql\t'Microsoft Transact-SQL'
 oracle\t'Oracle SQL and PL/SQL'
-scss\t'SCSS and the indented Sass syntax'"
+scss\t'SCSS'
+sass\t'The indentation-based Sass syntax'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l keep-kind -d 'Comma-separated comment kinds to protect on top of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -488,7 +492,8 @@ mysql\t'MySQL, including its executable versioned comments'
 sqlite\t'SQLite'
 t-sql\t'Microsoft Transact-SQL'
 oracle\t'Oracle SQL and PL/SQL'
-scss\t'SCSS and the indented Sass syntax'"
+scss\t'SCSS'
+sass\t'The indentation-based Sass syntax'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l keep-kind -d 'Comma-separated comment kinds to protect on top of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -587,7 +592,8 @@ mysql\t'MySQL, including its executable versioned comments'
 sqlite\t'SQLite'
 t-sql\t'Microsoft Transact-SQL'
 oracle\t'Oracle SQL and PL/SQL'
-scss\t'SCSS and the indented Sass syntax'"
+scss\t'SCSS'
+sass\t'The indentation-based Sass syntax'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l keep-kind -d 'Comma-separated comment kinds to protect on top of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -684,7 +690,8 @@ mysql\t'MySQL, including its executable versioned comments'
 sqlite\t'SQLite'
 t-sql\t'Microsoft Transact-SQL'
 oracle\t'Oracle SQL and PL/SQL'
-scss\t'SCSS and the indented Sass syntax'"
+scss\t'SCSS'
+sass\t'The indentation-based Sass syntax'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l keep-kind -d 'Comma-separated comment kinds to protect on top of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -781,7 +788,8 @@ mysql\t'MySQL, including its executable versioned comments'
 sqlite\t'SQLite'
 t-sql\t'Microsoft Transact-SQL'
 oracle\t'Oracle SQL and PL/SQL'
-scss\t'SCSS and the indented Sass syntax'"
+scss\t'SCSS'
+sass\t'The indentation-based Sass syntax'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l keep-kind -d 'Comma-separated comment kinds to protect on top of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -881,7 +889,8 @@ mysql\t'MySQL, including its executable versioned comments'
 sqlite\t'SQLite'
 t-sql\t'Microsoft Transact-SQL'
 oracle\t'Oracle SQL and PL/SQL'
-scss\t'SCSS and the indented Sass syntax'"
+scss\t'SCSS'
+sass\t'The indentation-based Sass syntax'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l keep-kind -d 'Comma-separated comment kinds to protect on top of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -978,7 +987,8 @@ mysql\t'MySQL, including its executable versioned comments'
 sqlite\t'SQLite'
 t-sql\t'Microsoft Transact-SQL'
 oracle\t'Oracle SQL and PL/SQL'
-scss\t'SCSS and the indented Sass syntax'"
+scss\t'SCSS'
+sass\t'The indentation-based Sass syntax'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l keep-kind -d 'Comma-separated comment kinds to protect on top of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -1075,7 +1085,8 @@ mysql\t'MySQL, including its executable versioned comments'
 sqlite\t'SQLite'
 t-sql\t'Microsoft Transact-SQL'
 oracle\t'Oracle SQL and PL/SQL'
-scss\t'SCSS and the indented Sass syntax'"
+scss\t'SCSS'
+sass\t'The indentation-based Sass syntax'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l keep-kind -d 'Comma-separated comment kinds to protect on top of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -1182,7 +1193,8 @@ mysql\t'MySQL, including its executable versioned comments'
 sqlite\t'SQLite'
 t-sql\t'Microsoft Transact-SQL'
 oracle\t'Oracle SQL and PL/SQL'
-scss\t'SCSS and the indented Sass syntax'"
+scss\t'SCSS'
+sass\t'The indentation-based Sass syntax'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l keep-kind -d 'Comma-separated comment kinds to protect on top of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -1279,7 +1291,8 @@ mysql\t'MySQL, including its executable versioned comments'
 sqlite\t'SQLite'
 t-sql\t'Microsoft Transact-SQL'
 oracle\t'Oracle SQL and PL/SQL'
-scss\t'SCSS and the indented Sass syntax'"
+scss\t'SCSS'
+sass\t'The indentation-based Sass syntax'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l keep-kind -d 'Comma-separated comment kinds to protect on top of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -1376,7 +1389,8 @@ mysql\t'MySQL, including its executable versioned comments'
 sqlite\t'SQLite'
 t-sql\t'Microsoft Transact-SQL'
 oracle\t'Oracle SQL and PL/SQL'
-scss\t'SCSS and the indented Sass syntax'"
+scss\t'SCSS'
+sass\t'The indentation-based Sass syntax'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l keep-kind -d 'Comma-separated comment kinds to protect on top of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -1473,7 +1487,8 @@ mysql\t'MySQL, including its executable versioned comments'
 sqlite\t'SQLite'
 t-sql\t'Microsoft Transact-SQL'
 oracle\t'Oracle SQL and PL/SQL'
-scss\t'SCSS and the indented Sass syntax'"
+scss\t'SCSS'
+sass\t'The indentation-based Sass syntax'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l keep-kind -d 'Comma-separated comment kinds to protect on top of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -1570,7 +1585,8 @@ mysql\t'MySQL, including its executable versioned comments'
 sqlite\t'SQLite'
 t-sql\t'Microsoft Transact-SQL'
 oracle\t'Oracle SQL and PL/SQL'
-scss\t'SCSS and the indented Sass syntax'"
+scss\t'SCSS'
+sass\t'The indentation-based Sass syntax'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l keep-kind -d 'Comma-separated comment kinds to protect on top of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -1667,7 +1683,8 @@ mysql\t'MySQL, including its executable versioned comments'
 sqlite\t'SQLite'
 t-sql\t'Microsoft Transact-SQL'
 oracle\t'Oracle SQL and PL/SQL'
-scss\t'SCSS and the indented Sass syntax'"
+scss\t'SCSS'
+sass\t'The indentation-based Sass syntax'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l keep-kind -d 'Comma-separated comment kinds to protect on top of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -1771,7 +1788,8 @@ mysql\t'MySQL, including its executable versioned comments'
 sqlite\t'SQLite'
 t-sql\t'Microsoft Transact-SQL'
 oracle\t'Oracle SQL and PL/SQL'
-scss\t'SCSS and the indented Sass syntax'"
+scss\t'SCSS'
+sass\t'The indentation-based Sass syntax'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l keep-kind -d 'Comma-separated comment kinds to protect on top of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -1868,7 +1886,8 @@ mysql\t'MySQL, including its executable versioned comments'
 sqlite\t'SQLite'
 t-sql\t'Microsoft Transact-SQL'
 oracle\t'Oracle SQL and PL/SQL'
-scss\t'SCSS and the indented Sass syntax'"
+scss\t'SCSS'
+sass\t'The indentation-based Sass syntax'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l keep-kind -d 'Comma-separated comment kinds to protect on top of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -1965,7 +1984,8 @@ mysql\t'MySQL, including its executable versioned comments'
 sqlite\t'SQLite'
 t-sql\t'Microsoft Transact-SQL'
 oracle\t'Oracle SQL and PL/SQL'
-scss\t'SCSS and the indented Sass syntax'"
+scss\t'SCSS'
+sass\t'The indentation-based Sass syntax'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l keep-kind -d 'Comma-separated comment kinds to protect on top of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'

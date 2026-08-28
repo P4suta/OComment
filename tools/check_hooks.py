@@ -1,23 +1,19 @@
 #!/usr/bin/env python3
-"""Fail when .pre-commit-hooks.yaml drifts from the canonical language table.
+"""Validate the published pre-commit hooks without a YAML dependency.
 
-The `files:` pattern of every published pre-commit hook must select exactly the
-extensions in `spec/languages.toml`, so adding a language to the shared spec
-cannot silently leave the hooks scanning the old file set. Only the standard
-library is used, because this runs next to `tools/check_embedded_specs.py` in a
-job that installs nothing.
+The hooks pass every pre-commit `text` file to OComment and leave language
+detection to the CLI. A manifest-level extension regex would silently exclude
+reserved file names and extensionless shebang scripts, so this checker rejects
+one rather than generating one from the language table.
 """
 
 from __future__ import annotations
 
 import argparse
 import pathlib
-import re
-import tomllib
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-LANGUAGES = ROOT / "spec/languages.toml"
 HOOKS = ROOT / ".pre-commit-hooks.yaml"
 
 EXPECTED_ENTRIES = {
@@ -57,23 +53,6 @@ KNOWN_FIELDS = frozenset(
 REQUIRED_FIELDS = ("id", "name", "entry", "language")
 
 
-def expected_files_pattern() -> str:
-    """Build the `files:` regex that matches every extension in the spec."""
-    with LANGUAGES.open("rb") as stream:
-        table = tomllib.load(stream)
-    extensions: set[str] = set()
-    for language in table["languages"]:
-        for extension in language["extensions"]:
-            if not re.fullmatch(r"[a-z0-9]+", extension):
-                raise SystemExit(
-                    f"extension {extension!r} needs regex quoting; update {__file__}"
-                )
-            extensions.add(extension)
-    if not extensions:
-        raise SystemExit(f"{LANGUAGES} lists no extensions")
-    return r"(?i)\.(" + "|".join(sorted(extensions)) + r")$"
-
-
 def unquote(value: str) -> str:
     """Undo the single- or double-quoted YAML scalar forms this file uses."""
     if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
@@ -107,17 +86,7 @@ def parse_hooks(text: str) -> list[dict[str, str]]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--print-pattern",
-        action="store_true",
-        help="write the expected `files:` regex to stdout and exit",
-    )
-    args = parser.parse_args()
-
-    pattern = expected_files_pattern()
-    if args.print_pattern:
-        print(pattern)
-        return 0
+    parser.parse_args()
 
     if not HOOKS.is_file():
         print(f"{HOOKS.relative_to(ROOT)} is missing")
@@ -149,18 +118,20 @@ def main() -> int:
                 " (pre-commit's `language: rust` builds the checkout root, and the"
                 " manifest lives in rust/)"
             )
-        actual = hook.get("files")
-        if actual != pattern:
+        if "files" in hook:
             failures.append(
-                f"hook `{hook_id}` files is {actual!r}\n"
-                f"{' ' * 4}spec/languages.toml requires {pattern!r}"
+                f"hook `{hook_id}` must not set `files`; the CLI detector must see"
+                " reserved names and extensionless shebang scripts"
+            )
+        if hook.get("types") != "[text]":
+            failures.append(
+                f"hook `{hook_id}` types is {hook.get('types')!r}, expected '[text]'"
             )
 
     if failures:
         print("\n".join(failures))
-        print("Regenerate with: python3 tools/check_hooks.py --print-pattern")
         return 1
-    print(f"{len(EXPECTED_ENTRIES)} pre-commit hooks match spec/languages.toml")
+    print(f"{len(EXPECTED_ENTRIES)} pre-commit hooks delegate detection to OComment")
     return 0
 
 
