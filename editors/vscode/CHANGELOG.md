@@ -1,8 +1,8 @@
 # Changelog
 
 All notable changes to the OComment VS Code extension are documented here. The
-extension is versioned with the `ocomment` binary it launches, so its releases
-follow the repository's tags.
+extension is versioned and released independently of the `ocomment` binary it
+launches. No packaged extension release is currently distributed.
 
 ## Unreleased
 
@@ -10,7 +10,8 @@ follow the repository's tags.
 
 ### Added
 
-- First release. Launches `ocomment lsp` and attaches it to the thirty-five
+- Initial source implementation; this is not a published extension release.
+  Launches `ocomment lsp` and attaches it to the thirty-five
   language identifiers OComment scans, including `objective-c`,
   `objective-cpp`, `cuda-cpp`, `javascriptreact`, `typescriptreact`, and
   `shellscript`.

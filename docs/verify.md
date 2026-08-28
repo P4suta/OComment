@@ -36,8 +36,8 @@ The trailing `*` in the first pattern brings the archive's `.sha256` and its
 sha256sum --ignore-missing --check SHA256SUMS
 ```
 
-`SHA256SUMS` covers every archive, per-archive checksum, the VSIX, the SPDX SBOM,
-and the generated Homebrew, Scoop, and WinGet definitions of that release, so
+`SHA256SUMS` covers every archive, per-archive checksum, the SPDX SBOM, and the
+generated Homebrew, Scoop, and WinGet definitions of that release, so
 `--ignore-missing` is what lets it pass when you downloaded one of them. The
 combined checksum file itself is signed and attested. On macOS the command is
 `shasum -a 256`, and in PowerShell it is `Get-FileHash`.
@@ -83,7 +83,7 @@ pull request, and the release-tag ruleset is what makes those tags immutable.
 The same command verifies any other signed asset of the release by name: the
 SPDX SBOM `ocomment.spdx.json`, the generated `ocomment.rb`,
 `ocomment-scoop.json`, and `ocomment.winget.yaml` definitions, the `SHA256SUMS`
-file itself, and the published `.vsix` of the VS Code extension.
+file itself, and each per-archive checksum.
 
 ## Verify the container image
 

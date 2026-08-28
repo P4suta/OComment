@@ -115,10 +115,13 @@ changes for a partially staged file.
 
 ## Editor extension
 
-The official VS Code extension is `P4suta.ocomment`, on the Visual Studio
-Marketplace and on Open VSX. It is a client only: it launches the `ocomment`
-binary, so install both. Every other LSP client can launch `ocomment lsp`
-directly — see [Editors and LSP](editors.md).
+The VS Code extension is currently source-only: it has not been published to
+the Visual Studio Marketplace, Open VSX, or GitHub Releases. The source under
+[`editors/vscode`](https://github.com/P4suta/OComment/tree/main/editors/vscode)
+can be built and installed locally, but it has its own version and release
+lifecycle. It is a client only and launches the separately installed
+`ocomment` binary. Every other LSP client can launch `ocomment lsp` directly —
+see [Editors and LSP](editors.md).
 
 ## From source
 

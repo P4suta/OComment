@@ -704,7 +704,7 @@ fn the_vscode_activation_events_are_the_languages_it_attaches_to() {
 /// Every written-out count of languages or of editor language identifiers is
 /// the count it claims to be. `Language::ALL` and the extension's own selector
 /// are the two things being counted, so adding a language cannot leave a
-/// sentence, a Marketplace description, or a changelog entry quietly wrong.
+/// sentence, an extension description, or a changelog entry quietly wrong.
 ///
 /// The claims are searched for in the file with its line wrapping collapsed,
 /// so re-flowing a paragraph is not a failure and changing what it says is.

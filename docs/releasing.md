@@ -3,28 +3,76 @@
 Tags named `vMAJOR.MINOR.PATCH` run the release workflow. It builds and smoke
 tests Linux x86_64/aarch64 GNU and musl, macOS Intel/Apple Silicon, and Windows
 x64 archives. Archives contain the binary, licenses, README, man page, and shell
-completions. The workflow builds the VSIX from the same tag, then creates a
-draft release containing every archive, VSIX, checksum, SPDX JSON SBOM,
-package-manager definition, keyless Sigstore signature, and GitHub
-build-provenance attestation.
+completions. It creates a draft release containing every archive and checksum,
+an SPDX JSON SBOM, package-manager definitions, keyless Sigstore signatures,
+and GitHub build-provenance attestations. The v0.1.0 workflow publishes the CLI
+to GitHub Releases and crates.io and publishes its container to GHCR; it does
+not build or publish a VS Code extension.
 
 Before tagging:
 
-1. Update all workspace and internal adapter versions together, update
-   `editors/vscode/package.json`, and add the version to both changelogs.
+1. Update `rust/Cargo.toml`, the three public workspace crates and their
+   internal dependency requirements, `rust/Cargo.lock`, and `CHANGELOG.md`.
+   `editors/vscode/package.json` and its changelog are deliberately independent
+   and are not CLI release inputs.
 2. Run `./tools/release-check.sh` and confirm the cross-target smoke jobs and
    six expanded-crate artifact checks are green.
-3. Confirm the publishing secrets, publisher agreements, GHCR visibility, and
-   required environment reviewers from the checklist below are ready.
+3. Confirm `HEAD` is a clean, signed commit equal to `origin/main`, version
+   `0.1.0` is still unused by all six crates, and neither tag nor release exists.
+4. Confirm the crates.io secret, GHCR visibility plan, and required `release`
+   Environment reviewer from the checklist below are ready.
 
-Publishing is workflow-owned. After the draft exists, crates.io, GHCR, Visual
-Studio Marketplace, and Open VSX run as independent retryable jobs using the
-already-built artifacts. `tools/publish-crates.sh` reads every package name and
-version from Cargo metadata, skips an exact version already visible in the
-registry, and resumes in dependency order. Only after all four destinations
-succeed does the reviewer-protected `release` environment allow `finalize` to
-make the GitHub release public. Do not publish crates by hand between those
-jobs; that defeats the resumable state the workflow verifies.
+Publishing is workflow-owned. After the draft exists, crates.io and GHCR run as
+independent retryable jobs using the tag and already-built artifacts.
+`tools/publish-crates.sh` reads all six package names and versions from Cargo
+metadata, skips an exact version already visible in the registry, and resumes
+in dependency order. Only after both destinations succeed does the
+reviewer-protected `release` Environment allow `finalize` to make the GitHub
+release public. Do not publish crates by hand between those jobs; that defeats
+the resumable state the workflow verifies.
+
+## One-time publishing setup
+
+1. Authenticate GitHub tooling again if necessary. Log in to crates.io with
+   GitHub, verify the account email, create the initial-publish API token, and
+   store it directly as `CARGO_REGISTRY_TOKEN` in the `crates-io` Environment.
+   Never paste that token into an issue, workflow log, or chat. After the first
+   publication, migrate to Trusted Publishing when practical and revoke or
+   narrow the temporary token. See the
+   [crates.io development update](https://blog.rust-lang.org/2025/07/11/crates-io-development-update-2025-07/).
+2. Configure the `release` Environment with `P4suta` as a required reviewer.
+   The approval is intentionally the last gate: leave `finalize` waiting until
+   the registries and draft assets have been verified.
+3. The first GHCR package is private. As soon as `publish-container` creates
+   it, change the package visibility to public before approving `release`.
+
+## Release sequence
+
+1. Fetch `origin/main` and tags, verify a clean tree and signed `HEAD`, and run
+   the metadata and release gates one final time on the exact commit. Check that
+   `v0.1.0` and its GitHub Release do not exist and that all six target crate
+   versions are unused.
+2. Create and verify a signed annotated `v0.1.0` tag on that commit, then push
+   only `refs/tags/v0.1.0`. Do not move or recreate a release tag.
+3. Monitor the Release workflow. Before either registry result is accepted, it
+   must have built and smoke-tested seven target archives, generated the SBOM,
+   checksums, signatures and attestations, published six crates in dependency
+   order, and pushed the amd64/arm64 image.
+4. Make the new GHCR package public. Inspect its multi-platform manifest,
+   verify its cosign signature and GitHub attestation, then run `--version` and
+   a sample scan from the image.
+5. After crates.io propagation, install into a clean temporary prefix with
+   `cargo install ocomment --version 0.1.0 --locked`. Exercise detection,
+   `diff`, `fix --dry-run`, and `fix`, and confirm the installed binary reports
+   `ocomment 0.1.0`.
+6. While `finalize` waits for approval, download the authenticated draft
+   assets. Verify `SHA256SUMS`, each Sigstore bundle, GitHub provenance, and the
+   unpacked binaries as described in [Verifying downloads](verify.md).
+7. Approve the `release` Environment only after the preceding checks pass.
+   Confirm that `finalize` publishes the existing draft as the latest GitHub
+   Release without replacing its assets.
+8. From an external-user path, repeat a GitHub Release download, `cargo
+   install`, GHCR pull, and a workflow using `P4suta/OComment@v0.1.0`.
 
 The benchmark workflow is manual-only. Select the branch or tag to benchmark in
 the workflow's **Run workflow** ref picker, then enter that ref's full
@@ -40,9 +88,9 @@ scan is no slower than 1.5 times `typos`.
 
 Every release also contains signed `ocomment.rb`, `ocomment-scoop.json`, and
 `ocomment.winget.yaml` definitions generated from the final archive SHA-256
-values. Submit those exact files to the corresponding Homebrew tap, Scoop
-bucket, and WinGet repository; they can also be installed directly while an
-upstream submission is pending. The CLI crate contains explicit
+values. They can be installed directly or submitted unchanged to a future
+Homebrew tap, Scoop bucket, and WinGet repository. Creating those upstream
+listings is outside the v0.1.0 release. The CLI crate contains explicit
 `cargo-binstall` URL, archive-format, and in-archive binary metadata for the
 same target-qualified archives.
 
@@ -58,10 +106,10 @@ a build-provenance attestation pushed to the registry.
 
 A GHCR package is private when it is first created, and the visibility setting
 belongs to the package rather than the repository, so nothing in this
-repository can set it. **After the first release, open the package page and set
-its visibility to public once.** Until that is done every `docker pull` fails
-with an authentication error even though the workflow succeeded. Later releases
-inherit the setting.
+repository can set it. **During the first release, open the package page and
+set its visibility to public before approving the `release` Environment.**
+Until that is done every unauthenticated `docker pull` fails even though the
+workflow succeeded. Later releases inherit the setting.
 
 Renaming the image, dropping an architecture, or moving the `builder` context
 layout — `out/amd64/ocomment` and `out/arm64/ocomment` — breaks pinned pulls
@@ -70,33 +118,16 @@ contract, exactly like the archive layout.
 
 ## The VS Code extension
 
-`build-vscode` packages `editors/vscode` before the draft is created. The draft
-job signs and attests that exact `.vsix`; two independent publish jobs then send
-the same bytes to Visual Studio Marketplace and Open VSX. It refuses to run when
-`editors/vscode/package.json` does not carry the tag's version — a Marketplace
-version can never be republished, so the check has to come before the upload
-rather than after. `npm run unit` pins the same file to the workspace crate
-version on every pull request, so the two only have to be bumped together.
+The extension remains under `editors/vscode`, and the ordinary `vscode` CI job
+still lints, compiles, unit-tests, drives a real VS Code instance, and packages
+a test VSIX. It is source-only and is not an asset or publication target of the
+v0.1.0 CLI release: the release workflow does not checksum, sign, attest, or
+attach a VSIX and has no Visual Studio Marketplace or Open VSX jobs.
 
-Three things are manual and are done once, not per release:
-
-1. Create the `P4suta` publisher on the
-   [Marketplace management page](https://marketplace.visualstudio.com/manage)
-   under an Entra ID tenant, and the matching namespace on
-   [Open VSX](https://open-vsx.org/). The `publisher` field in
-   `package.json` has to equal the Marketplace publisher id.
-2. Create a personal access token for each — an Azure DevOps token with
-   **Marketplace: Manage** for the first, an Open VSX access token for the
-   second — and store them as the `VSCE_PAT` and `OVSX_PAT` secrets of the
-   `vscode-marketplace` environment. They expire; a release that fails at the
-   publish step with a 401 usually means one has.
-3. Sign the Open VSX publisher agreement. Open VSX rejects the first publish
-   until it is signed, and the message says so.
-
-Nothing else in the extension needs a release step: the version, the changelog,
-and the README that becomes the Marketplace page are all in `editors/vscode`
-and travel with the tag. The Marketplace badge in the repository README stays
-grey until the first successful publish.
+The extension's manifest version and changelog are independent of the Rust
+workspace version and CLI tag. A future extension release needs its own review,
+credentials, workflow, verification contract, and publication documentation;
+none should be inferred from a successful CLI release.
 
 ## The documentation site
 
@@ -131,12 +162,9 @@ one.
 `P4suta/OComment@vMAJOR.MINOR.PATCH` resolves as soon as the tag exists; no
 extra publishing step is needed for it to work in a workflow.
 
-Listing it on the GitHub Marketplace is separate and manual. The first time,
-open the release in the GitHub UI and tick **Publish this Action to the GitHub
-Marketplace** before publishing the release; the checkbox appears only when
-`action.yml` is present at the repository root with a `name`, `description`,
-and `branding` block. Later releases inherit the listing, and the Marketplace
-version list follows the tags.
+Listing it on the GitHub Marketplace is separate and manual and would require
+its own review. GitHub Action Marketplace listing is outside the v0.1.0
+release; do not couple it to approval of the CLI's GitHub Release.
 
 Recommend full-version pins such as `P4suta/OComment@v0.1.0` in every example.
 The release-tag ruleset forbids deleting or force-moving `v*`, so a published

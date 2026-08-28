@@ -4,7 +4,6 @@ import { join } from "node:path";
 import test from "node:test";
 
 const extensionRoot = join(__dirname, "..", "..", "..");
-const repositoryRoot = join(extensionRoot, "..", "..");
 
 interface Manifest {
 	version: string;
@@ -29,19 +28,8 @@ test("the bundled extension is packaged without a second dependency tree", () =>
 	assert.match(manifest.scripts.package, /(?:^|\s)--no-dependencies(?:\s|$)/u);
 });
 
-test("the extension is versioned with the crate it launches", () => {
-	// NOTE: `publish-vscode` refuses to publish a Marketplace version that is
-	// NOTE: not the release tag, so a bump that forgot this file would fail the
-	// NOTE: release rather than ship a mismatched pair. Catching it here means
-	// NOTE: the bump is caught on the pull request instead.
-	const workspace = readFileSync(
-		join(repositoryRoot, "rust", "Cargo.toml"),
-		"utf8",
-	);
-	const section = workspace.slice(workspace.indexOf("[workspace.package]"));
-	const version = /^version\s*=\s*"([^"]+)"/mu.exec(section);
-	assert.ok(version, "rust/Cargo.toml has no [workspace.package] version");
-	assert.equal(manifest.version, version[1]);
+test("the extension carries its own semantic version", () => {
+	assert.match(manifest.version, /^\d+\.\d+\.\d+$/u);
 });
 
 test("every language the extension attaches to also activates it", () => {
@@ -54,7 +42,7 @@ test("every language the extension attaches to also activates it", () => {
 	assert.deepEqual([...activated].sort(), [...configured].sort());
 	// NOTE: The literal is the count, so dropping an identifier fails here rather
 	// NOTE: than shrinking the set the extension attaches to in silence. Every
-	// NOTE: written-out count of it -- the Marketplace description, the README,
+	// NOTE: written-out count of it -- the extension description, the README,
 	// NOTE: docs/editors.md, both changelogs -- is checked against this same list
 	// NOTE: by `every_written_language_count_matches_what_it_counts` in
 	// NOTE: rust/ocomment/tests/spec_languages.rs.

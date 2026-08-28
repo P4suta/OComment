@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import pathlib
 import re
 import subprocess
@@ -65,17 +64,10 @@ def metadata_failures(root: pathlib.Path, version: str) -> list[str]:
                 f"rust/Cargo.lock has {package_name}@{locked.get(package_name)}, expected {version}"
             )
 
-    extension_path = root / "editors/vscode/package.json"
-    extension = json.loads(extension_path.read_text(encoding="utf-8"))
-    if str(extension.get("version")) != version:
-        failures.append(
-            f"editors/vscode/package.json version is {extension.get('version')}, expected {version}"
-        )
-
     heading = re.compile(rf"^##\s+\[?{re.escape(version)}\]?(?:\s|$)", re.MULTILINE)
-    for relative in (pathlib.Path("CHANGELOG.md"), pathlib.Path("editors/vscode/CHANGELOG.md")):
-        if not heading.search((root / relative).read_text(encoding="utf-8")):
-            failures.append(f"{relative} has no {version} release heading")
+    changelog = pathlib.Path("CHANGELOG.md")
+    if not heading.search((root / changelog).read_text(encoding="utf-8")):
+        failures.append(f"{changelog} has no {version} release heading")
     return failures
 
 

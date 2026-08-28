@@ -9,6 +9,18 @@ Sass dialects.
 Removable comments appear as hints. Removing them is a code action, never a
 formatting pass, so nothing happens to a file until you ask for it.
 
+> Distribution status: source only. This extension has not been published to
+> the Visual Studio Marketplace, Open VSX, or the repository's GitHub Releases.
+> Its version and any future release are independent of the `ocomment` CLI.
+
+To package and install the current source locally:
+
+```sh
+npm ci
+npm run package -- --out ocomment.vsix
+code --install-extension ocomment.vsix
+```
+
 ## Install the `ocomment` binary first
 
 This extension is a client for the `ocomment` language server; it does not
@@ -24,7 +36,7 @@ standard input/output, so pulling the Docker image alone does not install the
 binary this extension needs. Use a container only through a wrapper that keeps
 those streams and workspace paths intact; the ordinary setup is a host binary.
 
-Release archives for Linux, macOS, and Windows are attached to every
+Release archives for the CLI on Linux, macOS, and Windows are attached to every
 [GitHub release](https://github.com/P4suta/OComment/releases). If the binary
 lives somewhere else, point `ocomment.path` at it.
 
