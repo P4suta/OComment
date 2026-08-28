@@ -21,8 +21,8 @@ include = []
 exclude = ["vendor/**"]
 
 [policy]
-mode = "safe"                 # safe, legal, all
-layout = "lines"              # lines, columns, compact
+mode = "safe"                 # NOTE: safe, legal, all
+layout = "lines"              # NOTE: lines, columns, compact
 keep_kind = ["directive"]
 remove_kind = []
 keep_regex = ["(?i)generated"]

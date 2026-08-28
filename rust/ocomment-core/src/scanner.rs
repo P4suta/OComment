@@ -6004,13 +6004,18 @@ impl RestartRules {
 /// would read the rest of the tag as ordinary text and find a comment in it
 /// the full scan protected.
 ///
-/// The test walks back to the nearest `<` and reads the tag forward from it,
+/// The test walks back from `offset` and reads every `<` it meets forward,
 /// exactly as the scan would: the quotes pair and the first unquoted `>`
-/// ends the tag. The offset is refused when the tag is still open there — its
-/// `>` lies beyond it or never comes. A suffix scan — whose own source begins
-/// at the checkpoint — gives the same answer, because a checkpoint that is
-/// itself sound, as every recorded one is, sits inside no tag, so the `<`
-/// its walk meets lies within its bytes.
+/// ends the tag. The offset is refused when any of those tags is still open
+/// there — its `>` lies beyond it or never comes. Every `<` rather than only
+/// the nearest one, because a tag's attributes may hold further `<` signs of
+/// their own: the tag that decided the scan's reading of this stretch can
+/// open far behind the closest sign, and an edit that grows the tag's `>`
+/// across the offset can withdraw a checkpoint the nearest sign alone would
+/// still permit. A suffix scan — whose own source begins at the checkpoint —
+/// gives the same answer, because a checkpoint that is itself sound, as every
+/// recorded one is, sits inside no tag, so every `<` its walk meets lies
+/// within its bytes.
 fn the_tag_boundary_permits_a_restart(source: &[u8], offset: usize) -> bool {
     let mut index = offset;
     while index > 0 {
@@ -6018,6 +6023,7 @@ fn the_tag_boundary_permits_a_restart(source: &[u8], offset: usize) -> bool {
         if source[index] == b'<' {
             let mut cursor = index + 1;
             let mut quote = None;
+            let mut closed = false;
             while cursor < offset {
                 if let Some(active) = quote {
                     if source[cursor] == active {
@@ -6026,11 +6032,14 @@ fn the_tag_boundary_permits_a_restart(source: &[u8], offset: usize) -> bool {
                 } else if matches!(source[cursor], b'\'' | b'"') {
                     quote = Some(source[cursor]);
                 } else if source[cursor] == b'>' {
-                    return true;
+                    closed = true;
+                    break;
                 }
                 cursor += 1;
             }
-            return false;
+            if !closed {
+                return false;
+            }
         }
     }
     true

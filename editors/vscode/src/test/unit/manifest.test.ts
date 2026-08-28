@@ -52,7 +52,7 @@ test("every language the extension attaches to also activates it", () => {
 	// NOTE: docs/editors.md, both changelogs -- is checked against this same list
 	// NOTE: by `every_written_language_count_matches_what_it_counts` in
 	// NOTE: rust/ocomment/tests/spec_languages.rs.
-	assert.equal(configured.length, 24);
+	assert.equal(configured.length, 35);
 	// NOTE: A workspace can hold a configuration file and no open editor, and
 	// NOTE: the status bar and the workspace fix have to work there too.
 	assert.ok(

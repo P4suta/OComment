@@ -657,8 +657,8 @@ POLICY_SAMPLE = """\
 // rustfmt::skip
 /// Adds two numbers.
 pub fn add(a: u32, b: u32) -> u32 {
-    let total = a + /* widen */ b; // TODO: check for overflow
-    /* Everything from here down is one block comment
+    let total = a + /* NOTE: widen */ b; // TODO: check for overflow
+    /* NOTE: Everything from here down is one block comment
        that runs across three lines, so each layout has
        something to show. */
     total

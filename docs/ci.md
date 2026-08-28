@@ -134,8 +134,8 @@ itself only complains when a consumer runs the hook. CI runs it next to
 `tools/check_embedded_specs.py`.
 
 ```sh
-python3 tools/check_hooks.py                  # fail on drift
-python3 tools/check_hooks.py --print-pattern  # the regex the hooks must carry
+python3 tools/check_hooks.py                  # NOTE: fail on drift
+python3 tools/check_hooks.py --print-pattern  # NOTE: the regex the hooks must carry
 ```
 
 ## GitHub Action
@@ -175,14 +175,14 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      security-events: write # Upload the SARIF file to code scanning.
+      security-events: write # NOTE: Upload the SARIF file to code scanning.
     steps:
       - uses: actions/checkout@v7
       - uses: P4suta/OComment@v0.1.0
         with:
           format: sarif
           upload-sarif: "true"
-          fail-on-findings: "false" # Let the code-scanning alerts carry the result.
+          fail-on-findings: "false" # NOTE: Let the code-scanning alerts carry the result.
 ```
 
 `upload-sarif: "true"` requires `format: sarif`; any other format is a usage

@@ -16,7 +16,7 @@ bundle one. Install the binary and make sure it is on your `PATH`:
 
 ```sh
 cargo install ocomment --locked
-# or: docker pull ghcr.io/p4suta/ocomment
+# NOTE: or: docker pull ghcr.io/p4suta/ocomment
 ```
 
 Release archives for Linux, macOS, and Windows are attached to every

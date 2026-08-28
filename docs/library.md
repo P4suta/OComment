@@ -46,7 +46,7 @@ assert!(report.comments[0].disposition.is_remove());
 ```rust
 use ocomment_core::{Language, TransformOptions, transform};
 
-// A BOM, a CRLF ending, and a comment to take out.
+// NOTE: A BOM, a CRLF ending, and a comment to take out.
 let source = "\u{feff}fn main() {} // trailing\r\n".as_bytes();
 let result = transform(source, Language::Rust, TransformOptions::default());
 assert_eq!(result.output, "\u{feff}fn main() {} \r\n".as_bytes());
@@ -58,7 +58,7 @@ use ocomment_core::{Language, TransformOptions, apply_edits, transform};
 let source = b"let x = 1; // note\nlet y = 2; // and\n";
 let result = transform(source, Language::Rust, TransformOptions::default());
 
-// Sorted and non-overlapping, so one pass applies them.
+// NOTE: Sorted and non-overlapping, so one pass applies them.
 assert!(
     result
         .edits
@@ -143,8 +143,8 @@ let source = b"k: |\n  a\n# ends the block\n  # yamllint disable\nz: 1\n";
 let options = ScanOptions::default();
 let report = scan(source, Language::Yaml, options.clone());
 
-// The scan kept the first comment: removing its line would hand the directive
-// under it back to the block scalar above.
+// NOTE: The scan kept the first comment: removing its line would hand the directive
+// NOTE: under it back to the block scalar above.
 let comment = &report.comments[0];
 let why = explain_comment(
     comment,
@@ -182,7 +182,7 @@ assert_eq!(found.language, Language::TypeScript);
 assert_eq!(found.dialect, Dialect::Tsx);
 assert_eq!(found.reason, "extension");
 
-// No name, so the shebang decides.
+// NOTE: No name, so the shebang decides.
 let piped = detect_language(None, b"#!/usr/bin/env python3\n").unwrap();
 assert_eq!(piped.language, Language::Python);
 ```
@@ -212,7 +212,7 @@ let result = transform_spans(
     TransformOptions::default(),
 )
 .unwrap();
-// The same policy the built-in scanners get: the directive is kept.
+// NOTE: The same policy the built-in scanners get: the directive is kept.
 assert_eq!(result.output, b"a b/* directive */");
 
 let bad = transform_spans(
@@ -286,7 +286,7 @@ let mut document = IncrementalDocument::new(
     1,
 );
 
-// A span past the end of the document is refused, and nothing moves.
+// NOTE: A span past the end of the document is refused, and nothing moves.
 let outside = ByteSpan::new(0, document.source().len() + 1);
 assert_eq!(
     document.apply_changes(

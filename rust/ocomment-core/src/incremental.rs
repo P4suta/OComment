@@ -809,6 +809,37 @@ mod tests {
         assert_eq!(document.safe_checkpoints(), expected_checkpoints);
     }
 
+    /// Regression: an edit that closes a tag the earlier scan had read as text
+    /// must withdraw every checkpoint the old reading offered inside it. A
+    /// tag's attributes can hold `<` of their own — `<div a="<b>"` reads the
+    /// second `<` as text inside the first tag's quotes — so a walk back to
+    /// the nearest `<` alone stands inside the outer tag once the edit
+    /// supplies its `>`; every `<` before the offset has to close.
+    #[test]
+    fn an_edit_that_closes_a_tag_withdraws_the_checkpoints_inside_it() {
+        let source = b"<div a=\"<b>\"\nline2\n".to_vec();
+        assert_eq!(source.len(), 19);
+        let mut document =
+            IncrementalDocument::new(source, Language::Vue, ScanOptions::default(), 1);
+        /* NOTE: the span is the document's end, and the replacement is the
+         * `>` the outer tag had been missing, which closes the tag across
+         * both checkpoints the unclosed tag had let stand. */
+        document
+            .apply_changes(
+                &[DocumentChange {
+                    span: ByteSpan::new(19, 19),
+                    replacement: b">".to_vec(),
+                }],
+                2,
+            )
+            .unwrap();
+        let (expected, expected_checkpoints) =
+            scan_with_checkpoints(document.source(), Language::Vue, ScanOptions::default(), 0);
+        assert_eq!(document.report().comments, expected.comments);
+        assert_eq!(document.report(), &expected);
+        assert_eq!(document.safe_checkpoints(), expected_checkpoints);
+    }
+
     /// A here document body and an embedded document are two Ruby states whose
     /// lines say nothing about themselves: the `#` at the head of one is a byte
     /// of the value, and the line that decides so sits above it. Neither offers

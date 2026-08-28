@@ -30,7 +30,7 @@ published).
 ```sh
 cargo install ocomment --locked
 
-ocomment                 # check the current directory
+ocomment                 # NOTE: check the current directory
 ocomment check src tests
 ocomment diff src
 ocomment fix --dry-run src

@@ -98,9 +98,9 @@ shapes a lexer cannot rule out and a parser will not take.
 ```sh
 python3 -m pip install pyyaml
 cargo build --manifest-path rust/Cargo.toml --locked -p ocomment
-python3 tools/yaml_roundtrip.py                          # the full sweep
-python3 tools/yaml_roundtrip.py --cases 200              # what CI runs
-python3 tools/yaml_roundtrip.py --cases 20000 --seed 7   # a longer sweep
+python3 tools/yaml_roundtrip.py                          # NOTE: the full sweep
+python3 tools/yaml_roundtrip.py --cases 200              # NOTE: what CI runs
+python3 tools/yaml_roundtrip.py --cases 20000 --seed 7   # NOTE: a longer sweep
 ```
 
 CI runs `python3 tools/yaml_roundtrip.py --cases 200` in the `dogfood` job: the
@@ -125,8 +125,8 @@ differed once, with a shrunken source that still shows it.
 ```sh
 cargo build --manifest-path rust/Cargo.toml -p ocomment-core --example ref_driver --locked
 opam exec -- dune build --root ocaml bin/main.exe
-python3 tools/fuzz_differential.py --seed 1 --seed 2      # ~2 minutes
-python3 tools/fuzz_differential.py --cases 200            # a quicker sweep
+python3 tools/fuzz_differential.py --seed 1 --seed 2      # NOTE: ~2 minutes
+python3 tools/fuzz_differential.py --cases 200            # NOTE: a quicker sweep
 ```
 
 The pool it draws from is one pool for every language, so a scanner meets the
