@@ -6,6 +6,7 @@
 version = 1
 
 [files]
+hidden = true
 exclude = [
   # NOTE: Vendored crates, fixture bytes, and packaging or benchmark scratch are
   # NOTE: not ours to rewrite: fixture comments are the test input itself.
@@ -14,6 +15,10 @@ exclude = [
   "editors/vscode/test-fixtures/**",
   "release-extras/**",
   "benchmarks/**",
+  # NOTE: This generated page contains deliberate before/after source bytes;
+  # NOTE: removing their example comments would change the documented policy
+  # NOTE: output rather than clean up generator prose.
+  "docs/policies.md",
   # NOTE: A lock file is written by its resolver rather than by hand, and the
   # NOTE: header Cargo puts at the top of this one comes back on the next
   # NOTE: `cargo update`.

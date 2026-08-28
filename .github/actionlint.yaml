@@ -1,5 +1,6 @@
 self-hosted-runner:
   labels:
     - ocomment-benchmark
+    - ephemeral
 
 config-variables: null

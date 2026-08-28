@@ -19,45 +19,49 @@ env:
 jobs:
   rust:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # NOTE: stable toolchain action
         with:
           components: clippy,rustfmt
       - run: cargo fmt --all --manifest-path rust/Cargo.toml -- --check
       - run: cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets --locked -- -D warnings
       - run: cargo test --manifest-path rust/Cargo.toml --workspace --all-targets --locked
-      # `--all-targets` above builds every target but silently drops the
-      # doctests, so the examples in the library rustdoc are only ever
-      # compiled and run by this step.
+      # NOTE: `--all-targets` above builds every target but silently drops the
+      # NOTE: doctests, so the examples in the library rustdoc are only ever
+      # NOTE: compiled and run by this step.
       - run: cargo test --manifest-path rust/Cargo.toml --doc --workspace --locked
-      # docs/library.md is hand-written prose and the step above never reads
-      # it: `--doc` compiles what is in the crate sources and nothing else. The
-      # page says every example on it is compiled and run, so it is handed to
-      # `rustdoc` as its own doctest file, linked against the library it
-      # documents.
+      # NOTE: docs/library.md is hand-written prose and the step above never reads
+      # NOTE: it: `--doc` compiles what is in the crate sources and nothing else. The
+      # NOTE: page says every example on it is compiled and run, so it is handed to
+      # NOTE: `rustdoc` as its own doctest file, linked against the library it
+      # NOTE: documents.
       - name: The examples on the library page still compile
         run: |
           cargo build --manifest-path rust/Cargo.toml --locked -p ocomment-core
           rustdoc --test docs/library.md --edition 2024 \
             --extern ocomment_core=rust/target/debug/libocomment_core.rlib \
             -L rust/target/debug/deps
-      # The binary crate is in here for its links alone: nothing publishes its
-      # rustdoc, but its modules document each other, and a link that names a
-      # function somebody has since renamed is a wrong sentence wherever it is
-      # written. `missing_docs` stays off for it — a `clap` derive has no
-      # documentation to give.
+      # NOTE: The binary crate is in here for its links alone: nothing publishes its
+      # NOTE: rustdoc, but its modules document each other, and a link that names a
+      # NOTE: function somebody has since renamed is a wrong sentence wherever it is
+      # NOTE: written. `missing_docs` stays off for it — a `clap` derive has no
+      # NOTE: documentation to give.
       - name: The documentation builds with no broken links
         env:
           RUSTDOCFLAGS: -D warnings
         run: cargo doc --manifest-path rust/Cargo.toml --no-deps -p ocomment-core -p ocomment-plugin-sdk -p ocomment --locked
       - run: python3 tools/check_embedded_specs.py
       - run: python3 tools/check_hooks.py
+      - run: python3 tools/check_editor_ids.py
+      - run: python3 tools/check_ci_contracts.py
+      - run: python3 -m unittest tools/test_release_metadata.py tools/test_publish_crates.py
       - run: python3 -m pip install --disable-pip-version-check jsonschema==4.25.1
       - run: cargo build --manifest-path rust/Cargo.toml --locked -p ocomment
+      - run: python3 tools/release_metadata.py --workspace --binary rust/target/debug/ocomment
       - run: python3 tools/check_directives.py
       - run: python3 tools/gen_docs.py --check
       - run: python3 tools/validate_schemas.py
@@ -68,10 +72,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # NOTE: stable toolchain action
         with:
           toolchain: 1.88.0
       - run: cargo check --manifest-path rust/Cargo.toml --workspace --all-targets --locked
@@ -80,10 +84,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # NOTE: stable toolchain action
       - uses: ocaml/setup-ocaml@f92e0606b7ae4873dd1238465ea4bf6f8e40d85c # v3
         with:
           ocaml-compiler: "5.5"
@@ -115,24 +119,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # NOTE: stable toolchain action
       - run: cargo build --manifest-path rust/Cargo.toml --locked -p ocomment
       - run: python3 -m pip install --disable-pip-version-check pyyaml==6.0.2
-      # The one invariant no byte-level fixture can state: a YAML block scalar
-      # reads the lines below it, so the hole a removal leaves on a comment line
-      # can be read back as part of a value. This strips thousands of generated
-      # documents under every layout and every policy and asks a real YAML
-      # parser whether they still mean the same thing.
-      #
-      # The corpus and both enumerated sweeps run in full here -- they are where
-      # the hazard lives and they are the same documents on every run. Only the
-      # pseudo-random set is cut, because its cost is linear and its value is
-      # not: `python3 tools/yaml_roundtrip.py` runs the whole 2400 on demand,
-      # and `--seed` moves it. Every pass is one `fsync` per rewritten file, so
-      # the tool overlaps them rather than waiting on them in turn.
+      # NOTE: The one invariant no byte-level fixture can state: a YAML block scalar
+      # NOTE: reads the lines below it, so the hole a removal leaves on a comment line
+      # NOTE: can be read back as part of a value. This strips thousands of generated
+      # NOTE: documents under every layout and every policy and asks a real YAML
+      # NOTE: parser whether they still mean the same thing.
+      # NOTE:
+      # NOTE: The corpus and both enumerated sweeps run in full here -- they are where
+      # NOTE: the hazard lives and they are the same documents on every run. Only the
+      # NOTE: pseudo-random set is cut, because its cost is linear and its value is
+      # NOTE: not: `python3 tools/yaml_roundtrip.py` runs the whole 2400 on demand,
+      # NOTE: and `--seed` moves it. Every pass is one `fsync` per rewritten file, so
+      # NOTE: the tool overlaps them rather than waiting on them in turn.
       - name: Removing YAML comments never changes what the document parses to
         run: python3 tools/yaml_roundtrip.py --cases 200
       - name: Report the environment and the configuration OComment resolved
@@ -140,9 +144,9 @@ jobs:
           set -euo pipefail
           ./rust/target/debug/ocomment doctor
           ./rust/target/debug/ocomment config explain
-      # A bare run is the gate: it walks the repository under the ordinary
-      # hidden-file and size limits and under `.ocomment.toml`, so a new
-      # explanatory comment that carries no tag fails the build.
+      # NOTE: A bare run is the gate: it walks the repository under the ordinary
+      # NOTE: hidden-file and size limits and under `.ocomment.toml`, so a new
+      # NOTE: explanatory comment that carries no tag fails the build.
       - name: OComment checks its own repository
         run: ./rust/target/debug/ocomment --format github
       - name: Strip every comment out of a copy of the workspace
@@ -176,10 +180,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # NOTE: stable toolchain action
       - run: cargo build --manifest-path rust/Cargo.toml --release --locked -p ocomment
       - name: Unix smoke test
         if: runner.os != 'Windows'
@@ -197,10 +201,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # NOTE: stable toolchain action
       - run: cargo build --manifest-path rust/Cargo.toml --locked -p ocomment
       - name: Create the action fixture
         shell: bash
@@ -249,20 +253,20 @@ jobs:
       run:
         working-directory: editors/vscode
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: editors/vscode/package-lock.json
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # NOTE: stable toolchain action
       - run: npm ci
       - run: npm run lint
       - run: npm run compile
-      # The manifest suite is what pins the extension version to the crate
-      # version, so it runs before anything is built from either of them.
+      # NOTE: The manifest suite is what pins the extension version to the crate
+      # NOTE: version, so it runs before anything is built from either of them.
       - run: npm run unit
       - name: Build the ocomment the extension launches
         working-directory: ${{ github.workspace }}
@@ -270,12 +274,12 @@ jobs:
       - name: Put that ocomment first on PATH
         working-directory: ${{ github.workspace }}
         run: echo "${GITHUB_WORKSPACE}/rust/target/debug" >>"$GITHUB_PATH"
-      # `npm test` downloads a real VS Code and drives it, so it needs a
-      # display; the runner has no X server of its own.
+      # NOTE: `npm test` downloads a real VS Code and drives it, so it needs a
+      # NOTE: display; the runner has no X server of its own.
       - run: xvfb-run -a npm test
       - name: Package the extension the release would publish
-        run: npx --no @vscode/vsce package --out ocomment.vsix
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        run: npm run package -- --out ocomment.vsix
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ocomment-vsix
           path: editors/vscode/ocomment.vsix
@@ -285,13 +289,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # A source build on one platform, which is the path a release never
-      # takes, so the Dockerfile's own builder stage cannot rot between
-      # releases. The step after the smoke test takes the release path over the
-      # same file.
+      # NOTE: A source build on one platform, which is the path a release never
+      # NOTE: takes, so the Dockerfile's own builder stage cannot rot between
+      # NOTE: releases. The step after the smoke test takes the release path over the
+      # NOTE: same file.
       - name: Build the image from source
         shell: bash
         run: docker build -t ocomment:ci .
@@ -308,13 +312,13 @@ jobs:
             exit 1
           fi
           python3 -c 'import json, sys; json.load(open(sys.argv[1]))' container-report.json
-      # The release image is not compiled: the workflow replaces the `builder`
-      # stage with a buildx named context holding the musl binaries the release
-      # matrix already built. Handing the image its own binary back through
-      # that context exercises the second path over the same Dockerfile, so a
-      # release build is never the first to find the layout broken. The hosted
-      # runner's default buildx builder supplies `--build-context`; this step
-      # uses that same builder.
+      # NOTE: The release image is not compiled: the workflow replaces the `builder`
+      # NOTE: stage with a buildx named context holding the musl binaries the release
+      # NOTE: matrix already built. Handing the image its own binary back through
+      # NOTE: that context exercises the second path over the same Dockerfile, so a
+      # NOTE: release build is never the first to find the layout broken. The hosted
+      # NOTE: runner's default buildx builder supplies `--build-context`; this step
+      # NOTE: uses that same builder.
       - name: Build the image again through the release path
         shell: bash
         run: |
@@ -323,13 +327,11 @@ jobs:
           container=$(docker create ocomment:ci)
           docker cp "${container}:/ocomment" release/binaries/out/amd64/ocomment
           docker rm "${container}"
-          # The Dockerfile's own builder stage hands the final stage a binary
-          # `install -m 0555` made read-only and executable, and a release
-          # archive carries the same mode. A named context that handed over an
-          # 0755 copy would be the one path where the image was built from a
-          # writable binary, so this step reproduces the mode the release
-          # really ships.
-          chmod 0555 release/binaries/out/amd64/ocomment
+          # Cargo archives the executable with its ordinary 0755 mode, and the
+          # release workflow preserves that mode when it lays out this named
+          # context. Reproduce the release input here as well as its directory
+          # layout; the source-build path separately exercises `install -m 0555`.
+          chmod 0755 release/binaries/out/amd64/ocomment
           docker buildx build --build-context builder=release/binaries \
             --load -t ocomment:ci-prebuilt .
           docker run --rm ocomment:ci-prebuilt --version
