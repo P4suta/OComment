@@ -96,7 +96,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      actions: write # NOTE: Dispatch only; the third-party action runs in the other job.
+      actions: write # NOTE: Dispatch only; release preparation runs in the other job.
     steps:
       - name: Dispatch checks for the Release PR head
         shell: bash
