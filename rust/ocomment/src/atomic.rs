@@ -1,25 +1,26 @@
 use anyhow::{Context, Result, anyhow, bail};
 use std::{
+    borrow::Cow,
     fs,
     io::Write,
     path::{Path, PathBuf},
 };
 use tempfile::{NamedTempFile, TempPath};
 
-pub struct WritePlan {
+pub struct WritePlan<'a> {
     pub path: PathBuf,
-    pub original: Vec<u8>,
-    pub replacement: Vec<u8>,
+    pub original: Cow<'a, [u8]>,
+    pub replacement: Cow<'a, [u8]>,
 }
 
-struct Prepared {
-    plan: WritePlan,
+struct Prepared<'a> {
+    plan: WritePlan<'a>,
     temporary: Option<TempPath>,
     backup: PathBuf,
 }
 
 /// Prepare every file first, then commit with rollback backups in each source directory.
-pub fn apply_transaction(plans: Vec<WritePlan>) -> Result<()> {
+pub fn apply_transaction(plans: Vec<WritePlan<'_>>) -> Result<()> {
     if plans.is_empty() {
         return Ok(());
     }
@@ -28,7 +29,7 @@ pub fn apply_transaction(plans: Vec<WritePlan>) -> Result<()> {
         reject_symlink(&plan.path, "transaction preparation")?;
         let current = fs::read(&plan.path)
             .with_context(|| format!("cannot re-read {}", plan.path.display()))?;
-        if current != plan.original {
+        if current != plan.original.as_ref() {
             bail!(
                 "{} changed while it was being checked; no files were modified",
                 plan.path.display()
@@ -41,7 +42,7 @@ pub fn apply_transaction(plans: Vec<WritePlan>) -> Result<()> {
                 plan.path.display()
             )
         })?;
-        temporary.write_all(&plan.replacement)?;
+        temporary.write_all(plan.replacement.as_ref())?;
         let permissions = fs::metadata(&plan.path)?.permissions();
         temporary.as_file().set_permissions(permissions)?;
         temporary.as_file_mut().sync_all()?;
@@ -101,11 +102,11 @@ pub fn apply_transaction(plans: Vec<WritePlan>) -> Result<()> {
     Ok(())
 }
 
-fn commit_one(item: &mut Prepared) -> Result<()> {
+fn commit_one(item: &mut Prepared<'_>) -> Result<()> {
     reject_symlink(&item.plan.path, "transaction commit")?;
     let current = fs::read(&item.plan.path)
         .with_context(|| format!("cannot recheck {} before commit", item.plan.path.display()))?;
-    if current != item.plan.original {
+    if current != item.plan.original.as_ref() {
         bail!(
             "{} changed after transaction preparation",
             item.plan.path.display()
@@ -130,7 +131,7 @@ fn commit_one(item: &mut Prepared) -> Result<()> {
     Ok(())
 }
 
-fn rollback(items: &[Prepared]) -> Result<()> {
+fn rollback(items: &[Prepared<'_>]) -> Result<()> {
     for item in items.iter().rev() {
         if item.backup.symlink_metadata().is_ok() {
             if item.plan.path.symlink_metadata().is_ok() {
@@ -186,8 +187,8 @@ mod tests {
         let permissions = fs::metadata(&path).unwrap().permissions();
         apply_transaction(vec![WritePlan {
             path: path.clone(),
-            original: b"old".to_vec(),
-            replacement: b"new".to_vec(),
+            original: Cow::Borrowed(b"old"),
+            replacement: Cow::Borrowed(b"new"),
         }])
         .unwrap();
         assert_eq!(fs::read(&path).unwrap(), b"new");
@@ -216,8 +217,8 @@ mod tests {
 
         let error = apply_transaction(vec![WritePlan {
             path: path.clone(),
-            original: b"old".to_vec(),
-            replacement: b"new".to_vec(),
+            original: Cow::Borrowed(b"old"),
+            replacement: Cow::Borrowed(b"new"),
         }])
         .unwrap_err();
 
@@ -248,13 +249,13 @@ mod tests {
         let error = apply_transaction(vec![
             WritePlan {
                 path: ordinary.clone(),
-                original: b"ordinary old".to_vec(),
-                replacement: b"ordinary new".to_vec(),
+                original: Cow::Borrowed(b"ordinary old"),
+                replacement: Cow::Borrowed(b"ordinary new"),
             },
             WritePlan {
                 path: link.clone(),
-                original: b"target old".to_vec(),
-                replacement: b"target new".to_vec(),
+                original: Cow::Borrowed(b"target old"),
+                replacement: Cow::Borrowed(b"target new"),
             },
         ])
         .unwrap_err();

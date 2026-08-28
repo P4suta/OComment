@@ -6,6 +6,56 @@ use memchr::{memchr, memchr2, memchr3, memmem};
 use regex::bytes::RegexSet;
 use std::cmp::Ordering;
 
+/// Scan options with their policy regular expressions compiled once.
+///
+/// A scanner can be shared between threads. Embedded language scanners (HTML
+/// script/style bodies, Markdown fences, Vue and Svelte regions) reuse the
+/// same compiled pattern sets as their parent.
+#[derive(Clone, Debug)]
+pub struct PreparedScanner {
+    pub(crate) options: ScanOptions,
+    pub(crate) patterns: DispositionPatterns,
+    pattern_error: Option<String>,
+}
+
+impl PreparedScanner {
+    /// Compile the policy patterns in `options` for reuse across any number of
+    /// source files.
+    pub fn new(options: ScanOptions) -> Result<Self, regex::Error> {
+        let patterns = DispositionPatterns::compile(&options)?;
+        Ok(Self {
+            options,
+            patterns,
+            pattern_error: None,
+        })
+    }
+
+    /// The effective options this scanner was prepared from.
+    pub fn options(&self) -> &ScanOptions {
+        &self.options
+    }
+
+    /// Scan one source without recompiling its policy regular expressions.
+    pub fn scan(&self, source: &[u8], language: Language) -> ScanReport {
+        scan_prepared_internal(source, language, self, 0, false, None).0
+    }
+
+    pub(crate) fn lossy(options: ScanOptions) -> Self {
+        match DispositionPatterns::compile(&options) {
+            Ok(patterns) => Self {
+                options,
+                patterns,
+                pattern_error: None,
+            },
+            Err(error) => Self {
+                options,
+                patterns: DispositionPatterns::empty(),
+                pattern_error: Some(error.to_string()),
+            },
+        }
+    }
+}
+
 /// Find every comment in `source` and decide what happens to each.
 ///
 /// One pass over the bytes, with the source never decoded as a whole: the
@@ -37,6 +87,7 @@ pub fn scan(source: &[u8], language: Language, options: ScanOptions) -> ScanRepo
     scan_internal(source, language, options, 0, false, None).0
 }
 
+#[cfg(test)]
 pub(crate) fn scan_with_checkpoints(
     source: &[u8],
     language: Language,
@@ -44,6 +95,17 @@ pub(crate) fn scan_with_checkpoints(
     offset: usize,
 ) -> (ScanReport, Vec<usize>) {
     let (report, checkpoints, _) = scan_internal(source, language, options, offset, true, None);
+    (report, checkpoints)
+}
+
+pub(crate) fn scan_with_checkpoints_prepared(
+    source: &[u8],
+    language: Language,
+    prepared: &PreparedScanner,
+    offset: usize,
+) -> (ScanReport, Vec<usize>) {
+    let (report, checkpoints, _) =
+        scan_prepared_internal(source, language, prepared, offset, true, None);
     (report, checkpoints)
 }
 
@@ -56,14 +118,14 @@ pub(crate) fn scan_with_checkpoints(
 /// the scanner a slice that had been truncated at `stop` instead would let a
 /// bounded lookahead straddling the cut decide differently than it does in the
 /// real document.
-pub(crate) fn scan_until_checkpoint(
+pub(crate) fn scan_until_checkpoint_prepared(
     source: &[u8],
     language: Language,
-    options: ScanOptions,
+    prepared: &PreparedScanner,
     offset: usize,
     stop: usize,
 ) -> (ScanReport, Vec<usize>, bool) {
-    scan_internal(source, language, options, offset, true, Some(stop))
+    scan_prepared_internal(source, language, prepared, offset, true, Some(stop))
 }
 
 /// Every safe checkpoint a scan of `source` offers, paired with the watermark
@@ -89,6 +151,24 @@ pub(crate) fn scan_checkpoint_watermarks(
         .collect()
 }
 
+fn scan_prepared_internal(
+    source: &[u8],
+    language: Language,
+    prepared: &PreparedScanner,
+    offset: usize,
+    track_checkpoints: bool,
+    stop: Option<usize>,
+) -> (ScanReport, Vec<usize>, bool) {
+    finish_scan(Scanner::with_prepared(
+        source,
+        language,
+        prepared,
+        offset,
+        track_checkpoints,
+        stop,
+    ))
+}
+
 fn scan_internal(
     source: &[u8],
     language: Language,
@@ -97,8 +177,19 @@ fn scan_internal(
     track_checkpoints: bool,
     stop: Option<usize>,
 ) -> (ScanReport, Vec<usize>, bool) {
-    let mut scanner =
-        Scanner::with_offset(source, language, options, offset, track_checkpoints, stop);
+    finish_scan(Scanner::with_offset(
+        source,
+        language,
+        options,
+        offset,
+        track_checkpoints,
+        stop,
+    ))
+}
+
+#[inline]
+fn finish_scan(mut scanner: Scanner<'_>) -> (ScanReport, Vec<usize>, bool) {
+    let language = scanner.language;
     scanner.scan_language();
     debug_assert!(
         scanner.comments.windows(2).all(|comments| {
@@ -222,6 +313,51 @@ impl<'a> Scanner<'a> {
             Ok(patterns) => (patterns, None),
             Err(error) => (DispositionPatterns::empty(), Some(error.to_string())),
         };
+        Self::with_owned(
+            source,
+            language,
+            PreparedScanner {
+                options,
+                patterns,
+                pattern_error,
+            },
+            offset,
+            track_checkpoints,
+            stop,
+        )
+    }
+
+    fn with_prepared(
+        source: &'a [u8],
+        language: Language,
+        prepared: &PreparedScanner,
+        offset: usize,
+        track_checkpoints: bool,
+        stop: Option<usize>,
+    ) -> Self {
+        Self::with_owned(
+            source,
+            language,
+            prepared.clone(),
+            offset,
+            track_checkpoints,
+            stop,
+        )
+    }
+
+    fn with_owned(
+        source: &'a [u8],
+        language: Language,
+        prepared: PreparedScanner,
+        offset: usize,
+        track_checkpoints: bool,
+        stop: Option<usize>,
+    ) -> Self {
+        let PreparedScanner {
+            options,
+            patterns,
+            pattern_error,
+        } = prepared;
         let mut scanner = Self {
             source,
             language,
@@ -244,7 +380,7 @@ impl<'a> Scanner<'a> {
             restart_rules: RestartRules::of(source, language),
             yaml_blocks: Vec::new(),
         };
-        if let Some(error) = pattern_error {
+        if let Some(error) = pattern_error.as_deref() {
             scanner.error(
                 "invalid-policy-regex",
                 &format!("invalid comment policy regex: {error}"),
@@ -254,9 +390,13 @@ impl<'a> Scanner<'a> {
         scanner
     }
 
-    fn child(source: &'a [u8], language: Language, options: ScanOptions, offset: usize) -> Self {
-        let patterns =
-            DispositionPatterns::compile(&options).unwrap_or_else(|_| DispositionPatterns::empty());
+    fn child(
+        source: &'a [u8],
+        language: Language,
+        options: ScanOptions,
+        patterns: DispositionPatterns,
+        offset: usize,
+    ) -> Self {
         Self {
             source,
             language,
@@ -433,7 +573,13 @@ impl<'a> Scanner<'a> {
          * it is the same answer the incremental engine gets from them. */
         if !self.restart_rules.splicing_permits_restarts {
             let mapped = MappedBytes::without_c_line_splices(self.source);
-            let mut child = Scanner::child(&mapped.bytes, self.language, self.options.clone(), 0);
+            let mut child = Scanner::child(
+                &mapped.bytes,
+                self.language,
+                self.options.clone(),
+                self.patterns.clone(),
+                0,
+            );
             child.scan_c_family_unmapped();
             self.merge_mapped(child, &mapped);
         } else {
@@ -1063,7 +1209,13 @@ impl<'a> Scanner<'a> {
                 span,
             );
         }
-        let mut child = Scanner::child(&mapped.bytes, Language::Java, self.options.clone(), 0);
+        let mut child = Scanner::child(
+            &mapped.bytes,
+            Language::Java,
+            self.options.clone(),
+            self.patterns.clone(),
+            0,
+        );
         let mut index = 0;
         while index < child.source.len() {
             if starts(child.source, index, b"//") {
@@ -5001,6 +5153,7 @@ impl<'a> Scanner<'a> {
                         slice,
                         language,
                         self.options.clone(),
+                        self.patterns.clone(),
                         self.offset + content_start,
                     );
                     if language == Language::JavaScript {
@@ -5578,6 +5731,7 @@ impl<'a> Scanner<'a> {
                 &bytes[info_end..content_end],
                 language,
                 self.options.clone(),
+                self.patterns.clone(),
                 self.offset + info_end,
             );
             child.scan_language();
@@ -5738,6 +5892,7 @@ impl<'a> Scanner<'a> {
                     &bytes[content_start..content_end],
                     language,
                     child_options,
+                    self.patterns.clone(),
                     self.offset + content_start,
                 );
                 match language {
@@ -5818,6 +5973,7 @@ impl<'a> Scanner<'a> {
                     &self.source[value_start..value_end],
                     Language::JavaScript,
                     self.options.clone(),
+                    self.patterns.clone(),
                     self.offset + value_start,
                 );
                 child.scan_javascript();
@@ -5884,10 +6040,12 @@ impl<'a> Scanner<'a> {
 /// every comment scanned under one set of options is matched against the very
 /// same two sets. A caller explaining a whole file compiles them once here and
 /// hands them to [`explain_disposition_with`] for each of its comments.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct DispositionPatterns {
     keep: RegexSet,
     remove: RegexSet,
+    keep_active: bool,
+    remove_active: bool,
 }
 
 impl DispositionPatterns {
@@ -5897,6 +6055,8 @@ impl DispositionPatterns {
         Ok(Self {
             keep: RegexSet::new(&options.keep_regex)?,
             remove: RegexSet::new(&options.remove_regex)?,
+            keep_active: !options.keep_regex.is_empty(),
+            remove_active: !options.remove_regex.is_empty(),
         })
     }
 
@@ -5908,6 +6068,8 @@ impl DispositionPatterns {
         Self {
             keep: RegexSet::empty(),
             remove: RegexSet::empty(),
+            keep_active: false,
+            remove_active: false,
         }
     }
 }
@@ -5918,7 +6080,7 @@ pub(crate) fn disposition(
     raw: &[u8],
     patterns: &DispositionPatterns,
 ) -> Disposition {
-    if options.keep_kinds.contains(&kind) || patterns.keep.is_match(raw) {
+    if options.keep_kinds.contains(&kind) || (patterns.keep_active && patterns.keep.is_match(raw)) {
         return Disposition::Keep {
             reason: "kept by kind or regex override".into(),
         };
@@ -5929,7 +6091,9 @@ pub(crate) fn disposition(
             reason: "required source preamble".into(),
         };
     }
-    if options.remove_kinds.contains(&kind) || patterns.remove.is_match(raw) {
+    if options.remove_kinds.contains(&kind)
+        || (patterns.remove_active && patterns.remove.is_match(raw))
+    {
         return Disposition::Remove;
     }
     if options.policy == Policy::All {

@@ -16,12 +16,15 @@
 use crate::{
     atomic::WritePlan,
     output::{
-        Presentation, ProcessedFile, color, line_column, sanitize_path, sanitize_source_line, wrote,
+        LineIndex, Presentation, ProcessedFile, color, sanitize_path, sanitize_source_line, wrote,
     },
 };
 use anyhow::Result;
 use ocomment_core::{Comment, Edit, apply_edits};
-use std::io::{BufRead, Write};
+use std::{
+    borrow::Cow,
+    io::{BufRead, Write},
+};
 
 /// What the reader decided about the removable comments of one run.
 ///
@@ -29,9 +32,9 @@ use std::io::{BufRead, Write};
 /// a source file, and the one thing this type must never do is put it on a
 /// terminal by accident.
 #[derive(Default)]
-pub struct Selection {
+pub struct Selection<'a> {
     /// One plan per file that keeps at least one accepted removal.
-    pub plans: Vec<WritePlan>,
+    pub plans: Vec<WritePlan<'a>>,
     pub accepted: usize,
     pub declined: usize,
     /// The reader asked for the run to write nothing at all.
@@ -65,12 +68,12 @@ const CONTEXT: usize = 3;
 ///
 /// `input` and `output` are the reader's terminal; they are parameters so the
 /// whole conversation can be driven from a script in a test.
-pub fn select(
-    files: &[ProcessedFile],
+pub fn select<'a>(
+    files: &'a [ProcessedFile],
     input: &mut dyn BufRead,
     output: &mut dyn Write,
     presentation: &Presentation,
-) -> Result<Selection> {
+) -> Result<Selection<'a>> {
     let total: usize = files.iter().map(|file| file.result.edits.len()).sum();
     let mut selection = Selection::default();
     let mut position = 0usize;
@@ -81,6 +84,7 @@ pub fn select(
             continue;
         }
         let mut accepted: Vec<Edit> = Vec::new();
+        let lines = LineIndex::new(&file.source);
         // NOTE: The answer `a` or `d` left standing for the rest of this file.
         let mut standing: Option<bool> = None;
         for (index, item) in items.iter().enumerate() {
@@ -95,7 +99,7 @@ pub fn select(
                         position,
                         total,
                     };
-                    show(output, file, comment, edit, place, presentation)?;
+                    show(output, file, comment, edit, place, &lines, presentation)?;
                     match ask(input, output, presentation)? {
                         Answer::Yes => true,
                         Answer::No => false,
@@ -135,8 +139,8 @@ pub fn select(
             if replacement != file.source {
                 selection.plans.push(WritePlan {
                     path: file.path.clone(),
-                    original: file.source.clone(),
-                    replacement,
+                    original: Cow::Borrowed(&file.source),
+                    replacement: Cow::Owned(replacement),
                 });
             }
         }
@@ -178,9 +182,10 @@ fn show(
     comment: &Comment,
     edit: &Edit,
     place: Place,
+    lines: &LineIndex,
     presentation: &Presentation,
 ) -> Result<()> {
-    let (line, column) = line_column(&file.source, comment.span.start);
+    let (line, column) = lines.line_column(comment.span.start);
     wrote(writeln!(
         output,
         "{}:{line}:{column}  {} comment  ({} of {} in file, {} of {} total)",
@@ -457,29 +462,30 @@ mod tests {
             path: PathBuf::from(name),
             source,
             language: Language::C,
-            result,
+            result: crate::output::ProcessedResult::complete(result),
         }
     }
 
     /// Drive `select` with a scripted answer per line and collect everything it
     /// wrote to the terminal.
-    fn ask(files: &[ProcessedFile], script: &str) -> (Selection, String) {
+    fn ask<'a>(files: &'a [ProcessedFile], script: &str) -> (Selection<'a>, String) {
         let mut input = Cursor::new(script.as_bytes().to_vec());
         let mut written: Vec<u8> = Vec::new();
         let selection = select(files, &mut input, &mut written, &Presentation::default()).unwrap();
         (selection, String::from_utf8(written).unwrap())
     }
 
-    fn replacement(selection: &Selection) -> String {
+    fn replacement(selection: &Selection<'_>) -> String {
         assert_eq!(selection.plans.len(), 1, "expected exactly one write plan");
-        String::from_utf8(selection.plans[0].replacement.clone()).unwrap()
+        String::from_utf8(selection.plans[0].replacement.to_vec()).unwrap()
     }
 
     /// The answers apply to one comment each: the accepted span is gone and the
     /// declined one is still in the bytes that would be written.
     #[test]
     fn yes_and_no_apply_only_the_accepted_comment() {
-        let (selection, _) = ask(&[file("a.c", TWO)], "y\nn\n");
+        let files = [file("a.c", TWO)];
+        let (selection, _) = ask(&files, "y\nn\n");
         assert_eq!((selection.accepted, selection.declined), (1, 1));
         assert!(!selection.aborted);
         assert_eq!(replacement(&selection), "a b/* two */c\n");
@@ -611,11 +617,11 @@ mod tests {
         assert_eq!((selection.accepted, selection.declined), (3, 1));
         assert_eq!(selection.plans.len(), 2);
         assert_eq!(
-            String::from_utf8(selection.plans[0].replacement.clone()).unwrap(),
+            String::from_utf8(selection.plans[0].replacement.to_vec()).unwrap(),
             "a b c\n"
         );
         assert_eq!(
-            String::from_utf8(selection.plans[1].replacement.clone()).unwrap(),
+            String::from_utf8(selection.plans[1].replacement.to_vec()).unwrap(),
             "a b/* two */c\n"
         );
         assert_eq!(
@@ -673,7 +679,8 @@ mod tests {
     /// the one answer that cannot be guessed at: it aborts.
     #[test]
     fn end_of_input_aborts_like_x() {
-        let (selection, _) = ask(&[file("a.c", TWO)], "y\n");
+        let files = [file("a.c", TWO)];
+        let (selection, _) = ask(&files, "y\n");
         assert!(selection.aborted, "the second question ran out of input");
         assert!(selection.plans.is_empty());
     }
@@ -681,7 +688,8 @@ mod tests {
     /// `?` is not an answer; it explains the answers and asks again.
     #[test]
     fn help_is_shown_and_the_question_repeated() {
-        let (selection, transcript) = ask(&[file("a.c", TWO)], "?\nn\nn\n");
+        let files = [file("a.c", TWO)];
+        let (selection, transcript) = ask(&files, "?\nn\nn\n");
         assert_eq!((selection.accepted, selection.declined), (0, 2));
         assert!(
             transcript.contains("a - remove it and every remaining comment in this file"),
@@ -697,7 +705,8 @@ mod tests {
     /// Anything else is a typo, not a decision, and is never taken for one.
     #[test]
     fn an_unknown_answer_re_prompts() {
-        let (selection, transcript) = ask(&[file("a.c", TWO)], "z\n\ny\nn\n");
+        let files = [file("a.c", TWO)];
+        let (selection, transcript) = ask(&files, "z\n\ny\nn\n");
         assert_eq!((selection.accepted, selection.declined), (1, 1));
         assert_eq!(replacement(&selection), "a b/* two */c\n");
         assert!(

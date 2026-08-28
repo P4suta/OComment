@@ -2,7 +2,9 @@ use crate::config::ResolvedConfig;
 use anyhow::{Context, Result, anyhow};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use ignore::WalkBuilder;
-use ocomment_core::{DeclarativeProfile, Detection, Dialect, Language, detect_language};
+use ocomment_core::{
+    DeclarativeProfile, Detection, Dialect, Language, TransformOptions, detect_language,
+};
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -14,6 +16,9 @@ pub struct SourceFile {
     pub source: Vec<u8>,
     pub language: Language,
     pub dialect: Dialect,
+    /// The path-resolved policy and layout used for this source. Resolution is
+    /// part of discovery so the parallel scan does not repeat it.
+    pub options: TransformOptions,
     pub profile: Option<DeclarativeProfile>,
     pub plugin: Option<String>,
 }
@@ -111,21 +116,22 @@ pub fn stdin_source(
     else {
         return Err(skipped(STDIN_LANGUAGE_HELP, true));
     };
-    if forced_language.is_none()
-        && resolved
-            .config
-            .languages
-            .get(language.as_str())
-            .and_then(|item| item.enabled)
-            == Some(false)
-    {
+    let (language, options) = resolved
+        .for_path(
+            Path::new(STDIN_PATH),
+            language,
+            forced_dialect.unwrap_or(dialect),
+        )
+        .map_err(|error| skipped(&error.to_string(), true))?;
+    if forced_language.is_none() && !resolved.language_is_enabled(language) {
         return Err(skipped("language disabled by configuration", false));
     }
     Ok(SourceFile {
         path: PathBuf::from(STDIN_PATH),
         source: bytes,
         language,
-        dialect: forced_dialect.unwrap_or(dialect),
+        dialect: options.scan.dialect,
+        options,
         profile: None,
         plugin: None,
     })
@@ -446,6 +452,7 @@ fn load_one(
         source,
         language,
         dialect: options.scan.dialect,
+        options,
         profile,
         plugin,
     });

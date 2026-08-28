@@ -1,9 +1,9 @@
 use crate::{
-    ByteSpan, Comment, CommentKind, Edit, ExternalSpanError, Language, Layout, ScanReport,
-    SourceMap, TransformOptions, TransformResult, scan,
+    ByteSpan, Comment, CommentKind, Edit, ExternalSpanError, Language, Layout, PreparedScanner,
+    ScanReport, SourceMap, TransformOptions, TransformPlan, TransformResult,
     scanner::{
-        DispositionPatterns, disposition, keep_yaml_structural_trails,
-        lines_a_removal_must_swallow, unicode_line_terminator_width,
+        disposition, keep_yaml_structural_trails, lines_a_removal_must_swallow, scan,
+        unicode_line_terminator_width,
     },
 };
 use unicode_width::UnicodeWidthChar;
@@ -39,8 +39,68 @@ use unicode_width::UnicodeWidthChar;
 /// assert_eq!(broken.output, b"x /* no end");
 /// ```
 pub fn transform(source: &[u8], language: Language, options: TransformOptions) -> TransformResult {
-    let report = scan(source, language, options.scan.clone());
-    transform_report(source, report, options)
+    transform_plan(source, language, options).finish(source)
+}
+
+/// Scan `source` and compute its edits without building output bytes or a
+/// source map.
+///
+/// This is the lazy counterpart of [`transform`]. It is useful for checkers
+/// and report writers that only need the report or edit list.
+pub fn transform_plan(
+    source: &[u8],
+    language: Language,
+    options: TransformOptions,
+) -> TransformPlan {
+    let force_invalid = options.scan.force_invalid;
+    let report = scan(source, language, options.scan);
+    plan_report(source, report, options.layout, force_invalid)
+}
+
+impl PreparedScanner {
+    /// Scan and plan edits with this scanner's already-compiled policy.
+    pub fn transform_plan(
+        &self,
+        source: &[u8],
+        language: Language,
+        layout: Layout,
+    ) -> TransformPlan {
+        let report = self.scan(source, language);
+        plan_report(source, report, layout, self.options().force_invalid)
+    }
+
+    /// Produce a complete transformation with this scanner's compiled policy.
+    pub fn transform(&self, source: &[u8], language: Language, layout: Layout) -> TransformResult {
+        self.transform_plan(source, language, layout).finish(source)
+    }
+
+    /// Validate externally supplied spans and plan their edits with this
+    /// scanner's already-compiled policy.
+    pub fn transform_spans_plan(
+        &self,
+        source: &[u8],
+        language: Language,
+        spans: &[(ByteSpan, CommentKind)],
+        layout: Layout,
+    ) -> Result<TransformPlan, ExternalSpanError> {
+        let report = self.scan_spans(source, language, spans)?;
+        Ok(plan_report(
+            source,
+            report,
+            layout,
+            self.options().force_invalid,
+        ))
+    }
+
+    /// Validate and classify externally supplied spans without planning edits.
+    pub fn scan_spans(
+        &self,
+        source: &[u8],
+        language: Language,
+        spans: &[(ByteSpan, CommentKind)],
+    ) -> Result<ScanReport, ExternalSpanError> {
+        external_report(source, language, spans, self)
+    }
 }
 
 /// Transform a scanner's already-classified comment spans using the same
@@ -94,8 +154,19 @@ pub fn transform_spans(
     spans: &[(ByteSpan, CommentKind)],
     options: TransformOptions,
 ) -> Result<TransformResult, ExternalSpanError> {
-    let patterns = DispositionPatterns::compile(&options.scan)
+    let prepared = PreparedScanner::new(options.scan)
         .map_err(|error| ExternalSpanError::InvalidPattern(error.to_string()))?;
+    Ok(prepared
+        .transform_spans_plan(source, language, spans, options.layout)?
+        .finish(source))
+}
+
+fn external_report(
+    source: &[u8],
+    language: Language,
+    spans: &[(ByteSpan, CommentKind)],
+    prepared: &PreparedScanner,
+) -> Result<ScanReport, ExternalSpanError> {
     let mut cursor = 0;
     let mut comments = Vec::with_capacity(spans.len());
     for (index, (span, kind)) in spans.iter().copied().enumerate() {
@@ -117,9 +188,9 @@ pub fn transform_spans(
             kind,
             disposition: disposition(
                 kind,
-                &options.scan,
+                prepared.options(),
                 &source[span.start..span.end],
-                &patterns,
+                &prepared.patterns,
             ),
         });
     }
@@ -129,16 +200,12 @@ pub fn transform_spans(
      * found it. Without this the report would promise a removal that
      * `lines_a_removal_must_swallow` cannot make safe. */
     keep_yaml_structural_trails(source, language, &mut comments);
-    Ok(transform_report(
-        source,
-        ScanReport {
-            language,
-            comments,
-            diagnostics: Vec::new(),
-            valid: true,
-        },
-        options,
-    ))
+    Ok(ScanReport {
+        language,
+        comments,
+        diagnostics: Vec::new(),
+        valid: true,
+    })
 }
 
 pub(crate) fn transform_report(
@@ -146,13 +213,22 @@ pub(crate) fn transform_report(
     report: crate::ScanReport,
     options: TransformOptions,
 ) -> TransformResult {
-    let edits = if report.valid || options.scan.force_invalid {
+    plan_report(source, report, options.layout, options.scan.force_invalid).finish(source)
+}
+
+pub(crate) fn plan_report(
+    source: &[u8],
+    report: crate::ScanReport,
+    layout: Layout,
+    force_invalid: bool,
+) -> TransformPlan {
+    let edits = if report.valid || force_invalid {
         /* NOTE: The one hole whose own bytes carry meaning, so every layout has
          * to be told where not to leave one. `compact` takes the line already;
          * what it does not know on its own is how far past the line to go
          * under a `|+` body. */
         let swallow = lines_a_removal_must_swallow(source, report.language, &report.comments);
-        match options.layout {
+        match layout {
             Layout::Lines => line_edits(source, &report.comments, &swallow),
             Layout::Columns => column_edits(source, &report.comments, &swallow),
             Layout::Compact => compact_edits(source, &report.comments, &swallow),
@@ -160,13 +236,35 @@ pub(crate) fn transform_report(
     } else {
         Vec::new()
     };
-    let output = apply_edits(source, &edits);
-    let source_map = SourceMap::from_edits(source.len(), &edits);
-    TransformResult {
-        output,
-        edits,
-        report,
-        source_map,
+    TransformPlan { edits, report }
+}
+
+impl TransformPlan {
+    /// Apply this plan and build its source map.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `source` is not the source the plan was made for and an
+    /// edit consequently lies outside it, just like [`apply_edits`].
+    pub fn finish(self, source: &[u8]) -> TransformResult {
+        let output = apply_edits(source, &self.edits);
+        let source_map = SourceMap::from_edits(source.len(), &self.edits);
+        TransformResult {
+            output,
+            edits: self.edits,
+            report: self.report,
+            source_map,
+        }
+    }
+
+    /// Build only the transformed bytes, leaving the plan available.
+    pub fn output(&self, source: &[u8]) -> Vec<u8> {
+        apply_edits(source, &self.edits)
+    }
+
+    /// Build only the source map, leaving the plan available.
+    pub fn source_map(&self, source_len: usize) -> SourceMap {
+        SourceMap::from_edits(source_len, &self.edits)
     }
 }
 

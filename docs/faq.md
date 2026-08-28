@@ -108,6 +108,11 @@ binary, and no more than a 5% regression against the checked-in baseline on a
 fixed machine. Where `typos` is installed, it also requires a no-op repository
 scan to be no slower than 1.5 times `typos` on the same tree.
 
+CLI workloads add a 17.3 ms self-scan budget, a 90 MiB peak-RSS budget for a
+64 MiB quiet check, a one-second budget for 40,000 Human findings, and 100 MiB
+peak-RSS budgets for 100,000 JSON and SARIF findings. A regex-configured set of
+2,000 small files is measured alongside them.
+
 Those are gates rather than marketing numbers: measure on your own tree with
 `ocomment -v`, which reports what was scanned and skipped.
 

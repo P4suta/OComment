@@ -3,7 +3,7 @@ use crate::{
     config, files, git, interactive, lsp,
     output::{
         self, Explanations, FileExplanation, Operation, OutputFormat, Presentation, ProcessedFile,
-        RenderOptions, Verbosity,
+        ProcessedResult, RenderOptions, Verbosity,
     },
     plugin,
     values::{CommentKindArg, DialectArg, LanguageArg, LayoutArg, PolicyArg},
@@ -11,15 +11,19 @@ use crate::{
 use anyhow::{Context, Result, bail, ensure};
 use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{Shell, generate};
-use ocomment_core::{CommentKind, Dialect, Language, transform};
+use ocomment_core::{CommentKind, Dialect, Language, PreparedScanner, transform};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::BTreeMap,
+    borrow::Cow,
+    collections::{BTreeMap, HashMap},
     fs,
     io::{self, IsTerminal, Read, Write},
     path::PathBuf,
-    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+    },
 };
 
 const LONG_ABOUT: &str = "\
@@ -602,21 +606,43 @@ fn run_target(
     let total = discovery.files.len();
     let counter = Progress::default();
     let explain = common.output.explain;
+    let materialize_output = operation == Operation::Fix
+        || flags.interactive
+        || (operation == Operation::Diff && common.output.format == OutputFormat::Human);
+    let materialize_source_map = matches!(
+        common.output.format,
+        OutputFormat::Json | OutputFormat::Jsonl
+    );
+    let needs_plan =
+        materialize_output || materialize_source_map || common.output.format == OutputFormat::Sarif;
+    let mut scanners = HashMap::new();
+    for file in &discovery.files {
+        if !scanners.contains_key(&file.options.scan) {
+            let scanner = PreparedScanner::new(file.options.scan.clone())
+                .context("cannot prepare comment policy")?;
+            scanners.insert(file.options.scan.clone(), Arc::new(scanner));
+        }
+    }
     let processed = discovery
         .files
-        .par_iter()
+        .into_par_iter()
         .map(|file| {
             /* NOTE: Only an explaining run pays for the trace; every other one takes
              * the hot path it always took. */
-            let (language, options, trace) = if explain {
-                let (language, options, trace) =
+            let trace = if explain {
+                let (traced_language, traced_options, trace) =
                     resolved.for_path_traced(&file.path, file.language, file.dialect)?;
-                (language, options, Some(trace))
+                debug_assert_eq!(traced_language, file.language);
+                debug_assert_eq!(traced_options, file.options);
+                Some(trace)
             } else {
-                let (language, options) =
-                    resolved.for_path(&file.path, file.language, file.dialect)?;
-                (language, options, None)
+                None
             };
+            let language = file.language;
+            let options = file.options;
+            let scanner = scanners
+                .get(&options.scan)
+                .expect("every discovered policy was prepared");
             /* NOTE: Recorded as the scan is about to run with them, `--language` and
              * `--dialect` included, so an explanation accounts for the run that
              * actually happened. */
@@ -624,27 +650,67 @@ fn run_target(
                 options: options.scan.clone(),
                 trace,
             });
-            let result = if let Some(name) = &file.plugin {
-                let language_name = file
-                    .path
+            let language_name = || {
+                file.path
                     .extension()
                     .and_then(|value| value.to_str())
                     .unwrap_or("unknown")
-                    .to_ascii_lowercase();
-                plugin_host.transform(name, &file.source, &language_name, &file.path, options)?
-            } else if let Some(profile) = &file.profile {
-                ocomment_core::transform_profile(&file.source, profile, options)
-                    .expect("profiles were validated while loading configuration")
+                    .to_ascii_lowercase()
+            };
+            let result = if needs_plan {
+                let plan = if let Some(name) = &file.plugin {
+                    plugin_host.transform_plan(
+                        name,
+                        &file.source,
+                        &language_name(),
+                        &file.path,
+                        &options,
+                        scanner,
+                    )?
+                } else if let Some(profile) = &file.profile {
+                    scanner
+                        .transform_profile_plan(&file.source, profile, options.layout)
+                        .expect("profiles were validated while loading configuration")
+                } else {
+                    scanner.transform_plan(&file.source, language, options.layout)
+                };
+                ProcessedResult::plan(
+                    &file.source,
+                    plan,
+                    materialize_output,
+                    materialize_source_map,
+                )
             } else {
-                transform(&file.source, language, options)
+                let report = if let Some(name) = &file.plugin {
+                    plugin_host.scan_report(
+                        name,
+                        &file.source,
+                        &language_name(),
+                        &file.path,
+                        &options,
+                        scanner,
+                    )?
+                } else if let Some(profile) = &file.profile {
+                    scanner
+                        .scan_profile(&file.source, profile)
+                        .expect("profiles were validated while loading configuration")
+                } else {
+                    scanner.scan(&file.source, language)
+                };
+                let changed = (report.valid || scanner.options().force_invalid)
+                    && report
+                        .comments
+                        .iter()
+                        .any(|comment| comment.disposition.is_remove());
+                ProcessedResult::report(report, changed)
             };
             if progress {
                 counter.report(total);
             }
             Ok::<_, anyhow::Error>((
                 ProcessedFile {
-                    path: file.path.clone(),
-                    source: file.source.clone(),
+                    path: file.path,
+                    source: file.source,
                     language,
                     result,
                 },
@@ -683,11 +749,11 @@ fn run_target(
     if applied {
         let plans = files
             .iter()
-            .filter(|file| file.source != file.result.output)
+            .filter(|file| file.result.changed())
             .map(|file| WritePlan {
                 path: file.path.clone(),
-                original: file.source.clone(),
-                replacement: file.result.output.clone(),
+                original: Cow::Borrowed(&file.source),
+                replacement: Cow::Borrowed(file.result.output()),
             })
             .collect();
         apply_transaction(plans)?;

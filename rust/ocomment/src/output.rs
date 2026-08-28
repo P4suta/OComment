@@ -4,11 +4,13 @@ use crate::{
 };
 use anyhow::Result;
 use clap::ValueEnum;
+#[cfg(test)]
+use ocomment_core::TransformResult;
 use ocomment_core::{
-    ByteSpan, Comment, CommentKind, Disposition, DispositionExplanation, DispositionPatterns,
-    Language, Policy, ScanOptions, TransformResult, explain_comment_with,
+    ByteSpan, Comment, CommentKind, Disposition, DispositionExplanation, DispositionPatterns, Edit,
+    Language, Policy, ScanOptions, ScanReport, SourceMap, TransformPlan, explain_comment_with,
 };
-use serde::Serialize;
+use serde::{Serialize, Serializer, ser::SerializeSeq};
 use serde_json::{Value, json};
 use similar::{Algorithm, ChangeTag, capture_diff_slices, group_diff_ops};
 use std::{
@@ -115,7 +117,7 @@ impl Summary {
             if !file.result.report.valid {
                 summary.invalid_files += 1;
             }
-            if file.source != file.result.output {
+            if file.result.changed() {
                 summary.files_changed += 1;
                 if operation == Operation::Fix {
                     summary.comments_removed += removable;
@@ -213,7 +215,80 @@ pub struct ProcessedFile {
     pub path: PathBuf,
     pub source: Vec<u8>,
     pub language: Language,
-    pub result: TransformResult,
+    pub result: ProcessedResult,
+}
+
+/// The stages of a core transformation retained by the CLI.
+///
+/// Reports are always present. Edits, a source map, and transformed bytes are
+/// materialized only for the commands and output formats that consume them.
+#[derive(Clone, Debug)]
+pub struct ProcessedResult {
+    pub report: ScanReport,
+    pub edits: Vec<Edit>,
+    pub source_map: Option<SourceMap>,
+    output: Option<Vec<u8>>,
+    changed: bool,
+}
+
+impl ProcessedResult {
+    pub fn report(report: ScanReport, changed: bool) -> Self {
+        Self {
+            report,
+            edits: Vec::new(),
+            source_map: None,
+            output: None,
+            changed,
+        }
+    }
+
+    pub fn plan(
+        source: &[u8],
+        plan: TransformPlan,
+        materialize_output: bool,
+        materialize_source_map: bool,
+    ) -> Self {
+        let changed = plan.edits.iter().any(|edit| {
+            source.get(edit.span.start..edit.span.end) != Some(edit.replacement.as_slice())
+        });
+        let output = materialize_output.then(|| plan.output(source));
+        let source_map = materialize_source_map.then(|| plan.source_map(source.len()));
+        Self {
+            report: plan.report,
+            edits: plan.edits,
+            source_map,
+            output,
+            changed,
+        }
+    }
+
+    #[cfg(test)]
+    pub fn complete(result: TransformResult) -> Self {
+        let changed = !result.edits.is_empty();
+        Self {
+            report: result.report,
+            edits: result.edits,
+            source_map: Some(result.source_map),
+            output: Some(result.output),
+            changed,
+        }
+    }
+
+    pub const fn changed(&self) -> bool {
+        self.changed
+    }
+
+    pub fn output(&self) -> &[u8] {
+        self.output
+            .as_deref()
+            .expect("this operation requested transformed source bytes")
+    }
+
+    pub fn source_map(&self) -> &SourceMap {
+        self.source_map
+            .as_ref()
+            .expect("this output format requested a source map")
+    }
 }
 
 #[derive(Serialize)]
@@ -223,7 +298,7 @@ struct JsonFile<'a> {
     changed: bool,
     report: &'a ocomment_core::ScanReport,
     edits: &'a [ocomment_core::Edit],
-    source_map: &'a ocomment_core::SourceMap,
+    source_map: &'a SourceMap,
 }
 
 /// The one-line label for a comment OComment would delete.
@@ -670,14 +745,37 @@ fn render_human(
     let quiet = options.verbosity == Verbosity::Quiet;
     let verbose = options.verbosity == Verbosity::Verbose;
     for file in files {
-        if operation == Operation::Diff && file.source != file.result.output {
+        if operation == Operation::Diff && file.result.changed() {
             /* NOTE: The patch is the product of `diff`, so `-q` keeps it and drops
              * only the summary that follows on standard error. */
-            wrote(output.write_all(&unified_diff(&file.path, &file.source, &file.result.output)))?;
+            wrote(output.write_all(&unified_diff(
+                &file.path,
+                &file.source,
+                file.result.output(),
+            )))?;
             continue;
         }
+        let reports_comments = match operation {
+            Operation::Scan => !file.result.report.comments.is_empty(),
+            Operation::Fix => false,
+            Operation::Check | Operation::Diff if quiet => false,
+            Operation::Check | Operation::Diff if options.explain => {
+                !file.result.report.comments.is_empty()
+            }
+            Operation::Check | Operation::Diff => file
+                .result
+                .report
+                .comments
+                .iter()
+                .any(|comment| comment.disposition.is_remove()),
+        };
+        let lines = (!file.result.report.diagnostics.is_empty() || reports_comments)
+            .then(|| LineIndex::new(&file.source));
         for diagnostic in &file.result.report.diagnostics {
-            let (line, column) = line_column(&file.source, diagnostic.span.start);
+            let (line, column) = lines
+                .as_ref()
+                .expect("a diagnostic requested a line index")
+                .line_column(diagnostic.span.start);
             wrote(writeln!(
                 output,
                 "{}:{line}:{column}: {}{}[{}]{}: {}",
@@ -698,7 +796,10 @@ fn render_human(
         if operation == Operation::Scan {
             // NOTE: The listing is the product of `scan`; `-q` keeps it too.
             for comment in &file.result.report.comments {
-                let (line, column) = line_column(&file.source, comment.span.start);
+                let (line, column) = lines
+                    .as_ref()
+                    .expect("a scan listing requested a line index")
+                    .line_column(comment.span.start);
                 wrote(writeln!(
                     output,
                     "{}:{line}:{column}: {} {} {}..{}{}",
@@ -714,7 +815,7 @@ fn render_human(
         } else if quiet {
             continue;
         } else if operation == Operation::Fix {
-            if options.applied && file.source != file.result.output {
+            if options.applied && file.result.changed() {
                 wrote(writeln!(
                     output,
                     "fixed {}: removed {}",
@@ -731,7 +832,10 @@ fn render_human(
                 if !options.explain && !removable {
                     continue;
                 }
-                let (line, column) = line_column(&file.source, comment.span.start);
+                let (line, column) = lines
+                    .as_ref()
+                    .expect("a finding requested a line index")
+                    .line_column(comment.span.start);
                 wrote(writeln!(
                     output,
                     "{}:{line}:{column}: {}{}{}{}",
@@ -1133,20 +1237,63 @@ fn render_json(
     files: &[ProcessedFile],
     skipped: &[SkippedFile],
 ) -> Result<()> {
-    let values: Vec<_> = files.iter().map(json_file).collect();
-    let skipped: Vec<_> = skipped
-        .iter()
-        .map(|item| {
-            json!({"path": item.path.to_string_lossy(), "reason": item.reason, "error": item.error})
-        })
-        .collect();
+    #[derive(Serialize)]
+    struct Document<'a> {
+        version: u8,
+        files: JsonFiles<'a>,
+        skipped: JsonSkipped<'a>,
+    }
     serde_json::to_writer_pretty(
         &mut *output,
-        &json!({"version": 1, "files": values, "skipped": skipped}),
+        &Document {
+            version: 1,
+            files: JsonFiles(files),
+            skipped: JsonSkipped(skipped),
+        },
     )
     .map_err(write_error)?;
     wrote(writeln!(output))?;
     Ok(())
+}
+
+struct JsonFiles<'a>(&'a [ProcessedFile]);
+
+impl Serialize for JsonFiles<'_> {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut sequence = serializer.serialize_seq(Some(self.0.len()))?;
+        for file in self.0 {
+            sequence.serialize_element(&json_file(file))?;
+        }
+        sequence.end()
+    }
+}
+
+struct JsonSkipped<'a>(&'a [SkippedFile]);
+
+impl Serialize for JsonSkipped<'_> {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        #[derive(Serialize)]
+        struct Entry<'a> {
+            path: std::borrow::Cow<'a, str>,
+            reason: &'a str,
+            error: bool,
+        }
+        let mut sequence = serializer.serialize_seq(Some(self.0.len()))?;
+        for item in self.0 {
+            sequence.serialize_element(&Entry {
+                path: item.path.to_string_lossy(),
+                reason: &item.reason,
+                error: item.error,
+            })?;
+        }
+        sequence.end()
+    }
 }
 
 fn render_jsonl(
@@ -1173,10 +1320,10 @@ fn json_file(file: &ProcessedFile) -> JsonFile<'_> {
     JsonFile {
         path: file.path.to_string_lossy().into_owned(),
         language: file.language,
-        changed: file.source != file.result.output,
+        changed: file.result.changed(),
         report: &file.result.report,
         edits: &file.result.edits,
-        source_map: &file.result.source_map,
+        source_map: file.result.source_map(),
     }
 }
 
@@ -1426,12 +1573,19 @@ impl SarifRules {
         index
     }
 
-    fn kind(&mut self, kind: CommentKind) -> usize {
+    fn kind(&self, kind: CommentKind) -> usize {
         let id = format!("removable-{kind}");
         *self
             .indices
             .get(&id)
             .expect("every comment kind is described")
+    }
+
+    fn index(&self, id: &str) -> usize {
+        *self
+            .indices
+            .get(id)
+            .expect("every emitted SARIF result has a prepared rule")
     }
 }
 
@@ -1446,77 +1600,129 @@ fn sentence_case(code: &str) -> String {
     }
 }
 
+fn sarif_level(severity: ocomment_core::Severity) -> &'static str {
+    match severity {
+        ocomment_core::Severity::Error => "error",
+        ocomment_core::Severity::Warning => "warning",
+        ocomment_core::Severity::Info | ocomment_core::Severity::Hint => "note",
+    }
+}
+
+/// A SARIF result array serialized one finding at a time. Keeping the rule
+/// table separate lets the header be finalized first without retaining a
+/// `serde_json::Value` for every comment in the run.
+struct SarifResults<'a> {
+    files: &'a [ProcessedFile],
+    skipped: &'a [SkippedFile],
+    rules: &'a SarifRules,
+}
+
+impl Serialize for SarifResults<'_> {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut results = serializer.serialize_seq(None)?;
+        for file in self.files {
+            if file.result.report.diagnostics.is_empty()
+                && !file
+                    .result
+                    .report
+                    .comments
+                    .iter()
+                    .any(|comment| comment.disposition.is_remove())
+            {
+                continue;
+            }
+            let location = artifact_location(&file.path);
+            let lines = LineIndex::new(&file.source);
+            for comment in file
+                .result
+                .report
+                .comments
+                .iter()
+                .filter(|comment| comment.disposition.is_remove())
+            {
+                let (line, column) = lines.line_column(comment.span.start);
+                let (end_line, end_column) = lines.line_column(comment.span.end);
+                let (fix_span, replacement) = fix_for_span(file, comment.span);
+                let (fix_line, fix_column) = lines.line_column(fix_span.start);
+                let (fix_end_line, fix_end_column) = lines.line_column(fix_span.end);
+                let kind = comment.kind.as_str();
+                results.serialize_element(&json!({
+                    "ruleId": format!("removable-{kind}"),
+                    "ruleIndex": self.rules.kind(comment.kind),
+                    "level": "note",
+                    "message": {"text": removable_label(comment.kind)},
+                    "locations": [{"physicalLocation": {
+                        "artifactLocation": location.clone(),
+                        "region": {"startLine": line, "startColumn": column,
+                            "endLine": end_line, "endColumn": end_column}
+                    }}],
+                    "fixes": [{
+                        "description": {"text": "Remove comment with OComment"},
+                        "artifactChanges": [{
+                            "artifactLocation": location.clone(),
+                            "replacements": [{"deletedRegion": {
+                                "startLine": fix_line, "startColumn": fix_column,
+                                "endLine": fix_end_line, "endColumn": fix_end_column
+                            }, "insertedContent": {"text": replacement}}]
+                        }]
+                    }]
+                }))?;
+            }
+            for diagnostic in &file.result.report.diagnostics {
+                let (line, column) = lines.line_column(diagnostic.span.start);
+                let (end_line, end_column) = lines.line_column(diagnostic.span.end);
+                let level = sarif_level(diagnostic.severity);
+                results.serialize_element(&json!({
+                    "ruleId": diagnostic.code,
+                    "ruleIndex": self.rules.index(&diagnostic.code),
+                    "level": level,
+                    "message": {"text": diagnostic.message},
+                    "locations": [{"physicalLocation": {
+                        "artifactLocation": location.clone(),
+                        "region": {"startLine": line, "startColumn": column,
+                            "endLine": end_line, "endColumn": end_column}
+                    }}]
+                }))?;
+            }
+        }
+        for item in self.skipped {
+            let (id, level) = if item.error {
+                ("io-error", "error")
+            } else {
+                ("skipped-file", "note")
+            };
+            results.serialize_element(&json!({
+                "ruleId": id,
+                "ruleIndex": self.rules.index(id),
+                "level": level,
+                "message": {"text": item.reason},
+                "locations": [{"physicalLocation": {
+                    "artifactLocation": artifact_location(&item.path)
+                }}]
+            }))?;
+        }
+        results.end()
+    }
+}
+
 fn render_sarif(
     output: &mut impl Write,
     files: &[ProcessedFile],
     skipped: &[SkippedFile],
 ) -> Result<()> {
     let mut rules = SarifRules::new();
-    let mut results = Vec::new();
     for file in files {
-        let location = artifact_location(&file.path);
-        for comment in file
-            .result
-            .report
-            .comments
-            .iter()
-            .filter(|comment| comment.disposition.is_remove())
-        {
-            let (line, column) = line_column(&file.source, comment.span.start);
-            let (end_line, end_column) = line_column(&file.source, comment.span.end);
-            let (fix_span, replacement) = fix_for_span(file, comment.span);
-            let (fix_line, fix_column) = line_column(&file.source, fix_span.start);
-            let (fix_end_line, fix_end_column) = line_column(&file.source, fix_span.end);
-            let kind = comment.kind.as_str();
-            let index = rules.kind(comment.kind);
-            results.push(json!({
-                "ruleId": format!("removable-{kind}"),
-                "ruleIndex": index,
-                "level": "note",
-                "message": {"text": removable_label(comment.kind)},
-                "locations": [{"physicalLocation": {
-                    "artifactLocation": location.clone(),
-                    "region": {"startLine": line, "startColumn": column,
-                        "endLine": end_line, "endColumn": end_column}
-                }}],
-                "fixes": [{
-                    "description": {"text": "Remove comment with OComment"},
-                    "artifactChanges": [{
-                        "artifactLocation": location.clone(),
-                        "replacements": [{"deletedRegion": {
-                            "startLine": fix_line, "startColumn": fix_column,
-                            "endLine": fix_end_line, "endColumn": fix_end_column
-                        }, "insertedContent": {"text": replacement}}]
-                    }]
-                }]
-            }));
-        }
         for diagnostic in &file.result.report.diagnostics {
-            let (line, column) = line_column(&file.source, diagnostic.span.start);
-            let (end_line, end_column) = line_column(&file.source, diagnostic.span.end);
-            let level = match diagnostic.severity {
-                ocomment_core::Severity::Error => "error",
-                ocomment_core::Severity::Warning => "warning",
-                ocomment_core::Severity::Info | ocomment_core::Severity::Hint => "note",
-            };
-            let index = rules.describe(
+            rules.describe(
                 &diagnostic.code,
-                level,
+                sarif_level(diagnostic.severity),
                 &sentence_case(&diagnostic.code),
                 DIAGNOSTIC_DESCRIPTION,
                 TOOL_INFORMATION_URI,
             );
-            results.push(json!({
-                "ruleId": diagnostic.code,
-                "ruleIndex": index,
-                "level": level,
-                "message": {"text": diagnostic.message},
-                "locations": [{"physicalLocation": {
-                    "artifactLocation": location.clone(),
-                    "region": {"startLine": line, "startColumn": column,
-                        "endLine": end_line, "endColumn": end_column}
-                }}]
-            }));
         }
     }
     for item in skipped {
@@ -1535,28 +1741,58 @@ fn render_sarif(
                 "A file OComment did not scan; the message on the result says why it was left alone.",
             )
         };
-        let index = rules.describe(id, level, short, full, TOOL_INFORMATION_URI);
-        results.push(json!({
-            "ruleId": id,
-            "ruleIndex": index,
-            "level": level,
-            "message": {"text": item.reason},
-            "locations": [{"physicalLocation": {
-                "artifactLocation": artifact_location(&item.path)
-            }}]
-        }));
+        rules.describe(id, level, short, full, TOOL_INFORMATION_URI);
     }
-    let sarif = json!({
-        "version": "2.1.0",
-        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
-        "runs": [{"tool": {"driver": {
-            "name": "ocomment",
-            "version": env!("CARGO_PKG_VERSION"),
-            "informationUri": TOOL_INFORMATION_URI,
-            "rules": rules.entries
-        }}, "results": results}]
-    });
-    serde_json::to_writer_pretty(&mut *output, &sarif).map_err(write_error)?;
+
+    #[derive(Serialize)]
+    struct Document<'a> {
+        version: &'static str,
+        #[serde(rename = "$schema")]
+        schema: &'static str,
+        runs: &'a [Run<'a>],
+    }
+    #[derive(Serialize)]
+    struct Run<'a> {
+        tool: Tool<'a>,
+        results: SarifResults<'a>,
+    }
+    #[derive(Serialize)]
+    struct Tool<'a> {
+        driver: Driver<'a>,
+    }
+    #[derive(Serialize)]
+    struct Driver<'a> {
+        name: &'static str,
+        version: &'static str,
+        #[serde(rename = "informationUri")]
+        information_uri: &'static str,
+        rules: &'a [Value],
+    }
+
+    let runs = [Run {
+        tool: Tool {
+            driver: Driver {
+                name: "ocomment",
+                version: env!("CARGO_PKG_VERSION"),
+                information_uri: TOOL_INFORMATION_URI,
+                rules: &rules.entries,
+            },
+        },
+        results: SarifResults {
+            files,
+            skipped,
+            rules: &rules,
+        },
+    }];
+    serde_json::to_writer_pretty(
+        &mut *output,
+        &Document {
+            version: "2.1.0",
+            schema: "https://json.schemastore.org/sarif-2.1.0.json",
+            runs: &runs,
+        },
+    )
+    .map_err(write_error)?;
     wrote(writeln!(output))?;
     Ok(())
 }
@@ -1601,6 +1837,17 @@ fn render_github(
     verbosity: Verbosity,
 ) -> Result<()> {
     for file in files {
+        if file.result.report.diagnostics.is_empty()
+            && !file
+                .result
+                .report
+                .comments
+                .iter()
+                .any(|comment| comment.disposition.is_remove())
+        {
+            continue;
+        }
+        let lines = LineIndex::new(&file.source);
         for comment in file
             .result
             .report
@@ -1608,7 +1855,7 @@ fn render_github(
             .iter()
             .filter(|comment| comment.disposition.is_remove())
         {
-            let (line, column) = line_column(&file.source, comment.span.start);
+            let (line, column) = lines.line_column(comment.span.start);
             wrote(writeln!(
                 output,
                 "::notice file={},line={line},col={column}::{}",
@@ -1617,7 +1864,7 @@ fn render_github(
             ))?;
         }
         for diagnostic in &file.result.report.diagnostics {
-            let (line, column) = line_column(&file.source, diagnostic.span.start);
+            let (line, column) = lines.line_column(diagnostic.span.start);
             wrote(writeln!(
                 output,
                 "::error file={},line={line},col={column},title={}::{}",
@@ -1755,29 +2002,55 @@ fn git_patch_path(prefix: &[u8], path: &Path) -> Vec<u8> {
     output
 }
 
-pub(crate) fn line_column(source: &[u8], offset: usize) -> (usize, usize) {
-    let offset = offset.min(source.len());
-    let mut line = 1usize;
-    let mut start = 0usize;
-    let mut index = 0usize;
-    while index < offset {
-        if source[index] == b'\r' {
-            index += if source.get(index + 1) == Some(&b'\n') && index + 1 < offset {
-                2
+/// A reusable byte-offset index for the CLI's one-based line and column
+/// coordinates.
+///
+/// `after_first` preserves the established answer for an offset on the LF of
+/// a CRLF pair: that offset is already on the following line, while an offset
+/// after the pair begins its column after both bytes.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct LineIndex {
+    /// `(after_first << 1) | is_crlf`. Packing the CRLF bit keeps the index to
+    /// one machine word per logical line break even though an offset on the
+    /// LF and an offset after it have different column starts.
+    breaks: Vec<usize>,
+    source_len: usize,
+}
+
+impl LineIndex {
+    pub(crate) fn new(source: &[u8]) -> Self {
+        let mut breaks = Vec::new();
+        let mut index = 0usize;
+        while index < source.len() {
+            if source[index] == b'\r' {
+                let after_first = index + 1;
+                let crlf = source.get(index + 1) == Some(&b'\n');
+                breaks.push((after_first << 1) | usize::from(crlf));
+                index = after_first + usize::from(crlf);
+            } else if source[index] == b'\n' {
+                index += 1;
+                breaks.push(index << 1);
             } else {
-                1
-            };
-            line += 1;
-            start = index;
-        } else if source[index] == b'\n' {
-            index += 1;
-            line += 1;
-            start = index;
-        } else {
-            index += 1;
+                index += 1;
+            }
+        }
+        Self {
+            breaks,
+            source_len: source.len(),
         }
     }
-    (line, offset - start + 1)
+
+    pub(crate) fn line_column(&self, offset: usize) -> (usize, usize) {
+        let offset = offset.min(self.source_len);
+        let line_breaks = self
+            .breaks
+            .partition_point(|line_break| (*line_break >> 1) <= offset);
+        let start = line_breaks.checked_sub(1).map_or(0, |index| {
+            let encoded = self.breaks[index];
+            ((encoded >> 1) + (encoded & 1)).min(offset)
+        });
+        (line_breaks + 1, offset - start + 1)
+    }
 }
 
 fn github_escape(text: &str) -> String {
@@ -1801,7 +2074,7 @@ fn github_escape(text: &str) -> String {
 }
 
 pub fn changed(files: &[ProcessedFile]) -> bool {
-    files.iter().any(|file| file.source != file.result.output)
+    files.iter().any(|file| file.result.changed())
 }
 pub fn invalid(files: &[ProcessedFile]) -> bool {
     files.iter().any(|file| !file.result.report.valid)
@@ -1815,6 +2088,54 @@ fn _span(_: ByteSpan) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn linear_line_column(source: &[u8], offset: usize) -> (usize, usize) {
+        let offset = offset.min(source.len());
+        let mut line = 1usize;
+        let mut start = 0usize;
+        let mut index = 0usize;
+        while index < offset {
+            if source[index] == b'\r' {
+                index += if source.get(index + 1) == Some(&b'\n') && index + 1 < offset {
+                    2
+                } else {
+                    1
+                };
+                line += 1;
+                start = index;
+            } else if source[index] == b'\n' {
+                index += 1;
+                line += 1;
+                start = index;
+            } else {
+                index += 1;
+            }
+        }
+        (line, offset - start + 1)
+    }
+
+    #[test]
+    fn line_index_matches_the_previous_walk_at_every_offset() {
+        let alphabet = *b"x\r\n";
+        for length in 0..=7usize {
+            let variants = 3usize.pow(length as u32);
+            for mut variant in 0..variants {
+                let mut source = Vec::with_capacity(length);
+                for _ in 0..length {
+                    source.push(alphabet[variant % alphabet.len()]);
+                    variant /= alphabet.len();
+                }
+                let lines = LineIndex::new(&source);
+                for offset in 0..=source.len() + 2 {
+                    assert_eq!(
+                        lines.line_column(offset),
+                        linear_line_column(&source, offset),
+                        "source={source:?}, offset={offset}"
+                    );
+                }
+            }
+        }
+    }
 
     /// The frame around a hyperlink target is written in escape bytes, so a
     /// name carrying one of its own would close the frame early and be read as
