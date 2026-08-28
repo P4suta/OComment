@@ -5,6 +5,8 @@ All notable changes to OComment will be documented here. The project follows
 
 ## Unreleased
 
+## 0.1.0
+
 ### Added
 
 - Byte-oriented scanners and transformations for 30 built-in languages and the
@@ -113,8 +115,11 @@ All notable changes to OComment will be documented here. The project follows
   extension at all (`Dockerfile`, `Containerfile`, `Makefile`, `GNUmakefile`,
   `.profile`, `.bashrc`, `.zshrc`, `tsconfig.json`, `jsconfig.json`), and the
   interpreter names a `#!` line is read for, and `docs/languages.md` is
-  generated with them. `tools/check_embedded_specs.py` holds the embedded copy
-  to the canonical file, and `rust/ocomment/tests/spec_languages.rs` checks
+  generated with them. The published pre-commit hooks pass every text file to
+  that detector instead of maintaining an extension-only regex, so reserved
+  names and extensionless shebang scripts reach it too.
+  `tools/check_embedded_specs.py` holds the embedded copy to the canonical file,
+  and `rust/ocomment/tests/spec_languages.rs` checks
   every claim the table makes against the code that has to honour it: each
   extension, reserved name, and shebang against `detect_language`, each row of
   dialects against the list the binary prints when it refuses one, the schema
