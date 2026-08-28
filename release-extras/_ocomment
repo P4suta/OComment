@@ -68,7 +68,8 @@ mysql\:"MySQL, including its executable versioned comments"
 sqlite\:"SQLite"
 t-sql\:"Microsoft Transact-SQL"
 oracle\:"Oracle SQL and PL/SQL"
-scss\:"SCSS and the indented Sass syntax"))' \
+scss\:"SCSS"
+sass\:"The indentation-based Sass syntax"))' \
 '*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -172,7 +173,8 @@ mysql\:"MySQL, including its executable versioned comments"
 sqlite\:"SQLite"
 t-sql\:"Microsoft Transact-SQL"
 oracle\:"Oracle SQL and PL/SQL"
-scss\:"SCSS and the indented Sass syntax"))' \
+scss\:"SCSS"
+sass\:"The indentation-based Sass syntax"))' \
 '*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -269,7 +271,8 @@ mysql\:"MySQL, including its executable versioned comments"
 sqlite\:"SQLite"
 t-sql\:"Microsoft Transact-SQL"
 oracle\:"Oracle SQL and PL/SQL"
-scss\:"SCSS and the indented Sass syntax"))' \
+scss\:"SCSS"
+sass\:"The indentation-based Sass syntax"))' \
 '*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -369,7 +372,8 @@ mysql\:"MySQL, including its executable versioned comments"
 sqlite\:"SQLite"
 t-sql\:"Microsoft Transact-SQL"
 oracle\:"Oracle SQL and PL/SQL"
-scss\:"SCSS and the indented Sass syntax"))' \
+scss\:"SCSS"
+sass\:"The indentation-based Sass syntax"))' \
 '*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -466,7 +470,8 @@ mysql\:"MySQL, including its executable versioned comments"
 sqlite\:"SQLite"
 t-sql\:"Microsoft Transact-SQL"
 oracle\:"Oracle SQL and PL/SQL"
-scss\:"SCSS and the indented Sass syntax"))' \
+scss\:"SCSS"
+sass\:"The indentation-based Sass syntax"))' \
 '*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -563,7 +568,8 @@ mysql\:"MySQL, including its executable versioned comments"
 sqlite\:"SQLite"
 t-sql\:"Microsoft Transact-SQL"
 oracle\:"Oracle SQL and PL/SQL"
-scss\:"SCSS and the indented Sass syntax"))' \
+scss\:"SCSS"
+sass\:"The indentation-based Sass syntax"))' \
 '*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -657,7 +663,8 @@ mysql\:"MySQL, including its executable versioned comments"
 sqlite\:"SQLite"
 t-sql\:"Microsoft Transact-SQL"
 oracle\:"Oracle SQL and PL/SQL"
-scss\:"SCSS and the indented Sass syntax"))' \
+scss\:"SCSS"
+sass\:"The indentation-based Sass syntax"))' \
 '*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -751,7 +758,8 @@ mysql\:"MySQL, including its executable versioned comments"
 sqlite\:"SQLite"
 t-sql\:"Microsoft Transact-SQL"
 oracle\:"Oracle SQL and PL/SQL"
-scss\:"SCSS and the indented Sass syntax"))' \
+scss\:"SCSS"
+sass\:"The indentation-based Sass syntax"))' \
 '*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -849,7 +857,8 @@ mysql\:"MySQL, including its executable versioned comments"
 sqlite\:"SQLite"
 t-sql\:"Microsoft Transact-SQL"
 oracle\:"Oracle SQL and PL/SQL"
-scss\:"SCSS and the indented Sass syntax"))' \
+scss\:"SCSS"
+sass\:"The indentation-based Sass syntax"))' \
 '*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -944,7 +953,8 @@ mysql\:"MySQL, including its executable versioned comments"
 sqlite\:"SQLite"
 t-sql\:"Microsoft Transact-SQL"
 oracle\:"Oracle SQL and PL/SQL"
-scss\:"SCSS and the indented Sass syntax"))' \
+scss\:"SCSS"
+sass\:"The indentation-based Sass syntax"))' \
 '*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -1038,7 +1048,8 @@ mysql\:"MySQL, including its executable versioned comments"
 sqlite\:"SQLite"
 t-sql\:"Microsoft Transact-SQL"
 oracle\:"Oracle SQL and PL/SQL"
-scss\:"SCSS and the indented Sass syntax"))' \
+scss\:"SCSS"
+sass\:"The indentation-based Sass syntax"))' \
 '*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -1143,7 +1154,8 @@ mysql\:"MySQL, including its executable versioned comments"
 sqlite\:"SQLite"
 t-sql\:"Microsoft Transact-SQL"
 oracle\:"Oracle SQL and PL/SQL"
-scss\:"SCSS and the indented Sass syntax"))' \
+scss\:"SCSS"
+sass\:"The indentation-based Sass syntax"))' \
 '*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -1238,7 +1250,8 @@ mysql\:"MySQL, including its executable versioned comments"
 sqlite\:"SQLite"
 t-sql\:"Microsoft Transact-SQL"
 oracle\:"Oracle SQL and PL/SQL"
-scss\:"SCSS and the indented Sass syntax"))' \
+scss\:"SCSS"
+sass\:"The indentation-based Sass syntax"))' \
 '*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -1333,7 +1346,8 @@ mysql\:"MySQL, including its executable versioned comments"
 sqlite\:"SQLite"
 t-sql\:"Microsoft Transact-SQL"
 oracle\:"Oracle SQL and PL/SQL"
-scss\:"SCSS and the indented Sass syntax"))' \
+scss\:"SCSS"
+sass\:"The indentation-based Sass syntax"))' \
 '*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -1427,7 +1441,8 @@ mysql\:"MySQL, including its executable versioned comments"
 sqlite\:"SQLite"
 t-sql\:"Microsoft Transact-SQL"
 oracle\:"Oracle SQL and PL/SQL"
-scss\:"SCSS and the indented Sass syntax"))' \
+scss\:"SCSS"
+sass\:"The indentation-based Sass syntax"))' \
 '*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -1522,7 +1537,8 @@ mysql\:"MySQL, including its executable versioned comments"
 sqlite\:"SQLite"
 t-sql\:"Microsoft Transact-SQL"
 oracle\:"Oracle SQL and PL/SQL"
-scss\:"SCSS and the indented Sass syntax"))' \
+scss\:"SCSS"
+sass\:"The indentation-based Sass syntax"))' \
 '*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -1617,7 +1633,8 @@ mysql\:"MySQL, including its executable versioned comments"
 sqlite\:"SQLite"
 t-sql\:"Microsoft Transact-SQL"
 oracle\:"Oracle SQL and PL/SQL"
-scss\:"SCSS and the indented Sass syntax"))' \
+scss\:"SCSS"
+sass\:"The indentation-based Sass syntax"))' \
 '*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -1760,7 +1777,8 @@ mysql\:"MySQL, including its executable versioned comments"
 sqlite\:"SQLite"
 t-sql\:"Microsoft Transact-SQL"
 oracle\:"Oracle SQL and PL/SQL"
-scss\:"SCSS and the indented Sass syntax"))' \
+scss\:"SCSS"
+sass\:"The indentation-based Sass syntax"))' \
 '*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -1855,7 +1873,8 @@ mysql\:"MySQL, including its executable versioned comments"
 sqlite\:"SQLite"
 t-sql\:"Microsoft Transact-SQL"
 oracle\:"Oracle SQL and PL/SQL"
-scss\:"SCSS and the indented Sass syntax"))' \
+scss\:"SCSS"
+sass\:"The indentation-based Sass syntax"))' \
 '*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -1949,7 +1968,8 @@ mysql\:"MySQL, including its executable versioned comments"
 sqlite\:"SQLite"
 t-sql\:"Microsoft Transact-SQL"
 oracle\:"Oracle SQL and PL/SQL"
-scss\:"SCSS and the indented Sass syntax"))' \
+scss\:"SCSS"
+sass\:"The indentation-based Sass syntax"))' \
 '*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"

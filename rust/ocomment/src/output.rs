@@ -10,7 +10,7 @@ use ocomment_core::{
 };
 use serde::Serialize;
 use serde_json::{Value, json};
-use similar::{ChangeTag, TextDiff};
+use similar::{Algorithm, ChangeTag, capture_diff_slices, group_diff_ops};
 use std::{
     collections::BTreeMap,
     io::{self, BufWriter, Write},
@@ -673,11 +673,7 @@ fn render_human(
         if operation == Operation::Diff && file.source != file.result.output {
             /* NOTE: The patch is the product of `diff`, so `-q` keeps it and drops
              * only the summary that follows on standard error. */
-            wrote(write!(
-                output,
-                "{}",
-                unified_diff(&file.path, &file.source, &file.result.output)
-            ))?;
+            wrote(output.write_all(&unified_diff(&file.path, &file.source, &file.result.output)))?;
             continue;
         }
         for diagnostic in &file.result.report.diagnostics {
@@ -688,9 +684,9 @@ fn render_human(
                 display_path(&file.path, presentation.hyperlinks),
                 color("\x1b[31m", presentation.color),
                 diagnostic.severity,
-                diagnostic.code,
+                sanitize_message(&diagnostic.code),
                 color("\x1b[0m", presentation.color),
-                diagnostic.message
+                sanitize_message(&diagnostic.message)
             ))?;
         }
         let explainer = options
@@ -857,7 +853,7 @@ pub(crate) fn skip_lines(
                 "{}: {}: {}",
                 display_path(&item.path, presentation.hyperlinks),
                 if item.error { "error" } else { "skipped" },
-                item.reason
+                sanitize_message(&item.reason)
             )
         })
         .collect()
@@ -1087,7 +1083,13 @@ fn display_path(path: &Path, hyperlinks: bool) -> String {
         return display;
     }
     let absolute = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-    let target = percent_encode(&absolute.to_string_lossy());
+    #[cfg(unix)]
+    let target = {
+        use std::os::unix::ffi::OsStrExt;
+        percent_encode(absolute.as_os_str().as_bytes())
+    };
+    #[cfg(not(unix))]
+    let target = percent_encode(absolute.to_string_lossy().as_bytes());
     format!("\x1b]8;;file://{target}\x1b\\{display}\x1b]8;;\x1b\\")
 }
 
@@ -1101,18 +1103,23 @@ fn display_path(path: &Path, hyperlinks: bool) -> String {
 /// than characters, so the encoding is done over the UTF-8 the name is spelled
 /// in: a `%XX` pair is defined as a byte, and half an encoded character is not
 /// a character a terminal can put back together.
-fn percent_encode(path: &str) -> String {
+fn percent_encode(path: impl AsRef<[u8]>) -> String {
+    let path = path.as_ref();
     let mut encoded = String::with_capacity(path.len());
-    for byte in path.bytes() {
+    for byte in path.iter().copied() {
         if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~' | b'/') {
             encoded.push(char::from(byte));
         } else {
-            encoded.push('%');
-            encoded.push(HEX[usize::from(byte >> 4)]);
-            encoded.push(HEX[usize::from(byte & 0xf)]);
+            push_percent_encoded(&mut encoded, byte);
         }
     }
     encoded
+}
+
+fn push_percent_encoded(output: &mut String, byte: u8) {
+    output.push('%');
+    output.push(HEX[usize::from(byte >> 4)]);
+    output.push(HEX[usize::from(byte & 0xf)]);
 }
 
 /// The digits a percent-encoded byte is spelled with. RFC 3986 asks for the
@@ -1191,23 +1198,119 @@ const SRCROOT: &str = "%SRCROOT%";
 const DIAGNOSTIC_DESCRIPTION: &str =
     "A problem OComment met while scanning the file; the message on the result says what it was.";
 
-/// The spelling a machine format reports a path under.
+/// The repository spelling a machine format reports a path under.
 ///
-/// A SARIF `artifactLocation.uri` and the `file=` of a GitHub annotation are
-/// both matched against the paths the repository uses, so a reported path is
-/// spelled the way the repository spells it: forward slashes on every
-/// platform, and none of the `.` segments a walk root or a typed target leaves
-/// behind — `sub/./doc.rs` names a file no checkout has. What a relative path
-/// is measured *from* is said separately, by [`artifact_location`].
-fn report_uri(path: &Path) -> String {
-    let text = path.to_string_lossy().replace('\\', "/");
-    let trimmed: Vec<&str> = text.split('/').filter(|segment| *segment != ".").collect();
-    if trimmed.is_empty() {
+/// GitHub's `file=` property is a repository path, while SARIF wants a URI.
+/// Both start from this byte-preserving spelling: platform separators become
+/// `/`, and `.` segments left by a typed path are removed. Keeping this layer
+/// separate prevents URI escaping from being mistaken for a repository name.
+fn report_path_bytes(path: &Path) -> Vec<u8> {
+    #[cfg(unix)]
+    let bytes = {
+        use std::os::unix::ffi::OsStrExt;
+        path.as_os_str().as_bytes().to_vec()
+    };
+    #[cfg(not(unix))]
+    let bytes = path.to_string_lossy().replace('\\', "/").into_bytes();
+
+    let segments: Vec<&[u8]> = bytes
+        .split(|byte| *byte == b'/')
+        .filter(|segment| *segment != b".")
+        .collect();
+    if segments.is_empty() {
         /* NOTE: The path was `.` (or `./`) and naming nothing at all would be worse
          * than naming the directory. */
-        return text;
+        return bytes;
     }
-    trimmed.join("/")
+    let mut normalized = Vec::with_capacity(bytes.len());
+    for (index, segment) in segments.into_iter().enumerate() {
+        if index > 0 {
+            normalized.push(b'/');
+        }
+        normalized.extend_from_slice(segment);
+    }
+    normalized
+}
+
+/// Turn a repository path into UTF-8 without replacing a Unix filename byte.
+/// Invalid byte sequences use `%XX`; valid Unicode keeps its semantic value.
+fn report_path(path: &Path) -> String {
+    lossless_text(&report_path_bytes(path))
+}
+
+fn lossless_text(mut bytes: &[u8]) -> String {
+    let mut text = String::with_capacity(bytes.len());
+    while !bytes.is_empty() {
+        match std::str::from_utf8(bytes) {
+            Ok(valid) => {
+                text.push_str(valid);
+                break;
+            }
+            Err(error) => {
+                let valid = error.valid_up_to();
+                text.push_str(
+                    std::str::from_utf8(&bytes[..valid])
+                        .expect("the UTF-8 error identifies a valid prefix"),
+                );
+                let invalid = error.error_len().unwrap_or(bytes.len() - valid);
+                for byte in &bytes[valid..valid + invalid] {
+                    push_percent_encoded(&mut text, *byte);
+                }
+                bytes = &bytes[valid + invalid..];
+            }
+        }
+    }
+    text
+}
+
+/// The URI spelling SARIF requires. Unlike a GitHub annotation property it is
+/// an RFC 3986 reference, so spaces, controls, literal percent signs, and raw
+/// Unix filename bytes are percent-encoded exactly once.
+fn sarif_uri(path: &Path) -> String {
+    if path == Path::new(STDIN_PATH) {
+        return STDIN_PATH.to_owned();
+    }
+    let mut encoded = String::new();
+    for byte in report_path_bytes(path) {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~' | b'/' | b':') {
+            encoded.push(char::from(byte));
+        } else {
+            push_percent_encoded(&mut encoded, byte);
+        }
+    }
+    encoded
+}
+
+/// Encode a GitHub workflow-command `file=` property from path bytes. This is
+/// not URI encoding: GitHub decodes its small `%25`/`%0D`/`%0A` command
+/// alphabet before matching the repository path. Invalid UTF-8 has no command
+/// representation, so it remains visible and non-lossy as `%XX` instead of
+/// silently becoming U+FFFD.
+fn github_path(path: &Path) -> String {
+    let bytes = report_path_bytes(path);
+    let mut escaped = String::with_capacity(bytes.len());
+    let mut remaining = bytes.as_slice();
+    while !remaining.is_empty() {
+        match std::str::from_utf8(remaining) {
+            Ok(valid) => {
+                escaped.push_str(&github_escape(valid));
+                break;
+            }
+            Err(error) => {
+                let valid = error.valid_up_to();
+                escaped.push_str(&github_escape(
+                    std::str::from_utf8(&remaining[..valid])
+                        .expect("the UTF-8 error identifies a valid prefix"),
+                ));
+                let invalid = error.error_len().unwrap_or(remaining.len() - valid);
+                for byte in &remaining[valid..valid + invalid] {
+                    push_percent_encoded(&mut escaped, *byte);
+                }
+                remaining = &remaining[valid + invalid..];
+            }
+        }
+    }
+    escaped
 }
 
 /// The SARIF `artifactLocation` for a reported path.
@@ -1220,9 +1323,10 @@ fn report_uri(path: &Path) -> String {
 /// standard input is reported under is not a file at all — each of those is
 /// reported as it stands, with no base id claiming otherwise.
 fn artifact_location(path: &Path) -> Value {
-    let uri = report_uri(path);
+    let repository_path = report_path(path);
+    let uri = sarif_uri(path);
     if under_source_root(path) {
-        let uri = if reads_as_a_drive_letter(&uri) {
+        let uri = if reads_as_a_drive_letter(&repository_path) {
             format!("./{uri}")
         } else {
             uri
@@ -1246,7 +1350,7 @@ fn artifact_location(path: &Path) -> Value {
 ///
 /// Only a repository-relative path is treated this way. A GitHub annotation is
 /// matched against the paths the checkout uses rather than parsed as a URI, so
-/// [`report_uri`] leaves the spelling alone and only this document adds to it;
+/// [`report_path`] leaves the spelling alone and only this document adds to it;
 /// `tools/validate_schemas.py` is the other half of the rule and turns down
 /// the bare form.
 fn reads_as_a_drive_letter(uri: &str) -> bool {
@@ -1508,7 +1612,7 @@ fn render_github(
             wrote(writeln!(
                 output,
                 "::notice file={},line={line},col={column}::{}",
-                github_escape(&report_uri(&file.path)),
+                github_path(&file.path),
                 removable_label(comment.kind)
             ))?;
         }
@@ -1517,7 +1621,7 @@ fn render_github(
             wrote(writeln!(
                 output,
                 "::error file={},line={line},col={column},title={}::{}",
-                github_escape(&report_uri(&file.path)),
+                github_path(&file.path),
                 github_escape(&diagnostic.code),
                 github_escape(&diagnostic.message)
             ))?;
@@ -1545,7 +1649,7 @@ fn render_github(
             output,
             "::{} file={},title={}::{}",
             if item.error { "error" } else { "notice" },
-            github_escape(&report_uri(&item.path)),
+            github_path(&item.path),
             if item.error {
                 "OComment I/O error"
             } else {
@@ -1557,35 +1661,97 @@ fn render_github(
     Ok(())
 }
 
-pub fn unified_diff(path: &Path, original: &[u8], transformed: &[u8]) -> String {
-    let old = String::from_utf8_lossy(original);
-    let new = String::from_utf8_lossy(transformed);
-    let display = path.to_string_lossy().replace('\\', "/");
-    let mut output = format!("--- a/{display}\n+++ b/{display}\n");
-    let diff = TextDiff::from_lines(&old, &new);
-    for group in diff.grouped_ops(3) {
+pub fn unified_diff(path: &Path, original: &[u8], transformed: &[u8]) -> Vec<u8> {
+    let old = byte_lines(original);
+    let new = byte_lines(transformed);
+    let mut output = Vec::new();
+    output.extend_from_slice(b"--- ");
+    output.extend_from_slice(&git_patch_path(b"a/", path));
+    output.extend_from_slice(b"\n+++ ");
+    output.extend_from_slice(&git_patch_path(b"b/", path));
+    output.push(b'\n');
+    let ops = capture_diff_slices(Algorithm::Myers, &old, &new);
+    for group in group_diff_ops(ops, 3) {
         let old_start = group.first().map_or(0, |op| op.old_range().start) + 1;
         let new_start = group.first().map_or(0, |op| op.new_range().start) + 1;
         let old_len: usize = group.iter().map(|op| op.old_range().len()).sum();
         let new_len: usize = group.iter().map(|op| op.new_range().len()).sum();
-        output.push_str(&format!(
-            "@@ -{old_start},{old_len} +{new_start},{new_len} @@\n"
-        ));
+        output.extend_from_slice(
+            format!("@@ -{old_start},{old_len} +{new_start},{new_len} @@\n").as_bytes(),
+        );
         for op in group {
-            for change in diff.iter_changes(&op) {
+            for change in op.iter_changes(&old, &new) {
                 let prefix = match change.tag() {
-                    ChangeTag::Delete => '-',
-                    ChangeTag::Insert => '+',
-                    ChangeTag::Equal => ' ',
+                    ChangeTag::Delete => b'-',
+                    ChangeTag::Insert => b'+',
+                    ChangeTag::Equal => b' ',
                 };
                 output.push(prefix);
-                output.push_str(change.value());
-                if !change.value().ends_with('\n') {
-                    output.push_str("\n\\ No newline at end of file\n");
+                output.extend_from_slice(change.value());
+                if !change.value().ends_with(b"\n") {
+                    output.extend_from_slice(b"\n\\ No newline at end of file\n");
                 }
             }
         }
     }
+    output
+}
+
+/// Split on the byte Git treats as a line ending without decoding or replacing
+/// any other byte. The newline remains in each item so the resulting patch can
+/// reconstruct the source exactly.
+fn byte_lines(bytes: &[u8]) -> Vec<&[u8]> {
+    let mut lines = Vec::new();
+    let mut start = 0;
+    for (index, byte) in bytes.iter().enumerate() {
+        if *byte == b'\n' {
+            lines.push(&bytes[start..=index]);
+            start = index + 1;
+        }
+    }
+    if start < bytes.len() {
+        lines.push(&bytes[start..]);
+    }
+    lines
+}
+
+/// Spell a patch header path the way Git's parser accepts it. Ordinary names
+/// stay readable; bytes that could terminate or corrupt the header use Git's
+/// C-style quoting, including three-digit octal escapes for non-UTF-8 bytes.
+fn git_patch_path(prefix: &[u8], path: &Path) -> Vec<u8> {
+    #[cfg(unix)]
+    let bytes = {
+        use std::os::unix::ffi::OsStrExt;
+        path.as_os_str().as_bytes().to_vec()
+    };
+    #[cfg(not(unix))]
+    let bytes = path.to_string_lossy().replace('\\', "/").into_bytes();
+
+    let mut full = Vec::with_capacity(prefix.len() + bytes.len());
+    full.extend_from_slice(prefix);
+    full.extend_from_slice(&bytes);
+    let quoted = full
+        .iter()
+        .any(|byte| *byte < b' ' || *byte >= 0x7f || matches!(*byte, b'"' | b'\\'));
+    if !quoted {
+        return full;
+    }
+    let mut output = Vec::with_capacity(full.len() + 2);
+    output.push(b'"');
+    for byte in full {
+        match byte {
+            b'\n' => output.extend_from_slice(br"\n"),
+            b'\r' => output.extend_from_slice(br"\r"),
+            b'\t' => output.extend_from_slice(br"\t"),
+            0x08 => output.extend_from_slice(br"\b"),
+            0x0c => output.extend_from_slice(br"\f"),
+            b'"' => output.extend_from_slice(br#"\""#),
+            b'\\' => output.extend_from_slice(br"\\"),
+            b' '..=b'~' => output.push(byte),
+            _ => output.extend_from_slice(format!("\\{byte:03o}").as_bytes()),
+        }
+    }
+    output.push(b'"');
     output
 }
 
@@ -1615,11 +1781,23 @@ pub(crate) fn line_column(source: &[u8], offset: usize) -> (usize, usize) {
 }
 
 fn github_escape(text: &str) -> String {
-    text.replace('%', "%25")
-        .replace('\r', "%0D")
-        .replace('\n', "%0A")
-        .replace(':', "%3A")
-        .replace(',', "%2C")
+    let mut escaped = String::with_capacity(text.len());
+    for character in text.chars() {
+        match character {
+            '%' => escaped.push_str("%25"),
+            '\r' => escaped.push_str("%0D"),
+            '\n' => escaped.push_str("%0A"),
+            ':' => escaped.push_str("%3A"),
+            ',' => escaped.push_str("%2C"),
+            character if is_control(character) => {
+                for byte in character.to_string().bytes() {
+                    push_percent_encoded(&mut escaped, byte);
+                }
+            }
+            character => escaped.push(character),
+        }
+    }
+    escaped
 }
 
 pub fn changed(files: &[ProcessedFile]) -> bool {
@@ -1674,20 +1852,46 @@ mod tests {
     /// `artifactLocation.uri` against the checkout. A Windows separator and a
     /// `.` segment both name a file no checkout has.
     #[test]
-    fn report_uri_spells_a_path_the_way_a_repository_does() {
-        assert_eq!(report_uri(Path::new("./a.rs")), "a.rs");
-        assert_eq!(report_uri(Path::new("sub/./doc.rs")), "sub/doc.rs");
-        assert_eq!(report_uri(Path::new("./sub/./doc.rs")), "sub/doc.rs");
-        assert_eq!(report_uri(Path::new(r"sub\doc.rs")), "sub/doc.rs");
-        assert_eq!(report_uri(Path::new(r".\sub\.\doc.rs")), "sub/doc.rs");
+    fn report_path_spells_a_path_the_way_a_repository_does() {
+        assert_eq!(report_path(Path::new("./a.rs")), "a.rs");
+        assert_eq!(report_path(Path::new("sub/./doc.rs")), "sub/doc.rs");
+        assert_eq!(report_path(Path::new("./sub/./doc.rs")), "sub/doc.rs");
+        #[cfg(windows)]
+        {
+            assert_eq!(report_path(Path::new(r"sub\doc.rs")), "sub/doc.rs");
+            assert_eq!(report_path(Path::new(r".\sub\.\doc.rs")), "sub/doc.rs");
+        }
+        #[cfg(unix)]
+        {
+            /* NOTE: On Unix a backslash is a filename byte, not a separator. */
+            assert_eq!(report_path(Path::new(r"sub\doc.rs")), r"sub\doc.rs");
+            assert_eq!(sarif_uri(Path::new(r"sub\doc.rs")), "sub%5Cdoc.rs");
+        }
         /* NOTE: A path that leaves the tree, an absolute one, and standard input are
          * all left as they are; only the separators are normalised. */
-        assert_eq!(report_uri(Path::new("../sibling/a.rs")), "../sibling/a.rs");
-        assert_eq!(report_uri(Path::new("/tmp/a.rs")), "/tmp/a.rs");
-        assert_eq!(report_uri(Path::new(r"C:\src\a.rs")), "C:/src/a.rs");
-        assert_eq!(report_uri(Path::new(STDIN_PATH)), STDIN_PATH);
+        assert_eq!(report_path(Path::new("../sibling/a.rs")), "../sibling/a.rs");
+        assert_eq!(report_path(Path::new("/tmp/a.rs")), "/tmp/a.rs");
+        assert_eq!(report_path(Path::new(STDIN_PATH)), STDIN_PATH);
         // NOTE: Naming the working directory as nothing at all would be worse.
-        assert_eq!(report_uri(Path::new(".")), ".");
+        assert_eq!(report_path(Path::new(".")), ".");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn machine_path_encoders_preserve_raw_unix_bytes_without_sharing_syntax() {
+        use std::{ffi::OsString, os::unix::ffi::OsStringExt};
+
+        let path = PathBuf::from(OsString::from_vec(b"odd \xff,\n\x1b.rs".to_vec()));
+        assert_eq!(sarif_uri(&path), "odd%20%FF%2C%0A%1B.rs");
+        assert_eq!(github_path(&path), "odd %FF%2C%0A%1B.rs");
+        assert!(!sarif_uri(&path).contains('\u{fffd}'));
+        assert!(!github_path(&path).contains('\u{fffd}'));
+
+        let raw_invalid = PathBuf::from(OsString::from_vec(b"odd \xff.rs".to_vec()));
+        let literal_percent = Path::new("odd %FF.rs");
+        assert_eq!(github_path(&raw_invalid), "odd %FF.rs");
+        assert_eq!(github_path(literal_percent), "odd %25FF.rs");
+        assert_ne!(github_path(literal_percent), github_path(&raw_invalid));
     }
 
     /// `%SRCROOT%` says the path is measured from the root of the checkout, so
@@ -1724,7 +1928,7 @@ mod tests {
         for plain in ["a.rs", "sub/doc.rs", "cc:/a.rs", "sub/c:/a.rs"] {
             assert_eq!(
                 artifact_location(Path::new(plain))["uri"],
-                json!(report_uri(Path::new(plain))),
+                json!(sarif_uri(Path::new(plain))),
                 "`{plain}` was disambiguated and had no need of it"
             );
         }

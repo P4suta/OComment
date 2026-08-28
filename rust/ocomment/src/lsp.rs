@@ -14,7 +14,10 @@ use serde_json::{Value, json};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    sync::atomic::{AtomicBool, AtomicU64, Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicU64, Ordering},
+    },
 };
 use tokio::sync::RwLock;
 use tower_lsp::{Client, LanguageServer, LspService, Server, jsonrpc, lsp_types::*};
@@ -43,14 +46,24 @@ struct WorkspaceEditEntry {
     edits: Vec<ocomment_core::Edit>,
 }
 
+struct WorkspaceContext {
+    /// The workspace folder or standalone document directory this context was
+    /// discovered from. It is distinct from `configuration.root`, which may be
+    /// an ancestor containing `.ocomment.toml`.
+    scope_root: PathBuf,
+    configuration: ResolvedConfig,
+    plugins: PluginHost,
+}
+
 struct Backend {
     client: Client,
     documents: RwLock<HashMap<Url, Document>>,
-    configuration: RwLock<ResolvedConfig>,
+    default_context: RwLock<Arc<WorkspaceContext>>,
+    workspace_contexts: RwLock<Vec<Arc<WorkspaceContext>>>,
+    standalone_contexts: RwLock<HashMap<PathBuf, Arc<WorkspaceContext>>>,
     explicit_config: Option<PathBuf>,
     encoding: RwLock<PositionEncodingKind>,
     workspace_folders: RwLock<Vec<WorkspaceFolder>>,
-    plugins: RwLock<PluginHost>,
     configuration_generation: AtomicU64,
     pull_diagnostics: AtomicBool,
     dynamic_file_watching: AtomicBool,
@@ -59,7 +72,13 @@ struct Backend {
 pub fn run(explicit_config: Option<&Path>) -> AnyResult<u8> {
     let configuration = config::load(explicit_config)?;
     let plugins = PluginHost::load(&configuration.root, &configuration.config.plugins)?;
-    let explicit_config = explicit_config.map(Path::to_path_buf);
+    let scope_root = configuration.cwd.clone();
+    let explicit_config = configuration.trace.explicit.clone();
+    let default_context = Arc::new(WorkspaceContext {
+        scope_root,
+        configuration,
+        plugins,
+    });
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
@@ -69,11 +88,12 @@ pub fn run(explicit_config: Option<&Path>) -> AnyResult<u8> {
         let (service, socket) = LspService::new(|client| Backend {
             client,
             documents: RwLock::new(HashMap::new()),
-            configuration: RwLock::new(configuration),
+            default_context: RwLock::new(default_context),
+            workspace_contexts: RwLock::new(Vec::new()),
+            standalone_contexts: RwLock::new(HashMap::new()),
             explicit_config,
             encoding: RwLock::new(PositionEncodingKind::UTF16),
             workspace_folders: RwLock::new(Vec::new()),
-            plugins: RwLock::new(plugins),
             configuration_generation: AtomicU64::new(0),
             pull_diagnostics: AtomicBool::new(false),
             dynamic_file_watching: AtomicBool::new(false),
@@ -84,39 +104,107 @@ pub fn run(explicit_config: Option<&Path>) -> AnyResult<u8> {
 }
 
 impl Backend {
+    fn load_context(&self, scope_root: &Path) -> AnyResult<Arc<WorkspaceContext>> {
+        let configuration = config::load_from(scope_root, self.explicit_config.as_deref())?;
+        let plugins = PluginHost::load(&configuration.root, &configuration.config.plugins)?;
+        Ok(Arc::new(WorkspaceContext {
+            scope_root: scope_root.to_path_buf(),
+            configuration,
+            plugins,
+        }))
+    }
+
+    async fn context_for_uri(&self, uri: &Url) -> AnyResult<Arc<WorkspaceContext>> {
+        let path = uri
+            .to_file_path()
+            .unwrap_or_else(|_| PathBuf::from(uri.path()));
+        if let Some(context) = self
+            .workspace_contexts
+            .read()
+            .await
+            .iter()
+            .filter(|context| path.starts_with(&context.scope_root))
+            .max_by_key(|context| context.scope_root.components().count())
+            .cloned()
+        {
+            return Ok(context);
+        }
+        let directory = path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .unwrap_or(Path::new("."))
+            .to_path_buf();
+        if let Some(context) = self
+            .standalone_contexts
+            .read()
+            .await
+            .get(&directory)
+            .cloned()
+        {
+            return Ok(context);
+        }
+        let context = self.load_context(&directory)?;
+        self.standalone_contexts
+            .write()
+            .await
+            .insert(directory, context.clone());
+        Ok(context)
+    }
+
+    async fn context_for_document(&self, uri: &Url) -> Option<Arc<WorkspaceContext>> {
+        match self.context_for_uri(uri).await {
+            Ok(context) => Some(context),
+            Err(error) => {
+                self.client
+                    .log_message(
+                        MessageType::ERROR,
+                        format!("OComment configuration: {error:#}"),
+                    )
+                    .await;
+                None
+            }
+        }
+    }
+
     async fn result(&self, uri: &Url, document: &Document) -> TransformResult {
         let path = uri
             .to_file_path()
             .unwrap_or_else(|_| PathBuf::from(uri.path()));
-        let configuration = self.configuration.read().await;
-        if document.language != Language::Unknown
-            && configuration
-                .config
-                .languages
-                .get(document.language.as_str())
-                .and_then(|language| language.enabled)
-                == Some(false)
-        {
-            return unchanged_result(document.text.as_bytes(), document.language);
-        }
+        let Some(context) = self.context_for_document(uri).await else {
+            return failure_result(
+                document.text.as_bytes(),
+                "configuration-error",
+                "cannot load effective file configuration".into(),
+            );
+        };
+        let configuration = &context.configuration;
         let (language, options) =
-            configuration.for_path(&path, document.language, document.dialect);
-        let profile = (document.language == Language::Unknown)
-            .then(|| files::profile_for_path(&path, &configuration))
+            match configuration.for_path(&path, document.language, document.dialect) {
+                Ok(value) => value,
+                Err(error) => {
+                    return failure_result(
+                        document.text.as_bytes(),
+                        "configuration-error",
+                        format!("invalid effective file configuration: {error:#}"),
+                    );
+                }
+            };
+        if !configuration.language_is_enabled(language) {
+            return unchanged_result(document.text.as_bytes(), language);
+        }
+        let profile = (language == Language::Unknown)
+            .then(|| files::profile_for_path(&path, configuration))
             .flatten();
-        let plugin = (document.language == Language::Unknown && profile.is_none())
-            .then(|| files::plugin_for_path(&path, &configuration))
+        let plugin = (language == Language::Unknown && profile.is_none())
+            .then(|| files::plugin_for_path(&path, configuration))
             .flatten();
-        drop(configuration);
         if let Some(profile) = profile {
             return ocomment_core::transform_profile(document.text.as_bytes(), &profile, options)
                 .expect("profiles were validated while loading configuration");
         }
         if let Some(plugin) = plugin {
-            return self
+            return context
                 .plugins
-                .read()
-                .await
                 .transform(
                     &plugin,
                     document.text.as_bytes(),
@@ -184,7 +272,10 @@ impl Backend {
         }
         let document = self.documents.read().await.get(&uri).cloned();
         if let Some(document) = document {
-            let enabled = self.configuration.read().await.config.lsp.diagnostics;
+            let enabled = self
+                .context_for_document(&uri)
+                .await
+                .is_some_and(|context| context.configuration.config.lsp.diagnostics);
             let diagnostics = if enabled {
                 self.lsp_diagnostics(&uri, &document).await
             } else {
@@ -197,49 +288,51 @@ impl Backend {
     }
 
     async fn reload_configuration(&self) {
-        match config::load(self.explicit_config.as_deref()) {
-            Ok(configuration) => {
-                let plugins =
-                    match PluginHost::load(&configuration.root, &configuration.config.plugins) {
-                        Ok(plugins) => plugins,
-                        Err(error) => {
-                            self.client
-                                .show_message(
-                                    MessageType::ERROR,
-                                    format!("OComment plugins: {error:#}"),
-                                )
-                                .await;
-                            return;
-                        }
-                    };
-                *self.configuration.write().await = configuration;
-                *self.plugins.write().await = plugins;
-                {
-                    let configuration = self.configuration.read().await;
-                    let mut documents = self.documents.write().await;
-                    for (uri, document) in documents.iter_mut() {
-                        document.incremental =
-                            incremental_for_document(uri, document, &configuration);
-                    }
-                }
-                self.configuration_generation
-                    .fetch_add(1, Ordering::Relaxed);
-                let uris: Vec<_> = self.documents.read().await.keys().cloned().collect();
-                for uri in uris {
-                    self.publish(uri).await;
-                }
-                let _ = self.client.code_lens_refresh().await;
-                let _ = self.client.workspace_diagnostic_refresh().await;
-            }
+        let default_scope = self.default_context.read().await.scope_root.clone();
+        let roots: Vec<_> = self
+            .workspace_folders
+            .read()
+            .await
+            .iter()
+            .filter_map(|folder| folder.uri.to_file_path().ok())
+            .collect();
+        let replacement = (|| -> AnyResult<_> {
+            let default = self.load_context(&default_scope)?;
+            let workspaces = roots
+                .iter()
+                .map(|root| self.load_context(root))
+                .collect::<AnyResult<Vec<_>>>()?;
+            Ok((default, workspaces))
+        })();
+        let (default, workspaces) = match replacement {
+            Ok(value) => value,
             Err(error) => {
                 self.client
                     .show_message(
                         MessageType::ERROR,
                         format!("OComment configuration: {error:#}"),
                     )
-                    .await
+                    .await;
+                return;
             }
+        };
+        *self.default_context.write().await = default;
+        *self.workspace_contexts.write().await = workspaces;
+        self.standalone_contexts.write().await.clear();
+        /* NOTE: A cached incremental scanner belongs to the options of the
+         * generation that built it. Dropping the cache is enough; the next
+         * document operation performs a full scan under the new context. */
+        for document in self.documents.write().await.values_mut() {
+            document.incremental = None;
         }
+        self.configuration_generation
+            .fetch_add(1, Ordering::Relaxed);
+        let uris: Vec<_> = self.documents.read().await.keys().cloned().collect();
+        for uri in uris {
+            self.publish(uri).await;
+        }
+        let _ = self.client.code_lens_refresh().await;
+        let _ = self.client.workspace_diagnostic_refresh().await;
     }
 
     async fn document_workspace_edit(
@@ -332,83 +425,118 @@ impl Backend {
             .iter()
             .map(|(uri, document)| (uri.clone(), document.clone()))
             .collect();
+        let contexts = self.workspace_contexts.read().await.clone();
+        /* NOTE: With no folders there is no disk workspace to discover. The
+         * protocol's folder-less mode defines the workspace as the open
+         * documents, wherever those documents live. */
+        if contexts.is_empty() {
+            let mut snapshots: Vec<_> = open
+                .into_iter()
+                .map(|(uri, document)| WorkspaceSnapshot {
+                    uri,
+                    version: Some(document.version),
+                    document,
+                })
+                .collect();
+            snapshots.sort_by(|left, right| left.uri.as_str().cmp(right.uri.as_str()));
+            return snapshots;
+        }
+        let in_workspace = |uri: &Url| {
+            uri.to_file_path().ok().is_some_and(|path| {
+                contexts
+                    .iter()
+                    .any(|context| path.starts_with(&context.scope_root))
+            })
+        };
         let mut snapshots: Vec<_> = open
             .iter()
+            .filter(|(uri, _)| in_workspace(uri))
             .map(|(uri, document)| WorkspaceSnapshot {
                 uri: uri.clone(),
                 document: document.clone(),
                 version: Some(document.version),
             })
             .collect();
-        let roots: Vec<_> = self
-            .workspace_folders
-            .read()
-            .await
-            .iter()
-            .filter_map(|folder| folder.uri.to_file_path().ok())
-            .collect();
-        let discovery = {
-            let configuration = self.configuration.read().await;
-            files::discover_workspace(&roots, &configuration)
-        };
-        let discovery = match discovery {
-            Ok(discovery) => discovery,
-            Err(error) => {
+        for context in &contexts {
+            let discovery = files::discover_workspace(
+                std::slice::from_ref(&context.scope_root),
+                &context.configuration,
+            );
+            let discovery = match discovery {
+                Ok(discovery) => discovery,
+                Err(error) => {
+                    self.client
+                        .log_message(
+                            MessageType::ERROR,
+                            format!(
+                                "OComment workspace discovery failed under {}: {error:#}",
+                                context.scope_root.display()
+                            ),
+                        )
+                        .await;
+                    continue;
+                }
+            };
+            for skipped in discovery.skipped.iter().filter(|item| item.error) {
                 self.client
                     .log_message(
-                        MessageType::ERROR,
-                        format!("OComment workspace discovery failed: {error:#}"),
+                        MessageType::WARNING,
+                        format!(
+                            "OComment could not inspect {}: {}",
+                            skipped.path.display(),
+                            skipped.reason
+                        ),
                     )
                     .await;
-                snapshots.sort_by(|left, right| left.uri.as_str().cmp(right.uri.as_str()));
-                return snapshots;
             }
-        };
-        for skipped in discovery.skipped.iter().filter(|item| item.error) {
-            self.client
-                .log_message(
-                    MessageType::WARNING,
-                    format!(
-                        "OComment could not inspect {}: {}",
-                        skipped.path.display(),
-                        skipped.reason
-                    ),
-                )
-                .await;
-        }
-        for file in discovery.files {
-            let Ok(uri) = Url::from_file_path(&file.path) else {
-                continue;
-            };
-            if open.contains_key(&uri) {
-                continue;
+            for file in discovery.files {
+                /* NOTE: Nested workspace folders own their subtree. Keeping a
+                 * copy discovered through an outer root would bypass the
+                 * inner context's file include/exclude and size policy before
+                 * the transform ever gets a chance to route by URI. */
+                let owned_by_more_specific_context = contexts.iter().any(|candidate| {
+                    candidate.scope_root != context.scope_root
+                        && candidate.scope_root.components().count()
+                            > context.scope_root.components().count()
+                        && file.path.starts_with(&candidate.scope_root)
+                });
+                if owned_by_more_specific_context {
+                    continue;
+                }
+                let Ok(uri) = Url::from_file_path(&file.path) else {
+                    continue;
+                };
+                if open.contains_key(&uri) {
+                    continue;
+                }
+                let Ok(text) = String::from_utf8(file.source) else {
+                    continue;
+                };
+                let language_name = if file.language == Language::Unknown {
+                    file.path
+                        .extension()
+                        .and_then(|value| value.to_str())
+                        .unwrap_or("unknown")
+                        .to_ascii_lowercase()
+                } else {
+                    file.language.as_str().to_owned()
+                };
+                snapshots.push(WorkspaceSnapshot {
+                    uri,
+                    document: Document {
+                        text,
+                        language_name,
+                        language: file.language,
+                        dialect: file.dialect,
+                        version: 0,
+                        incremental: None,
+                    },
+                    version: None,
+                });
             }
-            let Ok(text) = String::from_utf8(file.source) else {
-                continue;
-            };
-            let language_name = if file.language == Language::Unknown {
-                file.path
-                    .extension()
-                    .and_then(|value| value.to_str())
-                    .unwrap_or("unknown")
-                    .to_ascii_lowercase()
-            } else {
-                file.language.as_str().to_owned()
-            };
-            snapshots.push(WorkspaceSnapshot {
-                uri,
-                document: Document {
-                    text,
-                    language_name,
-                    language: file.language,
-                    dialect: file.dialect,
-                    version: 0,
-                    incremental: None,
-                },
-                version: None,
-            });
         }
         snapshots.sort_by(|left, right| left.uri.as_str().cmp(right.uri.as_str()));
+        snapshots.dedup_by(|left, right| left.uri == right.uri);
         snapshots
     }
 
@@ -462,8 +590,21 @@ impl LanguageServer for Backend {
             })
             .unwrap_or(PositionEncodingKind::UTF16);
         *self.encoding.write().await = encoding.clone();
-        *self.workspace_folders.write().await = params.workspace_folders.unwrap_or_default();
-        let on_save = self.configuration.read().await.config.lsp.on_save;
+        let folders = params.workspace_folders.unwrap_or_default();
+        let contexts = folders
+            .iter()
+            .filter_map(|folder| folder.uri.to_file_path().ok())
+            .map(|root| {
+                self.load_context(&root).map_err(|error| {
+                    jsonrpc::Error::invalid_params(format!(
+                        "cannot load OComment workspace {}: {error:#}",
+                        root.display()
+                    ))
+                })
+            })
+            .collect::<jsonrpc::Result<Vec<_>>>()?;
+        *self.workspace_folders.write().await = folders;
+        *self.workspace_contexts.write().await = contexts;
         Ok(InitializeResult {
             capabilities: ServerCapabilities {
                 position_encoding: Some(encoding),
@@ -471,8 +612,12 @@ impl LanguageServer for Backend {
                     TextDocumentSyncOptions {
                         open_close: Some(true),
                         change: Some(TextDocumentSyncKind::INCREMENTAL),
-                        will_save: Some(on_save),
-                        will_save_wait_until: Some(on_save),
+                        /* NOTE: Capabilities cannot be withdrawn when live
+                         * configuration changes. Advertise the handler once;
+                         * it reads `lsp.on_save` for every request and becomes
+                         * a no-op while the setting is disabled. */
+                        will_save: Some(true),
+                        will_save_wait_until: Some(true),
                         save: Some(TextDocumentSyncSaveOptions::Supported(true)),
                     },
                 )),
@@ -574,10 +719,12 @@ impl LanguageServer for Backend {
             version: item.version,
             incremental: None,
         };
-        document.incremental = {
-            let configuration = self.configuration.read().await;
-            incremental_for_document(&item.uri, &document, &configuration)
-        };
+        document.incremental = self
+            .context_for_document(&item.uri)
+            .await
+            .and_then(|context| {
+                incremental_for_document(&item.uri, &document, &context.configuration)
+            });
         self.documents
             .write()
             .await
@@ -684,7 +831,10 @@ impl LanguageServer for Backend {
         &self,
         params: WillSaveTextDocumentParams,
     ) -> jsonrpc::Result<Option<Vec<TextEdit>>> {
-        if !self.configuration.read().await.config.lsp.on_save {
+        let Some(context) = self.context_for_document(&params.text_document.uri).await else {
+            return Ok(None);
+        };
+        if !context.configuration.config.lsp.on_save {
             return Ok(None);
         }
         let Some(document) = self
@@ -940,10 +1090,13 @@ impl LanguageServer for Backend {
     }
 
     async fn code_lens(&self, params: CodeLensParams) -> jsonrpc::Result<Option<Vec<CodeLens>>> {
-        if !self.configuration.read().await.config.lsp.code_lens {
+        let uri = params.text_document.uri;
+        let Some(context) = self.context_for_document(&uri).await else {
+            return Ok(None);
+        };
+        if !context.configuration.config.lsp.code_lens {
             return Ok(None);
         }
-        let uri = params.text_document.uri;
         let Some(document) = self.documents.read().await.get(&uri).cloned() else {
             return Ok(None);
         };
@@ -1005,6 +1158,32 @@ impl LanguageServer for Backend {
     }
 
     async fn did_change_workspace_folders(&self, params: DidChangeWorkspaceFoldersParams) {
+        let removed_roots: Vec<_> = params
+            .event
+            .removed
+            .iter()
+            .filter_map(|folder| folder.uri.to_file_path().ok())
+            .collect();
+        let mut added_contexts = Vec::new();
+        for folder in &params.event.added {
+            let Ok(root) = folder.uri.to_file_path() else {
+                continue;
+            };
+            match self.load_context(&root) {
+                Ok(context) => added_contexts.push(context),
+                Err(error) => {
+                    self.client
+                        .show_message(
+                            MessageType::ERROR,
+                            format!(
+                                "OComment workspace {} could not be loaded: {error:#}",
+                                root.display()
+                            ),
+                        )
+                        .await;
+                }
+            }
+        }
         let mut folders = self.workspace_folders.write().await;
         folders.retain(|folder| {
             !params
@@ -1014,10 +1193,29 @@ impl LanguageServer for Backend {
                 .any(|removed| removed.uri == folder.uri)
         });
         folders.extend(params.event.added);
+        drop(folders);
+        let mut contexts = self.workspace_contexts.write().await;
+        contexts.retain(|context| !removed_roots.contains(&context.scope_root));
+        contexts.extend(added_contexts);
+        drop(contexts);
+        self.standalone_contexts.write().await.clear();
+        for document in self.documents.write().await.values_mut() {
+            document.incremental = None;
+        }
+        self.configuration_generation
+            .fetch_add(1, Ordering::Relaxed);
     }
 }
 
 fn plugin_failure(source: &[u8], error: anyhow::Error) -> TransformResult {
+    failure_result(
+        source,
+        "plugin-error",
+        format!("scanner plugin failed: {error:#}"),
+    )
+}
+
+fn failure_result(source: &[u8], code: &str, message: String) -> TransformResult {
     TransformResult {
         output: source.to_vec(),
         edits: Vec::new(),
@@ -1025,8 +1223,8 @@ fn plugin_failure(source: &[u8], error: anyhow::Error) -> TransformResult {
             language: Language::Unknown,
             comments: Vec::new(),
             diagnostics: vec![CoreDiagnostic {
-                code: "plugin-error".into(),
-                message: format!("scanner plugin failed: {error:#}"),
+                code: code.into(),
+                message,
                 severity: Severity::Error,
                 span: ByteSpan::new(0, 0),
             }],
@@ -1092,21 +1290,13 @@ fn incremental_for_document(
     document: &Document,
     configuration: &ResolvedConfig,
 ) -> Option<IncrementalDocument> {
-    if document.language == Language::Unknown
-        || configuration
-            .config
-            .languages
-            .get(document.language.as_str())
-            .and_then(|language| language.enabled)
-            == Some(false)
-    {
-        return None;
-    }
     let path = uri
         .to_file_path()
         .unwrap_or_else(|_| PathBuf::from(uri.path()));
-    let (language, options) = configuration.for_path(&path, document.language, document.dialect);
-    (language != Language::Unknown).then(|| {
+    let (language, options) = configuration
+        .for_path(&path, document.language, document.dialect)
+        .ok()?;
+    (language != Language::Unknown && configuration.language_is_enabled(language)).then(|| {
         IncrementalDocument::new(
             document.text.as_bytes().to_vec(),
             language,
@@ -1275,32 +1465,35 @@ fn next_line_start(source: &[u8], start: usize) -> Option<usize> {
 mod tests {
     use super::*;
 
+    #[derive(serde::Deserialize)]
+    struct EditorLanguageTable {
+        languages: Vec<EditorLanguageRow>,
+    }
+
+    #[derive(serde::Deserialize)]
+    struct EditorLanguageRow {
+        editor_ids: Vec<String>,
+    }
+
     /// Every language identifier the VS Code extension attaches the server to
     /// has to reach a built-in language here.
     ///
-    /// The two lists are written in different vocabularies: `Language` is named
-    /// after the language and an editor identifier after whatever the editor
-    /// calls it, and the two agree for most of them by luck rather than by
-    /// construction — `objective-c`, `cuda-cpp`, `javascriptreact` and
-    /// `shellscript` do not agree at all, which is what
-    /// [`language_from_lsp`]'s arms are for. Nothing else notices when they
-    /// stop agreeing: the extension still activates for the identifier, the
-    /// server still opens the document, and the scan comes back with the
-    /// `unknown-language` diagnostic and no comments. So the selector is read
-    /// here rather than trusted.
+    /// This crate-local test reads only the packaged language asset, so it also
+    /// runs after a `.crate` is expanded in an otherwise empty directory. The
+    /// repository integration test separately proves that the VS Code manifest
+    /// contains this exact canonical set.
     #[test]
     fn every_editor_language_identifier_reaches_a_built_in_language() {
-        let manifest: serde_json::Value =
-            serde_json::from_str(include_str!("../../../editors/vscode/package.json"))
-                .expect("package.json parses");
-        let identifiers =
-            manifest["contributes"]["configuration"]["properties"]["ocomment.languages"]["default"]
-                .as_array()
-                .expect("`ocomment.languages` has an array default");
+        let table: EditorLanguageTable = toml::from_str(include_str!("../assets/languages.toml"))
+            .expect("packaged languages.toml parses");
+        let identifiers: Vec<_> = table
+            .languages
+            .iter()
+            .flat_map(|language| &language.editor_ids)
+            .collect();
         let uri = Url::parse("file:///buffer").expect("a well-formed URI");
         assert!(!identifiers.is_empty());
-        for value in identifiers {
-            let id = value.as_str().expect("a language identifier is a string");
+        for id in identifiers {
             let (language, _) = language_from_lsp(id, &uri, b"");
             assert!(
                 Language::ALL.contains(&language),

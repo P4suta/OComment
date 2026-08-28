@@ -100,10 +100,14 @@ fn scan_internal(
     let mut scanner =
         Scanner::with_offset(source, language, options, offset, track_checkpoints, stop);
     scanner.scan_language();
-    debug_assert!(scanner.comments.windows(2).all(|comments| {
-        comments[0].span.start < comments[1].span.start
-            && comments[0].span.end <= comments[1].span.start
-    }));
+    debug_assert!(
+        scanner.comments.windows(2).all(|comments| {
+            comments[0].span.start < comments[1].span.start
+                && comments[0].span.end <= comments[1].span.start
+        }),
+        "{language} scanner returned duplicate, unordered, or overlapping comments: {:?}",
+        scanner.comments,
+    );
     let valid = !scanner
         .diagnostics
         .iter()
@@ -276,6 +280,7 @@ impl<'a> Scanner<'a> {
     /// Run the scanner for its own language.
     fn scan_language(&mut self) {
         match self.language {
+            Language::Css if self.options.dialect == Dialect::Sass => self.scan_sass(),
             Language::Rust
             | Language::C
             | Language::Cpp
@@ -322,15 +327,19 @@ impl<'a> Scanner<'a> {
     }
 
     fn error(&mut self, code: &str, message: &str, span: ByteSpan) {
+        let start = span.start.min(self.source.len());
+        let end = span.end.max(start).min(self.source.len());
         self.diagnostics.push(Diagnostic {
             code: code.into(),
             message: message.into(),
             severity: Severity::Error,
-            span: ByteSpan::new(span.start + self.offset, span.end + self.offset),
+            span: ByteSpan::new(start + self.offset, end + self.offset),
         });
     }
 
     fn add_comment(&mut self, start: usize, end: usize, lexical_kind: CommentKind) {
+        let start = start.min(self.source.len());
+        let end = end.max(start).min(self.source.len());
         let kind = classify_comment(
             self.source,
             self.language,
@@ -339,7 +348,7 @@ impl<'a> Scanner<'a> {
             end,
             self.offset,
         );
-        let raw = &self.source[start.min(self.source.len())..end.min(self.source.len())];
+        let raw = &self.source[start..end];
         let disposition = disposition(kind, &self.options, raw, &self.patterns);
         self.comments.push(Comment {
             span: ByteSpan::new(start + self.offset, end + self.offset),
@@ -474,7 +483,7 @@ impl<'a> Scanner<'a> {
                     index = self.scan_scss_interpolation(index + 2, 0);
                     continue;
                 }
-                if let Some(end) = self.scss_url_end(index) {
+                if let Some(end) = self.scss_url_end(index, 0) {
                     index = end;
                     continue;
                 }
@@ -487,14 +496,98 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    /// The byte after an SCSS `url(` whose content is an unquoted URL, which
-    /// dart-sass reads as URL bytes until the `)` that ends them — a `//` or a
-    /// `/*` in them is URL text, not a comment — with `#{ ... }` interpolation
-    /// inside being code. A quoted URL is an ordinary string and is left to
-    /// [`Self::special_c_string`]; an unquoted URL that never closes is a file
-    /// dart-sass rejects, and reading it as ordinary bytes is the safe half of
-    /// being wrong.
-    fn scss_url_end(&mut self, index: usize) -> Option<usize> {
+    /// The indentation-based Sass syntax.
+    ///
+    /// Its strings, URLs, interpolation and explicit block comments use the
+    /// same lexical rules as SCSS. A silent `//` comment on an otherwise blank
+    /// prefix additionally owns every following non-blank line indented more
+    /// deeply than the comment line. Keeping that body in one span is
+    /// important: treating a `#` or `/*` in a picture line as source would
+    /// make a removal rewrite bytes the Sass parser never exposes as code.
+    fn scan_sass(&mut self) {
+        let bytes = self.source;
+        let mut index = 0;
+        while index < bytes.len() && !self.stopped {
+            if starts(bytes, index, b"//") {
+                let end = self.sass_silent_comment_end(index);
+                self.add_comment(index, end, line_kind(bytes, index));
+                index = end;
+                continue;
+            }
+            if starts(bytes, index, b"/*") {
+                let (end, closed) = block_end(bytes, index, b"/*", b"*/", false);
+                self.add_comment(index, end, block_kind(bytes, index));
+                if !closed {
+                    self.error(
+                        "unterminated-comment",
+                        "unterminated Sass block comment",
+                        ByteSpan::new(index, end),
+                    );
+                }
+                index = end;
+                continue;
+            }
+            if starts(bytes, index, b"#{") {
+                index = self.scan_scss_interpolation(index + 2, 0);
+                continue;
+            }
+            if let Some(end) = self.scss_url_end(index, 0) {
+                index = end;
+                continue;
+            }
+            if matches!(bytes[index], b'"' | b'\'') {
+                index = self.scan_scss_string(index, 0);
+                continue;
+            }
+            if matches!(bytes[index], b'\r' | b'\n') {
+                index = consume_newline(bytes, index);
+                self.add_safe_checkpoint(index);
+            } else {
+                index += 1;
+            }
+        }
+    }
+
+    fn sass_silent_comment_end(&self, start: usize) -> usize {
+        let bytes = self.source;
+        let line_start = line_start(bytes, start);
+        if bytes[line_start..start]
+            .iter()
+            .any(|byte| !matches!(byte, b' ' | b'\t'))
+        {
+            return line_end(bytes, start + 2);
+        }
+        let base_indent = sass_indent_width(&bytes[line_start..start]);
+        let first_end = line_end(bytes, start + 2);
+        let mut included_end = first_end;
+        let mut next = if first_end < bytes.len() {
+            consume_newline(bytes, first_end)
+        } else {
+            return first_end;
+        };
+        while next < bytes.len() {
+            let finish = line_end(bytes, next);
+            let mut content = next;
+            while content < finish && matches!(bytes[content], b' ' | b'\t') {
+                content += 1;
+            }
+            let blank = content == finish || matches!(bytes.get(content), Some(b'\r' | b'\n'));
+            if !blank && sass_indent_width(&bytes[next..content]) <= base_indent {
+                break;
+            }
+            included_end = finish;
+            if finish >= bytes.len() {
+                break;
+            }
+            next = consume_newline(bytes, finish);
+        }
+        included_end
+    }
+
+    /// The byte after an SCSS/Sass `url(...)`. CSS white space around the
+    /// value, quoted values and escapes are part of the function token; an
+    /// interpolation inside either value form is code.
+    fn scss_url_end(&mut self, index: usize, depth: usize) -> Option<usize> {
         if !starts_ascii_case(&self.source[index..], b"url(") {
             return None;
         }
@@ -503,15 +596,28 @@ impl<'a> Scanner<'a> {
         }
         let bytes = self.source;
         let mut cursor = index + 4;
+        while bytes.get(cursor).is_some_and(|byte| css_whitespace(*byte)) {
+            cursor += 1;
+        }
         if matches!(bytes.get(cursor), Some(b'"' | b'\'')) {
-            return None;
+            cursor = self.scan_scss_string(cursor, depth);
+            while bytes.get(cursor).is_some_and(|byte| css_whitespace(*byte)) {
+                cursor += 1;
+            }
+            if bytes.get(cursor) == Some(&b')') {
+                return Some(cursor + 1);
+            }
         }
         while cursor < bytes.len() {
             if bytes[cursor] == b')' {
                 return Some(cursor + 1);
             }
+            if bytes[cursor] == b'\\' {
+                cursor = (cursor + 2).min(bytes.len());
+                continue;
+            }
             if starts(bytes, cursor, b"#{") {
-                cursor = self.scan_scss_interpolation(cursor + 2, 0);
+                cursor = self.scan_scss_interpolation(cursor + 2, depth + 1);
                 continue;
             }
             cursor += 1;
@@ -560,12 +666,12 @@ impl<'a> Scanner<'a> {
                 index = end;
                 continue;
             }
-            if let Some(end) = self.scss_url_end(index) {
+            if let Some(end) = self.scss_url_end(index, depth) {
                 index = end;
                 continue;
             }
             match bytes[index] {
-                b'"' | b'\'' => index = self.quoted_or_error(index, true, "CSS string"),
+                b'"' | b'\'' => index = self.scan_scss_string(index, depth),
                 b'{' => {
                     braces += 1;
                     index += 1;
@@ -586,6 +692,36 @@ impl<'a> Scanner<'a> {
             ByteSpan::new(index, index),
         );
         index
+    }
+
+    /// A Sass-family quoted string. Unlike a CSS string treated as an opaque
+    /// token, interpolation re-enters Sass code and may therefore contain real
+    /// comments. A backslash carries the following byte, including a line
+    /// terminator, exactly as the Sass tokenizer does.
+    fn scan_scss_string(&mut self, start: usize, depth: usize) -> usize {
+        let bytes = self.source;
+        let quote = bytes[start];
+        let mut index = start + 1;
+        while index < bytes.len() {
+            if bytes[index] == b'\\' {
+                index = (index + 2).min(bytes.len());
+                continue;
+            }
+            if bytes[index] == quote {
+                return index + 1;
+            }
+            if starts(bytes, index, b"#{") {
+                index = self.scan_scss_interpolation(index + 2, depth + 1);
+                continue;
+            }
+            index += 1;
+        }
+        self.error(
+            "unterminated-string",
+            "unterminated Sass string",
+            ByteSpan::new(start, bytes.len()),
+        );
+        bytes.len()
     }
 
     fn special_c_string(&mut self, index: usize) -> Option<usize> {
@@ -714,7 +850,11 @@ impl<'a> Scanner<'a> {
             }
             Language::Css => {
                 if matches!(bytes[index], b'"' | b'\'') {
-                    return Some(self.quoted_or_error(index, true, "CSS string"));
+                    return Some(if self.options.dialect == Dialect::Scss {
+                        self.scan_scss_string(index, 0)
+                    } else {
+                        self.quoted_or_error(index, true, "CSS string")
+                    });
                 }
             }
             _ => {}
@@ -733,15 +873,25 @@ impl<'a> Scanner<'a> {
         }
         let bytes = self.source;
         let delimiter = if triple { b"\"\"\"".as_slice() } else { b"\"" };
+        let dollars = kotlin_dollar_width(bytes, start);
         let mut index = start + delimiter.len();
         while index < bytes.len() {
             if starts(bytes, index, delimiter) {
-                return index + delimiter.len();
+                return if triple {
+                    index + count_run(bytes, index, b'"')
+                } else {
+                    index + 1
+                };
             }
             if !triple && bytes[index] == b'\\' {
                 index = (index + 2).min(bytes.len());
-            } else if starts(bytes, index, b"${") {
-                index = self.scan_kotlin_expression(index + 2, depth + 1);
+            } else if bytes[index] == b'$' {
+                let run = count_run(bytes, index, b'$');
+                if run >= dollars && bytes.get(index + run) == Some(&b'{') {
+                    index = self.scan_kotlin_expression(index + run + 1, depth + 1);
+                } else {
+                    index += run;
+                }
             } else if !triple && matches!(bytes[index], b'\r' | b'\n') {
                 self.error(
                     "unterminated-string",
@@ -3718,6 +3868,11 @@ impl<'a> Scanner<'a> {
         if bytes[index] == b'"' {
             return Some(self.scan_scala_string(index, depth));
         }
+        if bytes[index] == b'\''
+            && let Some(end) = scala_character_literal_end(bytes, index)
+        {
+            return Some(end);
+        }
         /* NOTE: a backquoted identifier may hold any bytes but a backtick,
          * `//` included — `` val `a//b` = 1 `` is one identifier — and ends at
          * its line, which is what keeps it from swallowing the source below. */
@@ -4921,11 +5076,18 @@ impl<'a> Scanner<'a> {
         let mut index = 0;
         let mut regex_allowed: Option<bool> = Some(true);
         while index < bytes.len() && !self.stopped {
+            if perl_at_line_start(bytes, index)
+                && (perl_marker_line(bytes, index, b"__DATA__")
+                    || perl_marker_line(bytes, index, b"__END__"))
+            {
+                break;
+            }
             if (index == 0 || matches!(bytes[index - 1], b'\n' | b'\r'))
                 && bytes[index] == b'='
                 && bytes
                     .get(index + 1)
                     .is_some_and(|byte| byte.is_ascii_alphanumeric() || *byte == b'_')
+                && !perl_pod_directive(bytes, index, b"cut")
             {
                 index = self.scan_perl_pod(index);
                 continue;
@@ -4944,7 +5106,7 @@ impl<'a> Scanner<'a> {
             }
             if bytes[index] == b'<'
                 && bytes.get(index + 1) == Some(&b'<')
-                && let Some(end) = self.scan_perl_heredoc(index)
+                && let Some(end) = self.scan_perl_heredocs(index)
             {
                 index = end;
                 regex_allowed = Some(false);
@@ -4992,11 +5154,8 @@ impl<'a> Scanner<'a> {
                 regex_allowed = Some(true);
                 continue;
             }
-            if bytes[index] == b'$' || bytes[index] == b'@' || bytes[index] == b'%' {
-                index += 1;
-                while index < bytes.len() && is_perl_word_byte(bytes[index]) {
-                    index += 1;
-                }
+            if matches!(bytes[index], b'$' | b'@' | b'%') {
+                index = perl_variable_end(bytes, index);
                 regex_allowed = Some(false);
                 continue;
             }
@@ -5007,6 +5166,16 @@ impl<'a> Scanner<'a> {
                     index += 1;
                 }
                 let word = &bytes[start..index];
+                if word == b"format"
+                    && bytes[line_start(bytes, start)..start]
+                        .iter()
+                        .all(|byte| matches!(byte, b' ' | b'\t'))
+                    && let Some(end) = self.scan_perl_format(start)
+                {
+                    index = end;
+                    regex_allowed = Some(true);
+                    continue;
+                }
                 regex_allowed = perl_word_allows_regex(word);
                 continue;
             }
@@ -5036,17 +5205,14 @@ impl<'a> Scanner<'a> {
     }
 
     /// One POD block, beginning at the `=` of its marker. The block is opaque
-    /// until a line that opens with `=cut`; a stray `=cut` with nothing open
-    /// is a line like any other.
+    /// until a complete `=cut` directive; `=cutlery` is POD text, not a
+    /// boundary.
     fn scan_perl_pod(&mut self, start: usize) -> usize {
         let bytes = self.source;
         let mut index = start;
         while index < bytes.len() {
             let line_finish = line_end(bytes, index);
-            if (index == start || bytes.get(index).copied() == Some(b'='))
-                && starts(bytes, index, b"=cut")
-                && index != start
-            {
+            if index != start && perl_pod_directive(bytes, index, b"cut") {
                 return if line_finish >= bytes.len() {
                     line_finish
                 } else {
@@ -5071,32 +5237,7 @@ impl<'a> Scanner<'a> {
 
     /// One Perl string or command substitution, beginning at its quote.
     fn scan_perl_quoted(&mut self, start: usize) -> usize {
-        let bytes = self.source;
-        let quote = bytes[start];
-        let mut index = start + 1;
-        let mut backslashes = 0usize;
-        while index < bytes.len() {
-            if bytes[index] == b'\\' {
-                backslashes += 1;
-                index += 1;
-                continue;
-            }
-            if bytes[index] == quote {
-                if quote == b'\'' {
-                    if backslashes.is_multiple_of(2) {
-                        return index + 1;
-                    }
-                } else {
-                    return index + 1;
-                }
-            }
-            backslashes = 0;
-            if quote != b'\'' && bytes[index] == b'\\' {
-                index = (index + 1).min(bytes.len());
-            }
-            index += 1;
-        }
-        bytes.len()
+        perl_quoted_end(self.source, start)
     }
 
     /// One Perl quote word, here-document or the `m`, `s`, `tr` and `y`
@@ -5104,9 +5245,11 @@ impl<'a> Scanner<'a> {
     /// letter is a bareword rather than a quote.
     fn scan_perl_quote_word(&mut self, start: usize) -> Option<usize> {
         let bytes = self.source;
+        let mut reach = Reach::default();
         let mut cursor = start;
         let mut form = Vec::new();
         form.push(bytes[cursor]);
+        reach.byte(cursor);
         if matches!(bytes[cursor], b'q' | b't')
             && let Some(&second) = bytes.get(cursor + 1)
             && ((bytes[cursor] == b'q' && matches!(second, b'q' | b'w' | b'x' | b'r'))
@@ -5114,80 +5257,175 @@ impl<'a> Scanner<'a> {
         {
             form.push(second);
             cursor += 1;
+            reach.byte(cursor);
         }
         cursor += 1;
-        while cursor < bytes.len() && bytes[cursor].is_ascii_whitespace() && bytes[cursor] != b'\n'
+        while cursor < bytes.len()
+            && bytes[cursor].is_ascii_whitespace()
+            && !matches!(bytes[cursor], b'\r' | b'\n')
         {
+            reach.byte(cursor);
             cursor += 1;
         }
-        let delimiter = bytes.get(cursor).copied()?;
-        if is_perl_word_byte(delimiter) {
+        let Some(delimiter) = bytes.get(cursor).copied() else {
+            reach.end_of(bytes);
+            self.consult(reach);
+            return None;
+        };
+        reach.byte(cursor);
+        if is_perl_word_byte(delimiter) || delimiter.is_ascii_whitespace() {
+            self.consult(reach);
             return None;
         }
-        let first = perl_section_end(bytes, cursor, delimiter)?;
+        let Some(first) = perl_section_end_reach(bytes, cursor, delimiter, &mut reach) else {
+            self.consult(reach);
+            return None;
+        };
         if matches!(form[0], b's' | b't' | b'y') {
-            let second = bytes.get(first).copied()?;
-            if is_perl_word_byte(second) {
-                return None;
-            }
-            let second_end = perl_section_end(bytes, first, second)?;
-            return Some(second_end);
+            let paired = matches!(delimiter, b'(' | b'[' | b'{' | b'<');
+            let second_end = if paired {
+                let mut second_start = first;
+                while bytes.get(second_start).is_some_and(|byte| {
+                    byte.is_ascii_whitespace() && !matches!(byte, b'\r' | b'\n')
+                }) {
+                    reach.byte(second_start);
+                    second_start += 1;
+                }
+                let Some(second) = bytes.get(second_start).copied() else {
+                    reach.end_of(bytes);
+                    self.consult(reach);
+                    return None;
+                };
+                reach.byte(second_start);
+                if is_perl_word_byte(second) || second.is_ascii_whitespace() {
+                    self.consult(reach);
+                    return None;
+                }
+                let Some(end) = perl_section_end_reach(bytes, second_start, second, &mut reach)
+                else {
+                    self.consult(reach);
+                    return None;
+                };
+                end
+            } else {
+                let Some(end) =
+                    perl_unpaired_section_end_reach(bytes, first, delimiter, &mut reach)
+                else {
+                    self.consult(reach);
+                    return None;
+                };
+                end
+            };
+            let end = perl_modifiers_end(bytes, second_end);
+            reach.through(end);
+            self.consult(reach);
+            return Some(end);
         }
-        Some(first)
+        let end = perl_modifiers_end(bytes, first);
+        reach.through(end);
+        self.consult(reach);
+        Some(end)
     }
 
-    /// One Perl here-document, beginning at its `<<`, or `None` when the
-    /// `<<` is the shift operator.
-    fn scan_perl_heredoc(&mut self, start: usize) -> Option<usize> {
+    /// Every Perl here-document queued by the header line beginning at this
+    /// `<<`, in declaration order. Horizontal white space is permitted around
+    /// `~` and the delimiter.
+    fn scan_perl_heredocs(&mut self, start: usize) -> Option<usize> {
         let bytes = self.source;
-        let mut cursor = start + 2;
-        let indented = bytes.get(cursor) == Some(&b'~');
-        if indented {
-            cursor += 1;
-        }
-        let mut terminator = Vec::new();
-        if matches!(bytes.get(cursor), Some(b'\'' | b'"' | b'`')) {
-            let quote = bytes[cursor];
-            cursor += 1;
-            while cursor < bytes.len() && bytes[cursor] != quote {
-                terminator.push(bytes[cursor]);
-                cursor += 1;
+        let header_end = line_end(bytes, start);
+        let mut declarations = Vec::new();
+        let mut header_comment = None;
+        let mut search = start;
+        while search < header_end {
+            if matches!(bytes[search], b'\'' | b'"' | b'`') {
+                search = perl_quoted_end(bytes, search).min(header_end);
+            } else if bytes[search] == b'#' {
+                header_comment = Some(search);
+                break;
+            } else if matches!(bytes[search], b'$' | b'@' | b'%') {
+                search = perl_variable_end(bytes, search).min(header_end);
+            } else if starts(bytes, search, b"<<") {
+                let Some((declaration, end)) = perl_heredoc_declaration(bytes, search, header_end)
+                else {
+                    search += 2;
+                    continue;
+                };
+                declarations.push(declaration);
+                search = end;
+            } else {
+                search += 1;
             }
-            cursor += 1;
-        } else {
-            while cursor < bytes.len() && is_perl_word_byte(bytes[cursor]) {
-                terminator.push(bytes[cursor]);
-                cursor += 1;
-            }
         }
-        if terminator.is_empty() {
+        if declarations.is_empty() {
             return None;
         }
-        let line_finish = line_end(bytes, cursor);
-        let mut body = if line_finish >= bytes.len() {
+        if let Some(comment) = header_comment {
+            self.add_comment(comment, header_end, CommentKind::Line);
+        }
+        let mut body = if header_end >= bytes.len() {
             return Some(bytes.len());
         } else {
-            consume_newline(bytes, line_finish)
+            consume_newline(bytes, header_end)
         };
-        while body < bytes.len() {
-            let line_finish = line_end(bytes, body);
-            let mut content = body;
-            if indented {
-                while content < line_finish && matches!(bytes[content], b' ' | b'\t') {
-                    content += 1;
+        for declaration in declarations {
+            let mut found = false;
+            while body < bytes.len() {
+                let line_finish = line_end(bytes, body);
+                let mut content = body;
+                if declaration.indented {
+                    while content < line_finish && matches!(bytes[content], b' ' | b'\t') {
+                        content += 1;
+                    }
                 }
-            }
-            if bytes[content..line_finish] == terminator[..] {
-                return Some(if line_finish >= bytes.len() {
-                    line_finish
+                if bytes[content..line_finish] == declaration.terminator[..] {
+                    body = if line_finish >= bytes.len() {
+                        line_finish
+                    } else {
+                        consume_newline(bytes, line_finish)
+                    };
+                    found = true;
+                    break;
+                }
+                body = if line_finish >= bytes.len() {
+                    bytes.len()
                 } else {
                     consume_newline(bytes, line_finish)
+                };
+            }
+            if !found {
+                return Some(bytes.len());
+            }
+        }
+        Some(body)
+    }
+
+    /// A format declaration and its picture body, through the line containing
+    /// only `.`. Picture lines are a mini-language and are opaque to Perl's
+    /// ordinary `#` comment token.
+    fn scan_perl_format(&self, start: usize) -> Option<usize> {
+        let bytes = self.source;
+        let header_end = line_end(bytes, start);
+        if !bytes[start + b"format".len()..header_end].contains(&b'=') {
+            return None;
+        }
+        let mut line = if header_end < bytes.len() {
+            consume_newline(bytes, header_end)
+        } else {
+            return Some(bytes.len());
+        };
+        while line < bytes.len() {
+            let finish = line_end(bytes, line);
+            if bytes[line..finish].trim_ascii() == b"." {
+                return Some(if finish < bytes.len() {
+                    consume_newline(bytes, finish)
+                } else {
+                    finish
                 });
             }
-            body = if line_finish >= bytes.len() {
-                bytes.len()
+            line = if finish < bytes.len() {
+                consume_newline(bytes, finish)
             } else {
-                consume_newline(bytes, line_finish)
+                bytes.len()
             };
         }
         Some(bytes.len())
@@ -5205,7 +5443,7 @@ impl<'a> Scanner<'a> {
                 continue;
             }
             if bytes[index] == b'[' {
-                index += 1;
+                index = (index + 1).min(bytes.len());
                 while index < bytes.len() && bytes[index] != b']' {
                     if bytes[index] == b'\\' {
                         index = (index + 2).min(bytes.len());
@@ -5255,27 +5493,29 @@ impl<'a> Scanner<'a> {
                 index = end;
                 continue;
             }
-            if index == 0 || bytes[index - 1] == b'\n' {
-                let mut cursor = index;
-                while cursor < bytes.len() && bytes[cursor] == b' ' {
-                    cursor += 1;
-                }
-                let indent = cursor - index;
+            if index == 0 || matches!(bytes[index - 1], b'\r' | b'\n') {
+                let line_finish = line_end(bytes, index);
+                let (cursor, indent) = markdown_indent(bytes, index, line_finish);
                 if indent >= 4 {
-                    index = self.scan_markdown_indented(cursor);
+                    index = self.scan_markdown_indented(index);
                     continue;
                 }
                 if indent <= 3 && cursor < bytes.len() && matches!(bytes[cursor], b'`' | b'~') {
                     let marker = bytes[cursor];
                     let run = count_run(bytes, cursor, marker);
-                    if run >= 3 {
+                    let info_end = line_end(bytes, cursor + run);
+                    let valid_info =
+                        marker != b'`' || !bytes[cursor + run..info_end].contains(&b'`');
+                    if run >= 3 && valid_info {
                         index = self.scan_markdown_fence(cursor, marker, run);
                         continue;
                     }
                 }
             }
             if bytes[index] == b'`' {
-                index = markdown_inline_code_end(bytes, index);
+                let mut reach = Reach::default();
+                index = markdown_inline_code_end(bytes, index, &mut reach);
+                self.consult(reach);
                 continue;
             }
             if matches!(bytes[index], b'\r' | b'\n') {
@@ -5313,7 +5553,7 @@ impl<'a> Scanner<'a> {
                 let closer_run = count_run(bytes, line, marker);
                 if closer_run >= run {
                     let mut after = line + closer_run;
-                    while after < bytes.len() && bytes[after] == b' ' {
+                    while after < bytes.len() && matches!(bytes[after], b' ' | b'\t') {
                         after += 1;
                     }
                     if after >= bytes.len() || matches!(bytes[after], b'\r' | b'\n') {
@@ -5354,14 +5594,9 @@ impl<'a> Scanner<'a> {
         let mut index = start;
         while index < bytes.len() {
             let line_finish = line_end(bytes, index);
-            let mut cursor = index;
-            let mut spaces = 0;
-            while cursor < line_finish && bytes[cursor] == b' ' {
-                cursor += 1;
-                spaces += 1;
-            }
-            let blank = cursor >= line_finish || matches!(bytes[cursor], b'\r');
-            if !blank && spaces < 4 {
+            let (cursor, indent) = markdown_indent(bytes, index, line_finish);
+            let blank = cursor >= line_finish;
+            if !blank && indent < 4 {
                 return index;
             }
             if line_finish >= bytes.len() {
@@ -5409,11 +5644,16 @@ impl<'a> Scanner<'a> {
                     index = end;
                     continue;
                 }
-                if html_tag_candidate(bytes, index)
-                    && let Some(end) = html_tag_end(bytes, index)
-                {
-                    index = end;
-                    continue;
+                if html_tag_candidate(bytes, index) {
+                    let end = if vue {
+                        sfc_tag_end(bytes, index)
+                    } else {
+                        self.scan_svelte_tag_end(index)
+                    };
+                    if let Some(end) = end {
+                        index = end;
+                        continue;
+                    }
                 }
             }
             if matches!(bytes[index], b'\r' | b'\n') {
@@ -5443,7 +5683,12 @@ impl<'a> Scanner<'a> {
         } else {
             return None;
         };
-        let Some(tag_end) = html_tag_end(bytes, start) else {
+        let tag_end = if vue {
+            sfc_tag_end(bytes, start)
+        } else {
+            self.scan_svelte_tag_end(start)
+        };
+        let Some(tag_end) = tag_end else {
             self.error(
                 "unterminated-html-tag",
                 "unterminated single-file component start tag",
@@ -5497,6 +5742,7 @@ impl<'a> Scanner<'a> {
                 );
                 match language {
                     Language::JavaScript | Language::TypeScript => child.scan_javascript(),
+                    Language::Css if dialect == Dialect::Sass => child.scan_sass(),
                     Language::Css => child.scan_c_family(),
                     _ => {}
                 }
@@ -5534,27 +5780,103 @@ impl<'a> Scanner<'a> {
             }
             if bytes[index] == b'<'
                 && html_tag_candidate(bytes, index)
-                && let Some(tag_end) = html_tag_end(bytes, index)
+                && let Some(tag_end) = sfc_tag_end(bytes, index)
             {
-                let name_end = index
-                    + 1
-                    + bytes[index + 1..]
-                        .iter()
-                        .take_while(|byte| !byte.is_ascii_whitespace() && **byte != b'>')
-                        .count();
+                let name_end = html_tag_name_end(bytes, index);
                 let attrs = &bytes[name_end..tag_end.saturating_sub(1)];
                 if vue && tag_has_attribute(attrs, b"v-pre") {
                     let name = &bytes[index + 1..name_end];
-                    if let Some(close) = find_html_close(bytes, tag_end, name) {
-                        index = close;
+                    if let Some(close) = find_balanced_html_close(bytes, tag_end, name) {
+                        index = html_tag_end(bytes, close).unwrap_or(close);
                         continue;
                     }
                 }
+                self.scan_sfc_attributes(vue, name_end, tag_end.saturating_sub(1));
                 index = tag_end;
                 continue;
             }
             index += 1;
         }
+    }
+
+    /// Scan precisely the attribute forms whose host framework defines as
+    /// JavaScript. Ordinary HTML attribute text stays opaque.
+    fn scan_sfc_attributes(&mut self, vue: bool, start: usize, end: usize) {
+        let parsed = parse_tag_attributes(&self.source[start..end]);
+        if vue {
+            for attribute in parsed {
+                let name = &self.source[start + attribute.name.start..start + attribute.name.end];
+                if !vue_directive_attribute(name) {
+                    continue;
+                }
+                let Some(value) = attribute.value else {
+                    continue;
+                };
+                let value_start = start + value.start;
+                let value_end = start + value.end;
+                let mut child = Scanner::child(
+                    &self.source[value_start..value_end],
+                    Language::JavaScript,
+                    self.options.clone(),
+                    self.offset + value_start,
+                );
+                child.scan_javascript();
+                self.merge_child(child);
+            }
+            return;
+        }
+
+        let mut index = start;
+        while index < end {
+            if self.source[index] == b'{' {
+                let next = self.scan_js_code(index + 1, Some(1), 0);
+                index = next.max(index + 1).min(end);
+            } else {
+                index += 1;
+            }
+        }
+    }
+
+    /// End of a Svelte tag, using the JavaScript scanner itself for every
+    /// braced attribute expression. This matters for a regex such as `/}>/`:
+    /// its `}` and `>` are pattern bytes, not the end of the expression and
+    /// tag. The same pass records expression comments, so its caller must not
+    /// scan the attributes a second time.
+    fn scan_svelte_tag_end(&mut self, start: usize) -> Option<usize> {
+        /* INVARIANT: This is a probe until a closing `>` is found. A `<` in
+         * template text can look like the beginning of a tag and still be
+         * ordinary text; in that case any braced JavaScript the probe visited
+         * will be scanned again by `scan_sfc`. Keep the probe transactional so
+         * its comments and diagnostics cannot leak into that pass. */
+        let comments = self.comments.len();
+        let diagnostics = self.diagnostics.len();
+        let mut index = start + 1;
+        let mut quote = None;
+        while index < self.source.len() {
+            if let Some(active) = quote {
+                if self.source[index] == active {
+                    quote = None;
+                    index += 1;
+                } else if self.source[index] == b'{' {
+                    index = self.scan_js_code(index + 1, Some(1), 0);
+                } else {
+                    index += 1;
+                }
+                continue;
+            }
+            match self.source[index] {
+                b'\'' | b'"' => {
+                    quote = Some(self.source[index]);
+                    index += 1;
+                }
+                b'{' => index = self.scan_js_code(index + 1, Some(1), 0),
+                b'>' => return Some(index + 1),
+                _ => index += 1,
+            }
+        }
+        self.comments.truncate(comments);
+        self.diagnostics.truncate(diagnostics);
+        None
     }
 }
 ///
@@ -6465,7 +6787,9 @@ fn directive_name(text: &str, language: Language, raw: &[u8]) -> Option<&'static
             let tail = rest.strip_prefix("-file").unwrap_or(rest);
             (tail.is_empty()
                 || tail.starts_with(':')
-                || tail.starts_with(|character: char| character.is_ascii_whitespace()))
+                || tail.starts_with(|character: char| {
+                    character.is_ascii_whitespace() || character == '\u{000b}'
+                }))
             .then_some("swift-format-ignore")
         }
         /* NOTE: Three instructions, and the first is the one a *compiler* reads.
@@ -7057,6 +7381,47 @@ fn scala_block_kind(bytes: &[u8], index: usize) -> CommentKind {
     } else {
         CommentKind::Block
     }
+}
+
+/// End of a Scala character literal, or `None` for the Scala 2 symbol form
+/// `'name`. Requiring the closing apostrophe immediately after exactly one
+/// character (or one escape) is what prevents a symbol from becoming a
+/// line-spanning string, while still protecting `'\u0022'` from being mistaken
+/// for the opening quote of a Scala string.
+fn scala_character_literal_end(bytes: &[u8], start: usize) -> Option<usize> {
+    let content = start + 1;
+    let mut end = content;
+    match *bytes.get(content)? {
+        b'\r' | b'\n' | b'\'' => return None,
+        b'\\' => {
+            end += 1;
+            if bytes.get(end) == Some(&b'u') {
+                while bytes.get(end) == Some(&b'u') {
+                    end += 1;
+                }
+                let digits = bytes.get(end..end + 4)?;
+                if !digits.iter().all(u8::is_ascii_hexdigit) {
+                    return None;
+                }
+                end += 4;
+            } else {
+                bytes.get(end)?;
+                end += 1;
+            }
+        }
+        byte if byte.is_ascii() => end += 1,
+        byte => {
+            let width = match byte {
+                0xc2..=0xdf => 2,
+                0xe0..=0xef => 3,
+                0xf0..=0xf4 => 4,
+                _ => return None,
+            };
+            std::str::from_utf8(bytes.get(content..content + width)?).ok()?;
+            end += width;
+        }
+    }
+    (bytes.get(end) == Some(&b'\'')).then_some(end + 1)
 }
 
 /// Whether the quote at `quote` opens an *interpolated* string.
@@ -8841,6 +9206,37 @@ fn html_tag_end(bytes: &[u8], start: usize) -> Option<usize> {
     None
 }
 
+/// End of a Vue/Svelte tag. Braced attribute expressions may contain the `>`
+/// of an arrow or comparison, so only one outside balanced braces closes the
+/// tag. Quotes inside and outside an expression protect their contents.
+fn sfc_tag_end(bytes: &[u8], start: usize) -> Option<usize> {
+    let mut index = start + 1;
+    let mut quote = None;
+    let mut braces = 0usize;
+    while index < bytes.len() {
+        if let Some(active) = quote {
+            if bytes[index] == b'\\' && braces > 0 {
+                index = (index + 2).min(bytes.len());
+                continue;
+            }
+            if bytes[index] == active {
+                quote = None;
+            }
+        } else {
+            match bytes[index] {
+                b'\'' | b'"' | b'`' if braces > 0 => quote = Some(bytes[index]),
+                b'\'' | b'"' if braces == 0 => quote = Some(bytes[index]),
+                b'{' => braces += 1,
+                b'}' if braces > 0 => braces -= 1,
+                b'>' if braces == 0 => return Some(index + 1),
+                _ => {}
+            }
+        }
+        index += 1;
+    }
+    None
+}
+
 fn html_tag_candidate(bytes: &[u8], start: usize) -> bool {
     match bytes.get(start + 1).copied() {
         Some(byte) if byte.is_ascii_alphabetic() || matches!(byte, b'!' | b'?') => true,
@@ -8851,6 +9247,20 @@ fn html_tag_candidate(bytes: &[u8], start: usize) -> bool {
     }
 }
 
+fn html_tag_name_end(bytes: &[u8], start: usize) -> usize {
+    let mut index = start + 1;
+    if bytes.get(index) == Some(&b'/') {
+        index += 1;
+    }
+    while bytes
+        .get(index)
+        .is_some_and(|byte| !byte.is_ascii_whitespace() && !matches!(byte, b'>' | b'/'))
+    {
+        index += 1;
+    }
+    index
+}
+
 /// The value of the attribute `name` in an attribute list, without its
 /// quotes, or `None` when the list does not carry the attribute with a value.
 ///
@@ -8858,9 +9268,9 @@ fn html_tag_candidate(bytes: &[u8], start: usize) -> bool {
 /// bare word; the name is matched as a word, so `langx` is not `lang`.
 /// The end of an inline code span beginning at a run of backticks: the span
 /// closes at the next run of exactly the same length, per CommonMark 6.1, so
-/// a shorter or longer run is code text. An unterminated span runs to the
-/// end of the document, as CommonMark reads it.
-fn markdown_inline_code_end(bytes: &[u8], index: usize) -> usize {
+/// a shorter or longer run is code text. With no matching run the opener is
+/// literal text, not a code span, and only its own bytes are consumed.
+fn markdown_inline_code_end(bytes: &[u8], index: usize, reach: &mut Reach) -> usize {
     let run = count_run(bytes, index, b'`');
     let mut cursor = index + run;
     while cursor < bytes.len() {
@@ -8874,7 +9284,33 @@ fn markdown_inline_code_end(bytes: &[u8], index: usize) -> usize {
             cursor += 1;
         }
     }
-    bytes.len()
+    /* INVARIANT: The failed probe rewinds to just after the opener. A later
+     * edit can turn a backtick run beyond an intervening line into the closer,
+     * so those line starts are not safe incremental restart points yet. */
+    reach.end_of(bytes);
+    index + run
+}
+
+/// Leading CommonMark indentation in display columns. Tabs advance to the
+/// next four-column stop; callers only need to distinguish at most three
+/// columns from an indented code block, but returning the full width keeps the
+/// helper useful for continuation lines as well.
+fn markdown_indent(bytes: &[u8], mut index: usize, end: usize) -> (usize, usize) {
+    let mut columns = 0usize;
+    while index < end {
+        match bytes[index] {
+            b' ' => {
+                columns += 1;
+                index += 1;
+            }
+            b'\t' => {
+                columns += 4 - columns % 4;
+                index += 1;
+            }
+            _ => break,
+        }
+    }
+    (index, columns)
 }
 
 /// The language a fenced code block's info string names: the first word of
@@ -8889,7 +9325,7 @@ fn markdown_fence_language(info: &[u8]) -> Option<Language> {
     }
     let end = word
         .iter()
-        .position(|byte| byte.is_ascii_whitespace())
+        .position(|byte| byte.is_ascii_whitespace() || *byte == b',')
         .unwrap_or(word.len());
     let word = &word[..end];
     if word.is_empty() {
@@ -8902,6 +9338,93 @@ fn markdown_fence_language(info: &[u8]) -> Option<Language> {
 /// A byte a Perl word may carry.
 fn is_perl_word_byte(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || matches!(byte, b'_')
+}
+
+fn perl_at_line_start(bytes: &[u8], index: usize) -> bool {
+    index == 0 || matches!(bytes.get(index.wrapping_sub(1)), Some(b'\r' | b'\n'))
+}
+
+fn perl_marker_line(bytes: &[u8], index: usize, marker: &[u8]) -> bool {
+    starts(bytes, index, marker)
+        && bytes
+            .get(index + marker.len())
+            .is_none_or(|byte| byte.is_ascii_whitespace())
+}
+
+fn perl_pod_directive(bytes: &[u8], index: usize, name: &[u8]) -> bool {
+    bytes.get(index) == Some(&b'=')
+        && starts(bytes, index + 1, name)
+        && bytes
+            .get(index + 1 + name.len())
+            .is_none_or(|byte| byte.is_ascii_whitespace())
+}
+
+/// Past a Perl scalar, array or hash variable, including the punctuation that
+/// names special variables and the `#` in `$#array`.
+fn perl_variable_end(bytes: &[u8], start: usize) -> usize {
+    let mut index = start + 1;
+    if index >= bytes.len() {
+        return index;
+    }
+    if bytes[index] == b'{' {
+        index += 1;
+        while index < bytes.len() {
+            if bytes[index] == b'\\' {
+                index = (index + 2).min(bytes.len());
+            } else if bytes[index] == b'}' {
+                return index + 1;
+            } else {
+                index += 1;
+            }
+        }
+        return index;
+    }
+    if bytes[index] == b'#'
+        && bytes
+            .get(index + 1)
+            .is_some_and(|byte| byte.is_ascii_alphabetic() || *byte == b'_')
+    {
+        index += 2;
+        while index < bytes.len() && is_perl_word_byte(bytes[index]) {
+            index += 1;
+        }
+        return index;
+    }
+    if bytes[index] == b'^' {
+        return (index + 2).min(bytes.len());
+    }
+    if bytes[index].is_ascii_digit() {
+        index += 1;
+        while index < bytes.len() && bytes[index].is_ascii_digit() {
+            index += 1;
+        }
+        return index;
+    }
+    if bytes[index].is_ascii_alphabetic() || bytes[index] == b'_' {
+        index += 1;
+        while index < bytes.len() && is_perl_word_byte(bytes[index]) {
+            index += 1;
+        }
+        return index;
+    }
+    /* INVARIANT: Perl's one-byte special names include quotes and comment-looking
+     * punctuation (`$"`, `$'`, `$#` in its punctuation form). */
+    (index + 1).min(bytes.len())
+}
+
+fn perl_quoted_end(bytes: &[u8], start: usize) -> usize {
+    let quote = bytes[start];
+    let mut index = start + 1;
+    while index < bytes.len() {
+        if bytes[index] == b'\\' {
+            index = (index + 2).min(bytes.len());
+        } else if bytes[index] == quote {
+            return index + 1;
+        } else {
+            index += 1;
+        }
+    }
+    bytes.len()
 }
 
 /// Whether the word at the front of a token leaves the next `/` a regex
@@ -8944,10 +9467,12 @@ fn perl_word_allows_regex(word: &[u8]) -> Option<bool> {
     .or(Some(false))
 }
 
-/// The byte after one section of a Perl quote word, beginning at its
-/// delimiter: the section closes at the delimiter's mate, nesting for the
-/// paired delimiters, with a `\` carrying the byte behind it in.
-fn perl_section_end(bytes: &[u8], start: usize, delimiter: u8) -> Option<usize> {
+fn perl_section_end_reach(
+    bytes: &[u8],
+    start: usize,
+    delimiter: u8,
+    reach: &mut Reach,
+) -> Option<usize> {
     let close = match delimiter {
         b'(' => b')',
         b'[' => b']',
@@ -8955,33 +9480,18 @@ fn perl_section_end(bytes: &[u8], start: usize, delimiter: u8) -> Option<usize> 
         b'<' => b'>',
         other => other,
     };
-    if delimiter == close {
-        let mut index = start + 1;
-        while index < bytes.len() {
-            if bytes[index] == b'\\' {
-                index = (index + 2).min(bytes.len());
-                continue;
-            }
-            if bytes[index] == delimiter {
-                return Some(index + 1);
-            }
-            index += 1;
-        }
-        return None;
-    }
     let mut depth = 1usize;
     let mut index = start + 1;
     while index < bytes.len() {
+        reach.byte(index);
         if bytes[index] == b'\\' {
+            reach.byte(index + 1);
             index = (index + 2).min(bytes.len());
             continue;
         }
-        if bytes[index] == delimiter {
+        if delimiter != close && bytes[index] == delimiter {
             depth += 1;
-            index += 1;
-            continue;
-        }
-        if bytes[index] == close {
+        } else if bytes[index] == close {
             depth -= 1;
             index += 1;
             if depth == 0 {
@@ -8991,94 +9501,203 @@ fn perl_section_end(bytes: &[u8], start: usize, delimiter: u8) -> Option<usize> 
         }
         index += 1;
     }
+    reach.end_of(bytes);
     None
 }
 
-fn tag_attr_value<'a>(attrs: &'a [u8], name: &[u8]) -> Option<&'a [u8]> {
-    let mut index = 0;
-    while index < attrs.len() {
-        if attrs[index].is_ascii_whitespace() {
+/// The replacement part of `s///`, `tr///` or `y///` when both sections use
+/// one unpaired delimiter: the first section's closing byte is also the
+/// implicit opening boundary of the second section.
+fn perl_unpaired_section_end_reach(
+    bytes: &[u8],
+    mut index: usize,
+    delimiter: u8,
+    reach: &mut Reach,
+) -> Option<usize> {
+    while index < bytes.len() {
+        reach.byte(index);
+        if bytes[index] == b'\\' {
+            reach.byte(index + 1);
+            index = (index + 2).min(bytes.len());
+        } else if bytes[index] == delimiter {
+            return Some(index + 1);
+        } else {
             index += 1;
-            continue;
         }
-        if matches!(attrs[index], b'"' | b'\'') {
-            let quote = attrs[index];
-            index += 1;
-            while index < attrs.len() && attrs[index] != quote {
-                index += 1;
-            }
-            index += 1;
-            continue;
-        }
-        if attrs[index..].starts_with(name) {
-            let after = index + name.len();
-            let boundary = attrs.get(after).copied().unwrap_or(b'>');
-            if boundary.is_ascii_whitespace() || matches!(boundary, b'=' | b'>') {
-                let mut cursor = after;
-                while cursor < attrs.len() && attrs[cursor].is_ascii_whitespace() {
-                    cursor += 1;
-                }
-                if attrs.get(cursor) == Some(&b'=') {
-                    cursor += 1;
-                    while cursor < attrs.len() && attrs[cursor].is_ascii_whitespace() {
-                        cursor += 1;
-                    }
-                    return match attrs.get(cursor) {
-                        Some(b'"' | b'\'') => {
-                            let quote = attrs[cursor];
-                            let inner_start = cursor + 1;
-                            let inner_end = inner_start
-                                + attrs[inner_start..]
-                                    .iter()
-                                    .position(|byte| *byte == quote)?;
-                            Some(&attrs[inner_start..inner_end])
-                        }
-                        Some(_) => {
-                            let word_end = cursor
-                                + attrs[cursor..]
-                                    .iter()
-                                    .position(|byte| byte.is_ascii_whitespace() || *byte == b'>')
-                                    .unwrap_or(attrs.len() - cursor);
-                            Some(&attrs[cursor..word_end])
-                        }
-                        None => None,
-                    };
-                }
-            }
-        }
+    }
+    reach.end_of(bytes);
+    None
+}
+
+fn perl_modifiers_end(bytes: &[u8], mut index: usize) -> usize {
+    while bytes
+        .get(index)
+        .is_some_and(|byte| byte.is_ascii_alphabetic())
+    {
         index += 1;
     }
-    None
+    index
+}
+
+struct PerlHeredocDeclaration {
+    terminator: Vec<u8>,
+    indented: bool,
+}
+
+fn perl_heredoc_declaration(
+    bytes: &[u8],
+    operator: usize,
+    header_end: usize,
+) -> Option<(PerlHeredocDeclaration, usize)> {
+    let mut index = operator + 2;
+    while index < header_end && matches!(bytes[index], b' ' | b'\t' | 0x0b | 0x0c) {
+        index += 1;
+    }
+    let indented = bytes.get(index) == Some(&b'~');
+    if indented {
+        index += 1;
+        while index < header_end && matches!(bytes[index], b' ' | b'\t' | 0x0b | 0x0c) {
+            index += 1;
+        }
+    }
+    let (terminator, end) = if let Some(&quote @ (b'\'' | b'"' | b'`')) = bytes.get(index) {
+        let content = index + 1;
+        let relative = bytes[content..header_end]
+            .iter()
+            .position(|byte| *byte == quote)?;
+        let end = content + relative;
+        (bytes[content..end].to_vec(), end + 1)
+    } else {
+        if !bytes
+            .get(index)
+            .is_some_and(|byte| byte.is_ascii_alphabetic() || *byte == b'_')
+        {
+            return None;
+        }
+        let content = index;
+        index += 1;
+        while index < header_end && is_perl_word_byte(bytes[index]) {
+            index += 1;
+        }
+        (bytes[content..index].to_vec(), index)
+    };
+    (!terminator.is_empty()).then_some((
+        PerlHeredocDeclaration {
+            terminator,
+            indented,
+        },
+        end,
+    ))
+}
+
+#[derive(Clone, Debug)]
+struct ParsedTagAttribute {
+    name: std::ops::Range<usize>,
+    value: Option<std::ops::Range<usize>>,
+}
+
+/// Tokenize an HTML-like attribute list. In particular, a suffix of
+/// `data-lang` is never a second attribute named `lang`.
+fn parse_tag_attributes(attrs: &[u8]) -> Vec<ParsedTagAttribute> {
+    let mut parsed = Vec::new();
+    let mut index = 0usize;
+    while index < attrs.len() {
+        while index < attrs.len() && attrs[index].is_ascii_whitespace() {
+            index += 1;
+        }
+        if index >= attrs.len() || attrs[index] == b'>' {
+            break;
+        }
+        if attrs[index] == b'/' {
+            index += 1;
+            continue;
+        }
+        let name_start = index;
+        while index < attrs.len()
+            && !attrs[index].is_ascii_whitespace()
+            && !matches!(attrs[index], b'=' | b'>' | b'/')
+        {
+            index += 1;
+        }
+        if index == name_start {
+            index += 1;
+            continue;
+        }
+        let name = name_start..index;
+        while index < attrs.len() && attrs[index].is_ascii_whitespace() {
+            index += 1;
+        }
+        let mut value = None;
+        if attrs.get(index) == Some(&b'=') {
+            index += 1;
+            while index < attrs.len() && attrs[index].is_ascii_whitespace() {
+                index += 1;
+            }
+            if let Some(&quote @ (b'"' | b'\'')) = attrs.get(index) {
+                index += 1;
+                let value_start = index;
+                while index < attrs.len() && attrs[index] != quote {
+                    index += 1;
+                }
+                value = Some(value_start..index);
+                if index < attrs.len() {
+                    index += 1;
+                }
+            } else {
+                let value_start = index;
+                if attrs.get(index) == Some(&b'{') {
+                    let mut braces = 0usize;
+                    while index < attrs.len() {
+                        match attrs[index] {
+                            b'{' => braces += 1,
+                            b'}' => {
+                                braces = braces.saturating_sub(1);
+                                index += 1;
+                                if braces == 0 {
+                                    break;
+                                }
+                                continue;
+                            }
+                            _ => {}
+                        }
+                        index += 1;
+                    }
+                } else {
+                    while index < attrs.len()
+                        && !attrs[index].is_ascii_whitespace()
+                        && attrs[index] != b'>'
+                    {
+                        index += 1;
+                    }
+                }
+                value = Some(value_start..index);
+            }
+        }
+        parsed.push(ParsedTagAttribute { name, value });
+    }
+    parsed
+}
+
+fn tag_attr_value<'a>(attrs: &'a [u8], name: &[u8]) -> Option<&'a [u8]> {
+    parse_tag_attributes(attrs)
+        .into_iter()
+        .find_map(|attribute| {
+            (attrs[attribute.name.clone()].eq_ignore_ascii_case(name))
+                .then(|| attribute.value.map(|value| &attrs[value]))
+                .flatten()
+        })
 }
 
 /// Whether an attribute list carries `name` as a bare attribute, which is how
 /// Vue's `v-pre` directive is written.
 fn tag_has_attribute(attrs: &[u8], name: &[u8]) -> bool {
-    let mut index = 0;
-    while index < attrs.len() {
-        if attrs[index].is_ascii_whitespace() {
-            index += 1;
-            continue;
-        }
-        if matches!(attrs[index], b'"' | b'\'') {
-            let quote = attrs[index];
-            index += 1;
-            while index < attrs.len() && attrs[index] != quote {
-                index += 1;
-            }
-            index += 1;
-            continue;
-        }
-        if attrs[index..].starts_with(name) {
-            let after = index + name.len();
-            let boundary = attrs.get(after).copied().unwrap_or(b'>');
-            if boundary.is_ascii_whitespace() || boundary == b'>' {
-                return true;
-            }
-        }
-        index += 1;
-    }
-    false
+    parse_tag_attributes(attrs)
+        .into_iter()
+        .any(|attribute| attrs[attribute.name].eq_ignore_ascii_case(name))
+}
+
+fn vue_directive_attribute(name: &[u8]) -> bool {
+    name.starts_with(b"v-") || matches!(name.first(), Some(b':' | b'@' | b'#' | b'.'))
 }
 
 /// The language a Vue `<script>` body is written in, from its `lang`
@@ -9100,7 +9719,8 @@ fn vue_script_language(lang: Option<&[u8]>) -> Option<(Language, Dialect)> {
 fn vue_style_language(lang: Option<&[u8]>) -> Option<(Language, Dialect)> {
     match lang.map(|value| value.to_ascii_lowercase()).as_deref() {
         None | Some(b"css") => Some((Language::Css, Dialect::Standard)),
-        Some(b"scss" | b"sass") => Some((Language::Css, Dialect::Scss)),
+        Some(b"scss") => Some((Language::Css, Dialect::Scss)),
+        Some(b"sass") => Some((Language::Css, Dialect::Sass)),
         Some(_) => None,
     }
 }
@@ -9128,6 +9748,50 @@ fn find_html_close(bytes: &[u8], content_start: usize, name: &[u8]) -> Option<us
             return Some(candidate);
         }
         cursor = candidate + close.len();
+    }
+    None
+}
+
+/// The closing tag paired with an element whose body begins at
+/// `content_start`, counting nested elements with the same name. Vue's
+/// `v-pre` makes the complete subtree raw text, so the first textual `</name>`
+/// is not sufficient when another `<name>` is nested inside it.
+fn find_balanced_html_close(bytes: &[u8], content_start: usize, name: &[u8]) -> Option<usize> {
+    let mut index = content_start;
+    let mut depth = 1usize;
+    while index < bytes.len() {
+        let relative = memchr(b'<', &bytes[index..])?;
+        let tag = index + relative;
+        if starts(bytes, tag, b"<!--") {
+            index = find_subslice(&bytes[tag + 4..], b"-->")
+                .map_or(bytes.len(), |offset| tag + 4 + offset + 3);
+            continue;
+        }
+        let closing = bytes.get(tag + 1) == Some(&b'/');
+        let name_start = tag + if closing { 2 } else { 1 };
+        if name_start + name.len() <= bytes.len()
+            && bytes[name_start..name_start + name.len()].eq_ignore_ascii_case(name)
+            && tag_boundary(bytes.get(name_start + name.len()).copied())
+        {
+            let tag_end = html_tag_end(bytes, tag)?;
+            if closing {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(tag);
+                }
+            } else {
+                let mut before = tag_end.saturating_sub(1);
+                while before > tag && bytes[before - 1].is_ascii_whitespace() {
+                    before -= 1;
+                }
+                if before == tag || bytes[before - 1] != b'/' {
+                    depth += 1;
+                }
+            }
+            index = tag_end;
+        } else {
+            index = tag + 1;
+        }
     }
     None
 }
@@ -9976,6 +10640,35 @@ fn next_c_family_trigger(
 /// reading as the `url(` function.
 fn is_css_identifier_part(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_')
+}
+
+fn css_whitespace(byte: u8) -> bool {
+    matches!(byte, b' ' | b'\t' | b'\r' | b'\n' | 0x0c)
+}
+
+fn line_start(bytes: &[u8], index: usize) -> usize {
+    bytes[..index.min(bytes.len())]
+        .iter()
+        .rposition(|byte| matches!(byte, b'\r' | b'\n'))
+        .map_or(0, |position| position + 1)
+}
+
+fn sass_indent_width(bytes: &[u8]) -> usize {
+    bytes.iter().fold(0, |column, byte| match byte {
+        b'\t' => column + (8 - column % 8),
+        _ => column + 1,
+    })
+}
+
+/// The interpolation threshold of a Kotlin string whose quote begins at
+/// `start`. With no prefix the historic single-dollar rule applies; a run of
+/// dollars immediately before the quote opts into multi-dollar interpolation.
+fn kotlin_dollar_width(bytes: &[u8], start: usize) -> usize {
+    let mut prefix = start;
+    while prefix > 0 && bytes[prefix - 1] == b'$' {
+        prefix -= 1;
+    }
+    (start - prefix).max(1)
 }
 
 struct MappedBytes {

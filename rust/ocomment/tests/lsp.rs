@@ -94,7 +94,28 @@ impl LspClient {
     }
 
     fn initialize(&mut self, root: &Path, encodings: &[&str]) -> Value {
-        let root_uri = Url::from_directory_path(root).unwrap();
+        self.initialize_with_folders(Some(root), encodings, Some(&[root]))
+    }
+
+    fn initialize_with_folders(
+        &mut self,
+        root: Option<&Path>,
+        encodings: &[&str],
+        folders: Option<&[&Path]>,
+    ) -> Value {
+        let root_uri = root.map(|root| Url::from_directory_path(root).unwrap());
+        let workspace_folders = folders.map(|folders| {
+            folders
+                .iter()
+                .map(|root| {
+                    let uri = Url::from_directory_path(root).unwrap();
+                    json!({
+                        "uri": uri,
+                        "name": root.file_name().unwrap_or_default().to_string_lossy()
+                    })
+                })
+                .collect::<Vec<_>>()
+        });
         self.send(json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -106,7 +127,7 @@ impl LspClient {
                     "general": { "positionEncodings": encodings },
                     "workspace": { "diagnostics": { "refreshSupport": true } }
                 },
-                "workspaceFolders": [{ "uri": root_uri, "name": "test" }]
+                "workspaceFolders": workspace_folders
             }
         }));
         let response = self.response(1);
@@ -169,6 +190,10 @@ fn protocol_supports_utf8_pull_workspace_actions_and_stale_versions() {
     assert_eq!(
         initialized["result"]["capabilities"]["executeCommandProvider"]["workDoneProgress"],
         true
+    );
+    assert_eq!(
+        initialized["result"]["capabilities"]["textDocumentSync"]["willSaveWaitUntil"], true,
+        "on-save must remain callable after a live configuration reload"
     );
 
     client.send(json!({
@@ -447,6 +472,176 @@ fn on_save_is_opt_in_and_returns_annotated_safe_edits() {
     let response = client.response(8);
     assert_eq!(response["result"].as_array().unwrap().len(), 1);
     assert_eq!(response["result"][0]["range"]["start"]["character"], 11);
+    client.stop();
+}
+
+#[test]
+fn advertised_on_save_is_a_noop_while_live_configuration_disables_it() {
+    let workspace = tempfile::tempdir().unwrap();
+    let uri = Url::from_file_path(workspace.path().join("save.rs")).unwrap();
+    let mut client = LspClient::start(workspace.path());
+    let initialized = client.initialize(workspace.path(), &["utf-16"]);
+    assert_eq!(
+        initialized["result"]["capabilities"]["textDocumentSync"]["willSaveWaitUntil"],
+        true
+    );
+    client.send(json!({
+        "jsonrpc": "2.0", "method": "textDocument/didOpen",
+        "params": { "textDocument": {
+            "uri": uri, "languageId": "rust", "version": 1,
+            "text": "let x = 1; // remove\n"
+        }}
+    }));
+    let _ = client.notification("textDocument/publishDiagnostics");
+    client.send(json!({
+        "jsonrpc": "2.0", "id": 9, "method": "textDocument/willSaveWaitUntil",
+        "params": { "textDocument": { "uri": uri }, "reason": 1 }
+    }));
+    assert_eq!(client.response(9)["result"], Value::Null);
+    client.stop();
+}
+
+#[test]
+fn multi_root_routes_longest_ancestor_and_excludes_standalone_documents_from_workspace_fixes() {
+    let server = tempfile::tempdir().unwrap();
+    let outer = server.path().join("outer");
+    let nested = outer.join("nested");
+    let standalone = server.path().join("standalone");
+    std::fs::create_dir_all(&nested).unwrap();
+    std::fs::create_dir(&standalone).unwrap();
+    std::fs::write(
+        outer.join(".ocomment.toml"),
+        "version = 1\n[policy]\nmode = \"safe\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        nested.join(".ocomment.toml"),
+        "version = 1\n[policy]\nmode = \"all\"\n[files]\nexclude = [\"ignored.rs\"]\n",
+    )
+    .unwrap();
+    let ignored_path = nested.join("ignored.rs");
+    std::fs::write(&ignored_path, "let ignored = 1; // remove\n").unwrap();
+    std::fs::write(
+        standalone.join(".ocomment.toml"),
+        "version = 1\n[policy]\nmode = \"all\"\n",
+    )
+    .unwrap();
+    let outer_uri = Url::from_file_path(outer.join("outer.rs")).unwrap();
+    let nested_uri = Url::from_file_path(nested.join("nested.rs")).unwrap();
+    let standalone_uri = Url::from_file_path(standalone.join("outside.rs")).unwrap();
+    let ignored_uri = Url::from_file_path(ignored_path).unwrap();
+
+    let mut client = LspClient::start(server.path());
+    let _ = client.initialize_with_folders(
+        Some(&outer),
+        &["utf-8"],
+        Some(&[outer.as_path(), nested.as_path()]),
+    );
+    for (uri, version) in [(&outer_uri, 1), (&nested_uri, 2), (&standalone_uri, 3)] {
+        client.send(json!({
+            "jsonrpc": "2.0", "method": "textDocument/didOpen",
+            "params": { "textDocument": {
+                "uri": uri, "languageId": "rust", "version": version,
+                "text": "let value = 1; // rustfmt::skip\n"
+            }}
+        }));
+        let published = client.notification("textDocument/publishDiagnostics");
+        let count = published["params"]["diagnostics"].as_array().unwrap().len();
+        let expected = usize::from(uri != &outer_uri);
+        assert_eq!(
+            count, expected,
+            "wrong context routed for {uri}: {published}"
+        );
+    }
+
+    client.send(json!({
+        "jsonrpc": "2.0", "id": 70, "method": "workspace/diagnostic",
+        "params": { "previousResultIds": [] }
+    }));
+    let report = client.response(70);
+    let items = report["result"]["items"].as_array().unwrap();
+    assert!(items.iter().any(|item| item["uri"] == outer_uri.as_str()));
+    assert!(items.iter().any(|item| item["uri"] == nested_uri.as_str()));
+    assert!(
+        !items.iter().any(|item| item["uri"] == ignored_uri.as_str()),
+        "an outer root bypassed the nested root's file exclusions: {report}"
+    );
+    assert!(
+        !items
+            .iter()
+            .any(|item| item["uri"] == standalone_uri.as_str()),
+        "a standalone document entered workspace diagnostics: {report}"
+    );
+
+    client.send(json!({
+        "jsonrpc": "2.0", "id": 71, "method": "textDocument/codeAction",
+        "params": {
+            "textDocument": { "uri": nested_uri },
+            "range": {
+                "start": { "line": 0, "character": 18 },
+                "end": { "line": 0, "character": 18 }
+            },
+            "context": { "diagnostics": [] }
+        }
+    }));
+    let actions = client.response(71);
+    let workspace = actions["result"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|action| action["title"] == "Remove comments in workspace")
+        .unwrap();
+    let edits = workspace["edit"]["documentChanges"].as_array().unwrap();
+    assert!(
+        edits
+            .iter()
+            .any(|edit| edit["textDocument"]["uri"] == nested_uri.as_str())
+    );
+    assert!(
+        !edits
+            .iter()
+            .any(|edit| edit["textDocument"]["uri"] == standalone_uri.as_str()),
+        "a standalone document entered the workspace fix: {workspace}"
+    );
+    client.stop();
+}
+
+#[test]
+fn folderless_workspace_operations_cover_all_open_documents_only() {
+    let server = tempfile::tempdir().unwrap();
+    let first = tempfile::tempdir().unwrap();
+    let second = tempfile::tempdir().unwrap();
+    let first_uri = Url::from_file_path(first.path().join("one.rs")).unwrap();
+    let second_uri = Url::from_file_path(second.path().join("two.rs")).unwrap();
+    let mut client = LspClient::start(server.path());
+    let _ = client.initialize_with_folders(None, &["utf-8"], None);
+    for (uri, version) in [(&first_uri, 1), (&second_uri, 2)] {
+        client.send(json!({
+            "jsonrpc": "2.0", "method": "textDocument/didOpen",
+            "params": { "textDocument": {
+                "uri": uri, "languageId": "rust", "version": version,
+                "text": "let value = 1; // remove\n"
+            }}
+        }));
+        let published = client.notification("textDocument/publishDiagnostics");
+        assert_eq!(
+            published["params"]["diagnostics"].as_array().unwrap().len(),
+            1
+        );
+    }
+    client.send(json!({
+        "jsonrpc": "2.0", "id": 72, "method": "workspace/diagnostic",
+        "params": { "previousResultIds": [] }
+    }));
+    let report = client.response(72);
+    let items = report["result"]["items"].as_array().unwrap();
+    assert_eq!(
+        items.len(),
+        2,
+        "folder-less discovery read from disk: {report}"
+    );
+    assert!(items.iter().any(|item| item["uri"] == first_uri.as_str()));
+    assert!(items.iter().any(|item| item["uri"] == second_uri.as_str()));
     client.stop();
 }
 

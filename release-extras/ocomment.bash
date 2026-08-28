@@ -190,7 +190,7 @@ _ocomment() {
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss sass" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -248,7 +248,7 @@ _ocomment() {
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss sass" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -306,7 +306,7 @@ _ocomment() {
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss sass" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -364,7 +364,7 @@ _ocomment() {
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss sass" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -422,7 +422,7 @@ _ocomment() {
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss sass" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -480,7 +480,7 @@ _ocomment() {
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss sass" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -538,7 +538,7 @@ _ocomment() {
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss sass" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -890,7 +890,7 @@ _ocomment() {
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss sass" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -948,7 +948,7 @@ _ocomment() {
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss sass" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -1006,7 +1006,7 @@ _ocomment() {
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss sass" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -1064,7 +1064,7 @@ _ocomment() {
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss sass" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -1122,7 +1122,7 @@ _ocomment() {
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss sass" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -1192,7 +1192,7 @@ _ocomment() {
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss sass" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -1362,7 +1362,7 @@ _ocomment() {
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss sass" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -1420,7 +1420,7 @@ _ocomment() {
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss sass" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -1478,7 +1478,7 @@ _ocomment() {
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss sass" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -1536,7 +1536,7 @@ _ocomment() {
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss sass" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -1594,7 +1594,7 @@ _ocomment() {
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss sass" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -1652,7 +1652,7 @@ _ocomment() {
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss sass" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)
@@ -1710,7 +1710,7 @@ _ocomment() {
                     return 0
                     ;;
                 --dialect)
-                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss sass" -- "${cur}"))
                     return 0
                     ;;
                 --keep-kind)

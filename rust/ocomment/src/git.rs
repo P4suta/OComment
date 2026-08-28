@@ -64,7 +64,7 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
     let root = repository_root()?;
     let (blobs, mut skipped) = configured_paths(&root, staged_paths(&root, paths)?, resolved)?;
     let mut entries = Vec::new();
-    for StagedBlob { path, named } in blobs {
+    for StagedBlob { path, named, mode } in blobs {
         let source = index_blob(&root, &path)?;
         if source.iter().take(8192).any(|byte| *byte == 0) {
             /* NOTE: A walk says why it passed a file over, and so does this: a hook
@@ -85,34 +85,37 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
                 reason: "command-line",
             })
             .or_else(|| detect_language(Some(&path), &source));
-        let profile = detection
-            .is_none()
+        let detected_language = detection
+            .as_ref()
+            .map_or(ocomment_core::Language::Unknown, |value| value.language);
+        let detected_dialect = detection
+            .as_ref()
+            .map_or(ocomment_core::Dialect::Standard, |value| value.dialect);
+        let (language, options) = resolved.for_path(&path, detected_language, detected_dialect)?;
+        if !resolved.language_is_enabled(language) {
+            skipped.push(skipped_blob(
+                path,
+                "language disabled by configuration".to_owned(),
+                named,
+            ));
+            continue;
+        }
+        let profile = (language == ocomment_core::Language::Unknown)
             .then(|| crate::files::profile_for_path(&path, resolved))
             .flatten();
-        let routed_plugin = (detection.is_none() && profile.is_none())
+        let routed_plugin = (language == ocomment_core::Language::Unknown && profile.is_none())
             .then(|| crate::files::plugin_for_path(&path, resolved))
             .flatten();
-        if detection.is_none() && profile.is_none() && routed_plugin.is_none() {
+        if language == ocomment_core::Language::Unknown
+            && profile.is_none()
+            && routed_plugin.is_none()
+        {
             skipped.push(skipped_blob(
                 path,
                 crate::files::NO_LANGUAGE.to_owned(),
                 named,
             ));
             continue;
-        }
-        let language = detection
-            .as_ref()
-            .map_or(ocomment_core::Language::Unknown, |value| value.language);
-        let dialect = detection
-            .as_ref()
-            .map_or(ocomment_core::Dialect::Standard, |value| value.dialect);
-        let (mut language, mut options) = resolved.for_path(&path, language, dialect);
-        if let Some(value) = forced_language {
-            language = value;
-        }
-        if let Some(value) = forced_dialect {
-            crate::config::validate_dialect(language, value)?;
-            options.scan.dialect = value;
         }
         let full = if let Some(profile) = &profile {
             ocomment_core::transform_profile(&source, profile, options)
@@ -180,7 +183,7 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
             },
         };
         entries.push(IndexEntry {
-            mode: index_mode(&root, &path)?,
+            mode,
             path,
             source,
             processed,
@@ -371,6 +374,7 @@ struct StagedPaths {
 struct StagedBlob {
     path: PathBuf,
     named: bool,
+    mode: String,
 }
 
 /// Ask `git` what is staged, one question for each pathspec.
@@ -519,6 +523,19 @@ fn configured_paths(
         if !explicit && !resolved.config.files.hidden && has_hidden_component(&path) {
             continue;
         }
+        /* NOTE: Read the index mode before asking Git for blob bytes. A
+         * symlink's blob is its target spelling and a gitlink names a commit,
+         * neither of which is source text. */
+        let mode = index_mode(root, &path)?;
+        let special = match mode.as_str() {
+            "120000" => Some("symbolic link"),
+            "160000" => Some("Git submodule link"),
+            _ => None,
+        };
+        if let Some(reason) = special {
+            skipped.push(skipped_blob(path, reason.to_owned(), explicit));
+            continue;
+        }
         if !explicit && index_blob_size(root, &path)? > max_size {
             skipped.push(SkippedFile {
                 path,
@@ -533,6 +550,7 @@ fn configured_paths(
         kept.push(StagedBlob {
             path,
             named: explicit,
+            mode,
         });
     }
     Ok((kept, skipped))

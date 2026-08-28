@@ -5508,6 +5508,16 @@ fn swift_directives_are_kept_and_a_near_miss_is_not() {
         ScanOptions::default(),
     );
     assert_eq!(removable(&near_miss), 2, "{:?}", near_miss.comments);
+
+    /* INVARIANT: Swift's formatter treats a vertical tab as whitespace at the
+     * marker boundary even though Rust's deliberately narrow
+     * `is_ascii_whitespace` helper does not. */
+    let vertical_tab = scan(
+        b"// swift-format-ignore\x0b#error ",
+        Language::Swift,
+        ScanOptions::default(),
+    );
+    assert_eq!(vertical_tab.comments[0].kind, CommentKind::Directive);
 }
 
 /// A `#!` line is Swift's script preamble on the first line and two operators
@@ -6516,16 +6526,25 @@ fn scss_strings_and_urls_hide_comment_openers() {
     assert_eq!(report.comments[0].span, ByteSpan::new(107, 113));
 }
 
-/// `.scss` and `.sass` — the SCSS and the indented syntax, which dart-sass
-/// reads with the same comment rules — select the `scss` dialect.
+/// `.scss` and `.sass` select their distinct brace- and indentation-based
+/// dialects.
 #[test]
 fn scss_is_detected_from_its_extensions() {
-    for path in [Path::new("site.scss"), Path::new("site.sass")] {
-        let found = detect_language(Some(path), b"$x: 1\n").expect("detected by extension");
-        assert_eq!(found.language, Language::Css);
-        assert_eq!(found.dialect, Dialect::Scss);
-        assert_eq!(found.reason, "extension");
-    }
+    let scss =
+        detect_language(Some(Path::new("site.scss")), b"$x: 1\n").expect("detected by extension");
+    assert_eq!(
+        (scss.language, scss.dialect),
+        (Language::Css, Dialect::Scss)
+    );
+    assert_eq!(scss.reason, "extension");
+
+    let sass =
+        detect_language(Some(Path::new("site.sass")), b"$x: 1\n").expect("detected by extension");
+    assert_eq!(
+        (sass.language, sass.dialect),
+        (Language::Css, Dialect::Sass)
+    );
+    assert_eq!(sass.reason, "extension");
 }
 
 /// A Vue single-file component's template is HTML with code in its mustaches:
@@ -6890,4 +6909,340 @@ fn perl_is_detected_from_its_extensions_and_shebang() {
     let shebang = detect_language(None, b"#!/usr/bin/env perl\n").expect("detected by shebang");
     assert_eq!(shebang.language, Language::Perl);
     assert_eq!(shebang.reason, "shebang");
+}
+
+/// A backslash belongs to Swift's regex grammar rather than to Swift string
+/// interpolation, including inside extended delimiters. A failed bare-regex
+/// probe still gives its lookahead back before ordinary comments are scanned.
+#[test]
+fn swift_regex_escapes_are_opaque_and_failed_probes_resume_once() {
+    let source = b"let b = #/x\\#(call(/* pattern bytes */ 1))https://x/# // tail\n";
+    let report = scan(source, Language::Swift, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    let comments = report
+        .comments
+        .iter()
+        .map(|comment| &source[comment.span.start..comment.span.end])
+        .collect::<Vec<_>>();
+    assert_eq!(comments, vec![b"// tail".as_slice()]);
+
+    let failed = b"let a = /x\\(/* once */)\n// after\n";
+    let report = scan(failed, Language::Swift, ScanOptions::default());
+    let comments = report
+        .comments
+        .iter()
+        .map(|comment| &failed[comment.span.start..comment.span.end])
+        .collect::<Vec<_>>();
+    assert_eq!(
+        comments,
+        vec![b"/* once */".as_slice(), b"// after".as_slice()]
+    );
+}
+
+/// Perl's punctuation variables, escaped quote characters, two-section quote
+/// operators, data sections, POD boundaries, formats and queued heredocs are
+/// all opaque lexical constructs. Only the comments following them are tokens.
+#[test]
+fn perl_compound_opaque_constructs_preserve_hash_bytes() {
+    let source = br###"my @items = (1);
+print $#items, $^X, $!, $1; # variables
+my $quoted = "escaped \" # opaque"; # quote
+my $tick = `printf \`# opaque\``; # tick
+$quoted =~ s/foo#one/bar#two/g; # substitution
+$quoted =~ tr/a#b/c#d/; # transliteration
+$quoted =~ y/a#b/c#d/; # y transliteration
+print <<  "ONE", <<~'TWO';
+# first body
+ONE
+  # second body
+  TWO
+=pod
+# pod body
+=cutlery
+# still pod
+=cut
+format STDOUT =
+@<<<<<<<<<<<<
+# picture body
+.
+# after format
+__DATA__
+# data body
+"###;
+    let report = scan(source, Language::Perl, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    let comments = report
+        .comments
+        .iter()
+        .map(|comment| &source[comment.span.start..comment.span.end])
+        .collect::<Vec<_>>();
+    assert_eq!(
+        comments,
+        vec![
+            b"# variables".as_slice(),
+            b"# quote".as_slice(),
+            b"# tick".as_slice(),
+            b"# substitution".as_slice(),
+            b"# transliteration".as_slice(),
+            b"# y transliteration".as_slice(),
+            b"# after format".as_slice(),
+        ]
+    );
+
+    let false_queue = b"print <<'REAL', \"<<FAKE\"; # <<ALSO\n# body\nREAL\n# after\n";
+    let report = scan(false_queue, Language::Perl, ScanOptions::default());
+    let comments = report
+        .comments
+        .iter()
+        .map(|comment| &false_queue[comment.span.start..comment.span.end])
+        .collect::<Vec<_>>();
+    assert_eq!(
+        comments,
+        vec![b"# <<ALSO".as_slice(), b"# after".as_slice()]
+    );
+
+    let failed_heredoc_probe = b"<<<E # once";
+    let report = scan(failed_heredoc_probe, Language::Perl, ScanOptions::default());
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(
+        &failed_heredoc_probe[report.comments[0].span.start..report.comments[0].span.end],
+        b"# once"
+    );
+
+    let false_format = b"// swift-format-ignore=head1</div>//!#nullable enable";
+    let report = scan(false_format, Language::Perl, ScanOptions::default());
+    assert_eq!(
+        report
+            .comments
+            .iter()
+            .map(|comment| &false_format[comment.span.start..comment.span.end])
+            .collect::<Vec<_>>(),
+        vec![b"#nullable enable".as_slice()]
+    );
+
+    let ambiguous = scan(
+        b"// dart format offq}//!:title=",
+        Language::Perl,
+        ScanOptions::default(),
+    );
+    assert!(
+        ambiguous
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "lexical-ambiguity")
+    );
+}
+
+/// Even a malformed ambiguous regex may not manufacture a diagnostic span
+/// one byte beyond the source when its character class never closes.
+#[test]
+fn perl_regex_spans_are_clamped_to_the_source() {
+    let source = b") /[";
+    let report = scan(source, Language::Perl, ScanOptions::default());
+    assert!(!report.valid);
+    assert!(
+        report
+            .diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.span.end <= source.len()),
+        "diagnostics: {:?}",
+        report.diagnostics
+    );
+}
+
+/// SCSS interpolation stays code inside strings and quoted URL values; URL
+/// escapes remain opaque. The indented Sass dialect extends a silent comment
+/// over all of its more-deeply-indented picture lines.
+#[test]
+fn sass_and_scss_strings_urls_and_silent_comment_bodies_are_lexed_by_dialect() {
+    let scss = b".a { x: \"#{1 /* string */}\"; y: url( \"#{2 /* url */}\" ); z: url(foo\\)bar//opaque); // outer\n }";
+    let report = scan(scss, Language::Css, options(Dialect::Scss));
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    let comments = report
+        .comments
+        .iter()
+        .map(|comment| &scss[comment.span.start..comment.span.end])
+        .collect::<Vec<_>>();
+    assert_eq!(
+        comments,
+        vec![
+            b"/* string */".as_slice(),
+            b"/* url */".as_slice(),
+            b"// outer".as_slice(),
+        ]
+    );
+
+    let sass = b".a\n  // parent\n    color: red\n      width: 1px\n  color: blue\n// root\n  nested: yes\n.b\n  color: green\n";
+    let report = scan(sass, Language::Css, options(Dialect::Sass));
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    let comments = report
+        .comments
+        .iter()
+        .map(|comment| &sass[comment.span.start..comment.span.end])
+        .collect::<Vec<_>>();
+    assert_eq!(
+        comments,
+        vec![
+            b"// parent\n    color: red\n      width: 1px".as_slice(),
+            b"// root\n  nested: yes".as_slice(),
+        ]
+    );
+
+    let found = detect_language(Some(Path::new("theme.sass")), sass).expect("sass detected");
+    assert_eq!(found.language, Language::Css);
+    assert_eq!(found.dialect, Dialect::Sass);
+
+    let nested = scan(b"#{#{", Language::Css, options(Dialect::Sass));
+    assert!(!nested.valid);
+    assert_eq!(nested.diagnostics.len(), 1, "{:?}", nested.diagnostics);
+}
+
+/// Attribute names are tokens rather than suffix searches. Vue scans only
+/// directive values as JavaScript, Svelte scans brace-valued attributes, and
+/// a nested element with the same name does not prematurely end `v-pre`.
+#[test]
+fn sfc_attributes_are_exact_and_only_expression_values_are_code() {
+    let vue = b"<template data-lang=\"pug\"><div data-v-pre v-if=\"ok /* directive */\" title=\"/* opaque */\">{{ 1 /* mustache */ }}</div><div v-pre><div></div><!-- opaque --></div><!-- outer --></template>";
+    let report = scan(vue, Language::Vue, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    let comments = report
+        .comments
+        .iter()
+        .map(|comment| &vue[comment.span.start..comment.span.end])
+        .collect::<Vec<_>>();
+    assert_eq!(
+        comments,
+        vec![
+            b"/* directive */".as_slice(),
+            b"/* mustache */".as_slice(),
+            b"<!-- outer -->".as_slice(),
+        ]
+    );
+
+    let svelte = b"<button title=\"/* opaque */\" data-pattern={/}>/.test(x) /* regex attribute */} on:click={() => { /* attribute */ }}>x</button>{ 1 /* body */ }";
+    let report = scan(svelte, Language::Svelte, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    let comments = report
+        .comments
+        .iter()
+        .map(|comment| &svelte[comment.span.start..comment.span.end])
+        .collect::<Vec<_>>();
+    assert_eq!(
+        comments,
+        vec![
+            b"/* regex attribute */".as_slice(),
+            b"/* attribute */".as_slice(),
+            b"/* body */".as_slice(),
+        ]
+    );
+
+    /* INVARIANT: A failed tag probe is side-effect free. The `{...}` is
+     * template text, so its comment is visited exactly once after `<?php`
+     * fails to find a tag-ending `>`. */
+    let failed_tag_probe = b"<?php #{//go:build";
+    let report = scan(failed_tag_probe, Language::Svelte, ScanOptions::default());
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(
+        &failed_tag_probe[report.comments[0].span.start..report.comments[0].span.end],
+        b"//go:build"
+    );
+
+    let closed_expression_in_failed_tag = b"<div x={1 /* once */}";
+    let report = scan(
+        closed_expression_in_failed_tag,
+        Language::Svelte,
+        ScanOptions::default(),
+    );
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(
+        &closed_expression_in_failed_tag
+            [report.comments[0].span.start..report.comments[0].span.end],
+        b"/* once */"
+    );
+
+    let sass_style =
+        b"<style lang=\"sass\">\n// parent\n  color: red\n</style><p>{/* svelte */}</p>";
+    let report = scan(sass_style, Language::Svelte, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    let comments = report
+        .comments
+        .iter()
+        .map(|comment| &sass_style[comment.span.start..comment.span.end])
+        .collect::<Vec<_>>();
+    assert_eq!(
+        comments,
+        vec![
+            b"// parent\n  color: red".as_slice(),
+            b"/* svelte */".as_slice(),
+        ]
+    );
+}
+
+/// Kotlin consumes an entire closing quote run, and a multi-dollar prefix sets
+/// the exact interpolation threshold. Fewer dollar signs remain string text.
+#[test]
+fn kotlin_quote_runs_and_multi_dollar_interpolation_follow_the_string_grammar() {
+    let source = b"val a = \"\"\"opaque\"\"\"\"// after run\nval b = $$\"\"\"${ /* opaque */ 1 } $${ run { /* code */ } }\"\"\" // tail\n";
+    let report = scan(source, Language::Kotlin, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    let comments = report
+        .comments
+        .iter()
+        .map(|comment| &source[comment.span.start..comment.span.end])
+        .collect::<Vec<_>>();
+    assert_eq!(
+        comments,
+        vec![
+            b"// after run".as_slice(),
+            b"/* code */".as_slice(),
+            b"// tail".as_slice(),
+        ]
+    );
+}
+
+/// A Scala character literal is one bounded token, while a Scala 2 symbol
+/// literal has no closing quote and must not consume the comment after it.
+#[test]
+fn scala_character_literals_are_opaque_but_symbol_literals_are_not_strings() {
+    let source = b"val slash = '/'// after char\nval quote = '\\''// after escape\nval double = '\"'// after double quote\nval symbol = 'name // after symbol\n";
+    let report = scan(source, Language::Scala, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    let comments = report
+        .comments
+        .iter()
+        .map(|comment| &source[comment.span.start..comment.span.end])
+        .collect::<Vec<_>>();
+    assert_eq!(
+        comments,
+        vec![
+            b"// after char".as_slice(),
+            b"// after escape".as_slice(),
+            b"// after double quote".as_slice(),
+            b"// after symbol".as_slice(),
+        ]
+    );
+}
+
+/// CommonMark recognises indented blocks after every line-ending spelling,
+/// rejects a backtick fence whose info string contains a backtick, and R
+/// Markdown reads the language before the first comma in a chunk header.
+#[test]
+fn markdown_indentation_line_endings_and_fence_headers_match_commonmark() {
+    let source = b"before\r    <!-- opaque cr -->\r\n    <!-- opaque crlf -->\nnext\n```rust `bad\n// not a Rust fence\n```\n```{r, echo=FALSE}\n# r comment\n```\n";
+    let report = scan(source, Language::Markdown, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    let comments = report
+        .comments
+        .iter()
+        .map(|comment| &source[comment.span.start..comment.span.end])
+        .collect::<Vec<_>>();
+    assert_eq!(comments, vec![b"# r comment".as_slice()]);
+
+    let unmatched = b"```rust `bad\n<!-- real HTML comment -->\n";
+    let report = scan(unmatched, Language::Markdown, ScanOptions::default());
+    assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
+    assert_eq!(
+        &unmatched[report.comments[0].span.start..report.comments[0].span.end],
+        b"<!-- real HTML comment -->"
+    );
 }

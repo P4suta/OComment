@@ -6,6 +6,7 @@ type language =
 type dialect =
   | Standard | Jsx | Tsx | ObjectiveC | ObjectiveCpp | GnuC | GnuCpp | Cuda
   | PosixSh | Bash53 | Zsh | PostgreSql | MySql | Sqlite | TSql | Oracle | Scss
+  | Sass
 
 type byte_span = { start : int; finish : int }
 

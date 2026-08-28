@@ -65,6 +65,8 @@ const UNPUBLISHED_EXTENSIONS: [&str; 0] = [];
 struct Entry {
     /// The canonical language name, which is also its serde spelling.
     name: String,
+    /// Editor language identifiers routed to this language by the LSP.
+    editor_ids: Vec<String>,
     /// Every file extension that selects this language, without the dot.
     extensions: Vec<String>,
     /// Every dialect the language accepts, in the order the binary lists them.
@@ -354,6 +356,60 @@ fn the_schemas_enumerate_the_same_vocabulary() {
     );
 }
 
+/// Editor identifiers live in the shared spec; the VS Code activation and
+/// attachment lists are consumers of that canonical set, not parallel lists.
+#[test]
+fn editor_language_identifiers_match_the_vscode_manifest() {
+    let identifiers: Vec<String> = table()
+        .languages
+        .iter()
+        .flat_map(|entry| entry.editor_ids.iter().cloned())
+        .collect();
+    assert_eq!(identifiers.len(), 35, "the v0.1 editor ID set changed");
+    assert_eq!(
+        identifiers.iter().collect::<BTreeSet<_>>().len(),
+        identifiers.len(),
+        "an editor ID belongs to more than one language"
+    );
+    let manifest: Value =
+        serde_json::from_str(VSCODE_PACKAGE).expect("editors/vscode/package.json parses");
+    let configured: Vec<String> =
+        manifest["contributes"]["configuration"]["properties"]["ocomment.languages"]["default"]
+            .as_array()
+            .expect("`ocomment.languages` has an array default")
+            .iter()
+            .map(|value| {
+                value
+                    .as_str()
+                    .expect("an editor language identifier is a string")
+                    .to_owned()
+            })
+            .collect();
+    let activated: Vec<String> = manifest["activationEvents"]
+        .as_array()
+        .expect("activationEvents is an array")
+        .iter()
+        .filter_map(Value::as_str)
+        .filter_map(|event| event.strip_prefix("onLanguage:"))
+        .map(str::to_owned)
+        .collect();
+    let canonical: BTreeSet<&String> = identifiers.iter().collect();
+    assert_eq!(
+        configured.iter().collect::<BTreeSet<_>>(),
+        canonical,
+        "VS Code attachment IDs drifted"
+    );
+    assert_eq!(
+        activated.iter().collect::<BTreeSet<_>>(),
+        canonical,
+        "VS Code activation IDs drifted"
+    );
+    assert_eq!(
+        configured, activated,
+        "VS Code attachment and activation orders drifted"
+    );
+}
+
 /// The crate publishes and reads the spec table itself, so what a released
 /// binary prints cannot be a copy that was edited on its own.
 #[test]
@@ -384,6 +440,7 @@ fn the_json_listing_is_the_spec_table() {
         .map(|entry| {
             let mut object = Map::new();
             object.insert("name".to_owned(), json!(entry.name));
+            object.insert("editor_ids".to_owned(), json!(entry.editor_ids));
             object.insert("extensions".to_owned(), json!(entry.extensions));
             object.insert("dialects".to_owned(), json!(entry.dialects));
             if !entry.extension_dialects.is_empty() {

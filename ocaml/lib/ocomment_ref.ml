@@ -6,6 +6,7 @@ type language =
 type dialect =
   | Standard | Jsx | Tsx | ObjectiveC | ObjectiveCpp | GnuC | GnuCpp | Cuda
   | PosixSh | Bash53 | Zsh | PostgreSql | MySql | Sqlite | TSql | Oracle | Scss
+  | Sass
 
 type byte_span = { start : int; finish : int }
 
@@ -671,6 +672,8 @@ type accumulator = {
 }
 
 let add_comment accumulator source language options lexical start finish =
+  let start = max 0 (min start (Bytes.length source)) in
+  let finish = max start (min finish (Bytes.length source)) in
   let kind = classify source language lexical start finish in
   let raw = Bytes.sub_string source start (finish - start) in
   accumulator.comments_rev <- { span = { start; finish }; kind; disposition = disposition options kind raw } :: accumulator.comments_rev
@@ -901,6 +904,12 @@ let quoted_or_error source accumulator start multiline name =
     add_error accumulator "unterminated-string" ("unterminated " ^ name) start finish;
   finish
 
+let kotlin_dollar_width source start =
+  let rec prefix index =
+    if index > 0 && Bytes.get source (index - 1) = '$' then prefix (index - 1)
+    else index in
+  max 1 (start - prefix start)
+
 let rec scan_kotlin_string source options accumulator start triple depth =
   if depth > 256 then begin
     add_error accumulator "nesting-limit" "Kotlin string-template nesting limit exceeded"
@@ -908,17 +917,25 @@ let rec scan_kotlin_string source options accumulator start triple depth =
     Bytes.length source
   end else
   let delimiter = if triple then "\"\"\"" else "\"" in
+  let dollars = kotlin_dollar_width source start in
   let rec loop index =
     if index >= Bytes.length source then begin
       add_error accumulator "unterminated-string"
         (if triple then "unterminated Kotlin triple-quoted string"
           else "unterminated Kotlin string") start index;
       index
-    end else if starts source index delimiter then index + String.length delimiter
+    end else if starts source index delimiter then
+      if triple then index + count_run source index '"' else index + 1
     else if not triple && Bytes.get source index = '\\' then
       loop (min (Bytes.length source) (index + 2))
-    else if starts source index "${" then
-      loop (scan_kotlin_expression source options accumulator (index + 2) (depth + 1))
+    else if Bytes.get source index = '$' then begin
+      let run = count_run source index '$' in
+      if run >= dollars && index + run < Bytes.length source
+         && Bytes.get source (index + run) = '{'
+      then loop (scan_kotlin_expression source options accumulator
+                   (index + run + 1) (depth + 1))
+      else loop (index + run)
+    end
     else if not triple && (Bytes.get source index = '\r' || Bytes.get source index = '\n')
     then begin
       add_error accumulator "unterminated-string" "unterminated Kotlin string" start index;
@@ -970,12 +987,32 @@ let is_css_identifier_part byte =
   (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z')
   || (byte >= '0' && byte <= '9') || byte = '-' || byte = '_'
 
+let css_whitespace = function
+  | ' ' | '\t' | '\r' | '\n' | '\012' -> true
+  | _ -> false
+
+(* NOTE: Sass strings differ from plain CSS strings at interpolation: the
+   bytes inside [#{ ... }] are Sass code and comments there are real tokens. *)
+let rec scan_scss_string source options accumulator language start =
+  let length = Bytes.length source in
+  let quote = Bytes.get source start in
+  let rec loop index =
+    if index >= length then begin
+      add_error accumulator "unterminated-string" "unterminated Sass string" start length;
+      length
+    end else if Bytes.get source index = '\\' then
+      loop (min length (index + 2))
+    else if Bytes.get source index = quote then index + 1
+    else if starts source index "#{" then
+      loop (scan_scss_interpolation source options accumulator language (index + 2) 0)
+    else loop (index + 1) in
+  loop (start + 1)
+
 (* NOTE: One SCSS "#{ ... }" interpolation, beginning past its opening brace.
    The braces are counted rather than searched for, because the expression is
-   code: a comment written there is a comment, and a string or an unquoted URL
-   written there is scanned as such.  A line comment runs to the end of its
-   line while the interpolation carries on below. *)
-let rec scan_scss_interpolation source options accumulator language index depth =
+   code: a comment written there is a comment, and a string or URL written
+   there is scanned by the Sass-family rules. *)
+and scan_scss_interpolation source options accumulator language index depth =
   if depth > 256 then begin
     add_error accumulator "nesting-limit"
       "SCSS interpolation nesting limit exceeded" index index;
@@ -1001,7 +1038,8 @@ let rec scan_scss_interpolation source options accumulator language index depth 
       end else match scss_url_end source options accumulator language cursor with
         | Some finish -> loop finish braces
         | None -> (match Bytes.get source cursor with
-          | '"' | '\'' -> loop (quoted_or_error source accumulator cursor true "CSS string") braces
+          | '"' | '\'' ->
+            loop (scan_scss_string source options accumulator language cursor) braces
           | '{' -> loop (cursor + 1) (braces + 1)
           | '}' ->
             if braces = 1 then cursor + 1 else loop (cursor + 1) (braces - 1)
@@ -1009,39 +1047,117 @@ let rec scan_scss_interpolation source options accumulator language index depth 
     in loop index 1
   end
 
-(* NOTE: The byte after an SCSS "url(" whose content is an unquoted URL,
-   which dart-sass reads as URL bytes until the ")" that ends them -- a "//" or
-   a "/*" in them is URL text, not a comment -- with "#{ ... }" interpolation
-   inside being code.  A quoted URL is an ordinary string and is left to
-   quoted_or_error; an unquoted URL that never closes is a file dart-sass
-   rejects, and reading it as ordinary bytes is the safe half of being wrong. *)
+(* NOTE: CSS white space, quoted values and escapes all remain inside a Sass
+   [url(...)].  Interpolation inside either value form re-enters code. *)
 and scss_url_end source options accumulator language index =
   let length = Bytes.length source in
   let url_start index =
-    if index + 4 <= length then begin
-      let byte index expected =
-        let actual = Bytes.get source index in
-        actual = expected || (actual >= 'A' && actual <= 'Z'
-                              && actual = Char.chr (Char.code expected - 32))
-        || (actual >= 'a' && actual <= 'z'
-            && actual = Char.chr (Char.code expected + 32)) in
-      byte index 'u' && byte (index + 1) 'r' && byte (index + 2) 'l'
-      && Bytes.get source (index + 3) = '('
-    end else false in
+    index + 4 <= length
+    && String.lowercase_ascii (Bytes.sub_string source index 3) = "url"
+    && Bytes.get source (index + 3) = '(' in
   if not (url_start index) then None
   else if index > 0 && is_css_identifier_part (Bytes.get source (index - 1)) then None
-  else if index + 4 < length
-          && (Bytes.get source (index + 4) = '"' || Bytes.get source (index + 4) = '\'')
-  then None
   else begin
-    let rec loop cursor =
-      if cursor >= length then Some length
-      else if Bytes.get source cursor = ')' then Some (cursor + 1)
-      else if starts source cursor "#{" then
-        loop (scan_scss_interpolation source options accumulator language (cursor + 2) 0)
-      else loop (cursor + 1)
-    in loop (index + 4)
+    let rec spaces cursor =
+      if cursor < length && css_whitespace (Bytes.get source cursor)
+      then spaces (cursor + 1) else cursor in
+    let cursor = spaces (index + 4) in
+    let cursor =
+      if cursor < length
+         && (Bytes.get source cursor = '"' || Bytes.get source cursor = '\'')
+      then scan_scss_string source options accumulator language cursor
+      else cursor in
+    let cursor = spaces cursor in
+    if cursor < length && Bytes.get source cursor = ')' then Some (cursor + 1)
+    else begin
+      let rec loop cursor =
+        if cursor >= length then Some length
+        else if Bytes.get source cursor = ')' then Some (cursor + 1)
+        else if Bytes.get source cursor = '\\' then loop (min length (cursor + 2))
+        else if starts source cursor "#{" then
+          loop (scan_scss_interpolation source options accumulator language (cursor + 2) 0)
+        else loop (cursor + 1) in
+      loop cursor
+    end
   end
+
+let sass_indent_width bytes =
+  let column = ref 0 in
+  Bytes.iter (fun byte ->
+    if byte = '\t' then column := !column + (8 - !column mod 8)
+    else incr column) bytes;
+  !column
+
+let sass_line_start source index =
+  let rec loop cursor =
+    if cursor = 0 then 0
+    else match Bytes.get source (cursor - 1) with
+      | '\r' | '\n' -> cursor
+      | _ -> loop (cursor - 1) in
+  loop (min index (Bytes.length source))
+
+let sass_consume_newline source index =
+  let length = Bytes.length source in
+  if index < length && Bytes.get source index = '\r'
+     && index + 1 < length && Bytes.get source (index + 1) = '\n'
+  then index + 2
+  else if index < length
+          && (Bytes.get source index = '\r' || Bytes.get source index = '\n')
+  then index + 1
+  else index
+
+let sass_silent_comment_end source start =
+  let length = Bytes.length source in
+  let line_start = sass_line_start source start in
+  let rec prefix_is_blank index =
+    index >= start
+    || ((Bytes.get source index = ' ' || Bytes.get source index = '\t')
+        && prefix_is_blank (index + 1)) in
+  if not (prefix_is_blank line_start) then line_end source (start + 2)
+  else begin
+    let base_indent = sass_indent_width (Bytes.sub source line_start (start - line_start)) in
+    let first_finish = line_end source (start + 2) in
+    let rec lines included next =
+      if next >= length then included else
+      let finish = line_end source next in
+      let rec content cursor =
+        if cursor < finish
+           && (Bytes.get source cursor = ' ' || Bytes.get source cursor = '\t')
+        then content (cursor + 1) else cursor in
+      let content = content next in
+      let blank = content = finish in
+      let indentation = sass_indent_width (Bytes.sub source next (content - next)) in
+      if not blank && indentation <= base_indent then included
+      else if finish >= length then finish
+      else lines finish (sass_consume_newline source finish) in
+    if first_finish >= length then first_finish
+    else lines first_finish (sass_consume_newline source first_finish)
+  end
+
+let scan_sass source language options accumulator =
+  let length = Bytes.length source in
+  let rec loop index =
+    if index >= length then ()
+    else if starts source index "//" then begin
+      let finish = sass_silent_comment_end source index in
+      let kind = if starts source index "///" || starts source index "//!" then DocLine else Line in
+      add_comment accumulator source language options kind index finish;
+      loop finish
+    end else if starts source index "/*" then begin
+      let finish, closed = block_end source index false in
+      let kind = if starts source index "/**" || starts source index "/*!" then DocBlock else Block in
+      add_comment accumulator source language options kind index finish;
+      if not closed then add_error accumulator "unterminated-comment"
+        "unterminated Sass block comment" index finish;
+      loop finish
+    end else if starts source index "#{" then
+      loop (scan_scss_interpolation source options accumulator language (index + 2) 0)
+    else match scss_url_end source options accumulator language index with
+      | Some finish -> loop finish
+      | None -> (match Bytes.get source index with
+        | '"' | '\'' -> loop (scan_scss_string source options accumulator language index)
+        | _ -> loop (index + 1)) in
+  loop 0
 
 let scan_slash_unmapped source language options accumulator =
   let nested = language = Rust || language = Kotlin in
@@ -1133,7 +1249,7 @@ let scan_slash_unmapped source language options accumulator =
         (match scss_url_end source options accumulator language index with
          | Some finish -> loop finish
          | None -> if character = '"' || character = '\'' then
-             loop (quoted_or_error source accumulator index true "CSS string")
+             loop (scan_scss_string source options accumulator language index)
            else loop (index + 1))
       | Css when character = '"' || character = '\'' ->
         loop (quoted_or_error source accumulator index true "CSS string")
@@ -3855,10 +3971,71 @@ and scan_scala_lexeme source language options accumulator index depth =
   end
   else match Bytes.get source index with
     | '"' -> Some (scan_scala_string source language options accumulator index depth)
+    | '\'' -> scala_character_literal_end source index
     | '`' -> Some (scala_backquoted_identifier source accumulator index)
     | '<' when scala_is_xml_start source index ->
       Some (scan_scala_xml source language options accumulator index depth)
     | _ -> None
+
+(* NOTE: A Scala character literal is exactly one character or one escape and
+   its closing apostrophe.  Scala 2's symbol literal, such as ['name], has no
+   closing apostrophe and therefore must not turn the rest of the line into an
+   opaque string. *)
+and scala_character_literal_end source start =
+  let length = Bytes.length source in
+  let content = start + 1 in
+  if content >= length then None else
+  let byte = Bytes.get source content in
+  let continuation index =
+    index < length && let code = Char.code (Bytes.get source index) in
+      code >= 0x80 && code <= 0xbf in
+  let utf8_end =
+    let code = Char.code byte in
+    if code >= 0xc2 && code <= 0xdf then
+      if continuation (content + 1) then Some (content + 2) else None
+    else if code >= 0xe0 && code <= 0xef then begin
+      if content + 2 >= length then None else
+      let second = Char.code (Bytes.get source (content + 1)) in
+      let second_ok =
+        if code = 0xe0 then second >= 0xa0 && second <= 0xbf
+        else if code = 0xed then second >= 0x80 && second <= 0x9f
+        else second >= 0x80 && second <= 0xbf in
+      if second_ok && continuation (content + 2) then Some (content + 3) else None
+    end else if code >= 0xf0 && code <= 0xf4 then begin
+      if content + 3 >= length then None else
+      let second = Char.code (Bytes.get source (content + 1)) in
+      let second_ok =
+        if code = 0xf0 then second >= 0x90 && second <= 0xbf
+        else if code = 0xf4 then second >= 0x80 && second <= 0x8f
+        else second >= 0x80 && second <= 0xbf in
+      if second_ok && continuation (content + 2) && continuation (content + 3)
+      then Some (content + 4) else None
+    end else None in
+  let end_of_content =
+    match byte with
+    | '\r' | '\n' | '\'' -> None
+    | '\\' ->
+      let escaped = content + 1 in
+      if escaped >= length then None
+      else if Bytes.get source escaped = 'u' then begin
+        let rec us index =
+          if index < length && Bytes.get source index = 'u' then us (index + 1)
+          else index in
+        let digits = us escaped in
+        if digits + 4 > length then None else
+        let hex character =
+          (character >= '0' && character <= '9')
+          || (character >= 'a' && character <= 'f')
+          || (character >= 'A' && character <= 'F') in
+        let rec all index =
+          index = digits + 4 || (hex (Bytes.get source index) && all (index + 1)) in
+        if all digits then Some (digits + 4) else None
+      end else Some (escaped + 1)
+    | character when Char.code character < 0x80 -> Some (content + 1)
+    | _ -> utf8_end in
+  match end_of_content with
+  | Some finish when finish < length && Bytes.get source finish = '\'' -> Some (finish + 1)
+  | _ -> None
 
 (* NOTE: Scala has no "#" comment of its own, so a "#!" line is the only shape
    a "#" is part of, and it is a preamble only at the very first byte -- a byte
@@ -5097,82 +5274,9 @@ let scan_ruby source language options accumulator =
    quotes, or None when the list does not carry the attribute with a value.
    Attributes are separated by white space and their values are quoted or a
    bare word; the name is matched as a word, so "langx" is not "lang". *)
-let tag_attr_value attrs name =
-  let length = Bytes.length attrs in
-  let word index expected =
-    index < length && index + expected <= length
-    && (let rec loop offset =
-          offset = expected
-          || (Bytes.get attrs (index + offset) = Bytes.get name offset
-              && loop (offset + 1)) in
-        loop 0) in
-  let rec skip_value cursor quote =
-    if cursor >= length then length
-    else if Bytes.get attrs cursor = quote then cursor + 1
-    else skip_value (cursor + 1) quote in
-  let rec loop index =
-    if index >= length then None
-    else if Bytes.get attrs index = ' ' || Bytes.get attrs index = '\t' then loop (index + 1)
-    else if Bytes.get attrs index = '"' || Bytes.get attrs index = '\'' then
-      loop (skip_value (index + 1) (Bytes.get attrs index))
-    else if word index (Bytes.length name) then begin
-      let after = index + Bytes.length name in
-      let boundary = if after < length then Bytes.get attrs after else '>' in
-      if boundary = ' ' || boundary = '\t' || boundary = '=' || boundary = '>' then begin
-        let rec skip index =
-          if index < length && (Bytes.get attrs index = ' ' || Bytes.get attrs index = '\t')
-          then skip (index + 1) else index in
-        let cursor = skip after in
-        if cursor < length && Bytes.get attrs cursor = '=' then begin
-          let cursor = skip (cursor + 1) in
-          if cursor >= length then None
-          else if Bytes.get attrs cursor = '"' || Bytes.get attrs cursor = '\'' then begin
-            let quote = Bytes.get attrs cursor in
-            let inner_start = cursor + 1 in
-            let rec inner cursor =
-              if cursor >= length then None
-              else if Bytes.get attrs cursor = quote then Some (inner_start, cursor)
-              else inner (cursor + 1) in
-            Option.map (fun (start, finish) -> Bytes.sub_string attrs start (finish - start)) (inner inner_start)
-          end else begin
-            let rec word_end cursor =
-              if cursor >= length || Bytes.get attrs cursor = ' ' || Bytes.get attrs cursor = '\t'
-                 || Bytes.get attrs cursor = '>'
-              then cursor else word_end (cursor + 1) in
-            let finish = word_end cursor in
-            Some (Bytes.sub_string attrs cursor (finish - cursor))
-          end
-        end else None
-      end else loop (index + 1)
-    end else loop (index + 1)
-  in loop 0
 
 (* NOTE: Whether an attribute list carries "name" as a bare attribute, which
    is how Vue's "v-pre" directive is written. *)
-let tag_has_attribute attrs name =
-  let length = Bytes.length attrs in
-  let word index expected =
-    index < length && index + expected <= length
-    && (let rec loop offset =
-          offset = expected
-          || (Bytes.get attrs (index + offset) = Bytes.get name offset
-              && loop (offset + 1)) in
-        loop 0) in
-  let rec skip_value cursor quote =
-    if cursor >= length then length
-    else if Bytes.get attrs cursor = quote then cursor + 1
-    else skip_value (cursor + 1) quote in
-  let rec loop index =
-    if index >= length then false
-    else if Bytes.get attrs index = ' ' || Bytes.get attrs index = '\t' then loop (index + 1)
-    else if Bytes.get attrs index = '"' || Bytes.get attrs index = '\'' then
-      loop (skip_value (index + 1) (Bytes.get attrs index))
-    else if word index (Bytes.length name) then begin
-      let after = index + Bytes.length name in
-      let boundary = if after < length then Bytes.get attrs after else '>' in
-      boundary = ' ' || boundary = '\t' || boundary = '>'
-    end else loop (index + 1)
-  in loop 0
 
 (* NOTE: The language a Vue "<script>" body is written in, from its "lang"
    attribute; None for a "lang" this scanner has no rules for, which makes the
@@ -5191,7 +5295,8 @@ let vue_script_language lang =
 let vue_style_language lang =
   match Option.map String.lowercase_ascii lang with
   | None | Some "css" -> Some (Css, Standard)
-  | Some "scss" | Some "sass" -> Some (Css, Scss)
+  | Some "scss" -> Some (Css, Scss)
+  | Some "sass" -> Some (Css, Sass)
   | Some _ -> None
 
 (* NOTE: One Vue or Svelte single-file component.  The top level holds the
@@ -5218,11 +5323,71 @@ let vue_style_language lang =
    the parse context tells which, so this scanner reports that "/" as
    lexically ambiguous and refuses to edit the file, keeping the "#" that
    would decide the other way out of reach. *)
+
+type perl_heredoc_declaration = { perl_terminator : string; perl_indented : bool }
+
 let scan_perl source language options accumulator =
   let length = Bytes.length source in
-  let word_byte byte =
-    (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z')
-    || (byte >= '0' && byte <= '9') || byte = '_' in
+  let alphabetic byte =
+    (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') in
+  let digit byte = byte >= '0' && byte <= '9' in
+  let word_byte byte = alphabetic byte || digit byte || byte = '_' in
+  let perl_space byte = ascii_whitespace byte || byte = '\011' in
+  let horizontal byte = perl_space byte && byte <> '\r' && byte <> '\n' in
+  let at_line_start index =
+    index = 0 || Bytes.get source (index - 1) = '\r'
+              || Bytes.get source (index - 1) = '\n' in
+  let rec blank_line_prefix index =
+    if index = 0 then true
+    else match Bytes.get source (index - 1) with
+      | '\r' | '\n' -> true
+      | ' ' | '\t' -> blank_line_prefix (index - 1)
+      | _ -> false in
+  let marker_line index marker =
+    starts source index marker
+    && (index + String.length marker >= length
+        || perl_space (Bytes.get source (index + String.length marker))) in
+  let pod_directive index name =
+    index < length && Bytes.get source index = '=' && starts source (index + 1) name
+    && (index + 1 + String.length name >= length
+        || perl_space (Bytes.get source (index + 1 + String.length name))) in
+  let variable_end start =
+    let index = start + 1 in
+    if index >= length then index
+    else if Bytes.get source index = '{' then begin
+      let rec loop cursor =
+        if cursor >= length then cursor
+        else if Bytes.get source cursor = '\\' then loop (min length (cursor + 2))
+        else if Bytes.get source cursor = '}' then cursor + 1
+        else loop (cursor + 1) in
+      loop (index + 1)
+    end else if Bytes.get source index = '#' && index + 1 < length
+                && (alphabetic (Bytes.get source (index + 1))
+                    || Bytes.get source (index + 1) = '_') then begin
+      let rec loop cursor =
+        if cursor < length && word_byte (Bytes.get source cursor)
+        then loop (cursor + 1) else cursor in
+      loop (index + 2)
+    end else if Bytes.get source index = '^' then min length (index + 2)
+    else if digit (Bytes.get source index) then begin
+      let rec loop cursor =
+        if cursor < length && digit (Bytes.get source cursor)
+        then loop (cursor + 1) else cursor in
+      loop (index + 1)
+    end else if alphabetic (Bytes.get source index) || Bytes.get source index = '_' then begin
+      let rec loop cursor =
+        if cursor < length && word_byte (Bytes.get source cursor)
+        then loop (cursor + 1) else cursor in
+      loop (index + 1)
+    end else min length (index + 1) in
+  let quoted start =
+    let quote = Bytes.get source start in
+    let rec loop index =
+      if index >= length then length
+      else if Bytes.get source index = '\\' then loop (min length (index + 2))
+      else if Bytes.get source index = quote then index + 1
+      else loop (index + 1) in
+    loop (start + 1) in
   let word_allows_regex word =
     match word with
     | "return" | "if" | "unless" | "while" | "until" | "for" | "foreach"
@@ -5233,207 +5398,236 @@ let scan_perl source language options accumulator =
     | _ -> false in
   let section_end start delimiter =
     let close = match delimiter with
-      | '(' -> ')' | '[' -> ']' | '{' -> '}' | '<' -> '>'
-      | other -> other in
-    if delimiter = close then begin
-      let rec loop index =
-        if index >= length then None
-        else if Bytes.get source index = '\\' then loop (min length (index + 2))
-        else if Bytes.get source index = delimiter then Some (index + 1)
-        else loop (index + 1) in
-      loop (start + 1)
-    end else begin
-      let rec loop index depth =
-        if index >= length then None
-        else if Bytes.get source index = '\\' then loop (min length (index + 2)) depth
-        else if Bytes.get source index = delimiter then loop (index + 1) (depth + 1)
-        else if Bytes.get source index = close then
-          if depth = 1 then Some (index + 1) else loop (index + 1) (depth - 1)
-        else loop (index + 1) depth in
-      loop (start + 1) 1
-    end in
-  let pod start =
-    let rec loop index =
-      if index >= length then length
-      else begin
-        let line_finish = line_end source index in
-        if index = start then begin
-          if line_finish >= length then length
-          else loop (consume_newline source line_finish)
-        end else if starts source index "=cut" then
-          if line_finish >= length then line_finish
-          else consume_newline source line_finish
-        else if line_finish >= length then length
-        else loop (consume_newline source line_finish)
-      end in
-    loop start in
-  let quoted start =
-    let quote = Bytes.get source start in
-    let rec loop index backslashes =
-      if index >= length then length
-      else if Bytes.get source index = '\\' then loop (index + 1) (backslashes + 1)
-      else if Bytes.get source index = quote then
-        if quote = '\'' then
-          if backslashes mod 2 = 0 then index + 1 else loop (index + 1) 0
-        else index + 1
-      else loop (index + 1) 0 in
-    loop (start + 1) 0 in
+      | '(' -> ')' | '[' -> ']' | '{' -> '}' | '<' -> '>' | other -> other in
+    let rec loop index depth =
+      if index >= length then None
+      else if Bytes.get source index = '\\' then loop (min length (index + 2)) depth
+      else if delimiter <> close && Bytes.get source index = delimiter
+      then loop (index + 1) (depth + 1)
+      else if Bytes.get source index = close then
+        if depth = 1 then Some (index + 1) else loop (index + 1) (depth - 1)
+      else loop (index + 1) depth in
+    loop (start + 1) 1 in
+  let unpaired_section_end index delimiter =
+    let rec loop cursor =
+      if cursor >= length then None
+      else if Bytes.get source cursor = '\\' then loop (min length (cursor + 2))
+      else if Bytes.get source cursor = delimiter then Some (cursor + 1)
+      else loop (cursor + 1) in
+    loop index in
+  let modifiers_end index =
+    let rec loop cursor =
+      if cursor < length && alphabetic (Bytes.get source cursor)
+      then loop (cursor + 1) else cursor in
+    loop index in
   let quote_word start =
     let letter = Bytes.get source start in
-    let rec skip_space index =
-      if index < length && Bytes.get source index = ' ' then skip_space (index + 1) else index in
-    let second_letter index =
-      if index < length && word_byte (Bytes.get source index) then
-        if (letter = 'q' && (Bytes.get source index = 'q' || Bytes.get source index = 'w'
-                             || Bytes.get source index = 'x' || Bytes.get source index = 'r'))
-           || (letter = 't' && Bytes.get source index = 'r')
-        then (index + 1, true) else (index, false)
-      else (index, false) in
-    let cursor, _doubled = second_letter (start + 1) in
-    let cursor = skip_space cursor in
-    if cursor >= length then None
-    else if word_byte (Bytes.get source cursor) then None
-    else match section_end cursor (Bytes.get source cursor) with
+    let cursor =
+      if start + 1 < length
+         && ((letter = 'q' && List.mem (Bytes.get source (start + 1)) ['q'; 'w'; 'x'; 'r'])
+             || (letter = 't' && Bytes.get source (start + 1) = 'r'))
+      then start + 2 else start + 1 in
+    let rec spaces index =
+      if index < length && horizontal (Bytes.get source index)
+      then spaces (index + 1) else index in
+    let cursor = spaces cursor in
+    if cursor >= length || word_byte (Bytes.get source cursor)
+       || perl_space (Bytes.get source cursor) then None
+    else let delimiter = Bytes.get source cursor in
+      match section_end cursor delimiter with
       | None -> None
-      | Some first ->
-        if letter = 's' || letter = 't' || letter = 'y' then
-          if first >= length then None
-          else if word_byte (Bytes.get source first) then None
-          else Option.map (fun second_end -> second_end) (section_end first (Bytes.get source first))
-        else Some first in
-  let heredoc start =
-    let rec terminator_word index acc =
-      if index < length && word_byte (Bytes.get source index)
-      then terminator_word (index + 1) (acc ^ String.make 1 (Bytes.get source index))
-      else (index, acc) in
-    let cursor = start + 2 in
-    let indented = cursor < length && Bytes.get source cursor = '~' in
-    let cursor = if indented then cursor + 1 else cursor in
-    let cursor, terminator =
-      if cursor < length && (Bytes.get source cursor = '\'' || Bytes.get source cursor = '"'
-                             || Bytes.get source cursor = '`') then begin
-        let quote = Bytes.get source cursor in
-        let rec inner index acc =
-          if index >= length then (length, acc)
-          else if Bytes.get source index = quote then (index + 1, acc)
-          else inner (index + 1) (acc ^ String.make 1 (Bytes.get source index)) in
-        inner (cursor + 1) ""
-      end else terminator_word cursor "" in
-    if terminator = "" then None
-    else begin
-      let line_finish = line_end source cursor in
-      let rec body index =
-        if index >= length then Some length
-        else begin
-          let line_finish = line_end source index in
+      | Some first when letter = 's' || letter = 't' || letter = 'y' ->
+        let paired = List.mem delimiter ['('; '['; '{'; '<'] in
+        let second =
+          if paired then begin
+            let second_start = spaces first in
+            if second_start >= length || word_byte (Bytes.get source second_start)
+               || perl_space (Bytes.get source second_start) then None
+            else section_end second_start (Bytes.get source second_start)
+          end else unpaired_section_end first delimiter in
+        Option.map modifiers_end second
+      | Some first -> Some (modifiers_end first) in
+  let heredoc_declaration operator header_finish =
+    let rec spaces index =
+      if index < header_finish && horizontal (Bytes.get source index)
+      then spaces (index + 1) else index in
+    let cursor = spaces (operator + 2) in
+    let indented = cursor < header_finish && Bytes.get source cursor = '~' in
+    let cursor = spaces (if indented then cursor + 1 else cursor) in
+    if cursor >= header_finish then None
+    else if List.mem (Bytes.get source cursor) ['\''; '"'; '`'] then begin
+      let quote = Bytes.get source cursor in
+      let rec close index =
+        if index >= header_finish then None
+        else if Bytes.get source index = quote then Some index
+        else close (index + 1) in
+      match close (cursor + 1) with
+      | None -> None
+      | Some finish when finish = cursor + 1 -> None
+      | Some finish -> Some ({ perl_terminator = Bytes.sub_string source (cursor + 1)
+                                (finish - cursor - 1); perl_indented = indented }, finish + 1)
+    end else if alphabetic (Bytes.get source cursor) || Bytes.get source cursor = '_' then begin
+      let rec word index =
+        if index < header_finish && word_byte (Bytes.get source index)
+        then word (index + 1) else index in
+      let finish = word (cursor + 1) in
+      Some ({ perl_terminator = Bytes.sub_string source cursor (finish - cursor);
+              perl_indented = indented }, finish)
+    end else None in
+  let heredocs start =
+    let header_finish = line_end source start in
+    let rec declarations search found =
+      if search >= header_finish then List.rev found
+      else if List.mem (Bytes.get source search) ['\''; '"'; '`'] then
+        declarations (min header_finish (quoted search)) found
+      else if Bytes.get source search = '#' then begin
+        if found <> [] then
+          add_comment accumulator source language options Line search header_finish;
+        List.rev found
+      end else if List.mem (Bytes.get source search) ['$'; '@'; '%'] then
+        declarations (min header_finish (variable_end search)) found
+      else if starts source search "<<" then
+        (match heredoc_declaration search header_finish with
+         | Some (declaration, finish) -> declarations finish (declaration :: found)
+         | None -> declarations (search + 2) found)
+      else declarations (search + 1) found in
+    match declarations start [] with
+    | [] -> None
+    | declarations ->
+      let body_start =
+        if header_finish >= length then length else consume_newline source header_finish in
+      let body declaration start =
+        let rec lines index =
+          if index >= length then None else
+          let finish = line_end source index in
           let rec content cursor =
-            if indented && cursor < line_finish && (Bytes.get source cursor = ' '
-                                                    || Bytes.get source cursor = '\t')
+            if declaration.perl_indented && cursor < finish
+               && (Bytes.get source cursor = ' ' || Bytes.get source cursor = '\t')
             then content (cursor + 1) else cursor in
           let content = content index in
-          if Bytes.sub_string source content (line_finish - content) = terminator then
-            Some (if line_finish >= length then line_finish else consume_newline source line_finish)
-          else if line_finish >= length then Some length
-          else body (consume_newline source line_finish)
-        end in
-      if line_finish >= length then Some length else body (consume_newline source line_finish)
-    end in
+          if Bytes.sub_string source content (finish - content) = declaration.perl_terminator
+          then Some (if finish >= length then finish else consume_newline source finish)
+          else if finish >= length then None
+          else lines (consume_newline source finish) in
+        lines start in
+      let rec bodies index = function
+        | [] -> Some index
+        | declaration :: tail ->
+          (match body declaration index with
+           | Some finish -> bodies finish tail
+           | None -> Some length) in
+      bodies body_start declarations in
+  let pod start =
+    let rec loop index =
+      if index >= length then length else
+      let finish = line_end source index in
+      if index <> start && pod_directive index "cut" then
+        if finish >= length then finish else consume_newline source finish
+      else if finish >= length then length
+      else loop (consume_newline source finish) in
+    loop start in
+  let format start =
+    let header_finish = line_end source start in
+    let rec has_equal index =
+      index < header_finish && (Bytes.get source index = '=' || has_equal (index + 1)) in
+    if not (has_equal (start + String.length "format")) then None else
+    let rec lines index =
+      if index >= length then Some length else
+      let finish = line_end source index in
+      let text = String.trim (Bytes.sub_string source index (finish - index)) in
+      if text = "." then Some (if finish >= length then finish
+                               else consume_newline source finish)
+      else if finish >= length then Some length
+      else lines (consume_newline source finish) in
+    if header_finish >= length then Some length
+    else lines (consume_newline source header_finish) in
   let regex start =
     let rec loop index =
       if index >= length then length
       else if Bytes.get source index = '\\' then loop (min length (index + 2))
       else if Bytes.get source index = '[' then begin
-        let rec class_index index =
-          if index >= length then length
-          else if Bytes.get source index = ']' then index + 1
-          else if Bytes.get source index = '\\' then class_index (min length (index + 2))
-          else class_index (index + 1) in
-        loop (class_index (index + 1))
-      end
-      else if Bytes.get source index = '/' then begin
-        let rec modifiers index =
-          if index < length && word_byte (Bytes.get source index) then modifiers (index + 1) else index in
+        let rec class_end cursor =
+          if cursor >= length then length
+          else if Bytes.get source cursor = '\\' then class_end (min length (cursor + 2))
+          else if Bytes.get source cursor = ']' then cursor + 1
+          else class_end (cursor + 1) in
+        loop (class_end (index + 1))
+      end else if Bytes.get source index = '/' then begin
+        let rec modifiers cursor =
+          if cursor < length && word_byte (Bytes.get source cursor)
+          then modifiers (cursor + 1) else cursor in
         modifiers (index + 1)
-      end
-      else loop (index + 1) in
+      end else loop (index + 1) in
     loop (start + 1) in
   let rec loop index regex_allowed =
     if index >= length then ()
-    else if (index = 0 || Bytes.get source (index - 1) = '\n' || Bytes.get source (index - 1) = '\r')
-            && Bytes.get source index = '='
+    else if at_line_start index
+            && (marker_line index "__DATA__" || marker_line index "__END__") then ()
+    else if at_line_start index && Bytes.get source index = '='
             && index + 1 < length && word_byte (Bytes.get source (index + 1))
+            && not (pod_directive index "cut")
     then loop (pod index) regex_allowed
     else if Bytes.get source index = '#' then begin
       let finish = line_end source (index + 1) in
       add_comment accumulator source language options Line index finish;
       loop finish (Some true)
-    end
-    else if Bytes.get source index = '\'' || Bytes.get source index = '"' || Bytes.get source index = '`'
-    then loop (quoted index) (Some false)
-    else if Bytes.get source index = '<' && index + 1 < length && Bytes.get source (index + 1) = '<'
-    then (match heredoc index with
-      | Some finish -> loop finish (Some false)
-      | None -> loop (index + 1) regex_allowed)
+    end else if List.mem (Bytes.get source index) ['\''; '"'; '`'] then
+      loop (quoted index) (Some false)
+    else if starts source index "<<" then
+      (match heredocs index with
+       | Some finish -> loop finish (Some false)
+       | None -> loop (index + 1) regex_allowed)
     else if (index = 0 || not (word_byte (Bytes.get source (index - 1))))
-            && (Bytes.get source index = 'q' || Bytes.get source index = 'm'
-                || Bytes.get source index = 's' || Bytes.get source index = 't'
-                || Bytes.get source index = 'y')
-    then (match quote_word index with
-      | Some finish -> loop finish (Some false)
-      | None ->
-        (* NOTE: the letter is a bareword, so the `/` after it is settled by
-           the same rules as after any other word. *)
-        let start = index in
-        let rec ident index =
-          if index < length && word_byte (Bytes.get source index) then ident (index + 1) else index in
-        let finish = ident index in
-        loop finish (Some (word_allows_regex (Bytes.sub_string source start (finish - start)))))
-    else if Bytes.get source index = '/' then begin
-      match regex_allowed with
-      | Some true ->
-        let finish = regex index in
-        loop finish (Some false)
-      | Some false -> loop (index + 1) (Some true)
-      | None ->
-        let finish = regex index in
-        add_error accumulator "lexical-ambiguity"
-          "ambiguous `/` after a closing delimiter: a regex or a division" index finish;
-        loop finish (Some false)
-    end
-    else if Bytes.get source index = ')' || Bytes.get source index = ']' || Bytes.get source index = '}'
-    then loop (index + 1) None
-    else if Bytes.get source index = '(' || Bytes.get source index = '[' || Bytes.get source index = '{'
-    then loop (index + 1) (Some true)
-    else if Bytes.get source index = '$' || Bytes.get source index = '@' || Bytes.get source index = '%'
-    then begin
-      let rec ident index =
-        if index < length && word_byte (Bytes.get source index) then ident (index + 1) else index in
-      loop (ident (index + 1)) (Some false)
-    end
-    else if (Bytes.get source index >= 'a' && Bytes.get source index <= 'z')
-            || (Bytes.get source index >= 'A' && Bytes.get source index <= 'Z')
-            || Bytes.get source index = '_' then begin
+            && List.mem (Bytes.get source index) ['q'; 'm'; 's'; 't'; 'y'] then
+      (match quote_word index with
+       | Some finish -> loop finish (Some false)
+       | None ->
+         let start = index in
+         let rec ident cursor =
+           if cursor < length && word_byte (Bytes.get source cursor)
+           then ident (cursor + 1) else cursor in
+         let finish = ident index in
+         loop finish (Some (word_allows_regex
+           (Bytes.sub_string source start (finish - start)))))
+    else if Bytes.get source index = '/' then
+      (match regex_allowed with
+       | Some true -> loop (regex index) (Some false)
+       | Some false -> loop (index + 1) (Some true)
+       | None ->
+         let finish = regex index in
+         add_error accumulator "lexical-ambiguity"
+           "ambiguous `/` after a closing delimiter: a regex or a division" index finish;
+         loop finish (Some false))
+    else if List.mem (Bytes.get source index) [')'; ']'; '}'] then loop (index + 1) None
+    else if List.mem (Bytes.get source index) ['('; '['; '{'] then loop (index + 1) (Some true)
+    else if List.mem (Bytes.get source index) ['$'; '@'; '%'] then
+      loop (variable_end index) (Some false)
+    else if alphabetic (Bytes.get source index) || Bytes.get source index = '_' then begin
       let start = index in
-      let rec ident index =
-        if index < length && word_byte (Bytes.get source index) then ident (index + 1) else index in
-      let finish = ident index in
-      loop finish (Some (word_allows_regex (Bytes.sub_string source start (finish - start))))
-    end
-    else if Bytes.get source index >= '0' && Bytes.get source index <= '9' then begin
-      let rec digits index =
-        if index < length && word_byte (Bytes.get source index) then digits (index + 1) else index in
-      loop (digits index) (Some false)
-    end
-    else if Bytes.get source index = '=' || Bytes.get source index = '+' || Bytes.get source index = '-'
-            || Bytes.get source index = '*' || Bytes.get source index = '%' || Bytes.get source index = '!'
-            || Bytes.get source index = '~' || Bytes.get source index = '&' || Bytes.get source index = '|'
-            || Bytes.get source index = '?' || Bytes.get source index = ':' || Bytes.get source index = ','
-            || Bytes.get source index = ';' || Bytes.get source index = '<' || Bytes.get source index = '>'
+      let rec ident cursor =
+        if cursor < length && word_byte (Bytes.get source cursor)
+        then ident (cursor + 1) else cursor in
+      let finish = ident (index + 1) in
+      if Bytes.sub_string source start (finish - start) = "format"
+         && blank_line_prefix start then
+        match format start with
+        | Some after -> loop after (Some true)
+        | None -> loop finish (Some false)
+      else loop finish (Some (word_allows_regex
+        (Bytes.sub_string source start (finish - start))))
+    end else if digit (Bytes.get source index) then begin
+      let rec number cursor =
+        if cursor < length
+           && (word_byte (Bytes.get source cursor) || Bytes.get source cursor = '.')
+        then number (cursor + 1) else cursor in
+      loop (number index) (Some false)
+    end else if List.mem (Bytes.get source index)
+      ['='; '+'; '-'; '*'; '%'; '!'; '~'; '&'; '|'; '?'; ':'; ','; ';'; '<'; '>']
     then loop (index + 1) (Some true)
     else if Bytes.get source index = '\r' || Bytes.get source index = '\n'
     then loop (consume_newline source index) (Some true)
-    else loop (index + 1) regex_allowed
-  in ignore (loop 0 (Some true))
+    else loop (index + 1) regex_allowed in
+  loop 0 (Some true)
 
 let scan_markdown source language options accumulator =
   let length = Bytes.length source in
@@ -5448,57 +5642,77 @@ let scan_markdown source language options accumulator =
   let inline_code_end index =
     let run = count_run source index '`' in
     let rec loop cursor =
-      if cursor >= length then length
+      if cursor >= length then index + run
       else if Bytes.get source cursor = '`' then
         let next = count_run source cursor '`' in
         if next = run then cursor + next else loop (cursor + next)
       else loop (cursor + 1) in
     loop (index + run) in
+  let indent start finish =
+    let rec loop cursor columns =
+      if cursor >= finish then (cursor, columns)
+      else match Bytes.get source cursor with
+        | ' ' -> loop (cursor + 1) (columns + 1)
+        | '\t' -> loop (cursor + 1) (columns + 4 - columns mod 4)
+        | _ -> (cursor, columns) in
+    loop start 0 in
   let fence_language info =
     let trimmed = String.trim info in
     let inner =
-      if String.length trimmed > 0 && trimmed.[0] = '{' then begin
+      if String.length trimmed > 0 && trimmed.[0] = '{' then
         match String.index_opt trimmed '}' with
         | Some finish -> String.sub trimmed 1 (finish - 1)
-        | None -> trimmed
-      end else trimmed in
-    let word =
-      match String.index_opt inner ' ' with
-      | Some finish -> String.sub inner 0 finish
-      | None -> inner in
+        | None -> ""
+      else trimmed in
+    let rec word_end index =
+      if index >= String.length inner then index else
+      let byte = inner.[index] in
+      if ascii_whitespace byte || byte = '\011' || byte = ',' then index
+      else word_end (index + 1) in
+    let finish = word_end 0 in
+    let word = String.sub inner 0 finish in
     if word = "" then None else match language_of_string word with
       | Ok found -> Some found
       | Error _ -> None in
   let fence opener marker run =
     let info_start = opener + run in
     let info_finish = line_end source info_start in
-    let language = fence_language (Bytes.sub_string source info_start (info_finish - info_start)) in
+    let embedded = fence_language
+      (Bytes.sub_string source info_start (info_finish - info_start)) in
     let rec find_closer cursor =
-      if cursor >= length then None
-      else begin
-        let rec line_start index spaces =
-          if index < length && Bytes.get source index = ' ' && spaces < 3
-          then line_start (index + 1) (spaces + 1) else index in
-        let line = line_start cursor 0 in
+      if cursor >= length then None else
+      let rec leading index spaces =
+        if index < length && Bytes.get source index = ' ' && spaces < 3
+        then leading (index + 1) (spaces + 1) else index in
+      let line = leading cursor 0 in
+      let found =
         if line < length && Bytes.get source line = marker then begin
           let closer_run = count_run source line marker in
-          if closer_run >= run then begin
-            let rec tail index =
-              if index < length && Bytes.get source index = ' ' then tail (index + 1) else index in
-            let after = tail (line + closer_run) in
-            if after >= length || Bytes.get source after = '\r' || Bytes.get source after = '\n'
-            then Some (line, min length (consume_newline source after))
-            else find_closer (min length (consume_newline source (line_end source cursor)))
-          end else find_closer (min length (consume_newline source (line_end source cursor)))
-        end else find_closer (min length (consume_newline source (line_end source cursor)))
-      end in
+          if closer_run < run then None else
+          let rec tail index =
+            if index < length
+               && (Bytes.get source index = ' ' || Bytes.get source index = '\t')
+            then tail (index + 1) else index in
+          let after = tail (line + closer_run) in
+          if after >= length || Bytes.get source after = '\r' || Bytes.get source after = '\n'
+          then Some (line, min length (consume_newline source after))
+          else None
+        end else None in
+      match found with
+      | Some _ as result -> result
+      | None ->
+        let finish = line_end source cursor in
+        if finish >= length then None
+        else find_closer (consume_newline source finish) in
     let closer = find_closer info_finish in
     let content_finish = match closer with Some (line, _) -> line | None -> length in
-    (match language with
+    (match embedded with
+     | Some (Html | Markdown | Vue | Svelte | Unknown) | None -> ()
      | Some embedded ->
        let child_source = Bytes.sub source info_finish (content_finish - info_finish) in
        let child = { comments_rev = []; diagnostics_rev = []; yaml_blocks_rev = [] } in
        (match embedded with
+        | Css when options.dialect = Sass -> scan_sass child_source embedded options child
         | Rust | C | Cpp | Go | Kotlin | Css | Jsonc -> scan_slash child_source embedded options child
         | Java -> scan_java child_source embedded options child
         | JavaScript | TypeScript -> scan_javascript child_source embedded options child
@@ -5520,225 +5734,402 @@ let scan_markdown source language options accumulator =
         | Perl -> scan_perl child_source embedded options child
         | Html | Markdown | Vue | Svelte | Unknown -> ());
        List.iter (fun (comment : comment) ->
-         accumulator.comments_rev <- { comment with span = { start = comment.span.start + info_finish; finish = comment.span.finish + info_finish } } :: accumulator.comments_rev) (List.rev child.comments_rev);
+         accumulator.comments_rev <- { comment with span = {
+           start = comment.span.start + info_finish;
+           finish = comment.span.finish + info_finish } } :: accumulator.comments_rev)
+         (List.rev child.comments_rev);
        List.iter (fun (diagnostic : diagnostic) ->
-         accumulator.diagnostics_rev <- { diagnostic with span = { start = diagnostic.span.start + info_finish; finish = diagnostic.span.finish + info_finish } } :: accumulator.diagnostics_rev) (List.rev child.diagnostics_rev)
-     | None -> ());
+         accumulator.diagnostics_rev <- { diagnostic with span = {
+           start = diagnostic.span.start + info_finish;
+           finish = diagnostic.span.finish + info_finish } } :: accumulator.diagnostics_rev)
+         (List.rev child.diagnostics_rev));
     match closer with Some (_, resume) -> resume | None -> length in
   let indented start =
     let rec loop index =
-      if index >= length then length
-      else begin
-        let line_finish = line_end source index in
-        let rec leading cursor spaces =
-          if cursor < line_finish && Bytes.get source cursor = ' ' then leading (cursor + 1) (spaces + 1)
-          else (cursor, spaces) in
-        let cursor, spaces = leading index 0 in
-        let blank = cursor >= line_finish || Bytes.get source cursor = '\r' in
-        if (not blank) && spaces < 4 then index
-        else if line_finish >= length then length
-        else loop (consume_newline source line_finish)
-      end in
+      if index >= length then length else
+      let line_finish = line_end source index in
+      let cursor, columns = indent index line_finish in
+      if cursor < line_finish && columns < 4 then index
+      else if line_finish >= length then length
+      else loop (consume_newline source line_finish) in
     loop start in
   let rec loop index =
     if index >= length then ()
     else if starts source index "<!--" then loop (html_comment index)
-    else if index = 0 || Bytes.get source (index - 1) = '\n' then begin
-      let rec leading cursor =
-        if cursor < length && Bytes.get source cursor = ' ' then leading (cursor + 1) else cursor in
-      let cursor = leading index in
-      let indent = cursor - index in
-      if indent >= 4 then loop (indented cursor)
-      else if indent <= 3 && cursor < length && (Bytes.get source cursor = '`' || Bytes.get source cursor = '~')
+    else if index = 0 || Bytes.get source (index - 1) = '\r'
+                       || Bytes.get source (index - 1) = '\n' then begin
+      let line_finish = line_end source index in
+      let cursor, columns = indent index line_finish in
+      if columns >= 4 then loop (indented index)
+      else if columns <= 3 && cursor < length
+              && (Bytes.get source cursor = '`' || Bytes.get source cursor = '~')
       then begin
         let marker = Bytes.get source cursor in
         let run = count_run source cursor marker in
-        if run >= 3 then loop (fence cursor marker run)
+        let info_finish = line_end source (cursor + run) in
+        let valid_info = marker <> '`'
+          || not (String.contains
+                    (Bytes.sub_string source (cursor + run) (info_finish - cursor - run)) '`') in
+        if run >= 3 && valid_info then loop (fence cursor marker run)
         else if marker = '`' then loop (inline_code_end cursor)
         else loop (index + 1)
       end else if Bytes.get source index = '`' then loop (inline_code_end index)
-      else if Bytes.get source index = '\r' || Bytes.get source index = '\n' then loop (consume_newline source index)
+      else if Bytes.get source index = '\r' || Bytes.get source index = '\n'
+      then loop (consume_newline source index)
       else loop (index + 1)
     end else if Bytes.get source index = '`' then loop (inline_code_end index)
-    else if Bytes.get source index = '\r' || Bytes.get source index = '\n' then loop (consume_newline source index)
-    else loop (index + 1)
-  in loop 0
+    else if Bytes.get source index = '\r' || Bytes.get source index = '\n'
+    then loop (consume_newline source index)
+    else loop (index + 1) in
+  loop 0
 
-let rec scan_vue source language options accumulator = scan_sfc true source language options accumulator
-and scan_svelte source language options accumulator = scan_sfc false source language options accumulator
+
+type parsed_tag_attribute = {
+  tag_name_start : int;
+  tag_name_finish : int;
+  tag_value : (int * int) option;
+}
+
+let parse_tag_attributes attrs =
+  let length = Bytes.length attrs in
+  let rec loop index parsed =
+    let rec spaces cursor =
+      if cursor < length && ascii_whitespace (Bytes.get attrs cursor)
+      then spaces (cursor + 1) else cursor in
+    let index = spaces index in
+    if index >= length || Bytes.get attrs index = '>' then List.rev parsed
+    else if Bytes.get attrs index = '/' then loop (index + 1) parsed
+    else begin
+      let name_start = index in
+      let rec name cursor =
+        if cursor < length && not (ascii_whitespace (Bytes.get attrs cursor))
+           && not (List.mem (Bytes.get attrs cursor) ['='; '>'; '/'])
+        then name (cursor + 1) else cursor in
+      let name_finish = name index in
+      if name_finish = name_start then loop (index + 1) parsed else
+      let cursor = spaces name_finish in
+      let value, next =
+        if cursor >= length || Bytes.get attrs cursor <> '=' then (None, cursor)
+        else begin
+          let cursor = spaces (cursor + 1) in
+          if cursor < length && List.mem (Bytes.get attrs cursor) ['"'; '\''] then begin
+            let quote = Bytes.get attrs cursor in
+            let rec close index =
+              if index >= length || Bytes.get attrs index = quote then index
+              else close (index + 1) in
+            let finish = close (cursor + 1) in
+            (Some (cursor + 1, finish), if finish < length then finish + 1 else finish)
+          end else if cursor < length && Bytes.get attrs cursor = '{' then begin
+            let rec braces index depth =
+              if index >= length then index
+              else match Bytes.get attrs index with
+                | '{' -> braces (index + 1) (depth + 1)
+                | '}' when depth = 1 -> index + 1
+                | '}' -> braces (index + 1) (depth - 1)
+                | _ -> braces (index + 1) depth in
+            let finish = braces cursor 0 in
+            (Some (cursor, finish), finish)
+          end else begin
+            let rec bare index =
+              if index < length && not (ascii_whitespace (Bytes.get attrs index))
+                 && Bytes.get attrs index <> '>'
+              then bare (index + 1) else index in
+            let finish = bare cursor in
+            (Some (cursor, finish), finish)
+          end
+        end in
+      loop next ({ tag_name_start = name_start; tag_name_finish = name_finish;
+                   tag_value = value } :: parsed)
+    end in
+  loop 0 []
+
+let tag_name_equals attrs attribute expected =
+  let length = attribute.tag_name_finish - attribute.tag_name_start in
+  length = String.length expected
+  && String.lowercase_ascii
+       (Bytes.sub_string attrs attribute.tag_name_start length)
+     = String.lowercase_ascii expected
+
+let tag_attr_value attrs name =
+  let expected = Bytes.to_string name in
+  List.find_map (fun attribute ->
+    if tag_name_equals attrs attribute expected then
+      Option.map (fun (start, finish) -> Bytes.sub_string attrs start (finish - start))
+        attribute.tag_value
+    else None) (parse_tag_attributes attrs)
+
+let tag_has_attribute attrs name =
+  let expected = Bytes.to_string name in
+  List.exists (fun attribute -> tag_name_equals attrs attribute expected)
+    (parse_tag_attributes attrs)
+
+let vue_directive_attribute name =
+  String.starts_with ~prefix:"v-" name
+  || (String.length name > 0 && List.mem name.[0] [':'; '@'; '#'; '.'])
+
+let sfc_tag_boundary = function
+  | None -> true
+  | Some byte -> ascii_whitespace byte || byte = '>' || byte = '/'
+
+let sfc_alphabetic byte =
+  (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z')
+
+let sfc_tag_candidate source start =
+  let length = Bytes.length source in
+  if start + 1 >= length then false else
+  let next = Bytes.get source (start + 1) in
+  sfc_alphabetic next || next = '!' || next = '?'
+  || (next = '/' && start + 2 < length && sfc_alphabetic (Bytes.get source (start + 2)))
+
+let sfc_html_tag_end source start =
+  let length = Bytes.length source in
+  let rec loop index quote =
+    if index >= length then None else match quote with
+      | Some active when Bytes.get source index = active -> loop (index + 1) None
+      | Some _ -> loop (index + 1) quote
+      | None when List.mem (Bytes.get source index) ['\''; '"'] ->
+        loop (index + 1) (Some (Bytes.get source index))
+      | None when Bytes.get source index = '>' -> Some (index + 1)
+      | None -> loop (index + 1) None in
+  loop (start + 1) None
+
+let sfc_vue_tag_end source start =
+  let length = Bytes.length source in
+  let rec loop index quote braces =
+    if index >= length then None else match quote with
+      | Some active ->
+        if Bytes.get source index = '\\' && braces > 0
+        then loop (min length (index + 2)) quote braces
+        else if Bytes.get source index = active then loop (index + 1) None braces
+        else loop (index + 1) quote braces
+      | None -> (match Bytes.get source index with
+        | '\'' | '"' | '`' as byte when braces > 0 -> loop (index + 1) (Some byte) braces
+        | '\'' | '"' as byte -> loop (index + 1) (Some byte) braces
+        | '{' -> loop (index + 1) None (braces + 1)
+        | '}' when braces > 0 -> loop (index + 1) None (braces - 1)
+        | '>' when braces = 0 -> Some (index + 1)
+        | _ -> loop (index + 1) None braces) in
+  loop (start + 1) None 0
+
+let sfc_tag_name_end source start =
+  let length = Bytes.length source in
+  let cursor = if start + 1 < length && Bytes.get source (start + 1) = '/'
+    then start + 2 else start + 1 in
+  let rec loop index =
+    if index < length && not (ascii_whitespace (Bytes.get source index))
+       && not (List.mem (Bytes.get source index) ['>'; '/'])
+    then loop (index + 1) else index in
+  loop cursor
+
+let sfc_find_close source start name =
+  let length = Bytes.length source in
+  let token = "</" ^ name in
+  let rec loop cursor = match ascii_case_find source cursor token with
+    | None -> None
+    | Some candidate ->
+      let after = candidate + String.length token in
+      if sfc_tag_boundary (if after < length then Some (Bytes.get source after) else None)
+      then Some candidate else loop after in
+  loop start
+
+let sfc_balanced_close source content_start name =
+  let length = Bytes.length source in
+  let rec loop index depth =
+    match find_from source index "<" with
+    | None -> None
+    | Some tag when starts source tag "<!--" ->
+      let resume = match find_from source (tag + 4) "-->" with
+        | Some close -> close + 3 | None -> length in
+      loop resume depth
+    | Some tag ->
+      let closing = tag + 1 < length && Bytes.get source (tag + 1) = '/' in
+      let name_start = tag + if closing then 2 else 1 in
+      let same = name_start + String.length name <= length
+        && String.lowercase_ascii
+             (Bytes.sub_string source name_start (String.length name))
+           = String.lowercase_ascii name
+        && sfc_tag_boundary
+             (if name_start + String.length name < length
+              then Some (Bytes.get source (name_start + String.length name)) else None) in
+      if not same then loop (tag + 1) depth else
+      match sfc_html_tag_end source tag with
+      | None -> None
+      | Some finish when closing ->
+        if depth = 1 then Some tag else loop finish (depth - 1)
+      | Some finish ->
+        let rec before index =
+          if index > tag && ascii_whitespace (Bytes.get source (index - 1))
+          then before (index - 1) else index in
+        let before = before (finish - 1) in
+        let self_closing = before > tag && Bytes.get source (before - 1) = '/' in
+        loop finish (if self_closing then depth else depth + 1) in
+  loop content_start 1
+
+let merge_sfc_child accumulator offset child =
+  List.iter (fun (comment : comment) ->
+    accumulator.comments_rev <- { comment with span = {
+      start = comment.span.start + offset; finish = comment.span.finish + offset } }
+      :: accumulator.comments_rev) (List.rev child.comments_rev);
+  List.iter (fun (diagnostic : diagnostic) ->
+    accumulator.diagnostics_rev <- { diagnostic with span = {
+      start = diagnostic.span.start + offset; finish = diagnostic.span.finish + offset } }
+      :: accumulator.diagnostics_rev) (List.rev child.diagnostics_rev)
+
+let scan_vue_attribute_code source _language options accumulator start finish =
+  let attrs = Bytes.sub source start (finish - start) in
+  List.iter (fun attribute ->
+    let name = Bytes.sub_string attrs attribute.tag_name_start
+      (attribute.tag_name_finish - attribute.tag_name_start) in
+    if vue_directive_attribute name then match attribute.tag_value with
+      | None -> ()
+      | Some (value_start, value_finish) ->
+        let value_start = start + value_start in
+        let value_finish = start + value_finish in
+        let child_source = Bytes.sub source value_start (value_finish - value_start) in
+        let child = { comments_rev = []; diagnostics_rev = []; yaml_blocks_rev = [] } in
+        scan_javascript ~offset:value_start child_source JavaScript options child;
+        merge_sfc_child accumulator value_start child)
+    (parse_tag_attributes attrs)
+
+let svelte_tag_end source language options accumulator start =
+  let length = Bytes.length source in
+  let comments_before = accumulator.comments_rev in
+  let diagnostics_before = accumulator.diagnostics_rev in
+  let rec loop index quote =
+    if index >= length then None else match quote with
+      | Some active when Bytes.get source index = active -> loop (index + 1) None
+      | Some _ when Bytes.get source index = '{' ->
+        loop (scan_js_code source language options accumulator (index + 1) (Some 1) 0) quote
+      | Some _ -> loop (index + 1) quote
+      | None -> (match Bytes.get source index with
+        | '\'' | '"' as byte -> loop (index + 1) (Some byte)
+        | '{' -> loop (scan_js_code source language options accumulator
+                         (index + 1) (Some 1) 0) None
+        | '>' -> Some (index + 1)
+        | _ -> loop (index + 1) None) in
+  match loop (start + 1) None with
+  | Some _ as finish -> finish
+  | None ->
+    accumulator.comments_rev <- comments_before;
+    accumulator.diagnostics_rev <- diagnostics_before;
+    None
+
+let rec scan_vue source language options accumulator =
+  scan_sfc true source language options accumulator
+and scan_svelte source language options accumulator =
+  scan_sfc false source language options accumulator
 and scan_sfc vue source language options accumulator =
   let length = Bytes.length source in
   let html_comment index =
     let finish, closed = match find_from source (index + 4) "-->" with
-      | Some close -> (close + 3, true)
-      | None -> (length, false) in
+      | Some close -> (close + 3, true) | None -> (length, false) in
     add_comment accumulator source language options HtmlComment index finish;
     if not closed then add_error accumulator "unterminated-comment"
       "unterminated HTML comment" index finish;
     finish in
-  let tag_end index =
-    let rec loop cursor quote =
-      if cursor >= length then None else
-      match quote with
-      | Some active when Bytes.get source cursor = active -> loop (cursor + 1) None
-      | Some _ -> loop (cursor + 1) quote
-      | None when Bytes.get source cursor = '\'' || Bytes.get source cursor = '"' ->
-        loop (cursor + 1) (Some (Bytes.get source cursor))
-      | None when Bytes.get source cursor = '>' -> Some (cursor + 1)
-      | None -> loop (cursor + 1) None in
-    loop (index + 1) None in
-  let tag_boundary = function None -> true | Some character ->
-    character = ' ' || character = '\t' || character = '\n' || character = '\r'
-    || character = '\x0c' || character = '>' || character = '/' in
-  let sfc_block index =
+  let block index =
     if ascii_case_starts source index "<script"
-       && tag_boundary (if index + 7 < length then Some (Bytes.get source (index + 7)) else None)
-    then Some ("script", "script")
+       && sfc_tag_boundary (if index + 7 < length then Some (Bytes.get source (index + 7)) else None)
+    then Some "script"
     else if ascii_case_starts source index "<style"
-            && tag_boundary (if index + 6 < length then Some (Bytes.get source (index + 6)) else None)
-    then Some ("style", "style")
+            && sfc_tag_boundary (if index + 6 < length then Some (Bytes.get source (index + 6)) else None)
+    then Some "style"
     else if vue && ascii_case_starts source index "<template"
-            && tag_boundary (if index + 9 < length then Some (Bytes.get source (index + 9)) else None)
-    then Some ("template", "template")
+            && sfc_tag_boundary (if index + 9 < length then Some (Bytes.get source (index + 9)) else None)
+    then Some "template"
     else None in
-  let find_close start name =
-    let token = "</" ^ name in
-    let rec loop cursor = match ascii_case_find source cursor token with
-      | None -> None
-      | Some candidate ->
-        let after = candidate + String.length token in
-        if tag_boundary (if after < length then Some (Bytes.get source after) else None)
-        then Some candidate else loop after in
-    loop start in
-  let merge offset report =
-    List.iter (fun (comment : comment) ->
-      accumulator.comments_rev <- { comment with span = { start = comment.span.start + offset; finish = comment.span.finish + offset } } :: accumulator.comments_rev) report.comments;
-    List.iter (fun (diagnostic : diagnostic) ->
-      accumulator.diagnostics_rev <- { diagnostic with span = { start = diagnostic.span.start + offset; finish = diagnostic.span.finish + offset } } :: accumulator.diagnostics_rev) report.diagnostics in
   let run_block name content_start content_finish lang =
     let resolved = match name with
       | "script" -> vue_script_language lang
       | "style" -> vue_style_language lang
       | "template" ->
         (match Option.map String.lowercase_ascii lang with
-         | None | Some "html" -> Some (Html, Standard)
-         | Some _ -> None)
+         | None | Some "html" -> Some (Html, Standard) | Some _ -> None)
       | _ -> None in
     match resolved with
-    | Some (Html, _) -> scan_sfc_template vue source language options accumulator content_start content_finish
+    | Some (Html, _) ->
+      scan_sfc_template vue source language options accumulator content_start content_finish
     | Some (embedded, dialect) ->
       let child_source = Bytes.sub source content_start (content_finish - content_start) in
       let child = { comments_rev = []; diagnostics_rev = []; yaml_blocks_rev = [] } in
       let child_options = { options with dialect } in
-      (if embedded = JavaScript || embedded = TypeScript
-       then scan_javascript ~offset:content_start child_source embedded child_options child
-       else scan_slash child_source embedded child_options child);
-      merge content_start { language = embedded; comments = List.rev child.comments_rev;
-        diagnostics = List.rev child.diagnostics_rev; valid = true }
+      if embedded = JavaScript || embedded = TypeScript then
+        scan_javascript ~offset:content_start child_source embedded child_options child
+      else if embedded = Css && dialect = Sass then
+        scan_sass child_source embedded child_options child
+      else scan_slash child_source embedded child_options child;
+      merge_sfc_child accumulator content_start child
     | None -> () in
   let rec loop index =
     if index >= length then ()
     else if starts source index "<!--" then loop (html_comment index)
     else if not vue && Bytes.get source index = '{' then
       loop (scan_js_code source language options accumulator (index + 1) (Some 1) 0)
-    else if Bytes.get source index = '<' then
-      (match sfc_block index with
-       | Some (name, name_bytes) -> (match tag_end index with
-         | None ->
-           add_error accumulator "unterminated-html-tag"
+    else if Bytes.get source index = '<' then begin
+      match block index with
+      | Some name ->
+        let tag_finish = if vue then sfc_vue_tag_end source index
+          else svelte_tag_end source language options accumulator index in
+        (match tag_finish with
+         | None -> add_error accumulator "unterminated-html-tag"
              "unterminated single-file component start tag" index length
          | Some tag_finish ->
-           let attrs = Bytes.sub source (index + 1 + String.length name_bytes)
-             (max 0 (tag_finish - 1 - (index + 1 + String.length name_bytes))) in
+           let attrs_start = index + 1 + String.length name in
+           let attrs = Bytes.sub source attrs_start (max 0 (tag_finish - 1 - attrs_start)) in
            let lang = tag_attr_value attrs (Bytes.of_string "lang") in
-           (match find_close tag_finish name with
-            | None ->
-              add_error accumulator "unterminated-embedded-language"
+           (match sfc_find_close source tag_finish name with
+            | None -> add_error accumulator "unterminated-embedded-language"
                 "unterminated single-file component element" index length
             | Some closing ->
               run_block name tag_finish closing lang;
               loop closing))
-       | None ->
-         let candidate =
-           if index + 1 < length then
-             let next = Bytes.get source (index + 1) in
-             (next >= 'a' && next <= 'z') || (next >= 'A' && next <= 'Z')
-             || next = '!' || next = '?'
-             || (next = '/' && index + 2 < length
-                 && let after = Bytes.get source (index + 2) in
-                    (after >= 'a' && after <= 'z') || (after >= 'A' && after <= 'Z'))
-           else false in
-         (if candidate then match tag_end index with
-          | Some finish -> loop finish
-          | None -> loop (index + 1)
-          else loop (index + 1)))
-    else if Bytes.get source index = '\r' || Bytes.get source index = '\n'
+      | None ->
+        if not (sfc_tag_candidate source index) then loop (index + 1)
+        else
+          let finish = if vue then sfc_vue_tag_end source index
+            else svelte_tag_end source language options accumulator index in
+          match finish with Some finish -> loop finish | None -> loop (index + 1)
+    end else if Bytes.get source index = '\r' || Bytes.get source index = '\n'
     then loop (consume_newline source index)
-    else loop (index + 1)
-  in loop 0
+    else loop (index + 1) in
+  loop 0
 
-(* NOTE: The body of a Vue "<template>": HTML with "{{ ... }}" mustaches that
-   are code, and "v-pre" elements whose whole content is raw text. *)
 and scan_sfc_template vue source language options accumulator start finish =
   let length = Bytes.length source in
   let html_comment index =
     let finish, closed = match find_from source (index + 4) "-->" with
-      | Some close -> (close + 3, true)
-      | None -> (length, false) in
+      | Some close -> (close + 3, true) | None -> (length, false) in
     add_comment accumulator source language options HtmlComment index finish;
     if not closed then add_error accumulator "unterminated-comment"
       "unterminated HTML comment" index finish;
     finish in
-  let tag_end index =
-    let rec loop cursor quote =
-      if cursor >= length then None else
-      match quote with
-      | Some active when Bytes.get source cursor = active -> loop (cursor + 1) None
-      | Some _ -> loop (cursor + 1) quote
-      | None when Bytes.get source cursor = '\'' || Bytes.get source cursor = '"' ->
-        loop (cursor + 1) (Some (Bytes.get source cursor))
-      | None when Bytes.get source cursor = '>' -> Some (cursor + 1)
-      | None -> loop (cursor + 1) None in
-    loop (index + 1) None in
-  let tag_boundary = function None -> true | Some character ->
-    character = ' ' || character = '\t' || character = '\n' || character = '\r'
-    || character = '>' || character = '/' in
-  let find_close start name =
-    let token = "</" ^ name in
-    let rec loop cursor = match ascii_case_find source cursor token with
-      | None -> None
-      | Some candidate ->
-        let after = candidate + String.length token in
-        if tag_boundary (if after < length then Some (Bytes.get source after) else None)
-        then Some candidate else loop after in
-    loop start in
   let rec loop index =
     if index >= finish then ()
     else if starts source index "<!--" then loop (html_comment index)
     else if vue && starts source index "{{" then
       loop (scan_js_code source language options accumulator (index + 2) (Some 2) 0)
-    else if Bytes.get source index = '<'
-            && (let next = if index + 1 < length then Bytes.get source (index + 1) else ' ' in
-                (next >= 'a' && next <= 'z') || (next >= 'A' && next <= 'Z')
-                || next = '!' || next = '?')
-    then (match tag_end index with
+    else if Bytes.get source index = '<' && sfc_tag_candidate source index then
+      (match sfc_vue_tag_end source index with
+       | None -> loop (index + 1)
        | Some tag_finish ->
-         let rec name_end cursor =
-           if cursor < length && Bytes.get source cursor <> ' '
-              && Bytes.get source cursor <> '\t' && Bytes.get source cursor <> '\n'
-              && Bytes.get source cursor <> '\r' && Bytes.get source cursor <> '>'
-           then name_end (cursor + 1) else cursor in
-         let name_finish = name_end (index + 1) in
-         let attrs = Bytes.sub source name_finish (max 0 (tag_finish - 1 - name_finish)) in
-         if vue && tag_has_attribute attrs (Bytes.of_string "v-pre") then
-           let name = Bytes.sub_string source (index + 1) (name_finish - (index + 1)) in
-           (match find_close tag_finish name with
-            | Some closing -> loop closing
-            | None -> loop (tag_finish + 1))
-         else loop tag_finish
-       | None -> loop (index + 1))
-    else loop (index + 1)
-  in loop start
+         let name_finish = sfc_tag_name_end source index in
+         let attrs_finish = max name_finish (tag_finish - 1) in
+         let attrs = Bytes.sub source name_finish (attrs_finish - name_finish) in
+         if vue && tag_has_attribute attrs (Bytes.of_string "v-pre") then begin
+           let name = Bytes.sub_string source (index + 1) (name_finish - index - 1) in
+           match sfc_balanced_close source tag_finish name with
+           | Some closing ->
+             loop (Option.value ~default:closing (sfc_html_tag_end source closing))
+           | None ->
+             scan_vue_attribute_code source language options accumulator name_finish attrs_finish;
+             loop tag_finish
+         end else begin
+           if vue then
+             scan_vue_attribute_code source language options accumulator name_finish attrs_finish;
+           loop tag_finish
+         end)
+    else loop (index + 1) in
+  loop start
 
 let rec scan_html source language options accumulator =
   let tag_boundary = function None -> true | Some character ->
@@ -5816,6 +6207,7 @@ let rec scan_html source language options accumulator =
 and scan source language options =
   let accumulator = { comments_rev = []; diagnostics_rev = []; yaml_blocks_rev = [] } in
   (match language with
+  | Css when options.dialect = Sass -> scan_sass source language options accumulator
   | Rust | C | Cpp | Go | Kotlin | Css | Jsonc -> scan_slash source language options accumulator
   | Java -> scan_java source language options accumulator
   | JavaScript | TypeScript -> scan_javascript source language options accumulator
@@ -5840,8 +6232,14 @@ and scan source language options =
   | R -> scan_r source language options accumulator
   | Html -> scan_html source language options accumulator
   | Unknown -> add_error accumulator "unknown-language" "a language is required" 0 0);
-  let comments = List.rev accumulator.comments_rev in
-  let diagnostics = List.rev accumulator.diagnostics_rev in
+  let length = Bytes.length source in
+  let clamp span =
+    let start = max 0 (min span.start length) in
+    { start; finish = max start (min span.finish length) } in
+  let comments = List.rev accumulator.comments_rev
+    |> List.map (fun (comment : comment) -> { comment with span = clamp comment.span }) in
+  let diagnostics = List.rev accumulator.diagnostics_rev
+    |> List.map (fun (diagnostic : diagnostic) -> { diagnostic with span = clamp diagnostic.span }) in
   { language; comments; diagnostics; valid = not (List.exists (fun diagnostic -> diagnostic.severity = Error) diagnostics) }
 
 let validate_profile profile =

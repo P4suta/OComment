@@ -86,7 +86,7 @@ fn language_names_are_stable() {
 #[test]
 fn dialect_names_are_stable() {
     check_stable_names!(Dialect);
-    assert_eq!(Dialect::ALL.len(), 17);
+    assert_eq!(Dialect::ALL.len(), 18);
 }
 
 #[test]
@@ -245,6 +245,8 @@ fn dialect_aliases_are_pinned() {
         ("t-sql", Dialect::TSql),
         ("tsql", Dialect::TSql),
         ("oracle", Dialect::Oracle),
+        ("scss", Dialect::Scss),
+        ("sass", Dialect::Sass),
     ];
     for (text, expected) in cases {
         assert_eq!(Dialect::from_str(text), Ok(expected), "`{text}`");

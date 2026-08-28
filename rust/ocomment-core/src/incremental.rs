@@ -615,6 +615,35 @@ mod tests {
         assert!(endpoint(source, 12345) <= source.len());
     }
 
+    #[test]
+    fn an_unmatched_markdown_code_span_withdraws_later_line_checkpoints() {
+        let mut document = IncrementalDocument::new(
+            b"text ```open\nnext".to_vec(),
+            Language::Markdown,
+            ScanOptions::default(),
+            1,
+        );
+        assert_eq!(document.safe_checkpoints(), [0]);
+        let end = document.source().len();
+        document
+            .apply_changes(
+                &[DocumentChange {
+                    span: ByteSpan::new(end, end),
+                    replacement: b"```".to_vec(),
+                }],
+                2,
+            )
+            .unwrap();
+        let (expected, expected_checkpoints) = scan_with_checkpoints(
+            document.source(),
+            Language::Markdown,
+            ScanOptions::default(),
+            0,
+        );
+        assert_eq!(document.report(), &expected);
+        assert_eq!(document.safe_checkpoints(), expected_checkpoints);
+    }
+
     proptest! {
         /* NOTE: Unit-test proptests cannot persist regressions next to `src`, so the
          * shrunk counterexample is reported inline instead. */

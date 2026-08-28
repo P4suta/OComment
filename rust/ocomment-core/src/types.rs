@@ -368,14 +368,16 @@ pub enum Dialect {
     TSql,
     /// Oracle, which adds `q'[...]'` quoted literals.
     Oracle,
-    /// SCSS and the indented Sass syntax: CSS with `//` line comments and
-    /// `#{ ... }` interpolation.
+    /// SCSS: CSS with `//` line comments and `#{ ... }` interpolation.
     Scss,
+    /// The indentation-based Sass syntax. Silent comments also own their
+    /// more-deeply-indented body lines.
+    Sass,
 }
 
 impl Dialect {
     /// Every CLI-visible dialect.
-    pub const ALL: [Self; 17] = [
+    pub const ALL: [Self; 18] = [
         Self::Standard,
         Self::Jsx,
         Self::Tsx,
@@ -393,6 +395,7 @@ impl Dialect {
         Self::TSql,
         Self::Oracle,
         Self::Scss,
+        Self::Sass,
     ];
 
     /// The canonical name, identical to the serde representation.
@@ -415,6 +418,7 @@ impl Dialect {
             Self::TSql => "t-sql",
             Self::Oracle => "oracle",
             Self::Scss => "scss",
+            Self::Sass => "sass",
         }
     }
 
@@ -430,7 +434,8 @@ impl Dialect {
             | Self::MySql
             | Self::Sqlite
             | Self::Oracle
-            | Self::Scss => &[],
+            | Self::Scss
+            | Self::Sass => &[],
             Self::ObjectiveC => &["objc"],
             Self::ObjectiveCpp => &["objective-c++", "objcpp"],
             Self::GnuC => &["gnuc"],

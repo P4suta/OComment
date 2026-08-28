@@ -124,6 +124,70 @@ fn check_diff_and_fix_follow_the_exit_contract() {
     );
 }
 
+/// A patch is a byte transport, not a Unicode report. Both invalid source
+/// bytes and an OS-native file name must round-trip through Git unchanged.
+#[cfg(unix)]
+#[test]
+fn diff_is_byte_preserving_and_git_applies_quoted_non_utf8_paths() {
+    use std::os::unix::ffi::OsStringExt;
+
+    let directory = repository();
+    let name = std::ffi::OsString::from_vec(b"odd\n\xfe.rs".to_vec());
+    let path = directory.path().join(&name);
+    let original = b"let raw = b\"\xff\"; // remove me\n";
+    fs::write(&path, original).unwrap();
+
+    let output = Command::new(binary())
+        .current_dir(directory.path())
+        .env("PATH", "/usr/bin:/bin")
+        .arg("diff")
+        .arg(&name)
+        .output()
+        .unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        output.stdout.contains(&0xff),
+        "the invalid source byte was replaced in the patch: {:?}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    assert!(
+        output
+            .stdout
+            .windows(b"\"a/odd\\n\\376.rs\"".len())
+            .any(|window| window == b"\"a/odd\\n\\376.rs\""),
+        "the path was not Git C-quoted: {:?}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+
+    let mut apply = Command::new("/usr/bin/git")
+        .current_dir(directory.path())
+        .args(["apply", "--whitespace=nowarn", "-"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    apply
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(&output.stdout)
+        .unwrap();
+    let applied = apply.wait_with_output().unwrap();
+    assert!(
+        applied.status.success(),
+        "git apply failed: {}\npatch: {:?}",
+        String::from_utf8_lossy(&applied.stderr),
+        String::from_utf8_lossy(&output.stdout)
+    );
+    assert_eq!(fs::read(path).unwrap(), b"let raw = b\"\xff\"; \n");
+}
+
 /* NOTE: A lock file carries no extension the detector can use, so the whole
  * name has to reach it through the binary for the run to scan the file at all.
  * `Cargo.lock` is the one every Rust checkout has. */
@@ -635,6 +699,137 @@ fn strict_configuration_suggests_unknown_keys() {
     let error = String::from_utf8_lossy(&output.stderr);
     assert!(error.contains("unknown field"));
     assert!(error.contains("policy"));
+}
+
+/// An explicit configuration is a hermetic replacement for user/project
+/// discovery. Its own directory is also the root against which path overrides
+/// are matched.
+#[test]
+fn explicit_config_replaces_discovery_and_roots_its_own_globs() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        b"this project configuration must not be parsed\n",
+    )
+    .unwrap();
+    let xdg = directory.path().join("xdg/ocomment");
+    fs::create_dir_all(&xdg).unwrap();
+    fs::write(
+        xdg.join("config.toml"),
+        b"this user configuration must not be parsed\n",
+    )
+    .unwrap();
+    let explicit = directory.path().join("configuration");
+    fs::create_dir(&explicit).unwrap();
+    fs::write(
+        explicit.join("only.toml"),
+        b"version = 1\n[[overrides]]\npaths = [\"source.odd\"]\nlanguage = \"rust\"\n",
+    )
+    .unwrap();
+    fs::write(
+        explicit.join("source.odd"),
+        b"let value = 1; // remove me\n",
+    )
+    .unwrap();
+
+    let output = Command::new(binary())
+        .current_dir(directory.path())
+        .env("PATH", "/usr/bin:/bin")
+        .env("XDG_CONFIG_HOME", directory.path().join("xdg"))
+        .args([
+            "check",
+            "--config",
+            "configuration/only.toml",
+            "configuration/source.odd",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("removable line comment"),
+        "{}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+/// The effective language is selected before its language table is applied,
+/// and a CLI scalar remains the final layer after the matching path override.
+#[test]
+fn path_language_override_uses_its_language_policy_and_cli_stays_final() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        b"version = 1\n[languages.rust]\npolicy = \"all\"\n\
+          [[overrides]]\npaths = [\"*.odd\"]\nlanguage = \"rust\"\npolicy = \"safe\"\n",
+    )
+    .unwrap();
+    fs::write(
+        directory.path().join("source.odd"),
+        b"let value = 1; // rustfmt::skip\n",
+    )
+    .unwrap();
+
+    let safe = run(directory.path(), &["check", "source.odd"]);
+    assert_eq!(safe.status.code(), Some(0));
+    assert!(
+        safe.stdout.is_empty(),
+        "{}",
+        String::from_utf8_lossy(&safe.stdout)
+    );
+
+    let all = run(
+        directory.path(),
+        &["check", "--policy", "all", "source.odd"],
+    );
+    assert_eq!(all.status.code(), Some(1));
+    assert!(
+        String::from_utf8_lossy(&all.stdout).contains("removable directive comment"),
+        "{}",
+        String::from_utf8_lossy(&all.stdout)
+    );
+}
+
+/// Disabled languages apply after path routing, except that an explicit CLI
+/// language is a request to scan regardless of the configured default.
+#[test]
+fn disabled_path_language_is_skipped_but_explicit_cli_language_wins() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        b"version = 1\n[languages.rust]\nenabled = false\n\
+          [[overrides]]\npaths = [\"*.odd\"]\nlanguage = \"rust\"\n",
+    )
+    .unwrap();
+    fs::write(
+        directory.path().join("source.odd"),
+        b"let value = 1; // remove me\n",
+    )
+    .unwrap();
+
+    let configured = run(directory.path(), &["check", "source.odd"]);
+    assert_eq!(configured.status.code(), Some(0));
+    assert!(
+        String::from_utf8_lossy(&configured.stdout).contains("language disabled"),
+        "{}",
+        String::from_utf8_lossy(&configured.stdout)
+    );
+
+    let forced = run(
+        directory.path(),
+        &["check", "--language", "rust", "source.odd"],
+    );
+    assert_eq!(forced.status.code(), Some(1));
+    assert!(
+        String::from_utf8_lossy(&forced.stdout).contains("removable line comment"),
+        "{}",
+        String::from_utf8_lossy(&forced.stdout)
+    );
 }
 
 #[test]
@@ -1402,6 +1597,76 @@ fn staged_blobs_without_a_scanner_are_counted_in_the_summary() {
     );
 }
 
+/// Mode 120000 contains the link target spelling, not source bytes, and mode
+/// 160000 names a commit rather than a blob. Both must be classified before
+/// `cat-file blob` is attempted and must survive a staged fix byte-for-byte.
+#[cfg(unix)]
+#[test]
+fn staged_symlinks_and_gitlinks_are_skipped_by_index_mode() {
+    use std::os::unix::fs::symlink;
+
+    let directory = repository();
+    fs::write(directory.path().join("seed.rs"), b"let seed = 1;\n").unwrap();
+    git(directory.path(), &["add", "seed.rs"]);
+    git(
+        directory.path(),
+        &["commit", "--quiet", "--message", "seed"],
+    );
+    fs::write(
+        directory.path().join("target.rs"),
+        b"let value = 1; // target comment\n",
+    )
+    .unwrap();
+    symlink("target.rs", directory.path().join("link.rs")).unwrap();
+    git(directory.path(), &["add", "link.rs"]);
+    let head = String::from_utf8(git(directory.path(), &["rev-parse", "HEAD"]))
+        .unwrap()
+        .trim()
+        .to_owned();
+    let cacheinfo = format!("160000,{head},vendor");
+    git(
+        directory.path(),
+        &["update-index", "--add", "--cacheinfo", &cacheinfo],
+    );
+    let before = git(directory.path(), &["ls-files", "-s", "-z"]);
+
+    for (path, reason) in [
+        ("link.rs", "symbolic link"),
+        ("vendor", "Git submodule link"),
+    ] {
+        let checked = run(directory.path(), &["check", "--staged", path]);
+        assert_eq!(
+            checked.status.code(),
+            Some(0),
+            "{}",
+            String::from_utf8_lossy(&checked.stderr)
+        );
+        assert!(
+            String::from_utf8_lossy(&checked.stdout).contains(reason),
+            "{}",
+            String::from_utf8_lossy(&checked.stdout)
+        );
+    }
+
+    let fixed = run(directory.path(), &["fix", "--staged"]);
+    assert_eq!(
+        fixed.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&fixed.stderr)
+    );
+    assert_eq!(git(directory.path(), &["ls-files", "-s", "-z"]), before);
+    assert!(
+        directory
+            .path()
+            .join("link.rs")
+            .symlink_metadata()
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+}
+
 #[test]
 fn staged_fix_stops_on_existing_block_comment_interior() {
     let directory = repository();
@@ -1940,6 +2205,83 @@ fn symlink_following_is_explicitly_configurable() {
     let followed = run(directory.path(), &["check", "link.rs"]);
     assert_eq!(followed.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&followed.stdout).contains("removable"));
+
+    let scanned = run(directory.path(), &["scan", "link.rs"]);
+    assert_eq!(scanned.status.code(), Some(0));
+    assert!(String::from_utf8_lossy(&scanned.stdout).contains("line remove"));
+    for arguments in [
+        &["diff", "link.rs"][..],
+        &["fix", "--dry-run", "link.rs"][..],
+    ] {
+        let preview = run(directory.path(), arguments);
+        assert_eq!(preview.status.code(), Some(1));
+        assert!(preview.stdout.starts_with(b"--- a/link.rs\n"));
+    }
+
+    let target_before = fs::read(directory.path().join("source.txt")).unwrap();
+    let fixed = run(directory.path(), &["fix", "link.rs"]);
+    assert_eq!(fixed.status.code(), Some(2));
+    assert!(
+        String::from_utf8_lossy(&fixed.stderr).contains("refusing to rewrite symbolic link"),
+        "{}",
+        String::from_utf8_lossy(&fixed.stderr)
+    );
+    assert_eq!(
+        fs::read(directory.path().join("source.txt")).unwrap(),
+        target_before,
+        "the link target was rewritten"
+    );
+    assert!(
+        directory
+            .path()
+            .join("link.rs")
+            .symlink_metadata()
+            .unwrap()
+            .file_type()
+            .is_symlink(),
+        "the link was replaced"
+    );
+}
+
+/// Transaction preparation keeps cleanup ownership of every temporary path,
+/// but not an open descriptor for every file.
+#[cfg(unix)]
+#[test]
+fn a_wide_transaction_completes_under_a_low_file_descriptor_limit() {
+    let directory = tempfile::tempdir().unwrap();
+    for index in 0..128 {
+        fs::write(
+            directory.path().join(format!("source-{index:03}.rs")),
+            b"let value = 1; // remove me\n",
+        )
+        .unwrap();
+    }
+
+    let output = Command::new("/bin/bash")
+        .current_dir(directory.path())
+        .env("PATH", "/usr/bin:/bin")
+        .args([
+            "-c",
+            "ulimit -n 64; exec \"$1\" fix .",
+            "ocomment-low-fd",
+            binary(),
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    for index in 0..128 {
+        assert_eq!(
+            fs::read(directory.path().join(format!("source-{index:03}.rs"))).unwrap(),
+            b"let value = 1; \n"
+        );
+    }
 }
 
 fn subcommand_lines(help: &str) -> Vec<(String, String)> {
@@ -2822,6 +3164,43 @@ fn github_annotations_report_repository_paths() {
         stdout,
         "::notice file=sub/doc.rs,line=1,col=1::removable doc-block comment\n"
     );
+}
+
+/// SARIF locations are URIs and GitHub `file=` values are workflow-command
+/// properties. They deliberately have different escaping rules, but neither
+/// is allowed to replace a raw Unix filename byte with U+FFFD.
+#[cfg(unix)]
+#[test]
+fn machine_reports_encode_raw_unix_paths_without_loss() {
+    use std::{ffi::OsString, os::unix::ffi::OsStringExt};
+
+    let directory = tempfile::tempdir().unwrap();
+    let name = OsString::from_vec(b"odd \xff,\n.rs".to_vec());
+    fs::write(directory.path().join(&name), b"let value = 1; // remove\n").unwrap();
+
+    let sarif = run(directory.path(), &["check", ".", "--format", "sarif"]);
+    assert_eq!(sarif.status.code(), Some(1));
+    let report = String::from_utf8(sarif.stdout).unwrap();
+    assert!(
+        !report.contains('\u{fffd}'),
+        "SARIF replaced a path byte:\n{report}"
+    );
+    let document: serde_json::Value = serde_json::from_str(&report).unwrap();
+    let locations = artifact_locations(&document);
+    assert!(!locations.is_empty(), "SARIF locates nothing:\n{report}");
+    for location in locations {
+        assert_eq!(location["uri"], "odd%20%FF%2C%0A.rs");
+        assert_eq!(location["uriBaseId"], "%SRCROOT%");
+    }
+
+    let github = run(directory.path(), &["check", ".", "--format", "github"]);
+    assert_eq!(github.status.code(), Some(1));
+    let annotations = String::from_utf8(github.stdout).unwrap();
+    assert!(
+        annotations.contains("::notice file=odd %FF%2C%0A.rs,"),
+        "GitHub output lost or mis-encoded the path:\n{annotations}"
+    );
+    assert!(!annotations.contains('\u{fffd}'));
 }
 
 #[test]

@@ -12,6 +12,14 @@ Workspace diagnostics and fixes report LSP work-done progress when the client
 provides a token and advertise it as cancellable; `$/cancelRequest` aborts the
 pending request with the standard cancellation response.
 
+In a multi-root session, every workspace folder has its own configuration and
+plugin host. A document uses the most deeply nested workspace folder that
+contains it. An open document outside all folders gets a standalone context
+discovered from its parent directory and is omitted from workspace-wide fixes;
+only a folder-less session treats every open document as workspace scope.
+Save-time editing remains an advertised capability so live configuration can
+turn it on, but the handler is a no-op whenever `[lsp].on_save` is false.
+
 ## Neovim
 
 ```lua

@@ -608,22 +608,15 @@ fn run_target(
         .map(|file| {
             /* NOTE: Only an explaining run pays for the trace; every other one takes
              * the hot path it always took. */
-            let (mut language, mut options, trace) = if explain {
+            let (language, options, trace) = if explain {
                 let (language, options, trace) =
-                    resolved.for_path_traced(&file.path, file.language, file.dialect);
+                    resolved.for_path_traced(&file.path, file.language, file.dialect)?;
                 (language, options, Some(trace))
             } else {
                 let (language, options) =
-                    resolved.for_path(&file.path, file.language, file.dialect);
+                    resolved.for_path(&file.path, file.language, file.dialect)?;
                 (language, options, None)
             };
-            if let Some(value) = common.language() {
-                language = value;
-            }
-            if let Some(value) = common.dialect() {
-                config::validate_dialect(language, value)?;
-                options.scan.dialect = value;
-            }
             /* NOTE: Recorded as the scan is about to run with them, `--language` and
              * `--dialect` included, so an explanation accounts for the run that
              * actually happened. */
@@ -878,15 +871,11 @@ fn run_strip(common: &CommonArgs) -> Result<u8> {
                 .map(|value| (value.language, value.dialect))
         })
         .context(files::STDIN_LANGUAGE_HELP)?;
-    let (language, mut options) = resolved.for_path(
+    let (language, options) = resolved.for_path(
         std::path::Path::new(files::STDIN_PATH),
         detection.0,
         detection.1,
-    );
-    if let Some(value) = common.dialect() {
-        config::validate_dialect(language, value)?;
-        options.scan.dialect = value;
-    }
+    )?;
     let result = transform(&source, language, options);
     let stderr = io::stderr();
     let mut report = stderr.lock();
@@ -895,7 +884,10 @@ fn run_strip(common: &CommonArgs) -> Result<u8> {
             &mut report,
             &format!(
                 "stdin:{}..{}: {}: {}",
-                diagnostic.span.start, diagnostic.span.end, diagnostic.code, diagnostic.message
+                diagnostic.span.start,
+                diagnostic.span.end,
+                output::sanitize_message(&diagnostic.code),
+                output::sanitize_message(&diagnostic.message)
             ),
         )?;
     }
@@ -915,6 +907,8 @@ fn apply_cli_overrides(resolved: &mut config::ResolvedConfig, common: &CommonArg
     let policy = &common.policy;
     let config = &mut resolved.config;
     let overrides = &mut resolved.cli_overrides;
+    overrides.language = common.language();
+    overrides.dialect = common.dialect();
     if let Some(value) = policy.policy {
         config.policy.mode = *value;
         overrides.policy = true;
@@ -1139,7 +1133,7 @@ fn note_inherited_config() -> Result<()> {
         &mut report,
         &format!(
             "note: {} already applies to this directory",
-            inherited.display()
+            output::sanitize_path(&inherited.display().to_string())
         ),
     )
 }
@@ -1215,13 +1209,25 @@ fn run_config(args: ConfigArgs, common: &CommonArgs) -> Result<u8> {
                 }
                 ConfigAction::Locate => {
                     if let Some(path) = &resolved.trace.user {
-                        output::wrote(writeln!(stdout, "user\t{}", path.display()))?;
+                        output::wrote(writeln!(
+                            stdout,
+                            "user\t{}",
+                            output::sanitize_path(&path.display().to_string())
+                        ))?;
                     }
                     if let Some(path) = &resolved.trace.project {
-                        output::wrote(writeln!(stdout, "project\t{}", path.display()))?;
+                        output::wrote(writeln!(
+                            stdout,
+                            "project\t{}",
+                            output::sanitize_path(&path.display().to_string())
+                        ))?;
                     }
                     if let Some(path) = &resolved.trace.explicit {
-                        output::wrote(writeln!(stdout, "explicit\t{}", path.display()))?;
+                        output::wrote(writeln!(
+                            stdout,
+                            "explicit\t{}",
+                            output::sanitize_path(&path.display().to_string())
+                        ))?;
                     }
                     if resolved.trace.user.is_none()
                         && resolved.trace.project.is_none()
@@ -1267,6 +1273,8 @@ const LANGUAGE_TABLE: &str = include_str!("../assets/languages.toml");
 struct LanguageRow {
     /// The canonical language name, which is also what `--language` takes.
     name: String,
+    /// Editor language identifiers that the LSP maps to this built-in scanner.
+    editor_ids: Vec<String>,
     /// Every file extension that selects the language, without the dot.
     extensions: Vec<String>,
     /// Every dialect the language accepts, in the order `--dialect` names them
@@ -1607,7 +1615,7 @@ fn target_label(paths: &[PathBuf]) -> String {
     }
     paths
         .iter()
-        .map(|path| path.display().to_string())
+        .map(|path| output::sanitize_path(&path.display().to_string()))
         .collect::<Vec<_>>()
         .join(" ")
 }
