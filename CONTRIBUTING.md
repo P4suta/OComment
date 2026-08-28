@@ -217,6 +217,10 @@ JSONL, SARIF, and GitHub output. All user-facing text is English.
 ## Pull requests
 
 - Keep each pull request focused and explain compatibility or safety effects.
+- Use a Conventional Commit subject for the pull request's squash commit:
+  `fix:`, `feat:`, and a `!` or `BREAKING CHANGE:` footer are the release-plz
+  signals for the next SemVer version and changelog. Use a scope when it makes
+  the subject clearer, such as `feat(languages): ...`.
 - Add tests for observable behavior and update user-facing documentation.
 - Regenerate checked-in schemas, WIT, man pages, or completions when their source
   changes; `tools/check_embedded_specs.py` checks shared embedded assets.

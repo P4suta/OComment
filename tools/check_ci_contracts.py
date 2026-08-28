@@ -6,6 +6,7 @@ from __future__ import annotations
 import pathlib
 import re
 import sys
+import tomllib
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -181,6 +182,57 @@ def main() -> int:
         failures.append("draft release must depend only on the CLI archive build")
     if 'chmod 0755 "release/binaries/out/$2/ocomment"' not in release:
         failures.append("release workflow does not preserve archive executable mode")
+
+    release_pr = (ROOT / ".github/workflows/release-pr.yml").read_text(encoding="utf-8")
+    for required in (
+        "release-plz release-pr",
+        "--config release-plz.toml",
+        "--manifest-path rust/Cargo.toml",
+        "release-plz-v0.3.160",
+        "2263c4f95eac1513da96a114a77fde20ea038742a8c8050f7514b8f93b828646",
+        "python3 tools/sync_release_docs.py",
+        "gh workflow run ci.yml",
+        "gh workflow run docs.yml",
+        "gh workflow run codeql.yml",
+        "dispatch-checks:",
+        "actions: write # NOTE: Dispatch only",
+    ):
+        if required not in release_pr:
+            failures.append(f"Release PR automation is missing {required!r}")
+    for forbidden in ("release-plz release ", "CARGO_REGISTRY_TOKEN", "cargo publish"):
+        if forbidden in release_pr:
+            failures.append(f"Release PR automation must not contain {forbidden!r}")
+    prepare_job = re.search(
+        r"(?ms)^  prepare:\n(?P<body>.*?)(?=^  dispatch-checks:\n)", release_pr
+    )
+    if prepare_job is None or "actions: write" in prepare_job.group("body"):
+        failures.append("the Release PR preparation job must not receive actions: write")
+
+    with (ROOT / "release-plz.toml").open("rb") as stream:
+        release_plz = tomllib.load(stream)
+    release_workspace = release_plz.get("workspace", {})
+    for field in ("publish", "git_tag_enable", "git_release_enable"):
+        if release_workspace.get(field) is not False:
+            failures.append(f"release-plz must set workspace.{field} = false")
+    if release_workspace.get("git_tag_name") != "v{{ version }}":
+        failures.append("release-plz must recognize the repository's single vVERSION tag")
+    configured_packages = release_plz.get("package", [])
+    package_names = [package.get("name") for package in configured_packages]
+    expected_packages = ["ocomment-core", "ocomment-plugin-sdk", "ocomment"]
+    if package_names != expected_packages:
+        failures.append(
+            "release-plz must manage exactly the three product crates in dependency order"
+        )
+    if any(package.get("version_group") != "ocomment" for package in configured_packages):
+        failures.append("all release-plz packages must share the ocomment version group")
+    cli_release = next(
+        (package for package in configured_packages if package.get("name") == "ocomment"),
+        {},
+    )
+    if cli_release.get("changelog_path") != "../CHANGELOG.md":
+        failures.append("release-plz must update only the root CLI CHANGELOG.md")
+    if cli_release.get("changelog_include") != ["ocomment-core", "ocomment-plugin-sdk"]:
+        failures.append("the CLI changelog must include core and plugin SDK changes")
 
     action = (ROOT / "action.yml").read_text(encoding="utf-8")
     for required in (
