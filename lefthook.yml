@@ -1,0 +1,27 @@
+# NOTE: Git hooks for this repository. Install them once with `lefthook
+# NOTE: install`.
+# NOTE:
+# NOTE: `ocomment check --staged` reads the staged blobs rather than the working
+# NOTE: tree, so a partially staged file is judged by the bytes the commit will
+# NOTE: actually carry. It reports rather than rewrites: `fix --staged` would
+# NOTE: need Lefthook's `stage_fixed`, and that setting stages the whole
+# NOTE: working-tree file and destroys partial staging.
+pre-commit:
+  parallel: true
+  commands:
+    ocomment:
+      # NOTE: Prefer an installed CLI; fall back to the workspace copy so a
+      # NOTE: fresh clone gets the same gate without `cargo install` first.
+      run: |
+        if command -v ocomment >/dev/null 2>&1; then
+          ocomment check --staged
+        else
+          cargo run --quiet --manifest-path rust/Cargo.toml --locked -p ocomment -- check --staged
+        fi
+    rustfmt:
+      glob: "rust/**/*.rs"
+      run: cargo fmt --all --manifest-path rust/Cargo.toml -- --check
+
+  skip:
+    - merge
+    - rebase

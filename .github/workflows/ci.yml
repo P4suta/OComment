@@ -30,9 +30,36 @@ jobs:
       - run: cargo fmt --all --manifest-path rust/Cargo.toml -- --check
       - run: cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets --locked -- -D warnings
       - run: cargo test --manifest-path rust/Cargo.toml --workspace --all-targets --locked
+      # `--all-targets` above builds every target but silently drops the
+      # doctests, so the examples in the library rustdoc are only ever
+      # compiled and run by this step.
+      - run: cargo test --manifest-path rust/Cargo.toml --doc --workspace --locked
+      # docs/library.md is hand-written prose and the step above never reads
+      # it: `--doc` compiles what is in the crate sources and nothing else. The
+      # page says every example on it is compiled and run, so it is handed to
+      # `rustdoc` as its own doctest file, linked against the library it
+      # documents.
+      - name: The examples on the library page still compile
+        run: |
+          cargo build --manifest-path rust/Cargo.toml --locked -p ocomment-core
+          rustdoc --test docs/library.md --edition 2024 \
+            --extern ocomment_core=rust/target/debug/libocomment_core.rlib \
+            -L rust/target/debug/deps
+      # The binary crate is in here for its links alone: nothing publishes its
+      # rustdoc, but its modules document each other, and a link that names a
+      # function somebody has since renamed is a wrong sentence wherever it is
+      # written. `missing_docs` stays off for it — a `clap` derive has no
+      # documentation to give.
+      - name: The documentation builds with no broken links
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --manifest-path rust/Cargo.toml --no-deps -p ocomment-core -p ocomment-plugin-sdk -p ocomment --locked
       - run: python3 tools/check_embedded_specs.py
+      - run: python3 tools/check_hooks.py
       - run: python3 -m pip install --disable-pip-version-check jsonschema==4.25.1
       - run: cargo build --manifest-path rust/Cargo.toml --locked -p ocomment
+      - run: python3 tools/check_directives.py
+      - run: python3 tools/gen_docs.py --check
       - run: python3 tools/validate_schemas.py
       - name: Check publishable file sets
         run: ./tools/package-list.sh
@@ -63,6 +90,83 @@ jobs:
       - run: opam install ./ocaml/ocomment-ref.opam --deps-only --with-test
       - run: opam exec -- dune runtest --root ocaml
       - run: opam exec -- ./tools/differential.sh
+      - run: cargo build --manifest-path rust/Cargo.toml --locked -p ocomment
+      - name: The reference still builds with every comment stripped out of it
+        run: |
+          set -euo pipefail
+          rm -rf "${RUNNER_TEMP}/strip-ocaml"
+          mkdir -p "${RUNNER_TEMP}/strip-ocaml"
+          git ls-files -z ocaml | xargs -0 cp --parents -t "${RUNNER_TEMP}/strip-ocaml"
+          # Only the strip moves into the copy, and it does so in a subshell:
+          # it has to start there so it inherits none of this repository's
+          # `.ocomment.toml`, while `opam exec` resolves the local switch
+          # setup-ocaml made in the workspace and stops finding it from
+          # anywhere else. So dune is pointed at the copy instead of moved to
+          # it, and the step never leaves GITHUB_WORKSPACE.
+          (
+            cd "${RUNNER_TEMP}/strip-ocaml"
+            "${GITHUB_WORKSPACE}/rust/target/debug/ocomment" \
+              fix --policy all --force-protected 2>&1 | tee "${RUNNER_TEMP}/strip-ocaml.log"
+          )
+          grep -qE 'Removed [0-9]+ comments? in [0-9]+ files?' "${RUNNER_TEMP}/strip-ocaml.log"
+          opam exec -- dune build --root "${RUNNER_TEMP}/strip-ocaml/ocaml"
+
+  dogfood:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - run: cargo build --manifest-path rust/Cargo.toml --locked -p ocomment
+      - run: python3 -m pip install --disable-pip-version-check pyyaml==6.0.2
+      # The one invariant no byte-level fixture can state: a YAML block scalar
+      # reads the lines below it, so the hole a removal leaves on a comment line
+      # can be read back as part of a value. This strips thousands of generated
+      # documents under every layout and every policy and asks a real YAML
+      # parser whether they still mean the same thing.
+      #
+      # The corpus and both enumerated sweeps run in full here -- they are where
+      # the hazard lives and they are the same documents on every run. Only the
+      # pseudo-random set is cut, because its cost is linear and its value is
+      # not: `python3 tools/yaml_roundtrip.py` runs the whole 2400 on demand,
+      # and `--seed` moves it. Every pass is one `fsync` per rewritten file, so
+      # the tool overlaps them rather than waiting on them in turn.
+      - name: Removing YAML comments never changes what the document parses to
+        run: python3 tools/yaml_roundtrip.py --cases 200
+      - name: Report the environment and the configuration OComment resolved
+        run: |
+          set -euo pipefail
+          ./rust/target/debug/ocomment doctor
+          ./rust/target/debug/ocomment config explain
+      # A bare run is the gate: it walks the repository under the ordinary
+      # hidden-file and size limits and under `.ocomment.toml`, so a new
+      # explanatory comment that carries no tag fails the build.
+      - name: OComment checks its own repository
+        run: ./rust/target/debug/ocomment --format github
+      - name: Strip every comment out of a copy of the workspace
+        run: |
+          set -euo pipefail
+          rm -rf "${RUNNER_TEMP}/strip"
+          mkdir -p "${RUNNER_TEMP}/strip"
+          git ls-files -z rust spec | xargs -0 cp --parents -t "${RUNNER_TEMP}/strip"
+          # The copy inherits no configuration of its own, and the patched
+          # crate under rust/vendor is not ours to rewrite. The spec corpus
+          # travels with the copy because the crate's spec-fixture tests read
+          # it from `../../spec`; it is the tests' input, so it is excluded
+          # from the strip rather than rewritten by it.
+          printf 'version = 1\n\n[files]\nexclude = ["rust/vendor/**", "spec/fixtures/**"]\n' \
+            >"${RUNNER_TEMP}/strip/.ocomment.toml"
+          cd "${RUNNER_TEMP}/strip"
+          "${GITHUB_WORKSPACE}/rust/target/debug/ocomment" \
+            fix --policy all --force-protected 2>&1 | tee "${RUNNER_TEMP}/strip.log"
+          grep -qE 'Removed [0-9]+ comments? in [0-9]+ files?' "${RUNNER_TEMP}/strip.log"
+      - name: The stripped workspace still builds and still passes the core tests
+        run: |
+          set -euo pipefail
+          cargo build --manifest-path "${RUNNER_TEMP}/strip/rust/Cargo.toml" --workspace --locked
+          cargo test --manifest-path "${RUNNER_TEMP}/strip/rust/Cargo.toml" -p ocomment-core --locked
 
   host-smoke:
     strategy:
@@ -84,3 +188,148 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: '& rust/target/release/ocomment.exe --version'
+
+  action-smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - run: cargo build --manifest-path rust/Cargo.toml --locked -p ocomment
+      - name: Create the action fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p action-fixture
+          printf 'fn main() {\n    let value = 1; // removable\n}\n' >action-fixture/sample.rs
+          printf 'def sample():\n    return 1  # removable\n' >action-fixture/sample.py
+      - name: Run the composite action against the fixture
+        id: smoke
+        uses: ./
+        with:
+          command: check
+          paths: action-fixture
+          format: sarif
+          sarif-file: ocomment.sarif
+          upload-sarif: "false"
+          fail-on-findings: "false"
+          verify-attestation: "false"
+          binary-path: rust/target/debug/ocomment
+      - name: Validate the SARIF the action produced
+        shell: bash
+        env:
+          SMOKE_EXIT_CODE: ${{ steps.smoke.outputs.exit-code }}
+          SMOKE_SARIF_FILE: ${{ steps.smoke.outputs.sarif-file }}
+          SMOKE_VERSION: ${{ steps.smoke.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "${SMOKE_EXIT_CODE}" != "1" ]; then
+            echo "::error::the fixture has removable comments, so the action should report exit code 1, not ${SMOKE_EXIT_CODE}"
+            exit 1
+          fi
+          if [ -z "${SMOKE_VERSION}" ]; then
+            echo "::error::the action reported no version"
+            exit 1
+          fi
+          python=python3
+          command -v python3 >/dev/null 2>&1 || python=python
+          "${python}" tools/validate_schemas.py --sarif "${SMOKE_SARIF_FILE}" | tee sarif-report.txt
+          grep -q 'with 2 ocomment results' sarif-report.txt
+
+  vscode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: editors/vscode
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: editors/vscode/package-lock.json
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run compile
+      # The manifest suite is what pins the extension version to the crate
+      # version, so it runs before anything is built from either of them.
+      - run: npm run unit
+      - name: Build the ocomment the extension launches
+        working-directory: ${{ github.workspace }}
+        run: cargo build --manifest-path rust/Cargo.toml --locked -p ocomment
+      - name: Put that ocomment first on PATH
+        working-directory: ${{ github.workspace }}
+        run: echo "${GITHUB_WORKSPACE}/rust/target/debug" >>"$GITHUB_PATH"
+      # `npm test` downloads a real VS Code and drives it, so it needs a
+      # display; the runner has no X server of its own.
+      - run: xvfb-run -a npm test
+      - name: Package the extension the release would publish
+        run: npx --no @vscode/vsce package --out ocomment.vsix
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ocomment-vsix
+          path: editors/vscode/ocomment.vsix
+          if-no-files-found: error
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      # A source build on one platform, which is the path a release never
+      # takes, so the Dockerfile's own builder stage cannot rot between
+      # releases. The step after the smoke test takes the release path over the
+      # same file.
+      - name: Build the image from source
+        shell: bash
+        run: docker build -t ocomment:ci .
+      - name: Smoke test the image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm ocomment:ci --version
+          status=0
+          docker run --rm -v "$PWD/spec:/src" ocomment:ci check --format json \
+            >container-report.json || status=$?
+          if [ "$status" -gt 1 ]; then
+            echo "::error::the image failed to scan the mounted directory (exit ${status})"
+            exit 1
+          fi
+          python3 -c 'import json, sys; json.load(open(sys.argv[1]))' container-report.json
+      # The release image is not compiled: the workflow replaces the `builder`
+      # stage with a buildx named context holding the musl binaries the release
+      # matrix already built. Handing the image its own binary back through
+      # that context exercises the second path over the same Dockerfile, so a
+      # release build is never the first to find the layout broken. The hosted
+      # runner's default buildx builder supplies `--build-context`; this step
+      # uses that same builder.
+      - name: Build the image again through the release path
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release/binaries/out/amd64
+          container=$(docker create ocomment:ci)
+          docker cp "${container}:/ocomment" release/binaries/out/amd64/ocomment
+          docker rm "${container}"
+          # The Dockerfile's own builder stage hands the final stage a binary
+          # `install -m 0555` made read-only and executable, and a release
+          # archive carries the same mode. A named context that handed over an
+          # 0755 copy would be the one path where the image was built from a
+          # writable binary, so this step reproduces the mode the release
+          # really ships.
+          chmod 0555 release/binaries/out/amd64/ocomment
+          docker buildx build --build-context builder=release/binaries \
+            --load -t ocomment:ci-prebuilt .
+          docker run --rm ocomment:ci-prebuilt --version

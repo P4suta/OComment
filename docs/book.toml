@@ -1,0 +1,25 @@
+[book]
+title = "OComment"
+description = "Fast, byte-preserving comment checker and remover"
+authors = ["The OComment Authors"]
+language = "en"
+src = "."
+
+[build]
+build-dir = "../target/book"
+create-missing = false
+
+[output.html]
+git-repository-url = "https://github.com/P4suta/OComment"
+git-repository-icon = "fab-github"
+edit-url-template = "https://github.com/P4suta/OComment/edit/main/docs/{path}"
+site-url = "/OComment/"
+default-theme = "rust"
+preferred-dark-theme = "ayu"
+
+[output.html.playground]
+runnable = false
+
+[output.html.search]
+enable = true
+limit-results = 20

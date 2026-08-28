@@ -13,6 +13,9 @@ keywords = ["comments", "lexer", "source-code", "scanner"]
 categories = ["development-tools", "parser-implementations"]
 include = ["src/**", "examples/**", "README.md"]
 
+[lints]
+workspace = true
+
 [dependencies]
 memchr.workspace = true
 regex.workspace = true
@@ -24,3 +27,7 @@ unicode-width.workspace = true
 
 [dev-dependencies]
 proptest = "1.11.0"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--generate-link-to-definition"]

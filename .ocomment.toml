@@ -1,0 +1,35 @@
+# NOTE: OComment checks its own repository. `ocomment` from the root is the
+# NOTE: gate the `dogfood` CI job runs, and Lefthook runs `ocomment check
+# NOTE: --staged` before every commit; see CONTRIBUTING.md for the tag
+# NOTE: convention this configuration enforces. TOML is a built-in language, so
+# NOTE: this file is now one of the files that convention applies to.
+version = 1
+
+[files]
+exclude = [
+  # NOTE: Vendored crates, fixture bytes, and packaging or benchmark scratch are
+  # NOTE: not ours to rewrite: fixture comments are the test input itself.
+  "rust/vendor/**",
+  "spec/fixtures/**",
+  "editors/vscode/test-fixtures/**",
+  "release-extras/**",
+  "benchmarks/**",
+  # NOTE: A lock file is written by its resolver rather than by hand, and the
+  # NOTE: header Cargo puts at the top of this one comes back on the next
+  # NOTE: `cargo update`.
+  "rust/Cargo.lock",
+]
+
+[policy]
+mode = "legal"
+layout = "lines"
+keep_kind = ["doc-line", "doc-block"]
+keep_regex = [
+  '^(//|\(\*|/\*|#)\s*(NOTE|SAFETY|INVARIANT|PERF|TODO|FIXME|HACK)\b',
+  # NOTE: The version beside a SHA-pinned action, now that YAML is scanned.
+  # NOTE: CONTRIBUTING.md requires every `uses:` to carry one and Dependabot
+  # NOTE: rewrites it when it moves the pin, so it is read by a machine rather
+  # NOTE: than by a reader and has no rationale to tag. The pattern is the whole
+  # NOTE: comment, so prose that merely opens with a version is still prose.
+  '^#\s*v[0-9]+(\.[0-9]+)*$',
+]

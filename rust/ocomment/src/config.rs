@@ -1,14 +1,14 @@
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use globset::{Glob, GlobMatcher};
 use ocomment_core::{
-    CommentKind, DeclarativeProfile, Dialect, Language, Layout, Policy, ScanOptions,
-    TransformOptions, validate_profile,
+    CommentKind, DeclarativeProfile, Dialect, DispositionExplanation, Language, Layout, Policy,
+    ScanOptions, TransformOptions, validate_profile,
 };
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     env, fs,
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
 };
 
 pub const CONFIG_FILE: &str = ".ocomment.toml";
@@ -142,6 +142,199 @@ pub struct PathOverride {
     pub remove_regex: Vec<String>,
 }
 
+/// Where one effective setting came from.
+///
+/// The layers are the ones [`ResolvedConfig::for_path`] merges, and a source
+/// names the layer a value arrived on rather than the value itself, so
+/// `--explain` can send a reader to the table they have to edit.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub enum Source {
+    /// The `[policy]` table, or the built-in default when no file set it.
+    #[default]
+    Global,
+    /// A `[languages.<name>]` table.
+    Language(String),
+    /// The `[[overrides]]` table at `index`, whose globs matched the path.
+    Override { index: usize, paths: Vec<String> },
+    /// A flag on the command line.
+    Cli { flag: &'static str },
+}
+
+impl Source {
+    /// How an explanation names this source, given the file a `Global` value
+    /// was written in.
+    ///
+    /// `#N` counts an `[[overrides]]` table from zero, the way the regex
+    /// indices printed beside it count the patterns they address.
+    fn describe(&self, origin: Option<&Path>) -> String {
+        match self {
+            Self::Global => match origin {
+                Some(path) => format!("[policy] in {}", path.display()),
+                None => "built-in defaults".to_owned(),
+            },
+            Self::Language(name) => format!("[languages.{name}]"),
+            Self::Override { index, paths } => {
+                format!("[[overrides]] #{index}, paths = {paths:?}")
+            }
+            Self::Cli { flag } => format!("{flag} on the command line"),
+        }
+    }
+}
+
+/// The `[policy]` keys a trace can attribute to a file, spelled as the file
+/// spells them.
+const POLICY_KEYS: [&str; 6] = [
+    "mode",
+    "layout",
+    "keep_kind",
+    "remove_kind",
+    "keep_regex",
+    "remove_regex",
+];
+
+/// Which configuration file last set each `[policy]` key. A key no file sets
+/// keeps no entry, and an explanation calls it a built-in default rather than
+/// sending the reader to a file that never mentions it.
+type PolicyOrigins = BTreeMap<&'static str, PathBuf>;
+
+/// What the command line overrode, recorded while it was applied so a trace
+/// can say the command line rather than the file the value would otherwise
+/// have been written in.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CliOverrides {
+    pub policy: bool,
+    pub layout: bool,
+    /// Where the `--keep-kind` values start in `policy.keep_kind`: the command
+    /// line appends to the configured list instead of replacing it, so only
+    /// the tail of that list belongs to the command line.
+    pub keep_kind_from: Option<usize>,
+    /// The same boundary for `--remove-kind` in `policy.remove_kind`.
+    pub remove_kind_from: Option<usize>,
+}
+
+/// Where every effective setting for one path came from.
+///
+/// The `*_kind` and `*_regex` vectors run parallel to the vectors in the
+/// [`ScanOptions`] that [`ResolvedConfig::for_path_traced`] returned beside
+/// this: entry `i` says which layer contributed entry `i` of that list.
+#[derive(Clone, Debug, Default)]
+pub struct PolicyTrace {
+    pub policy: Source,
+    /// Where the layout came from. No disposition depends on the layout, so no
+    /// explanation names it yet; it is recorded because the trace answers the
+    /// question for the whole `[policy]` block and `--explain` will not be its
+    /// only caller.
+    #[allow(dead_code)]
+    pub layout: Source,
+    pub keep_kind: Vec<Source>,
+    pub remove_kind: Vec<Source>,
+    pub keep_regex: Vec<Source>,
+    pub remove_regex: Vec<Source>,
+    origins: PolicyOrigins,
+}
+
+impl PolicyTrace {
+    /// Where the setting that decided `explanation` came from, worded the way
+    /// `--explain` prints it, or `None` when a built-in rule decided it and
+    /// there is no table to point at.
+    ///
+    /// `options` is the one the explanation was produced from: a regex
+    /// explanation carries its index into those lists, and a kind explanation
+    /// is found by the kind it names.
+    pub fn origin_of(
+        &self,
+        explanation: &DispositionExplanation,
+        options: &ScanOptions,
+    ) -> Option<String> {
+        let position = |kinds: &[CommentKind], kind: &CommentKind| {
+            kinds.iter().position(|value| value == kind)
+        };
+        let (source, key) = match explanation {
+            DispositionExplanation::KeptByKind(kind) => (
+                self.keep_kind.get(position(&options.keep_kinds, kind)?)?,
+                "keep_kind",
+            ),
+            DispositionExplanation::RemovedByKind(kind) => (
+                self.remove_kind
+                    .get(position(&options.remove_kinds, kind)?)?,
+                "remove_kind",
+            ),
+            DispositionExplanation::KeptByRegex { index, .. } => {
+                (self.keep_regex.get(*index)?, "keep_regex")
+            }
+            DispositionExplanation::RemovedByRegex { index, .. } => {
+                (self.remove_regex.get(*index)?, "remove_regex")
+            }
+            /* NOTE: Every one of these is the policy having the last word, whether it
+             * took the comment out or protected it. */
+            DispositionExplanation::RemovedByPolicy(_)
+            | DispositionExplanation::RemovedByDefault(_)
+            | DispositionExplanation::KeptLicense { .. } => (&self.policy, "mode"),
+            // NOTE: A built-in rule, decided by no setting at all.
+            DispositionExplanation::ProtectedPreamble
+            | DispositionExplanation::KeptHtml
+            | DispositionExplanation::KeptDirective { .. }
+            | DispositionExplanation::KeptStructural { .. } => return None,
+        };
+        Some(source.describe(self.origins.get(key).map(PathBuf::as_path)))
+    }
+}
+
+/// One layer of the policy merge, as the trace replays it.
+struct TracedLayer<'a> {
+    source: Source,
+    policy: Option<Policy>,
+    layout: Option<Layout>,
+    keep_kind: &'a [CommentKind],
+    remove_kind: &'a [CommentKind],
+    keep_regex: &'a [String],
+    remove_regex: &'a [String],
+}
+
+/// Attribute every entry of one merged list to the layer that introduced it.
+///
+/// [`ResolvedConfig::for_path`] starts from the global list verbatim and then
+/// appends whatever a later layer adds that is not there yet, so replaying that
+/// walk reproduces the merged list position for position. The tail of the
+/// global list from `cli_from` on is what `flag` appended to it.
+fn attribute<T: Clone + Eq>(
+    global: &[T],
+    cli_from: Option<usize>,
+    flag: &'static str,
+    layers: &[(&Source, &[T])],
+) -> Vec<Source> {
+    let cli_from = cli_from.unwrap_or(usize::MAX);
+    let mut sources: Vec<Source> = (0..global.len())
+        .map(|index| {
+            if index >= cli_from {
+                Source::Cli { flag }
+            } else {
+                Source::Global
+            }
+        })
+        .collect();
+    let mut seen = global.to_vec();
+    for (source, values) in layers {
+        for value in *values {
+            if !seen.contains(value) {
+                seen.push(value.clone());
+                sources.push((*source).clone());
+            }
+        }
+    }
+    sources
+}
+
+/// Where a setting that holds a single value came from, before any language or
+/// path layer has had its say.
+fn scalar_source(overridden: bool, flag: &'static str) -> Source {
+    if overridden {
+        Source::Cli { flag }
+    } else {
+        Source::Global
+    }
+}
+
 struct CompiledOverride {
     matchers: Vec<GlobMatcher>,
     value: PathOverride,
@@ -157,19 +350,55 @@ pub struct ConfigTrace {
 pub struct ResolvedConfig {
     pub config: Config,
     pub trace: ConfigTrace,
+    /// Where the project starts: the directory `.ocomment.toml` was found in,
+    /// the repository above the working directory, or the working directory
+    /// itself. It decides where configuration is discovered, what the file and
+    /// override globs are written relative to, and where the plugin lock
+    /// lives — no longer what a command with no path walks.
     pub root: PathBuf,
+    /// The directory the command was run from, which is what a path typed on
+    /// the command line is relative to.
+    pub cwd: PathBuf,
+    /// What the command line overrode, filled in after the files were merged.
+    pub cli_overrides: CliOverrides,
     overrides: Vec<CompiledOverride>,
+    origins: PolicyOrigins,
 }
 
 impl ResolvedConfig {
+    /// Where `path` sits under the project root, spelled the way a
+    /// configuration glob is written.
+    ///
+    /// `files.include`, `files.exclude`, and every `[[overrides]].paths`
+    /// pattern is relative to the root, while a path named on the command line
+    /// is relative to the working directory. The two agree only when the
+    /// command is run from the root, so the path is resolved against the
+    /// directory it was typed in before it is measured against the root, and
+    /// the separators come out as forward slashes so one glob reads the same
+    /// on every platform.
+    ///
+    /// A path outside the root — an explicit target above it, say — has no
+    /// root-relative spelling at all, so it keeps its absolute one and only an
+    /// absolute glob can match it.
+    pub fn relative_to_root(&self, path: &Path) -> String {
+        /* NOTE: Standard input has no place on disk. The pseudo-path is what the
+         * renderers print, so it is also what the globs are shown. */
+        if path.as_os_str() == crate::files::STDIN_PATH {
+            return crate::files::STDIN_PATH.to_owned();
+        }
+        let joined = self.cwd.join(path);
+        let absolute = lexical(&std::path::absolute(&joined).unwrap_or(joined));
+        let relative = absolute.strip_prefix(&self.root).unwrap_or(&absolute);
+        relative.to_string_lossy().replace('\\', "/")
+    }
+
     pub fn for_path(
         &self,
         path: &Path,
         language: Language,
         dialect: Dialect,
     ) -> (Language, TransformOptions) {
-        let relative = path.strip_prefix(&self.root).unwrap_or(path);
-        let normalized = relative.to_string_lossy().replace('\\', "/");
+        let normalized = self.relative_to_root(path);
         let mut chosen_language = language;
         let mut chosen_dialect = dialect;
         let mut policy = self.config.policy.mode;
@@ -230,6 +459,109 @@ impl ResolvedConfig {
         };
         (chosen_language, TransformOptions { scan, layout })
     }
+
+    /// The same answer as [`Self::for_path`], with a record of where each
+    /// setting came from.
+    ///
+    /// The values are [`Self::for_path`]'s own, so what a run does and what
+    /// `--explain` says about it cannot disagree; only the attribution is
+    /// computed here, by replaying the same merge with the layer names
+    /// attached. `--explain` is the only caller, which is why the hot path is
+    /// left as it was.
+    pub fn for_path_traced(
+        &self,
+        path: &Path,
+        language: Language,
+        dialect: Dialect,
+    ) -> (Language, TransformOptions, PolicyTrace) {
+        let (chosen_language, options) = self.for_path(path, language, dialect);
+        let normalized = self.relative_to_root(path);
+        let mut layers = Vec::new();
+        /* NOTE: `for_path` looks the language table up under the language it was
+         * handed, not under the one an override may have changed it to. */
+        if let Some(config) = self.config.languages.get(language.as_str()) {
+            layers.push(TracedLayer {
+                source: Source::Language(language.as_str().to_owned()),
+                policy: config.policy,
+                layout: config.layout,
+                keep_kind: &config.keep_kind,
+                remove_kind: &config.remove_kind,
+                keep_regex: &config.keep_regex,
+                remove_regex: &config.remove_regex,
+            });
+        }
+        for (index, compiled) in self.overrides.iter().enumerate() {
+            if !compiled
+                .matchers
+                .iter()
+                .any(|matcher| matcher.is_match(&normalized))
+            {
+                continue;
+            }
+            let value = &compiled.value;
+            layers.push(TracedLayer {
+                source: Source::Override {
+                    index,
+                    paths: value.paths.clone(),
+                },
+                policy: value.policy,
+                layout: value.layout,
+                keep_kind: &value.keep_kind,
+                remove_kind: &value.remove_kind,
+                keep_regex: &value.keep_regex,
+                remove_regex: &value.remove_regex,
+            });
+        }
+        let cli = self.cli_overrides;
+        let keep_kinds: Vec<_> = layers
+            .iter()
+            .map(|layer| (&layer.source, layer.keep_kind))
+            .collect();
+        let remove_kinds: Vec<_> = layers
+            .iter()
+            .map(|layer| (&layer.source, layer.remove_kind))
+            .collect();
+        let keep_patterns: Vec<_> = layers
+            .iter()
+            .map(|layer| (&layer.source, layer.keep_regex))
+            .collect();
+        let remove_patterns: Vec<_> = layers
+            .iter()
+            .map(|layer| (&layer.source, layer.remove_regex))
+            .collect();
+        let mut trace = PolicyTrace {
+            policy: scalar_source(cli.policy, "--policy"),
+            layout: scalar_source(cli.layout, "--layout"),
+            keep_kind: attribute(
+                &self.config.policy.keep_kind,
+                cli.keep_kind_from,
+                "--keep-kind",
+                &keep_kinds,
+            ),
+            remove_kind: attribute(
+                &self.config.policy.remove_kind,
+                cli.remove_kind_from,
+                "--remove-kind",
+                &remove_kinds,
+            ),
+            /* NOTE: No flag supplies a pattern, so no entry of either list can have
+             * come from the command line. */
+            keep_regex: attribute(&self.config.policy.keep_regex, None, "", &keep_patterns),
+            remove_regex: attribute(&self.config.policy.remove_regex, None, "", &remove_patterns),
+            origins: self.origins.clone(),
+        };
+        /* NOTE: A single-valued setting is not merged but replaced, so the last layer
+         * that names it is the one that decided it. */
+        for layer in &layers {
+            if layer.policy.is_some() {
+                trace.policy = layer.source.clone();
+            }
+            if layer.layout.is_some() {
+                trace.layout = layer.source.clone();
+            }
+        }
+        (chosen_language, options, trace)
+    }
 }
 
 pub fn load(explicit: Option<&Path>) -> Result<ResolvedConfig> {
@@ -244,16 +576,35 @@ pub fn load(explicit: Option<&Path>) -> Result<ResolvedConfig> {
     let user_path = user_config_path().filter(|path| path.is_file());
     let mut merged: toml::Value = toml::from_str(&toml::to_string(&Config::default())?)?;
     let mut trace = ConfigTrace::default();
+    let mut origins = PolicyOrigins::new();
     if let Some(path) = &user_path {
-        merge_value(&mut merged, parse_layer(path, false)?);
+        merge_layer(
+            &mut merged,
+            &mut origins,
+            parse_layer(path, false)?,
+            path,
+            &cwd,
+        );
         trace.user = Some(path.clone());
     }
     if let Some(path) = &project_path {
-        merge_value(&mut merged, parse_layer(path, true)?);
+        merge_layer(
+            &mut merged,
+            &mut origins,
+            parse_layer(path, true)?,
+            path,
+            &cwd,
+        );
         trace.project = Some(path.clone());
     }
     if let Some(path) = explicit {
-        merge_value(&mut merged, parse_layer(path, true)?);
+        merge_layer(
+            &mut merged,
+            &mut origins,
+            parse_layer(path, true)?,
+            path,
+            &cwd,
+        );
         trace.explicit = Some(path.to_path_buf());
     }
     let mut config: Config = merged
@@ -272,15 +623,52 @@ pub fn load(explicit: Option<&Path>) -> Result<ResolvedConfig> {
         config,
         trace,
         root,
+        cwd,
+        cli_overrides: CliOverrides::default(),
         overrides,
+        origins,
     })
+}
+
+/// Layer one configuration file over the merged document, noting every
+/// `[policy]` key it sets on the way.
+///
+/// A later layer overwrites an earlier one exactly as `merge_value` does, so
+/// what is left is the file whose value survived the merge — the one an
+/// explanation is worth sending a reader to.
+fn merge_layer(
+    merged: &mut toml::Value,
+    origins: &mut PolicyOrigins,
+    layer: toml::Value,
+    path: &Path,
+    cwd: &Path,
+) {
+    if let Some(policy) = layer.get("policy") {
+        for key in POLICY_KEYS {
+            if policy.get(key).is_some() {
+                origins.insert(key, origin_label(path, cwd));
+            }
+        }
+    }
+    merge_value(merged, layer);
+}
+
+/// How an explanation names a configuration file: relative to the directory
+/// the command was run from when it sits there, and absolute otherwise.
+///
+/// The label is repeated on every explained line, so the short spelling is
+/// worth having — but only where it still names the file the reader would open.
+/// A file further up the tree, or the user file under `$HOME`, keeps its
+/// absolute path.
+fn origin_label(path: &Path, cwd: &Path) -> PathBuf {
+    path.strip_prefix(cwd).unwrap_or(path).to_path_buf()
 }
 
 fn validate_languages(config: &Config) -> Result<()> {
     for (name, language_config) in &config.languages {
-        let language: Language = name
-            .parse()
-            .map_err(|_| anyhow!("unknown language configuration key `{name}`"))?;
+        let language: Language = name.parse().map_err(|_| {
+            anyhow!("unknown language configuration key `{name}`; see `ocomment languages`")
+        })?;
         if let Some(dialect) = language_config.dialect {
             validate_dialect(language, dialect)
                 .with_context(|| format!("invalid dialect for [languages.{name}]"))?;
@@ -295,36 +683,47 @@ fn validate_languages(config: &Config) -> Result<()> {
     Ok(())
 }
 
+/// Every dialect the scanner accepts for `language`, in canonical order.
+pub fn supported_dialects(language: Language) -> &'static [Dialect] {
+    match language {
+        Language::JavaScript => &[Dialect::Standard, Dialect::Jsx],
+        Language::TypeScript => &[Dialect::Standard, Dialect::Tsx],
+        Language::C => &[Dialect::Standard, Dialect::ObjectiveC, Dialect::GnuC],
+        Language::Cpp => &[
+            Dialect::Standard,
+            Dialect::ObjectiveCpp,
+            Dialect::GnuCpp,
+            Dialect::Cuda,
+        ],
+        Language::Css => &[Dialect::Standard, Dialect::Scss],
+        Language::Shell => &[
+            Dialect::Standard,
+            Dialect::PosixSh,
+            Dialect::Bash53,
+            Dialect::Zsh,
+        ],
+        Language::Sql => &[
+            Dialect::Standard,
+            Dialect::PostgreSql,
+            Dialect::MySql,
+            Dialect::Sqlite,
+            Dialect::TSql,
+            Dialect::Oracle,
+        ],
+        _ => &[Dialect::Standard],
+    }
+}
+
 pub fn validate_dialect(language: Language, dialect: Dialect) -> Result<()> {
-    let compatible = match language {
-        Language::JavaScript => matches!(dialect, Dialect::Standard | Dialect::Jsx),
-        Language::TypeScript => matches!(dialect, Dialect::Standard | Dialect::Tsx),
-        Language::C => matches!(
-            dialect,
-            Dialect::Standard | Dialect::GnuC | Dialect::ObjectiveC
-        ),
-        Language::Cpp => matches!(
-            dialect,
-            Dialect::Standard | Dialect::GnuCpp | Dialect::ObjectiveCpp | Dialect::Cuda
-        ),
-        Language::Shell => matches!(
-            dialect,
-            Dialect::Standard | Dialect::PosixSh | Dialect::Bash53 | Dialect::Zsh
-        ),
-        Language::Sql => matches!(
-            dialect,
-            Dialect::Standard
-                | Dialect::PostgreSql
-                | Dialect::MySql
-                | Dialect::Sqlite
-                | Dialect::TSql
-                | Dialect::Oracle
-        ),
-        _ => dialect == Dialect::Standard,
-    };
+    let supported = supported_dialects(language);
     ensure!(
-        compatible,
-        "dialect `{dialect:?}` is not supported for language `{language}`"
+        supported.contains(&dialect),
+        "unsupported dialect `{dialect}` for {language}; supported: {}",
+        supported
+            .iter()
+            .map(|value| value.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
     );
     Ok(())
 }
@@ -348,8 +747,21 @@ fn validate_policy_regexes(config: &Config) -> Result<()> {
                 .flat_map(|item| item.keep_regex.iter().chain(&item.remove_regex)),
         );
     for pattern in patterns {
-        regex::bytes::Regex::new(pattern)
-            .with_context(|| format!("invalid comment policy regex `{pattern}`"))?;
+        regex::bytes::Regex::new(pattern).map_err(|error| {
+            /* INVARIANT: Both halves of this line came out of a file in the project: the
+             * pattern the caller wrote, and a parse error that quotes that
+             * same pattern back with a caret under it. Neither may reach a
+             * terminal verbatim, and the line stays one line. The pattern
+             * keeps the spacing it was written with, because a reader who is
+             * shown something else cannot find it in the file; the parse
+             * error, which `regex` spreads over four lines, is folded onto
+             * this one and kept whole. */
+            anyhow!(
+                "invalid comment policy regex `{}`: {}",
+                crate::output::sanitize_path(pattern),
+                crate::output::sanitize_message(&error.to_string())
+            )
+        })?;
     }
     Ok(())
 }
@@ -359,15 +771,30 @@ fn parse_layer(path: &Path, require_version: bool) -> Result<toml::Value> {
         fs::read_to_string(path).with_context(|| format!("cannot read {}", path.display()))?;
     let config: Config = toml::from_str(&text).map_err(|error| {
         let message = error.to_string();
+        /* INVARIANT: `toml` quotes the line it stopped on, with a caret under the byte
+         * that is wrong with it, so the whole of that line — bytes a project
+         * file chose, an escape sequence among them — is on its way to a
+         * terminal over four lines of diagram. It is folded onto the one line
+         * an error is and kept whole, the way an invalid `[policy]` regex is:
+         * the caret means nothing once the lines are joined, and the sentence
+         * after it is the entire answer. The hint reads the unfolded message
+         * because it quotes nothing back — only a key it found in the schema. */
         anyhow!(
             "invalid configuration {}: {}{}",
-            path.display(),
-            message,
+            /* NOTE: The path is the project's too — a directory it named — so it is
+             * held to what every other path in the report is held to: printed
+             * as it was spelled, with nothing in it a terminal would act on. */
+            crate::output::sanitize_path(&path.display().to_string()),
+            crate::output::sanitize_message(&message),
             unknown_key_hint(&message)
         )
     })?;
     if require_version && config.version != Some(1) {
-        bail!("{} must contain `version = 1`", path.display());
+        /* NOTE: The path is repeated deliberately: the first half is the verdict on
+         * a file the reader may not have opened, the second is the edit that
+         * settles it, and an editor is opened on the second one. */
+        let path = path.display();
+        bail!("{path} must contain `version = 1` (add `version = 1` at the top of {path})");
     }
     toml::from_str(&text).with_context(|| format!("cannot parse {}", path.display()))
 }
@@ -420,6 +847,34 @@ fn compile_overrides(overrides: &[PathOverride]) -> Result<Vec<CompiledOverride>
             Ok(CompiledOverride { matchers, value })
         })
         .collect()
+}
+
+/// Resolve `.` and `..` without asking the file system.
+///
+/// A configuration glob is matched against text, so the text has to be the one
+/// the reader would have written: `../sibling/main.rs`, named from `nested/`,
+/// is `sibling/main.rs` under the root, and leaving the `..` in place would
+/// let it match a `nested/**` override it is not under. The resolution is
+/// lexical because the path need not exist and because `canonicalize` would
+/// also resolve the symbolic links the root itself may be reached through,
+/// which would leave the two ends of the comparison in different spellings.
+pub(crate) fn lexical(path: &Path) -> PathBuf {
+    let mut resolved = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir
+                if matches!(
+                    resolved.components().next_back(),
+                    Some(Component::Normal(_))
+                ) =>
+            {
+                resolved.pop();
+            }
+            component => resolved.push(component),
+        }
+    }
+    resolved
 }
 
 pub fn locate_project(start: &Path) -> Option<PathBuf> {
@@ -515,6 +970,74 @@ mod tests {
     fn typo_hint_uses_nearest_key() {
         let message = "unknown field `layuot`, expected one of `mode`, `layout`, `keep_kind`";
         assert!(unknown_key_hint(message).contains("layout"));
+    }
+
+    /// `for_path_traced` must not become a second copy of the merge that can
+    /// drift from it: the values it returns are `for_path`'s own, and the trace
+    /// beside them lines up with those values position for position.
+    #[test]
+    fn a_traced_lookup_returns_the_untraced_answer_and_lines_up_with_it() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().to_path_buf();
+        let mut config = Config::default();
+        config.policy.keep_regex = vec!["global".to_owned()];
+        config.policy.keep_kind = vec![CommentKind::Line];
+        config.languages.insert(
+            "rust".to_owned(),
+            LanguageConfig {
+                keep_regex: vec!["language".to_owned()],
+                ..LanguageConfig::default()
+            },
+        );
+        config.overrides = vec![PathOverride {
+            paths: vec!["nested/**".to_owned()],
+            policy: Some(Policy::All),
+            /* NOTE: The duplicate is dropped by the merge, so the trace must not
+             * record a source for it either. */
+            keep_regex: vec!["override".to_owned(), "global".to_owned()],
+            ..PathOverride::default()
+        }];
+        let overrides = compile_overrides(&config.overrides).unwrap();
+        let resolved = ResolvedConfig {
+            config,
+            trace: ConfigTrace::default(),
+            root: root.clone(),
+            cwd: root.clone(),
+            cli_overrides: CliOverrides {
+                keep_kind_from: Some(0),
+                ..CliOverrides::default()
+            },
+            overrides,
+            origins: PolicyOrigins::new(),
+        };
+        let path = root.join("nested/a.rs");
+
+        let (language, options) = resolved.for_path(&path, Language::Rust, Dialect::Standard);
+        let (traced_language, traced_options, trace) =
+            resolved.for_path_traced(&path, Language::Rust, Dialect::Standard);
+        assert_eq!(traced_language, language);
+        assert_eq!(traced_options, options);
+
+        let override_source = Source::Override {
+            index: 0,
+            paths: vec!["nested/**".to_owned()],
+        };
+        assert_eq!(options.scan.keep_regex, ["global", "language", "override"]);
+        assert_eq!(
+            trace.keep_regex,
+            [
+                Source::Global,
+                Source::Language("rust".to_owned()),
+                override_source.clone(),
+            ]
+        );
+        assert_eq!(trace.policy, override_source);
+        assert_eq!(
+            trace.keep_kind,
+            [Source::Cli {
+                flag: "--keep-kind"
+            }]
+        );
     }
 
     #[test]

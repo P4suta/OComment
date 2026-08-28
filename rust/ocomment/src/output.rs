@@ -1,14 +1,22 @@
-use crate::files::SkippedFile;
+use crate::{
+    config::PolicyTrace,
+    files::{NO_LANGUAGE, STDIN_PATH, SkippedFile},
+};
 use anyhow::Result;
 use clap::ValueEnum;
-use ocomment_core::{ByteSpan, Language, TransformResult};
+use ocomment_core::{
+    ByteSpan, Comment, CommentKind, Disposition, DispositionExplanation, DispositionPatterns,
+    Language, Policy, ScanOptions, TransformResult, explain_comment_with,
+};
 use serde::Serialize;
 use serde_json::{Value, json};
 use similar::{ChangeTag, TextDiff};
 use std::{
-    io::{self, Write},
-    path::{Path, PathBuf},
+    collections::BTreeMap,
+    io::{self, BufWriter, Write},
+    path::{Component, Path, PathBuf},
 };
+use unicode_width::UnicodeWidthChar;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
 pub enum OutputFormat {
@@ -32,7 +40,172 @@ pub enum Operation {
 pub struct Presentation {
     pub color: bool,
     pub hyperlinks: bool,
-    pub progress: bool,
+}
+
+/// How much of the human report a run is allowed to write.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum Verbosity {
+    /// Only errors and diagnostics.
+    Quiet,
+    #[default]
+    Normal,
+    /// Everything, including the per-kind breakdown and every skipped file.
+    Verbose,
+}
+
+/// Everything the renderer needs besides the results themselves.
+#[derive(Clone, Copy, Debug)]
+pub struct RenderOptions {
+    pub format: OutputFormat,
+    pub operation: Operation,
+    pub presentation: Presentation,
+    pub verbosity: Verbosity,
+    /// Human lines carry a one-line rendering of the comment text.
+    pub preview: bool,
+    /// Human `check` and `scan` lines carry every comment, kept ones included,
+    /// each under an indented line naming the rule that decided it.
+    pub explain: bool,
+    /// The run is `fix --dry-run`: it produces the diff but speaks the
+    /// vocabulary of the `fix` it is standing in for.
+    pub dry_run: bool,
+    /// `--force-invalid` was in effect, so a file that fails to scan still had
+    /// its provably safe edits applied.
+    pub force_invalid: bool,
+    /// The run reached the disk. A `fix` blocked by invalid syntax or an I/O
+    /// error leaves this false and must not claim any removal.
+    pub applied: bool,
+    /// The policy the run was asked for. Only `all` promises to take every
+    /// comment out, so only `all` owes an explanation for the ones it keeps.
+    pub policy: Policy,
+}
+
+/// What one run found, counted once for the end-of-run summary.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct Summary {
+    pub files_scanned: usize,
+    pub files_with_removable: usize,
+    pub removable_comments: usize,
+    pub kept_comments: usize,
+    pub files_changed: usize,
+    pub comments_removed: usize,
+    pub invalid_files: usize,
+    /// Non-error skips met while walking, counted under a short stable label
+    /// rather than the raw reason, which can carry a configured byte limit.
+    /// A path named on the command line is deliberately absent: it already has
+    /// its own line on standard output and must not be counted twice.
+    pub skipped_by_reason: BTreeMap<String, usize>,
+    /// Non-error skips whose path was named on the command line.
+    pub named_skips: usize,
+    pub io_errors: usize,
+}
+
+impl Summary {
+    pub fn compute(files: &[ProcessedFile], skipped: &[SkippedFile], operation: Operation) -> Self {
+        let mut summary = Self {
+            files_scanned: files.len(),
+            ..Self::default()
+        };
+        for file in files {
+            let removable = removable_count(file);
+            summary.removable_comments += removable;
+            summary.kept_comments += file.result.report.comments.len() - removable;
+            if removable > 0 {
+                summary.files_with_removable += 1;
+            }
+            if !file.result.report.valid {
+                summary.invalid_files += 1;
+            }
+            if file.source != file.result.output {
+                summary.files_changed += 1;
+                if operation == Operation::Fix {
+                    summary.comments_removed += removable;
+                }
+            }
+        }
+        for item in skipped {
+            if item.error {
+                summary.io_errors += 1;
+            } else if item.explicit {
+                summary.named_skips += 1;
+            } else {
+                *summary
+                    .skipped_by_reason
+                    .entry(skip_label(&item.reason).to_owned())
+                    .or_default() += 1;
+            }
+        }
+        summary
+    }
+
+    fn skipped_files(&self) -> usize {
+        self.skipped_by_reason.values().sum()
+    }
+}
+
+fn removable_count(file: &ProcessedFile) -> usize {
+    file.result
+        .report
+        .comments
+        .iter()
+        .filter(|comment| comment.disposition.is_remove())
+        .count()
+}
+
+/// Fold a skip reason onto a short label the summary can group by.
+///
+/// The per-file line says what to do about one file; the summary counts many,
+/// so it trades the sentence for a key short enough to sit in a list of them.
+///
+/// Visible to the crate so the modules that *produce* the reasons — `files`
+/// and `git` — can name this function in their own documentation rather than
+/// describing a rule they do not own.
+pub(crate) fn skip_label(reason: &str) -> &str {
+    if reason.starts_with("larger than ") {
+        "too large"
+    } else if reason.starts_with("binary file") {
+        "binary"
+    } else if reason.starts_with("language disabled") {
+        "language disabled"
+    } else if reason == NO_LANGUAGE {
+        "unknown language"
+    } else {
+        reason
+    }
+}
+
+/// The `Keep` reason the core scanner gives a shebang or encoding line that
+/// `--force-protected` would have removed. It is one of the six reasons the
+/// differential protocol freezes, so matching on it is stable; the end-to-end
+/// test `policy_all_says_how_to_remove_a_kept_preamble` is what would catch it
+/// drifting apart from the scanner.
+const PROTECTED_PREAMBLE: &str = "required source preamble";
+
+/// How many comments were kept only because `--force-protected` was absent.
+///
+/// Counted from the disposition rather than from the comment kind: a shebang
+/// held back by `--keep-kind shebang` stays kept whatever `--force-protected`
+/// says, and advertising the flag for it would be a lie.
+fn protected_preambles(files: &[ProcessedFile]) -> usize {
+    files
+        .iter()
+        .flat_map(|file| &file.result.report.comments)
+        .filter(|comment| {
+            matches!(&comment.disposition, Disposition::Keep { reason } if reason == PROTECTED_PREAMBLE)
+        })
+        .count()
+}
+
+/// `1 file` / `2 files`: the count and its noun, pluralized by the regular
+/// rule. Every noun the summary counts goes through this.
+fn plural(count: usize, noun: &str) -> String {
+    format!("{count} {noun}{}", if count == 1 { "" } else { "s" })
+}
+
+/// `1 comment` / `2 removable comments`: the noun is pluralized and an
+/// optional adjective is placed in front of it.
+fn comments(count: usize, adjective: &str) -> String {
+    let space = if adjective.is_empty() { "" } else { " " };
+    plural(count, &format!("{adjective}{space}comment"))
 }
 
 #[derive(Clone, Debug)]
@@ -53,125 +226,906 @@ struct JsonFile<'a> {
     source_map: &'a ocomment_core::SourceMap,
 }
 
-pub fn render(
-    files: &[ProcessedFile],
-    skipped: &[SkippedFile],
-    format: OutputFormat,
-    operation: Operation,
-    presentation: Presentation,
-) -> Result<()> {
-    match format {
-        OutputFormat::Human => render_human(files, skipped, operation, presentation),
-        OutputFormat::Json => render_json(files, skipped),
-        OutputFormat::Jsonl => render_jsonl(files, skipped),
-        OutputFormat::Sarif => render_sarif(files, skipped),
-        OutputFormat::Github => render_github(files, skipped),
+/// The one-line label for a comment OComment would delete.
+pub fn removable_label(kind: CommentKind) -> String {
+    format!("removable {kind} comment")
+}
+
+/// The one-line label for a comment OComment deliberately protects.
+pub fn kept_label(kind: CommentKind, reason: &str) -> String {
+    format!("{}: {reason}", kept_prefix(kind))
+}
+
+/// The same label without a reason, for a report that gives the reason on a
+/// line of its own.
+fn kept_prefix(kind: CommentKind) -> String {
+    format!("kept {kind} comment")
+}
+
+/// What `--explain` needs to account for one file's comments: the options its
+/// scan actually ran with, and where each of their settings came from.
+#[derive(Clone, Debug)]
+pub struct FileExplanation {
+    pub options: ScanOptions,
+    pub trace: PolicyTrace,
+}
+
+/// That material for the files of one run, under the path the run reports each
+/// file by. A run that was not asked to explain anything carries none.
+pub type Explanations = BTreeMap<PathBuf, FileExplanation>;
+
+/// One file's explanation material with its policy patterns already compiled.
+///
+/// The two regex sets are the same for every comment in the file, so they are
+/// built once when the file is reached rather than once per reported line.
+struct Explainer<'a> {
+    material: &'a FileExplanation,
+    patterns: DispositionPatterns,
+}
+
+impl<'a> Explainer<'a> {
+    /// An unparseable pattern list is ignored here as the scanner ignores it,
+    /// which is exactly what `explain_disposition` falls back to on its own.
+    fn new(material: &'a FileExplanation) -> Self {
+        Self {
+            patterns: DispositionPatterns::compile(&material.options)
+                .unwrap_or_else(|_| DispositionPatterns::empty()),
+            material,
+        }
     }
 }
 
-fn render_human(
+/// The indented line under one reported comment: the rule that decided its
+/// fate, and either the setting behind that rule or the flag that would
+/// overrule it.
+///
+/// The pattern a regex explanation quotes and the globs a source names were
+/// both written by whoever wrote the configuration, so the composed line gets a
+/// comment preview's treatment before it reaches a terminal: one line, no
+/// control sequences. The width is not capped — a line that ends in an ellipsis
+/// where the pattern was answers nothing.
+fn explanation_line(
+    file: &ProcessedFile,
+    comment: &Comment,
+    explainer: &Explainer<'_>,
+    options: &RenderOptions,
+) -> String {
+    let material = explainer.material;
+    let start = comment.span.start.min(file.source.len());
+    let end = comment.span.end.clamp(start, file.source.len());
+    let verdict = explain_comment_with(
+        &explainer.patterns,
+        comment,
+        &file.source[start..end],
+        file.language,
+        &material.options,
+    );
+    let tail = match material.trace.origin_of(&verdict, &material.options) {
+        Some(origin) => format!(" ({origin})"),
+        None => next_step(&verdict),
+    };
+    format!(
+        "    {}{}{}",
+        color("\x1b[2m", options.presentation.color),
+        fold(&format!("{verdict}{tail}")),
+        color("\x1b[0m", options.presentation.color)
+    )
+}
+
+/// Write that line under the comment it is about, when the run has the
+/// material to account for it.
+fn write_explanation(
+    output: &mut impl Write,
+    file: &ProcessedFile,
+    comment: &Comment,
+    explainer: Option<&Explainer<'_>>,
+    options: &RenderOptions,
+) -> Result<()> {
+    let Some(explainer) = explainer else {
+        return Ok(());
+    };
+    wrote(writeln!(
+        output,
+        "{}",
+        explanation_line(file, comment, explainer, options)
+    ))
+}
+
+/// How to overrule a built-in rule, which no setting decided and no table can
+/// be pointed at for.
+fn next_step(verdict: &DispositionExplanation) -> String {
+    match verdict {
+        DispositionExplanation::ProtectedPreamble => {
+            "; add --force-protected to remove it".to_owned()
+        }
+        DispositionExplanation::KeptHtml => format!(
+            "; use --remove-kind {} or --policy all to remove it",
+            CommentKind::HtmlComment
+        ),
+        DispositionExplanation::KeptDirective { kind, .. } => {
+            format!("; use --remove-kind {kind} or --policy all to remove it")
+        }
+        /* NOTE: The one keep with no flag behind it. `--policy all` does not
+         * reach it either: what holds the body open is whatever comment is
+         * still standing under this one, so that is the line to take first. */
+        DispositionExplanation::KeptStructural { .. } => {
+            "; the comment under it has to go first".to_owned()
+        }
+        _ => String::new(),
+    }
+}
+
+/// How many display columns a comment preview may occupy.
+const PREVIEW_COLUMNS: usize = 72;
+
+/// A one-line, terminal-safe rendering of the comment at `span`.
+///
+/// Comment text is untrusted input that is about to be written to a terminal,
+/// so the whole comment is folded onto one line, every control character —
+/// `ESC` above all — is replaced with U+FFFD instead of being forwarded, and
+/// the result is cut to `max_columns` display columns.
+fn preview(source: &[u8], span: ByteSpan, max_columns: usize) -> String {
+    let start = span.start.min(source.len());
+    let end = span.end.clamp(start, source.len());
+    truncate(
+        fold(&String::from_utf8_lossy(&source[start..end])),
+        max_columns,
+    )
+}
+
+/// The same treatment for a line that did not come out of a source file.
+///
+/// What an external tool on `PATH` says about itself is untrusted for exactly
+/// the reason a comment is: `doctor` prints it to the same terminal, and a
+/// tool planted there could otherwise clear the screen or repaint the report
+/// from its own version line.
+pub(crate) fn sanitize_line(text: &str) -> String {
+    truncate(fold(text), PREVIEW_COLUMNS)
+}
+
+/// The same treatment for a message that must not be cut short.
+///
+/// A comment preview is commentary and can be trusted to a fixed width, but a
+/// diagnostic is the whole answer to a run that produced nothing else. The
+/// `regex` crate writes a parse error over several lines, with a caret under
+/// the byte it stopped at; the caret means nothing once the lines are joined,
+/// yet the sentence after it names what is actually wrong with the pattern. So
+/// this one folds — one line, no control characters — and keeps every word.
+pub(crate) fn sanitize_message(text: &str) -> String {
+    fold(text)
+}
+
+/// The same treatment for a name that must not be cut short — or reworded.
+///
+/// A directory name is chosen by whoever made the directory, so the rows
+/// `doctor` prints one on are untrusted for the same reason a version line is.
+/// What they are not is commentary: an absolute path is easily longer than a
+/// comment preview may be, and a row that ends in an ellipsis where the reader
+/// was looking for the rest of the path answers nothing.
+///
+/// Neither is the whitespace in a path commentary, which is why this does not
+/// borrow [`fold`]: a name may begin with a space or carry a tab, and a reader
+/// who is shown neither cannot type the name back, nor find it in a checkout
+/// that has it. So the spacing is left exactly as it was given and every
+/// control character — the tab among them — is replaced with U+FFFD, which
+/// keeps the promise `fold` was borrowed for in the first place: whatever the
+/// name holds, the row stays one row.
+pub(crate) fn sanitize_path(text: &str) -> String {
+    text.chars()
+        .map(|character| {
+            if is_control(character) {
+                '\u{fffd}'
+            } else {
+                character
+            }
+        })
+        .collect()
+}
+
+/// The same treatment for a line of source a prompt has to show as code.
+///
+/// A hunk is read for its shape as much as for its text — indentation says
+/// what a line belongs to — so unlike a comment preview this one keeps the
+/// spaces it was given and expands a tab onto the same eight-column stop the
+/// `columns` layout measures a replacement by. What it does not keep is
+/// anything that drives the terminal: every control character, `ESC` and the
+/// bidirectional overrides above all, still becomes U+FFFD, and the result is
+/// still one line cut to a fixed width, because the question underneath it has
+/// to stay on the screen with it.
+pub(crate) fn sanitize_source_line(text: &str) -> String {
+    let mut line = String::with_capacity(text.len());
+    let mut column = 0usize;
+    for character in text.chars() {
+        if character == '\t' {
+            let width = TAB_WIDTH - (column % TAB_WIDTH);
+            line.extend(std::iter::repeat_n(' ', width));
+            column += width;
+        } else if is_control(character) {
+            line.push('\u{fffd}');
+            column += 1;
+        } else {
+            line.push(character);
+            column += columns(character);
+        }
+    }
+    truncate(line, PREVIEW_COLUMNS)
+}
+
+/// The tab stop `sanitize_source_line` expands to, the one the `columns`
+/// layout already measures a tab by.
+const TAB_WIDTH: usize = 8;
+
+/// Fold `text` onto one control-free line.
+fn fold(text: &str) -> String {
+    let mut folded = String::with_capacity(text.len());
+    let mut pending_space = false;
+    for character in text.chars() {
+        if matches!(character, ' ' | '\t' | '\r' | '\n' | '\u{c}') {
+            /* NOTE: Leading whitespace is dropped, and a run only becomes a space
+             * once something else follows it, so the tail is trimmed too. */
+            pending_space = !folded.is_empty();
+            continue;
+        }
+        if pending_space {
+            folded.push(' ');
+            pending_space = false;
+        }
+        folded.push(if is_control(character) {
+            '\u{fffd}'
+        } else {
+            character
+        });
+    }
+    folded
+}
+
+/// C0, DEL, C1, and the bidirectional and separator format controls. None of
+/// these may reach the terminal verbatim: C0 drives it, the bidi overrides and
+/// isolates can make a comment render as its own reverse, and U+2028/U+2029
+/// break the promise that a preview is one line. U+061C joins the marks it
+/// belongs with, and U+FEFF is invisible wherever it lands.
+fn is_control(character: char) -> bool {
+    matches!(
+        character,
+        '\u{0}'..='\u{1f}'
+            | '\u{7f}'..='\u{9f}'
+            | '\u{61c}'
+            | '\u{200e}'..='\u{200f}'
+            | '\u{2028}'..='\u{2029}'
+            | '\u{202a}'..='\u{202e}'
+            | '\u{2066}'..='\u{2069}'
+            | '\u{feff}'
+    )
+}
+
+fn columns(character: char) -> usize {
+    UnicodeWidthChar::width(character).unwrap_or(0)
+}
+
+/// How many characters a preview may carry for each column it may occupy.
+/// Zero-width and combining characters cost no columns, so the width budget on
+/// its own cannot bound the line a terminal has to hold.
+const PREVIEW_CHARS_PER_COLUMN: usize = 4;
+
+/// Cut `text` to `max_columns` display columns and to a hard character cap,
+/// never inside a wide character, leaving room for the ellipsis that marks the
+/// cut.
+fn truncate(text: String, max_columns: usize) -> String {
+    let max_chars = max_columns.saturating_mul(PREVIEW_CHARS_PER_COLUMN);
+    if text.chars().map(columns).sum::<usize>() <= max_columns && text.chars().count() <= max_chars
+    {
+        return text;
+    }
+    let column_budget = max_columns.saturating_sub(1);
+    let char_budget = max_chars.saturating_sub(1);
+    let mut cut = String::with_capacity(text.len());
+    let mut width = 0usize;
+    for (taken, character) in text.chars().enumerate() {
+        if taken >= char_budget {
+            break;
+        }
+        width += columns(character);
+        if width > column_budget {
+            break;
+        }
+        cut.push(character);
+    }
+    cut.push('\u{2026}');
+    cut
+}
+
+/// The `: <text>` tail a human line carries, dimmed when colour is on.
+fn preview_suffix(source: &[u8], span: ByteSpan, options: &RenderOptions) -> String {
+    if !options.preview {
+        return String::new();
+    }
+    let text = preview(source, span, PREVIEW_COLUMNS);
+    if text.is_empty() {
+        return String::new();
+    }
+    format!(
+        ": {}{text}{}",
+        color("\x1b[2m", options.presentation.color),
+        color("\x1b[0m", options.presentation.color)
+    )
+}
+
+/// The handle every path that writes the product of a run takes: standard
+/// output, locked once for the whole run and buffered.
+///
+/// `println!` panics when its write fails, and the release profile aborts on
+/// panic, so a reader that stops early — `ocomment … | head` — would end the
+/// process with SIGABRT. Writing through a handle that returns its errors lets
+/// the caller decide instead, and `main` ends a closed pipe quietly.
+pub type Stdout = BufWriter<io::StdoutLock<'static>>;
+
+/// Lock standard output for the rest of the run and buffer it.
+pub fn stdout() -> Stdout {
+    BufWriter::new(io::stdout().lock())
+}
+
+/// The reader of the program's own output went away mid-run.
+///
+/// A broken pipe is only benign when it is *our* report that could not be
+/// written; `ocomment … | head` is a reader that finished, not a run that
+/// failed. Every other broken pipe — writing a rewritten blob into
+/// `git hash-object`, for one — is a real failure, so the benign case is
+/// tagged with this marker at the write that raised it instead of being
+/// recognized by error kind anywhere in the chain.
+#[derive(Debug)]
+pub struct OutputPipeClosed;
+
+impl std::fmt::Display for OutputPipeClosed {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("the reader of standard output closed the pipe")
+    }
+}
+
+impl std::error::Error for OutputPipeClosed {}
+
+/// Push the last buffered bytes out.
+///
+/// A `BufWriter` drops the error of the write it performs while being dropped,
+/// so every writer is finished by hand and the failure reaches the caller.
+pub fn finish(writer: &mut impl Write) -> Result<()> {
+    wrote(writer.flush())
+}
+
+/// Raise one write to the program's own output, tagging the reader that closed
+/// the pipe so `main` can end quietly for that case alone.
+pub fn wrote(result: io::Result<()>) -> Result<()> {
+    result.map_err(output_failure)
+}
+
+/// The error one failed write to our own output becomes.
+fn output_failure(error: io::Error) -> anyhow::Error {
+    if error.kind() == io::ErrorKind::BrokenPipe {
+        return anyhow::Error::new(OutputPipeClosed);
+    }
+    anyhow::Error::new(error).context("cannot write standard output")
+}
+
+/// Write one line of commentary to standard error.
+///
+/// Commentary — the `-v` trace, the end-of-run summary — is not the product of
+/// the run, so a reader that has already gone away is not a failure to report:
+/// a closed pipe is dropped and only a real write failure is raised. What must
+/// not happen is what `eprintln!` does, which is panic, and so abort under the
+/// release profile.
+pub fn note(writer: &mut impl Write, line: &str) -> Result<()> {
+    match writeln!(writer, "{line}") {
+        Err(error) if error.kind() != io::ErrorKind::BrokenPipe => {
+            Err(anyhow::Error::new(error).context("cannot write standard error"))
+        }
+        _ => Ok(()),
+    }
+}
+
+/// Turn a serialization failure back into the I/O error it usually is.
+///
+/// `serde_json` reports a failed write as an error of its own whose `source`
+/// is the *source* of the I/O error rather than the I/O error itself, so a
+/// closed pipe would be invisible to anything walking the chain. Its `From`
+/// conversion hands the original error back.
+fn write_error(error: serde_json::Error) -> anyhow::Error {
+    output_failure(io::Error::from(error))
+}
+
+pub fn render(
     files: &[ProcessedFile],
     skipped: &[SkippedFile],
-    operation: Operation,
-    presentation: Presentation,
+    options: &RenderOptions,
 ) -> Result<()> {
-    let stdout = io::stdout();
-    let mut output = stdout.lock();
+    render_explained(files, skipped, options, &Explanations::new())
+}
+
+/// The same report, with the material `--explain` needs for the files it has
+/// it for. A file with none is reported exactly as `render` reports it.
+pub fn render_explained(
+    files: &[ProcessedFile],
+    skipped: &[SkippedFile],
+    options: &RenderOptions,
+    explanations: &Explanations,
+) -> Result<()> {
+    let mut output = stdout();
+    match options.format {
+        OutputFormat::Human => render_human(&mut output, files, skipped, options, explanations),
+        OutputFormat::Json => render_json(&mut output, files, skipped),
+        OutputFormat::Jsonl => render_jsonl(&mut output, files, skipped),
+        OutputFormat::Sarif => render_sarif(&mut output, files, skipped),
+        OutputFormat::Github => render_github(&mut output, files, skipped, options.verbosity),
+    }?;
+    finish(&mut output)
+}
+
+fn render_human(
+    output: &mut impl Write,
+    files: &[ProcessedFile],
+    skipped: &[SkippedFile],
+    options: &RenderOptions,
+    explanations: &Explanations,
+) -> Result<()> {
+    let operation = options.operation;
+    let presentation = options.presentation;
+    let quiet = options.verbosity == Verbosity::Quiet;
+    let verbose = options.verbosity == Verbosity::Verbose;
     for file in files {
         if operation == Operation::Diff && file.source != file.result.output {
-            write!(
+            /* NOTE: The patch is the product of `diff`, so `-q` keeps it and drops
+             * only the summary that follows on standard error. */
+            wrote(write!(
                 output,
                 "{}",
                 unified_diff(&file.path, &file.source, &file.result.output)
-            )?;
+            ))?;
             continue;
         }
         for diagnostic in &file.result.report.diagnostics {
             let (line, column) = line_column(&file.source, diagnostic.span.start);
-            writeln!(
+            wrote(writeln!(
                 output,
-                "{}:{line}:{column}: {}{:?}[{}]{}: {}",
+                "{}:{line}:{column}: {}{}[{}]{}: {}",
                 display_path(&file.path, presentation.hyperlinks),
                 color("\x1b[31m", presentation.color),
                 diagnostic.severity,
                 diagnostic.code,
                 color("\x1b[0m", presentation.color),
                 diagnostic.message
-            )?;
+            ))?;
         }
+        let explainer = options
+            .explain
+            .then(|| explanations.get(&file.path))
+            .flatten()
+            .map(Explainer::new);
+        let explainer = explainer.as_ref();
         if operation == Operation::Scan {
+            // NOTE: The listing is the product of `scan`; `-q` keeps it too.
             for comment in &file.result.report.comments {
                 let (line, column) = line_column(&file.source, comment.span.start);
-                writeln!(
+                wrote(writeln!(
                     output,
-                    "{}:{line}:{column}: {:?} {:?} {}..{}",
+                    "{}:{line}:{column}: {} {} {}..{}{}",
                     display_path(&file.path, presentation.hyperlinks),
                     comment.kind,
                     comment.disposition,
                     comment.span.start,
-                    comment.span.end
-                )?;
+                    comment.span.end,
+                    preview_suffix(&file.source, comment.span, options)
+                ))?;
+                write_explanation(output, file, comment, explainer, options)?;
             }
-        } else if operation != Operation::Fix {
-            for comment in file
-                .result
-                .report
-                .comments
-                .iter()
-                .filter(|comment| comment.disposition.is_remove())
-            {
-                let (line, column) = line_column(&file.source, comment.span.start);
-                writeln!(
+        } else if quiet {
+            continue;
+        } else if operation == Operation::Fix {
+            if options.applied && file.source != file.result.output {
+                wrote(writeln!(
                     output,
-                    "{}:{line}:{column}: {}removable {:?} comment{}",
+                    "fixed {}: removed {}",
                     display_path(&file.path, presentation.hyperlinks),
-                    color("\x1b[33m", presentation.color),
-                    comment.kind,
-                    color("\x1b[0m", presentation.color)
-                )?;
+                    comments(removable_count(file), "")
+                ))?;
+            }
+        } else {
+            /* NOTE: `check` reports what it would remove. Asked to explain itself it
+             * reports the rest too, because a comment it left alone is exactly
+             * the one the reader is asking about. */
+            for comment in &file.result.report.comments {
+                let removable = comment.disposition.is_remove();
+                if !options.explain && !removable {
+                    continue;
+                }
+                let (line, column) = line_column(&file.source, comment.span.start);
+                wrote(writeln!(
+                    output,
+                    "{}:{line}:{column}: {}{}{}{}",
+                    display_path(&file.path, presentation.hyperlinks),
+                    color(
+                        if removable { "\x1b[33m" } else { "\x1b[32m" },
+                        presentation.color
+                    ),
+                    if removable {
+                        removable_label(comment.kind)
+                    } else {
+                        kept_prefix(comment.kind)
+                    },
+                    color("\x1b[0m", presentation.color),
+                    preview_suffix(&file.source, comment.span, options)
+                ))?;
+                write_explanation(output, file, comment, explainer, options)?;
             }
         }
     }
+    let skips = skip_lines(skipped, presentation, options.verbosity);
+    /* NOTE: `diff` keeps standard output for the patch alone, so the skips it met
+     * are left to standard error. `fix --dry-run` is that same `diff` speaking
+     * for the `fix` it stands in for: a skipped path can be the whole answer
+     * to the run, so the preview still owes the reader the reason — but beside
+     * the summary that counts it, because what the preview promises on
+     * standard output is a patch that has to survive being piped into `git
+     * apply`. A plain `fix` writes no patch and keeps its skips there. */
     if operation != Operation::Diff {
-        for item in skipped {
-            writeln!(
-                output,
-                "{}: {}: {}",
-                display_path(&item.path, presentation.hyperlinks),
-                if item.error { "error" } else { "skipped" },
-                item.reason
+        for line in &skips {
+            wrote(writeln!(output, "{line}"))?;
+        }
+    }
+    /* NOTE: The findings are on standard output and the commentary that follows is
+     * on standard error; a terminal sees both, so the buffer is emptied first
+     * to keep the report in the order it was written. */
+    finish(output)?;
+    let stderr = io::stderr();
+    let mut report = stderr.lock();
+    if operation == Operation::Diff && options.dry_run {
+        for line in &skips {
+            note(&mut report, line)?;
+        }
+    }
+    if quiet {
+        return Ok(());
+    }
+    let summary = Summary::compute(files, skipped, operation);
+    let folded = !verbose && skipped.iter().any(|item| !item.error && !item.explicit);
+    if verbose && let Some(line) = kind_breakdown(files, options) {
+        note(&mut report, &line)?;
+    }
+    note(&mut report, &summary_report(&summary, options, folded))?;
+    /* NOTE: Under any other policy a kept preamble is one of many deliberate keeps
+     * and saying so every run would be noise. `all` said it would take
+     * everything, so what it left behind is the surprise worth a line. */
+    if options.policy == Policy::All {
+        let protected = protected_preambles(files);
+        if protected > 0 {
+            /* NOTE: The line counts what it kept, so the pronoun that stands for it
+             * has to agree with that count. */
+            let pronoun = if protected == 1 { "it" } else { "them" };
+            note(
+                &mut report,
+                &format!(
+                    "{} kept; add --force-protected to remove {pronoun}.",
+                    comments(protected, "protected preamble")
+                ),
             )?;
         }
     }
-    if presentation.progress {
-        eprintln!(
-            "ocomment: processed {} file(s), skipped {}",
-            files.len(),
-            skipped.len()
-        );
+    if summary.invalid_files > 0 && !options.force_invalid {
+        let (verb, pronoun) = if summary.invalid_files == 1 {
+            ("has", "it")
+        } else {
+            ("have", "them")
+        };
+        note(
+            &mut report,
+            &format!(
+                "{} {verb} invalid syntax; nothing was written for {pronoun} \
+                 (use --force-invalid to apply known-safe edits).",
+                plural(summary.invalid_files, "file")
+            ),
+        )?;
     }
     Ok(())
 }
 
-fn color(code: &'static str, enabled: bool) -> &'static str {
+/// The skips one run has to name, in one wording for whichever stream ends up
+/// carrying them. An I/O error is named however quiet the run was asked to be:
+/// it is a failure, not commentary.
+///
+/// Shared with `fix --interactive`, which writes no report of its own and would
+/// otherwise be the one command that never says why it passed a file over.
+/// Whether a skip is worth a line of the report, in human and in GitHub form.
+///
+/// An I/O error decides the exit code, so it is said however quietly the run
+/// was asked to speak. A path the caller named is answered on a line of its
+/// own, because they asked about that path. What a walk merely wandered past
+/// is neither: one unscannable file is a skip, forty of them are noise, and
+/// the end-of-run summary counts those instead — `-v` is how a reader asks for
+/// the list. Both renderers share this so the two cannot drift apart.
+pub(crate) fn skip_is_visible(item: &SkippedFile, verbosity: Verbosity) -> bool {
+    item.error
+        || (verbosity != Verbosity::Quiet && (item.explicit || verbosity == Verbosity::Verbose))
+}
+
+pub(crate) fn skip_lines(
+    skipped: &[SkippedFile],
+    presentation: Presentation,
+    verbosity: Verbosity,
+) -> Vec<String> {
+    skipped
+        .iter()
+        .filter(|item| skip_is_visible(item, verbosity))
+        .map(|item| {
+            format!(
+                "{}: {}: {}",
+                display_path(&item.path, presentation.hyperlinks),
+                if item.error { "error" } else { "skipped" },
+                item.reason
+            )
+        })
+        .collect()
+}
+
+/// The numbers an interactive run's verdict is built from.
+///
+/// They count answers rather than findings, which is the one thing the ordinary
+/// summary cannot say: it counts what a run *could* have removed.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct InteractiveOutcome {
+    /// Comments the reader accepted for removal.
+    pub removed: usize,
+    /// Questions the reader answered. `a` and `d` answer for every remaining
+    /// comment in their file, so those count here too.
+    pub reviewed: usize,
+    /// Comments the run had to offer, whether or not it got as far as asking.
+    pub offered: usize,
+    /// Files an accepted removal is written to.
+    pub changed: usize,
+    /// Files the run scanned.
+    pub scanned: usize,
+}
+
+/// What an interactive run came to, in the vocabulary every other summary uses.
+///
+/// A run with nothing to offer borrows the wording the plain `fix` summary
+/// gives the same answer, because the only number worth reporting there is how
+/// much was looked at. A run stopped by `q` is counted against the questions it
+/// actually asked, and says how many it never got to: measuring the acceptances
+/// against every comment the run *could* have offered would read as a pile of
+/// refusals nobody made.
+///
+/// Either way the verdict closes on the `(N files scanned)` every other summary
+/// ends with. Answering questions about three files says nothing about how many
+/// were opened to find them, and that is the number a reader checks a run
+/// against.
+pub(crate) fn interactive_summary(outcome: InteractiveOutcome) -> String {
+    if outcome.offered == 0 {
+        return format!("Nothing to fix in {}.", plural(outcome.scanned, "file"));
+    }
+    let unreviewed = outcome.offered.saturating_sub(outcome.reviewed);
+    let tail = if unreviewed == 0 {
+        String::new()
+    } else {
+        format!(" ({} not reviewed)", comments(unreviewed, ""))
+    };
+    format!(
+        "Removed {} of {} in {}{tail} ({} scanned).",
+        outcome.removed,
+        comments(outcome.reviewed, ""),
+        plural(outcome.changed, "file"),
+        plural(outcome.scanned, "file")
+    )
+}
+
+/// The whole end-of-run summary: the verdict for the run, the folded skips,
+/// and the I/O errors that were listed one by one above it.
+fn summary_report(summary: &Summary, options: &RenderOptions, folded: bool) -> String {
+    let skips = skip_clause(summary, folded);
+    let nothing = nothing_to(options);
+    let mut report = if summary.files_scanned > 0 {
+        format!("{}{skips}", summary_line(summary, options))
+    } else if !skips.is_empty() {
+        /* NOTE: Nothing was scanned, so the verdict would count zero files; what the
+         * run actually did was pass every candidate over. */
+        format!("Nothing to {nothing}:{skips}")
+    } else if summary.named_skips > 0 {
+        format!("Nothing to {nothing}.")
+    } else {
+        summary_line(summary, options)
+    };
+    if summary.io_errors > 0 {
+        report.push_str(&format!(" {}.", plural(summary.io_errors, "I/O error")));
+    }
+    report
+}
+
+/// The verb a run uses for the work it found nothing to do. `fix --dry-run`
+/// borrows the vocabulary of the `fix` it is standing in for, as it does
+/// everywhere else in the summary.
+fn nothing_to(options: &RenderOptions) -> &'static str {
+    match options.operation {
+        Operation::Check => "check",
+        Operation::Fix => "fix",
+        Operation::Diff if options.dry_run => "fix",
+        Operation::Diff => "diff",
+        Operation::Scan => "scan",
+    }
+}
+
+/// The one-line verdict for the run, without the skipped-file clause.
+fn summary_line(summary: &Summary, options: &RenderOptions) -> String {
+    let scanned = plural(summary.files_scanned, "file");
+    let found = || {
+        format!(
+            "Found {} in {} ({scanned} scanned).",
+            comments(summary.removable_comments, "removable"),
+            plural(summary.files_with_removable, "file")
+        )
+    };
+    match options.operation {
+        /* NOTE: `fix --dry-run` is the diff of a fix: it counts what a real run would
+         * take out and points back at the run that would write it. */
+        Operation::Diff if options.dry_run => {
+            if summary.removable_comments == 0 {
+                return format!("Nothing to fix in {scanned}.");
+            }
+            format!(
+                "Would remove {} in {}. Rerun without --dry-run to apply.",
+                comments(summary.removable_comments, ""),
+                plural(summary.files_with_removable, "file")
+            )
+        }
+        Operation::Check | Operation::Diff => {
+            if summary.removable_comments == 0 {
+                return format!("No removable comments in {scanned}.");
+            }
+            let next = if options.operation == Operation::Diff {
+                "apply the patch"
+            } else if summary.removable_comments == 1 {
+                "remove it"
+            } else {
+                "remove them"
+            };
+            format!("{} Run `ocomment fix` to {next}.", found())
+        }
+        Operation::Fix => {
+            if options.applied && summary.files_changed > 0 {
+                format!(
+                    "Removed {} in {} ({scanned} scanned).",
+                    comments(summary.comments_removed, ""),
+                    plural(summary.files_changed, "file")
+                )
+            } else if summary.removable_comments == 0 {
+                format!("Nothing to fix in {scanned}.")
+            } else {
+                /* NOTE: The transaction never reached the disk; report what is still
+                 * there rather than claiming a removal. */
+                found()
+            }
+        }
+        Operation::Scan => format!(
+            "Scanned {scanned}: {} ({} removable, {} kept).",
+            comments(summary.removable_comments + summary.kept_comments, ""),
+            summary.removable_comments,
+            summary.kept_comments
+        ),
+    }
+}
+
+/// The skipped-file clause appended to the summary line. Only the skips met
+/// while walking are folded here; a named path was already reported on its own
+/// line.
+fn skip_clause(summary: &Summary, folded: bool) -> String {
+    let total = summary.skipped_files();
+    if total == 0 {
+        return String::new();
+    }
+    let reasons: Vec<_> = summary
+        .skipped_by_reason
+        .iter()
+        .map(|(label, count)| format!("{label}: {count}"))
+        .collect();
+    let hint = if folded { "; use -v to list" } else { "" };
+    format!(
+        " {} skipped ({}{hint}).",
+        plural(total, "file"),
+        reasons.join(", ")
+    )
+}
+
+/// The `-v` breakdown of what each comment kind contributed.
+fn kind_breakdown(files: &[ProcessedFile], options: &RenderOptions) -> Option<String> {
+    let verb = if options.operation == Operation::Fix && options.applied {
+        "removed"
+    } else {
+        "removable"
+    };
+    let mut removable = [0usize; CommentKind::ALL.len()];
+    let mut kept = [0usize; CommentKind::ALL.len()];
+    for file in files {
+        for comment in &file.result.report.comments {
+            let slot = CommentKind::ALL
+                .iter()
+                .position(|kind| *kind == comment.kind)
+                .expect("CommentKind::ALL lists every kind");
+            if comment.disposition.is_remove() {
+                removable[slot] += 1;
+            } else {
+                kept[slot] += 1;
+            }
+        }
+    }
+    let mut parts = Vec::new();
+    for (slot, kind) in CommentKind::ALL.into_iter().enumerate() {
+        if removable[slot] > 0 {
+            parts.push(format!("{kind} {} {verb}", removable[slot]));
+        }
+        if kept[slot] > 0 {
+            parts.push(format!("{kind} {} kept", kept[slot]));
+        }
+    }
+    (!parts.is_empty()).then(|| format!("kinds: {}", parts.join(", ")))
+}
+
+pub(crate) fn color(code: &'static str, enabled: bool) -> &'static str {
     if enabled { code } else { "" }
 }
 
+/// The path half of a report line, and the hyperlink wrapped around it.
+///
+/// A file name is chosen by whoever made the file, so the shown half is
+/// untrusted input on its way to a terminal exactly like the preview beside
+/// it, and gets `sanitize_path`'s treatment: one line, no control characters,
+/// and no width cap, because a path cut to an ellipsis names no file.
+///
+/// The link *target* is untrusted for the same reason and by the same route —
+/// the frame around it is written in escape bytes, so a name carrying one of
+/// its own would close the frame early and the rest of the name would be read
+/// as terminal instructions. A URL cannot carry a byte it has no spelling for
+/// anyway, so the target is encoded outright rather than patched up for the
+/// three characters somebody thought of first.
 fn display_path(path: &Path, hyperlinks: bool) -> String {
-    let display = path.display().to_string();
+    let display = sanitize_path(&path.display().to_string());
     if !hyperlinks {
         return display;
     }
     let absolute = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-    let target = absolute
-        .to_string_lossy()
-        .replace('%', "%25")
-        .replace(' ', "%20")
-        .replace('#', "%23");
+    let target = percent_encode(&absolute.to_string_lossy());
     format!("\x1b]8;;file://{target}\x1b\\{display}\x1b]8;;\x1b\\")
 }
 
-fn render_json(files: &[ProcessedFile], skipped: &[SkippedFile]) -> Result<()> {
+/// The path half of a `file://` URL, with every byte a URL may not carry
+/// spelled as the `%XX` a reader of the URL puts back.
+///
+/// The unreserved set of RFC 3986 is kept as it stands, and so is the `/` that
+/// separates one path segment from the next; everything else — the space and
+/// the `#` that used to be special-cased here, the `%` that makes an encoding
+/// an encoding, and every control byte — is encoded. A path is bytes rather
+/// than characters, so the encoding is done over the UTF-8 the name is spelled
+/// in: a `%XX` pair is defined as a byte, and half an encoded character is not
+/// a character a terminal can put back together.
+fn percent_encode(path: &str) -> String {
+    let mut encoded = String::with_capacity(path.len());
+    for byte in path.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~' | b'/') {
+            encoded.push(char::from(byte));
+        } else {
+            encoded.push('%');
+            encoded.push(HEX[usize::from(byte >> 4)]);
+            encoded.push(HEX[usize::from(byte & 0xf)]);
+        }
+    }
+    encoded
+}
+
+/// The digits a percent-encoded byte is spelled with. RFC 3986 asks for the
+/// upper-case ones.
+const HEX: [char; 16] = [
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F',
+];
+
+fn render_json(
+    output: &mut impl Write,
+    files: &[ProcessedFile],
+    skipped: &[SkippedFile],
+) -> Result<()> {
     let values: Vec<_> = files.iter().map(json_file).collect();
     let skipped: Vec<_> = skipped
         .iter()
@@ -180,26 +1134,30 @@ fn render_json(files: &[ProcessedFile], skipped: &[SkippedFile]) -> Result<()> {
         })
         .collect();
     serde_json::to_writer_pretty(
-        io::stdout().lock(),
+        &mut *output,
         &json!({"version": 1, "files": values, "skipped": skipped}),
-    )?;
-    println!();
+    )
+    .map_err(write_error)?;
+    wrote(writeln!(output))?;
     Ok(())
 }
 
-fn render_jsonl(files: &[ProcessedFile], skipped: &[SkippedFile]) -> Result<()> {
-    let stdout = io::stdout();
-    let mut output = stdout.lock();
+fn render_jsonl(
+    output: &mut impl Write,
+    files: &[ProcessedFile],
+    skipped: &[SkippedFile],
+) -> Result<()> {
     for file in files {
-        serde_json::to_writer(&mut output, &json_file(file))?;
-        writeln!(output)?;
+        serde_json::to_writer(&mut *output, &json_file(file)).map_err(write_error)?;
+        wrote(writeln!(output))?;
     }
     for item in skipped {
         serde_json::to_writer(
-            &mut output,
+            &mut *output,
             &json!({"type": "skip", "path": item.path.to_string_lossy(), "reason": item.reason, "error": item.error}),
-        )?;
-        writeln!(output)?;
+        )
+        .map_err(write_error)?;
+        wrote(writeln!(output))?;
     }
     Ok(())
 }
@@ -215,9 +1173,184 @@ fn json_file(file: &ProcessedFile) -> JsonFile<'_> {
     }
 }
 
-fn render_sarif(files: &[ProcessedFile], skipped: &[SkippedFile]) -> Result<()> {
+/// Where a SARIF reader is sent to learn what the tool itself is.
+const TOOL_INFORMATION_URI: &str = "https://github.com/P4suta/OComment";
+
+/// Where a rule about a comment sends a reader asking why that comment is
+/// reported — and why the one beside it is not.
+const KIND_HELP_URI: &str = "https://github.com/P4suta/OComment#why-was-this-comment-kept";
+
+/// The base id a path under the directory the run walked is reported against.
+/// SARIF readers, GitHub code scanning among them, resolve `%SRCROOT%` to the
+/// root of the checkout.
+const SRCROOT: &str = "%SRCROOT%";
+
+/// The one sentence every scan diagnostic is described by. The codes are as
+/// varied as the languages that raise them, and the result carries the message
+/// that says what was actually met.
+const DIAGNOSTIC_DESCRIPTION: &str =
+    "A problem OComment met while scanning the file; the message on the result says what it was.";
+
+/// The spelling a machine format reports a path under.
+///
+/// A SARIF `artifactLocation.uri` and the `file=` of a GitHub annotation are
+/// both matched against the paths the repository uses, so a reported path is
+/// spelled the way the repository spells it: forward slashes on every
+/// platform, and none of the `.` segments a walk root or a typed target leaves
+/// behind — `sub/./doc.rs` names a file no checkout has. What a relative path
+/// is measured *from* is said separately, by [`artifact_location`].
+fn report_uri(path: &Path) -> String {
+    let text = path.to_string_lossy().replace('\\', "/");
+    let trimmed: Vec<&str> = text.split('/').filter(|segment| *segment != ".").collect();
+    if trimmed.is_empty() {
+        /* NOTE: The path was `.` (or `./`) and naming nothing at all would be worse
+         * than naming the directory. */
+        return text;
+    }
+    trimmed.join("/")
+}
+
+/// The SARIF `artifactLocation` for a reported path.
+///
+/// A path under the directory the run started in is reported against
+/// `%SRCROOT%`: SARIF resolves a relative URI against a base id, and a reader
+/// given none has nothing to resolve it against, so the finding lands on no
+/// file. An absolute path is not under the checkout as far as the run can
+/// tell, one that climbs out through `..` has left it, and the pseudo-path
+/// standard input is reported under is not a file at all — each of those is
+/// reported as it stands, with no base id claiming otherwise.
+fn artifact_location(path: &Path) -> Value {
+    let uri = report_uri(path);
+    if under_source_root(path) {
+        let uri = if reads_as_a_drive_letter(&uri) {
+            format!("./{uri}")
+        } else {
+            uri
+        };
+        json!({"uri": uri, "uriBaseId": SRCROOT})
+    } else {
+        json!({"uri": uri})
+    }
+}
+
+/// Whether a repository-relative URI opens with a segment no reader will take
+/// for a directory name.
+///
+/// A `uri` is read as a URI, and RFC 3986 hands a relative reference's first
+/// segment to the scheme as soon as it holds a colon: `c:/a.rs` parses as the
+/// scheme `c` over the path `/a.rs`, and a Windows reader sees a drive letter
+/// in it besides. A POSIX checkout is free to hold a directory named `c:`, so
+/// the path says which it meant with the one `.` segment the standard keeps
+/// for exactly this: `./c:/a.rs` is a relative reference whatever reads it,
+/// and it still resolves against `%SRCROOT%`.
+///
+/// Only a repository-relative path is treated this way. A GitHub annotation is
+/// matched against the paths the checkout uses rather than parsed as a URI, so
+/// [`report_uri`] leaves the spelling alone and only this document adds to it;
+/// `tools/validate_schemas.py` is the other half of the rule and turns down
+/// the bare form.
+fn reads_as_a_drive_letter(uri: &str) -> bool {
+    let mut head = uri.split('/').next().unwrap_or_default().chars();
+    matches!(
+        (head.next(), head.next(), head.next()),
+        (Some(letter), Some(':'), None) if letter.is_ascii_alphabetic()
+    )
+}
+
+fn under_source_root(path: &Path) -> bool {
+    path != Path::new(STDIN_PATH)
+        && path
+            .components()
+            .all(|component| matches!(component, Component::Normal(_) | Component::CurDir))
+        && path
+            .components()
+            .any(|component| matches!(component, Component::Normal(_)))
+}
+
+/// The rules of one SARIF run, and the index each result points at.
+///
+/// A result names its rule twice: by `ruleId`, and by the position of that
+/// rule's description in `tool.driver.rules`. A code-scanning UI shows a
+/// finding through that description — its title, the sentence under it, and
+/// the link it offers — so handing out the id and the index together is what
+/// keeps a result from pointing at a description that is not there.
+///
+/// Every comment kind is described whether or not the run met one, because the
+/// rules a tool reports are also read as the list of what it can find. The
+/// rest — a scan diagnostic, a skipped file, a file that could not be read —
+/// are described as the run meets them.
+struct SarifRules {
+    entries: Vec<Value>,
+    indices: BTreeMap<String, usize>,
+}
+
+impl SarifRules {
+    fn new() -> Self {
+        let mut rules = Self {
+            entries: Vec::new(),
+            indices: BTreeMap::new(),
+        };
+        for kind in CommentKind::ALL {
+            rules.describe(
+                &format!("removable-{kind}"),
+                "note",
+                &format!("Removable {kind} comment"),
+                &format!(
+                    "A {kind} comment OComment can remove without changing what the file does."
+                ),
+                KIND_HELP_URI,
+            );
+        }
+        rules
+    }
+
+    /// The index of the rule `id`, describing it first if this run has not
+    /// reported it before.
+    fn describe(&mut self, id: &str, level: &str, short: &str, full: &str, help: &str) -> usize {
+        if let Some(&index) = self.indices.get(id) {
+            return index;
+        }
+        let index = self.entries.len();
+        self.entries.push(json!({
+            "id": id,
+            "shortDescription": {"text": short},
+            "fullDescription": {"text": full},
+            "helpUri": help,
+            "defaultConfiguration": {"level": level},
+        }));
+        self.indices.insert(id.to_owned(), index);
+        index
+    }
+
+    fn kind(&mut self, kind: CommentKind) -> usize {
+        let id = format!("removable-{kind}");
+        *self
+            .indices
+            .get(&id)
+            .expect("every comment kind is described")
+    }
+}
+
+/// A kebab-cased code read back as the title of a rule:
+/// `unterminated-comment` is `Unterminated comment`.
+fn sentence_case(code: &str) -> String {
+    let spelled = code.replace('-', " ");
+    let mut characters = spelled.chars();
+    match characters.next() {
+        Some(first) => first.to_uppercase().collect::<String>() + characters.as_str(),
+        None => spelled,
+    }
+}
+
+fn render_sarif(
+    output: &mut impl Write,
+    files: &[ProcessedFile],
+    skipped: &[SkippedFile],
+) -> Result<()> {
+    let mut rules = SarifRules::new();
     let mut results = Vec::new();
     for file in files {
+        let location = artifact_location(&file.path);
         for comment in file
             .result
             .report
@@ -227,27 +1360,29 @@ fn render_sarif(files: &[ProcessedFile], skipped: &[SkippedFile]) -> Result<()> 
         {
             let (line, column) = line_column(&file.source, comment.span.start);
             let (end_line, end_column) = line_column(&file.source, comment.span.end);
-            let kind = serde_json::to_value(comment.kind)?
-                .as_str()
-                .unwrap_or("comment")
-                .to_owned();
+            let (fix_span, replacement) = fix_for_span(file, comment.span);
+            let (fix_line, fix_column) = line_column(&file.source, fix_span.start);
+            let (fix_end_line, fix_end_column) = line_column(&file.source, fix_span.end);
+            let kind = comment.kind.as_str();
+            let index = rules.kind(comment.kind);
             results.push(json!({
                 "ruleId": format!("removable-{kind}"),
+                "ruleIndex": index,
                 "level": "note",
-                "message": {"text": format!("removable {:?} comment", comment.kind)},
+                "message": {"text": removable_label(comment.kind)},
                 "locations": [{"physicalLocation": {
-                    "artifactLocation": {"uri": file.path.to_string_lossy()},
+                    "artifactLocation": location.clone(),
                     "region": {"startLine": line, "startColumn": column,
                         "endLine": end_line, "endColumn": end_column}
                 }}],
                 "fixes": [{
                     "description": {"text": "Remove comment with OComment"},
                     "artifactChanges": [{
-                        "artifactLocation": {"uri": file.path.to_string_lossy()},
+                        "artifactLocation": location.clone(),
                         "replacements": [{"deletedRegion": {
-                            "startLine": line, "startColumn": column,
-                            "endLine": end_line, "endColumn": end_column
-                        }, "insertedContent": {"text": replacement_for_span(file, comment.span)}}]
+                            "startLine": fix_line, "startColumn": fix_column,
+                            "endLine": fix_end_line, "endColumn": fix_end_column
+                        }, "insertedContent": {"text": replacement}}]
                     }]
                 }]
             }));
@@ -260,12 +1395,20 @@ fn render_sarif(files: &[ProcessedFile], skipped: &[SkippedFile]) -> Result<()> 
                 ocomment_core::Severity::Warning => "warning",
                 ocomment_core::Severity::Info | ocomment_core::Severity::Hint => "note",
             };
+            let index = rules.describe(
+                &diagnostic.code,
+                level,
+                &sentence_case(&diagnostic.code),
+                DIAGNOSTIC_DESCRIPTION,
+                TOOL_INFORMATION_URI,
+            );
             results.push(json!({
                 "ruleId": diagnostic.code,
+                "ruleIndex": index,
                 "level": level,
                 "message": {"text": diagnostic.message},
                 "locations": [{"physicalLocation": {
-                    "artifactLocation": {"uri": file.path.to_string_lossy()},
+                    "artifactLocation": location.clone(),
                     "region": {"startLine": line, "startColumn": column,
                         "endLine": end_line, "endColumn": end_column}
                 }}]
@@ -273,35 +1416,86 @@ fn render_sarif(files: &[ProcessedFile], skipped: &[SkippedFile]) -> Result<()> 
         }
     }
     for item in skipped {
+        let (id, level, short, full) = if item.error {
+            (
+                "io-error",
+                "error",
+                "File could not be read",
+                "A file OComment could not read or write; the message on the result carries the operating-system error.",
+            )
+        } else {
+            (
+                "skipped-file",
+                "note",
+                "Skipped file",
+                "A file OComment did not scan; the message on the result says why it was left alone.",
+            )
+        };
+        let index = rules.describe(id, level, short, full, TOOL_INFORMATION_URI);
         results.push(json!({
-            "ruleId": if item.error { "io-error" } else { "skipped-file" },
-            "level": if item.error { "error" } else { "note" },
+            "ruleId": id,
+            "ruleIndex": index,
+            "level": level,
             "message": {"text": item.reason},
             "locations": [{"physicalLocation": {
-                "artifactLocation": {"uri": item.path.to_string_lossy()}
+                "artifactLocation": artifact_location(&item.path)
             }}]
         }));
     }
     let sarif = json!({
         "version": "2.1.0",
         "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
-        "runs": [{"tool": {"driver": {"name": "ocomment", "informationUri": "https://github.com/P4suta/OComment"}}, "results": results}]
+        "runs": [{"tool": {"driver": {
+            "name": "ocomment",
+            "version": env!("CARGO_PKG_VERSION"),
+            "informationUri": TOOL_INFORMATION_URI,
+            "rules": rules.entries
+        }}, "results": results}]
     });
-    serde_json::to_writer_pretty(io::stdout().lock(), &sarif)?;
-    println!();
+    serde_json::to_writer_pretty(&mut *output, &sarif).map_err(write_error)?;
+    wrote(writeln!(output))?;
     Ok(())
 }
 
-fn replacement_for_span(file: &ProcessedFile, span: ByteSpan) -> String {
+/// The rewrite a removed comment's SARIF fix offers: the bytes it deletes and
+/// the bytes that go in their place.
+///
+/// A fix is an offer to rewrite the file, so what it deletes has to be what the
+/// run would have deleted. Under [`ocomment_core::Layout::Compact`] that is
+/// wider than the comment: a comment alone on its line takes the indentation
+/// before it and the terminator after it with it, and a fix cut back to the
+/// comment's own span would leave behind exactly the blank line that layout
+/// exists to close up. So the edit that *contains* the comment is what is
+/// reported, rather than one that starts and ends where the comment does.
+///
+/// Edits are sorted and non-overlapping and each one spans the comment it
+/// removes, so at most one of them can contain a given comment. A file whose
+/// report came back invalid has comments but no edits — nothing is rewritten
+/// from a source the scanner could not read to the end — and there the
+/// comment's own span, with nothing to put in its place, is all there is to
+/// offer.
+fn fix_for_span(file: &ProcessedFile, span: ByteSpan) -> (ByteSpan, String) {
     file.result
         .edits
         .iter()
-        .find(|edit| edit.span == span)
-        .map(|edit| String::from_utf8_lossy(&edit.replacement).into_owned())
-        .unwrap_or_default()
+        .find(|edit| edit.span.start <= span.start && edit.span.end >= span.end)
+        .map_or_else(
+            || (span, String::new()),
+            |edit| {
+                (
+                    edit.span,
+                    String::from_utf8_lossy(&edit.replacement).into_owned(),
+                )
+            },
+        )
 }
 
-fn render_github(files: &[ProcessedFile], skipped: &[SkippedFile]) -> Result<()> {
+fn render_github(
+    output: &mut impl Write,
+    files: &[ProcessedFile],
+    skipped: &[SkippedFile],
+    verbosity: Verbosity,
+) -> Result<()> {
     for file in files {
         for comment in file
             .result
@@ -311,34 +1505,54 @@ fn render_github(files: &[ProcessedFile], skipped: &[SkippedFile]) -> Result<()>
             .filter(|comment| comment.disposition.is_remove())
         {
             let (line, column) = line_column(&file.source, comment.span.start);
-            println!(
-                "::notice file={},line={line},col={column}::removable {:?} comment",
-                github_escape(&file.path.to_string_lossy()),
-                comment.kind
-            );
+            wrote(writeln!(
+                output,
+                "::notice file={},line={line},col={column}::{}",
+                github_escape(&report_uri(&file.path)),
+                removable_label(comment.kind)
+            ))?;
         }
         for diagnostic in &file.result.report.diagnostics {
             let (line, column) = line_column(&file.source, diagnostic.span.start);
-            println!(
+            wrote(writeln!(
+                output,
                 "::error file={},line={line},col={column},title={}::{}",
-                github_escape(&file.path.to_string_lossy()),
+                github_escape(&report_uri(&file.path)),
                 github_escape(&diagnostic.code),
                 github_escape(&diagnostic.message)
-            );
+            ))?;
         }
     }
-    for item in skipped {
-        println!(
+    /* INVARIANT: `-q` trims the human report down to what went wrong, and there is
+     * no such thing to trim here: an annotation is the *product* of this
+     * format, not commentary about it, and a hook told to work quietly is
+     * still owed the notice for the path its caller named and the error for
+     * the file it could not read. So the visibility rule below is asked at
+     * `Normal` however quiet the run was, and only `-v` widens it. */
+    let visibility = match verbosity {
+        Verbosity::Quiet => Verbosity::Normal,
+        loud => loud,
+    };
+    /* NOTE: An annotation costs the reader a line of the checks tab, so a walked
+     * skip is folded away here exactly as it is in the human report: a run
+     * over a repository with forty Markdown files in it must not post forty
+     * notices about them. */
+    for item in skipped
+        .iter()
+        .filter(|item| skip_is_visible(item, visibility))
+    {
+        wrote(writeln!(
+            output,
             "::{} file={},title={}::{}",
             if item.error { "error" } else { "notice" },
-            github_escape(&item.path.to_string_lossy()),
+            github_escape(&report_uri(&item.path)),
             if item.error {
                 "OComment I/O error"
             } else {
                 "OComment skipped file"
             },
             github_escape(&item.reason)
-        );
+        ))?;
     }
     Ok(())
 }
@@ -375,7 +1589,7 @@ pub fn unified_diff(path: &Path, original: &[u8], transformed: &[u8]) -> String 
     output
 }
 
-fn line_column(source: &[u8], offset: usize) -> (usize, usize) {
+pub(crate) fn line_column(source: &[u8], offset: usize) -> (usize, usize) {
     let offset = offset.min(source.len());
     let mut line = 1usize;
     let mut start = 0usize;
@@ -418,4 +1632,351 @@ pub fn invalid(files: &[ProcessedFile]) -> bool {
 #[allow(dead_code)]
 fn _span(_: ByteSpan) -> Value {
     Value::Null
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The frame around a hyperlink target is written in escape bytes, so a
+    /// name carrying one of its own would close the frame early and be read as
+    /// terminal instructions from there on. Nor may a URL carry the `%` that
+    /// makes an encoding an encoding, the space that ends a URL, or the `#`
+    /// that starts a fragment.
+    #[test]
+    fn a_hyperlink_target_encodes_every_byte_a_url_may_not_carry() {
+        assert_eq!(
+            percent_encode("/tmp/plain-file_name.rs~"),
+            "/tmp/plain-file_name.rs~"
+        );
+        assert_eq!(percent_encode("/tmp/a b#c%d.rs"), "/tmp/a%20b%23c%25d.rs");
+        assert_eq!(
+            percent_encode("/tmp/evil\u{1b}[2Jname.rs"),
+            "/tmp/evil%1B%5B2Jname.rs"
+        );
+        /* NOTE: A path is bytes, and one character is as many `%XX` pairs as it
+         * takes to spell it. */
+        assert_eq!(percent_encode("/tmp/\u{e9}.rs"), "/tmp/%C3%A9.rs");
+    }
+
+    /// A name is shown to be typed back, so its own spacing survives; what
+    /// does not is anything that would drive the terminal or break the row.
+    #[test]
+    fn a_sanitized_path_keeps_its_spacing_and_loses_its_controls() {
+        assert_eq!(sanitize_path(" lead.rs "), " lead.rs ");
+        assert_eq!(sanitize_path("ta\tb.rs"), "ta\u{fffd}b.rs");
+        assert_eq!(sanitize_path("two  spaces.rs"), "two  spaces.rs");
+        assert_eq!(sanitize_path("a\nb\u{1b}c.rs"), "a\u{fffd}b\u{fffd}c.rs");
+    }
+
+    /// The reported path is read by a machine that has to find the file again:
+    /// GitHub matches an annotation by `file=`, and a SARIF reader resolves
+    /// `artifactLocation.uri` against the checkout. A Windows separator and a
+    /// `.` segment both name a file no checkout has.
+    #[test]
+    fn report_uri_spells_a_path_the_way_a_repository_does() {
+        assert_eq!(report_uri(Path::new("./a.rs")), "a.rs");
+        assert_eq!(report_uri(Path::new("sub/./doc.rs")), "sub/doc.rs");
+        assert_eq!(report_uri(Path::new("./sub/./doc.rs")), "sub/doc.rs");
+        assert_eq!(report_uri(Path::new(r"sub\doc.rs")), "sub/doc.rs");
+        assert_eq!(report_uri(Path::new(r".\sub\.\doc.rs")), "sub/doc.rs");
+        /* NOTE: A path that leaves the tree, an absolute one, and standard input are
+         * all left as they are; only the separators are normalised. */
+        assert_eq!(report_uri(Path::new("../sibling/a.rs")), "../sibling/a.rs");
+        assert_eq!(report_uri(Path::new("/tmp/a.rs")), "/tmp/a.rs");
+        assert_eq!(report_uri(Path::new(r"C:\src\a.rs")), "C:/src/a.rs");
+        assert_eq!(report_uri(Path::new(STDIN_PATH)), STDIN_PATH);
+        // NOTE: Naming the working directory as nothing at all would be worse.
+        assert_eq!(report_uri(Path::new(".")), ".");
+    }
+
+    /// `%SRCROOT%` says the path is measured from the root of the checkout, so
+    /// it is claimed only for the paths that are.
+    #[test]
+    fn only_a_path_inside_the_tree_is_reported_against_the_source_root() {
+        for inside in ["a.rs", "sub/doc.rs", "./sub/doc.rs"] {
+            assert_eq!(
+                artifact_location(Path::new(inside))["uriBaseId"],
+                json!(SRCROOT),
+                "`{inside}` is not reported against the source root"
+            );
+        }
+        for outside in ["../sibling/a.rs", "/tmp/a.rs", STDIN_PATH] {
+            let location = artifact_location(Path::new(outside));
+            assert_eq!(
+                location.get("uriBaseId"),
+                None,
+                "`{outside}` claims to be under the source root"
+            );
+        }
+    }
+
+    /// A relative reference whose first segment holds a colon is read as a
+    /// scheme, so a checkout that really does hold a directory named `c:` says
+    /// so with the one `.` segment a URI keeps for the purpose. Nothing else
+    /// gains one, and a path that is under no base is left exactly as it was.
+    #[test]
+    fn a_first_segment_that_reads_as_a_drive_letter_is_disambiguated() {
+        let location = artifact_location(Path::new("c:/a.rs"));
+        assert_eq!(location["uri"], json!("./c:/a.rs"));
+        assert_eq!(location["uriBaseId"], json!(SRCROOT));
+        assert_eq!(artifact_location(Path::new("c:"))["uri"], json!("./c:"));
+        for plain in ["a.rs", "sub/doc.rs", "cc:/a.rs", "sub/c:/a.rs"] {
+            assert_eq!(
+                artifact_location(Path::new(plain))["uri"],
+                json!(report_uri(Path::new(plain))),
+                "`{plain}` was disambiguated and had no need of it"
+            );
+        }
+        assert_eq!(
+            artifact_location(Path::new("/tmp/c:/a.rs"))["uri"],
+            json!("/tmp/c:/a.rs"),
+            "a path under no base was rewritten"
+        );
+    }
+
+    /// Every result points into the rules by index, so the two orders have to
+    /// be the same one.
+    #[test]
+    fn a_rule_is_described_once_and_keeps_its_index() {
+        let mut rules = SarifRules::new();
+        assert_eq!(rules.entries.len(), CommentKind::ALL.len());
+        assert_eq!(rules.kind(CommentKind::Line), 0);
+        let first = rules.describe("io-error", "error", "short", "full", TOOL_INFORMATION_URI);
+        assert_eq!(first, CommentKind::ALL.len());
+        let again = rules.describe("io-error", "note", "other", "other", TOOL_INFORMATION_URI);
+        assert_eq!(first, again, "a second sighting described the rule twice");
+        assert_eq!(
+            rules.entries[first]["defaultConfiguration"]["level"],
+            "error"
+        );
+        assert_eq!(rules.entries.len(), CommentKind::ALL.len() + 1);
+    }
+
+    #[test]
+    fn a_diagnostic_code_reads_back_as_a_title() {
+        assert_eq!(
+            sentence_case("unterminated-comment"),
+            "Unterminated comment"
+        );
+        assert_eq!(sentence_case("nesting-limit"), "Nesting limit");
+        assert_eq!(sentence_case(""), "");
+    }
+
+    fn preview_of(source: &[u8], max_columns: usize) -> String {
+        preview(source, ByteSpan::new(0, source.len()), max_columns)
+    }
+
+    #[test]
+    fn preview_collapses_every_run_of_whitespace_and_trims() {
+        assert_eq!(
+            preview_of(b"  /*\r\n\tkeep\t this  tidy \x0c*/  ", 72),
+            "/* keep this tidy */"
+        );
+    }
+
+    #[test]
+    fn preview_truncates_on_display_width_without_splitting_a_wide_character() {
+        let source = "ab漢字漢字漢字ab".as_bytes();
+        assert_eq!(preview_of(source, 20), "ab漢字漢字漢字ab");
+        let cut = preview_of(source, 10);
+        assert_eq!(cut, "ab漢字漢…");
+        assert!(cut.ends_with('…'), "truncation is unmarked: {cut}");
+        let width: usize = cut
+            .chars()
+            .map(|ch| unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0))
+            .sum();
+        assert!(width <= 10, "`{cut}` is {width} columns wide");
+    }
+
+    #[test]
+    fn preview_replaces_control_characters_with_the_replacement_character() {
+        let source = b"// \x1b[31m\x07 \xc2\x9b\x7f bell";
+        let rendered = preview_of(source, 72);
+        assert_eq!(rendered, "// \u{fffd}[31m\u{fffd} \u{fffd}\u{fffd} bell");
+        assert!(
+            !rendered.contains('\x1b'),
+            "an escape sequence survived: {rendered:?}"
+        );
+    }
+
+    #[test]
+    fn preview_replaces_invalid_utf8_bytes() {
+        assert_eq!(
+            preview_of(b"// \xff\xfe end", 72),
+            "// \u{fffd}\u{fffd} end"
+        );
+    }
+
+    /// Bidi overrides and isolates can make a comment render as its own
+    /// reverse, and the line/paragraph separators break the one-line promise.
+    #[test]
+    fn preview_replaces_bidirectional_and_separator_controls() {
+        let source = "// \u{202e}reverse\u{202c} \u{200e}\u{200f} \u{2066}iso\u{2069} \
+                      \u{2028}\u{2029} \u{61c}\u{feff} end";
+        assert_eq!(
+            preview_of(source.as_bytes(), 72),
+            "// \u{fffd}reverse\u{fffd} \u{fffd}\u{fffd} \u{fffd}iso\u{fffd} \
+             \u{fffd}\u{fffd} \u{fffd}\u{fffd} end"
+        );
+        for character in [
+            '\u{61c}', '\u{200e}', '\u{200f}', '\u{202a}', '\u{202b}', '\u{202c}', '\u{202d}',
+            '\u{202e}', '\u{2066}', '\u{2067}', '\u{2068}', '\u{2069}', '\u{2028}', '\u{2029}',
+            '\u{feff}',
+        ] {
+            assert!(
+                is_control(character),
+                "U+{:04X} still reaches the terminal",
+                character as u32
+            );
+        }
+    }
+
+    /// Zero-width characters cost no display columns, so the width budget alone
+    /// cannot bound the line; a hard character cap must.
+    #[test]
+    fn preview_caps_the_character_count_of_a_zero_width_run() {
+        let source = format!("a{}", "\u{301}".repeat(1000));
+        let rendered = preview_of(source.as_bytes(), 8);
+        assert!(
+            rendered.chars().count() <= 8 * 4,
+            "preview is {} characters wide",
+            rendered.chars().count()
+        );
+        assert!(rendered.ends_with('\u{2026}'), "truncation is unmarked");
+    }
+
+    /// A hunk is read as code, so the indentation that says what a line belongs
+    /// to survives — but nothing that drives the terminal does, because the
+    /// prompt asking about that line sits directly underneath it.
+    #[test]
+    fn a_source_line_keeps_its_shape_and_loses_its_control_characters() {
+        assert_eq!(
+            sanitize_source_line("    let x = 1; // note"),
+            "    let x = 1; // note",
+            "the indentation of a shown line was collapsed"
+        );
+        assert_eq!(
+            sanitize_source_line("\tif (x) {"),
+            "        if (x) {",
+            "a tab did not reach its eight-column stop"
+        );
+        assert_eq!(
+            sanitize_source_line("a\u{1b}[2Jb\u{202e}c"),
+            "a\u{fffd}[2Jb\u{fffd}c",
+            "an escape sequence reached the terminal verbatim"
+        );
+        let capped = sanitize_source_line(&"v".repeat(PREVIEW_COLUMNS * 3));
+        let width: usize = capped
+            .chars()
+            .map(|ch| unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0))
+            .sum();
+        assert!(
+            width <= PREVIEW_COLUMNS,
+            "a shown line ran to {width} columns and pushed the question off the screen"
+        );
+    }
+
+    /// The interactive verdict counts answers, and every noun agrees with the
+    /// number in front of it. It closes on the same `(N files scanned)` the
+    /// plain `fix` summary ends with: the reader still has to be told how much
+    /// was looked at to reach the answers.
+    #[test]
+    fn the_interactive_summary_pluralizes_both_of_its_nouns() {
+        assert_eq!(
+            interactive_summary(InteractiveOutcome {
+                removed: 1,
+                reviewed: 1,
+                offered: 1,
+                changed: 1,
+                scanned: 1,
+            }),
+            "Removed 1 of 1 comment in 1 file (1 file scanned)."
+        );
+        assert_eq!(
+            interactive_summary(InteractiveOutcome {
+                removed: 2,
+                reviewed: 5,
+                offered: 5,
+                changed: 3,
+                scanned: 4,
+            }),
+            "Removed 2 of 5 comments in 3 files (4 files scanned)."
+        );
+    }
+
+    /// A run that was never asked a question says so in the vocabulary the
+    /// plain `fix` summary uses for the same answer, and counts the files it
+    /// scanned — `Removed 0 of 0 comments in 0 files` named three numbers, none
+    /// of which was the one the reader wanted.
+    #[test]
+    fn an_interactive_run_with_nothing_to_offer_borrows_the_fix_wording() {
+        assert_eq!(
+            interactive_summary(InteractiveOutcome {
+                scanned: 3,
+                ..InteractiveOutcome::default()
+            }),
+            "Nothing to fix in 3 files."
+        );
+        assert_eq!(
+            interactive_summary(InteractiveOutcome {
+                scanned: 1,
+                ..InteractiveOutcome::default()
+            }),
+            "Nothing to fix in 1 file."
+        );
+    }
+
+    /// `q` stops the questions, so the verdict counts the ones that were
+    /// answered and says how many were left unasked. Reporting `1 of 9` to a
+    /// reader who answered twice would read as seven refusals.
+    #[test]
+    fn a_stopped_interactive_run_counts_the_questions_it_asked() {
+        assert_eq!(
+            interactive_summary(InteractiveOutcome {
+                removed: 1,
+                reviewed: 2,
+                offered: 9,
+                changed: 1,
+                scanned: 4,
+            }),
+            "Removed 1 of 2 comments in 1 file (7 comments not reviewed) (4 files scanned)."
+        );
+        assert_eq!(
+            interactive_summary(InteractiveOutcome {
+                removed: 0,
+                reviewed: 1,
+                offered: 2,
+                changed: 0,
+                scanned: 1,
+            }),
+            "Removed 0 of 1 comment in 0 files (1 comment not reviewed) (1 file scanned)."
+        );
+    }
+
+    /// What a probed tool says about itself gets the preview's treatment: one
+    /// line, no control sequences, and no more of it than a preview shows.
+    #[test]
+    fn sanitize_line_replaces_controls_and_caps_the_width() {
+        assert_eq!(
+            sanitize_line("\u{1b}[2J\u{1b}[1;31mv1.0\tPWNED\u{1b}[0m"),
+            "\u{fffd}[2J\u{fffd}[1;31mv1.0 PWNED\u{fffd}[0m"
+        );
+        let capped = sanitize_line(&"v".repeat(PREVIEW_COLUMNS * 3));
+        let width: usize = capped
+            .chars()
+            .map(|ch| unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0))
+            .sum();
+        assert!(
+            width <= PREVIEW_COLUMNS,
+            "`{capped}` is {width} columns wide"
+        );
+        assert!(capped.ends_with('\u{2026}'), "truncation is unmarked");
+    }
+
+    #[test]
+    fn preview_reads_only_the_span() {
+        let source = b"let x = 1; // TODO remove\n";
+        assert_eq!(preview(source, ByteSpan::new(11, 25), 72), "// TODO remove");
+    }
 }

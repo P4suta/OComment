@@ -12,8 +12,9 @@ repository = "https://github.com/P4suta/OComment"
 
 [workspace.dependencies]
 anyhow = "1.0.104"
-clap = { version = "4.6.6", features = ["derive"] }
+clap = { version = "4.6.6", features = ["derive", "string"] }
 clap_complete = "4.6.8"
+clap_mangen = "0.2"
 globset = "0.4.20"
 ignore = "0.4.26"
 memchr = "2.8.0"
@@ -32,6 +33,9 @@ unicode-width = "0.2.2"
 wasm_component_layer = { package = "ocomment-wasm-component-layer", path = "vendor/wasm_component_layer", version = "=0.1.18-ocomment.1" }
 wasmi = "0.31.2"
 wasmi_runtime_layer = { package = "ocomment-wasmi-runtime-layer", path = "vendor/wasmi_runtime_layer", version = "=0.31.0" }
+
+[workspace.lints.rust]
+missing_docs = "warn"
 
 [profile.release]
 codegen-units = 1

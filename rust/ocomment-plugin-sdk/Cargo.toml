@@ -13,7 +13,14 @@ keywords = ["comments", "plugin", "wasm", "component-model"]
 categories = ["development-tools", "wasm"]
 include = ["src/**", "README.md"]
 
+[lints]
+workspace = true
+
 [dependencies]
 ocomment-core = { version = "0.1.0", path = "../ocomment-core" }
 serde.workspace = true
 thiserror.workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--generate-link-to-definition"]

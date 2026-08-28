@@ -51,3 +51,55 @@ updates:
         update-types:
           - minor
           - patch
+  - package-ecosystem: npm
+    directory: /editors/vscode
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:45"
+      timezone: Asia/Tokyo
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - "area: editors"
+    commit-message:
+      prefix: "chore(deps)"
+    ignore:
+      # @types/vscode has to stay on the version engines.vscode names, or the
+      # extension compiles against API the editors it claims to support do not
+      # have.
+      - dependency-name: "@types/vscode"
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
+    groups:
+      npm-non-major:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "10:00"
+      timezone: Asia/Tokyo
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - "area: ci"
+    commit-message:
+      prefix: "chore(deps)"
+    ignore:
+      # The builder stage is pinned to the MSRV toolchain on purpose; a major
+      # or minor Rust bump is a deliberate change, not a dependency update.
+      - dependency-name: rust
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor

@@ -54,7 +54,14 @@ pub fn apply_transaction(plans: Vec<WritePlan>) -> Result<()> {
             std::process::id()
         ));
         if backup.exists() {
-            bail!("rollback path {} already exists", backup.display());
+            /* INVARIANT: The journal holds the file as it was before the interrupted
+             * run, so deleting it unread can be the loss the rollback existed
+             * to prevent. */
+            bail!(
+                "rollback path {} already exists; a previous ocomment run may have been \
+                 interrupted — inspect and delete it before retrying",
+                backup.display()
+            );
         }
         prepared.push(Prepared {
             plan,
@@ -66,8 +73,8 @@ pub fn apply_transaction(plans: Vec<WritePlan>) -> Result<()> {
     for index in 0..prepared.len() {
         if let Err(error) = commit_one(&mut prepared[index]) {
             let failed_path = prepared[index].plan.path.clone();
-            // Include the failing item: a rename may have created its backup
-            // before installing or syncing the replacement failed.
+            /* INVARIANT: Include the failing item: a rename may have created its backup
+             * before installing or syncing the replacement failed. */
             let rollback_error = rollback(&prepared[..=index]);
             return Err(match rollback_error {
                 Ok(()) => anyhow!(
@@ -165,5 +172,40 @@ mod tests {
             fs::metadata(&path).unwrap().permissions().readonly(),
             permissions.readonly()
         );
+    }
+
+    /// A journal left over from an interrupted run is the only thing standing
+    /// between the caller and a retry, and it holds the pre-run contents of a
+    /// file. The refusal has to say both: what the file is, and that reading
+    /// it before deleting it is the point.
+    ///
+    /// The name carries this process's own id, so the test can plant exactly
+    /// the journal the transaction is about to reach for.
+    #[test]
+    fn an_existing_rollback_journal_says_what_to_do_about_it() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("x.rs");
+        fs::write(&path, b"old").unwrap();
+        let journal = directory
+            .path()
+            .join(format!(".x.rs.ocomment-rollback-{}-0", std::process::id()));
+        fs::write(&journal, b"interrupted").unwrap();
+
+        let error = apply_transaction(vec![WritePlan {
+            path: path.clone(),
+            original: b"old".to_vec(),
+            replacement: b"new".to_vec(),
+        }])
+        .unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            format!(
+                "rollback path {} already exists; a previous ocomment run may have been \
+                 interrupted — inspect and delete it before retrying",
+                journal.display()
+            )
+        );
+        assert_eq!(fs::read(&path).unwrap(), b"old", "the file was rewritten");
     }
 }

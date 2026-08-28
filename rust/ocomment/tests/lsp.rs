@@ -302,7 +302,7 @@ fn protocol_supports_utf8_pull_workspace_actions_and_stale_versions() {
     }));
     assert!(client.response(6)["result"].is_null());
 
-    // A stale update must not replace the current document snapshot.
+    // NOTE: A stale update must not replace the current document snapshot.
     client.send(json!({
         "jsonrpc": "2.0", "method": "textDocument/didChange",
         "params": {
@@ -447,5 +447,135 @@ fn on_save_is_opt_in_and_returns_annotated_safe_edits() {
     let response = client.response(8);
     assert_eq!(response["result"].as_array().unwrap().len(), 1);
     assert_eq!(response["result"][0]["range"]["start"]["character"], 11);
+    client.stop();
+}
+
+#[test]
+fn diagnostics_and_hover_name_comment_kinds_in_canonical_spelling() {
+    let workspace = tempfile::tempdir().unwrap();
+    let uri = Url::from_file_path(workspace.path().join("doc.rs")).unwrap();
+    let mut client = LspClient::start(workspace.path());
+    let _ = client.initialize(workspace.path(), &["utf-8"]);
+    client.send(json!({
+        "jsonrpc": "2.0", "method": "textDocument/didOpen",
+        "params": { "textDocument": {
+            "uri": uri, "languageId": "rust", "version": 1,
+            "text": "/** doc */\n// SPDX-License-Identifier: MIT\n"
+        }}
+    }));
+    let pushed = client.notification("textDocument/publishDiagnostics");
+    let diagnostics = pushed["params"]["diagnostics"].as_array().unwrap();
+    assert_eq!(diagnostics[0]["message"], "removable doc-block comment");
+    assert_eq!(diagnostics[0]["code"], "removable-comment");
+
+    client.send(json!({
+        "jsonrpc": "2.0", "id": 60, "method": "textDocument/hover",
+        "params": {
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 3 }
+        }
+    }));
+    assert_eq!(
+        client.response(60)["result"]["contents"],
+        "OComment: removable doc-block comment"
+    );
+
+    client.stop();
+}
+
+#[test]
+fn hover_over_a_protected_comment_names_the_kind_and_reason() {
+    let workspace = tempfile::tempdir().unwrap();
+    let uri = Url::from_file_path(workspace.path().join("preamble.py")).unwrap();
+    let mut client = LspClient::start(workspace.path());
+    let _ = client.initialize(workspace.path(), &["utf-8"]);
+    client.send(json!({
+        "jsonrpc": "2.0", "method": "textDocument/didOpen",
+        "params": { "textDocument": {
+            "uri": uri, "languageId": "python", "version": 1,
+            "text": "#!/usr/bin/env python3\nx = 1\n"
+        }}
+    }));
+    let _ = client.notification("textDocument/publishDiagnostics");
+    client.send(json!({
+        "jsonrpc": "2.0", "id": 61, "method": "textDocument/hover",
+        "params": {
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 3 }
+        }
+    }));
+    assert_eq!(
+        client.response(61)["result"]["contents"],
+        "OComment: kept shebang comment: required source preamble"
+    );
+    client.stop();
+}
+
+#[test]
+fn editor_language_ids_name_languages_the_path_alone_would_not() {
+    let workspace = tempfile::tempdir().unwrap();
+    let mut client = LspClient::start(workspace.path());
+    let _ = client.initialize(workspace.path(), &["utf-8"]);
+
+    /* NOTE: Neither name carries an extension and neither buffer opens with a
+     * shebang, so the client's `languageId` is the only thing that can say
+     * what the bytes are. An id the server cannot place leaves the document
+     * `unknown`, which is an error diagnostic rather than a comment, so both
+     * assertions below check the comment and not merely the count. */
+    let shell = Url::from_file_path(workspace.path().join("hook")).unwrap();
+    client.send(json!({
+        "jsonrpc": "2.0", "method": "textDocument/didOpen",
+        "params": { "textDocument": {
+            "uri": shell, "languageId": "shellscript", "version": 1,
+            "text": "echo hi # remove\n"
+        }}
+    }));
+    let pushed = client.notification("textDocument/publishDiagnostics");
+    assert_eq!(pushed["params"]["uri"], shell.as_str());
+    let diagnostics = pushed["params"]["diagnostics"].as_array().unwrap();
+    assert_eq!(diagnostics.len(), 1, "unexpected diagnostics: {pushed}");
+    assert_eq!(diagnostics[0]["code"], "removable-comment");
+    assert_eq!(diagnostics[0]["range"]["start"]["character"], 8);
+
+    let cuda = Url::from_file_path(workspace.path().join("kernel")).unwrap();
+    client.send(json!({
+        "jsonrpc": "2.0", "method": "textDocument/didOpen",
+        "params": { "textDocument": {
+            "uri": cuda, "languageId": "cuda-cpp", "version": 1,
+            "text": "int x = 1; // remove\n"
+        }}
+    }));
+    let pushed = client.notification("textDocument/publishDiagnostics");
+    assert_eq!(pushed["params"]["uri"], cuda.as_str());
+    let diagnostics = pushed["params"]["diagnostics"].as_array().unwrap();
+    assert_eq!(diagnostics.len(), 1, "unexpected diagnostics: {pushed}");
+    assert_eq!(diagnostics[0]["code"], "removable-comment");
+    assert_eq!(diagnostics[0]["range"]["start"]["character"], 11);
+
+    client.stop();
+}
+
+#[test]
+fn shellscript_keeps_the_dialect_the_path_implies() {
+    let workspace = tempfile::tempdir().unwrap();
+    let uri = Url::from_file_path(workspace.path().join("script.bash")).unwrap();
+    let mut client = LspClient::start(workspace.path());
+    let _ = client.initialize(workspace.path(), &["utf-8"]);
+    /* NOTE: `$'...'` is ANSI-C quoting in Bash and zsh only. Read as POSIX sh
+     * the string ends at the escaped quote and the comment starts eleven
+     * columns earlier, on `#1'`. One editor id, `shellscript`, covers all
+     * three shells, so the dialect still has to come from the path. */
+    client.send(json!({
+        "jsonrpc": "2.0", "method": "textDocument/didOpen",
+        "params": { "textDocument": {
+            "uri": uri, "languageId": "shellscript", "version": 1,
+            "text": "printf $'it\\'s #1' # remove\n"
+        }}
+    }));
+    let pushed = client.notification("textDocument/publishDiagnostics");
+    let diagnostics = pushed["params"]["diagnostics"].as_array().unwrap();
+    assert_eq!(diagnostics.len(), 1, "unexpected diagnostics: {pushed}");
+    assert_eq!(diagnostics[0]["code"], "removable-comment");
+    assert_eq!(diagnostics[0]["range"]["start"]["character"], 19);
     client.stop();
 }

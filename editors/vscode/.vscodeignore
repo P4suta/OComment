@@ -1,0 +1,13 @@
+.vscode/**
+.vscode-test/**
+.vscode-test.mjs
+node_modules/**
+out/**
+src/**
+test-fixtures/**
+**/*.map
+**/*.ts
+**/tsconfig.json
+esbuild.mjs
+eslint.config.mjs
+package-lock.json

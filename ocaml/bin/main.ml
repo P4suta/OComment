@@ -66,7 +66,7 @@ let dialect_of_string = function
   | "gnu-c" -> GnuC | "gnu-cpp" -> GnuCpp | "cuda" -> Cuda
   | "posix-sh" -> PosixSh | "bash53" -> Bash53 | "zsh" -> Zsh
   | "postgresql" -> PostgreSql | "mysql" -> MySql | "sqlite" -> Sqlite
-  | "t-sql" -> TSql | "oracle" -> Oracle
+  | "t-sql" -> TSql | "oracle" -> Oracle | "scss" -> Scss
   | value -> failwith ("unknown dialect `" ^ value ^ "`")
 
 let strings name json =

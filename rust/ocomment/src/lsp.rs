@@ -1,6 +1,7 @@
 use crate::{
     config::{self, ResolvedConfig},
     files,
+    output::{kept_label, removable_label},
     plugin::PluginHost,
 };
 use anyhow::Result as AnyResult;
@@ -155,7 +156,7 @@ impl Backend {
                 code: Some(NumberOrString::String("removable-comment".into())),
                 code_description: None,
                 source: Some("ocomment".into()),
-                message: format!("removable {:?} comment", comment.kind),
+                message: removable_label(comment.kind),
                 related_information: None,
                 tags: Some(vec![DiagnosticTag::UNNECESSARY]),
                 data: None,
@@ -855,11 +856,10 @@ impl LanguageServer for Backend {
             return Ok(None);
         };
         let text = match &comment.disposition {
-            Disposition::Remove => format!("OComment: removable {:?} comment", comment.kind),
-            Disposition::Keep { reason } => format!(
-                "OComment protects this {:?} comment: {reason}",
-                comment.kind
-            ),
+            Disposition::Remove => format!("OComment: {}", removable_label(comment.kind)),
+            Disposition::Keep { reason } => {
+                format!("OComment: {}", kept_label(comment.kind, reason))
+            }
         };
         Ok(Some(Hover {
             contents: HoverContents::Scalar(MarkedString::String(text)),
@@ -1056,6 +1056,16 @@ fn language_from_lsp(id: &str, uri: &Url, source: &[u8]) -> (Language, Dialect) 
         "typescriptreact" => (Language::TypeScript, Dialect::Tsx),
         "objective-c" => (Language::C, Dialect::ObjectiveC),
         "objective-cpp" => (Language::Cpp, Dialect::ObjectiveCpp),
+        "cuda-cpp" => (Language::Cpp, Dialect::Cuda),
+        /* NOTE: One editor id covers sh, Bash, and zsh alike, and the dialects
+         * differ — `$'...'` is an ANSI-C quoted string in the last two only.
+         * The id settles the language, so the dialect is taken from the path
+         * and the bytes whenever they agree it is a shell script at all, and
+         * falls back to the language default when a buffer offers neither. */
+        "shellscript" => (
+            Language::Shell,
+            detected_dialect(uri, source, Language::Shell).unwrap_or(Dialect::Standard),
+        ),
         id => id
             .parse()
             .map(|language| (language, Dialect::Standard))
@@ -1066,6 +1076,15 @@ fn language_from_lsp(id: &str, uri: &Url, source: &[u8]) -> (Language, Dialect) 
                     .unwrap_or((Language::Unknown, Dialect::Standard))
             }),
     }
+}
+
+/// The dialect the path and the bytes imply, when they agree with the language
+/// the client named.
+fn detected_dialect(uri: &Url, source: &[u8], language: Language) -> Option<Dialect> {
+    let path = uri.to_file_path().ok();
+    detect_language(path.as_deref(), source)
+        .filter(|detection| detection.language == language)
+        .map(|detection| detection.dialect)
 }
 
 fn incremental_for_document(
@@ -1155,7 +1174,7 @@ fn progress_percentage(completed: usize, total: usize) -> u32 {
 }
 
 fn stable_text_hash(bytes: &[u8]) -> u64 {
-    // FNV-1a is sufficient for an opaque, session-local LSP result identifier.
+    // NOTE: FNV-1a is sufficient for an opaque, session-local LSP result identifier.
     bytes.iter().fold(0xcbf29ce484222325, |hash, byte| {
         (hash ^ u64::from(*byte)).wrapping_mul(0x100000001b3)
     })
@@ -1255,6 +1274,41 @@ fn next_line_start(source: &[u8], start: usize) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every language identifier the VS Code extension attaches the server to
+    /// has to reach a built-in language here.
+    ///
+    /// The two lists are written in different vocabularies: `Language` is named
+    /// after the language and an editor identifier after whatever the editor
+    /// calls it, and the two agree for most of them by luck rather than by
+    /// construction — `objective-c`, `cuda-cpp`, `javascriptreact` and
+    /// `shellscript` do not agree at all, which is what
+    /// [`language_from_lsp`]'s arms are for. Nothing else notices when they
+    /// stop agreeing: the extension still activates for the identifier, the
+    /// server still opens the document, and the scan comes back with the
+    /// `unknown-language` diagnostic and no comments. So the selector is read
+    /// here rather than trusted.
+    #[test]
+    fn every_editor_language_identifier_reaches_a_built_in_language() {
+        let manifest: serde_json::Value =
+            serde_json::from_str(include_str!("../../../editors/vscode/package.json"))
+                .expect("package.json parses");
+        let identifiers =
+            manifest["contributes"]["configuration"]["properties"]["ocomment.languages"]["default"]
+                .as_array()
+                .expect("`ocomment.languages` has an array default");
+        let uri = Url::parse("file:///buffer").expect("a well-formed URI");
+        assert!(!identifiers.is_empty());
+        for value in identifiers {
+            let id = value.as_str().expect("a language identifier is a string");
+            let (language, _) = language_from_lsp(id, &uri, b"");
+            assert!(
+                Language::ALL.contains(&language),
+                "the editor identifier `{id}` reaches {language}, which has no built-in scanner"
+            );
+        }
+    }
+
     #[test]
     fn position_round_trip_all_encodings() {
         let source = "a😀b\rnext\r\n二\nlast".as_bytes();

@@ -1,10 +1,11 @@
 type language =
   | Rust | Ocaml | C | Cpp | Go | Java | JavaScript | TypeScript | Python
-  | Shell | Html | Css | Jsonc | Sql | Kotlin | Unknown
+  | Shell | Html | Css | Jsonc | Sql | Kotlin | Toml | Lua | Yaml | Php | Ruby
+  | Zig | R | Dart | Swift | CSharp | Scala | Vue | Svelte | Markdown | Perl | Unknown
 
 type dialect =
   | Standard | Jsx | Tsx | ObjectiveC | ObjectiveCpp | GnuC | GnuCpp | Cuda
-  | PosixSh | Bash53 | Zsh | PostgreSql | MySql | Sqlite | TSql | Oracle
+  | PosixSh | Bash53 | Zsh | PostgreSql | MySql | Sqlite | TSql | Oracle | Scss
 
 type byte_span = { start : int; finish : int }
 
@@ -85,14 +86,32 @@ let language_of_string value =
   | "typescript" | "ts" | "tsx" -> Ok TypeScript | "python" | "py" -> Ok Python
   | "shell" | "sh" | "bash" | "zsh" -> Ok Shell | "html" | "htm" -> Ok Html
   | "css" -> Ok Css | "jsonc" | "json5" -> Ok Jsonc | "sql" -> Ok Sql
-  | "kotlin" | "kt" | "kts" -> Ok Kotlin
+  | "kotlin" | "kt" | "kts" -> Ok Kotlin | "toml" -> Ok Toml | "lua" -> Ok Lua
+  | "yaml" | "yml" -> Ok Yaml | "php" -> Ok Php | "ruby" | "rb" -> Ok Ruby
+  | "zig" -> Ok Zig | "r" | "rscript" -> Ok R | "dart" -> Ok Dart
+  | "swift" -> Ok Swift
+  | "csharp" | "cs" | "c#" | "c-sharp" -> Ok CSharp
+  | "scala" -> Ok Scala
+  | "vue" -> Ok Vue
+  | "svelte" -> Ok Svelte
+  | "markdown" -> Ok Markdown
+  | "perl" -> Ok Perl
   | other -> Error ("unsupported language `" ^ other ^ "`")
 
 let string_of_language = function
   | Rust -> "rust" | Ocaml -> "ocaml" | C -> "c" | Cpp -> "cpp" | Go -> "go"
   | Java -> "java" | JavaScript -> "javascript" | TypeScript -> "typescript"
   | Python -> "python" | Shell -> "shell" | Html -> "html" | Css -> "css"
-  | Jsonc -> "jsonc" | Sql -> "sql" | Kotlin -> "kotlin" | Unknown -> "unknown"
+  | Jsonc -> "jsonc" | Sql -> "sql" | Kotlin -> "kotlin" | Toml -> "toml"
+  | Lua -> "lua" | Yaml -> "yaml" | Php -> "php" | Ruby -> "ruby"
+  | Zig -> "zig" | R -> "r" | Dart -> "dart" | Swift -> "swift"
+  | CSharp -> "csharp"
+  | Scala -> "scala"
+  | Vue -> "vue"
+  | Svelte -> "svelte"
+  | Markdown -> "markdown"
+  | Perl -> "perl"
+  | Unknown -> "unknown"
 
 let string_of_comment_kind = function
   | Line -> "line" | Block -> "block" | DocLine -> "doc-line" | DocBlock -> "doc-block"
@@ -140,11 +159,41 @@ let find_from source index token =
     in search index 0
   end
 
+(* NOTE: the length of the run of "byte" beginning at "index". *)
+let count_run source index byte =
+  let rec loop cursor =
+    if cursor < Bytes.length source && Bytes.get source cursor = byte then loop (cursor + 1)
+    else cursor in
+  loop index - index
+
 let line_end source index =
   let rec loop cursor =
     if cursor >= Bytes.length source then cursor else
     match Bytes.get source cursor with '\r' | '\n' -> cursor | _ -> loop (cursor + 1)
   in loop index
+
+(* NOTE: ASCII whitespace as `u8::is_ascii_whitespace` defines it: space, tab,
+   line feed, form feed, carriage return.  The vertical tab is deliberately not
+   in it, which is what several rules below turn on. *)
+let ascii_whitespace = function
+  | ' ' | '\t' | '\n' | '\r' | '\012' -> true
+  | _ -> false
+
+(* NOTE: ECMAScript WhiteSpace and LineTerminator, as far as one byte can say
+   (ECMA-262 12.2, 12.3).  <VT> is whitespace to JavaScript, so a comparison
+   written `a<VT><div>` is a comparison and not a JSX element.  The non-ASCII
+   members -- U+00A0, U+FEFF, and the Zs category -- take more than one byte and
+   are not decided here. *)
+let js_is_space = function
+  | ' ' | '\t' | '\n' | '\011' | '\012' | '\r' -> true
+  | _ -> false
+
+let js_identifier_start character =
+  (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') ||
+  character = '_' || character = '$' || Char.code character land 0x80 <> 0
+
+let js_identifier_continue character =
+  js_identifier_start character || (character >= '0' && character <= '9')
 
 let mem_kind kind kinds = List.exists (( = ) kind) kinds
 
@@ -193,6 +242,53 @@ let contains text needle =
     (String.sub text index needle_length = needle || loop (index + 1))
   in needle_length = 0 || loop 0
 
+(* NOTE: The scalars Unicode gives the White_Space property.  Rust's
+   `str::trim` removes every one of them and OCaml's `String.trim` removes five
+   ASCII bytes, so a comment whose body opens with a no-break space or a line
+   separator would classify differently on the two sides: `region` behind one is
+   still the folding directive an editor reads, and keeping it is the
+   conservative half of that disagreement. *)
+let unicode_whitespace = function
+  | 0x09 | 0x0a | 0x0b | 0x0c | 0x0d | 0x20 | 0x85 | 0xa0 | 0x1680
+  | 0x2028 | 0x2029 | 0x202f | 0x205f | 0x3000 -> true
+  | value -> value >= 0x2000 && value <= 0x200a
+
+(* NOTE: One UTF-8 scalar at `index`, as (scalar, width).  A byte that opens no
+   well-formed sequence comes back on its own as U+FFFD, which is what
+   `String.from_utf8_lossy` hands the Rust trim; the widths the two assign to a
+   malformed run may differ, and cannot matter, because neither side calls
+   U+FFFD whitespace.  Overlong encodings and surrogates are rejected for the
+   same reason: `\xc0\xa0` is not a space to either lexer. *)
+let utf8_decode text index =
+  let length = String.length text in
+  let byte offset = Char.code (String.get text (index + offset)) in
+  let continuation offset = index + offset < length && byte offset land 0xc0 = 0x80 in
+  let head = byte 0 in
+  if head < 0x80 then (head, 1)
+  else if head land 0xe0 = 0xc0 && head >= 0xc2 && continuation 1 then
+    (((head land 0x1f) lsl 6) lor (byte 1 land 0x3f), 2)
+  else if head land 0xf0 = 0xe0 && continuation 1 && continuation 2 then
+    let scalar = ((head land 0x0f) lsl 12) lor ((byte 1 land 0x3f) lsl 6) lor (byte 2 land 0x3f) in
+    if scalar < 0x800 || (scalar >= 0xd800 && scalar <= 0xdfff) then (0xfffd, 1) else (scalar, 3)
+  else if head land 0xf8 = 0xf0 && continuation 1 && continuation 2 && continuation 3 then
+    let scalar = ((head land 0x07) lsl 18) lor ((byte 1 land 0x3f) lsl 12) lor
+      ((byte 2 land 0x3f) lsl 6) lor (byte 3 land 0x3f) in
+    if scalar < 0x10000 || scalar > 0x10ffff then (0xfffd, 1) else (scalar, 4)
+  else (0xfffd, 1)
+
+let unicode_trim text =
+  let length = String.length text in
+  let rec front index =
+    if index >= length then index
+    else let scalar, width = utf8_decode text index in
+      if unicode_whitespace scalar then front (index + width) else index in
+  let start = front 0 in
+  let rec back index finish =
+    if index >= length then finish
+    else let scalar, width = utf8_decode text index in
+      back (index + width) (if unicode_whitespace scalar then finish else index + width) in
+  String.sub text start (back start start - start)
+
 let trim_markers raw =
   let markers = ["<!--"; "///"; "//!"; "//"; "/**"; "/*"; "(*"; "--"; "#"] in
   let endings = ["-->"; "*/"; "*)"] in
@@ -200,24 +296,106 @@ let trim_markers raw =
     | Some marker -> String.length marker | None -> 0 in
   let finish = match List.find_opt (fun marker -> String.ends_with ~suffix:marker raw) endings with
     | Some marker -> String.length raw - String.length marker | None -> String.length raw in
-  String.sub raw start (max 0 (finish - start)) |> String.trim |> lowercase
+  String.sub raw start (max 0 (finish - start)) |> unicode_trim |> lowercase
 
 let is_legal text =
   List.exists (contains text) ["spdx-license-identifier"; "copyright"; "licensed under";
     "permission is hereby granted"; "all rights reserved"]
 
+(* NOTE: A directive named after the tool that reads it is followed by the
+   argument that tool takes, and whitespace of the writer's choosing separates
+   the two, so the keyword ends at a boundary rather than at one particular
+   byte. Matching the bare prefix would read prose that merely opens with those
+   letters -- "# shellcheckish note" -- as an instruction as well.
+
+   The end of the comment ends the keyword too: "#:schema" with its URL still to
+   be typed is the directive it is about to be, and the text arrives trimmed, so
+   refusing the empty remainder would protect the directive or not depending on
+   a trailing space. *)
+let opens_with_keyword compact keyword =
+  let length = String.length keyword in
+  String.starts_with ~prefix:keyword compact &&
+  (String.length compact = length ||
+   (match compact.[length] with
+    | ' ' | '\t' | '\n' | '\012' | '\r' -> true
+    | _ -> false))
+
+(* NOTE: trim_markers takes the "--" off a Lua comment and leaves the third dash
+   of "---@diagnostic" behind, which this is what removes. *)
+let trim_dashes text =
+  let length = String.length text in
+  let rec loop index = if index < length && text.[index] = '-' then loop (index + 1) else index in
+  let start = loop 0 in
+  String.sub text start (length - start)
+
+(* NOTE: ASCII whitespace as u8::is_ascii_whitespace defines it, taken off the
+   end alone: dart_style compares a comment's text, which is trimmed there and
+   not at the front. *)
+let trim_ascii_end text =
+  let rec loop finish =
+    if finish > 0 && ascii_whitespace text.[finish - 1] then loop (finish - 1) else finish in
+  String.sub text 0 (loop (String.length text))
+
+(* NOTE: Dart's language version comment, which the scanner itself reads rather
+   than a tool: "tokenizeLanguageVersionOrSingleLineComment" accepts exactly two
+   slashes -- a third sends it to tokenizeSingleLineComment instead -- then
+   spaces, "@dart" in lower case, spaces, "=", spaces, a run of digits, ".", a
+   second run of digits, spaces, and the end of the line.  Only the space is
+   skipped and not the tab: the scanner compares against $SPACE.
+
+   The comment is honoured only ahead of the first real token of a file, and
+   this is asked of every comment in one.  Reading a later one as an instruction
+   keeps a comment a removal would otherwise take, which is the direction to be
+   wrong in. *)
+let dart_language_version raw =
+  let length = String.length raw in
+  let spaces index =
+    let rec loop cursor =
+      if cursor < length && raw.[cursor] = ' ' then loop (cursor + 1) else cursor in
+    loop index in
+  let digits index =
+    let rec loop cursor =
+      if cursor < length && raw.[cursor] >= '0' && raw.[cursor] <= '9' then loop (cursor + 1)
+      else cursor in
+    let finish = loop index in
+    if finish = index then None else Some finish in
+  let literal index token =
+    let token_length = String.length token in
+    if index + token_length <= length && String.sub raw index token_length = token
+    then Some (index + token_length) else None in
+  match literal 0 "//" with
+  | None -> false
+  | Some index ->
+    if index < length && raw.[index] = '/' then false
+    else match literal (spaces index) "@dart" with
+      | None -> false
+      | Some index ->
+        match literal (spaces index) "=" with
+        | None -> false
+        | Some index ->
+          match digits (spaces index) with
+          | None -> false
+          | Some index ->
+            match literal index "." with
+            | None -> false
+            | Some index ->
+              match digits index with
+              | None -> false
+              | Some index -> spaces index = length
+
 let is_directive language text raw =
-  let compact = String.trim text |> String.to_seq |>
+  let compact = text |> String.to_seq |>
     Seq.drop_while (fun character -> String.contains "!/*#@ " character) |> String.of_seq in
   let prefixes = ["sourcemappingurl="; "sourceurl="; "#__pure__"; "@__pure__";
     "__pure__"; "#__no_side_effects__"; "__no_side_effects__"; "ts-ignore";
     "ts-expect-error"; "ts-nocheck"; "ts-check"; "eslint"; "prettier-ignore";
-    "stylelint"; "shellcheck";
+    "stylelint";
     "noinspection"; "nolint"; "noqa"; "type: ignore"; "fmt:"; "rustfmt::";
     "clang-format"; "spotless:"; "ktlint-disable"; "ktlint-enable"; "detekt:";
     "istanbul ignore"; "c8 ignore"; "coverage:";
     "ocomment:"; "region"; "endregion"] in
   List.exists (fun prefix -> String.starts_with ~prefix compact) prefixes ||
+  opens_with_keyword compact "shellcheck" ||
   match language with
   | Go -> String.starts_with ~prefix:"go:" compact || String.starts_with ~prefix:"+build" compact ||
       String.starts_with ~prefix:"line " compact
@@ -225,7 +403,168 @@ let is_directive language text raw =
   | C | Cpp -> String.starts_with ~prefix:"pragma" compact || String.starts_with ~prefix:"line " compact
   | Python -> List.exists (fun prefix -> String.starts_with ~prefix compact)
       ["pyright:"; "mypy:"; "ruff:"; "fmt:"]
-  | Shell -> String.starts_with ~prefix:"shellcheck" compact
+  | Shell -> opens_with_keyword compact "hadolint" ||
+      String.starts_with ~prefix:"syntax=" compact
+  | Toml -> opens_with_keyword compact ":schema" ||
+      String.starts_with ~prefix:"taplo:" compact
+  (* NOTE: The language server's annotations are the only Lua comments that open
+     with "---@", and "diagnostic" is the only one of them that instructs a tool
+     rather than describing a type, so "raw" is what tells the annotation from
+     prose about it. The four checkers below are addressed as "-- <tool>:",
+     which carries its own boundary in the colon. *)
+  | Lua -> (String.starts_with ~prefix:"---@" raw &&
+      String.starts_with ~prefix:"@diagnostic" (trim_dashes text)) ||
+      List.exists (fun prefix -> String.starts_with ~prefix compact)
+        ["luacheck:"; "selene:"; "stylua:"; "luacov:"]
+  (* NOTE: "@schema" is asked of the trimmed text rather than of "compact",
+     because "compact" is what takes the "@" off: the annotation the Helm schema
+     generator reads is spelled with it, and "schema" on its own is a word any
+     comment about a schema opens with.  The three keywords after it are the
+     whole word their tool answers to and end at a boundary; the four prefixes
+     carry their own in a colon. *)
+  | Yaml -> opens_with_keyword text "@schema" ||
+      List.exists (opens_with_keyword compact) ["yamllint"; "nosec"; "kics-scan"] ||
+      List.exists (fun prefix -> String.starts_with ~prefix compact)
+        ["yaml-language-server:"; "renovate:"; "checkov:skip"; "trivy:ignore"]
+  (* NOTE: Three of the four are asked of the trimmed text rather than of
+     "compact", because "compact" is what takes the "@" off, and the "@" is what
+     tells the annotation from prose about it.  "@psalm-suppress" is followed by
+     the issue it silences after whitespace, so it ends at a boundary;
+     "@phpstan-ignore" and "@codeCoverageIgnore" are namespaces whose members
+     differ only in what runs on past them, so a prefix is the whole rule there.
+     "phpcs:" carries its own boundary in the colon and covers "ignore",
+     "disable", "enable" and "ignoreFile" alike. *)
+  | Php -> opens_with_keyword text "@psalm-suppress" ||
+      String.starts_with ~prefix:"@phpstan-ignore" text ||
+      String.starts_with ~prefix:"@codecoverageignore" text ||
+      String.starts_with ~prefix:"phpcs:" compact
+  (* NOTE: Three of these six are Ruby's own magic comments, which the
+     interpreter reads out of the head of a file: "frozen_string_literal"
+     decides whether every literal string in it is frozen,
+     "shareable_constant_value" what Ractor may share, and "warn_indent" whether
+     the parser complains about the indentation.  The other three are the tools
+     every Ruby project runs -- RuboCop, StandardRB, and Sorbet's "# typed:"
+     sigil.  Each carries its own boundary in the colon and covers the whole
+     namespace behind it.  The encoding declaration is deliberately absent: it
+     is a kind of its own, classified before this runs. *)
+  | Ruby -> List.exists (fun prefix -> String.starts_with ~prefix compact)
+      ["frozen_string_literal:"; "warn_indent:"; "shareable_constant_value:";
+       "rubocop:"; "standard:"; "typed:"]
+  (* NOTE: The two comments an R tool reads rather than a reader.  styler turns
+     its formatter off between "# styler: off" and "# styler: on", and the colon
+     carries the marker's own boundary; covr excludes the lines between
+     "# nocov start" and "# nocov end", and "nocov" is the whole word it looks
+     for -- "start", "end" and nothing at all all follow it -- so that one ends
+     at a boundary instead.  lintr's "# nolint" is protected for every language
+     already and is deliberately absent here. *)
+  | R -> opens_with_keyword compact "nocov" ||
+      String.starts_with ~prefix:"styler:" compact
+  (* NOTE: "zig fmt" reads its one instruction by equality rather than by prefix:
+     Render.zig takes two bytes off the trimmed comment, trims the white space
+     that follows, and compares the remainder with "zig fmt: off" and
+     "zig fmt: on".  So "// zig fmt: off please" turns nothing off, and neither
+     does "/// zig fmt: off" or "//// zig fmt: off" -- the first leaves one "/"
+     in front of the phrase and the second two.  "raw" is what tells those
+     apart, because trim_markers takes a "///" off whole; the comparison itself
+     is against the trimmed text, which is folded to lower case here where
+     "zig fmt" is case-sensitive, and folding can only keep a comment a removal
+     would otherwise take. *)
+  | Zig ->
+    String.starts_with ~prefix:"//" raw &&
+    not (String.length raw > 2 && (raw.[2] = '/' || raw.[2] = '!')) &&
+    (text = "zig fmt: off" || text = "zig fmt: on")
+  (* NOTE: Four instructions, and only one of them is addressed to a tool.
+     "// @dart = 2.12" is read by the Dart scanner itself and decides which
+     version of the language the file is written in, so a removal that took it
+     would change what the remaining code means.  "dart format" is matched by
+     equality on the whole comment rather than by prefix, because that is how
+     dart_style matches it: piece_writer.dart switches on comment.text against
+     "// dart format off" and "// dart format on", so "//   dart format off"
+     with a second space and "/// dart format off" with a third slash turn
+     nothing off -- measured on dart format from SDK 3.13.2, which reformatted
+     both.  comment.text is trimmed at the end and not at the front, and this is
+     asked of "raw" for the reason Zig's is: trim_markers takes a "///" off
+     whole and would leave the two spellings indistinguishable.  The analyzer's
+     two ignore comments each carry their own boundary in the colon
+     (ignore_comments/ignore_info.dart). *)
+  | Dart ->
+    dart_language_version raw ||
+    (let phrase = trim_ascii_end raw in
+     phrase = "// dart format off" || phrase = "// dart format on") ||
+    List.exists (fun prefix -> String.starts_with ~prefix compact)
+      ["ignore:"; "ignore_for_file:"]
+  (* NOTE: Four instructions, and only one of them is addressed to a formatter.
+     "// swift-tools-version:" is the first line of a Package.swift, and SwiftPM
+     reads it before it reads any of the manifest: it decides which version of
+     the package description the file is written against, so a removal that took
+     it would leave a package that no longer builds.  The other three name the
+     tool that reads them and carry their own boundary -- a colon for
+     "swiftlint:" and "swiftformat:", and for "swift-format-ignore" the end of
+     the comment, a colon, or the "-file" that widens it to the whole file.
+     Measured on swift-format 6.3.3: "// swift-format-ignore" and
+     "// swift-format-ignore-file" both leave "let    a     = 1" alone, and
+     "// swift-format-ignoreish note" reformats it.  "// MARK:" is deliberately
+     absent: Xcode reads it to build a jump bar, so it is addressed to a reader
+     rather than to a build. *)
+  | Swift ->
+    List.exists (fun prefix -> String.starts_with ~prefix compact)
+      ["swift-tools-version:"; "swiftlint:"; "swiftformat:"] ||
+    (match String.starts_with ~prefix:"swift-format-ignore" compact with
+     | false -> false
+     | true ->
+       let rest = String.sub compact 19 (String.length compact - 19) in
+       let tail =
+         if String.starts_with ~prefix:"-file" rest
+         then String.sub rest 5 (String.length rest - 5) else rest in
+       tail = "" || tail.[0] = ':' || tail.[0] = ' ' || tail.[0] = '\t'
+       || tail.[0] = '\n' || tail.[0] = '\r' || tail.[0] = '\x0b' || tail.[0] = '\x0c')
+  (* NOTE: Three instructions, and the first is the one a compiler reads.
+     Roslyn's GeneratedCodeUtilities.BeginsWithAutoGeneratedComment searches the
+     "//" and block comments in front of a file's first token for
+     "<auto-generated" -- the legacy "<autogenerated" with it -- and a file it
+     finds one in is exempt from every analyzer that opts out of generated code,
+     so a removal that took it would light up the diagnostics the file was
+     written to escape.  That search is a containment rather than a prefix, and
+     it is followed here: the "<" is the marker's own boundary, and prose about
+     generated code carries none.  Roslyn asks for it in the leading trivia alone
+     and asks case-sensitively; both are widened here, because a comment that
+     merely reads like the marker is a comment a reader meant as one.
+
+     "// ReSharper disable" and "// ReSharper restore" bound the region an
+     inspection is turned off over, and only those two verbs are instructions --
+     the white space between the tool and its verb is what tells them from prose
+     that opens with the same letters.  "// csharpier-ignore" is matched on the
+     whole comment rather than by prefix, because that is how CSharpier matches
+     it: measured on csharpier 1.3.0, the bare marker and its "-start" and "-end"
+     spellings each left "int    a     =    1;" unformatted, while the same
+     marker with a second space after the slashes, with text run on past it, in a
+     block comment and behind three slashes all reformatted it. *)
+  | CSharp ->
+    contains text "<auto-generated" || contains text "<autogenerated" ||
+    (match String.starts_with ~prefix:"resharper" compact with
+     | false -> false
+     | true ->
+       let rest = String.sub compact 9 (String.length compact - 9) in
+       let rec skip index =
+         if index < String.length rest && (rest.[index] = ' ' || rest.[index] = '\t')
+         then skip (index + 1) else index in
+       let start = skip 0 in
+       start > 0 &&
+       (let verb = String.sub rest start (String.length rest - start) in
+        String.starts_with ~prefix:"disable" verb
+        || String.starts_with ~prefix:"restore" verb)) ||
+    raw = "// csharpier-ignore" || raw = "// csharpier-ignore-start"
+    || raw = "// csharpier-ignore-end"
+  (* NOTE: scala-cli reads a directive line before it reads the manifest at
+     all, and the directive is "//>" followed by a space and a name, of which
+     "using" is the one that configures the build.  "compact" is the comment
+     with its markers stripped, so "//> using" is "> using", and the boundary
+     is what keeps a comment that only opens with the same letters --
+     "//> usingless", or "//>> using" with one ">" more -- from being kept as
+     one. *)
+  | Scala ->
+    compact = "> using" || String.starts_with ~prefix:"> using " compact
+    || String.starts_with ~prefix:"> using\t" compact
   | _ -> false
 
 let within_first_two_lines source finish =
@@ -241,7 +580,32 @@ let within_first_two_lines source finish =
     else loop (index + 1) line_breaks
   in loop 0 0
 
-let python_encoding_declaration source start raw =
+(* NOTE: How many bytes of UTF-8 byte order mark the source opens with: three,
+   or none.  A BOM is consumed before the first line is read -- CPython's
+   `check_bom`, Lua's `skipBOM` -- so the line behind one is still the first
+   line, and a preamble rule that asked for byte 0 alone would miss it.  The
+   bytes stay where they are; only the question "is this the first line?" skips
+   them. *)
+let byte_order_mark_width source = if starts source 0 "\xef\xbb\xbf" then 3 else 0
+
+(* NOTE: Python and Ruby share the phrase, down to the spelling: PEP 263 asks
+   for "coding[:=]\s*([-\w.]+)" in one of the first two lines, and Ruby's
+   magic_comment reads the same phrase out of the same two lines.  The Emacs
+   form "# -*- coding: utf-8 -*-" satisfies both, which is why both languages
+   are written with it.
+
+   What the two do not share is which second line counts, and the rule here is
+   neither of theirs: any "coding:" comment on either of the first two lines is
+   a declaration, whatever stands on the line above it.  Ruby reads the second
+   line only behind a "#!" line, and Python only behind a line that is itself a
+   comment or blank -- so "x = 1\n# coding: us-ascii\n" names an encoding to
+   neither of them (Ruby 3.3.12 reports __ENCODING__ as UTF-8, and
+   tokenize.detect_encoding reports utf-8), and this function calls it a
+   declaration all the same.  Saying yes only ever keeps a comment "safe" would
+   otherwise remove, and the two ways to be wrong are not the same size: a
+   missed declaration removes the line a file's encoding is written on, an
+   invented one leaves an ordinary comment in place. *)
+let encoding_declaration source start raw =
   if not (within_first_two_lines source start) || not (String.starts_with ~prefix:"#" raw)
   then false else
   let rec find_line_start index =
@@ -249,7 +613,7 @@ let python_encoding_declaration source start raw =
     else if Bytes.get source (index - 1) = '\r' || Bytes.get source (index - 1) = '\n'
     then index else find_line_start (index - 1) in
   let line_start = find_line_start start in
-  let prefix_start = if line_start = 0 && starts source 0 "\xef\xbb\xbf" then 3 else line_start in
+  let prefix_start = if line_start = 0 then byte_order_mark_width source else line_start in
   let rec prefix_is_space index =
     index >= start || match Bytes.get source index with
       | ' ' | '\t' | '\x0c' -> prefix_is_space (index + 1)
@@ -278,13 +642,33 @@ let python_encoding_declaration source start raw =
 let classify source language lexical start finish =
   let raw = Bytes.sub_string source start (finish - start) in
   let text = trim_markers raw in
-  if start = 0 && String.starts_with ~prefix:"#!" raw then Shebang
-  else if language = Python && python_encoding_declaration source start raw then Encoding
+  if start = byte_order_mark_width source && String.starts_with ~prefix:"#!" raw then Shebang
+  else if (language = Python || language = Ruby) &&
+    encoding_declaration source start raw then Encoding
   else if language = Sql && String.starts_with ~prefix:"/*+" raw then OptimizerHint
   else if language = Sql && String.starts_with ~prefix:"/*!" raw then VersionComment
   else if is_legal text then License else if is_directive language text raw then Directive else lexical
 
-type accumulator = { mutable comments_rev : comment list; mutable diagnostics_rev : diagnostic list }
+(* NOTE: One YAML block scalar, as the two things the lines below it depend on:
+   where its body stopped, and whether its header asked to keep the empty lines
+   trailing it.  Where a body ends is decided by the column of the node the
+   header hangs off, which is not written on the header's own line -- "key:" on
+   one line and "|" on the next is the same scalar as "key: |" -- so only a scan
+   knows it.  The chomping indicator is carried as a bool rather than as the
+   "chomping" type, which the YAML section further down defines: "keep" is the
+   only one of the three these lines can tell apart.  The content indentation is
+   the other half a trail needs: the explicit indication indicator counted from
+   the owner, or the indentation of the first non-empty line where the header
+   spelled none out (8.1.1.1).  A line under the body that reaches that depth is
+   content of it and one that does not is outside it, which is the difference
+   between a trail comment a removal may take and one it may not. *)
+type yaml_block_scalar = { body_end : int; content_indent : int; keeps_empties : bool }
+
+type accumulator = {
+  mutable comments_rev : comment list;
+  mutable diagnostics_rev : diagnostic list;
+  mutable yaml_blocks_rev : yaml_block_scalar list;
+}
 
 let add_comment accumulator source language options lexical start finish =
   let kind = classify source language lexical start finish in
@@ -419,13 +803,29 @@ let cpp_raw_end source index =
     | None -> None
     | Some opening ->
       let delimiter = Bytes.sub_string source delimiter_start (opening - delimiter_start) in
+      (* NOTE: [lex.string]: a d-char is any member of the basic source
+         character set except space, "(", ")", "\\", and the control characters
+         horizontal tab, vertical tab, form feed and new-line. *)
       if String.length delimiter > 16 || String.exists
-        (fun character -> Char.code character <= 32 || character = '\\' || character = ')') delimiter
+        (fun character -> String.contains " ()\\\t\011\012\n\r" character) delimiter
       then None
       else let closing = ")" ^ delimiter ^ "\"" in
         match find_from source (opening + 1) closing with
         | Some finish -> Some (finish + String.length closing, true)
         | None -> Some (Bytes.length source, false))
+
+(* NOTE: The C++ raw string literal a '"' opens, as the offset of its prefix, or
+   None when the quote opens an ordinary one.  The question is asked at the
+   quote and answered backwards, because a prefix is only a prefix where no
+   identifier runs into it: `aR"(x)"` is the identifier `aR` and then a plain
+   string, not a raw string beginning in the middle of a name. *)
+let cpp_raw_start_at_quote source quote =
+  let prefixes = ["R\""; "u8R\""; "uR\""; "UR\""; "LR\""] in
+  List.find_map (fun prefix ->
+    let start = quote - String.length prefix + 1 in
+    if start >= 0 && starts source start prefix &&
+      (start = 0 || not (js_identifier_continue (Bytes.get source (start - 1))))
+    then Some start else None) prefixes
 
 let c_quote_start source index =
   let length = Bytes.length source in
@@ -437,17 +837,69 @@ let c_quote_start source index =
   else if (starts source index "u8\"" || starts source index "u8'") then Some (index + 2)
   else None
 
-let rust_raw_end source start =
-  let cursor = ref start in
-  if !cursor < Bytes.length source &&
-    (Bytes.get source !cursor = 'b' || Bytes.get source !cursor = 'c') then incr cursor;
-  if !cursor >= Bytes.length source || Bytes.get source !cursor <> 'r' then None else begin
-    incr cursor; let hashes = ref 0 in
-    while !cursor < Bytes.length source && Bytes.get source !cursor = '#' do incr cursor; incr hashes done;
-    if !cursor >= Bytes.length source || Bytes.get source !cursor <> '"' then None else
-    let ending = "\"" ^ String.make !hashes '#' in
-    match find_from source (!cursor + 1) ending with Some close -> Some (close + String.length ending) | None -> Some (Bytes.length source)
+(* NOTE: The raw string literal a '"' closes the opener of, as (start, hashes),
+   or None when the quote opens an ordinary one.  The question is asked at the
+   quote and answered backwards, because that is where the lexer stands: the
+   run of '#' before it, then the 'r', then an optional 'b' or 'c' prefix, and
+   then a byte that must not continue an identifier -- `bar"x"` is a call on a
+   string, not a raw string starting in the middle of a name. *)
+let rust_raw_start_at_quote source quote =
+  let cursor = ref quote in
+  while !cursor > 0 && Bytes.get source (!cursor - 1) = '#' do decr cursor done;
+  let hashes = quote - !cursor in
+  if !cursor = 0 || Bytes.get source (!cursor - 1) <> 'r' then None
+  else begin
+    let start = ref (!cursor - 1) in
+    if !start > 0 && (Bytes.get source (!start - 1) = 'b' || Bytes.get source (!start - 1) = 'c')
+    then decr start;
+    if !start > 0 && js_identifier_continue (Bytes.get source (!start - 1)) then None
+    else Some (!start, hashes)
   end
+
+(* INVARIANT: The two bytes that end a line everywhere a checkpoint may be
+   offered.  A bounded lookahead that decides a token asks this before it reads
+   one byte further: a checkpoint sits at the line start behind a terminator,
+   and it promises that nothing decided before it depends on bytes after it. *)
+let is_line_terminator character = character = '\r' || character = '\n'
+
+(* NOTE: Rust Reference, Lifetimes and loop labels: an apostrophe followed by an
+   identifier that no second apostrophe closes is a lifetime, so it opens no
+   literal at all and a `//` behind it on the same line is a comment.  What
+   tells the two apart is the shape after the quote: an escape closed four bytes
+   on, a single byte closed two bytes on, or a non-ASCII character with a quote
+   near enough behind it to be the closing one.
+   INVARIANT: none of those windows may run past a line terminator.  A Rust
+   character literal ends at the line (Rust Reference, Tokens) and `\` before a
+   line terminator is a string continuation rather than a character escape, so
+   every shape a crossing window would have caught is invalid Rust -- and
+   `rustc` 1.97 reads `'<non-ASCII>` with the closing quote on the next line as
+   a lifetime, reporting E0762 against that next line instead. *)
+let rust_char_start source index =
+  let length = Bytes.length source in
+  index + 1 < length &&
+  let next = Bytes.get source (index + 1) in
+  (not (is_line_terminator next)) &&
+  if next = '\\' then
+    index + 3 < length
+    && (not (is_line_terminator (Bytes.get source (index + 2))))
+    && Bytes.get source (index + 3) = '\''
+  else if index + 2 < length && Bytes.get source (index + 2) = '\'' then true
+  else Char.code next land 0x80 <> 0 &&
+    (let limit = min length (index + 6) in
+     let rec loop cursor =
+       cursor < limit && (not (is_line_terminator (Bytes.get source cursor)))
+       && (Bytes.get source cursor = '\'' || loop (cursor + 1)) in
+     loop (index + 1))
+
+(* NOTE: One quoted literal, with the diagnostic the language spells for it when
+   nothing closes it.  The construct is named -- "unterminated Rust raw string",
+   "unterminated string or rune literal" -- because the message is what a user
+   reads, and "literal" tells them nothing they did not already know. *)
+let quoted_or_error source accumulator start multiline name =
+  let finish, closed = quoted_end source start multiline in
+  if not closed then
+    add_error accumulator "unterminated-string" ("unterminated " ^ name) start finish;
+  finish
 
 let rec scan_kotlin_string source options accumulator start triple depth =
   if depth > 256 then begin
@@ -512,9 +964,88 @@ and scan_kotlin_expression source options accumulator index depth =
     | _ -> loop (index + 1) braces
   in loop index 1
 
+(* NOTE: A byte a CSS identifier may carry, which is what keeps "myurl(" from
+   reading as the "url(" function. *)
+let is_css_identifier_part byte =
+  (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z')
+  || (byte >= '0' && byte <= '9') || byte = '-' || byte = '_'
+
+(* NOTE: One SCSS "#{ ... }" interpolation, beginning past its opening brace.
+   The braces are counted rather than searched for, because the expression is
+   code: a comment written there is a comment, and a string or an unquoted URL
+   written there is scanned as such.  A line comment runs to the end of its
+   line while the interpolation carries on below. *)
+let rec scan_scss_interpolation source options accumulator language index depth =
+  if depth > 256 then begin
+    add_error accumulator "nesting-limit"
+      "SCSS interpolation nesting limit exceeded" index index;
+    Bytes.length source
+  end else begin
+    let length = Bytes.length source in
+    let rec loop cursor braces =
+      if cursor >= length then begin
+        add_error accumulator "unterminated-interpolation"
+          "unterminated SCSS interpolation" cursor cursor;
+        cursor
+      end else if starts source cursor "//" then begin
+        let finish = line_end source (cursor + 2) in
+        add_comment accumulator source language options Line cursor finish;
+        loop finish braces
+      end else if starts source cursor "/*" then begin
+        let finish, closed = block_end source cursor false in
+        let kind = if starts source cursor "/**" || starts source cursor "/*!" then DocBlock else Block in
+        add_comment accumulator source language options kind cursor finish;
+        if not closed then add_error accumulator "unterminated-comment"
+          "unterminated SCSS block comment" cursor finish;
+        loop finish braces
+      end else match scss_url_end source options accumulator language cursor with
+        | Some finish -> loop finish braces
+        | None -> (match Bytes.get source cursor with
+          | '"' | '\'' -> loop (quoted_or_error source accumulator cursor true "CSS string") braces
+          | '{' -> loop (cursor + 1) (braces + 1)
+          | '}' ->
+            if braces = 1 then cursor + 1 else loop (cursor + 1) (braces - 1)
+          | _ -> loop (cursor + 1) braces)
+    in loop index 1
+  end
+
+(* NOTE: The byte after an SCSS "url(" whose content is an unquoted URL,
+   which dart-sass reads as URL bytes until the ")" that ends them -- a "//" or
+   a "/*" in them is URL text, not a comment -- with "#{ ... }" interpolation
+   inside being code.  A quoted URL is an ordinary string and is left to
+   quoted_or_error; an unquoted URL that never closes is a file dart-sass
+   rejects, and reading it as ordinary bytes is the safe half of being wrong. *)
+and scss_url_end source options accumulator language index =
+  let length = Bytes.length source in
+  let url_start index =
+    if index + 4 <= length then begin
+      let byte index expected =
+        let actual = Bytes.get source index in
+        actual = expected || (actual >= 'A' && actual <= 'Z'
+                              && actual = Char.chr (Char.code expected - 32))
+        || (actual >= 'a' && actual <= 'z'
+            && actual = Char.chr (Char.code expected + 32)) in
+      byte index 'u' && byte (index + 1) 'r' && byte (index + 2) 'l'
+      && Bytes.get source (index + 3) = '('
+    end else false in
+  if not (url_start index) then None
+  else if index > 0 && is_css_identifier_part (Bytes.get source (index - 1)) then None
+  else if index + 4 < length
+          && (Bytes.get source (index + 4) = '"' || Bytes.get source (index + 4) = '\'')
+  then None
+  else begin
+    let rec loop cursor =
+      if cursor >= length then Some length
+      else if Bytes.get source cursor = ')' then Some (cursor + 1)
+      else if starts source cursor "#{" then
+        loop (scan_scss_interpolation source options accumulator language (cursor + 2) 0)
+      else loop (cursor + 1)
+    in loop (index + 4)
+  end
+
 let scan_slash_unmapped source language options accumulator =
   let nested = language = Rust || language = Kotlin in
-  let line_comments = language <> Css in
+  let line_comments = language <> Css || options.dialect = Scss in
   let rec loop index =
     if index >= Bytes.length source then ()
     else if line_comments && starts source index "//" then begin
@@ -527,43 +1058,86 @@ let scan_slash_unmapped source language options accumulator =
       add_comment accumulator source language options kind index finish;
       if not closed then add_error accumulator "unterminated-comment" "unterminated block comment" index finish;
       loop finish
-    end else match if language = Rust then rust_raw_end source index else None with
-      | Some finish -> loop finish
-      | None ->
-        let character = Bytes.get source index in
-        if language = Cpp then begin
-          match cpp_raw_end source index with
-          | Some (finish, closed) ->
-            if not closed then add_error accumulator "unterminated-string"
-              "unterminated C++ raw string" index finish;
-            loop finish
-          | None -> (match c_quote_start source index with
-            | Some quote ->
-              let finish, closed = quoted_end source quote false in
-              if not closed then add_error accumulator "unterminated-string"
-                "unterminated string or character literal" quote finish;
-              loop finish
-            | None -> loop (index + 1))
-        end else if language = C then begin
-          match c_quote_start source index with
-          | Some quote ->
-            let finish, closed = quoted_end source quote false in
-            if not closed then add_error accumulator "unterminated-string"
-              "unterminated string or character literal" quote finish;
-            loop finish
-          | None -> loop (index + 1)
-        end else if language = Go && character = '`' then begin
-          match find_from source (index + 1) "`" with Some finish -> loop (finish + 1)
-          | None -> add_error accumulator "unterminated-string" "unterminated raw string" index (Bytes.length source)
-        end else if language = Kotlin && starts source index "\"\"\"" then begin
-          loop (scan_kotlin_string source options accumulator index true 0)
-        end else if language = Kotlin && character = '"' then begin
-          loop (scan_kotlin_string source options accumulator index false 0)
-        end else if character = '"' || character = '\'' then begin
-          let finish, closed = quoted_end source index (language = Css) in
-          if not closed then add_error accumulator "unterminated-string" "unterminated literal" index finish;
+    end else
+      let character = Bytes.get source index in
+      match language with
+      | Rust when character = '"' ->
+        (match rust_raw_start_at_quote source index with
+        | Some (raw_start, hashes) ->
+          let ending = "\"" ^ String.make hashes '#' in
+          (match find_from source (index + 1) ending with
+          | Some close -> loop (close + String.length ending)
+          | None ->
+            add_error accumulator "unterminated-string" "unterminated Rust raw string"
+              raw_start (Bytes.length source))
+        (* INVARIANT: a Rust string or byte-string literal carries a bare
+           newline as content, so only its closing quote or the end of the file
+           ends one; a Rust character literal still ends at the line. *)
+        | None -> loop (quoted_or_error source accumulator index true "string"))
+      | Rust when character = '\'' && rust_char_start source index ->
+        loop (quoted_or_error source accumulator index false "character literal")
+      (* NOTE: What is left is an apostrophe the window read as no literal, and
+         nothing on its line says whether it opens one.  A Rust identifier is
+         `XID_Start XID_Continue*` (Rust Reference, Identifiers) and has been
+         since 1.53, so `'ä` is as good a lifetime or loop label as `'a` --
+         `fn f<'ä>() {}` and `'ä: loop {}` both compile -- and an unterminated
+         non-ASCII character literal is spelled the same way within one line.
+         `rustc` tells the two apart in the parser, which is where E0762 is
+         raised; this scanner is a lexer with a line-bounded window and cannot.
+         So it reports neither: over-keeping a comment is the safe direction,
+         calling a valid file invalid is not. *)
+      | Rust when character = '\'' -> loop (index + 1)
+      (* NOTE: A raw string prefix is only a prefix where no identifier runs
+         into it and the delimiter is made of d-chars, so both questions are
+         asked before the quote is read as one; otherwise it opens an ordinary
+         literal, exactly as `c_quote_start` says. *)
+      | C | Cpp ->
+        let raw =
+          if language = Cpp && character = '"' then
+            Option.bind (cpp_raw_start_at_quote source index) (fun start ->
+              Option.map (fun (finish, closed) -> (start, finish, closed))
+                (cpp_raw_end source start))
+          else None in
+        (match raw with
+        | Some (start, finish, closed) ->
+          if not closed then add_error accumulator "unterminated-string"
+            "unterminated C++ raw string" start finish;
           loop finish
-        end else loop (index + 1)
+        | None -> (match c_quote_start source index with
+          | Some quote ->
+            loop (quoted_or_error source accumulator quote false "string or character literal")
+          | None -> loop (index + 1)))
+      | Go when character = '`' ->
+        (match find_from source (index + 1) "`" with
+        | Some finish -> loop (finish + 1)
+        | None -> add_error accumulator "unterminated-string" "unterminated raw string"
+            index (Bytes.length source))
+      | Go when character = '"' || character = '\'' ->
+        loop (quoted_or_error source accumulator index false "string or rune literal")
+      | Kotlin when starts source index "\"\"\"" ->
+        loop (scan_kotlin_string source options accumulator index true 0)
+      | Kotlin when character = '"' ->
+        loop (scan_kotlin_string source options accumulator index false 0)
+      | Kotlin when character = '\'' ->
+        loop (quoted_or_error source accumulator index false "Kotlin character literal")
+      (* NOTE: JSON5 4.4 writes a string with either quote, and this language is
+         "JSON with comments, including JSON5" -- it owns ".json5" as well as
+         ".jsonc".  An apostrophe is already invalid in the stricter dialect, so
+         reading one as a string only hides a "//" that dialect could not have
+         meant as a comment. *)
+      | Jsonc when character = '"' || character = '\'' ->
+        loop (quoted_or_error source accumulator index false "JSON string")
+      | Css when options.dialect = Scss && starts source index "#{" ->
+        loop (scan_scss_interpolation source options accumulator language (index + 2) 0)
+      | Css when options.dialect = Scss ->
+        (match scss_url_end source options accumulator language index with
+         | Some finish -> loop finish
+         | None -> if character = '"' || character = '\'' then
+             loop (quoted_or_error source accumulator index true "CSS string")
+           else loop (index + 1))
+      | Css when character = '"' || character = '\'' ->
+        loop (quoted_or_error source accumulator index true "CSS string")
+      | _ -> loop (index + 1)
   in loop 0
 
 let scan_slash source language options accumulator =
@@ -571,7 +1145,7 @@ let scan_slash source language options accumulator =
     (find_from source 0 "\\\n" <> None || find_from source 0 "\\\r\n" <> None)
   then begin
     let mapping = without_c_line_splices source in
-    let child = { comments_rev = []; diagnostics_rev = [] } in
+    let child = { comments_rev = []; diagnostics_rev = []; yaml_blocks_rev = [] } in
     scan_slash_unmapped mapping.mapped language options child;
     let comments = List.rev child.comments_rev and diagnostics = List.rev child.diagnostics_rev in
     merge_mapped accumulator
@@ -598,7 +1172,7 @@ let scan_java source language options accumulator =
   let mapping, invalid_unicode = java_unicode source in
   List.iter (fun span -> add_error accumulator "invalid-unicode-escape"
     "invalid Java Unicode escape" span.start span.finish) invalid_unicode;
-  let mapped = mapping.mapped and child = { comments_rev = []; diagnostics_rev = [] } in
+  let mapped = mapping.mapped and child = { comments_rev = []; diagnostics_rev = []; yaml_blocks_rev = [] } in
   let rec loop index =
     if index >= Bytes.length mapped then ()
     else if starts mapped index "//" then begin
@@ -629,13 +1203,6 @@ let scan_java source language options accumulator =
       valid = not (List.exists (fun diagnostic -> diagnostic.severity = Error) diagnostics) }
     mapping
 
-let js_identifier_start character =
-  (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') ||
-  character = '_' || character = '$' || Char.code character land 0x80 <> 0
-
-let js_identifier_continue character =
-  js_identifier_start character || (character >= '0' && character <= '9')
-
 let unicode_line_terminator_width source index =
   if starts source index "\r\n" then Some 2
   else if index < Bytes.length source &&
@@ -665,6 +1232,12 @@ let js_quoted_end source start =
     else loop (index + 1)
   in loop (start + 1)
 
+(* NOTE: ECMA-262 12.5 makes a SingleLineHTMLCloseComment of a "-->" that
+   nothing but white space precedes on its line.  U+FEFF is <ZWNBSP>, which 12.2
+   lists among WhiteSpace wherever it sits and however many of it there are --
+   the start of a file is only the most common place to meet one -- and it takes
+   three bytes, which is why the prefix is walked rather than handed to
+   js_is_space byte by byte. *)
 let js_html_close_comment source index =
   starts source index "-->" &&
   let rec line_start cursor =
@@ -672,12 +1245,11 @@ let js_html_close_comment source index =
     match Bytes.get source (cursor - 1) with
     | '\r' | '\n' -> cursor
     | _ -> line_start (cursor - 1) in
-  let start = line_start index in
-  let start = if start = 0 && starts source start "\xef\xbb\xbf" then 3 else start in
   let rec whitespace cursor =
-    cursor = index ||
-    (String.contains " \t\011\012" (Bytes.get source cursor) && whitespace (cursor + 1)) in
-  whitespace start
+    cursor >= index ||
+    (if starts source cursor "\xef\xbb\xbf" then whitespace (cursor + 3)
+     else js_is_space (Bytes.get source cursor) && whitespace (cursor + 1)) in
+  whitespace (line_start index)
 
 let js_regex_end source start =
   let rec loop index in_class =
@@ -720,11 +1292,6 @@ let rec scan_js_code source language options accumulator index stop_brace depth 
         "unterminated-template-expression" "unterminated JavaScript template expression"
         index index | None -> ());
       index
-    end else if index = 0 && starts source index "#!" then begin
-      let finish = js_line_end source (index + 2) in
-      add_comment accumulator source language options Line index finish;
-      loop finish brace_depth regex_allowed control_parentheses pending_control
-        brace_blocks statement_start pending_block
     end else if starts source index "//" then begin
       let finish = js_line_end source (index + 2) in
       add_comment accumulator source language options
@@ -803,7 +1370,7 @@ let rec scan_js_code source language options accumulator index stop_brace depth 
         Bytes.get source (index + 1) = character ->
       loop (index + 2) brace_depth false control_parentheses false
         brace_blocks false false
-    | character when Char.code character <= 32 ->
+    | character when js_is_space character ->
       loop (index + 1) brace_depth regex_allowed control_parentheses pending_control
         brace_blocks statement_start pending_block
     | '=' when index + 1 < Bytes.length source && Bytes.get source (index + 1) = '>' ->
@@ -866,7 +1433,7 @@ and scan_jsx_element source language options accumulator start depth =
                 (Some 1) (depth + 1)) None
             | '>' ->
               let rec previous value =
-                if value > index && Char.code (Bytes.get source (value - 1)) <= 32
+                if value > index && js_is_space (Bytes.get source (value - 1))
                 then previous (value - 1) else value in
               let before = previous cursor in
               Some (cursor + 1, before > index && Bytes.get source (before - 1) = '/')
@@ -884,8 +1451,20 @@ and scan_jsx_element source language options accumulator start depth =
           else if element_depth = 0 then finish else loop finish element_depth
   in loop start 0
 
-let scan_javascript source language options accumulator =
-  ignore (scan_js_code source language options accumulator 0 None 0)
+(* NOTE: ECMA-262 12.5: a hashbang comment opens a Script or a Module and
+   nothing else, and OComment reads "a Script" as "a file": a preamble is a
+   preamble at absolute offset 0.  The embedded scan of a <script> element is
+   handed a slice that begins at its own 0, so `offset` is what tells that slice
+   from a file.  Without it a "#!" inside a page reads as the page's preamble,
+   which no page has. *)
+let scan_javascript ?(offset = 0) source language options accumulator =
+  let start =
+    if offset = 0 && starts source 0 "#!" then begin
+      let finish = js_line_end source 2 in
+      add_comment accumulator source language options Line 0 finish;
+      finish
+    end else 0 in
+  ignore (scan_js_code source language options accumulator start None 0)
 
 let ocaml_quoted_end source index =
   if Bytes.get source index <> '{' then None else
@@ -904,6 +1483,33 @@ let ocaml_quoted_end source index =
     | None -> Some (Bytes.length source, false))
   | _ -> None
 
+(* NOTE: A character literal is an apostrophe, one character or one escape
+   sequence, and a closing apostrophe (OCaml manual, Lexical conventions).  The
+   shape is what decides it: the second apostrophe two bytes on, or a backslash
+   and an apostrophe close enough behind it to close the longest escape there
+   is.  Anything else leaves the apostrophe an ordinary byte -- of a type
+   variable outside a comment, and of the comment's own text inside one, where
+   the string that follows it still has to terminate. *)
+(* INVARIANT: The rule `rust_char_start` states, for OCaml's two windows.  `'\`
+   before a line terminator is an illegal backslash escape (`ocamlc` 5.5.0
+   rejects it), so the escaped window gives up nothing valid by stopping there.
+   The bare window costs the one shape OCaml does accept -- an apostrophe, a
+   literal newline, an apostrophe -- which this scanner never read as a literal
+   anyway: it ends a character literal at the line, so that shape used to be
+   reported as an unterminated literal and is now simply not one. *)
+let ocaml_char_start source index =
+  let length = Bytes.length source in
+  index + 1 < length &&
+  let next = Bytes.get source (index + 1) in
+  (not (is_line_terminator next)) &&
+  ((index + 2 < length && Bytes.get source (index + 2) = '\'') ||
+   (next = '\\' &&
+     let rec has_quote cursor remaining =
+       remaining > 0 && cursor < length
+       && (not (is_line_terminator (Bytes.get source cursor)))
+       && (Bytes.get source cursor = '\'' || has_quote (cursor + 1) (remaining - 1)) in
+     has_quote (index + 2) 6))
+
 let scan_ocaml source language options accumulator =
   let rec comment_end index depth =
     if index >= Bytes.length source then (index, false)
@@ -915,8 +1521,7 @@ let scan_ocaml source language options accumulator =
       (match ocaml_quoted_end source index with
       | Some (finish, _) -> comment_end finish depth
       | None -> comment_end (index + 1) depth)
-    else if Bytes.get source index = '\'' && index + 2 < Bytes.length source &&
-      (Bytes.get source (index + 2) = '\'' || Bytes.get source (index + 1) = '\\') then
+    else if Bytes.get source index = '\'' && ocaml_char_start source index then
       let finish, _ = quoted_end source index false in comment_end finish depth
     else comment_end (index + 1) depth in
   let rec loop index =
@@ -926,22 +1531,27 @@ let scan_ocaml source language options accumulator =
       add_comment accumulator source language options (if starts source index "(**" then DocBlock else Block) index finish;
       if not closed then add_error accumulator "unterminated-comment" "unterminated OCaml comment" index finish;
       loop finish
-    end else if Bytes.get source index = '"' then let finish, closed = quoted_end source index true in
-      if closed then loop finish else add_error accumulator "unterminated-string" "unterminated OCaml string" index finish
-    else if Bytes.get source index = '\'' && index + 2 < Bytes.length source &&
-      (Bytes.get source (index + 2) = '\'' ||
-        (Bytes.get source (index + 1) = '\\' &&
-          let rec has_quote cursor remaining = remaining > 0 && cursor < Bytes.length source &&
-            (Bytes.get source cursor = '\'' || has_quote (cursor + 1) (remaining - 1)) in
-          has_quote (index + 2) 6))
-    then let finish, closed = quoted_end source index false in
-      if closed then loop finish else add_error accumulator "unterminated-string"
-        "unterminated OCaml character literal" index finish
+    end else if Bytes.get source index = '"' then begin
+      let finish, closed = quoted_end source index true in
+      if not closed then add_error accumulator "unterminated-string"
+        "unterminated OCaml string" index finish;
+      loop finish
+    end
+    else if Bytes.get source index = '\'' && ocaml_char_start source index then begin
+      (* NOTE: A literal nothing closed ends at the line, not at the file: the
+         rest of the source still holds comments, so the scan goes on from where
+         the literal stopped rather than giving up on the file. *)
+      let finish, closed = quoted_end source index false in
+      if not closed then add_error accumulator "unterminated-string"
+        "unterminated OCaml character literal" index finish;
+      loop finish
+    end
     else if Bytes.get source index = '{' then
       (match ocaml_quoted_end source index with
-      | Some (finish, true) -> loop finish
-      | Some (finish, false) -> add_error accumulator "unterminated-string"
-          "unterminated OCaml quoted string" index finish
+      | Some (finish, closed) ->
+        if not closed then add_error accumulator "unterminated-string"
+          "unterminated OCaml quoted string" index finish;
+        loop finish
       | None -> loop (index + 1))
     else loop (index + 1)
   in loop 0
@@ -1044,15 +1654,1788 @@ let scan_python source language options accumulator =
       | None -> loop (index + 1)
   in loop 0
 
+let toml_quote_run source start quote =
+  let rec loop index =
+    if index < Bytes.length source && Bytes.get source index = quote then loop (index + 1)
+    else index - start
+  in loop start
+
+(* NOTE: A basic string takes backslash escapes and a literal string takes none,
+   so a backslash is a byte of a literal string (TOML v1.0.0, String). Three of
+   either quote open the multi-line form, where a newline is content rather than
+   the end of an unterminated string, and where the three-quote delimiter may
+   absorb up to two content quotes in front of it. *)
+let scan_toml_string source accumulator start =
+  let quote = Bytes.get source start in
+  let multiline = starts source start (String.make 3 quote) in
+  let escapes = quote = '"' in
+  let rec loop index =
+    if index >= Bytes.length source then begin
+      add_error accumulator "unterminated-string"
+        (if multiline then "unterminated TOML multi-line string"
+          else "unterminated TOML string") start index;
+      index
+    end else if escapes && Bytes.get source index = '\\' then
+      loop (min (Bytes.length source) (index + 2))
+    else if Bytes.get source index <> quote then begin
+      if (not multiline) && (Bytes.get source index = '\r' || Bytes.get source index = '\n')
+      then begin
+        add_error accumulator "unterminated-string" "unterminated TOML string" start index;
+        index
+      end else loop (index + 1)
+    end else if not multiline then index + 1
+    else
+      let run = toml_quote_run source index quote in
+      if run >= 3 then index + min run 5 else loop (index + run)
+  in loop (start + if multiline then 3 else 1)
+
+let scan_toml source language options accumulator =
+  let rec loop index =
+    if index >= Bytes.length source then ()
+    else match Bytes.get source index with
+      | '#' -> let finish = line_end source (index + 1) in
+        add_comment accumulator source language options Line index finish; loop finish
+      | '"' | '\'' -> loop (scan_toml_string source accumulator index)
+      | _ -> loop (index + 1)
+  in loop 0
+
+(* NOTE: An opening long bracket is '[', a run of '=', then '[', and the length
+   of that run is its level (Lua 5.4 reference manual, 3.1). The second bracket
+   is what tells "[[" from the two brackets of a[b[1]], so a bracket that never
+   reaches it opens nothing at all. *)
+let long_bracket_level source index =
+  let length = Bytes.length source in
+  if index >= length || Bytes.get source index <> '[' then None
+  else
+    let rec loop cursor =
+      if cursor < length && Bytes.get source cursor = '=' then loop (cursor + 1)
+      else if cursor < length && Bytes.get source cursor = '[' then Some (cursor - index - 1)
+      else None
+    in loop (index + 1)
+
+(* NOTE: Long brackets do not nest, so the first close at the right level ends
+   one and a run of the wrong length is content: a level-two bracket carries
+   "]]" and "]=]" and ends only at "]==]". *)
+let long_bracket_end source content level =
+  let length = Bytes.length source in
+  let rec loop index =
+    if index >= length then (length, false)
+    else if Bytes.get source index = ']' then
+      let rec equals cursor =
+        if cursor < length && Bytes.get source cursor = '=' then equals (cursor + 1) else cursor in
+      let cursor = equals (index + 1) in
+      if cursor - index - 1 = level && cursor < length && Bytes.get source cursor = ']'
+      then (cursor + 1, true) else loop (index + 1)
+    else loop (index + 1)
+  in loop (min content length)
+
+(* NOTE: What the \z escape skips is C's isspace in the default locale, which
+   takes the vertical tab as well. *)
+let lua_is_space = function
+  | ' ' | '\t' | '\n' | '\011' | '\012' | '\r' -> true
+  | _ -> false
+
+(* NOTE: Lua counts "\r\n" and "\n\r" alike as one line (llex.c,
+   inclinenumber), so a backslash in front of either escapes the whole pair. *)
+let lua_newline_width source index =
+  let length = Bytes.length source in
+  if index >= length then None
+  else match Bytes.get source index with
+    | '\r' -> Some (if index + 1 < length && Bytes.get source (index + 1) = '\n' then 2 else 1)
+    | '\n' -> Some (if index + 1 < length && Bytes.get source (index + 1) = '\r' then 2 else 1)
+    | _ -> None
+
+(* NOTE: "---" opens the documentation comment LDoc and the Lua language server
+   read; a fourth dash makes an ordinary divider. *)
+let lua_line_kind source index =
+  if starts source index "---" && not (starts source index "----") then DocLine else Line
+
+(* NOTE: The \z escape skips the whitespace that follows it, newlines included,
+   and a backslash before a real line terminator carries that terminator into
+   the string; any other unescaped terminator ends a string that was never
+   closed. The remaining escapes carry neither a quote nor a newline, so
+   skipping the byte after the backslash finds the same closing quote. *)
+let scan_lua_short_string source accumulator start =
+  let length = Bytes.length source in
+  let quote = Bytes.get source start in
+  let rec loop index =
+    if index >= length then begin
+      add_error accumulator "unterminated-string" "unterminated Lua string" start index;
+      index
+    end else if Bytes.get source index = '\\' then
+      let escaped = index + 1 in
+      if escaped < length && Bytes.get source escaped = 'z' then
+        let rec space cursor =
+          if cursor < length && lua_is_space (Bytes.get source cursor) then space (cursor + 1)
+          else cursor in
+        loop (space (escaped + 1))
+      else (match lua_newline_width source escaped with
+        | Some width -> loop (escaped + width)
+        | None -> loop (min length (escaped + 1)))
+    else if Bytes.get source index = quote then index + 1
+    else (match lua_newline_width source index with
+      | Some _ ->
+        add_error accumulator "unterminated-string" "unterminated Lua string" start index;
+        index
+      | None -> loop (index + 1))
+  in loop (start + 1)
+
+(* NOTE: A long bracket immediately after the "--" opens a long comment, which
+   runs to the closing bracket of its own level; anything else is a short
+   comment to the end of the line, so "--[=" is one and "--[=[" is not. *)
+let scan_lua_comment source language options accumulator start =
+  match long_bracket_level source (start + 2) with
+  | Some level ->
+    let finish, closed = long_bracket_end source (start + 2 + level + 2) level in
+    add_comment accumulator source language options Block start finish;
+    if not closed then
+      add_error accumulator "unterminated-comment" "unterminated Lua long comment" start finish;
+    finish
+  | None ->
+    let finish = line_end source (start + 2) in
+    add_comment accumulator source language options (lua_line_kind source start) start finish;
+    finish
+
+(* NOTE: a[b[1]] indexes twice and opens no string, so a bracket that is not a
+   long one is one byte of the chunk. *)
+let scan_lua_long_string source accumulator start =
+  match long_bracket_level source start with
+  | None -> start + 1
+  | Some level ->
+    let finish, closed = long_bracket_end source (start + level + 2) level in
+    if not closed then
+      add_error accumulator "unterminated-string" "unterminated Lua long string" start finish;
+    finish
+
+(* NOTE: The loader skips a first line that opens with '#' before it lexes
+   anything (lauxlib.c, skipcomment), which is what lets a chunk carry a "#!"
+   line. It is that one byte at that one offset: '#' is the length operator
+   everywhere else. *)
+let scan_lua source language options accumulator =
+  let length = Bytes.length source in
+  let rec loop index =
+    if index >= length then ()
+    else if starts source index "--" then
+      loop (scan_lua_comment source language options accumulator index)
+    else match Bytes.get source index with
+      | '"' | '\'' -> loop (scan_lua_short_string source accumulator index)
+      | '[' -> loop (scan_lua_long_string source accumulator index)
+      | _ -> loop (index + 1)
+  in
+  (* NOTE: `skipcomment` (lauxlib.c) calls `skipBOM` before it tests the first
+     byte for '#', so a chunk behind a byte order mark still has its first line
+     skipped.  It is that one byte at that one offset: '#' is the length
+     operator everywhere else. *)
+  let preamble = byte_order_mark_width source in
+  if length > preamble && Bytes.get source preamble = '#' then begin
+    let finish = line_end source (preamble + 1) in
+    add_comment accumulator source language options Line preamble finish;
+    loop finish
+  end else loop 0
+
+(* NOTE: "///" documents the declaration under it and "//!" the container the
+   file is (Zig Language Reference, Doc comments), which std.zig.Tokenizer tags
+   doc_comment and container_doc_comment.  A fourth slash takes the first back:
+   .doc_comment_start falls to .line_comment when it meets one, so "////" is an
+   ordinary comment and only exactly three slashes document anything.  "//!!"
+   stays a top-level doc comment, because the tokenizer decides that one at the
+   "!" and reads no further. *)
+let zig_line_kind source index =
+  if starts source index "////" then Line
+  else if starts source index "///" || starts source index "//!" then DocLine
+  else Line
+
+(* NOTE: A Zig string and a Zig character literal are one rule: .string_literal
+   and .char_literal of std.zig.Tokenizer differ only in the quote that closes
+   them.  A backslash carries the next byte into the literal, and a real line
+   terminator ends neither -- the tokenizer marks the token invalid at it -- so
+   a quote that never closes is reported at the line break rather than
+   swallowing the lines below it.  A backslash in front of that terminator does
+   not carry it either, for the same reason. *)
+let scan_zig_quoted source accumulator start =
+  let length = Bytes.length source in
+  let quote = Bytes.get source start in
+  let message =
+    if quote = '"' then "unterminated Zig string"
+    else "unterminated Zig character literal" in
+  let carries index =
+    Bytes.get source index = '\\' && index + 1 < length &&
+    Bytes.get source (index + 1) <> '\r' && Bytes.get source (index + 1) <> '\n' in
+  let rec loop index =
+    if index >= length then begin
+      add_error accumulator "unterminated-string" message start index;
+      index
+    end else if carries index then loop (index + 2)
+    else if Bytes.get source index = quote then index + 1
+    else if Bytes.get source index = '\r' || Bytes.get source index = '\n' then begin
+      add_error accumulator "unterminated-string" message start index;
+      index
+    end else loop (index + 1)
+  in loop (start + 1)
+
+(* NOTE: Zig has no block comment at all -- "/*" is the division operator and
+   then multiplication, which std.zig.Tokenizer reports as slash and asterisk --
+   so this is its own small lexer rather than scan_slash with one delimiter
+   taken away.  Everything it has to know ends at a line break: a comment runs
+   to the end of its line, a quoted literal may not cross one, and a multiline
+   string literal is one line of content at a time.
+
+   "\\\\" is the whole opener of such a line, and the tokenizer takes it wherever
+   a token may begin rather than only as the first thing on a line, so that the
+   backslashes of "const b = \\\\text" open one just as an indented pair does.
+   Everything to the end of the line is content, and the next line starts in
+   code again, so consecutive lines are separate tokens the parser joins.  A
+   single backslash is an invalid token to Zig and an ordinary byte here:
+   nothing it could open is a state a comment can hide in.  "@\"quoted\"" needs
+   no rule of its own either -- the "@" is an ordinary byte and what follows it
+   is lexed as the string literal it is spelled as. *)
+let scan_zig source language options accumulator =
+  let length = Bytes.length source in
+  let rec loop index =
+    if index >= length then ()
+    else if starts source index "//" then begin
+      let finish = line_end source (index + 2) in
+      add_comment accumulator source language options (zig_line_kind source index) index finish;
+      loop finish
+    end
+    else if starts source index "\\\\" then loop (line_end source (index + 2))
+    else match Bytes.get source index with
+      | '"' | '\'' -> loop (scan_zig_quoted source accumulator index)
+      | _ -> loop (index + 1)
+  in loop 0
+
+(* NOTE: R's parser has one comment token and calls every "#" line a COMMENT
+   (measured on R 4.3.3: utils::getParseData gives "#' doc" and "# line" the same
+   token name).  "#'" is roxygen2's marker for the prose it turns into a manual
+   page, so it is documentation here for the reason Lua's "---" and Zig's "///"
+   are: the tool that reads it is what makes it one.  Nothing takes the marker
+   back the way a fourth slash does in Zig, so the test is the two bytes and no
+   more. *)
+let r_line_kind source index = if starts source index "#'" then DocLine else Line
+
+(* NOTE: Whether a byte may continue an R name, and so cannot be followed by the
+   "r" that opens a raw string.  SymbolValue (gram.y) reads a name while the
+   bytes are alphanumeric, "." or "_", and it is entered on a multi-byte
+   character as well, so every byte with the high bit set counts here.  Counting
+   one that does not only refuses the raw reading, which falls back to an
+   ordinary string and hides more rather than less. *)
+let is_r_name_byte character =
+  (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') ||
+  (character >= '0' && character <= '9') || character = '.' || character = '_' ||
+  Char.code character >= 0x80
+
+(* NOTE: The end of the R raw string whose quote is at the given index, and
+   whether it closed -- or None when no raw string opens there at all.  The
+   literal is "r" or "R", the quote, a run of dashes, and one of "(", "[" or
+   "{"; it closes on the matching bracket, the same run of dashes, and the same
+   quote (?Quotes; R 4.0.0 and later).  R puts no limit on the dash run -- 100
+   dashes were measured accepted on R 4.3.3 -- so it is copied out of the source
+   rather than counted twice.  The "r" opens the literal only where it begins a
+   token: "xr\"(a)\"" is the name "xr" and then an ordinary string, which is
+   what R's lexer reads there too. *)
+let r_raw_string source quote =
+  let length = Bytes.length source in
+  if quote = 0 then None
+  else
+    let prefix = quote - 1 in
+    let opener = Bytes.get source prefix in
+    if opener <> 'r' && opener <> 'R' then None
+    else if prefix > 0 && is_r_name_byte (Bytes.get source (prefix - 1)) then None
+    else
+      let rec dashes index =
+        if index < length && Bytes.get source index = '-' then dashes (index + 1) else index in
+      let bracket = dashes (quote + 1) in
+      if bracket >= length then None
+      else
+        let closing = match Bytes.get source bracket with
+          | '(' -> Some ')' | '[' -> Some ']' | '{' -> Some '}' | _ -> None in
+        match closing with
+        | None -> None
+        | Some closing ->
+          let close =
+            String.make 1 closing ^
+            Bytes.sub_string source (quote + 1) (bracket - quote - 1) ^
+            String.make 1 (Bytes.get source quote) in
+          Some (match find_from source (bracket + 1) close with
+            | Some relative -> (relative + String.length close, true)
+            | None -> (length, false))
+
+(* NOTE: The end of the R literal that runs to the next unescaped delimiter, and
+   whether that delimiter was there at all.  One function for the two quoted
+   strings and the backquoted name, because R lexes all three the same way: a
+   backslash carries the next byte in -- a line break included, which is why a
+   literal that never closes runs to the end of the file rather than to the end
+   of its line -- and nothing but the delimiter ends them. *)
+let r_delimited_end source start close =
+  let length = Bytes.length source in
+  let rec loop index =
+    if index >= length then (length, false)
+    else match Bytes.get source index with
+      | '\\' -> loop (min (index + 2) length)
+      | character when character = close -> (index + 1, true)
+      | _ -> loop (index + 1)
+  in loop start
+
+(* NOTE: One R script (R Language Definition, 10 Parser; ?Quotes).  "#" opens a
+   comment that runs to the end of the line and that is the whole comment
+   grammar -- there is no block form and no nesting.  What makes this more than
+   a search for "#" is the four literals that carry one as content: a quoted
+   string, a raw string, a backquoted name, and the "%...%" operator.
+
+   Three of the four may cross a line break.  The fourth may not: SpecialValue in
+   gram.y pushes every byte up to the next "%" into the operator's name and
+   returns ERROR at a line break instead, so the name may hold a "#", a quote or
+   a backquote, takes no escapes, and an unterminated one is reported where it is
+   rather than swallowing the rest of the file.
+
+   Where the bytes look like a raw string and are not one -- "r\"<a>\"", whose
+   delimiter is not a bracket -- R refuses the file outright with "malformed raw
+   string literal".  Falling back to the ordinary reading is what happens here
+   instead: it is the same fallback the C++ raw string takes, and it hides the
+   "#" behind a quote rather than exposing it in a file no interpreter would
+   run.
+
+   Measured against the interpreter over the 42 R files the R 4.3.3 distribution
+   ships: every one of the 1,330 comments utils::getParseData reports as a
+   COMMENT token comes back with the same byte span, and no file is called
+   invalid. *)
+let scan_r source language options accumulator =
+  let length = Bytes.length source in
+  let rec loop index =
+    if index >= length then ()
+    else match Bytes.get source index with
+      | '#' ->
+        let finish = line_end source (index + 1) in
+        add_comment accumulator source language options (r_line_kind source index) index finish;
+        loop finish
+      | '"' | '\'' ->
+        let raw = r_raw_string source index in
+        (match raw with
+         | Some (finish, closed) ->
+           if not closed then
+             add_error accumulator "unterminated-string" "unterminated R raw string"
+               (index - 1) finish;
+           loop finish
+         | None ->
+           let finish, closed = r_delimited_end source (index + 1) (Bytes.get source index) in
+           if not closed then
+             add_error accumulator "unterminated-string" "unterminated R string" index finish;
+           loop finish)
+      | '`' ->
+        let finish, closed = r_delimited_end source (index + 1) '`' in
+        if not closed then
+          add_error accumulator "unterminated-identifier" "unterminated R backquoted name"
+            index finish;
+        loop finish
+      | '%' ->
+        let stop = line_end source (index + 1) in
+        let rec percent cursor =
+          if cursor >= stop then None
+          else if Bytes.get source cursor = '%' then Some cursor
+          else percent (cursor + 1) in
+        (match percent (index + 1) with
+         | Some closing -> loop (closing + 1)
+         | None ->
+           add_error accumulator "unterminated-operator" "unterminated R special operator"
+             index stop;
+           loop stop)
+      | _ -> loop (index + 1)
+  in loop 0
+
+(* NOTE: "tokenizeSingleLineComment" (_fe_analyzer_shared,
+   src/scanner/abstract_scanner.dart) reads the byte behind "//" and sets
+   dartdoc when it is a third slash, then reads no further, so a fourth slash
+   leaves "////" a DartDocToken just as "///" is one -- which is where Dart
+   parts company with Lua's "----" and Zig's "////".  "//!" is Rust's inner-doc
+   marker and means nothing here. *)
+let dart_line_kind source index = if starts source index "///" then DocLine else Line
+
+(* NOTE: "tokenizeMultiLineComment" sets dartdoc from the single byte behind
+   "/*", so "/**" opens the documentation comment dart doc reads and "/**/" is
+   an empty one.  "/*!" is Doxygen's marker, which C and C++ honour and Dart
+   does not. *)
+let dart_block_kind source index = if starts source index "/**" then DocBlock else Block
+
+let dart_unterminated_string raw triple =
+  match raw, triple with
+  | true, true -> "unterminated Dart raw multiline string"
+  | true, false -> "unterminated Dart raw string"
+  | false, true -> "unterminated Dart multiline string"
+  | false, false -> "unterminated Dart string"
+
+(* NOTE: A Dart identifier is spelled with ASCII letters, digits, "_" and "$"
+   and nothing wider (Dart Language Specification, 17.4). *)
+let dart_identifier_continue = function
+  | 'a'..'z' | 'A'..'Z' | '0'..'9' | '_' | '$' -> true
+  | _ -> false
+
+(* NOTE: "tokenizeRawStringKeywordOrIdentifier" is reached from the scanner's
+   main switch, so the "r" has to begin a token: an "r" that continues an
+   identifier is a letter of that identifier, and the quote behind it opens an
+   ordinary string.  Only a lower-case "r" does it -- "R'x'" is the identifier
+   "R" and then a string.
+
+   What decides it is the run of identifier bytes ending just before the "r".
+   An empty run means nothing precedes it.  A run that begins with a letter,
+   "_" or "$" is an identifier the "r" continues.  A run that begins with a
+   digit is a number, and a number token always ends before an "r" -- "r" is
+   not a digit, a hex digit, "x", "e", "." or "_" -- so the "r" begins a token
+   there too.  Measured on Dart 3.13.2: "1r'x'" and "0x1r'x'" are a number and
+   then a raw string, while "xr'x'", "_r'x'" and "$r'x'" are one identifier and
+   then an ordinary one. *)
+let dart_raw_string_prefix source quote =
+  quote > 0 && Bytes.get source (quote - 1) = 'r' &&
+  let rec loop cursor =
+    if cursor > 0 && dart_identifier_continue (Bytes.get source (cursor - 1)) then loop (cursor - 1)
+    else cursor in
+  let start = loop (quote - 1) in
+  start = quote - 1 || (match Bytes.get source start with '0'..'9' -> true | _ -> false)
+
+(* NOTE: One Dart string beginning at its opening quote (Dart Language
+   Specification, 17.6 Strings).  The six forms are one rule with two switches:
+   "triple" is three of the same quote, which makes a line break content instead
+   of the end of the literal, and "raw" is the "r" in front of it, which takes
+   away both the backslash escape and "${" interpolation.
+
+   A backslash in an ordinary string carries the next byte in -- that is what
+   hides a "\'" -- but it does not carry a line terminator: tokenizeSingleLineString
+   leaves .string_literal at the break either way, so "'x\<newline>y'" is an
+   unterminated string rather than a continuation.  The closing delimiter is the
+   first unescaped run of it and not the last: "''''x''''" is "'''" then "'x"
+   then "'''" with one quote left over, which is what the Dart scanner reports
+   for those bytes. *)
+let rec scan_dart_string source language options accumulator quote depth =
+  if depth > 256 then begin
+    add_error accumulator "nesting-limit"
+      "Dart string interpolation nesting limit exceeded" quote quote;
+    Bytes.length source
+  end else
+  let length = Bytes.length source in
+  let raw = dart_raw_string_prefix source quote in
+  let start = if raw then quote - 1 else quote in
+  let character = Bytes.get source quote in
+  let triple = quote + 2 < length &&
+    Bytes.get source (quote + 1) = character && Bytes.get source (quote + 2) = character in
+  let width = if triple then 3 else 1 in
+  let delimiter = String.make width character in
+  let carries index =
+    (not raw) && Bytes.get source index = '\\' && index + 1 < length &&
+    Bytes.get source (index + 1) <> '\r' && Bytes.get source (index + 1) <> '\n' in
+  let rec loop index =
+    if index >= length then begin
+      add_error accumulator "unterminated-string" (dart_unterminated_string raw triple)
+        start index;
+      index
+    end else if starts source index delimiter then index + width
+    else if carries index then loop (index + 2)
+    else if (not raw) && starts source index "${" then
+      loop (scan_dart_interpolation source language options accumulator (index + 2) (depth + 1))
+    else if (not triple) && (Bytes.get source index = '\r' || Bytes.get source index = '\n')
+    then begin
+      add_error accumulator "unterminated-string" (dart_unterminated_string raw triple)
+        start index;
+      index
+    end else loop (index + 1)
+  in loop (quote + width)
+
+(* NOTE: One "${ ... }" interpolation, beginning past its "${".  The braces of
+   the expression are counted rather than searched for, because the expression
+   is code: a nested string, a map literal, and a comment may all stand inside
+   one.  A comment written there is a comment -- the Dart scanner attaches it to
+   the token that follows, exactly as it does outside a string -- and a "//" one
+   runs to the end of its line while the string it sits inside carries on
+   below. *)
+and scan_dart_interpolation source language options accumulator index depth =
+  if depth > 256 then begin
+    add_error accumulator "nesting-limit"
+      "Dart string interpolation nesting limit exceeded" index index;
+    Bytes.length source
+  end else
+  let length = Bytes.length source in
+  let rec loop index braces =
+    if index >= length then begin
+      add_error accumulator "unterminated-template-expression"
+        "unterminated Dart string interpolation" index index;
+      index
+    end else if starts source index "//" then begin
+      let finish = line_end source (index + 2) in
+      add_comment accumulator source language options (dart_line_kind source index) index finish;
+      loop finish braces
+    end else if starts source index "/*" then begin
+      let finish, closed = block_end source index true in
+      add_comment accumulator source language options (dart_block_kind source index) index finish;
+      if not closed then add_error accumulator "unterminated-comment"
+        "unterminated Dart block comment" index finish;
+      loop finish braces
+    end else match Bytes.get source index with
+      | '"' | '\'' ->
+        loop (scan_dart_string source language options accumulator index (depth + 1)) braces
+      | '{' -> loop (index + 1) (braces + 1)
+      | '}' -> let remaining = braces - 1 in
+        if remaining = 0 then index + 1 else loop (index + 1) remaining
+      | _ -> loop (index + 1) braces
+  in loop index 1
+
+(* NOTE: One Dart compilation unit (Dart Language Specification, 17.1 Comments).
+   Dart is a C-family syntax with three departures that decide the shape of this
+   scanner rather than of scan_slash: its block comment nests, so "/* /* */ */"
+   is one comment; "//!" and "/*!" document nothing while "////" still does; and
+   "#!" at the very first byte is the script tag, which tokenizeTag reads only
+   when scanOffset = 0 -- a comment on the line above one is enough to take that
+   away.  "#" everywhere else is the operator that opens a symbol literal,
+   "#foo" or "#+", and needs no rule of its own.
+
+   Ground truth for every rule here is scanString of package:_fe_analyzer_shared
+   as the Dart SDK 3.13.2 ships it, read for token kinds and offsets, with
+   dart analyze for acceptance.  Measured against that scanner over the 3,143
+   .dart files of the SDK's own lib/ and of the packages fetched beside it: all
+   147,988 comments it reports come back with the same byte span, and no file is
+   called invalid. *)
+let scan_dart source language options accumulator =
+  let length = Bytes.length source in
+  let rec loop index =
+    if index >= length then ()
+    else if index = 0 && starts source index "#!" then begin
+      let finish = line_end source (index + 2) in
+      add_comment accumulator source language options Line index finish;
+      loop finish
+    end
+    else if starts source index "//" then begin
+      let finish = line_end source (index + 2) in
+      add_comment accumulator source language options (dart_line_kind source index) index finish;
+      loop finish
+    end
+    else if starts source index "/*" then begin
+      let finish, closed = block_end source index true in
+      add_comment accumulator source language options (dart_block_kind source index) index finish;
+      if not closed then add_error accumulator "unterminated-comment"
+        "unterminated Dart block comment" index finish;
+      loop finish
+    end
+    else match Bytes.get source index with
+      | '"' | '\'' -> loop (scan_dart_string source language options accumulator index 0)
+      | _ -> loop (index + 1)
+  in loop 0
+
+(* NOTE: Swift's documentation marker is "///", and a fourth slash does not take
+   it away: SwiftSyntax reports "////" as docLineComment exactly as it reports
+   "///", which is where Swift keeps company with Dart and parts company with
+   Lua's "----" and Zig's "////".  "//!" is Rust's inner-doc marker and means
+   nothing here. *)
+let swift_line_kind source index = if starts source index "///" then DocLine else Line
+
+(* NOTE: "/**" opens the documentation comment DocC reads, with one exception
+   that the third "*" is not there to open anything: "/**/" is the empty block
+   comment, whose second "*" is the first byte of its own terminator.
+   SwiftSyntax reports "/**/" as blockComment and "/***/" as docBlockComment. *)
+let swift_block_kind source index =
+  if starts source index "/**" && not (starts source index "/**/") then DocBlock else Block
+
+(* NOTE: The name of the Swift string form that was left open, so the diagnostic
+   says which of the five a reader has to go and close.  The fifth is the
+   single-quoted literal the compiler lexes and then rejects, which carries
+   neither a hash nor a multi-line spelling. *)
+let swift_unterminated_string delimiter raw multiline =
+  if delimiter = '\'' then "unterminated Swift single-quoted string"
+  else match raw, multiline with
+  | true, true -> "unterminated Swift raw multiline string"
+  | true, false -> "unterminated Swift raw string"
+  | false, true -> "unterminated Swift multiline string"
+  | false, false -> "unterminated Swift string"
+
+(* NOTE: Whether "count" "#" bytes stand at "index".  A longer run still closes a
+   delimiter, because the extra hashes are content behind it rather than part of
+   it, which is why the byte behind is not examined. *)
+let swift_hashes_at source index count =
+  let length = Bytes.length source in
+  let rec loop offset =
+    offset >= count ||
+    (index + offset < length && Bytes.get source (index + offset) = '#' && loop (offset + 1))
+  in loop 0
+
+(* NOTE: The end of a string with "hashes" hashes if its delimiter closes at
+   "index".  A raw delimiter takes one "#" more than it needs when one is there:
+   Lexer.Cursor.advanceIfStringDelimiter counts pounds with the advance in the
+   loop condition and the count test in its body, so it consumes a hashes+1-th
+   before it stops -- and then swiftc calls the literal an error, "too many '#'
+   characters in closing delimiter".  Taking that byte too is what keeps this
+   scan standing where the lexer stands on a file that is already broken.  An
+   ordinary string takes none: the same function returns on delimiterLength = 0
+   before it looks at a byte, so the "#" behind the closing quote of a plain
+   string opens whatever follows rather than belonging to the string. *)
+let swift_string_close source index delimiter multiline hashes =
+  let length = Bytes.length source in
+  let width = if multiline then 3 else 1 in
+  let rec quotes offset =
+    offset >= width ||
+    (index + offset < length && Bytes.get source (index + offset) = delimiter
+     && quotes (offset + 1)) in
+  if quotes 0 && swift_hashes_at source (index + width) hashes then begin
+    let finish = index + width + hashes in
+    Some (if hashes > 0 && finish < length && Bytes.get source finish = '#'
+          then finish + 1 else finish)
+  end else None
+
+(* NOTE: The length of the run of "#" beginning at "index".  A "#" in Swift opens
+   a compiler directive, a macro, a raw string, or an extended regular
+   expression literal, and only the last two carry a run of them; what decides
+   which is the byte behind the run. *)
+let swift_hash_run source index =
+  let length = Bytes.length source in
+  let rec loop cursor =
+    if cursor < length && Bytes.get source cursor = '#' then loop (cursor + 1) else cursor in
+  (loop index) - index
+
+(* NOTE: Whether the quotes at "quote" open a multi-line string literal.  Three
+   quotes are the multi-line delimiter, with one exception that only a raw
+   string can spell: a hash, three quotes and a hash is the single-line raw string
+   whose one character of content is a quote, and not a multi-line literal left open.  SwiftSyntax
+   decides it in Lexer.Cursor.advanceIfMultilineStringDelimiter, and only for a
+   raw string: from the third quote it reads the rest of the line for a quote
+   carrying the opening run of "#" behind it, and a literal that closes on its
+   own line that way is a single-line one. *)
+let swift_multiline_string source quote hashes =
+  if not (starts source quote "\"\"\"") then false
+  else if hashes = 0 then true
+  else begin
+    let length = Bytes.length source in
+    let rec loop cursor =
+      if cursor >= length || is_line_terminator (Bytes.get source cursor) then true
+      else if Bytes.get source cursor = '"' && swift_hashes_at source (cursor + 1) hashes then false
+      else loop (cursor + 1)
+    in loop (quote + 2)
+  end
+
+(* NOTE: Whether the "/" at "index" stands where a binary operator does, and can
+   therefore open no regular expression literal.  The Swift book (Lexical
+   Structure, Operators) decides this from the white space around an operator:
+   one with white space on both sides or on neither is binary, and one with
+   white space on the left alone is prefix; "(", "[" and "{" before an operator
+   count as white space, and so do ",", ";" and ":".  The set here is
+   SwiftSyntax's Lexer.Cursor.isLeftBound, which is that rule with two more
+   bytes that are white space in fact: a NUL, and the second byte of a U+00A0
+   no-break space.  The end of a block comment is white space as well, so
+   "1 /* c *//a/" opens a literal. *)
+let swift_is_left_bound source index =
+  if index = 0 then false
+  else match Bytes.get source (index - 1) with
+    | ' ' | '\t' | '\r' | '\n' | '\000' -> false
+    | '(' | '[' | '{' | ',' | ';' | ':' -> false
+    | '/' -> not (index >= 2 && Bytes.get source (index - 2) = '*')
+    | '\xa0' -> not (index >= 2 && Bytes.get source (index - 2) = '\xc2')
+    | _ -> true
+
+(* NOTE: The end of the bare regular expression literal "/ ... /" opening at
+   "index", or None when those bytes open none.  The Swift book (Lexical
+   Structure, Regular Expression Literals) states the rule this follows: a
+   literal cannot begin with an unescaped tab or space, and it cannot contain an
+   unescaped forward slash, a carriage return, or a line feed.  So the first
+   unescaped "/" is the closing delimiter, the search for it never leaves the
+   line the literal opened on, and a backslash carries the byte behind it in: a
+   literal may hold a slash escaped that way, and its own last two bytes then
+   spell two slashes.
+
+   Two more conditions come from the compiler rather than from the book, both
+   measured with swift-frontend -dump-parse -swift-version 6: the closing
+   delimiter may not be preceded by an unescaped space or tab, so "/b /" opens
+   nothing while a literal whose space is escaped does; and when the closing delimiter would be the first
+   byte of a comment the comment wins outright, so "/a//b/" is "/a" and then the
+   line comment "//b/". *)
+let swift_bare_regex source index =
+  if swift_is_left_bound source index then None
+  else begin
+    let length = Bytes.length source in
+    if index + 1 >= length then None
+    else match Bytes.get source (index + 1) with
+      | ' ' | '\t' | '\r' | '\n' -> None
+      | _ ->
+        let rec loop cursor blank =
+          if cursor >= length then None
+          else match Bytes.get source cursor with
+            | '\\' ->
+              if cursor + 1 >= length || is_line_terminator (Bytes.get source (cursor + 1))
+              then None else loop (cursor + 2) false
+            | '\r' | '\n' -> None
+            | '/' ->
+              if blank then None
+              else if cursor + 1 < length &&
+                      (Bytes.get source (cursor + 1) = '/' || Bytes.get source (cursor + 1) = '*')
+              then None
+              else Some (cursor + 1)
+            | character -> loop (cursor + 1) (character = ' ' || character = '\t')
+        in loop (index + 1) false
+  end
+
+(* NOTE: One Swift comment, string, or regular expression literal beginning at
+   "index", or None when the byte there opens none of them.  This is the whole of
+   Swift's lexical surface that a comment can hide behind or be, which is why the
+   top level and the inside of an interpolation ask one function for it: an
+   interpolation is code, and a comment written there is a comment exactly as it
+   is outside one. *)
+let rec scan_swift_lexeme source language options accumulator index depth =
+  let length = Bytes.length source in
+  if starts source index "//" then begin
+    let finish = line_end source (index + 2) in
+    add_comment accumulator source language options (swift_line_kind source index) index finish;
+    Some finish
+  end
+  else if starts source index "/*" then begin
+    let finish, closed = block_end source index true in
+    add_comment accumulator source language options (swift_block_kind source index) index finish;
+    if not closed then add_error accumulator "unterminated-comment"
+      "unterminated Swift block comment" index finish;
+    Some finish
+  end
+  else match Bytes.get source index with
+    | '/' -> swift_bare_regex source index
+    | '#' ->
+      let hashes = swift_hash_run source index in
+      let opener = index + hashes in
+      if opener < length && Bytes.get source opener = '/' then
+        Some (scan_swift_extended_regex source accumulator index hashes)
+      else if opener < length && Bytes.get source opener = '"' then
+        Some (scan_swift_string source language options accumulator index hashes depth)
+      else
+        (* NOTE: the run opens neither, and the whole of it is taken rather than
+           one byte of it: a shorter run inside this one ends at the same byte,
+           so if that byte is neither a quote nor a slash then no suffix of the
+           run opens a literal either. *)
+        Some opener
+    (* NOTE: "'" is no delimiter in the language -- the Swift book's Lexical
+       Structure has no single-quoted literal and no character literal at all --
+       but it is one in the compiler, which lexes "'...'" as a singleQuote string
+       so that it can offer the fix-it that turns it into a "\"...\"" one
+       (Lexer.Cursor.lexStringQuote).  Following the lexer rather than the
+       grammar keeps a "//" inside such a literal from being read as a comment
+       and removed out of a file that is already broken; no "'" can stand in
+       Swift code outside a string, a comment or a regular expression literal,
+       so it costs a valid file nothing. *)
+    | '"' | '\'' -> Some (scan_swift_string source language options accumulator index 0 depth)
+    | _ -> None
+
+(* NOTE: One extended regular expression literal "#/ ... /#", beginning at its
+   first "#".  This is the form that may carry an unescaped "/" -- "#/https://x/#"
+   is a regular expression with a "//" in the middle of it -- and the only one
+   that may span lines, and only when it opens one: RegexLiteralLexer enters
+   multi-line mode when the opener is followed by blanks and then a line
+   terminator, and in every other case a line terminator inside the pattern ends
+   the literal unterminated.  A multi-line literal that never closes gives its
+   lines back rather than swallowing the file, resuming at the first newline.
+   lexPatternCharacter reads an escaped byte through the same switch as an
+   unescaped one and its line-terminator arm does not ask which it is, so a
+   backslash before a line break closes nothing. *)
+and scan_swift_extended_regex source accumulator start hashes =
+  let length = Bytes.length source in
+  let opener = start + hashes + 1 in
+  let rec blanks cursor =
+    if cursor < length && (Bytes.get source cursor = ' ' || Bytes.get source cursor = '\t')
+    then blanks (cursor + 1) else cursor in
+  let probe = blanks opener in
+  let multiline = probe < length && is_line_terminator (Bytes.get source probe) in
+  let rec pounds cursor =
+    if cursor < length && Bytes.get source cursor = '#' then pounds (cursor + 1) else cursor in
+  let rec loop index =
+    if index >= length then (length, false)
+    else if (not multiline) && is_line_terminator (Bytes.get source index) then (index, false)
+    else if Bytes.get source index = '\\' then begin
+      let escaped = index + 1 in
+      if (not multiline) && escaped < length && is_line_terminator (Bytes.get source escaped)
+      then (escaped, false)
+      else loop (min (escaped + 1) length)
+    end
+    else if Bytes.get source index = '/' && swift_hashes_at source (index + 1) hashes then
+      (pounds (index + 1), true)
+    else loop (index + 1)
+  in
+  let stop, closed = loop (if multiline then probe else opener) in
+  if closed then stop
+  else begin
+    let finish = if multiline then probe else stop in
+    add_error accumulator "unterminated-regex"
+      "unterminated Swift extended regular expression literal" start finish;
+    finish
+  end
+
+(* NOTE: One Swift string literal, beginning at the first "#" of a raw one and at
+   the quote of any other.  The four forms are one rule with two switches:
+   "multiline" is three quotes, which makes a line break content instead of the
+   end of the literal, and "hashes" is the run of "#" in front of the quote,
+   which is what makes a string raw.  A raw string does not take the escape and
+   the interpolation away -- it renames them: with n hashes the escape is a
+   backslash and n hashes, so a backslash, one hash and an opening parenthesis
+   opens an interpolation in a raw literal with one hash while a bare backslash
+   and parenthesis is two characters of content, and the closing delimiter needs the
+   same n hashes behind the quote.  A backslash in an ordinary string carries the
+   next byte in but not a line terminator, so a backslash at the end of a line is
+   an unterminated string rather than a continuation. *)
+and scan_swift_string source language options accumulator start hashes depth =
+  if depth > 256 then begin
+    add_error accumulator "nesting-limit"
+      "Swift string interpolation nesting limit exceeded" start start;
+    Bytes.length source
+  end else begin
+    let length = Bytes.length source in
+    let quote = start + hashes in
+    let delimiter = Bytes.get source quote in
+    let multiline = delimiter = '"' && swift_multiline_string source quote hashes in
+    let width = if multiline then 3 else 1 in
+    let raw = hashes > 0 in
+    let rec loop index =
+      if index >= length then begin
+        add_error accumulator "unterminated-string"
+          (swift_unterminated_string delimiter raw multiline) start index;
+        index
+      end else match swift_string_close source index delimiter multiline hashes with
+        | Some finish -> finish
+        | None ->
+          if Bytes.get source index = '\\' && swift_hashes_at source (index + 1) hashes then begin
+            let escaped = index + 1 + hashes in
+            if escaped < length && Bytes.get source escaped = '(' then
+              loop (scan_swift_interpolation source language options accumulator
+                      (escaped + 1) (depth + 1))
+            else if escaped < length && not (is_line_terminator (Bytes.get source escaped)) then
+              loop (escaped + 1)
+            else ordinary index
+          end else ordinary index
+    and ordinary index =
+      if (not multiline) && is_line_terminator (Bytes.get source index) then begin
+        add_error accumulator "unterminated-string"
+          (swift_unterminated_string delimiter raw multiline) start index;
+        index
+      end else loop (index + 1)
+    in loop (quote + width)
+  end
+
+(* NOTE: One interpolation, beginning past the opening parenthesis of the
+   backslash and parenthesis that opens it.
+   The parentheses of the expression are counted rather than searched for,
+   because the expression is code: a nested string, a tuple, a call, and a
+   comment may all stand inside one.  SwiftSyntax reports a comment written there
+   as lineComment or blockComment trivia exactly as it does outside a string. *)
+and scan_swift_interpolation source language options accumulator index depth =
+  if depth > 256 then begin
+    add_error accumulator "nesting-limit"
+      "Swift string interpolation nesting limit exceeded" index index;
+    Bytes.length source
+  end else begin
+    let length = Bytes.length source in
+    let rec loop index parentheses =
+      if index >= length then begin
+        add_error accumulator "unterminated-interpolation"
+          "unterminated Swift string interpolation" index index;
+        index
+      end else match scan_swift_lexeme source language options accumulator index depth with
+        | Some finish -> loop finish parentheses
+        | None ->
+          match Bytes.get source index with
+            | '(' -> loop (index + 1) (parentheses + 1)
+            | ')' ->
+              let remaining = parentheses - 1 in
+              if remaining = 0 then index + 1 else loop (index + 1) remaining
+            | _ -> loop (index + 1) parentheses
+    in loop index 1
+  end
+
+(* NOTE: One Swift source file (The Swift Programming Language, Lexical
+   Structure: Comments, String Literals, Regular Expression Literals).  Swift is
+   a C-family syntax with four departures that decide the shape of this scanner
+   rather than of scan_slash: its block comment nests; "//!" and "/*!" document
+   nothing while "////" still does and the empty "/**/" does not; "'" is not a
+   delimiter of the language; and a "/" may open a regular expression literal,
+   which is the one construct here that can carry a "//" without a quote in
+   front of it.  "#!" at the very first byte is the script preamble, which
+   SwiftSyntax reports as a shebang token only at offset 0.
+
+   Ground truth for every rule here is the SwiftSyntax parser the Swift 6.3.3
+   toolchain ships, read for the comment trivia and their UTF-8 offsets, with
+   swift-frontend -dump-parse -swift-version 6 for what the compiler makes of the
+   same bytes.  Measured against that parser over the 3,962 Swift files of
+   swift-syntax, swift-format, swift-nio, swift-algorithms, swift-collections,
+   swift-experimental-string-processing, swift-protobuf,
+   swift-composable-architecture and the toolchain's own module interfaces: all
+   207,959 comments it reports come back here with the same byte span and kind,
+   and no file is called invalid. *)
+let scan_swift source language options accumulator =
+  let length = Bytes.length source in
+  let rec loop index =
+    if index >= length then ()
+    else if index = 0 && starts source index "#!" then begin
+      let finish = line_end source (index + 2) in
+      add_comment accumulator source language options Line index finish;
+      loop finish
+    end
+    else match scan_swift_lexeme source language options accumulator index 0 with
+      | Some finish -> loop finish
+      | None -> loop (index + 1)
+  in loop 0
+
 type heredoc = { operator : int; delimiter : bytes; strip_tabs : bool }
 
 let consume_newline source index =
   if starts source index "\r\n" then index + 2 else index + 1
 
+(* NOTE: ECMA-334 6.3.1 writes New_Line_Character as five characters rather than
+   two: the carriage return and line feed every language here has, and U+0085,
+   U+2028 and U+2029 besides.  Roslyn's lexer ends a "//" comment, a string and a
+   character literal at all five, which is exactly why C# gets a line_end of its
+   own: a comment read on past a U+2028 would swallow the code behind it and a
+   removal would take that code with it.  A source encoded in UTF-8 spells the
+   next-line character "\xc2\x85". *)
+let csharp_unicode_line_terminator_width source index =
+  let length = Bytes.length source in
+  if index + 1 < length && Bytes.get source index = '\xc2'
+     && Bytes.get source (index + 1) = '\x85' then Some 2
+  else if index + 2 < length && Bytes.get source index = '\xe2'
+          && Bytes.get source (index + 1) = '\x80'
+          && (Bytes.get source (index + 2) = '\xa8'
+              || Bytes.get source (index + 2) = '\xa9') then Some 3
+  else None
+
+let csharp_line_terminator_width source index =
+  if index >= Bytes.length source then None
+  else match csharp_unicode_line_terminator_width source index with
+    | Some width -> Some width
+    | None ->
+      if starts source index "\r\n" then Some 2
+      else match Bytes.get source index with '\r' | '\n' -> Some 1 | _ -> None
+
+let csharp_line_end source index =
+  let length = Bytes.length source in
+  let rec loop cursor =
+    if cursor >= length then cursor
+    else match csharp_line_terminator_width source cursor with
+      | Some _ -> cursor
+      | None -> loop (cursor + 1)
+  in loop index
+
+(* NOTE: ECMA-334 6.5.1 writes PP_Whitespace as Whitespace_Character+, and a
+   vertical tab and a form feed are two of those: Roslyn's IsWhitespace answers
+   to both, and to the space and tab a file is actually indented with.  The Zs
+   category is deliberately not here: Roslyn does count a no-break space in
+   front of a directive, so a line indented with one is a directive line there
+   and an ordinary line here, which costs that line the one comment a directive
+   may carry and nothing else. *)
+let is_csharp_blank = function ' ' | '\t' | '\011' | '\012' -> true | _ -> false
+
+(* NOTE: "#error" and "#warning" carry the text their diagnostic quotes and
+   "#region" and "#endregion" the label an editor folds under, and ECMA-334
+   6.5.1 writes all four as Input_Character* -- every byte to the end of the
+   line, whatever it spells.  Roslyn still lexes a "//" that opens the message as
+   a comment, which is the one case this distinction has to keep. *)
+let csharp_directive_takes_a_message name =
+  name = "error" || name = "warning" || name = "region" || name = "endregion"
+
+(* NOTE: "///" is C#'s XML documentation comment and a fourth slash takes it
+   back: Roslyn asks for "///" and then that the byte behind is no slash, so
+   "////" is the ordinary comment a reader rules a section off with -- which is
+   where C# parts company with Dart and Swift and keeps company with Java. *)
+let csharp_line_kind source index =
+  if starts source index "///"
+     && not (index + 3 < Bytes.length source && Bytes.get source (index + 3) = '/')
+  then DocLine else Line
+
+(* NOTE: "/**" opens the delimited documentation comment, with two spellings that
+   are not there to open anything: "/**/" is the empty block comment, whose
+   second star is the first byte of its own terminator, and "/***" is a rule of
+   stars.  Roslyn asks for "/**" and then that the byte behind is neither a star
+   nor a slash. *)
+let csharp_block_kind source index =
+  if starts source index "/**"
+     && not (index + 3 < Bytes.length source
+             && (Bytes.get source (index + 3) = '*'
+                 || Bytes.get source (index + 3) = '/'))
+  then DocBlock else Block
+
+type csharp_string_form = CsharpPlain | CsharpVerbatim | CsharpRaw
+
+type csharp_prefix = {
+  csharp_start : int;
+  csharp_quote : int;
+  csharp_quotes : int;
+  csharp_dollars : int;
+  csharp_form : csharp_string_form;
+}
+
+(* NOTE: One past the run of "$" and "@" at index, which is where a scan that
+   found no literal behind them resumes: a shorter run inside this one ends at
+   the same byte, so if that byte is no quote then no suffix of the run opens a
+   string either.  "@x" is the verbatim identifier of ECMA-334 6.4.3. *)
+let csharp_prefix_end source index =
+  let length = Bytes.length source in
+  let rec loop cursor =
+    if cursor < length
+       && (Bytes.get source cursor = '$' || Bytes.get source cursor = '@')
+    then loop (cursor + 1) else cursor
+  in loop index
+
+(* NOTE: The literal a run of "$" and "@" and then a run of quotes opens, or None
+   when no quote follows the prefix.  The order of the three tests is the part
+   that is not obvious: two "$" or more make a literal raw whatever else it
+   carries -- Roslyn lexes "$$\"a\"" as a raw interpolated string with a
+   one-quote delimiter and CS9004 -- while a single "@" makes it verbatim even in
+   front of three quotes, where "@\"\"\"x\"\"\"" comes back as one string whose
+   content is a quote, an x and a quote. *)
+let csharp_literal_prefix source index =
+  let length = Bytes.length source in
+  let rec prefix cursor dollars ats =
+    if cursor >= length then (cursor, dollars, ats)
+    else match Bytes.get source cursor with
+      | '$' -> prefix (cursor + 1) (dollars + 1) ats
+      | '@' -> prefix (cursor + 1) dollars (ats + 1)
+      | _ -> (cursor, dollars, ats) in
+  let cursor, dollars, ats = prefix index 0 0 in
+  if cursor >= length || Bytes.get source cursor <> '"' then None
+  else begin
+    let rec run count =
+      if cursor + count < length && Bytes.get source (cursor + count) = '"'
+      then run (count + 1) else count in
+    let quotes = run 0 in
+    let form =
+      if dollars >= 2 then CsharpRaw
+      else if ats > 0 then CsharpVerbatim
+      else if quotes >= 3 then CsharpRaw
+      else CsharpPlain in
+    Some { csharp_start = index; csharp_quote = cursor; csharp_quotes = quotes;
+           csharp_dollars = dollars; csharp_form = form }
+  end
+
+(* NOTE: Whether the raw string whose content begins at "content" carries its
+   line breaks, which it does when only blanks stand between its opening quote
+   run and the end of that line. *)
+let csharp_multiline_raw_string source content =
+  let length = Bytes.length source in
+  let rec loop cursor =
+    if cursor >= length then false
+    else match csharp_line_terminator_width source cursor with
+      | Some _ -> true
+      | None ->
+        if is_csharp_blank (Bytes.get source cursor) then loop (cursor + 1) else false
+  in loop content
+
+(* NOTE: Where a "}" leaves an interpolation hole that "braces" braces close: the
+   end of the hole and true when the run is long enough, and one past the run it
+   did hold with false when it is not. *)
+let csharp_hole_close source index braces =
+  let length = Bytes.length source in
+  let rec loop run =
+    if run - index < braces && run < length && Bytes.get source run = '}'
+    then loop (run + 1) else run in
+  let run = loop index in
+  if run - index = braces then (index + braces, true) else (run, false)
+
+(* NOTE: The name of the C# string form that was left open, so the diagnostic
+   says which of the six a reader has to go and close. *)
+let csharp_unterminated_string form interpolated =
+  match form, interpolated with
+  | CsharpPlain, false -> "unterminated C# string"
+  | CsharpPlain, true -> "unterminated C# interpolated string"
+  | CsharpVerbatim, false -> "unterminated C# verbatim string"
+  | CsharpVerbatim, true -> "unterminated C# interpolated verbatim string"
+  | CsharpRaw, false -> "unterminated C# raw string"
+  | CsharpRaw, true -> "unterminated C# interpolated raw string"
+
+(* NOTE: One C# comment, string, or character literal beginning at index, or None
+   when the byte there opens none of them.  This is the whole of C#'s lexical
+   surface that a comment can hide behind or be, which is why the top level and
+   the inside of an interpolation hole ask one function for it: a hole is code,
+   and a comment written there is a comment exactly as it is outside one. *)
+let rec scan_csharp_lexeme source language options accumulator index depth =
+  if starts source index "//" then begin
+    let finish = csharp_line_end source (index + 2) in
+    add_comment accumulator source language options (csharp_line_kind source index) index finish;
+    Some finish
+  end
+  else if starts source index "/*" then begin
+    (* NOTE: ECMA-334 6.3.3: "/*" has no special meaning inside a delimited
+       comment, so the first "*/" closes it however many openers stand in
+       front. *)
+    let finish, closed = block_end source index false in
+    add_comment accumulator source language options (csharp_block_kind source index) index finish;
+    if not closed then add_error accumulator "unterminated-comment"
+      "unterminated C# block comment" index finish;
+    Some finish
+  end
+  else match Bytes.get source index with
+    | '\'' -> Some (scan_csharp_character source accumulator index)
+    | '"' | '@' | '$' ->
+      (match csharp_literal_prefix source index with
+       | Some prefix ->
+         Some (scan_csharp_string source language options accumulator prefix depth)
+       | None -> Some (csharp_prefix_end source index))
+    | _ -> None
+
+(* NOTE: One "'x'" character literal, beginning at its opening quote.  A
+   backslash carries the byte behind it in whatever it is -- Roslyn lexes a
+   backslash, a line feed and a quote as one CharacterLiteralToken spanning the
+   break -- while an unescaped line terminator ends the literal unterminated,
+   which it reports as CS1010, Newline in constant. *)
+and scan_csharp_character source accumulator start =
+  let length = Bytes.length source in
+  let unterminated index =
+    add_error accumulator "unterminated-string"
+      "unterminated C# character literal" start index;
+    index in
+  let rec loop index =
+    if index >= length then unterminated index
+    else if Bytes.get source index = '\\' then loop (min length (index + 2))
+    else if Bytes.get source index = '\'' then index + 1
+    else match csharp_line_terminator_width source index with
+      | Some _ -> unterminated index
+      | None -> loop (index + 1)
+  in loop (start + 1)
+
+(* NOTE: One C# string literal, beginning at the first byte of its "$" and "@"
+   prefix and at the quote of a plain one.  The eight forms are three rules and
+   one switch: a plain string takes the backslash escape and ends at its line, a
+   verbatim one spells its quote twice and carries line breaks, and a raw one is
+   opaque until a run of at least as many quotes as its opener carried comes
+   back.  The switch is the "$" run: with none the braces are content, with n of
+   them a run of n braces opens a hole. *)
+and scan_csharp_string source language options accumulator prefix depth =
+  if depth > 256 then begin
+    add_error accumulator "nesting-limit"
+      "C# string interpolation nesting limit exceeded"
+      prefix.csharp_start prefix.csharp_start;
+    Bytes.length source
+  end else match prefix.csharp_form with
+    | CsharpRaw -> scan_csharp_raw_string source language options accumulator prefix depth
+    | CsharpVerbatim -> scan_csharp_verbatim_string source language options accumulator prefix depth
+    | CsharpPlain -> scan_csharp_plain_string source language options accumulator prefix depth
+
+(* NOTE: A backslash carries the byte behind it in whatever it is, a line
+   terminator included: ScanEscapeSequence takes one character and raises CS1009
+   when it spells no escape, so a backslash and a line feed is a string that
+   carries on below and not one left open.  A CRLF pair still ends it -- only the
+   carriage return is carried -- which is why this counts bytes and not
+   characters. *)
+and scan_csharp_plain_string source language options accumulator prefix depth =
+  let length = Bytes.length source in
+  let interpolated = prefix.csharp_dollars > 0 in
+  let unterminated index =
+    add_error accumulator "unterminated-string"
+      (csharp_unterminated_string prefix.csharp_form interpolated)
+      prefix.csharp_start index;
+    index in
+  let rec loop index =
+    if index >= length then unterminated index
+    else match Bytes.get source index with
+      | '\\' -> loop (min length (index + 2))
+      | '"' -> index + 1
+      | '{' when interpolated ->
+        if index + 1 < length && Bytes.get source (index + 1) = '{' then loop (index + 2)
+        else loop (scan_csharp_hole source language options accumulator (index + 1)
+                     prefix.csharp_dollars (depth + 1))
+      | '}' when interpolated && index + 1 < length
+                 && Bytes.get source (index + 1) = '}' -> loop (index + 2)
+      | _ ->
+        (match csharp_line_terminator_width source index with
+         | Some _ -> unterminated index
+         | None -> loop (index + 1))
+  in loop (prefix.csharp_quote + 1)
+
+(* NOTE: Two quotes are how a verbatim literal spells one, so the closing
+   delimiter is the first quote no second quote follows, and a backslash is
+   content. *)
+and scan_csharp_verbatim_string source language options accumulator prefix depth =
+  let length = Bytes.length source in
+  let interpolated = prefix.csharp_dollars > 0 in
+  let rec loop index =
+    if index >= length then begin
+      add_error accumulator "unterminated-string"
+        (csharp_unterminated_string prefix.csharp_form interpolated)
+        prefix.csharp_start index;
+      index
+    end
+    else match Bytes.get source index with
+      | '"' when index + 1 < length && Bytes.get source (index + 1) = '"' -> loop (index + 2)
+      | '"' -> index + 1
+      | '{' when interpolated ->
+        if index + 1 < length && Bytes.get source (index + 1) = '{' then loop (index + 2)
+        else loop (scan_csharp_hole source language options accumulator (index + 1)
+                     prefix.csharp_dollars (depth + 1))
+      | '}' when interpolated && index + 1 < length
+                 && Bytes.get source (index + 1) = '}' -> loop (index + 2)
+      | _ -> loop (index + 1)
+  in loop (prefix.csharp_quote + 1)
+
+(* NOTE: The closing delimiter of a raw literal is the first run of at least as
+   many quotes as the opener carried, and the whole run is taken: Roslyn ends
+   "\"\"\"abc\"\"\"\"" at its fourth closing quote and raises CS8998 rather than
+   leaving one behind.  A run shorter than the opener's is content, which is what
+   lets a raw string carry three quotes.  A run of braces longer than the "$" run
+   spends its first braces as content and its last on the hole. *)
+and scan_csharp_raw_string source language options accumulator prefix depth =
+  let length = Bytes.length source in
+  let interpolated = prefix.csharp_dollars > 0 in
+  let multiline =
+    csharp_multiline_raw_string source (prefix.csharp_quote + prefix.csharp_quotes) in
+  let unterminated index =
+    add_error accumulator "unterminated-string"
+      (csharp_unterminated_string prefix.csharp_form interpolated)
+      prefix.csharp_start index;
+    index in
+  let rec loop index =
+    if index >= length then unterminated index
+    else if Bytes.get source index = '"' then begin
+      let rec run cursor =
+        if cursor < length && Bytes.get source cursor = '"' then run (cursor + 1) else cursor in
+      let finish = run index in
+      if finish - index >= prefix.csharp_quotes then finish else loop finish
+    end
+    else if interpolated && Bytes.get source index = '{' then begin
+      let rec run cursor =
+        if cursor < length && Bytes.get source cursor = '{' then run (cursor + 1) else cursor in
+      let finish = run index in
+      if finish - index < prefix.csharp_dollars then loop finish
+      else loop (scan_csharp_hole source language options accumulator finish
+                   prefix.csharp_dollars (depth + 1))
+    end
+    else if (not multiline) && csharp_line_terminator_width source index <> None then
+      unterminated index
+    else loop (index + 1)
+  in loop (prefix.csharp_quote + prefix.csharp_quotes)
+
+(* NOTE: One interpolation hole, beginning past its opening braces.  The brackets
+   of the expression are counted rather than searched for, because the expression
+   is code: a nested string, a collection expression, a lambda, and a comment may
+   all stand inside one, and Roslyn reports a comment written there exactly as it
+   does outside a string.  A ":" where no bracket is open ends the expression and
+   opens the format clause, which is text to the end of the hole -- that is
+   Roslyn's rule down to the case that surprises a reader, where the first colon
+   of "global::X" opens a format clause of its own. *)
+and scan_csharp_hole source language options accumulator index braces depth =
+  if depth > 256 then begin
+    add_error accumulator "nesting-limit"
+      "C# string interpolation nesting limit exceeded" index index;
+    Bytes.length source
+  end else begin
+    let length = Bytes.length source in
+    let rec loop index brackets =
+      if index >= length then begin
+        add_error accumulator "unterminated-interpolation"
+          "unterminated C# string interpolation" index index;
+        index
+      end
+      else match scan_csharp_lexeme source language options accumulator index depth with
+        | Some finish -> loop finish brackets
+        | None ->
+          match Bytes.get source index with
+            | '(' | '[' | '{' -> loop (index + 1) (brackets + 1)
+            | ')' | ']' -> loop (index + 1) (max 0 (brackets - 1))
+            | '}' ->
+              if brackets > 0 then loop (index + 1) (brackets - 1)
+              else begin
+                let next, closed = csharp_hole_close source index braces in
+                if closed then next else loop next brackets
+              end
+            | ':' when brackets = 0 -> scan_csharp_format source accumulator index braces
+            | _ -> loop (index + 1) brackets
+    in loop index 0
+  end
+
+(* NOTE: The format clause of a hole, beginning at its colon.  Everything to the
+   closing braces is text -- Roslyn lexes it as one InterpolatedStringTextToken
+   -- so no comment is reported here and no nested literal is lexed. *)
+and scan_csharp_format source accumulator index braces =
+  let length = Bytes.length source in
+  let rec loop index =
+    if index >= length then begin
+      add_error accumulator "unterminated-interpolation"
+        "unterminated C# string interpolation" index index;
+      index
+    end
+    else if Bytes.get source index = '}' then begin
+      let next, closed = csharp_hole_close source index braces in
+      if closed then next else loop next
+    end
+    else loop (index + 1)
+  in loop index
+
+(* NOTE: One pre-processing directive line, beginning at its "#".  ECMA-334 6.5.1
+   ends every directive with PP_New_Line : PP_Whitespace? SINGLE_LINE_COMMENT?
+   New_Line, so a "//" is the one comment a directive line can carry: "/*" opens
+   nothing there and neither does an apostrophe.  A quote still opens a string --
+   that is the file name of "#line" and the three arguments of "#pragma checksum"
+   -- and Roslyn's ScanStringLiteral takes an inDirective flag that turns the
+   backslash escape off, so such a string ends at its next quote or at the line.
+   The "#" and its keyword may stand apart, since PP_Kind opens with
+   PP_Whitespace?.  A "#" that some other byte on its line came before is CS1040,
+   and Roslyn makes the whole rest of that line one bad token with no comment in
+   it, so nothing is reported for one here either. *)
+let scan_csharp_directive source language options accumulator index line_initial =
+  let finish = csharp_line_end source index in
+  if not line_initial then finish
+  else begin
+    let rec blanks cursor =
+      if cursor < finish && is_csharp_blank (Bytes.get source cursor)
+      then blanks (cursor + 1) else cursor in
+    let name_start = blanks (index + 1) in
+    let rec letters cursor =
+      if cursor < finish
+         && (match Bytes.get source cursor with 'a' .. 'z' | 'A' .. 'Z' -> true | _ -> false)
+      then letters (cursor + 1) else cursor in
+    let name_end = letters name_start in
+    let name = Bytes.sub_string source name_start (name_end - name_start) in
+    if csharp_directive_takes_a_message name then begin
+      let message = blanks name_end in
+      (* NOTE: the directive lexer has no documentation trivia, so a "///" on
+         this line is the ordinary line comment Roslyn reports it as. *)
+      if starts source message "//" then
+        add_comment accumulator source language options Line message finish;
+      finish
+    end else begin
+      let rec loop cursor =
+        if cursor >= finish then finish
+        else if starts source cursor "//" then begin
+          add_comment accumulator source language options Line cursor finish;
+          finish
+        end
+        else if Bytes.get source cursor = '"' then begin
+          let rec quote scan =
+            if scan < finish && Bytes.get source scan <> '"' then quote (scan + 1) else scan in
+          loop (min finish (quote (cursor + 1) + 1))
+        end
+        else loop (cursor + 1)
+      in loop (index + 1)
+    end
+  end
+
+(* NOTE: One C# source file (ECMA-334 6.3 Lexical analysis: comments, literals;
+   6.5 Pre-processing directives).  C# is a C-family syntax with three departures
+   that decide the shape of this scanner rather than of scan_slash: a line whose
+   first non-blank byte is "#" is a pre-processing directive and the rest of it
+   is not ordinary code; a string is written eight ways, and only the plain one
+   takes a backslash escape; and an interpolation hole is code, so a comment
+   written in one is a comment while the format clause behind its colon is text
+   again.  "#!" at the very first byte is the script preamble a ".csx" file
+   carries, which Roslyn reports as a ShebangDirectiveTrivia and dotnet-script
+   reads.
+
+   A conditional section is scanned as ordinary code rather than skipped: Roslyn
+   reports the body of an "#if" whose symbol is undefined as one DisabledText
+   blob and finds no comment in it, but which symbols a build defines is not in
+   the file, and a comment inside "#if DEBUG" is a comment in every build that
+   defines it.  C and C++ read "#if 0" the same way here for the same reason.
+
+   Ground truth for every rule here is the Roslyn lexer the .NET SDK 10.0.400
+   ships (CSharpSyntaxTree.ParseText with LanguageVersion.Preview, read for the
+   comment, disabled-text and pre-processing-message trivia and their UTF-8
+   offsets, and for the token each literal was lexed as).  Measured against that
+   lexer over the 70,630 C# files of dotnet/runtime, dotnet/roslyn,
+   dotnet/aspnetcore, dotnet/efcore, Newtonsoft.Json, Serilog and ImageSharp:
+   all 1,946,012 comments it reports come back with the same byte span and the
+   same kind, and 23,510 of those files stripped of every comment still parse
+   with no error. *)
+let scan_csharp source language options accumulator =
+  let length = Bytes.length source in
+  let rec loop index blank_line =
+    if index >= length then ()
+    else if index = 0 && starts source index "#!" then begin
+      let finish = csharp_line_end source (index + 2) in
+      add_comment accumulator source language options Line index finish;
+      loop finish false
+    end
+    else if Bytes.get source index = '#' then
+      loop (scan_csharp_directive source language options accumulator index blank_line) false
+    else match scan_csharp_lexeme source language options accumulator index 0 with
+      | Some finish -> loop finish false
+      | None ->
+        if is_line_terminator (Bytes.get source index) then
+          loop (consume_newline source index) true
+        else match csharp_unicode_line_terminator_width source index with
+          | Some width -> loop (index + width) true
+          | None ->
+            loop (index + 1) (blank_line && is_csharp_blank (Bytes.get source index))
+  (* NOTE: a byte order mark is consumed before the first line is read, so the
+     "#" behind one is still the first non-blank byte of its line and still
+     opens a directive: Roslyn reports the comment at the end of a "#pragma"
+     line that a mark stands in front of. *)
+  in loop (byte_order_mark_width source) true
+
+(* NOTE: A quote opens a scalar only where a scalar may begin: at the start of a
+   line, behind white space, or behind one of the flow indicators "," "[" "{"
+   (YAML 1.2.2, 7.4).  Anywhere else it is content of the plain scalar it sits
+   in, which is what keeps the apostrophe of "it's" from opening a literal that
+   would swallow the rest of the file. *)
+let yaml_flow_opener source index =
+  index > 0 && (match Bytes.get source (index - 1) with
+    | ',' | '[' | '{' -> true
+    | _ -> false)
+
+(* NOTE: Which trailing line breaks a block scalar keeps (YAML 1.2.2, 8.1.1.2):
+   "-" drops the final break and every empty line behind it, no indicator keeps
+   the final break alone, and "+" makes both content -- which is what lets a
+   blank line under such a body change its value. *)
+type chomping = Chomp_strip | Chomp_clip | Chomp_keep
+
+(* NOTE: A block scalar header is its "|" or ">", then its indicators, then
+   white space, then at most a comment, and then the end of the line (YAML
+   1.2.2, 8.1.1).  Anything else leaves the indicator a byte of a plain scalar,
+   which is the whole of what tells "key: >" from "key: a > b".  The comment
+   needs that white space in front of it like any other (6.6), so "key: |#c" is
+   no header either.  The answer carries the explicit indentation indicator --
+   None where the header spells none out and the body detects its own -- the
+   chomping indicator, where a comment begins, and where the line ends.  The two
+   readings of a missing indicator are not one answer: the floor a body line has
+   to clear is the owner's column either way, and an absent indicator behaves as
+   1 for that, but the depth the body's content sits at is written on the header
+   only when the indicator is. *)
+let yaml_block_header source index =
+  let length = Bytes.length source in
+  let rec indicators cursor indentation chomping =
+    if cursor >= length then (cursor, indentation, chomping)
+    else match Bytes.get source cursor with
+      | '1' .. '9' when indentation = None ->
+        indicators (cursor + 1)
+          (Some (Char.code (Bytes.get source cursor) - Char.code '0')) chomping
+      | '+' when chomping = None -> indicators (cursor + 1) indentation (Some Chomp_keep)
+      | '-' when chomping = None -> indicators (cursor + 1) indentation (Some Chomp_strip)
+      | _ -> (cursor, indentation, chomping) in
+  let cursor, indentation, chomping = indicators (index + 1) None None in
+  let rec white cursor spaced =
+    if cursor < length && (Bytes.get source cursor = ' ' || Bytes.get source cursor = '\t')
+    then white (cursor + 1) true else (cursor, spaced) in
+  let cursor, spaced = white cursor false in
+  let comment =
+    if spaced && cursor < length && Bytes.get source cursor = '#' then Some cursor else None in
+  let cursor = match comment with Some start -> line_end source start | None -> cursor in
+  if cursor >= length || Bytes.get source cursor = '\r' || Bytes.get source cursor = '\n'
+  then Some (indentation,
+             (match chomping with Some value -> value | None -> Chomp_clip),
+             comment, cursor)
+  else None
+
+(* NOTE: Where the node property beginning at `index` ends.  An anchor "&name"
+   and a tag "!tag" run to the white space, the line, or the flow indicator that
+   ends them (YAML 1.2.2, 6.9 and 7.4); nothing else may close one, which is
+   what keeps "!!str" a single token. *)
+let yaml_property_end source index =
+  let length = Bytes.length source in
+  let rec loop cursor =
+    if cursor >= length then cursor
+    else match Bytes.get source cursor with
+      | ' ' | '\t' | '\r' | '\n' | ',' | '[' | ']' | '{' | '}' -> cursor
+      | _ -> loop (cursor + 1)
+  in loop (index + 1)
+
+(* NOTE: Indentation is spaces alone: a tab may not indent a line (YAML 1.2.2,
+   6.1), so the first one ends the indentation and is content of whatever
+   follows it.  A line of nothing but white space is empty even so, which is
+   what keeps a blank line inside a block scalar body from ending it. *)
+let yaml_line_shape source start =
+  let length = Bytes.length source in
+  let rec spaces index =
+    if index < length && Bytes.get source index = ' ' then spaces (index + 1) else index in
+  let content = spaces start in
+  let rec white index =
+    if index < length && (Bytes.get source index = ' ' || Bytes.get source index = '\t')
+    then white (index + 1) else index in
+  let cursor = white content in
+  let blank =
+    cursor >= length || Bytes.get source cursor = '\r' || Bytes.get source cursor = '\n' in
+  (content - start, blank, line_end source cursor)
+
+(* NOTE: "---" and "..." are read in column zero alone, which is what the line
+   start carries here: a line with any indentation at all begins with a space
+   and matches neither (YAML 1.2.2, 9.1.2 and 9.1.3). *)
+let yaml_document_marker source line_start =
+  (starts source line_start "---" || starts source line_start "...") &&
+  (line_start + 3 >= Bytes.length source ||
+   match Bytes.get source (line_start + 3) with
+   | ' ' | '\t' | '\r' | '\n' -> true
+   | _ -> false)
+
+(* NOTE: A line belongs to the body of a block scalar while it is empty -- an
+   empty line is content of the scalar whatever its indentation (YAML 1.2.2,
+   8.1.2) -- or indented to at least the content indentation.  The first line
+   that is neither ends it, and so does a document marker in column zero, which
+   is what ends the body of a scalar that is the whole document and therefore
+   has no parent indentation to fall short of.
+
+   The second half of the answer is the detected content indentation (8.1.1.1):
+   the indentation of the first non-empty line, which is what a parser measures
+   every later line against, and `body_min` when the body holds no non-empty
+   line to measure.  It is never less than `body_min`, because a line shallower
+   than that would have ended the body instead of opening it. *)
+let yaml_block_body_end source header_end body_min =
+  let length = Bytes.length source in
+  if header_end >= length then (length, body_min)
+  else
+    let rec loop index content =
+      if index >= length then (index, content)
+      else
+        let indent, blank, finish = yaml_line_shape source index in
+        if (not blank) && (indent < body_min || yaml_document_marker source index) then (index, content)
+        else
+          let content = if blank || content <> None then content else Some indent in
+          if finish >= length then (length, content)
+          else loop (consume_newline source finish) content
+    in
+    let finish, content = loop (consume_newline source header_end) None in
+    (finish, match content with Some value -> value | None -> body_min)
+
+let rec only_blanks source index finish =
+  index >= finish ||
+  ((match Bytes.get source index with ' ' | '\t' -> true | _ -> false) &&
+   only_blanks source (index + 1) finish)
+
+(* NOTE: The one comment that is all its line holds, as an index into the array.
+   None when the line holds none, holds one with something else on it, or holds
+   a comment that does not run to the end of the line -- in each of those the
+   line survives a removal whatever else is decided about it. *)
+let comment_alone_on_line source comments line_start line_finish =
+  let rec loop index =
+    if index >= Array.length comments then None
+    else
+      let span = (comments.(index) : comment).span in
+      if span.start >= line_finish then None
+      else if span.start < line_start then loop (index + 1)
+      else if span.finish = line_finish && only_blanks source line_start span.start
+      then Some index else None
+  in loop 0
+
+(* NOTE: Where a line under a block scalar ends once its terminator is taken with
+   it. *)
+let past_terminator source line_finish =
+  if line_finish >= Bytes.length source then line_finish
+  else consume_newline source line_finish
+
+(* NOTE: The keep reason the scanner writes for a comment a YAML block scalar
+   leans on, and the one keep no option can overrule.  Frozen: the differential
+   protocol compares this string byte for byte. *)
+let yaml_structural_trail = "structural in a YAML block scalar trail"
+
+(* NOTE: Which comments in the trails of `blocks` no removal may take, as indices
+   into `comments`.
+
+   A block scalar body ends at the first line under it that is shallower than its
+   content (YAML 1.2.2, 8.1.1), and in a trail of whole-line comments that line
+   is a comment.  Removing it -- and a removal there takes the whole line, which
+   is the least a removal can leave -- hands the lines under it back to the body,
+   and a line that reaches the content depth is content again.  When what comes
+   back up is a comment the run keeps, no removal preserves the value: the
+   comment above it is not commentary but the thing that closes the scalar, and
+   it is kept.
+
+   Only the first comment of a trail can do that work, and it always can.  The
+   line a body ended at is shallower than the floor and so shallower than the
+   content, so keeping it closes the scalar there and leaves everything below
+   outside -- which is why one keep per block is both necessary and enough, and
+   why the deeper comments of the trail stay removable.  Keeping a deeper one
+   instead would be no fix at all: it reaches the content depth itself, so the
+   body would swallow the survivor.
+
+   A trail whose every comment is removable needs none of this: with nothing left
+   standing under the body there is nothing for it to take back. *)
+let yaml_structural_trail_keeps source blocks comments =
+  let length = Bytes.length source in
+  let keeps = ref [] in
+  List.iter (fun block ->
+    (* INVARIANT: `shield` is the trail's first removable comment shallower than
+       the content -- the one keep that would close the body -- and is set before
+       any deeper line can be reached, because the line a body ends at is
+       shallower than the content by construction. *)
+    let rec loop probe shield =
+      if probe >= length then ()
+      else
+        let indent, blank, finish = yaml_line_shape source probe in
+        if blank then
+          (* NOTE: An empty line is content of the body above whatever its
+             indentation (8.1.1.2), so it neither ends the trail nor shields
+             anything under it. *)
+          loop (past_terminator source finish) shield
+        else
+          match comment_alone_on_line source comments probe finish with
+          (* NOTE: The first line with anything else on it is the next node, and
+             it is not a line any removal here can move. *)
+          | None -> ()
+          | Some found ->
+            if (comments.(found) : comment).disposition = Remove then
+              let shield =
+                if shield = None && indent < block.content_indent then Some found else shield in
+              loop (past_terminator source finish) shield
+            else if indent < block.content_indent then
+              (* NOTE: A surviving line shallower than the content closes the
+                 body on its own, so nothing above it is load-bearing. *)
+              ()
+            else match shield with
+              | Some index -> keeps := index :: !keeps
+              | None -> ()
+    in loop block.body_end None) blocks;
+  !keeps
+
+(* NOTE: A double-quoted scalar takes backslash escapes (YAML 1.2.2, 7.3.1) and
+   a single-quoted one takes none, where "''" is the one way to write a quote of
+   its own (7.3.2), so a backslash inside the second is a byte of it.  Both fold
+   over a line break, which leaves the end of the file the only thing that can
+   leave one unterminated. *)
+let scan_yaml_quoted source accumulator start =
+  let length = Bytes.length source in
+  let quote = Bytes.get source start in
+  let rec loop index =
+    if index >= length then begin
+      add_error accumulator "unterminated-string"
+        (if quote = '"' then "unterminated YAML double-quoted scalar"
+          else "unterminated YAML single-quoted scalar") start index;
+      index
+    end
+    else if quote = '"' && Bytes.get source index = '\\' then loop (min length (index + 2))
+    else if Bytes.get source index <> quote then loop (index + 1)
+    else if quote = '\'' && index + 1 < length && Bytes.get source (index + 1) = '\''
+    then loop (index + 2)
+    else index + 1
+  in loop (start + 1)
+
+(* NOTE: One YAML stream (YAML 1.2.2).  The scanner is line-local: everything it
+   needs to decide what a byte is comes from the line that byte sits on.  "#"
+   opens a comment only where white space separates it from the token in front
+   of it (6.6), the two quoted styles may run over a line break and carry every
+   "#" inside them as content, and a block scalar (8.1) swallows every following
+   line more indented than the node it hangs off.
+
+   "separated" is whether a "#" here would be separated from what precedes it;
+   "node_start" is whether a node may begin here, which is what tells the block
+   scalar indicator of "key: >" from the ">" inside the plain scalar
+   "key: a > b"; "token_column" is where the token being read began, so that a
+   ": " behind it can name the column its value hangs off; and "owner_column" is
+   that column once one is known.  The first three are reset by the line break;
+   "owner_column" survives it while the node it names is still owed one, because
+   the "|" of a block scalar may sit on the line under the "key:" or the "-"
+   that owns it, or behind node properties (6.9).  The Rust scanner carries two
+   more answers -- whether a block scalar body ended at the start of a line, and
+   that a line under a live carry offers no restart point -- which is
+   bookkeeping for the incremental checkpoints this reference has no engine for.
+
+   "valid" is a lexical answer here and nothing more.  YAML has shapes a lexer
+   cannot rule out and a parser rejects, and removing a comment can walk a file
+   from one to the other: a comment line inside a multi-line plain scalar is a
+   parse error while it is there, and taking it away leaves a scalar that parses
+   and folds the two halves into one value. *)
+let scan_yaml source language options accumulator =
+  let length = Bytes.length source in
+  let boundary index =
+    index >= length ||
+    (match Bytes.get source index with ' ' | '\t' | '\r' | '\n' -> true | _ -> false) in
+  let rec loop index line_start separated node_start token_column owner_column =
+    if index >= length then ()
+    else
+      let byte = Bytes.get source index in
+      if byte = '#' && separated then begin
+        let finish = line_end source (index + 1) in
+        add_comment accumulator source language options Line index finish;
+        loop finish line_start separated node_start token_column owner_column
+      end
+      else if byte = '\r' || byte = '\n' then
+        (* NOTE: A line that ends while a node is still owed -- "key:", a bare
+           "-", a property whose node has not come yet, and the blank and comment
+           lines a separation may hold (6.9, 8.2.2) -- hands the owner's
+           indentation to the line below, because the "|" of the block scalar it
+           introduces may be down there.  A line that put a node on itself hands
+           over nothing. *)
+        let next = consume_newline source index in
+        loop next next true true None (if node_start then owner_column else None)
+      else if byte = ' ' || byte = '\t' then
+        loop (index + 1) line_start true node_start token_column owner_column
+      else if (byte = '|' || byte = '>') && node_start && separated then
+        (match yaml_block_header source index with
+        | Some (indicator, chomping, comment, header_end) ->
+          (match comment with
+          | Some start -> add_comment accumulator source language options Line start header_end
+          | None -> ());
+          (* NOTE: The body is indented past the node the scalar hangs off
+             (8.1.1.1).  For "key: |" that node is the mapping, whose indentation
+             is the column of the key; for "- |" it is the sequence, whose
+             indentation is the column of the "-".  The header itself may sit
+             anywhere past that owner -- on a line of its own, or behind an
+             anchor or a tag -- so its own column says nothing about how deep a
+             body line has to be, and reading it as the floor would take a body
+             indented less than the header for the end of the scalar and its "#"
+             lines for comments.  With no owner at all the scalar is the whole
+             document, whose indentation is one short of column zero, which
+             leaves every line under it body.  An explicit indentation indicator
+             counts from that same owner, which is why it replaces the detected
+             depth rather than adding to it.  Detection proper reads the first
+             non-empty line instead, and a line shallower than that but still
+             past the owner is content of neither reading; taking it for body is
+             the one that leaves bytes alone. *)
+          let base = match owner_column with Some column -> column + 1 | None -> 0 in
+          let floor = base + (match indicator with Some value -> value | None -> 1) - 1 in
+          let finish, detected = yaml_block_body_end source header_end floor in
+          (* NOTE: Where this body stopped, on what terms it keeps its trailing
+             empty lines, and how deep its content is are the whole of what
+             `lines_a_removal_must_swallow` and `yaml_structural_trail_keeps`
+             need from a scan: the lines under a body are the only place in YAML
+             where the hole a removal leaves carries meaning.  Recorded here
+             rather than re-derived, because only the scan knows the column of
+             the node the header hangs off.  An explicit indicator is the content
+             depth (8.1.1.1); without one the depth is detected from the first
+             non-empty line, and a body with no non-empty line at all has none to
+             detect, so the floor stands in for it -- which is the depth the next
+             line the scalar could take would set. *)
+          accumulator.yaml_blocks_rev <-
+            { body_end = finish;
+              content_indent = (match indicator with Some _ -> floor | None -> detected);
+              keeps_empties = chomping = Chomp_keep }
+            :: accumulator.yaml_blocks_rev;
+          loop finish finish true true None None
+        | None ->
+          let token_column =
+            match token_column with Some _ -> token_column | None -> Some (index - line_start) in
+          loop (index + 1) line_start false false token_column owner_column)
+      (* NOTE: An anchor "&name" and a tag "!tag" are node properties (6.9): they
+         stand in front of the node they decorate rather than being one, so a
+         node may still begin after them.  That is what leaves the "|" of
+         "key: !!str |" a block scalar header instead of a byte of a plain
+         scalar.  A property belongs to the node it decorates, so it is that
+         node's first token and names the column a ": " behind it hangs off. *)
+      else if (byte = '!' || byte = '&') && node_start && separated then
+        let token_column =
+          match token_column with Some _ -> token_column | None -> Some (index - line_start) in
+        loop (yaml_property_end source index) line_start false node_start token_column owner_column
+      else if (byte = '"' || byte = '\'') && (separated || yaml_flow_opener source index) then
+        let token_column =
+          match token_column with
+          | Some _ -> token_column
+          | None -> if node_start then Some (index - line_start) else None in
+        let finish = scan_yaml_quoted source accumulator index in
+        loop finish line_start false false token_column owner_column
+      (* NOTE: "-" is a sequence entry and "?" an explicit key only when white
+         space or the line ends them (6.9 and 8.2): "-x" is a plain scalar, and
+         so is "?x".  Either leaves the position a node may begin at, one column
+         further in. *)
+      else if (byte = '-' || byte = '?') && node_start && boundary (index + 1) then
+        loop (index + 1) line_start false true None (Some (index - line_start))
+      (* NOTE: A ":" ends a key only where white space or the line follows it
+         (7.2), which is what leaves the ":" of "http://x" inside the plain
+         scalar it belongs to. *)
+      else if byte = ':' && boundary (index + 1) then
+        let owner = match token_column with Some _ -> token_column | None -> owner_column in
+        loop (index + 1) line_start false true None owner
+      else
+        let token_column =
+          match token_column with
+          | Some _ -> token_column
+          | None -> if node_start then Some (index - line_start) else None in
+        loop (index + 1) line_start false false token_column owner_column
+  in
+  loop 0 0 true true None None;
+  (* NOTE: One rule needs the whole file rather than the byte in front of it, so
+     it runs once the trails are all there to read: a comment that is the only
+     thing holding a block scalar out of the kept comment under it is not
+     commentary and is kept. *)
+  if accumulator.yaml_blocks_rev <> [] then begin
+    let comments = Array.of_list (List.rev accumulator.comments_rev) in
+    let blocks = List.rev accumulator.yaml_blocks_rev in
+    List.iter (fun index ->
+      comments.(index) <- { (comments.(index)) with disposition = Keep yaml_structural_trail })
+      (yaml_structural_trail_keeps source blocks comments);
+    accumulator.comments_rev <- List.rev (Array.to_list comments)
+  end
+
 let parse_heredoc source index =
   let strip_tabs = index + 2 < Bytes.length source && Bytes.get source (index + 2) = '-' in
   let cursor = ref (index + if strip_tabs then 3 else 2) in
-  while !cursor < Bytes.length source && Char.code (Bytes.get source !cursor) <= 32 &&
+  while !cursor < Bytes.length source && ascii_whitespace (Bytes.get source !cursor) &&
     Bytes.get source !cursor <> '\r' && Bytes.get source !cursor <> '\n' do incr cursor done;
   let delimiter = Buffer.create 16 in
   let quote = ref None and saw_word = ref false and invalid = ref false in
@@ -1075,8 +3458,10 @@ let parse_heredoc source index =
   while !cursor < Bytes.length source && not !invalid &&
     (match !quote with
     | Some _ -> true
+    (* NOTE: The delimiter is a word (POSIX Shell Command Language, 2.7.4), and
+       a word ends at a blank or at an unquoted operator character. *)
     | None -> let byte = Bytes.get source !cursor in
-      Char.code byte > 32 && not (String.contains ";|&()<>" byte))
+      not (ascii_whitespace byte) && not (String.contains ";|&()<>" byte))
   do
     let byte = Bytes.get source !cursor in
     match !quote with
@@ -1118,6 +3503,380 @@ let shell_quote_end source start closing escapes =
 
 type shell_terminator = ShellParenthesis of int | ShellBacktick of int
 type shell_case_state = CaseAwaitIn | CasePattern | CaseBody
+
+(* NOTE: The kind of a Scala line comment.  The comment reader of the Scala 3
+   compiler classifies a comment as documentation when its raw text starts with
+   "/**" (Comment.isDocComment), and a line comment cannot, so "///" -- which
+   scaladoc does not read -- and "//!" are ordinary line comments, unlike Dart's
+   and Swift's third slash. *)
+let scala_line_kind _source _index = Line
+
+(* NOTE: The kind of a Scala block comment: documentation exactly when its raw
+   text starts with "/**", which is what Comment.isDocComment answers, so
+   "/**/" and "/***/" are documentation comments -- their second "*" is content
+   -- and "/*!" is Doxygen's marker, which Scala does not honour. *)
+let scala_block_kind source index =
+  if starts source index "/**" then DocBlock else Block
+
+(* NOTE: Whether the quote at "quote" opens an interpolated string.  The
+   compiler's lexer turns an identifier standing directly before a quote into
+   INTERPOLATIONID (fetchToken checks `ch = '"' && token == IDENTIFIER` after
+   reading an identifier), and a keyword is its own token, so "s\"...\"" and
+   "raw\"...\"" and a custom interpolator interpolate and "return\"...\"" does
+   not.  A number is not an identifier either, so the run of identifier
+   characters is read back from the quote and refused when it begins with a
+   digit. *)
+let scala_identifier_start byte =
+  (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z')
+  || byte = '_' || byte = '$'
+
+let scala_identifier_part byte =
+  scala_identifier_start byte || (byte >= '0' && byte <= '9')
+
+(* NOTE: Whether "word" is a hard Scala keyword, which is its own token and does
+   not interpolate a string after it.  Soft keywords -- as, derives, end,
+   extension, infix, inline, opaque, using -- are identifiers in the lexer, so
+   they are interpolators like any other. *)
+let scala_is_keyword word =
+  List.mem word [
+    "abstract"; "case"; "catch"; "class"; "def"; "do"; "else"; "enum";
+    "export"; "extends"; "final"; "finally"; "for"; "given"; "if";
+    "implicit"; "import"; "lazy"; "match"; "new"; "object"; "open";
+    "override"; "package"; "private"; "protected"; "return"; "sealed";
+    "then"; "throw"; "trait"; "transparent"; "try"; "type"; "val"; "var";
+    "while"; "with"; "yield";
+  ]
+
+let scala_interpolator source quote =
+  let rec backward index =
+    if index > 0 && scala_identifier_part (Bytes.get source (index - 1))
+    then backward (index - 1) else index in
+  let start = backward quote in
+  start < quote
+  && scala_identifier_start (Bytes.get source start)
+  && not (scala_is_keyword (Bytes.sub_string source start (quote - start)))
+
+(* NOTE: The first byte of an XML name: XML 1.0 NameStartChar, of which the
+   ASCII alphabet, "_" and ":" are the bytes a source file actually writes.  A
+   byte with the high bit is read as one too -- it may be a non-ASCII letter --
+   which costs a comparison nothing and gives a literal a chance to protect
+   text. *)
+let xml_name_start byte =
+  (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z')
+  || byte = '_' || byte = ':' || Char.code byte >= 0x80
+
+let xml_name_char byte =
+  xml_name_start byte || (byte >= '0' && byte <= '9')
+  || byte = '-' || byte = '.'
+
+(* NOTE: Whether the "<" at "index" opens an XML literal, which is exactly
+   where the compiler's lexer emits XMLSTART: the byte before it is space, tab,
+   line feed, "{", "(" or ">" -- a token boundary, and not the "x" of "x<a>" --
+   and the byte after it is an XML name start, "!" or "?".  The name start is
+   the lexer's own xml.Utility.isNameStart, which answers to letters and "_"
+   and *not* to ":" -- that is what keeps "_ <: Suite" a type bound and "x<a>"
+   a literal -- and a byte with the high bit is read as a letter too, which
+   costs a comparison nothing and gives a literal a chance to protect text.  A
+   byte order is read from the start of the file, so a "<" at its very
+   beginning is preceded by the space the lexer defaults to.  A bare "\r" is
+   not a boundary: "<a>" after one is a comparison, exactly as the lexer reads
+   it. *)
+let scala_is_xml_start source index =
+  let length = Bytes.length source in
+  let before = if index > 0 then Bytes.get source (index - 1) else ' ' in
+  (before = ' ' || before = '\t' || before = '\n' || before = '{'
+   || before = '(' || before = '>')
+  && (index + 1 < length
+      && (let after = Bytes.get source (index + 1) in
+          (after >= 'a' && after <= 'z') || (after >= 'A' && after <= 'Z')
+          || after = '_' || after = '!' || after = '?' || Char.code after >= 0x80))
+
+(* NOTE: One backquoted identifier, beginning at its opening backtick.  The
+   compiler's getBackquotedIdent reads to the next backtick and ends at a line
+   terminator, which it reports as "unclosed quoted identifier"; this scanner
+   follows both.  The identifier may hold any bytes but a backtick, "//"
+   included -- `val `a//b` = 1` is one identifier -- so the region between the
+   two backticks is opaque. *)
+let scala_backquoted_identifier source accumulator start =
+  let length = Bytes.length source in
+  let rec loop index =
+    if index >= length then (index, false)
+    else match Bytes.get source index with
+      | '`' -> (index + 1, true)
+      | '\r' | '\n' -> (index, false)
+      | _ -> loop (index + 1)
+  in
+  let finish, closed = loop (start + 1) in
+  if not closed then add_error accumulator "unterminated-identifier"
+    "unclosed quoted identifier" start finish;
+  finish
+
+(* NOTE: One `${ ... }` expression or the inside of an XML literal's braces,
+   beginning past the opening brace.  The braces are counted rather than
+   searched for, because the expression is code: a nested string, a tuple, a
+   call, and a comment may all stand inside one, and a string or an XML literal
+   written there is scanned as such.  The compiler reports a comment written
+   inside an interpolation as a comment exactly as it does outside a string,
+   and a "//" one runs to the end of its line while a multi-line string carries
+   on below. *)
+let rec scan_scala_expression source language options accumulator index depth =
+  if depth > 256 then begin
+    add_error accumulator "nesting-limit"
+      "Scala string interpolation nesting limit exceeded" index index;
+    Bytes.length source
+  end else begin
+    let length = Bytes.length source in
+    let rec loop cursor braces =
+      if cursor >= length then begin
+        add_error accumulator "unterminated-template-expression"
+          "unterminated Scala string-template expression" cursor cursor;
+        cursor
+      end else match scan_scala_lexeme source language options accumulator cursor depth with
+        | Some finish -> loop finish braces
+        | None -> match Bytes.get source cursor with
+          | '{' -> loop (cursor + 1) (braces + 1)
+          | '}' ->
+            if braces = 1 then cursor + 1
+            else loop (cursor + 1) (braces - 1)
+          | _ -> loop (cursor + 1) braces
+    in loop index 1
+  end
+
+(* NOTE: One Scala string literal, beginning at its opening quote.  A string is
+   interpolated exactly when an identifier stands directly before its quote --
+   the compiler's lexer turns that identifier into INTERPOLATIONID -- so
+   "s\"...\"", "raw\"...\"", a custom interpolator such as "xml\"...\"", and
+   each of them triple-quoted are the interpolated forms, and every other quote
+   opens a plain string whose "$" is content.  Inside an interpolated string
+   "$$" and "$\"" write a literal "$" and "\"", "${ ... }" opens an expression
+   that is code, and "$" followed by an identifier starts another expression;
+   the compiler rejects any other "$", and this scanner reads it as content,
+   which costs a comment nothing and keeps a broken file scannable.  A "\"
+   carries the byte behind it in a single-line string -- that is what hides a
+   "\\\"" -- and means nothing in a triple-quoted one.
+
+   A triple-quoted string closes on the first three quotes of a run, and any
+   further quotes of the run are part of the string's value: the lexer's
+   isTripleQuote consumes the first three and putChars the rest, so
+   "\"\"\"a\"\"\"\"" is the string "a\"" and ends after the run of four.  That
+   is where Scala parts company with Kotlin's existing scanner, which closes on
+   the first three of a run and leaves a stray quote behind. *)
+and scan_scala_string source language options accumulator start depth =
+  if depth > 256 then begin
+    add_error accumulator "nesting-limit"
+      "Scala string interpolation nesting limit exceeded" start start;
+    Bytes.length source
+  end else begin
+    let length = Bytes.length source in
+    let interpolated = scala_interpolator source start in
+    let triple = starts source start "\"\"\"" in
+    let rec run cursor =
+      if cursor < length && Bytes.get source cursor = '"' then run (cursor + 1) else cursor in
+    let rec loop index =
+      if index >= length then begin
+        add_error accumulator "unterminated-string"
+          (if triple then "unterminated Scala multi-line string"
+           else "unterminated Scala string") start index;
+        index
+      end else if interpolated && Bytes.get source index = '$' then begin
+        if index + 1 < length then
+          match Bytes.get source (index + 1) with
+          | '$' | '"' -> loop (index + 2)
+          | '{' -> loop (scan_scala_expression source language options accumulator
+                            (index + 2) (depth + 1))
+          | byte when scala_identifier_start byte ->
+            let rec identifier cursor =
+              if cursor < length && scala_identifier_part (Bytes.get source cursor)
+              then identifier (cursor + 1) else cursor in
+            loop (identifier (index + 2))
+          | _ -> loop (index + 1)
+        else loop (index + 1)
+      end else match Bytes.get source index with
+        | '"' when triple ->
+          let finish = run index in
+          if finish - index >= 3 then finish else loop (index + 1)
+        | '"' -> index + 1
+        | '\\' when not triple -> loop (min length (index + 2))
+        | ('\r' | '\n') when not triple -> begin
+          add_error accumulator "unterminated-string" "unterminated Scala string"
+            start index;
+          index
+        end
+        | _ -> loop (index + 1)
+    in loop (start + if triple then 3 else 1)
+  end
+
+(* NOTE: One XML tag beginning at its "<", returning where it ends, whether it
+   is self-closing, and the range of its name. *)
+and scala_xml_tag source language options accumulator start depth =
+  let length = Bytes.length source in
+  let name_start = start + 1 in
+  if name_start >= length || not (xml_name_start (Bytes.get source name_start))
+  then None
+  else begin
+    let rec name cursor =
+      if cursor < length && xml_name_char (Bytes.get source cursor)
+      then name (cursor + 1) else cursor in
+    let name_finish = name name_start in
+    let rec attributes index =
+      if index >= length then None
+      else match Bytes.get source index with
+        | '>' -> Some (index + 1, false)
+        | '/' when index + 1 < length && Bytes.get source (index + 1) = '>' ->
+          Some (index + 2, true)
+        | '"' | '\'' ->
+          let quote = Bytes.get source index in
+          let rec value cursor =
+            if cursor >= length then None
+            else if Bytes.get source cursor = quote then Some (cursor + 1)
+            else value (cursor + 1) in
+          (match value (index + 1) with
+           | Some finish -> attributes finish
+           | None -> None)
+        | '{' ->
+          attributes (scan_scala_expression source language options accumulator
+                        (index + 1) (depth + 1))
+        | _ -> attributes (index + 1)
+    in
+    match attributes name_finish with
+    | Some (finish, self_closing) -> Some (finish, self_closing, name_start, name_finish)
+    | None -> None
+  end
+
+(* NOTE: One XML literal, beginning at the "<" that opened it.  The compiler's
+   *lexer* emits an XMLSTART token for the "<" and then hands the literal to
+   the parser, which re-reads it with an XML scanner: element text, CDATA and
+   processing instructions are *not* code, and a "//" in them is a byte the
+   lexer alone would call a comment.  This scanner follows the parser, so text
+   and the construct bodies are opaque, "{ ... }" in text or an attribute is
+   code, "<!-- ... -->" is an XML comment, and the literal ends at the close
+   tag matching its root or at a self-closing "/>".  A literal whose root never
+   closes is a file the parser rejects, and the rest of it is read as opaque
+   content, which is the safe half of being wrong: a comment below a broken
+   literal is over-kept rather than removed out of one that parses. *)
+and scan_scala_xml source language options accumulator start depth =
+  let length = Bytes.length source in
+  match scala_xml_tag source language options accumulator start depth with
+  | None -> length
+  | Some (after_root, root_self_closing, root_start, root_finish) ->
+    if root_self_closing then after_root
+    else begin
+      let stack = ref [(root_start, root_finish)] in
+      let rec loop index =
+        if index >= length then length
+        else if Bytes.get source index = '{' then
+          loop (scan_scala_expression source language options accumulator
+                  (index + 1) (depth + 1))
+        else if Bytes.get source index <> '<' then loop (index + 1)
+        else if starts source index "<!--" then begin
+          match find_from source (index + 4) "-->" with
+          | None -> length
+          | Some finish ->
+            add_comment accumulator source language options HtmlComment index
+              (finish + 3);
+            loop (finish + 3)
+        end
+        else if starts source index "<![CDATA[" then begin
+          match find_from source (index + 9) "]]>" with
+          | None -> length
+          | Some finish -> loop (finish + 3)
+        end
+        else if starts source index "<?" then begin
+          match find_from source (index + 2) "?>" with
+          | None -> length
+          | Some finish -> loop (finish + 2)
+        end
+        else if starts source index "</" then begin
+          let name_start = index + 2 in
+          if name_start < length && xml_name_start (Bytes.get source name_start)
+          then begin
+            let rec name cursor =
+              if cursor < length && xml_name_char (Bytes.get source cursor)
+              then name (cursor + 1) else cursor in
+            let name_finish = name name_start in
+            let rec tail cursor =
+              if cursor < length && (Bytes.get source cursor = ' '
+                                     || Bytes.get source cursor = '\t'
+                                     || Bytes.get source cursor = '\r'
+                                     || Bytes.get source cursor = '\n')
+              then tail (cursor + 1) else cursor in
+            let after_name = tail name_finish in
+            if after_name < length && Bytes.get source after_name = '>' then begin
+              (* NOTE: the closing tag matches only the top of the stack; a
+                 name that does not match is text of a file the parser rejects,
+                 and reading past it keeps the scan moving instead of guessing. *)
+              let top_start, top_finish = List.hd !stack in
+              if name_finish - name_start = top_finish - top_start
+                 && Bytes.sub_string source name_start (name_finish - name_start)
+                    = Bytes.sub_string source top_start (top_finish - top_start)
+              then begin
+                stack := List.tl !stack;
+                if !stack = [] then after_name + 1
+                else loop (after_name + 1)
+              end else loop (index + 2)
+            end else length
+          end else loop (index + 2)
+        end
+        else if starts source index "<!" then begin
+          match find_from source (index + 2) ">" with
+          | None -> length
+          | Some finish -> loop (finish + 1)
+        end
+        else if index + 1 < length
+                && xml_name_start (Bytes.get source (index + 1)) then begin
+          match scala_xml_tag source language options accumulator index depth with
+          | None -> length
+          | Some (finish, self_closing, nested_start, nested_finish) ->
+            if not self_closing then stack := (nested_start, nested_finish) :: !stack;
+            loop finish
+        end
+        else loop (index + 1)
+      in loop after_root
+    end
+
+(* NOTE: One Scala comment, string, backquoted identifier, or XML literal
+   beginning at "index", or None when the byte there opens none of them.  This
+   is the whole of Scala's lexical surface that a comment can hide behind or
+   be, which is why the top level and the inside of a "${ ... }" interpolation
+   or of an XML literal's braces ask one function for it: both are code, and a
+   comment written there is a comment exactly as it is outside one. *)
+and scan_scala_lexeme source language options accumulator index depth =
+  if starts source index "//" then begin
+    let finish = line_end source (index + 2) in
+    add_comment accumulator source language options (scala_line_kind source index) index finish;
+    Some finish
+  end
+  else if starts source index "/*" then begin
+    let finish, closed = block_end source index true in
+    add_comment accumulator source language options (scala_block_kind source index) index finish;
+    if not closed then add_error accumulator "unterminated-comment"
+      "unterminated Scala block comment" index finish;
+    Some finish
+  end
+  else match Bytes.get source index with
+    | '"' -> Some (scan_scala_string source language options accumulator index depth)
+    | '`' -> Some (scala_backquoted_identifier source accumulator index)
+    | '<' when scala_is_xml_start source index ->
+      Some (scan_scala_xml source language options accumulator index depth)
+    | _ -> None
+
+(* NOTE: Scala has no "#" comment of its own, so a "#!" line is the only shape
+   a "#" is part of, and it is a preamble only at the very first byte -- a byte
+   order mark permitting -- which is also the only place scala-cli reads one.
+   The same bytes lower down are ordinary code. *)
+let scan_scala source language options accumulator =
+  let length = Bytes.length source in
+  let rec loop index =
+    if index >= length then ()
+    else if index = 0 && starts source index "#!" then begin
+      let finish = line_end source (index + 2) in
+      add_comment accumulator source language options Line index finish;
+      loop finish
+    end
+    else match scan_scala_lexeme source language options accumulator index 0 with
+      | Some finish -> loop finish
+      | None -> loop (index + 1)
+  in loop 0
 
 let scan_shell source language options accumulator =
   let rec consume_bodies index = function
@@ -1238,7 +3997,7 @@ let scan_shell source language options accumulator =
     end
     else if String.contains "<>" (Bytes.get source index) then
       loop (index + 1) heredocs parentheses false
-    else if Char.code (Bytes.get source index) <= 32 then
+    else if ascii_whitespace (Bytes.get source index) then
       loop (index + 1) heredocs parentheses false
     else if Bytes.get source index = '\\' then
       if starts source index "\\\r\n" then
@@ -1266,7 +4025,7 @@ let scan_shell source language options accumulator =
       let finish = word_end (index + 1) in
       let boundary = finish = Bytes.length source ||
         let character = Bytes.get source finish in
-        Char.code character <= 32 || String.contains ";&|()<>" character in
+        ascii_whitespace character || String.contains ";&|()<>" character in
       let token = Bytes.sub_string source index (finish - index) in
       if boundary && token = "case" && !command_position then begin
         case_states := CaseAwaitIn :: !case_states;
@@ -1428,9 +4187,1562 @@ let ascii_case_find source index token =
     else if ascii_case_starts source cursor token then Some cursor else loop (cursor + 1)
   in loop index
 
+(* NOTE: An opening tag is "<?php" without regard to case, followed by white
+   space or the end of the file (zend_language_scanner.l:
+   "<?php"([ \t]|{NEWLINE})), so "<?phpinfo()" is inline text; "<?=" is the
+   short echo tag and needs nothing behind it.  A bare "<?" opens nothing at
+   all, because short_open_tag is off by default, which is what leaves "<?xml"
+   an XML declaration in the output rather than the start of a program. *)
+let php_open_tag source index =
+  let length = Bytes.length source in
+  if starts source index "<?=" then Some (index + 3)
+  else if ascii_case_starts source index "<?php" &&
+    (index + 5 >= length ||
+     match Bytes.get source (index + 5) with
+     | ' ' | '\t' | '\r' | '\n' -> true
+     | _ -> false)
+  then Some (index + 5) else None
+
+(* NOTE: A PHP "//" or "#" comment ends at the line break or at a closing tag,
+   whichever comes first (PHP manual, Comments -- "the closing tag breaks out of
+   PHP mode").  The "?>" is not part of the comment. *)
+let php_line_comment_end source index =
+  let length = Bytes.length source in
+  let rec loop cursor =
+    if cursor >= length then cursor
+    else match Bytes.get source cursor with
+      | '\r' | '\n' -> cursor
+      | _ -> if starts source cursor "?>" then cursor else loop (cursor + 1)
+  in loop index
+
+(* NOTE: The tokenizer makes a documentation comment of "/**" only when white
+   space follows it -- its rule is "/*"|"/**"{WHITESPACE}, and the longer
+   alternative is what sets T_DOC_COMMENT -- so "/**/" and "/**text*/" are
+   ordinary block comments.  "/*!" is Doxygen's marker and means nothing to
+   PHP's own tooling, so it is an ordinary comment too. *)
+let php_block_kind source index =
+  if starts source index "/**" && index + 3 < Bytes.length source &&
+    (match Bytes.get source (index + 3) with
+     | ' ' | '\t' | '\r' | '\n' -> true
+     | _ -> false)
+  then DocBlock else Block
+
+(* NOTE: The complex syntax "{$...}" holds a PHP expression, which the engine
+   lexes as ordinary code.  This balances its braces instead, skipping over the
+   two things inside one that can carry a brace of their own -- a nested string
+   and a comment -- so "{$a['}']}" ends where PHP ends it.  Nothing else in an
+   expression can.  What it does not do is report the comment it skipped:
+   reading one out of a string would mean running the whole lexer inside one,
+   and v1 leaves those bytes alone instead. *)
+let php_interpolation_end source brace =
+  let length = Bytes.length source in
+  let rec literal index quote =
+    if index >= length || Bytes.get source index = quote then index
+    else if Bytes.get source index = '\\' then literal (min length (index + 2)) quote
+    else literal (index + 1) quote in
+  let rec loop index depth =
+    if index >= length then length
+    else match Bytes.get source index with
+      | '{' -> loop (index + 1) (depth + 1)
+      | '}' -> if depth = 1 then index + 1 else loop (index + 1) (depth - 1)
+      | ('\'' | '"' | '`') as quote -> loop (min length (literal (index + 1) quote + 1)) depth
+      | '/' when starts source index "/*" ->
+        let finish, _ = block_end source index false in loop finish depth
+      | '/' when starts source index "//" ->
+        loop (php_line_comment_end source (index + 2)) depth
+      | '#' when not (starts source index "#[") ->
+        loop (php_line_comment_end source (index + 1)) depth
+      | _ -> loop (index + 1) depth
+  in loop (brace + 1) 1
+
+(* NOTE: A PHP label opens with a letter, "_", or any byte from 0x80 up, and
+   continues with those and the digits (PHP manual, Variables). *)
+let php_label_start character =
+  (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') ||
+  character = '_' || Char.code character >= 0x80
+
+let php_label_continue character =
+  php_label_start character || (character >= '0' && character <= '9')
+
+(* NOTE: The header is "<<<", blanks, the label -- bare, or quoted with "'" for
+   a nowdoc or with a double quote for a heredoc -- and then the line break,
+   with nothing else allowed in between (zend_language_scanner.l).  The body
+   begins on the next line.  Anything the grammar refuses opened nothing, which
+   is the conservative reading of "$a <<< 1". *)
+let php_heredoc_header source start =
+  let length = Bytes.length source in
+  let rec blanks cursor =
+    if cursor < length && (Bytes.get source cursor = ' ' || Bytes.get source cursor = '\t')
+    then blanks (cursor + 1) else cursor in
+  let opened = blanks (start + 3) in
+  let quote =
+    if opened < length && (Bytes.get source opened = '\'' || Bytes.get source opened = '"')
+    then Some (Bytes.get source opened) else None in
+  let label_start = match quote with Some _ -> opened + 1 | None -> opened in
+  if label_start >= length || not (php_label_start (Bytes.get source label_start)) then None
+  else
+    let rec label cursor =
+      if cursor < length && php_label_continue (Bytes.get source cursor)
+      then label (cursor + 1) else cursor in
+    let label_end = label label_start in
+    let name = Bytes.sub_string source label_start (label_end - label_start) in
+    let after = match quote with
+      | None -> Some label_end
+      | Some quote ->
+        if label_end < length && Bytes.get source label_end = quote
+        then Some (label_end + 1) else None in
+    match after with
+    | None -> None
+    | Some after ->
+      if after < length && (Bytes.get source after = '\r' || Bytes.get source after = '\n')
+      then Some (name, consume_newline source after, quote = Some '\'')
+      else None
+
+(* NOTE: Since PHP 7.3 the closing label may be indented by blanks and may be
+   followed by anything that cannot continue a label -- ";", ",", ")", an
+   operator, the line break, or the end of the file (PHP manual, Heredoc text).
+   A byte that can continue one leaves the line ordinary body, which is what
+   keeps "EOTX" from ending an "EOT". *)
+let php_heredoc_end source body name =
+  let length = Bytes.length source in
+  let width = String.length name in
+  let rec line index =
+    let rec blanks cursor =
+      if cursor < length && (Bytes.get source cursor = ' ' || Bytes.get source cursor = '\t')
+      then blanks (cursor + 1) else cursor in
+    let cursor = blanks index in
+    if starts source cursor name &&
+      (cursor + width >= length || not (php_label_continue (Bytes.get source (cursor + width))))
+    then Some (cursor + width)
+    else
+      let finish = line_end source index in
+      if finish >= length then None else line (consume_newline source finish)
+  in line body
+
+(* NOTE: A single-quoted string escapes only "\'" and "\\", and every other
+   backslash is a byte of it -- but the byte after a backslash can never be the
+   closing quote unless the pair is that escape, so skipping two finds the same
+   closer either way.  A double-quoted or backtick string takes the full escape
+   set and interpolates.  None of the three ends at a line break, so only the
+   end of the file leaves one unterminated. *)
+let scan_php_quoted source accumulator start =
+  let length = Bytes.length source in
+  let quote = Bytes.get source start in
+  let interpolates = quote <> '\'' in
+  let rec loop index =
+    if index >= length then begin
+      add_error accumulator "unterminated-string"
+        (match quote with
+         | '\'' -> "unterminated PHP single-quoted string"
+         | '"' -> "unterminated PHP double-quoted string"
+         | _ -> "unterminated PHP backtick string") start index;
+      index
+    end
+    else if Bytes.get source index = '\\' then loop (min length (index + 2))
+    else if Bytes.get source index = quote then index + 1
+    else if interpolates && Bytes.get source index = '{' &&
+      index + 1 < length && Bytes.get source (index + 1) = '$'
+    then loop (php_interpolation_end source index)
+    else if interpolates && Bytes.get source index = '$' &&
+      index + 1 < length && Bytes.get source (index + 1) = '{'
+    then loop (php_interpolation_end source (index + 1))
+    else loop (index + 1)
+  in loop (start + 1)
+
+let scan_php_heredoc source accumulator start =
+  match php_heredoc_header source start with
+  | None -> start + 1
+  | Some (name, body, nowdoc) ->
+    (match php_heredoc_end source body name with
+     | Some finish -> finish
+     | None ->
+       add_error accumulator "unterminated-string"
+         (if nowdoc then "unterminated PHP nowdoc" else "unterminated PHP heredoc")
+         start (Bytes.length source);
+       Bytes.length source)
+
+(* NOTE: PHP mode, from the byte after the opening tag that entered it.  The
+   answer is where inline HTML resumes: past a "?>" and the one line break it
+   carries away with it (zend_language_scanner.l: "?>"{NEWLINE}?), which is what
+   keeps a template from emitting a blank line for every block of code it holds,
+   or the end of the file.  PHP 8.0 gave "#[" to attributes, so a "#" with a
+   bracket behind it opens no comment. *)
+let scan_php_code source language options accumulator start =
+  let length = Bytes.length source in
+  let rec loop index =
+    if index >= length then index
+    else if starts source index "?>" then
+      let finish = index + 2 in
+      if finish < length && (Bytes.get source finish = '\r' || Bytes.get source finish = '\n')
+      then consume_newline source finish else finish
+    else if starts source index "//" then
+      let finish = php_line_comment_end source (index + 2) in
+      add_comment accumulator source language options Line index finish;
+      loop finish
+    else if starts source index "/*" then begin
+      let finish, closed = block_end source index false in
+      add_comment accumulator source language options (php_block_kind source index) index finish;
+      if not closed then
+        add_error accumulator "unterminated-comment" "unterminated PHP block comment" index finish;
+      loop finish
+    end
+    else if starts source index "#[" then loop (index + 1)
+    else if Bytes.get source index = '#' then
+      let finish = php_line_comment_end source (index + 1) in
+      add_comment accumulator source language options Line index finish;
+      loop finish
+    else match Bytes.get source index with
+      | '\'' | '"' | '`' -> loop (scan_php_quoted source accumulator index)
+      | '<' when starts source index "<<<" ->
+        loop (scan_php_heredoc source accumulator index)
+      | _ -> loop (index + 1)
+  in loop start
+
+(* NOTE: One PHP file (PHP manual, Basic syntax, Comments, Strings, Heredoc
+   text).  A file opens in inline-HTML mode, where every byte is output verbatim
+   and nothing is a comment; an opening tag enters PHP mode and "?>" returns.
+   Inline HTML is opaque in v1, so an HTML comment in a PHP file is not
+   reported: reading it would mean scanning the inline halves as HTML, which is
+   a change of what the language is rather than a missing arm here.
+
+   The CLI strips a "#!" line from the very first line of a script before the
+   engine sees it (php_cli.c, which tests the first two bytes).  Unlike CPython
+   and Lua, PHP skips no byte order mark first, and neither does the kernel, so
+   a mark in front of the "#!" leaves it ordinary inline HTML.  The Rust scanner
+   carries one more answer out of the closing tag -- whether it ended at the
+   start of a line -- which is bookkeeping for the incremental checkpoints this
+   reference has no engine for. *)
+let scan_php source language options accumulator =
+  let length = Bytes.length source in
+  let rec html index =
+    if index >= length then ()
+    else match Bytes.get source index with
+      | '<' -> (match php_open_tag source index with
+        | Some code -> html (scan_php_code source language options accumulator code)
+        | None -> html (index + 1))
+      | '\r' | '\n' -> html (consume_newline source index)
+      | _ -> html (index + 1)
+  in
+  if starts source 0 "#!" then begin
+    let finish = line_end source 2 in
+    add_comment accumulator source language options Line 0 finish;
+    html finish
+  end else html 0
+
+(* NOTE: Where a Ruby token may begin, which is what decides whether "/", "%",
+   "?" and "<<" open a literal or are the operator spelled with the same byte.
+   This is Ruby's own lex_state folded onto the three answers those four
+   questions read out of it: IS_BEG(), IS_END(), and the IS_ARG() in between,
+   where a bare word may be a method about to take a command argument and only
+   the spacing around the byte says which.  Ruby's lexer tells a local variable
+   from a method name by the symbol table it is building, which a scanner has
+   not got, so every bare word lands in RubyArgument. *)
+(* NOTE: RubyFname is EXPR_FNAME|EXPR_FITEM, where "alias" and "undef" leave
+   Ruby.  It answers every question RubyEnd answers, and one differently:
+   parse_percent opens a symbol literal on "%s" there, spacing or none. *)
+type ruby_state = RubyBegin | RubyArgument | RubyEnd | RubyFname
+
+type ruby_percent = {
+  percent_form : char;
+  percent_open : char;
+  percent_close : char;
+  percent_content : int;
+  percent_interpolates : bool;
+}
+
+type ruby_heredoc = {
+  heredoc_operator : int;
+  heredoc_label : string;
+  heredoc_indented : bool;
+  heredoc_interpolates : bool;
+}
+
+(* NOTE: Ruby's is_identchar: a letter, "_", or the lead byte of a character
+   outside ASCII, which Ruby takes as a name byte wholesale. *)
+let ruby_identifier_start character =
+  (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') ||
+  character = '_' || Char.code character land 0x80 <> 0
+
+let ruby_identifier_continue character =
+  ruby_identifier_start character || (character >= '0' && character <= '9')
+
+let ruby_digit character = character >= '0' && character <= '9'
+
+let ruby_alphanumeric character =
+  (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') ||
+  ruby_digit character
+
+(* NOTE: White space that separates Ruby tokens without ending a line.  The
+   vertical tab and the form feed are in it, as rb_isspace has them; the two
+   line terminators are handled on their own, because they finish a statement. *)
+let ruby_is_space = function ' ' | '\t' | '\011' | '\012' -> true | _ -> false
+
+let ruby_identifier_end source index =
+  let rec loop cursor =
+    if cursor < Bytes.length source && ruby_identifier_continue (Bytes.get source cursor)
+    then loop (cursor + 1) else cursor
+  in loop index
+
+(* NOTE: Ruby's lexer takes a trailing "?" or "!" into a name unless a "="
+   follows it, which is what tells "x.empty?" from the ternary "x ? y : z" --
+   and, in the other direction, keeps "a != b" a comparison. *)
+let ruby_word_end source index =
+  let finish = ruby_identifier_end source (index + 1) in
+  if finish < Bytes.length source &&
+    (Bytes.get source finish = '?' || Bytes.get source finish = '!') &&
+    not (finish + 1 < Bytes.length source && Bytes.get source (finish + 1) = '=')
+  then finish + 1 else finish
+
+(* NOTE: The digits, the "_" separators, the radix letters and the "r" and "i"
+   suffixes are one run of name bytes; a "." joins the run only when a digit
+   follows it, which is what keeps "1.times" a method call. *)
+let ruby_number_end source index =
+  let rec loop cursor =
+    let finish = ruby_identifier_end source cursor in
+    if finish + 1 < Bytes.length source && Bytes.get source finish = '.' &&
+      ruby_digit (Bytes.get source (finish + 1))
+    then loop (finish + 1) else finish
+  in loop index
+
+(* NOTE: Ruby's keyword table folded onto ruby_state.  "def", "alias" and
+   "undef" refuse a literal because the name that follows one may be spelled "/"
+   or "%" -- "def /(other)" defines division; "class" and "module" are in the
+   first list for the mirror-image reason, that "class <<self" is a singleton
+   class and never a here document.  "alias" and "undef" take RubyFname rather
+   than RubyEnd because they leave Ruby in EXPR_FNAME|EXPR_FITEM, which is one
+   answer wider.  "super", "yield", "not" and "defined?" are in none of the
+   three, which leaves them where Ruby has them: a command that may take an
+   argument.
+
+   RubyEnd is a coarser answer than either reason asked for, and it is worth
+   naming what the coarseness costs.  What is measured is this table against
+   Ripper.lex, keyword by keyword: RubyEnd answers all four of the state
+   machine's questions at once, so it also decides "/", "%" and "?", and two
+   readings are where the answer it gives is not Ruby's.  After "def" it is
+   Ruby's own answer for "/" and for every percent literal, which EXPR_FNAME
+   reads as the method names they are, and "def" has no exception: "def%s(foo)"
+   is on_op "%" then on_ident "s" to Ruby 3.3.12.  After "class" and "module" it
+   is not Ruby's answer either: EXPR_CLASS expects a value, so Ruby opens a
+   literal there -- "class /x # c/" is one regular expression to Ruby 3.3.12
+   (Ripper.lex gives on_regexp_beg) and a division with a comment behind it
+   here.  And "?" diverges after all five: "class ?# x" and "def ?# x" are
+   on_CHAR "?#" to Ruby and a comment opener here.  Both of those are spellings
+   Ruby itself refuses -- "class" and "module" take a constant, a "::" or a "<<"
+   in any program that parses, and "def ?# x" is a syntax error -- so both are
+   reachable only where the scan is already reading a broken file, and buying
+   them back with a state of their own, one that keeps the literal readings and
+   refuses only the here document, would add a state to the machine for no
+   program that runs.
+
+   RubyFname is the state that does earn its keep, and "%s" after "alias" or
+   "undef" is what buys it: "alias%s(baz # x) %s(bar)" is a file Ruby runs, and
+   Ripper.lex under Ruby 3.3.12 gives on_symbeg "%s(" in state FNAME|FITEM for
+   both names with "baz # x" an on_tstring_content.  Reading that "#" as a
+   comment would remove bytes Ruby has inside a symbol, which is the one
+   direction this scanner may not take.  The rule is about the delimiter and not
+   only the state -- "alias" goes on refusing "/", "<<", "%w" and "%q" in the
+   same breath it accepts "%s" ("alias%w[a]" is on_op "%" to Ripper) -- so
+   ruby_percent_opens asks it rather than ruby_literal_opens alone.
+
+   "<<" itself is not an entry on that list, and what keeps it off is not
+   this function.  A header RubyEnd refuses is a shift, which reads no fewer
+   bytes into a literal than Ruby does; a header it allows queues a body, and
+   scan_ruby queues it for the physical line the header stands on wherever that
+   header was written -- before an interpolation, inside one, inside a nested
+   one, or inside an interpolation on another here document's body line.  A
+   queue that stopped at an interpolation boundary would read a whole here
+   document body as code, which would be one more reading that takes fewer bytes
+   into a literal than Ruby does, and it is the one the corpus cases named
+   "ruby-heredoc-*-interpolation" hold shut.
+
+   NOTE: RubyEnd is as far as that first half reaches, and "def", "alias" and
+   "undef" are where it stops.  MRI's parser_yylex tries heredoc_identifier on
+   "<<" unless the lexer state is EXPR_DOT|EXPR_CLASS, unless IS_END(), or
+   unless it is an IS_ARG() with no white space in front -- and EXPR_FNAME is in
+   none of those three, so the state "def" leaves Ruby in, and the
+   EXPR_FNAME|EXPR_FITEM that "alias" and "undef" do, still reach a here
+   document.  This table answers RubyEnd for "def" and RubyFname for the other
+   two, and both refuse the header: "def <<EOS" is a shift here and a
+   here-document header to MRI, which is the direction -- fewer bytes into a
+   literal than Ruby takes -- that the rest of this file refuses.  What bounds
+   it is what bounds the "class" and "module" readings above: no program that
+   runs is written that way, because "def" is followed by a method name and
+   "<<EOS" is not one.  "class" and "module" are not part of this exception at
+   all -- EXPR_CLASS is named in that guard, which is what makes "class <<self"
+   a singleton class rather than a here document.  Unlike every other reading in
+   this comment, the "def <<EOS" one is argued from MRI's parse.y alone and has
+   not been put to Ripper.lex: no Ruby 3.3 was available where it was
+   written. *)
+let ruby_state_after_word token =
+  match token with
+  | "end" | "self" | "nil" | "true" | "false" | "redo" | "retry" | "__FILE__"
+  | "__LINE__" | "__ENCODING__" | "def" | "class" | "module" -> RubyEnd
+  | "alias" | "undef" -> RubyFname
+  | "if" | "unless" | "while" | "until" | "case" | "when" | "in" | "and" | "or"
+  | "return" | "break" | "next" | "then" | "do" | "else" | "elsif" | "begin"
+  | "ensure" | "rescue" | "for" -> RubyBegin
+  | _ -> RubyArgument
+
+(* NOTE: Ruby's rule for both "/" and "%" (parse_slash, parse_percent) is one
+   rule: where a value is expected the byte always opens a literal; after an
+   operand it never does; and in between it opens one exactly when white space
+   stands before it and none behind it, which tells the command argument of
+   "puts /x/" from the division in "a / b".  "/=" and "%=" are recognised before
+   that last test, so an assignment operator is never read as a literal outside
+   value position. *)
+let ruby_literal_opens state space_seen source index =
+  match state with
+  | RubyBegin -> true
+  | RubyEnd | RubyFname -> false
+  | RubyArgument ->
+    space_seen && index + 1 < Bytes.length source &&
+    (let byte = Bytes.get source (index + 1) in
+     byte <> '=' && not (ruby_is_space byte) && byte <> '\r' && byte <> '\n')
+
+(* NOTE: Never after an operand, and after a bare word only when white space
+   stands in front of it -- which is why "a << b" is a shift and "a <<b" is the
+   here document that spacing exists to avoid. *)
+let ruby_heredoc_may_open state space_seen =
+  match state with
+  | RubyBegin -> true | RubyArgument -> space_seen | RubyEnd | RubyFname -> false
+
+(* NOTE: ruby_literal_opens answers the "%" question everywhere but one:
+   parse_percent tests IS_lex_state(EXPR_FNAME | EXPR_FITEM) before it reaches
+   the spacing rule and opens a symbol literal on "%s" there, so "alias%s(a)"
+   and "alias %s(a)" open one alike.  Only "s" does; "%w", "%q" and the rest
+   fall through to the ordinary answer, which is false in that state. *)
+let ruby_percent_opens state space_seen source index form =
+  (state = RubyFname && form = 's') || ruby_literal_opens state space_seen source index
+
+(* NOTE: Where Ruby's two column-zero markers -- "=begin" and "__END__" -- are
+   recognised.  A byte order mark is consumed before the first line is read, so
+   the byte behind one still opens the first line. *)
+let ruby_at_line_start source index =
+  if index = 0 || index = byte_order_mark_width source then true
+  else match Bytes.get source (index - 1) with
+    | '\n' -> true
+    | '\r' -> not (index < Bytes.length source && Bytes.get source index = '\n')
+    | _ -> false
+
+let ruby_word_boundary source index =
+  index >= Bytes.length source ||
+  (let byte = Bytes.get source index in
+   ruby_is_space byte || byte = '\r' || byte = '\n')
+
+(* NOTE: Ruby's word_match_p: the word ends at white space or at the end of the
+   file, so "=beginner" is the "=" operator and a name. *)
+let ruby_embedded_document source index =
+  starts source index "=begin" && ruby_word_boundary source (index + 6)
+
+(* NOTE: The document runs to the end of the "=end" line, whose remaining bytes
+   Ruby skips along with the rest of it, and both markers stand at column zero. *)
+let ruby_embedded_document_end source start =
+  let rec loop index =
+    if index >= Bytes.length source then (Bytes.length source, false)
+    else
+      let next = consume_newline source index in
+      if starts source next "=end" && ruby_word_boundary source (next + 4)
+      then (line_end source (next + 4), true)
+      else loop (line_end source next)
+  in loop (line_end source start)
+
+(* NOTE: Ruby's whole_match_p: the marker is the whole line, so "__END__ x" is
+   an ordinary name and the source runs on past it. *)
+let ruby_data_marker source index =
+  starts source index "__END__" &&
+  (index + 7 >= Bytes.length source ||
+   (let byte = Bytes.get source (index + 7) in byte = '\r' || byte = '\n'))
+
+(* NOTE: The characters an operator method is spelled with, which is how a
+   symbol naming one -- ":<=>", ":[]=", ":+@" -- is written. *)
+let ruby_symbol_operator = function
+  | '+' | '-' | '*' | '/' | '%' | '<' | '>' | '=' | '!' | '~' | '^' | '&' | '|'
+  | '[' | ']' | '@' -> true
+  | _ -> false
+
+let ruby_symbol_head character =
+  ruby_identifier_start character || character = '@' || character = '$' ||
+  ruby_symbol_operator character
+
+(* NOTE: Ruby's parse_gvar: a name, a digit run, "-" and one character, or one
+   of the punctuation names.  "$\"" and "$'" are two of those names, which keeps
+   the quote in either from opening a string, and "$/" and "$\\" two more.  "#"
+   is not one of them -- the reference refuses that spelling outright -- so "$#"
+   is a "$" on its own and the byte behind it opens the comment it opens
+   everywhere else in the language. *)
+let ruby_global_end source index =
+  if index + 1 >= Bytes.length source then index + 1 else
+  let byte = Bytes.get source (index + 1) in
+  if ruby_identifier_start byte then ruby_identifier_end source (index + 2)
+  else if ruby_digit byte then
+    (let rec loop cursor =
+       if cursor < Bytes.length source && ruby_digit (Bytes.get source cursor)
+       then loop (cursor + 1) else cursor
+     in loop (index + 2))
+  else if byte = '-' then min (Bytes.length source) (index + 3)
+  else if String.contains "~*$?!@/\\;,.=:<>\"&`'+" byte then index + 2
+  else index + 1
+
+let ruby_at_variable_end source index =
+  let cursor =
+    if index + 1 < Bytes.length source && Bytes.get source (index + 1) = '@'
+    then index + 2 else index + 1 in
+  ruby_identifier_end source cursor
+
+(* NOTE: A symbol is a name -- with the "@", "@@" or "$" of a variable in front
+   of it where one is meant -- or one of the operator methods, which is read
+   here as the run of characters those are spelled with rather than as a table
+   of them: a run that names no method is a syntax error either way, and reading
+   it as one symbol keeps the byte after it out of the literal path. *)
+let ruby_symbol_end source index =
+  let cursor = index + 1 in
+  if cursor >= Bytes.length source then cursor
+  else match Bytes.get source cursor with
+    | '$' -> ruby_global_end source cursor
+    | '@' -> ruby_at_variable_end source cursor
+    | byte when ruby_identifier_start byte -> ruby_word_end source cursor
+    | _ ->
+      let rec loop probe =
+        if probe < Bytes.length source && ruby_symbol_operator (Bytes.get source probe)
+        then loop (probe + 1) else probe
+      in loop cursor
+
+let ruby_character_width byte =
+  let code = Char.code byte in
+  if code >= 0xf0 && code <= 0xf7 then 4
+  else if code >= 0xe0 && code <= 0xef then 3
+  else if code >= 0xc0 && code <= 0xdf then 2
+  else 1
+
+(* NOTE: Ruby's parse_qmark: white space behind the "?" makes it the operator; a
+   character outside ASCII is a literal whole; an ASCII letter, digit or "_"
+   with another name byte behind it is the operator again, which keeps
+   "a ?bc : d" a ternary; and everything else -- an escape, or one punctuation
+   byte -- is a literal. *)
+let ruby_character_literal_end source question =
+  let index = question + 1 in
+  if index >= Bytes.length source then None else
+  let byte = Bytes.get source index in
+  if ruby_is_space byte || byte = '\r' || byte = '\n' then None
+  else if Char.code byte land 0x80 <> 0 then
+    Some (min (Bytes.length source) (index + ruby_character_width byte))
+  else if byte = '\\' then
+    (if index + 2 < Bytes.length source && Bytes.get source (index + 1) = 'u' &&
+       Bytes.get source (index + 2) = '{'
+     then
+       let rec loop cursor =
+         if cursor < Bytes.length source && Bytes.get source cursor <> '}'
+         then loop (cursor + 1) else min (Bytes.length source) (cursor + 1)
+       in Some (loop (index + 3))
+     else Some (min (Bytes.length source) (index + 2)))
+  else if ruby_identifier_continue byte && index + 1 < Bytes.length source &&
+    ruby_identifier_continue (Bytes.get source (index + 1))
+  then None
+  else Some (index + 1)
+
+(* NOTE: The option letters that may follow a regular expression are read as a
+   run of ASCII letters rather than as the set "imxonesu": a letter that is not
+   an option is a syntax error either way, and taking it here leaves the lexer
+   where the letters ended rather than in the middle of them. *)
+let ruby_regexp_flags_end source index =
+  let rec loop cursor =
+    if cursor < Bytes.length source &&
+      (let byte = Bytes.get source cursor in
+       (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z'))
+    then loop (cursor + 1) else cursor
+  in loop index
+
+(* NOTE: Ruby's parse_percent: the byte after the "%" is the delimiter unless it
+   is alphanumeric, in which case it names the form and the byte after that is
+   the delimiter.  A delimiter is any ASCII byte that is not alphanumeric, the
+   space of "% a " included.  "(", "[", "{" and "<" pair with their closer and
+   nest; every other delimiter closes with itself. *)
+let ruby_percent_header source start =
+  if start + 1 >= Bytes.length source then None else
+  let first = Bytes.get source (start + 1) in
+  let header =
+    if ruby_alphanumeric first then
+      (if not (String.contains "qQwWiIsrx" first) then None
+       else if start + 2 >= Bytes.length source then None
+       else Some (first, Bytes.get source (start + 2), start + 3))
+    else Some ('Q', first, start + 2) in
+  match header with
+  | None -> None
+  | Some (form, delimiter, content) ->
+    if ruby_alphanumeric delimiter || Char.code delimiter land 0x80 <> 0 then None
+    else
+      let close = match delimiter with
+        | '(' -> ')' | '[' -> ']' | '{' -> '}' | '<' -> '>' | other -> other in
+      Some { percent_form = form; percent_open = delimiter; percent_close = close;
+             percent_content = content;
+             percent_interpolates = String.contains "QWIrx" form }
+
+(* NOTE: Ruby's heredoc_identifier: an optional "-" or "~", then a quoted
+   terminator or a bare word.  The bare word is a run of is_identchar bytes from
+   its very first one, which is a wider set than a name may start with: a digit
+   is an identchar, so "<<2" is a here document terminated by a line reading "2"
+   and "<<9x" one terminated by "9x".  Refusing digits would read the body as
+   code, which is the one direction that invents a comment out of bytes Ruby has
+   inside a string, so they are taken.  Whether the "<<" stands where one may
+   open at all is ruby_heredoc_may_open's question, and it is what still leaves
+   "a[0] <<2" and "p 1 <<2" the shift they are.  A quoted terminator that runs
+   past the end of its line opens nothing. *)
+let ruby_heredoc_header source index =
+  let cursor = index + 2 in
+  let indented = cursor < Bytes.length source &&
+    (Bytes.get source cursor = '-' || Bytes.get source cursor = '~') in
+  let cursor = if indented then cursor + 1 else cursor in
+  let opener =
+    if cursor >= Bytes.length source then `Absent
+    else match Bytes.get source cursor with
+      | ('\'' | '"' | '`') as quote -> `Quoted quote
+      | byte when ruby_identifier_continue byte -> `Bare
+      | _ -> `Absent in
+  match opener with
+  | `Absent -> None
+  | `Quoted quote ->
+    let start = cursor + 1 in
+    let rec loop finish =
+      if finish >= Bytes.length source then None
+      else match Bytes.get source finish with
+        | '\r' | '\n' -> None
+        | byte when byte = quote ->
+          Some (Bytes.sub_string source start (finish - start), finish + 1)
+        | _ -> loop (finish + 1) in
+    (match loop start with
+     | None -> None
+     | Some (label, finish) ->
+       Some ({ heredoc_operator = index; heredoc_label = label;
+               heredoc_indented = indented; heredoc_interpolates = quote <> '\'' }, finish))
+  | `Bare ->
+    let finish = ruby_identifier_end source (cursor + 1) in
+    Some ({ heredoc_operator = index;
+            heredoc_label = Bytes.sub_string source cursor (finish - cursor);
+            heredoc_indented = indented; heredoc_interpolates = true }, finish)
+
+(* NOTE: Ruby's whole_match_p: the terminator is the whole line, with leading
+   white space skipped only for the "<<-" and "<<~" forms. *)
+let ruby_heredoc_terminates source index heredoc =
+  let rec skip probe =
+    if heredoc.heredoc_indented && probe < Bytes.length source &&
+      ruby_is_space (Bytes.get source probe)
+    then skip (probe + 1) else probe in
+  let probe = skip index in
+  let width = String.length heredoc.heredoc_label in
+  starts source probe heredoc.heredoc_label &&
+  (probe + width >= Bytes.length source ||
+   (let byte = Bytes.get source (probe + width) in byte = '\r' || byte = '\n'))
+
+(* NOTE: The first "count" elements of "items", which is how the shared here
+   document queue is cut back to what an enclosing scan had put in it. *)
+let rec ruby_take count items =
+  if count <= 0 then []
+  else match items with [] -> [] | head :: tail -> head :: ruby_take (count - 1) tail
+
+let scan_ruby source language options accumulator =
+  let length = Bytes.length source in
+  (* NOTE: The here documents opened on the physical line being read and not yet
+     given a body, in the order Ruby will consume them.  It is one queue for the
+     whole line rather than one per nested scan because a header may stand
+     inside an interpolation -- "puts \"#{ <<EOS }\"" opens a here document whose
+     body is the line under that one -- and because Ruby takes the bodies in
+     header order across the whole line, so an opener written before an
+     interpolation and one written inside it queue together.  The queue is
+     drained by whichever scan reaches the line break first, which is why it has
+     to outlive the "}" a nested scan returns from. *)
+  let pending = ref [] in
+  let pending_push heredoc = pending := !pending @ [heredoc] in
+  let pending_take () = let opened = !pending in pending := []; opened in
+  let rec code index interpolation depth =
+    if depth > 256 then begin
+      add_error accumulator "nesting-limit" "Ruby lexical nesting limit exceeded" index index;
+      length
+    end else
+    (* NOTE: Where this call's own openers begin in the shared queue.  An
+       enclosing scan's entries sit in front of them and are that scan's to
+       report, which is what keeps one unterminated here document to one
+       diagnostic. *)
+    let base = List.length !pending in
+    let rec loop index state space_seen braces =
+      if index >= length then begin
+        (* NOTE: A here document opened on a last line that has no break of its
+           own never reaches "bodies", which is driven from the break.  It is
+           unterminated all the same, and is reported from its own "<<" with the
+           span that call would have given it.  Only this call's own openers are
+           reported here -- the ones from "base" on -- because an enclosing scan
+           reports its own, and the queue is cut back to "base" so that it
+           reports them once. *)
+        (match List.nth_opt !pending base with
+         | Some heredoc ->
+           add_error accumulator "unterminated-heredoc"
+             "unterminated Ruby here document" heredoc.heredoc_operator length;
+           pending := ruby_take base !pending
+         | None -> ());
+        if interpolation then
+          add_error accumulator "unterminated-interpolation"
+            "unterminated Ruby interpolation" index index;
+        index
+      end else
+      match Bytes.get source index with
+      | '#' ->
+        let finish = line_end source (index + 1) in
+        add_comment accumulator source language options Line index finish;
+        loop finish state space_seen braces
+      | '=' when ruby_at_line_start source index && ruby_embedded_document source index ->
+        let finish, closed = ruby_embedded_document_end source index in
+        add_comment accumulator source language options Block index finish;
+        if not closed then add_error accumulator "unterminated-comment"
+          "unterminated Ruby embedded document" index finish;
+        loop finish RubyBegin false braces
+      (* NOTE: Everything past the marker is the DATA section, which is not
+         source and holds no comments. *)
+      | '_' when ruby_at_line_start source index && ruby_data_marker source index ->
+        loop length state space_seen braces
+      | '\r' | '\n' ->
+        let next = consume_newline source index in
+        (match pending_take () with
+         | [] -> loop next RubyBegin false braces
+         | opened ->
+           (match bodies next opened (depth + 1) with
+            | Some finish -> loop finish RubyBegin false braces
+            | None -> loop length state space_seen braces))
+      | '\'' -> loop (string index false depth) RubyEnd false braces
+      | '"' | '`' -> loop (string index true depth) RubyEnd false braces
+      | ':' when starts source index "::" -> loop (index + 2) RubyEnd false braces
+      | ':' when index + 1 < length &&
+          (Bytes.get source (index + 1) = '\'' || Bytes.get source (index + 1) = '"') ->
+        loop (string (index + 1) (Bytes.get source (index + 1) = '"') depth)
+          RubyEnd false braces
+      | ':' when index + 1 < length && ruby_symbol_head (Bytes.get source (index + 1)) ->
+        loop (ruby_symbol_end source index) RubyEnd false braces
+      | '?' ->
+        (match ruby_character_literal_end source index with
+         | Some finish when state <> RubyEnd && state <> RubyFname ->
+           loop finish RubyEnd false braces
+         | _ -> loop (index + 1) RubyBegin false braces)
+      | '%' ->
+        (match ruby_percent_header source index with
+         | Some literal
+           when ruby_percent_opens state space_seen source index literal.percent_form ->
+           (* NOTE: "alias" and "undef" hold EXPR_FNAME|EXPR_FITEM across the whole
+              statement rather than only up to the first name: Ripper.lex under
+              Ruby 3.3.12 reports that state again after the ")" of the first
+              symbol, which is what makes "alias%s(a)%s(b # c)" two symbols and
+              not one symbol and a modulo. *)
+           let next_state =
+             if state = RubyFname && literal.percent_form = 's' then RubyFname else RubyEnd in
+           loop (percent index literal depth) next_state false braces
+         | _ -> loop (index + 1) RubyBegin false braces)
+      | '/' ->
+        if ruby_literal_opens state space_seen source index
+        then loop (regexp index depth) RubyEnd false braces
+        else loop (index + 1) RubyBegin false braces
+      | '<' when starts source index "<<" ->
+        (match ruby_heredoc_header source index with
+         | Some (heredoc, finish) when ruby_heredoc_may_open state space_seen ->
+           pending_push heredoc; loop finish RubyEnd false braces
+         | _ -> loop (index + 2) RubyBegin false braces)
+      | '$' -> loop (ruby_global_end source index) RubyEnd false braces
+      | '@' -> loop (ruby_at_variable_end source index) RubyEnd false braces
+      | '{' -> loop (index + 1) RubyBegin false (braces + 1)
+      | '}' ->
+        if interpolation && braces = 1 then index + 1
+        else loop (index + 1) RubyEnd false
+          (if interpolation then braces - 1 else braces)
+      | '(' | '[' -> loop (index + 1) RubyBegin false braces
+      | ')' | ']' -> loop (index + 1) RubyEnd false braces
+      (* NOTE: The method-call dot, which is also the two range operators.  All
+         three want the byte after them read as a name rather than as a literal
+         delimiter, which is what RubyEnd says. *)
+      | '.' -> loop (index + 1) RubyEnd false braces
+      (* NOTE: Outside a literal a backslash only continues the line, which is
+         white space to the grammar. *)
+      | '\\' when index + 1 < length &&
+          (Bytes.get source (index + 1) = '\r' || Bytes.get source (index + 1) = '\n') ->
+        loop (consume_newline source (index + 1)) state true braces
+      | '\\' -> loop (min length (index + 2)) RubyEnd false braces
+      | byte when ruby_digit byte ->
+        loop (ruby_number_end source index) RubyEnd false braces
+      | byte when ruby_identifier_start byte ->
+        let finish = ruby_word_end source index in
+        loop finish (ruby_state_after_word (Bytes.sub_string source index (finish - index)))
+          false braces
+      | byte when ruby_is_space byte -> loop (index + 1) state true braces
+      | _ -> loop (index + 1) RubyBegin false braces
+    in loop index RubyBegin false (if interpolation then 1 else 0)
+
+  (* NOTE: A single-quoted string escapes only "\'" and "\\", and every other
+     backslash is a byte of it -- but the byte after a backslash can never be
+     the closing quote unless the pair is the "\'" escape, so skipping two finds
+     the same closer either way.  The other two take the full escape set and
+     interpolate, and none of the three ends at a line break. *)
+  and string start interpolates depth =
+    let quote = Bytes.get source start in
+    let rec loop index =
+      if index >= length then begin
+        add_error accumulator "unterminated-string"
+          (match quote with
+           | '\'' -> "unterminated Ruby single-quoted string"
+           | '"' -> "unterminated Ruby double-quoted string"
+           | _ -> "unterminated Ruby backtick string")
+          start index;
+        index
+      end
+      else if Bytes.get source index = '\\' then loop (min length (index + 2))
+      else if Bytes.get source index = quote then index + 1
+      else if interpolates && starts source index "#{" then
+        loop (code (index + 2) true (depth + 1))
+      else loop (index + 1)
+    in loop (start + 1)
+
+  (* NOTE: A "[" opens a character class, where the delimiter is one of the
+     pattern's own bytes.  That is deliberately more forgiving than Ruby's own
+     tokadd_string, which ends the literal at the first unescaped "/" wherever
+     it stands: reading "/[/]/" as one literal keeps the rest of the line inside
+     it, which hides bytes from a removal rather than exposing them. *)
+  and regexp start depth =
+    let rec loop index in_class =
+      if index >= length then begin
+        add_error accumulator "unterminated-string"
+          "unterminated Ruby regular expression" start index;
+        index
+      end
+      else match Bytes.get source index with
+        | '\\' -> loop (min length (index + 2)) in_class
+        | '[' -> loop (index + 1) true
+        | ']' -> loop (index + 1) false
+        | '/' when not in_class -> ruby_regexp_flags_end source (index + 1)
+        | '#' when starts source index "#{" -> loop (code (index + 2) true (depth + 1)) in_class
+        | _ -> loop (index + 1) in_class
+    in loop (start + 1) false
+
+  (* NOTE: A paired delimiter nests, which is what lets "%w[a [b] c]" hold a
+     bracket; every other delimiter closes with itself and cannot.  The
+     interpolating forms read "#{ ... }" as an expression before either
+     delimiter is considered, so the braces of one never count towards a
+     "%Q{...}" nesting depth. *)
+  and percent start literal depth =
+    let rec loop index nesting =
+      if index >= length then begin
+        add_error accumulator "unterminated-string"
+          "unterminated Ruby percent literal" start index;
+        index
+      end
+      else if Bytes.get source index = '\\' then loop (min length (index + 2)) nesting
+      else if literal.percent_interpolates && starts source index "#{" then
+        loop (code (index + 2) true (depth + 1)) nesting
+      else if literal.percent_open <> literal.percent_close &&
+        Bytes.get source index = literal.percent_open
+      then loop (index + 1) (nesting + 1)
+      else if Bytes.get source index = literal.percent_close then
+        (if nesting = 1 then
+           (if literal.percent_form = 'r' then ruby_regexp_flags_end source (index + 1)
+            else index + 1)
+         else loop (index + 1) (nesting - 1))
+      else loop (index + 1) nesting
+    in loop literal.percent_content 1
+
+  (* NOTE: Every here document opened on the line that has just ended, in the
+     order they were opened.  None once one of them runs out of file, which is
+     reported from the "<<" that opened it rather than from the line it
+     swallowed. *)
+  and bodies index heredocs depth =
+    match heredocs with
+    | [] -> Some index
+    | heredoc :: tail ->
+      (match body index heredoc depth with
+       | Some finish -> bodies finish tail depth
+       | None ->
+         add_error accumulator "unterminated-heredoc" "unterminated Ruby here document"
+           heredoc.heredoc_operator length;
+         None)
+
+  (* NOTE: The body is opaque: only "#{ ... }" in an interpolating form is read
+     as code, and the terminator is looked for at the start of each of the
+     body's own lines, so one written inside an interpolation is content like
+     the rest of it. *)
+  and body index heredoc depth =
+    let rec line index =
+      if index >= length then None
+      else if ruby_heredoc_terminates source index heredoc then
+        Some (min length (consume_newline source (line_end source index)))
+      else
+        let rec content cursor =
+          if cursor >= length then cursor
+          else match Bytes.get source cursor with
+            | '\r' | '\n' -> cursor
+            | '\\' when heredoc.heredoc_interpolates ->
+              content (if starts source cursor "\\\r\n" then cursor + 3
+                       else min length (cursor + 2))
+            | '#' when heredoc.heredoc_interpolates && starts source cursor "#{" ->
+              content (code (cursor + 2) true (depth + 1))
+            | _ -> content (cursor + 1) in
+        let finish = content index in
+        if finish >= length then None
+        else
+          let next = consume_newline source finish in
+          (* NOTE: A body line is a physical line like any other, so a header
+             reached through an interpolation on it queues for the line under it
+             and is read there -- before this body resumes. *)
+          (match pending_take () with
+           | [] -> line next
+           | opened ->
+             (match bodies next opened (depth + 1) with
+              | Some resume -> line resume
+              | None -> None))
+    in line index
+  in ignore (code 0 false 0)
+
+(* NOTE: The value of the attribute "name" in an attribute list, without its
+   quotes, or None when the list does not carry the attribute with a value.
+   Attributes are separated by white space and their values are quoted or a
+   bare word; the name is matched as a word, so "langx" is not "lang". *)
+let tag_attr_value attrs name =
+  let length = Bytes.length attrs in
+  let word index expected =
+    index < length && index + expected <= length
+    && (let rec loop offset =
+          offset = expected
+          || (Bytes.get attrs (index + offset) = Bytes.get name offset
+              && loop (offset + 1)) in
+        loop 0) in
+  let rec skip_value cursor quote =
+    if cursor >= length then length
+    else if Bytes.get attrs cursor = quote then cursor + 1
+    else skip_value (cursor + 1) quote in
+  let rec loop index =
+    if index >= length then None
+    else if Bytes.get attrs index = ' ' || Bytes.get attrs index = '\t' then loop (index + 1)
+    else if Bytes.get attrs index = '"' || Bytes.get attrs index = '\'' then
+      loop (skip_value (index + 1) (Bytes.get attrs index))
+    else if word index (Bytes.length name) then begin
+      let after = index + Bytes.length name in
+      let boundary = if after < length then Bytes.get attrs after else '>' in
+      if boundary = ' ' || boundary = '\t' || boundary = '=' || boundary = '>' then begin
+        let rec skip index =
+          if index < length && (Bytes.get attrs index = ' ' || Bytes.get attrs index = '\t')
+          then skip (index + 1) else index in
+        let cursor = skip after in
+        if cursor < length && Bytes.get attrs cursor = '=' then begin
+          let cursor = skip (cursor + 1) in
+          if cursor >= length then None
+          else if Bytes.get attrs cursor = '"' || Bytes.get attrs cursor = '\'' then begin
+            let quote = Bytes.get attrs cursor in
+            let inner_start = cursor + 1 in
+            let rec inner cursor =
+              if cursor >= length then None
+              else if Bytes.get attrs cursor = quote then Some (inner_start, cursor)
+              else inner (cursor + 1) in
+            Option.map (fun (start, finish) -> Bytes.sub_string attrs start (finish - start)) (inner inner_start)
+          end else begin
+            let rec word_end cursor =
+              if cursor >= length || Bytes.get attrs cursor = ' ' || Bytes.get attrs cursor = '\t'
+                 || Bytes.get attrs cursor = '>'
+              then cursor else word_end (cursor + 1) in
+            let finish = word_end cursor in
+            Some (Bytes.sub_string attrs cursor (finish - cursor))
+          end
+        end else None
+      end else loop (index + 1)
+    end else loop (index + 1)
+  in loop 0
+
+(* NOTE: Whether an attribute list carries "name" as a bare attribute, which
+   is how Vue's "v-pre" directive is written. *)
+let tag_has_attribute attrs name =
+  let length = Bytes.length attrs in
+  let word index expected =
+    index < length && index + expected <= length
+    && (let rec loop offset =
+          offset = expected
+          || (Bytes.get attrs (index + offset) = Bytes.get name offset
+              && loop (offset + 1)) in
+        loop 0) in
+  let rec skip_value cursor quote =
+    if cursor >= length then length
+    else if Bytes.get attrs cursor = quote then cursor + 1
+    else skip_value (cursor + 1) quote in
+  let rec loop index =
+    if index >= length then false
+    else if Bytes.get attrs index = ' ' || Bytes.get attrs index = '\t' then loop (index + 1)
+    else if Bytes.get attrs index = '"' || Bytes.get attrs index = '\'' then
+      loop (skip_value (index + 1) (Bytes.get attrs index))
+    else if word index (Bytes.length name) then begin
+      let after = index + Bytes.length name in
+      let boundary = if after < length then Bytes.get attrs after else '>' in
+      boundary = ' ' || boundary = '\t' || boundary = '>'
+    end else loop (index + 1)
+  in loop 0
+
+(* NOTE: The language a Vue "<script>" body is written in, from its "lang"
+   attribute; None for a "lang" this scanner has no rules for, which makes the
+   block opaque. *)
+let vue_script_language lang =
+  match Option.map String.lowercase_ascii lang with
+  | None | Some "js" | Some "javascript" -> Some (JavaScript, Standard)
+  | Some "jsx" -> Some (JavaScript, Jsx)
+  | Some "ts" | Some "typescript" -> Some (TypeScript, Standard)
+  | Some "tsx" -> Some (TypeScript, Tsx)
+  | Some _ -> None
+
+(* NOTE: The language a Vue or Svelte "<style>" body is written in, from its
+   "lang" attribute; the default is CSS, "scss" and the indented "sass" select
+   the SCSS dialect, and any other "lang" makes the block opaque. *)
+let vue_style_language lang =
+  match Option.map String.lowercase_ascii lang with
+  | None | Some "css" -> Some (Css, Standard)
+  | Some "scss" | Some "sass" -> Some (Css, Scss)
+  | Some _ -> None
+
+(* NOTE: One Vue or Svelte single-file component.  The top level holds the
+   "<script>" and "<style>" blocks and -- for Vue -- the "<template>" block,
+   and the body of each is scanned as its own language, the "lang" attribute
+   choosing which.  For Svelte the text between the blocks is the template
+   itself, whose every "{ ... }" opens an expression; for Vue the template is
+   the body of its "<template>" element.  A "lang" this scanner has no rules
+   for makes the whole block opaque, and a top-level "<!-- ... -->" is an HTML
+   comment. *)
+(* NOTE: One Markdown document.  An HTML comment is a comment, a fenced code
+   block is scanned as the language its info string names -- an unknown or
+   absent language leaves the block opaque -- and an inline code span or an
+   indented code block is opaque: a "//" or a "/*" in one is code text, not a
+   comment.  Every construct is recognised at its own start and read forward,
+   so no decision depends on a byte behind a restart. *)
+(* NOTE: One Perl document.  Perl's lexical surface is almost all quote
+   words: the single and double quotes and backticks, the "q", "qq", "qw" and
+   "qx" forms, the "m", "s", "tr" and "y" operators with delimiters of their
+   own, and the here-documents, all hide a "#" written inside them, and a POD
+   block is opaque.  The one place the bytes do not settle the reading is a
+   "/" directly after a closing parenthesis, bracket or brace: perl reads
+   "f() /a#b/" as a regular expression and "(2) / 2" as a division, and only
+   the parse context tells which, so this scanner reports that "/" as
+   lexically ambiguous and refuses to edit the file, keeping the "#" that
+   would decide the other way out of reach. *)
+let scan_perl source language options accumulator =
+  let length = Bytes.length source in
+  let word_byte byte =
+    (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z')
+    || (byte >= '0' && byte <= '9') || byte = '_' in
+  let word_allows_regex word =
+    match word with
+    | "return" | "if" | "unless" | "while" | "until" | "for" | "foreach"
+    | "and" | "or" | "not" | "print" | "printf" | "say" | "split" | "grep"
+    | "map" | "join" | "sort" | "push" | "unshift" | "pop" | "shift"
+    | "splice" | "index" | "length" | "substr" | "chomp" | "chop" | "lc"
+    | "uc" -> true
+    | _ -> false in
+  let section_end start delimiter =
+    let close = match delimiter with
+      | '(' -> ')' | '[' -> ']' | '{' -> '}' | '<' -> '>'
+      | other -> other in
+    if delimiter = close then begin
+      let rec loop index =
+        if index >= length then None
+        else if Bytes.get source index = '\\' then loop (min length (index + 2))
+        else if Bytes.get source index = delimiter then Some (index + 1)
+        else loop (index + 1) in
+      loop (start + 1)
+    end else begin
+      let rec loop index depth =
+        if index >= length then None
+        else if Bytes.get source index = '\\' then loop (min length (index + 2)) depth
+        else if Bytes.get source index = delimiter then loop (index + 1) (depth + 1)
+        else if Bytes.get source index = close then
+          if depth = 1 then Some (index + 1) else loop (index + 1) (depth - 1)
+        else loop (index + 1) depth in
+      loop (start + 1) 1
+    end in
+  let pod start =
+    let rec loop index =
+      if index >= length then length
+      else begin
+        let line_finish = line_end source index in
+        if index = start then begin
+          if line_finish >= length then length
+          else loop (consume_newline source line_finish)
+        end else if starts source index "=cut" then
+          if line_finish >= length then line_finish
+          else consume_newline source line_finish
+        else if line_finish >= length then length
+        else loop (consume_newline source line_finish)
+      end in
+    loop start in
+  let quoted start =
+    let quote = Bytes.get source start in
+    let rec loop index backslashes =
+      if index >= length then length
+      else if Bytes.get source index = '\\' then loop (index + 1) (backslashes + 1)
+      else if Bytes.get source index = quote then
+        if quote = '\'' then
+          if backslashes mod 2 = 0 then index + 1 else loop (index + 1) 0
+        else index + 1
+      else loop (index + 1) 0 in
+    loop (start + 1) 0 in
+  let quote_word start =
+    let letter = Bytes.get source start in
+    let rec skip_space index =
+      if index < length && Bytes.get source index = ' ' then skip_space (index + 1) else index in
+    let second_letter index =
+      if index < length && word_byte (Bytes.get source index) then
+        if (letter = 'q' && (Bytes.get source index = 'q' || Bytes.get source index = 'w'
+                             || Bytes.get source index = 'x' || Bytes.get source index = 'r'))
+           || (letter = 't' && Bytes.get source index = 'r')
+        then (index + 1, true) else (index, false)
+      else (index, false) in
+    let cursor, _doubled = second_letter (start + 1) in
+    let cursor = skip_space cursor in
+    if cursor >= length then None
+    else if word_byte (Bytes.get source cursor) then None
+    else match section_end cursor (Bytes.get source cursor) with
+      | None -> None
+      | Some first ->
+        if letter = 's' || letter = 't' || letter = 'y' then
+          if first >= length then None
+          else if word_byte (Bytes.get source first) then None
+          else Option.map (fun second_end -> second_end) (section_end first (Bytes.get source first))
+        else Some first in
+  let heredoc start =
+    let rec terminator_word index acc =
+      if index < length && word_byte (Bytes.get source index)
+      then terminator_word (index + 1) (acc ^ String.make 1 (Bytes.get source index))
+      else (index, acc) in
+    let cursor = start + 2 in
+    let indented = cursor < length && Bytes.get source cursor = '~' in
+    let cursor = if indented then cursor + 1 else cursor in
+    let cursor, terminator =
+      if cursor < length && (Bytes.get source cursor = '\'' || Bytes.get source cursor = '"'
+                             || Bytes.get source cursor = '`') then begin
+        let quote = Bytes.get source cursor in
+        let rec inner index acc =
+          if index >= length then (length, acc)
+          else if Bytes.get source index = quote then (index + 1, acc)
+          else inner (index + 1) (acc ^ String.make 1 (Bytes.get source index)) in
+        inner (cursor + 1) ""
+      end else terminator_word cursor "" in
+    if terminator = "" then None
+    else begin
+      let line_finish = line_end source cursor in
+      let rec body index =
+        if index >= length then Some length
+        else begin
+          let line_finish = line_end source index in
+          let rec content cursor =
+            if indented && cursor < line_finish && (Bytes.get source cursor = ' '
+                                                    || Bytes.get source cursor = '\t')
+            then content (cursor + 1) else cursor in
+          let content = content index in
+          if Bytes.sub_string source content (line_finish - content) = terminator then
+            Some (if line_finish >= length then line_finish else consume_newline source line_finish)
+          else if line_finish >= length then Some length
+          else body (consume_newline source line_finish)
+        end in
+      if line_finish >= length then Some length else body (consume_newline source line_finish)
+    end in
+  let regex start =
+    let rec loop index =
+      if index >= length then length
+      else if Bytes.get source index = '\\' then loop (min length (index + 2))
+      else if Bytes.get source index = '[' then begin
+        let rec class_index index =
+          if index >= length then length
+          else if Bytes.get source index = ']' then index + 1
+          else if Bytes.get source index = '\\' then class_index (min length (index + 2))
+          else class_index (index + 1) in
+        loop (class_index (index + 1))
+      end
+      else if Bytes.get source index = '/' then begin
+        let rec modifiers index =
+          if index < length && word_byte (Bytes.get source index) then modifiers (index + 1) else index in
+        modifiers (index + 1)
+      end
+      else loop (index + 1) in
+    loop (start + 1) in
+  let rec loop index regex_allowed =
+    if index >= length then ()
+    else if (index = 0 || Bytes.get source (index - 1) = '\n' || Bytes.get source (index - 1) = '\r')
+            && Bytes.get source index = '='
+            && index + 1 < length && word_byte (Bytes.get source (index + 1))
+    then loop (pod index) regex_allowed
+    else if Bytes.get source index = '#' then begin
+      let finish = line_end source (index + 1) in
+      add_comment accumulator source language options Line index finish;
+      loop finish (Some true)
+    end
+    else if Bytes.get source index = '\'' || Bytes.get source index = '"' || Bytes.get source index = '`'
+    then loop (quoted index) (Some false)
+    else if Bytes.get source index = '<' && index + 1 < length && Bytes.get source (index + 1) = '<'
+    then (match heredoc index with
+      | Some finish -> loop finish (Some false)
+      | None -> loop (index + 1) regex_allowed)
+    else if (index = 0 || not (word_byte (Bytes.get source (index - 1))))
+            && (Bytes.get source index = 'q' || Bytes.get source index = 'm'
+                || Bytes.get source index = 's' || Bytes.get source index = 't'
+                || Bytes.get source index = 'y')
+    then (match quote_word index with
+      | Some finish -> loop finish (Some false)
+      | None ->
+        (* NOTE: the letter is a bareword, so the `/` after it is settled by
+           the same rules as after any other word. *)
+        let start = index in
+        let rec ident index =
+          if index < length && word_byte (Bytes.get source index) then ident (index + 1) else index in
+        let finish = ident index in
+        loop finish (Some (word_allows_regex (Bytes.sub_string source start (finish - start)))))
+    else if Bytes.get source index = '/' then begin
+      match regex_allowed with
+      | Some true ->
+        let finish = regex index in
+        loop finish (Some false)
+      | Some false -> loop (index + 1) (Some true)
+      | None ->
+        let finish = regex index in
+        add_error accumulator "lexical-ambiguity"
+          "ambiguous `/` after a closing delimiter: a regex or a division" index finish;
+        loop finish (Some false)
+    end
+    else if Bytes.get source index = ')' || Bytes.get source index = ']' || Bytes.get source index = '}'
+    then loop (index + 1) None
+    else if Bytes.get source index = '(' || Bytes.get source index = '[' || Bytes.get source index = '{'
+    then loop (index + 1) (Some true)
+    else if Bytes.get source index = '$' || Bytes.get source index = '@' || Bytes.get source index = '%'
+    then begin
+      let rec ident index =
+        if index < length && word_byte (Bytes.get source index) then ident (index + 1) else index in
+      loop (ident (index + 1)) (Some false)
+    end
+    else if (Bytes.get source index >= 'a' && Bytes.get source index <= 'z')
+            || (Bytes.get source index >= 'A' && Bytes.get source index <= 'Z')
+            || Bytes.get source index = '_' then begin
+      let start = index in
+      let rec ident index =
+        if index < length && word_byte (Bytes.get source index) then ident (index + 1) else index in
+      let finish = ident index in
+      loop finish (Some (word_allows_regex (Bytes.sub_string source start (finish - start))))
+    end
+    else if Bytes.get source index >= '0' && Bytes.get source index <= '9' then begin
+      let rec digits index =
+        if index < length && word_byte (Bytes.get source index) then digits (index + 1) else index in
+      loop (digits index) (Some false)
+    end
+    else if Bytes.get source index = '=' || Bytes.get source index = '+' || Bytes.get source index = '-'
+            || Bytes.get source index = '*' || Bytes.get source index = '%' || Bytes.get source index = '!'
+            || Bytes.get source index = '~' || Bytes.get source index = '&' || Bytes.get source index = '|'
+            || Bytes.get source index = '?' || Bytes.get source index = ':' || Bytes.get source index = ','
+            || Bytes.get source index = ';' || Bytes.get source index = '<' || Bytes.get source index = '>'
+    then loop (index + 1) (Some true)
+    else if Bytes.get source index = '\r' || Bytes.get source index = '\n'
+    then loop (consume_newline source index) (Some true)
+    else loop (index + 1) regex_allowed
+  in ignore (loop 0 (Some true))
+
+let scan_markdown source language options accumulator =
+  let length = Bytes.length source in
+  let html_comment index =
+    let finish, closed = match find_from source (index + 4) "-->" with
+      | Some close -> (close + 3, true)
+      | None -> (length, false) in
+    add_comment accumulator source language options HtmlComment index finish;
+    if not closed then add_error accumulator "unterminated-comment"
+      "unterminated HTML comment" index finish;
+    finish in
+  let inline_code_end index =
+    let run = count_run source index '`' in
+    let rec loop cursor =
+      if cursor >= length then length
+      else if Bytes.get source cursor = '`' then
+        let next = count_run source cursor '`' in
+        if next = run then cursor + next else loop (cursor + next)
+      else loop (cursor + 1) in
+    loop (index + run) in
+  let fence_language info =
+    let trimmed = String.trim info in
+    let inner =
+      if String.length trimmed > 0 && trimmed.[0] = '{' then begin
+        match String.index_opt trimmed '}' with
+        | Some finish -> String.sub trimmed 1 (finish - 1)
+        | None -> trimmed
+      end else trimmed in
+    let word =
+      match String.index_opt inner ' ' with
+      | Some finish -> String.sub inner 0 finish
+      | None -> inner in
+    if word = "" then None else match language_of_string word with
+      | Ok found -> Some found
+      | Error _ -> None in
+  let fence opener marker run =
+    let info_start = opener + run in
+    let info_finish = line_end source info_start in
+    let language = fence_language (Bytes.sub_string source info_start (info_finish - info_start)) in
+    let rec find_closer cursor =
+      if cursor >= length then None
+      else begin
+        let rec line_start index spaces =
+          if index < length && Bytes.get source index = ' ' && spaces < 3
+          then line_start (index + 1) (spaces + 1) else index in
+        let line = line_start cursor 0 in
+        if line < length && Bytes.get source line = marker then begin
+          let closer_run = count_run source line marker in
+          if closer_run >= run then begin
+            let rec tail index =
+              if index < length && Bytes.get source index = ' ' then tail (index + 1) else index in
+            let after = tail (line + closer_run) in
+            if after >= length || Bytes.get source after = '\r' || Bytes.get source after = '\n'
+            then Some (line, min length (consume_newline source after))
+            else find_closer (min length (consume_newline source (line_end source cursor)))
+          end else find_closer (min length (consume_newline source (line_end source cursor)))
+        end else find_closer (min length (consume_newline source (line_end source cursor)))
+      end in
+    let closer = find_closer info_finish in
+    let content_finish = match closer with Some (line, _) -> line | None -> length in
+    (match language with
+     | Some embedded ->
+       let child_source = Bytes.sub source info_finish (content_finish - info_finish) in
+       let child = { comments_rev = []; diagnostics_rev = []; yaml_blocks_rev = [] } in
+       (match embedded with
+        | Rust | C | Cpp | Go | Kotlin | Css | Jsonc -> scan_slash child_source embedded options child
+        | Java -> scan_java child_source embedded options child
+        | JavaScript | TypeScript -> scan_javascript child_source embedded options child
+        | Ocaml -> scan_ocaml child_source embedded options child
+        | Python -> scan_python child_source embedded options child
+        | Shell -> scan_shell child_source embedded options child
+        | Sql -> scan_sql child_source embedded options child
+        | Toml -> scan_toml child_source embedded options child
+        | Lua -> scan_lua child_source embedded options child
+        | Yaml -> scan_yaml child_source embedded options child
+        | Php -> scan_php child_source embedded options child
+        | Ruby -> scan_ruby child_source embedded options child
+        | Zig -> scan_zig child_source embedded options child
+        | Dart -> scan_dart child_source embedded options child
+        | Swift -> scan_swift child_source embedded options child
+        | CSharp -> scan_csharp child_source embedded options child
+        | Scala -> scan_scala child_source embedded options child
+        | R -> scan_r child_source embedded options child
+        | Perl -> scan_perl child_source embedded options child
+        | Html | Markdown | Vue | Svelte | Unknown -> ());
+       List.iter (fun (comment : comment) ->
+         accumulator.comments_rev <- { comment with span = { start = comment.span.start + info_finish; finish = comment.span.finish + info_finish } } :: accumulator.comments_rev) (List.rev child.comments_rev);
+       List.iter (fun (diagnostic : diagnostic) ->
+         accumulator.diagnostics_rev <- { diagnostic with span = { start = diagnostic.span.start + info_finish; finish = diagnostic.span.finish + info_finish } } :: accumulator.diagnostics_rev) (List.rev child.diagnostics_rev)
+     | None -> ());
+    match closer with Some (_, resume) -> resume | None -> length in
+  let indented start =
+    let rec loop index =
+      if index >= length then length
+      else begin
+        let line_finish = line_end source index in
+        let rec leading cursor spaces =
+          if cursor < line_finish && Bytes.get source cursor = ' ' then leading (cursor + 1) (spaces + 1)
+          else (cursor, spaces) in
+        let cursor, spaces = leading index 0 in
+        let blank = cursor >= line_finish || Bytes.get source cursor = '\r' in
+        if (not blank) && spaces < 4 then index
+        else if line_finish >= length then length
+        else loop (consume_newline source line_finish)
+      end in
+    loop start in
+  let rec loop index =
+    if index >= length then ()
+    else if starts source index "<!--" then loop (html_comment index)
+    else if index = 0 || Bytes.get source (index - 1) = '\n' then begin
+      let rec leading cursor =
+        if cursor < length && Bytes.get source cursor = ' ' then leading (cursor + 1) else cursor in
+      let cursor = leading index in
+      let indent = cursor - index in
+      if indent >= 4 then loop (indented cursor)
+      else if indent <= 3 && cursor < length && (Bytes.get source cursor = '`' || Bytes.get source cursor = '~')
+      then begin
+        let marker = Bytes.get source cursor in
+        let run = count_run source cursor marker in
+        if run >= 3 then loop (fence cursor marker run)
+        else if marker = '`' then loop (inline_code_end cursor)
+        else loop (index + 1)
+      end else if Bytes.get source index = '`' then loop (inline_code_end index)
+      else if Bytes.get source index = '\r' || Bytes.get source index = '\n' then loop (consume_newline source index)
+      else loop (index + 1)
+    end else if Bytes.get source index = '`' then loop (inline_code_end index)
+    else if Bytes.get source index = '\r' || Bytes.get source index = '\n' then loop (consume_newline source index)
+    else loop (index + 1)
+  in loop 0
+
+let rec scan_vue source language options accumulator = scan_sfc true source language options accumulator
+and scan_svelte source language options accumulator = scan_sfc false source language options accumulator
+and scan_sfc vue source language options accumulator =
+  let length = Bytes.length source in
+  let html_comment index =
+    let finish, closed = match find_from source (index + 4) "-->" with
+      | Some close -> (close + 3, true)
+      | None -> (length, false) in
+    add_comment accumulator source language options HtmlComment index finish;
+    if not closed then add_error accumulator "unterminated-comment"
+      "unterminated HTML comment" index finish;
+    finish in
+  let tag_end index =
+    let rec loop cursor quote =
+      if cursor >= length then None else
+      match quote with
+      | Some active when Bytes.get source cursor = active -> loop (cursor + 1) None
+      | Some _ -> loop (cursor + 1) quote
+      | None when Bytes.get source cursor = '\'' || Bytes.get source cursor = '"' ->
+        loop (cursor + 1) (Some (Bytes.get source cursor))
+      | None when Bytes.get source cursor = '>' -> Some (cursor + 1)
+      | None -> loop (cursor + 1) None in
+    loop (index + 1) None in
+  let tag_boundary = function None -> true | Some character ->
+    character = ' ' || character = '\t' || character = '\n' || character = '\r'
+    || character = '\x0c' || character = '>' || character = '/' in
+  let sfc_block index =
+    if ascii_case_starts source index "<script"
+       && tag_boundary (if index + 7 < length then Some (Bytes.get source (index + 7)) else None)
+    then Some ("script", "script")
+    else if ascii_case_starts source index "<style"
+            && tag_boundary (if index + 6 < length then Some (Bytes.get source (index + 6)) else None)
+    then Some ("style", "style")
+    else if vue && ascii_case_starts source index "<template"
+            && tag_boundary (if index + 9 < length then Some (Bytes.get source (index + 9)) else None)
+    then Some ("template", "template")
+    else None in
+  let find_close start name =
+    let token = "</" ^ name in
+    let rec loop cursor = match ascii_case_find source cursor token with
+      | None -> None
+      | Some candidate ->
+        let after = candidate + String.length token in
+        if tag_boundary (if after < length then Some (Bytes.get source after) else None)
+        then Some candidate else loop after in
+    loop start in
+  let merge offset report =
+    List.iter (fun (comment : comment) ->
+      accumulator.comments_rev <- { comment with span = { start = comment.span.start + offset; finish = comment.span.finish + offset } } :: accumulator.comments_rev) report.comments;
+    List.iter (fun (diagnostic : diagnostic) ->
+      accumulator.diagnostics_rev <- { diagnostic with span = { start = diagnostic.span.start + offset; finish = diagnostic.span.finish + offset } } :: accumulator.diagnostics_rev) report.diagnostics in
+  let run_block name content_start content_finish lang =
+    let resolved = match name with
+      | "script" -> vue_script_language lang
+      | "style" -> vue_style_language lang
+      | "template" ->
+        (match Option.map String.lowercase_ascii lang with
+         | None | Some "html" -> Some (Html, Standard)
+         | Some _ -> None)
+      | _ -> None in
+    match resolved with
+    | Some (Html, _) -> scan_sfc_template vue source language options accumulator content_start content_finish
+    | Some (embedded, dialect) ->
+      let child_source = Bytes.sub source content_start (content_finish - content_start) in
+      let child = { comments_rev = []; diagnostics_rev = []; yaml_blocks_rev = [] } in
+      let child_options = { options with dialect } in
+      (if embedded = JavaScript || embedded = TypeScript
+       then scan_javascript ~offset:content_start child_source embedded child_options child
+       else scan_slash child_source embedded child_options child);
+      merge content_start { language = embedded; comments = List.rev child.comments_rev;
+        diagnostics = List.rev child.diagnostics_rev; valid = true }
+    | None -> () in
+  let rec loop index =
+    if index >= length then ()
+    else if starts source index "<!--" then loop (html_comment index)
+    else if not vue && Bytes.get source index = '{' then
+      loop (scan_js_code source language options accumulator (index + 1) (Some 1) 0)
+    else if Bytes.get source index = '<' then
+      (match sfc_block index with
+       | Some (name, name_bytes) -> (match tag_end index with
+         | None ->
+           add_error accumulator "unterminated-html-tag"
+             "unterminated single-file component start tag" index length
+         | Some tag_finish ->
+           let attrs = Bytes.sub source (index + 1 + String.length name_bytes)
+             (max 0 (tag_finish - 1 - (index + 1 + String.length name_bytes))) in
+           let lang = tag_attr_value attrs (Bytes.of_string "lang") in
+           (match find_close tag_finish name with
+            | None ->
+              add_error accumulator "unterminated-embedded-language"
+                "unterminated single-file component element" index length
+            | Some closing ->
+              run_block name tag_finish closing lang;
+              loop closing))
+       | None ->
+         let candidate =
+           if index + 1 < length then
+             let next = Bytes.get source (index + 1) in
+             (next >= 'a' && next <= 'z') || (next >= 'A' && next <= 'Z')
+             || next = '!' || next = '?'
+             || (next = '/' && index + 2 < length
+                 && let after = Bytes.get source (index + 2) in
+                    (after >= 'a' && after <= 'z') || (after >= 'A' && after <= 'Z'))
+           else false in
+         (if candidate then match tag_end index with
+          | Some finish -> loop finish
+          | None -> loop (index + 1)
+          else loop (index + 1)))
+    else if Bytes.get source index = '\r' || Bytes.get source index = '\n'
+    then loop (consume_newline source index)
+    else loop (index + 1)
+  in loop 0
+
+(* NOTE: The body of a Vue "<template>": HTML with "{{ ... }}" mustaches that
+   are code, and "v-pre" elements whose whole content is raw text. *)
+and scan_sfc_template vue source language options accumulator start finish =
+  let length = Bytes.length source in
+  let html_comment index =
+    let finish, closed = match find_from source (index + 4) "-->" with
+      | Some close -> (close + 3, true)
+      | None -> (length, false) in
+    add_comment accumulator source language options HtmlComment index finish;
+    if not closed then add_error accumulator "unterminated-comment"
+      "unterminated HTML comment" index finish;
+    finish in
+  let tag_end index =
+    let rec loop cursor quote =
+      if cursor >= length then None else
+      match quote with
+      | Some active when Bytes.get source cursor = active -> loop (cursor + 1) None
+      | Some _ -> loop (cursor + 1) quote
+      | None when Bytes.get source cursor = '\'' || Bytes.get source cursor = '"' ->
+        loop (cursor + 1) (Some (Bytes.get source cursor))
+      | None when Bytes.get source cursor = '>' -> Some (cursor + 1)
+      | None -> loop (cursor + 1) None in
+    loop (index + 1) None in
+  let tag_boundary = function None -> true | Some character ->
+    character = ' ' || character = '\t' || character = '\n' || character = '\r'
+    || character = '>' || character = '/' in
+  let find_close start name =
+    let token = "</" ^ name in
+    let rec loop cursor = match ascii_case_find source cursor token with
+      | None -> None
+      | Some candidate ->
+        let after = candidate + String.length token in
+        if tag_boundary (if after < length then Some (Bytes.get source after) else None)
+        then Some candidate else loop after in
+    loop start in
+  let rec loop index =
+    if index >= finish then ()
+    else if starts source index "<!--" then loop (html_comment index)
+    else if vue && starts source index "{{" then
+      loop (scan_js_code source language options accumulator (index + 2) (Some 2) 0)
+    else if Bytes.get source index = '<'
+            && (let next = if index + 1 < length then Bytes.get source (index + 1) else ' ' in
+                (next >= 'a' && next <= 'z') || (next >= 'A' && next <= 'Z')
+                || next = '!' || next = '?')
+    then (match tag_end index with
+       | Some tag_finish ->
+         let rec name_end cursor =
+           if cursor < length && Bytes.get source cursor <> ' '
+              && Bytes.get source cursor <> '\t' && Bytes.get source cursor <> '\n'
+              && Bytes.get source cursor <> '\r' && Bytes.get source cursor <> '>'
+           then name_end (cursor + 1) else cursor in
+         let name_finish = name_end (index + 1) in
+         let attrs = Bytes.sub source name_finish (max 0 (tag_finish - 1 - name_finish)) in
+         if vue && tag_has_attribute attrs (Bytes.of_string "v-pre") then
+           let name = Bytes.sub_string source (index + 1) (name_finish - (index + 1)) in
+           (match find_close tag_finish name with
+            | Some closing -> loop closing
+            | None -> loop (tag_finish + 1))
+         else loop tag_finish
+       | None -> loop (index + 1))
+    else loop (index + 1)
+  in loop start
+
 let rec scan_html source language options accumulator =
   let tag_boundary = function None -> true | Some character ->
-    Char.code character <= 32 || character = '>' || character = '/' in
+    ascii_whitespace character || character = '>' || character = '/' in
   let rec tag_end index quote =
     if index >= Bytes.length source then None else
     let character = Bytes.get source index in
@@ -1480,7 +5792,12 @@ let rec scan_html source language options accumulator =
         let closing = find_close content_start name in
         let content_finish = match closing with Some value -> value | None -> Bytes.length source in
         let child_source = Bytes.sub source content_start (content_finish - content_start) in
-        merge content_start (scan child_source embedded options);
+        let child = { comments_rev = []; diagnostics_rev = []; yaml_blocks_rev = [] } in
+        if embedded = JavaScript
+        then scan_javascript ~offset:content_start child_source embedded options child
+        else scan_slash child_source embedded options child;
+        merge content_start { language = embedded; comments = List.rev child.comments_rev;
+          diagnostics = List.rev child.diagnostics_rev; valid = true };
         (match closing with
         | None -> add_error accumulator "unterminated-embedded-language"
             "unterminated HTML script or style element" index (Bytes.length source)
@@ -1497,7 +5814,7 @@ let rec scan_html source language options accumulator =
   in loop 0
 
 and scan source language options =
-  let accumulator = { comments_rev = []; diagnostics_rev = [] } in
+  let accumulator = { comments_rev = []; diagnostics_rev = []; yaml_blocks_rev = [] } in
   (match language with
   | Rust | C | Cpp | Go | Kotlin | Css | Jsonc -> scan_slash source language options accumulator
   | Java -> scan_java source language options accumulator
@@ -1506,6 +5823,21 @@ and scan source language options =
   | Python -> scan_python source language options accumulator
   | Shell -> scan_shell source language options accumulator
   | Sql -> scan_sql source language options accumulator
+  | Toml -> scan_toml source language options accumulator
+  | Lua -> scan_lua source language options accumulator
+  | Yaml -> scan_yaml source language options accumulator
+  | Php -> scan_php source language options accumulator
+  | Ruby -> scan_ruby source language options accumulator
+  | Zig -> scan_zig source language options accumulator
+  | Dart -> scan_dart source language options accumulator
+  | Swift -> scan_swift source language options accumulator
+  | CSharp -> scan_csharp source language options accumulator
+  | Scala -> scan_scala source language options accumulator
+  | Vue -> scan_vue source language options accumulator
+  | Svelte -> scan_svelte source language options accumulator
+  | Markdown -> scan_markdown source language options accumulator
+  | Perl -> scan_perl source language options accumulator
+  | R -> scan_r source language options accumulator
   | Html -> scan_html source language options accumulator
   | Unknown -> add_error accumulator "unknown-language" "a language is required" 0 0);
   let comments = List.rev accumulator.comments_rev in
@@ -1583,7 +5915,7 @@ let scan_profile source profile options =
   match validate_profile profile with
   | Result.Error _ as error -> error
   | Result.Ok () ->
-    let accumulator = { comments_rev = []; diagnostics_rev = [] } in
+    let accumulator = { comments_rev = []; diagnostics_rev = []; yaml_blocks_rev = [] } in
     let rec scan_string token_start delimiter index =
       if index >= Bytes.length source then (index, false)
       else if starts source index delimiter.string_end then
@@ -1616,7 +5948,7 @@ let scan_profile source profile options =
         loop finish
       | None -> match List.find_opt (fun delimiter -> starts source index delimiter.line_start &&
           (not delimiter.requires_boundary || index = 0 ||
-            Char.code (Bytes.get source (index - 1)) <= 32)) profile.line_comments with
+            ascii_whitespace (Bytes.get source (index - 1)))) profile.line_comments with
         | Some delimiter ->
           let finish = line_end source (index + String.length delimiter.line_start) in
           accumulator.comments_rev <- profile_comment source profile options index finish
@@ -1677,10 +6009,10 @@ let prepended_concatenation_mark value =
   value = 0x0890 || value = 0x0891 || value = 0x08e2 || value = 0x110bd ||
   value = 0x110cd
 
-(* Keep this character-level policy aligned with unicode-width's documented
-   Unicode 17 rules.  Uucp's tty_width_hint deliberately follows the much
-   simpler historical wcwidth heuristic and, in particular, gives decomposed
-   Hangul vowel/trailing jamo a width of one. *)
+(* INVARIANT: Keep this character-level policy aligned with unicode-width's
+   documented Unicode 17 rules.  Uucp's tty_width_hint deliberately follows the
+   much simpler historical wcwidth heuristic and, in particular, gives
+   decomposed Hangul vowel/trailing jamo a width of one. *)
 let unicode_width value =
   let character = Uchar.of_int value in
   if value < 0x20 || (value >= 0x7f && value < 0xa0) then 0
@@ -1736,22 +6068,150 @@ let column_replacement source span initial_column =
       | None -> Buffer.add_char output ' '; loop (index + 1) (column + 1))
   in loop span.start initial_column
 
-let ascii_whitespace = function
-  | ' ' | '\t' | '\n' | '\r' | '\011' | '\012' -> true
-  | _ -> false
+(* NOTE: The layout arithmetic calls a byte blank when `ascii_whitespace` does,
+   which leaves the vertical tab out, so a line carrying one is not blank and
+   survives `compact`.  Lua's own lexer disagrees -- see `lua_is_space` -- and
+   that is a different question: one asks what the chunk means, this one asks
+   what the file looks like. *)
+let has_non_whitespace_neighbors source span =
+  span.start > 0 && span.finish < Bytes.length source &&
+  not (ascii_whitespace (Bytes.get source (span.start - 1))) &&
+  not (ascii_whitespace (Bytes.get source span.finish))
 
-let replacement source layout kind span =
-  if kind = HtmlComment then Bytes.empty else match layout with
-  | Columns -> invalid_arg "column replacement requires tracked display state"
-  | Lines | Compact ->
-    let output = newline_bytes source span in
-    if Bytes.length output > 0 then output
-    else if span.start > 0 && span.finish < Bytes.length source &&
-      not (ascii_whitespace (Bytes.get source (span.start - 1))) &&
-      not (ascii_whitespace (Bytes.get source span.finish))
-    then Bytes.of_string " " else Bytes.empty
+(* NOTE: What layout `lines` leaves in place of a removed comment: the line
+   terminators the comment spanned, so every following line keeps its number,
+   and a single space when the comment was all that kept two tokens apart.  A
+   comment that spanned a terminator needs no space of its own, because a
+   newline is a lexical separator already. *)
+let line_replacement source kind span =
+  if kind = HtmlComment then Bytes.empty else
+  let output = newline_bytes source span in
+  if Bytes.length output > 0 then output
+  else if has_non_whitespace_neighbors source span then Bytes.of_string " "
+  else Bytes.empty
 
-(*
+(* NOTE: The first line terminator inside a comment, as the bytes that wrote
+   it, so a CRLF file keeps its CRLF.  A terminator that would reach past the
+   end of the comment is not one: the same rule newline_bytes applies. *)
+let first_line_terminator source span =
+  let rec loop index =
+    if index >= span.finish then None
+    else match unicode_line_terminator_width source index with
+    | Some width when index + width <= span.finish -> Some (Bytes.sub source index width)
+    | _ -> loop (index + 1)
+  in loop span.start
+
+(* NOTE: How the line a comment ended on runs out: where the blanks after the
+   comment stop, and how wide the line terminator there is - 0 at the end of the
+   source.  None when something other than blanks follows on that line, which is
+   what makes the comment an interior one rather than the last thing on its
+   line. *)
+let line_tail source from =
+  let rec loop index =
+    match unicode_line_terminator_width source index with
+    | Some width -> Some (index, width)
+    | None ->
+      if index >= Bytes.length source then Some (index, 0)
+      else if ascii_whitespace (Bytes.get source index) then loop (index + 1)
+      else None
+  in loop from
+
+(* NOTE: Where the run of blanks that ends at `at` begins.  It never reaches
+   before `floor` and never crosses a line terminator, so trimming what a
+   removal left at the end of a line can never touch the line before it. *)
+let blank_start source at floor =
+  let rec loop index =
+    if index > floor && ascii_whitespace (Bytes.get source (index - 1)) &&
+      unicode_line_terminator_width source (index - 1) = None
+    then loop (index - 1) else index
+  in loop at
+
+let rec has_code source index finish =
+  index < finish &&
+  (not (ascii_whitespace (Bytes.get source index)) || has_code source (index + 1) finish)
+
+(* NOTE: One layout `compact` edit.  `line_start` is where the line holding the
+   comment begins, `floor` is the end of the previous edit and `ceiling` the
+   start of the next comment, so the span that comes back is sorted and
+   non-overlapping with its neighbours however a scanner laid the comments out.
+
+   An HTML comment closes up completely under every layout, the newlines it
+   spanned included, so it never counts as ending a line by spanning one and
+   never puts a terminator back. *)
+let compact_edit source (comment : comment) line_start floor ceiling =
+  let span = comment.span in
+  let html = comment.kind = HtmlComment in
+  let interior = first_line_terminator source span in
+  let tail = line_tail source span.finish in
+  let head_code = has_code source line_start span.start in
+  let ends_the_line = tail <> None || (interior <> None && not html) in
+  let start =
+    if ends_the_line then blank_start source span.start (max floor line_start)
+    else span.start in
+  let eats_the_terminator =
+    if html then not head_code else interior <> None || not head_code in
+  let finish = match tail with
+    | Some (blanks, terminator) ->
+      blanks + (if eats_the_terminator then terminator else 0)
+    | None -> span.finish in
+  let replacement =
+    if html then Bytes.empty
+    (* NOTE: An interior comment: the line goes on after it, so keeping the two
+       tokens either side apart is the whole story, exactly as under `lines`. *)
+    else if not ends_the_line then line_replacement source comment.kind span
+    else match interior with
+    (* NOTE: The code before the comment keeps its own line, and the terminator
+       that ended that line was inside the comment. *)
+    | Some terminator when head_code -> terminator
+    (* NOTE: Nothing that survives on this line follows the comment, so the
+       line terminator - the one kept after it or the one that ended the code
+       line - is separator enough. *)
+    | _ -> Bytes.empty in
+  { span = { start; finish = min finish ceiling }; replacement }
+
+(* NOTE: The edits layout `compact` makes: layout `lines`, plus the promise
+   that a line which held nothing but a removed comment goes away instead of
+   staying behind as a blank one.
+
+   Whether a comment was alone on its line is judged from the bytes of the
+   original source, so a line holding two comments and nothing else keeps its
+   terminator: neither of them was alone on it.
+
+   The start of the current line is tracked forward through the whole source,
+   comment bodies included, so a comment beginning on a line that an earlier
+   comment ended is still measured from that line's real beginning. *)
+(* NOTE: `swallowed` names the lines whose hole would carry meaning, and it
+   reaches further than a line: under a "|+" body it takes the empty lines the
+   comment was sheltering too (see `lines_a_removal_must_swallow`).  Taking the
+   line is what `compact` does anyway, so this only ever widens what it takes,
+   and it is what keeps all three layouts writing the same bytes there. *)
+let compact_edits source comments swallowed =
+  let rec loop index scan line_start floor edits = function
+    | [] -> List.rev edits
+    | (comment : comment) :: tail -> match comment.disposition with
+      | Keep _ -> loop (index + 1) scan line_start floor edits tail
+      | Remove -> match swallowed index with
+      | Some (line : byte_span) ->
+        let span = { start = max line.start floor; finish = max line.finish floor } in
+        loop (index + 1) span.finish span.finish span.finish
+          ({ span; replacement = Bytes.empty } :: edits) tail
+      | None ->
+        let rec advance scan line_start =
+          if scan >= comment.span.start then (scan, line_start)
+          else match unicode_line_terminator_width source scan with
+          | Some width when scan + width <= comment.span.start ->
+            advance (scan + width) (scan + width)
+          | _ -> advance (scan + 1) line_start in
+        let scan, line_start = advance scan line_start in
+        (* NOTE: The next comment of any disposition, kept ones included: the
+           blanks an edit swallows must never reach into one. *)
+        let ceiling = max comment.span.finish
+          (match tail with next :: _ -> next.span.start | [] -> Bytes.length source) in
+        let edit = compact_edit source comment line_start floor ceiling in
+        loop (index + 1) scan line_start edit.span.finish (edit :: edits) tail
+  in loop 0 0 0 0 [] comments
+
+(* PERF:
    Column state is threaded between edits so every source byte is inspected at
    most once.  This also reflects an explicitly removed HTML comment: because
    that edit emits no bytes, its original newlines do not affect later edits.
@@ -1794,23 +6254,185 @@ let source_map source_length edits =
         ({ original = edit.span; output = { start = output; finish = replacement_finish }; exact = false } :: segments) tail
   in loop 0 0 [] edits
 
+(* NOTE: Every block scalar in a YAML source, in order.
+
+   A scan of its own, so that the answer stays a function of the bytes alone and
+   an incremental rescan or an external hand-off reaches the same one with no
+   state to carry.  It is the scanner's reading of a header, not a loose one:
+   "key: a |+" ends a plain scalar with two characters that look like a header,
+   and reading it as one would hang a phantom keep-chomped tail off a line that
+   has no body at all. *)
+let yaml_block_scalars source =
+  let accumulator = { comments_rev = []; diagnostics_rev = []; yaml_blocks_rev = [] } in
+  scan_yaml source Yaml default_scan_options accumulator;
+  List.rev accumulator.yaml_blocks_rev
+
+(* NOTE: Whether nothing but indentation stands between "start" and the beginning
+   of its line, which is the whole of what makes a comment a candidate for being
+   swallowed whole. *)
+let starts_its_line source start =
+  let rec loop index =
+    if index <= 0 then true
+    else match Bytes.get source (index - 1) with
+      | ' ' | '\t' -> loop (index - 1)
+      | '\r' | '\n' -> true
+      | _ -> false
+  in loop start
+
+(* NOTE: Whether the source holds a byte that could head a block scalar at all. *)
+let holds_a_block_indicator source =
+  let length = Bytes.length source in
+  let rec loop index =
+    index < length &&
+    (match Bytes.get source index with '|' | '>' -> true | _ -> loop (index + 1))
+  in loop 0
+
+(* NOTE: For each comment, the line a removal has to take whole -- its
+   terminator included -- instead of leaving the ordinary hole on it, or None
+   where the ordinary hole is right.  An empty answer stands for all-None, which
+   is every language but YAML and nearly every YAML file.
+
+   YAML is the one language where the hole itself carries meaning, and the reason
+   is that a block scalar decides where its body ends from the lines below it
+   (YAML 1.2.2, 8.1.1).  A whole-line comment under a body is
+   "l-trail-comments" and is not part of the value, but the hole left in its
+   place is read as one of two things: a line of spaces as wide as the comment,
+   which `columns` writes, is indented at least as deep as the body whenever the
+   comment was wide enough -- and a line indented that deep is body content, so
+   the scalar silently grows a line; and an empty line, which `lines` writes, is
+   content under "|+" and ">+", where every empty line trailing a body is kept
+   (8.1.1.2).
+
+   So every whole-line comment whose own line sits in the run of empty and
+   comment lines under a body is removed by taking the line, terminator and all,
+   under every layout -- which is the line `compact` takes already.  That costs
+   those lines their numbering under `lines` and their columns under `columns`;
+   the alternative costs the reader's value, and no indentation a padded line
+   could be given is safe, because the depth that would put it outside one body
+   is the depth that puts it inside the mapping the body belongs to.
+
+   Under "|+" and ">+" the line is not enough on its own.  The empty lines
+   between a removed comment and the next line are "l-comment" while the comment
+   shelters them and "l-keep-empty" once it is gone (8.1.1.2), so the swallow
+   runs on through them.  The empty lines above the first comment are already
+   content and are left exactly where they are: a removal takes what the comment
+   was sheltering and nothing else.
+
+   The answer is a function of the source and the comments alone, so an
+   incremental rescan and an external hand-off reach the same one with no state
+   to carry. *)
+let lines_a_removal_must_swallow source language comments =
+  if language <> Yaml || comments = [] then [||]
+  (* PERF: Two answers that cost almost nothing, in front of a scan of the whole
+     source.  A file with no "|" and no ">" in it has no block scalar at all; and
+     a comment a body could swallow is one that is alone on its line, which is a
+     walk back over that line's indentation and no further -- the "# note" of
+     "key: value # note" stops on the byte behind it.  A YAML file whose comments
+     all trail something therefore never pays for the scan below. *)
+  else if not (holds_a_block_indicator source) then [||]
+  else if not (List.exists (fun (comment : comment) ->
+    comment.disposition = Remove && starts_its_line source comment.span.start) comments)
+  then [||]
+  else
+    let blocks = yaml_block_scalars source in
+    if blocks = [] then [||]
+    else begin
+      let comments = Array.of_list comments in
+      let answers = Array.make (Array.length comments) None in
+      let length = Bytes.length source in
+      List.iter (fun block ->
+        let rec loop probe =
+          if probe >= length then ()
+          else
+            let _, blank, finish = yaml_line_shape source probe in
+            if blank then
+              (* NOTE: An empty line neither ends the run nor is taken on its
+                 own: it is content of the body above until a comment below it is
+                 removed, and only that removal may take it. *)
+              loop (past_terminator source finish)
+            else
+              match comment_alone_on_line source comments probe finish with
+              (* NOTE: The first line with anything else on it is the next node,
+                 and the comments under it are that node's. *)
+              | None -> ()
+              | Some found ->
+                (if (comments.(found) : comment).disposition = Remove then begin
+                   let rec run taken =
+                     if not block.keeps_empties || taken >= length then taken
+                     else
+                       let _, blank, run_finish = yaml_line_shape source taken in
+                       if blank then run (past_terminator source run_finish) else taken in
+                   let taken = run (past_terminator source finish) in
+                   answers.(found) <- Some { start = probe; finish = taken }
+                 end);
+                loop (past_terminator source finish)
+        in loop block.body_end) blocks;
+      answers
+    end
+
+(* NOTE: Apply `yaml_structural_trail_keeps` to comments that did not come from a
+   scan of this reference's own, which is the external hand-off of
+   `transform_spans`.  A scan reaches the same answer from the blocks it already
+   walked over; this is that answer re-derived from the bytes, so the two paths
+   cannot disagree about a value. *)
+let keep_yaml_structural_trails source language comments =
+  (* PERF: The same two answers `lines_a_removal_must_swallow` opens with: no "|"
+     and no ">" is no block scalar, and a file whose comments all trail something
+     has no whole-line comment to weigh. *)
+  if language <> Yaml || comments = [] then comments
+  else if not (holds_a_block_indicator source) then comments
+  else if not (List.exists (fun (comment : comment) ->
+    comment.disposition = Remove && starts_its_line source comment.span.start) comments)
+  then comments
+  else
+    let comments = Array.of_list comments in
+    List.iter (fun index ->
+      comments.(index) <- { (comments.(index)) with disposition = Keep yaml_structural_trail })
+      (yaml_structural_trail_keeps source (yaml_block_scalars source) comments);
+    Array.to_list comments
+
 let transform_report source report options =
   let edits =
     if not report.valid && not options.scan.force_invalid then []
-    else match options.layout with
+    else
+    (* NOTE: The one hole whose own bytes carry meaning, so the layouts that
+       leave a line behind have to be told where not to.  `compact` takes the
+       line already. *)
+    let swallow = lines_a_removal_must_swallow source report.language report.comments in
+    let swallowed index = if index < Array.length swallow then swallow.(index) else None in
+    match options.layout with
     | Columns ->
-      let rec loop cursor column edits = function
+      let rec loop index cursor column edits = function
         | [] -> List.rev edits
-        | comment :: tail -> (match comment.disposition with
-          | Keep _ -> loop cursor column edits tail
+        | (comment : comment) :: tail -> (match comment.disposition with
+          | Keep _ -> loop (index + 1) cursor column edits tail
+          | Remove -> match swallowed index with
+            (* NOTE: A swallowed line takes its terminator with it, so what
+               follows starts a line of its own in the output as it did in the
+               source and the column count begins again there. *)
+            | Some line ->
+              let span = { start = max line.start cursor; finish = line.finish } in
+              loop (index + 1) span.finish 0 ({ span; replacement = Bytes.empty } :: edits) tail
+            | None ->
+              let edit, column = column_edit source cursor column comment in
+              loop (index + 1) comment.span.finish column (edit :: edits) tail)
+      in loop 0 0 0 [] report.comments
+    | Lines ->
+      let rec loop index floor edits = function
+        | [] -> List.rev edits
+        | (comment : comment) :: tail -> (match comment.disposition with
+          | Keep _ -> loop (index + 1) floor edits tail
           | Remove ->
-            let edit, column = column_edit source cursor column comment in
-            loop comment.span.finish column (edit :: edits) tail)
+            let edit = match swallowed index with
+              | Some line ->
+                { span = { start = max line.start floor; finish = line.finish };
+                  replacement = Bytes.empty }
+              | None ->
+                { span = comment.span;
+                  replacement = line_replacement source comment.kind comment.span } in
+            loop (index + 1) edit.span.finish (edit :: edits) tail)
       in loop 0 0 [] report.comments
-    | Lines | Compact ->
-      List.filter_map (fun comment -> match comment.disposition with Keep _ -> None | Remove ->
-        Some { span = comment.span;
-          replacement = replacement source options.layout comment.kind comment.span }) report.comments
+    | Compact -> compact_edits source report.comments swallowed
   in
   { output = apply_edits source edits; edits; report; source_map = source_map (Bytes.length source) edits }
 
@@ -1839,5 +6461,12 @@ let transform_spans source language spans options =
   in
   match validate 0 0 [] spans with
   | Result.Error _ as error -> error
-  | Result.Ok comments -> Result.Ok (transform_report source
+  | Result.Ok comments ->
+    (* NOTE: The one verdict a comment's own bytes cannot reach, so it is applied
+       to the hand-off as a built-in scan applies it: a YAML block scalar leaning
+       on the comment that ends it keeps that comment, whoever found it.  Without
+       this the report would promise a removal that
+       `lines_a_removal_must_swallow` cannot make safe. *)
+    let comments = keep_yaml_structural_trails source language comments in
+    Result.Ok (transform_report source
       { language; comments; diagnostics = []; valid = true } options)

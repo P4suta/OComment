@@ -1,0 +1,22 @@
+# Hook definitions consumed by pre-commit when this repository is used as a
+# `repo:` entry. The `files:` patterns are generated from spec/languages.toml
+# and are enforced by tools/check_hooks.py, which CI runs on every change.
+#
+# `language: system` requires `ocomment` to already be on PATH: pre-commit's
+# `language: rust` runs `cargo install --path .` at the checkout root, and this
+# repository's manifest lives in rust/, so it cannot build these hooks.
+- id: ocomment-check
+  name: ocomment check
+  description: 'Report removable comments in the staged source files; exit 1 blocks the commit, exit 2 signals an invalid source, configuration, plugin, or I/O failure.'
+  entry: ocomment check
+  language: system
+  types: [text]
+  files: '(?i)\.(bash|c|cc|cjs|cpp|cs|css|csx|cts|cu|cuh|cxx|dart|gemspec|go|h|hh|hpp|htm|html|hxx|java|jbuilder|js|json5|jsonc|jsx|kt|kts|lua|m|markdown|md|mjs|ml|mli|mlt|mm|mts|php|phpt|phtml|pl|pm|podspec|py|pyi|pyw|r|rake|rb|rbi|rbw|rmd|rockspec|rs|ru|sass|sc|scala|scss|sh|shtml|sql|svelte|swift|t|thor|toml|ts|tsx|vue|xhtml|yaml|yml|zig|zon|zsh)$'
+- id: ocomment-fix
+  name: ocomment fix
+  description: 'Remove comments from the staged source files in place; exit 1 from the following ocomment-check run, or a file pre-commit sees modified, blocks the commit until the result is reviewed and staged.'
+  entry: ocomment fix
+  language: system
+  types: [text]
+  require_serial: true
+  files: '(?i)\.(bash|c|cc|cjs|cpp|cs|css|csx|cts|cu|cuh|cxx|dart|gemspec|go|h|hh|hpp|htm|html|hxx|java|jbuilder|js|json5|jsonc|jsx|kt|kts|lua|m|markdown|md|mjs|ml|mli|mlt|mm|mts|php|phpt|phtml|pl|pm|podspec|py|pyi|pyw|r|rake|rb|rbi|rbw|rmd|rockspec|rs|ru|sass|sc|scala|scss|sh|shtml|sql|svelte|swift|t|thor|toml|ts|tsx|vue|xhtml|yaml|yml|zig|zon|zsh)$'

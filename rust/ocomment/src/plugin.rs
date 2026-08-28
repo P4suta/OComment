@@ -1,4 +1,4 @@
-use crate::config::PluginsConfig;
+use crate::{config::PluginsConfig, output::wrote};
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use ocomment_core::{
     ByteSpan, CommentKind, Language, TransformOptions, TransformResult, transform_spans,
@@ -519,16 +519,26 @@ fn locked_artifact_candidate(root: &Path, artifact: &str) -> Result<PathBuf> {
 }
 
 pub fn add(
+    output: &mut impl Write,
     root: &Path,
     source: &str,
     requested_name: Option<&str>,
     expected: Option<&str>,
     identity: Option<&str>,
 ) -> Result<()> {
-    install(root, source, requested_name, expected, identity, true)
+    install(
+        output,
+        root,
+        source,
+        requested_name,
+        expected,
+        identity,
+        true,
+    )
 }
 
 fn install(
+    output: &mut impl Write,
     root: &Path,
     source: &str,
     requested_name: Option<&str>,
@@ -599,11 +609,11 @@ fn install(
         },
     );
     save_lock(root, &lock)?;
-    println!("added plugin {name}");
+    wrote(writeln!(output, "added plugin {name}"))?;
     Ok(())
 }
 
-pub fn remove(root: &Path, name: &str) -> Result<()> {
+pub fn remove(output: &mut impl Write, root: &Path, name: &str) -> Result<()> {
     let mut lock = load_lock(root)?;
     let removed = lock
         .plugins
@@ -623,25 +633,26 @@ pub fn remove(root: &Path, name: &str) -> Result<()> {
         }
     }
     save_lock(root, &lock)?;
-    println!("removed plugin {name}");
+    wrote(writeln!(output, "removed plugin {name}"))?;
     Ok(())
 }
 
-pub fn list(root: &Path) -> Result<()> {
+pub fn list(output: &mut impl Write, root: &Path) -> Result<()> {
     let lock = load_lock(root)?;
     if lock.plugins.is_empty() {
-        println!("no plugins locked");
+        wrote(writeln!(output, "no plugins locked"))?;
     }
     for (name, plugin) in lock.plugins {
-        println!(
+        wrote(writeln!(
+            output,
             "{name}\t{}\tsha256:{}\tAPI {}",
             plugin.version, plugin.sha256, plugin.api
-        );
+        ))?;
     }
     Ok(())
 }
 
-pub fn verify(root: &Path, selected: Option<&str>) -> Result<()> {
+pub fn verify(output: &mut impl Write, root: &Path, selected: Option<&str>) -> Result<()> {
     let lock = load_lock(root)?;
     for (name, plugin) in lock
         .plugins
@@ -657,7 +668,11 @@ pub fn verify(root: &Path, selected: Option<&str>) -> Result<()> {
         if actual != plugin.sha256 {
             bail!("plugin `{name}` digest mismatch");
         }
-        println!("plugin {name}: verified sha256:{}", plugin.sha256);
+        wrote(writeln!(
+            output,
+            "plugin {name}: verified sha256:{}",
+            plugin.sha256
+        ))?;
     }
     if let Some(name) = selected
         && !lock.plugins.contains_key(name)
@@ -665,12 +680,12 @@ pub fn verify(root: &Path, selected: Option<&str>) -> Result<()> {
         bail!("plugin `{name}` is not locked");
     }
     if lock.plugins.is_empty() {
-        println!("plugins: none (offline lock is valid)");
+        wrote(writeln!(output, "plugins: none (offline lock is valid)"))?;
     }
     Ok(())
 }
 
-pub fn update(root: &Path, selected: Option<&str>) -> Result<()> {
+pub fn update(output: &mut impl Write, root: &Path, selected: Option<&str>) -> Result<()> {
     let lock = load_lock(root)?;
     let entries: Vec<_> = lock
         .plugins
@@ -683,11 +698,12 @@ pub fn update(root: &Path, selected: Option<&str>) -> Result<()> {
     }
     for (name, plugin) in entries {
         if !is_remote_source(&plugin.source) {
-            add(root, &plugin.source, Some(&name), None, None)?;
+            add(output, root, &plugin.source, Some(&name), None, None)?;
         } else {
-            // The existing signature identity authorizes a freshly fetched
-            // artifact. Its new digest is then written to the lockfile.
+            /* INVARIANT: The existing signature identity authorizes a freshly fetched
+             * artifact. Its new digest is then written to the lockfile. */
             install(
+                output,
                 root,
                 &plugin.source,
                 Some(&name),
@@ -704,9 +720,14 @@ fn is_remote_source(source: &str) -> bool {
     source.starts_with("https://") || source.starts_with("gh:") || source.starts_with("oci:")
 }
 
-pub fn new_plugin(path: &Path) -> Result<()> {
-    fs::create_dir(path)
-        .with_context(|| format!("refusing to overwrite plugin directory {}", path.display()))?;
+pub fn new_plugin(output: &mut impl Write, path: &Path) -> Result<()> {
+    fs::create_dir(path).with_context(|| {
+        format!(
+            "refusing to overwrite plugin directory {}; remove it or run \
+             `ocomment plugin remove <name>` first",
+            path.display()
+        )
+    })?;
     fs::create_dir(path.join("src"))?;
     fs::write(
         path.join("ocomment-scanner.wit"),
@@ -790,8 +811,31 @@ The host provides no WASI, filesystem, network, clock, or random imports. Keep t
 self-contained and return sorted, non-overlapping, non-empty byte spans.
 "#,
     )?;
-    println!("created plugin scaffold {}", path.display());
+    wrote(writeln!(
+        output,
+        "created plugin scaffold {}",
+        path.display()
+    ))?;
     Ok(())
+}
+
+/// What each external tool is needed for, in the words the command line uses.
+/// One constant per purpose keeps the four spawn sites and `doctor` naming the
+/// same thing: the line `doctor` prints for a tool that is missing has to be
+/// the line the failure would have printed once something needed it.
+pub const HTTPS_SOURCES: &str = "https:// plugin sources";
+pub const GH_SOURCES: &str = "gh: plugin sources";
+pub const OCI_SOURCES: &str = "oci: plugin sources";
+pub const SIGNATURE_VERIFICATION: &str = "--identity verification";
+
+/// Why a tool OComment shells out to could not be started.
+///
+/// The operating system says only "No such file or directory", which names
+/// neither the missing binary nor the part of the run that wanted it. This
+/// says both, and sends the reader to the command that reports every tool at
+/// once instead of making them rediscover the next gap one failure at a time.
+fn missing_tool(tool: &str, purpose: &str) -> String {
+    format!("cannot run `{tool}` (needed for {purpose}); run `ocomment doctor`")
 }
 
 fn fetch_remote(source: &str, directory: &Path) -> Result<AcquiredArtifact> {
@@ -808,7 +852,7 @@ fn fetch_remote(source: &str, directory: &Path) -> Result<AcquiredArtifact> {
             .arg(temporary.path())
             .arg(source)
             .status()
-            .context("cannot launch HTTPS plugin retrieval")?;
+            .with_context(|| missing_tool("curl", HTTPS_SOURCES))?;
         ensure!(status.success(), "plugin retrieval failed with {status}");
     } else if let Some(spec) = source.strip_prefix("gh:") {
         let (repository, tag, asset) = parse_github_source(spec)?;
@@ -825,7 +869,7 @@ fn fetch_remote(source: &str, directory: &Path) -> Result<AcquiredArtifact> {
             ])
             .arg(temporary.path())
             .status()
-            .context("cannot launch GitHub plugin retrieval")?;
+            .with_context(|| missing_tool("gh", GH_SOURCES))?;
         ensure!(status.success(), "plugin retrieval failed with {status}");
     } else {
         let specification = source.strip_prefix("oci:").expect("remote kind checked");
@@ -840,7 +884,7 @@ fn fetch_remote(source: &str, directory: &Path) -> Result<AcquiredArtifact> {
             .args(["pull", reference, "--output"])
             .arg(pulled.path())
             .status()
-            .context("cannot launch OCI plugin retrieval")?;
+            .with_context(|| missing_tool("oras", OCI_SOURCES))?;
         ensure!(status.success(), "plugin retrieval failed with {status}");
         let artifact = if let Some(relative) = artifact_path {
             let relative = Path::new(relative);
@@ -893,7 +937,7 @@ fn verify_sigstore(source: &str, artifact: &Path, identity: &str, directory: &Pa
             ])
             .arg(reference)
             .status()
-            .context("cannot launch cosign")?;
+            .with_context(|| missing_tool("cosign", SIGNATURE_VERIFICATION))?;
         ensure!(status.success(), "Sigstore verification failed");
         return Ok(());
     }
@@ -913,7 +957,7 @@ fn verify_sigstore(source: &str, artifact: &Path, identity: &str, directory: &Pa
             ])
             .arg(bundle.path())
             .status()
-            .context("cannot retrieve GitHub Sigstore bundle")?
+            .with_context(|| missing_tool("gh", GH_SOURCES))?
     } else {
         let bundle_url = format!("{source}.sigstore.json");
         Command::new("curl")
@@ -927,7 +971,7 @@ fn verify_sigstore(source: &str, artifact: &Path, identity: &str, directory: &Pa
             .arg(bundle.path())
             .arg(&bundle_url)
             .status()
-            .with_context(|| format!("cannot retrieve Sigstore bundle {bundle_url}"))?
+            .with_context(|| missing_tool("curl", HTTPS_SOURCES))?
     };
     ensure!(download.success(), "cannot retrieve Sigstore bundle");
     let status = Command::new("cosign")
@@ -941,7 +985,7 @@ fn verify_sigstore(source: &str, artifact: &Path, identity: &str, directory: &Pa
         ])
         .arg(artifact)
         .status()
-        .context("cannot launch cosign")?;
+        .with_context(|| missing_tool("cosign", SIGNATURE_VERIFICATION))?;
     if !status.success() {
         bail!("Sigstore verification failed");
     }
@@ -1236,6 +1280,37 @@ mod tests {
             .unwrap();
         assert_eq!(result.output, source);
         assert!(result.report.comments.is_empty());
+    }
+
+    /// A tool that is not installed is the most common way a plugin command
+    /// fails, and the shell's "No such file or directory" names neither the
+    /// binary nor the reason this run wanted it. Every spawn site says both,
+    /// and points at the one command that reports the whole environment.
+    ///
+    /// `cosign` runs only after an artifact has already been fetched and
+    /// validated, which no offline test can arrange, so its wording is pinned
+    /// here rather than through the command line.
+    #[test]
+    fn a_missing_tool_names_itself_its_purpose_and_doctor() {
+        for (tool, purpose) in [
+            ("curl", HTTPS_SOURCES),
+            ("gh", GH_SOURCES),
+            ("oras", OCI_SOURCES),
+            ("cosign", SIGNATURE_VERIFICATION),
+        ] {
+            assert_eq!(
+                missing_tool(tool, purpose),
+                format!("cannot run `{tool}` (needed for {purpose}); run `ocomment doctor`")
+            );
+        }
+        assert_eq!(
+            missing_tool("gh", GH_SOURCES),
+            "cannot run `gh` (needed for gh: plugin sources); run `ocomment doctor`"
+        );
+        assert_eq!(
+            missing_tool("cosign", SIGNATURE_VERIFICATION),
+            "cannot run `cosign` (needed for --identity verification); run `ocomment doctor`"
+        );
     }
 
     #[test]

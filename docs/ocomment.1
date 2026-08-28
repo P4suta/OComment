@@ -1,86 +1,529 @@
-.TH OCOMMENT 1 "August 2026" "ocomment 0.1.0" "User Commands"
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH OCOMMENT 1  "ocomment 0.1.0" "User Commands"
 .SH NAME
-ocomment \- check and remove source-code comments safely
+ocomment \- Check and remove source\-code comments safely
 .SH SYNOPSIS
-.B ocomment
-.RI [ PATH ...]
-.br
-.B ocomment
-.RI COMMAND " [OPTIONS]"
+\fBocomment\fR [\fB\-\-config\fR] [\fB\-\-policy\fR] [\fB\-\-layout\fR] [\fB\-\-language\fR] [\fB\-\-dialect\fR] [\fB\-\-keep\-kind\fR] [\fB\-\-remove\-kind\fR] [\fB\-\-force\-invalid\fR] [\fB\-\-force\-protected\fR] [\fB\-\-format\fR] [\fB\-\-color\fR] [\fB\-\-hyperlinks\fR] [\fB\-\-no\-preview\fR] [\fB\-\-explain\fR] [\fB\-\-progress\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIPATH\fR] [\fIsubcommands\fR]
 .SH DESCRIPTION
-OComment scans source bytes without requiring UTF-8 and reports or removes
-comment tokens. The default policy protects source preambles and tool or
-language directives. Rewrites are prepared and committed as one rollback-backed
-transaction.
-.SH COMMANDS
-.TP
-.B check [PATH...]
-Report removable comments. This is the default command.
-.TP
-.B fix [PATH...]
-Atomically apply safe edits.
-.TP
-.B diff [PATH...]
-Print unified differences.
-.TP
-.B strip
-Read source from standard input and write transformed bytes to standard output.
-.TP
-.B scan [PATH...]
-Print comment spans, kinds, dispositions, diagnostics, edits, and source maps.
-.TP
-.B lsp
-Run the LSP 3.18 server over stdio.
-.TP
-.B init, config, languages, plugin, completions, doctor
-Manage configuration, integrations, plugins, generated completions, and
-environment diagnostics.
+OComment scans source bytes without requiring UTF\-8 and reports or removes comment tokens. The default policy protects source preambles and tool or language directives. Rewrites are prepared and committed as one rollback\-backed transaction.
 .SH OPTIONS
 .TP
-.BI --format " human|json|jsonl|sarif|github"
-Select output format.
+\fB\-\-config\fR \fI<FILE>\fR
+Read this configuration file instead of discovering `.ocomment.toml`
 .TP
-.BI --policy " safe|legal|all"
-Select removal policy.
+\fB\-h\fR, \fB\-\-help\fR
+Print help (see a summary with \*(Aq\-h\*(Aq)
 .TP
-.BI --layout " lines|columns|compact"
-Select replacement layout.
+\fB\-V\fR, \fB\-\-version\fR
+Print version
 .TP
-.BI --language " LANGUAGE"
-Override language detection.
+[\fIPATH\fR]
+Files or directories to check; `\-` reads standard input (default: current directory)
+.SH POLICY
 .TP
-.BI --dialect " DIALECT"
-Select a guaranteed language dialect.
+\fB\-\-policy\fR \fI<POLICY>\fR
+Which classes of comment the run is allowed to remove
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+safe: Remove ordinary and doc comments; keep preambles and directives
+.IP \(bu 2
+legal: Like safe, and keep licence and copyright comments as well
+.IP \(bu 2
+all: Remove every comment that no keep override protects
+.RE
 .TP
-.BI --keep-kind " KIND"
-Keep a comment kind. May be repeated or comma separated.
+\fB\-\-layout\fR \fI<LAYOUT>\fR
+How the bytes left behind by a removed comment are laid out
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+lines: Keep the line structure and separate tokens that would otherwise join
+.IP \(bu 2
+columns: Pad each removed comment so the following columns do not shift
+.IP \(bu 2
+compact: Drop lines that held only a removed comment, and the whitespace it left behind
+.RE
 .TP
-.BI --remove-kind " KIND"
-Remove a comment kind. May be repeated or comma separated.
+\fB\-\-language\fR \fI<LANGUAGE>\fR
+Force this language instead of detecting it from path and contents
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+rust: Rust source files
+.IP \(bu 2
+ocaml: OCaml implementation and interface files
+.IP \(bu 2
+c: C source and header files
+.IP \(bu 2
+cpp: C++ source and header files
+.IP \(bu 2
+go: Go source files
+.IP \(bu 2
+java: Java source files, including Unicode escape translation
+.IP \(bu 2
+javascript: JavaScript modules and scripts, including JSX
+.IP \(bu 2
+typescript: TypeScript modules and scripts, including TSX
+.IP \(bu 2
+python: Python source and stub files
+.IP \(bu 2
+shell: POSIX sh, Bash, and zsh scripts
+.IP \(bu 2
+html: HTML documents, including nested script and style elements
+.IP \(bu 2
+css: CSS stylesheets
+.IP \(bu 2
+jsonc: JSON with comments, including JSON5
+.IP \(bu 2
+sql: SQL for every supported database dialect
+.IP \(bu 2
+kotlin: Kotlin source and script files
+.IP \(bu 2
+toml: TOML documents, including the lock files written in it
+.IP \(bu 2
+lua: Lua chunks and LuaRocks rockspecs
+.IP \(bu 2
+yaml: YAML documents, including the tool configurations written in it
+.IP \(bu 2
+php: PHP scripts and templates; the inline HTML around the tags is content
+.IP \(bu 2
+ruby: Ruby scripts, gem manifests, and the project files named after their tool
+.IP \(bu 2
+zig: Zig source files and Zig Object Notation data
+.IP \(bu 2
+r: R scripts and the `.Rprofile` an R session sources at start\-up
+.IP \(bu 2
+dart: Dart source files, whose block comments nest
+.IP \(bu 2
+swift: Swift source files, whose block comments nest and whose `#/../#` is a regex
+.IP \(bu 2
+csharp: C# source and script files, whose `#` lines are preprocessor directives
+.IP \(bu 2
+scala: Scala source and script files, whose block comments nest and whose XML literals are opaque
+.IP \(bu 2
+vue: Vue single\-file components, whose templates are HTML with `{{ ... }}` code
+.IP \(bu 2
+svelte: Svelte components, whose templates are HTML with `{ ... }` code
+.IP \(bu 2
+markdown: Markdown documents, whose fenced code blocks are scanned as their named languages
+.IP \(bu 2
+perl: Perl scripts and modules, whose quote words and regexes hide a `#`
+.RE
 .TP
-.B --force-invalid
-Apply known safe spans even when the lexical scan reports invalid input.
+\fB\-\-dialect\fR \fI<DIALECT>\fR
+Force this dialect of the selected language
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+standard: The default lexical rules of the language
+.IP \(bu 2
+jsx: JavaScript with JSX elements
+.IP \(bu 2
+tsx: TypeScript with JSX elements
+.IP \(bu 2
+objective\-c: Objective\-C extensions to C
+.IP \(bu 2
+objective\-cpp: Objective\-C++ extensions to C++
+.IP \(bu 2
+gnu\-c: GNU extensions to C
+.IP \(bu 2
+gnu\-cpp: GNU extensions to C++
+.IP \(bu 2
+cuda: CUDA extensions to C++
+.IP \(bu 2
+posix\-sh: The POSIX shell command language
+.IP \(bu 2
+bash53: Bash 5.3
+.IP \(bu 2
+zsh: The Z shell
+.IP \(bu 2
+postgresql: PostgreSQL, with dollar\-quoted bodies
+.IP \(bu 2
+mysql: MySQL, including its executable versioned comments
+.IP \(bu 2
+sqlite: SQLite
+.IP \(bu 2
+t\-sql: Microsoft Transact\-SQL
+.IP \(bu 2
+oracle: Oracle SQL and PL/SQL
+.IP \(bu 2
+scss: SCSS and the indented Sass syntax
+.RE
 .TP
-.B --force-protected
-Allow the all policy to remove protected comment preambles.
+\fB\-\-keep\-kind\fR \fI<KIND>\fR
+Comma\-separated comment kinds to protect on top of the policy
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+line: An ordinary comment running to the end of the line
+.IP \(bu 2
+block: An ordinary delimited comment
+.IP \(bu 2
+doc\-line: A documentation comment running to the end of the line
+.IP \(bu 2
+doc\-block: A delimited documentation comment
+.IP \(bu 2
+directive: A tool or language directive such as a pragma or lint control
+.IP \(bu 2
+license: A licence or copyright preamble
+.IP \(bu 2
+html\-comment: A DOM\-observable HTML comment
+.IP \(bu 2
+shebang: The interpreter line starting an executable script
+.IP \(bu 2
+encoding: A source encoding declaration
+.IP \(bu 2
+optimizer\-hint: A compiler or database optimizer hint
+.IP \(bu 2
+version\-comment: A MySQL versioned comment that the server executes
+.RE
 .TP
-.B --staged
-Operate on comments whose starting delimiter is in a Git index addition.
+\fB\-\-remove\-kind\fR \fI<KIND>\fR
+Comma\-separated comment kinds to remove regardless of the policy
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+line: An ordinary comment running to the end of the line
+.IP \(bu 2
+block: An ordinary delimited comment
+.IP \(bu 2
+doc\-line: A documentation comment running to the end of the line
+.IP \(bu 2
+doc\-block: A delimited documentation comment
+.IP \(bu 2
+directive: A tool or language directive such as a pragma or lint control
+.IP \(bu 2
+license: A licence or copyright preamble
+.IP \(bu 2
+html\-comment: A DOM\-observable HTML comment
+.IP \(bu 2
+shebang: The interpreter line starting an executable script
+.IP \(bu 2
+encoding: A source encoding declaration
+.IP \(bu 2
+optimizer\-hint: A compiler or database optimizer hint
+.IP \(bu 2
+version\-comment: A MySQL versioned comment that the server executes
+.RE
 .TP
-.B --index-only
-With --staged, update only the Git index.
+\fB\-\-force\-invalid\fR
+Apply the edits that are still provably safe when the source fails to scan
+.TP
+\fB\-\-force\-protected\fR
+Remove protected comments such as shebang and encoding preambles
+.SH OUTPUT
+.TP
+\fB\-\-format\fR \fI<FORMAT>\fR [default: human]
+Output encoding
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+human
+.IP \(bu 2
+json
+.IP \(bu 2
+jsonl
+.IP \(bu 2
+sarif
+.IP \(bu 2
+github
+.RE
+.TP
+\fB\-\-color\fR \fI<WHEN>\fR [default: auto]
+When to colour terminal output
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+auto
+.IP \(bu 2
+always
+.IP \(bu 2
+never
+.RE
+.TP
+\fB\-\-hyperlinks\fR \fI<WHEN>\fR [default: auto]
+When to emit terminal hyperlinks for reported paths
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+auto
+.IP \(bu 2
+always
+.IP \(bu 2
+never
+.RE
+.TP
+\fB\-\-no\-preview\fR
+Omit the one\-line comment text from human `check` and `scan` lines
+.TP
+\fB\-\-explain\fR
+List every comment human `check` and `scan` met and name the rule and setting behind each one
+.TP
+\fB\-\-progress\fR \fI<WHEN>\fR [default: auto]
+When to draw the live scanning counter on standard error
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+auto
+.IP \(bu 2
+always
+.IP \(bu 2
+never
+.RE
+.TP
+\fB\-q\fR, \fB\-\-quiet\fR
+Drop the run summary and notes; the command\*(Aqs product (findings, patch, listing) is still written
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Trace what is scanned and summarize every comment kind and skipped file
+.SH SUBCOMMANDS
+.TP
+ocomment\-check(1)
+Report removable comments (default command)
+.TP
+ocomment\-fix(1)
+Remove comments in place through an atomic, rollback\-backed transaction
+.TP
+ocomment\-diff(1)
+Print a unified diff of the changes fix would make
+.TP
+ocomment\-scan(1)
+List every comment with its kind, disposition and byte span
+.TP
+ocomment\-strip(1)
+Read source on stdin and write the stripped result to stdout
+.TP
+ocomment\-lsp(1)
+Run the LSP 3.18 server over stdio
+.TP
+ocomment\-init(1)
+Write a starter .ocomment.toml or Lefthook configuration
+.TP
+ocomment\-config(1)
+Show, locate, explain, or export the resolved configuration
+.TP
+ocomment\-languages(1)
+List built\-in languages, extensions, and dialects
+.TP
+ocomment\-plugin(1)
+Manage sandboxed WASM scanner plugins
+.TP
+ocomment\-completions(1)
+Generate shell completions
+.TP
+ocomment\-doctor(1)
+Diagnose the environment (config, git, plugins, tools)
+.TP
+ocomment\-man(1)
+Render the roff manual page to stdout
+.TP
+ocomment\-help(1)
+Print this message or the help of the given subcommand(s)
+.SH COMMAND OPTIONS
+.SS ocomment check
+.TP
+\fB\-\-staged\fR
+Read and update Git index blobs rather than treating the working tree as the source
+.TP
+\fB\-\-index\-only\fR
+With `\-\-staged`, do not attempt a uniquely mappable working\-tree update
+.TP
+[\fIPATH\fR]
+Files or directories to process; `\-` reads standard input (default: current directory)
+.SS ocomment fix
+.TP
+\fB\-\-staged\fR
+Read and update Git index blobs rather than treating the working tree as the source
+.TP
+\fB\-\-index\-only\fR
+With `\-\-staged`, do not attempt a uniquely mappable working\-tree update
+.TP
+\fB\-\-dry\-run\fR
+Print the patch `fix` would apply and write nothing
+.TP
+\fB\-i\fR, \fB\-\-interactive\fR
+Ask about each comment in turn and remove only the accepted ones.
+
+The index has no working\-tree line to show a hunk from, `\-\-dry\-run` writes nothing whatever the answers were, and `\-q` asks for a run with no commentary at all. None of the three can also be a conversation.
+.TP
+[\fIPATH\fR]
+Files or directories to rewrite (default: current directory)
+.SS ocomment diff
+.TP
+\fB\-\-staged\fR
+Read and update Git index blobs rather than treating the working tree as the source
+.TP
+\fB\-\-index\-only\fR
+With `\-\-staged`, do not attempt a uniquely mappable working\-tree update
+.TP
+[\fIPATH\fR]
+Files or directories to process; `\-` reads standard input (default: current directory)
+.SS ocomment scan
+.TP
+\fB\-\-staged\fR
+Read and update Git index blobs rather than treating the working tree as the source
+.TP
+\fB\-\-index\-only\fR
+With `\-\-staged`, do not attempt a uniquely mappable working\-tree update
+.TP
+[\fIPATH\fR]
+Files or directories to process; `\-` reads standard input (default: current directory)
+.SS ocomment init
+.TP
+\fB\-\-fix\fR
+For the Lefthook hook, run `fix` instead of `check`
+.TP
+\fB\-\-force\fR
+Replace the file if it already exists
+.TP
+\fB\-\-stdout\fR
+Print the template to standard output and write no file
+.TP
+[\fIKIND\fR] [default: config]
+Which starter file to write
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+config
+.IP \(bu 2
+lefthook
+.RE
+.SS ocomment config
+.TP
+[\fIACTION\fR] [default: show]
+Which view of the resolved configuration to print
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+show
+.IP \(bu 2
+locate
+.IP \(bu 2
+explain
+.IP \(bu 2
+schema
+.RE
+.SS ocomment plugin add
+.TP
+\fB\-\-name\fR \fI<NAME>\fR
+Name to register the plugin under (default: the file stem)
+.TP
+\fB\-\-sha256\fR \fI<HEX>\fR
+Expected SHA\-256 digest of the component, verified before install
+.TP
+\fB\-\-identity\fR \fI<IDENTITY>\fR
+Publisher identity recorded alongside the pinned digest
+.TP
+<\fISOURCE\fR>
+Path or URL of the WASM component to install
+.SS ocomment plugin remove
+.TP
+<\fINAME\fR>
+Name of the plugin to remove
+.SS ocomment plugin update
+.TP
+[\fINAME\fR]
+Name of the plugin to update (default: all of them)
+.SS ocomment plugin verify
+.TP
+[\fINAME\fR]
+Name of the plugin to verify (default: all of them)
+.SS ocomment plugin new
+.TP
+<\fIPATH\fR>
+Directory to create the plugin crate in
+.SS ocomment completions
+.TP
+<\fISHELL\fR>
+Shell whose completion script is written to stdout
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+bash
+.IP \(bu 2
+elvish
+.IP \(bu 2
+fish
+.IP \(bu 2
+powershell
+.IP \(bu 2
+zsh
+.RE
+.SH VERSION
+v0.1.0
 .SH EXIT STATUS
-0 means clean or a successful transformation. 1 means check or diff found a
-change. 2 means configuration, I/O, source, staged-mapping, or plugin failure.
+.TP
+.B 0
+Nothing removable was found and every requested change was applied.
+.TP
+.B 1
+Removable comments were reported, or a diff was printed.
+.TP
+.B 2
+Invalid source, configuration, plugin, or I/O failure.
 .SH FILES
 .TP
-.B .ocomment.toml
-Project configuration, version 1.
+.B \&.ocomment.toml
+Project configuration, merged over the user file.
 .TP
-.B .ocommentignore
-Additional ignore patterns.
+.B \&.ocommentignore
+Extra ignore patterns honoured by repository walks.
 .TP
-.B .ocomment.lock
-Pinned plugin artifacts and identities.
+.B \&.ocomment.lock
+Pinned digests of the installed WASM scanner plugins.
+.TP
+.B $XDG_CONFIG_HOME/ocomment/config.toml
+User configuration, merged over the built\-in defaults.
+.SH EXAMPLES
+.TP
+.B ocomment
+Check the current directory and report removable comments.
+.TP
+.B ocomment fix \-\-policy all \-\-layout compact src
+Remove every comment under src and close the gaps it leaves.
+.TP
+.B ocomment strip \-\-language rust < before.rs > after.rs
+Strip one file from standard input to standard output.
 .SH SEE ALSO
 The complete schemas and guides are available in the OComment repository.

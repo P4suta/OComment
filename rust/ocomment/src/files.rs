@@ -1,10 +1,10 @@
 use crate::config::ResolvedConfig;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use ignore::WalkBuilder;
 use ocomment_core::{DeclarativeProfile, Detection, Dialect, Language, detect_language};
 use std::{
-    fs,
+    env, fs,
     path::{Path, PathBuf},
 };
 
@@ -23,6 +23,10 @@ pub struct SkippedFile {
     pub path: PathBuf,
     pub reason: String,
     pub error: bool,
+    /// The path itself was named on the command line. Such a skip is always
+    /// reported on its own line; a skip found while walking a directory is
+    /// folded into the end-of-run summary instead.
+    pub explicit: bool,
 }
 
 #[derive(Default)]
@@ -31,13 +35,137 @@ pub struct Discovery {
     pub skipped: Vec<SkippedFile>,
 }
 
+/// The path standard input is reported under. It is not a real file name: the
+/// renderers print it, and the configuration override matcher sees it, exactly
+/// as it reads here.
+pub const STDIN_PATH: &str = "<stdin>";
+
+/// What both `strip` and a `-` target say when the bytes carry no signature to
+/// detect a language from. Standard input has no name to fall back on, so the
+/// only way forward is for the caller to name the language.
+pub const STDIN_LANGUAGE_HELP: &str = "cannot detect the language of standard input; \
+pass --language <LANGUAGE> (see `ocomment languages`)";
+
+/// Why a file OComment has no scanner for is passed over, and the two ways out
+/// of it: consult the list of what is built in, or name a language anyway.
+///
+/// The end-of-run summary must not repeat this sentence once per file, so it
+/// folds the reason onto a short key of its own; `output::skip_label` is what
+/// ties the two together.
+pub const NO_LANGUAGE: &str =
+    "no built-in language for this file (see `ocomment languages`; use --language to force)";
+
+/// Why a named path was not found. A relative path is resolved against the
+/// working directory, which is exactly what a caller who typed it from the
+/// wrong place cannot see, so the directory that was searched is named.
+fn missing_path_reason() -> String {
+    env::current_dir().map_or_else(
+        |_| "path does not exist".to_owned(),
+        |cwd| {
+            format!(
+                "path does not exist (checked relative to {})",
+                cwd.display()
+            )
+        },
+    )
+}
+
+/// Turn the bytes read from standard input into a source file the ordinary
+/// pipeline can process, or the skip that says why it cannot. Detection has no
+/// path to work with, so it is driven by `--language` or by the contents.
+///
+/// Declarative profiles and plugins route on a file extension, which standard
+/// input does not have; a pipe is therefore always handled by a built-in
+/// language or not at all.
+pub fn stdin_source(
+    bytes: Vec<u8>,
+    resolved: &ResolvedConfig,
+    forced_language: Option<Language>,
+    forced_dialect: Option<Dialect>,
+) -> Result<SourceFile, SkippedFile> {
+    let skipped = |reason: &str, error: bool| SkippedFile {
+        path: PathBuf::from(STDIN_PATH),
+        reason: reason.to_owned(),
+        error,
+        /* NOTE: Standard input was named on the command line, so its skip is always
+         * reported on its own line rather than folded into the summary. */
+        explicit: true,
+    };
+    if bytes.iter().take(8192).any(|byte| *byte == 0) {
+        return Err(skipped("binary file (NUL byte)", false));
+    }
+    let detection = forced_language
+        .map(|language| Detection {
+            language,
+            dialect: forced_dialect.unwrap_or(Dialect::Standard),
+            reason: "command-line",
+        })
+        .or_else(|| detect_language(None, &bytes));
+    let Some(Detection {
+        language, dialect, ..
+    }) = detection
+    else {
+        return Err(skipped(STDIN_LANGUAGE_HELP, true));
+    };
+    if forced_language.is_none()
+        && resolved
+            .config
+            .languages
+            .get(language.as_str())
+            .and_then(|item| item.enabled)
+            == Some(false)
+    {
+        return Err(skipped("language disabled by configuration", false));
+    }
+    Ok(SourceFile {
+        path: PathBuf::from(STDIN_PATH),
+        source: bytes,
+        language,
+        dialect: forced_dialect.unwrap_or(dialect),
+        profile: None,
+        plugin: None,
+    })
+}
+
+/// What a command with no PATH walks.
+///
+/// The project root is where the configuration was found, not what the caller
+/// is looking at: a command run from a subdirectory checks that subdirectory,
+/// the way every other file-walking developer tool does. Reaching back up to
+/// the root would put files the caller cannot see — and, with `fix`, files
+/// they did not mean to rewrite — into the run.
+pub const DEFAULT_TARGET: &str = ".";
+
+/// The one name a walk never offers, whatever else was asked for.
+///
+/// `.git` is git's own storage rather than source, and `git` itself never
+/// treats it as a candidate for anything. Neither may a tool that rewrites
+/// files in place: `ocomment fix .` in a fresh repository would otherwise
+/// rewrite every sample hook git had just written into `.git/hooks`. Naming
+/// a directory lifts the hidden-file rule and so does `files.hidden`, so the
+/// exclusion cannot hang off either of them.
+///
+/// A submodule or a linked worktree keeps its `.git` as a *file* pointing at
+/// the storage instead of holding it, which is why the name is matched rather
+/// than the file type.
+const GIT_DIRECTORY: &str = ".git";
+
 pub fn discover(
     paths: &[PathBuf],
     resolved: &ResolvedConfig,
     forced_language: Option<Language>,
     forced_dialect: Option<Dialect>,
 ) -> Result<Discovery> {
-    discover_with_scope(paths, resolved, forced_language, forced_dialect, true)
+    let implicit = [PathBuf::from(DEFAULT_TARGET)];
+    /* NOTE: The substituted target stands in for an argument nobody typed, so it is
+     * walked with the ordinary limits: only a path the caller actually named
+     * is a request to look past the hidden-file and size rules. */
+    let (paths, explicit) = if paths.is_empty() {
+        (&implicit[..], false)
+    } else {
+        (paths, true)
+    };
+    discover_with_scope(paths, resolved, forced_language, forced_dialect, explicit)
 }
 
 /// Discover workspace roots with normal traversal limits. Unlike explicit CLI
@@ -56,6 +184,8 @@ fn discover_with_scope(
     let include = compile_globs(&resolved.config.files.include)?;
     let exclude = compile_globs(&resolved.config.files.exclude)?;
     let mut discovery = Discovery::default();
+    /* NOTE: Only an editor asking for its workspace arrives here without a target;
+     * `discover` gives a command line the current directory instead. */
     let targets: Vec<_> = if paths.is_empty() {
         vec![(resolved.root.clone(), false)]
     } else {
@@ -74,6 +204,7 @@ fn discover_with_scope(
             load_one(
                 &path,
                 explicit_scope,
+                explicit_scope,
                 resolved,
                 forced_language,
                 forced_dialect,
@@ -87,8 +218,8 @@ fn discover_with_scope(
             builder
                 .follow_links(resolved.config.files.follow_symlinks)
                 .standard_filters(ignore)
-                // `standard_filters` also resets the hidden-file flag, so this
-                // must come afterwards for explicitly named directories.
+                /* NOTE: `standard_filters` also resets the hidden-file flag, so this
+                 * must come afterwards for explicitly named directories. */
                 .hidden(!explicit_scope && !resolved.config.files.hidden)
                 .git_ignore(ignore)
                 .git_global(ignore)
@@ -98,12 +229,17 @@ fn discover_with_scope(
             if ignore {
                 builder.add_custom_ignore_filename(".ocommentignore");
             }
+            /* NOTE: The filter is never asked about the walk root, so a caller who
+             * names a path inside `.git` — or `.git` itself — is still
+             * answered; only what a walk *wanders* into is excluded. */
+            builder.filter_entry(|entry| entry.file_name() != GIT_DIRECTORY);
             for entry in builder.build() {
                 match entry {
                     Ok(entry) if entry.file_type().is_some_and(|kind| kind.is_file()) => {
                         load_one(
                             entry.path(),
                             explicit_scope,
+                            false,
                             resolved,
                             forced_language,
                             forced_dialect,
@@ -117,14 +253,16 @@ fn discover_with_scope(
                         path: path.clone(),
                         reason: error.to_string(),
                         error: true,
+                        explicit: explicit_scope,
                     }),
                 }
             }
         } else {
             discovery.skipped.push(SkippedFile {
                 path,
-                reason: "path does not exist".into(),
+                reason: missing_path_reason(),
                 error: true,
+                explicit: explicit_scope,
             });
         }
     }
@@ -134,16 +272,45 @@ fn discover_with_scope(
     discovery
         .files
         .dedup_by(|left, right| left.path == right.path);
+    /* INVARIANT: A path is reached twice whenever it is named beside a directory holding
+     * it, and it is one file either way: `files` says so with the sort and the
+     * dedup above, and a skip is one file just as much — a report that
+     * annotates the same path twice reads as two problems with it. Which of
+     * the two entries survives is not arbitrary. An error decides the exit
+     * code, and a path the caller actually typed is answered on a line of its
+     * own rather than folded into the summary, so the entry that says the most
+     * is sorted to the front of its path and is the one the dedup keeps. */
+    discovery.skipped.sort_by(|left, right| {
+        left.path
+            .cmp(&right.path)
+            .then(right.error.cmp(&left.error))
+            .then(right.explicit.cmp(&left.explicit))
+    });
     discovery
         .skipped
-        .sort_by(|left, right| left.path.cmp(&right.path));
+        .dedup_by(|left, right| left.path == right.path);
     Ok(discovery)
+}
+
+/// The name a walked file is reported under.
+///
+/// The implicit target is `.`, so a walk rooted there hands back every entry
+/// as `./name`. `ocomment` and `ocomment check name` report one file, and a
+/// reader — or a `git apply` reading the patch — is owed one spelling of it,
+/// so the prefix the walk root contributed is dropped. The target itself is
+/// left alone: `.` names a directory, and `` names nothing.
+fn reported_path(path: &Path) -> PathBuf {
+    match path.strip_prefix(DEFAULT_TARGET) {
+        Ok(stripped) if !stripped.as_os_str().is_empty() => stripped.to_path_buf(),
+        _ => path.to_path_buf(),
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
 fn load_one(
     path: &Path,
     explicit_scope: bool,
+    explicit_path: bool,
     resolved: &ResolvedConfig,
     forced_language: Option<Language>,
     forced_dialect: Option<Dialect>,
@@ -151,14 +318,18 @@ fn load_one(
     exclude: &GlobSet,
     discovery: &mut Discovery,
 ) {
-    let relative = path.strip_prefix(&resolved.root).unwrap_or(path);
-    if (!include.is_empty() && !include.is_match(relative)) || exclude.is_match(relative) {
+    let path = &reported_path(path);
+    /* NOTE: The globs are written relative to the root; the path was typed — or
+     * walked — relative to the working directory, so it is measured against
+     * the root before either set is asked about it. */
+    let relative = resolved.relative_to_root(path);
+    if (!include.is_empty() && !include.is_match(&relative)) || exclude.is_match(&relative) {
         return;
     }
     let link_metadata = match path.symlink_metadata() {
         Ok(value) => value,
         Err(error) => {
-            discovery.skipped.push(skip(path, error));
+            discovery.skipped.push(skip(path, explicit_path, error));
             return;
         }
     };
@@ -168,6 +339,7 @@ fn load_one(
                 path: path.to_path_buf(),
                 reason: "symbolic link".into(),
                 error: false,
+                explicit: explicit_path,
             });
             return;
         }
@@ -175,26 +347,28 @@ fn load_one(
             Ok(metadata) if metadata.is_file() => metadata,
             Ok(_) => return,
             Err(error) => {
-                discovery.skipped.push(skip(path, error));
+                discovery.skipped.push(skip(path, explicit_path, error));
                 return;
             }
         }
     } else {
         link_metadata
     };
-    // Every path under an explicitly named directory is explicit for hidden and size handling.
+    /* NOTE: Every path under an explicitly named directory is explicit for hidden and
+     * size handling. */
     if !explicit_scope && metadata.len() > resolved.config.files.max_size {
         discovery.skipped.push(SkippedFile {
             path: path.to_path_buf(),
             reason: format!("larger than {} bytes", resolved.config.files.max_size),
             error: false,
+            explicit: explicit_path,
         });
         return;
     }
     let source = match fs::read(path) {
         Ok(value) => value,
         Err(error) => {
-            discovery.skipped.push(skip(path, error));
+            discovery.skipped.push(skip(path, explicit_path, error));
             return;
         }
     };
@@ -203,6 +377,7 @@ fn load_one(
             path: path.to_path_buf(),
             reason: "binary file (NUL byte)".into(),
             error: false,
+            explicit: explicit_path,
         });
         return;
     }
@@ -227,6 +402,7 @@ fn load_one(
             path: path.to_path_buf(),
             reason: "language disabled by configuration".into(),
             error: false,
+            explicit: explicit_path,
         });
         return;
     }
@@ -250,8 +426,9 @@ fn load_one(
     if language == Language::Unknown && profile.is_none() && plugin.is_none() {
         discovery.skipped.push(SkippedFile {
             path: path.to_path_buf(),
-            reason: "unknown language".into(),
+            reason: NO_LANGUAGE.into(),
             error: false,
+            explicit: explicit_path,
         });
         return;
     }
@@ -291,18 +468,39 @@ pub fn profile_for_path(path: &Path, resolved: &ResolvedConfig) -> Option<Declar
         .cloned()
 }
 
-fn compile_globs(patterns: &[String]) -> Result<GlobSet> {
+/// Compile one of the `[files]` glob lists.
+///
+/// A walk asks for these in `discover_with_scope` and a staged run asks for
+/// them in `git::run_staged`; both measure a path against the project root
+/// first, so both get the same answer for the same path.
+pub(crate) fn compile_globs(patterns: &[String]) -> Result<GlobSet> {
     let mut builder = GlobSetBuilder::new();
     for pattern in patterns {
-        builder.add(Glob::new(pattern).with_context(|| format!("invalid file glob `{pattern}`"))?);
+        let glob = Glob::new(pattern).map_err(|error| {
+            /* INVARIANT: Both halves of this line came out of a file in the project: the
+             * pattern the caller wrote, and a `globset` parse error that
+             * quotes that same pattern straight back. Neither may reach a
+             * terminal verbatim, and the line stays one line. The pattern
+             * keeps the spacing it was written with, because a reader who is
+             * shown something else cannot find it in the file. It is the same
+             * treatment `config::validate_regexes` gives the other pattern a
+             * project file carries. */
+            anyhow!(
+                "invalid file glob `{}`: {}",
+                crate::output::sanitize_path(pattern),
+                crate::output::sanitize_message(&error.to_string())
+            )
+        })?;
+        builder.add(glob);
     }
     builder.build().context("cannot compile file globs")
 }
 
-fn skip(path: &Path, error: impl std::fmt::Display) -> SkippedFile {
+fn skip(path: &Path, explicit: bool, error: impl std::fmt::Display) -> SkippedFile {
     SkippedFile {
         path: path.to_path_buf(),
         reason: error.to_string(),
         error: true,
+        explicit,
     }
 }

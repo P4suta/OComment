@@ -1,3 +1,10 @@
+//! Test tooling: the driver `tools/differential.py` speaks to.
+//!
+//! It reads one JSON request per line on standard input and answers on
+//! standard output, so the OCaml reference implementation and this one can be
+//! compared byte for byte. It is not an example of how to use the library;
+//! `strip.rs` is.
+
 use ocomment_core::{
     ByteSpan, CommentKind, DeclarativeProfile, Dialect, Edit, Language, Layout, Policy,
     ScanOptions, TransformOptions, apply_edits, scan, scan_profile, transform, transform_profile,
