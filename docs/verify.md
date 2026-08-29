@@ -15,14 +15,14 @@ A digest alone proves nothing about origin: whoever could replace the archive
 could replace the digest beside it. The signature and the attestation are what
 tie the file to `P4suta/OComment` and to the tag it claims to come from.
 
-Examples pin `0.1.0` — use the version you want, and change it in every line of
+Examples pin `0.1.1` — use the version you want, and change it in every line of
 a command: the tag inside a signing identity is part of what the check proves,
 not a detail of the example.
 
 ## Download
 
 ```sh
-gh release download v0.1.0 --repo P4suta/OComment \
+gh release download v0.1.1 --repo P4suta/OComment \
   --pattern 'ocomment-x86_64-unknown-linux-gnu.tar.gz*' \
   --pattern 'SHA256SUMS*'
 ```
@@ -60,7 +60,7 @@ Action runs this same verification on the runner before it uses the binary.
 cosign verify-blob \
   --bundle ocomment-x86_64-unknown-linux-gnu.tar.gz.sigstore.json \
   --certificate-identity \
-    'https://github.com/P4suta/OComment/.github/workflows/release.yml@refs/tags/v0.1.0' \
+    'https://github.com/P4suta/OComment/.github/workflows/release.yml@refs/tags/v0.1.1' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   ocomment-x86_64-unknown-linux-gnu.tar.gz
 ```
@@ -88,12 +88,12 @@ file itself, and each per-archive checksum.
 ## Verify the container image
 
 ```sh
-cosign verify ghcr.io/p4suta/ocomment:0.1.0 \
+cosign verify ghcr.io/p4suta/ocomment:0.1.1 \
   --certificate-identity-regexp \
     '^https://github\.com/P4suta/OComment/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
-gh attestation verify oci://ghcr.io/p4suta/ocomment:0.1.0 --repo P4suta/OComment
+gh attestation verify oci://ghcr.io/p4suta/ocomment:0.1.1 --repo P4suta/OComment
 ```
 
 The image carries the same musl binary the matching release archive contains,

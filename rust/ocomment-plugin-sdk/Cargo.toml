@@ -17,7 +17,7 @@ include = ["src/**", "README.md"]
 workspace = true
 
 [dependencies]
-ocomment-core = { version = "0.1.0", path = "../ocomment-core" }
+ocomment-core = { version = "0.1.1", path = "../ocomment-core" }
 serde.workspace = true
 thiserror.workspace = true
 
