@@ -5,6 +5,12 @@ All notable changes to OComment will be documented here. The project follows
 
 ## Unreleased
 
+## [0.1.1](https://github.com/P4suta/OComment/compare/v0.1.0...v0.1.1) - 2026-08-29
+
+### Other
+
+- automate preparation and publish only product crates ([#17](https://github.com/P4suta/OComment/pull/17))
+
 ## 0.1.0
 
 ### Added

@@ -36,8 +36,8 @@ fxhash.workspace = true
 globset.workspace = true
 id-arena.workspace = true
 ignore.workspace = true
-ocomment-core = { version = "0.1.0", path = "../ocomment-core" }
-ocomment-plugin-sdk = { version = "0.1.0", path = "../ocomment-plugin-sdk" }
+ocomment-core = { version = "0.1.1", path = "../ocomment-core" }
+ocomment-plugin-sdk = { version = "0.1.1", path = "../ocomment-plugin-sdk" }
 rayon.workspace = true
 ref-cast.workspace = true
 regex.workspace = true
