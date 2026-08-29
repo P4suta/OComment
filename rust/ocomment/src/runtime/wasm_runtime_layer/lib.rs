@@ -1321,9 +1321,9 @@ impl std::fmt::Debug for BackendObject {
     }
 }
 
-/// Marks a type that can be cloned into a box and interpreted as an [`Any`](std::any::Any).
+/// Marks a type that can be cloned into a box and interpreted as an [`Any`].
 trait AnyCloneBoxed: Any + Send + Sync {
-    /// Gets this type as an [`Any`](std::any::Any).
+    /// Gets this type as an [`Any`].
     fn as_any(&self) -> &(dyn Any + Send + Sync);
 
     /// Creates a clone of this type into a new box.
