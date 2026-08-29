@@ -71,8 +71,18 @@ jobs:
             exit 0
           fi
 
-          pr_number="$(jq -er '.number' <<<"${RELEASE_PR}")"
-          branch="$(jq -er '.head_branch' <<<"${RELEASE_PR}")"
+          pr_count="$(jq -er '.prs | length' <<<"${RELEASE_PR}")"
+          if [ "${pr_count}" -eq 0 ]; then
+            echo "No Rust release changes to prepare"
+            exit 0
+          fi
+          if [ "${pr_count}" -ne 1 ]; then
+            echo "::error::Expected one version-grouped Release PR, got ${pr_count}"
+            exit 2
+          fi
+
+          pr_number="$(jq -er '.prs[0].number' <<<"${RELEASE_PR}")"
+          branch="$(jq -er '.prs[0].head_branch' <<<"${RELEASE_PR}")"
           gh pr checkout "${pr_number}" --force
 
           python3 tools/sync_release_docs.py
