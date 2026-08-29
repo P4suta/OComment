@@ -1,7 +1,7 @@
 # Installation
 
 Every channel below installs the same binary for the same release. Pick one;
-they do not need each other. Examples pin `0.1.0` — use the version you want,
+they do not need each other. Examples pin `0.1.1` — use the version you want,
 and prefer a full pin over a moving tag wherever a workflow or a tap will
 resolve it later.
 
@@ -44,7 +44,7 @@ both licences, the README, the `ocomment.1` manual page, and completion scripts
 for Bash, Zsh, fish, PowerShell, and Elvish.
 
 ```sh
-gh release download v0.1.0 --repo P4suta/OComment \
+gh release download v0.1.1 --repo P4suta/OComment \
   --pattern 'ocomment-x86_64-unknown-linux-gnu.tar.gz*'
 tar -xzf ocomment-x86_64-unknown-linux-gnu.tar.gz
 install -m 0755 ocomment-x86_64-unknown-linux-gnu/ocomment ~/.local/bin/ocomment
@@ -78,7 +78,7 @@ the ordinary `brew install ocomment`, `scoop install ocomment`, and
 ## Container image
 
 ```sh
-docker run --rm -v "$PWD:/src" ghcr.io/p4suta/ocomment:0.1.0 check
+docker run --rm -v "$PWD:/src" ghcr.io/p4suta/ocomment:0.1.1 check
 ```
 
 The image is `scratch` plus one statically linked musl binary, built from the
@@ -89,7 +89,7 @@ own user.
 ## GitHub Actions
 
 ```yaml
-      - uses: P4suta/OComment@v0.1.0
+      - uses: P4suta/OComment@v0.1.1
         with:
           paths: src tests
 ```
@@ -104,7 +104,7 @@ to code scanning.
 ```yaml
 repos:
   - repo: https://github.com/P4suta/OComment
-    rev: v0.1.0
+    rev: v0.1.1
     hooks:
       - id: ocomment-check
 ```

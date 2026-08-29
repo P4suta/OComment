@@ -29,7 +29,7 @@ not found" error rather than silently passing.
 ```yaml
 repos:
   - repo: https://github.com/P4suta/OComment
-    rev: v0.1.0
+    rev: v0.1.1
     hooks:
       - id: ocomment-check
 ```
@@ -44,7 +44,7 @@ To rewrite instead of reporting, use `ocomment-fix`. Run it *before*
 ```yaml
 repos:
   - repo: https://github.com/P4suta/OComment
-    rev: v0.1.0
+    rev: v0.1.1
     hooks:
       - id: ocomment-fix
       - id: ocomment-check
@@ -161,7 +161,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: P4suta/OComment@v0.1.0
+      - uses: P4suta/OComment@v0.1.1
         with:
           paths: src tests
 ```
@@ -177,7 +177,7 @@ jobs:
       security-events: write # NOTE: Upload the SARIF file to code scanning.
     steps:
       - uses: actions/checkout@v7
-      - uses: P4suta/OComment@v0.1.0
+      - uses: P4suta/OComment@v0.1.1
         with:
           format: sarif
           upload-sarif: "true"
@@ -223,7 +223,7 @@ branch on `exit-code`:
 
 ```yaml
       - id: comments
-        uses: P4suta/OComment@v0.1.0
+        uses: P4suta/OComment@v0.1.1
         with:
           fail-on-findings: "false"
       - if: steps.comments.outputs.exit-code == '1'
@@ -274,7 +274,7 @@ works across the runner matrix. This is how the repository's own
 ### Pinning
 
 Version tags are immutable under the repository's release-tag ruleset, so
-`P4suta/OComment@v0.1.0` is a stable reference and there is no moving `v0` tag
+`P4suta/OComment@v0.1.1` is a stable reference and there is no moving `v0` tag
 to follow. Pin to a full version, or to a commit SHA with a version comment if
 your policy requires it.
 
