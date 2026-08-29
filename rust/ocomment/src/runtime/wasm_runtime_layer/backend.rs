@@ -1,4 +1,4 @@
-use crate::*;
+use crate::runtime::wasm_runtime_layer::*;
 use anyhow::*;
 use fxhash::*;
 use std::marker::*;
@@ -55,8 +55,8 @@ where
 
 /// An external item to a WebAssembly module.
 ///
-/// This is returned from [`Instance::exports`](crate::Instance::exports)
-/// or [`Instance::get_export`](crate::Instance::get_export).
+/// This is returned from [`Instance::exports`](crate::runtime::wasm_runtime_layer::Instance::exports)
+/// or [`Instance::get_export`](crate::runtime::wasm_runtime_layer::Instance::get_export).
 pub enum Extern<E: WasmEngine> {
     /// A WebAssembly global which acts like a [`Cell<T>`] of sorts, supporting `get` and `set` operations.
     ///
@@ -361,9 +361,9 @@ pub trait WasmFunc<E: WasmEngine>: Clone + Sized + Send + Sync {
         ctx: impl AsContextMut<E, UserState = T>,
         ty: FuncType,
         func: impl 'static
-            + Send
-            + Sync
-            + Fn(E::StoreContextMut<'_, T>, &[Value<E>], &mut [Value<E>]) -> Result<()>,
+        + Send
+        + Sync
+        + Fn(E::StoreContextMut<'_, T>, &[Value<E>], &mut [Value<E>]) -> Result<()>,
     ) -> Self;
     /// Gets the function type of this object.
     fn ty(&self, ctx: impl AsContext<E>) -> FuncType;
@@ -493,22 +493,22 @@ pub trait AsContextMut<E: WasmEngine>: AsContext<E> {
 
 impl<E, C> AsContext<E> for C
 where
-    C: crate::AsContext<Engine = E>,
+    C: crate::runtime::wasm_runtime_layer::AsContext<Engine = E>,
     E: WasmEngine,
 {
     type UserState = C::UserState;
 
     fn as_context(&self) -> <E as WasmEngine>::StoreContext<'_, Self::UserState> {
-        <Self as crate::AsContext>::as_context(self).inner
+        <Self as crate::runtime::wasm_runtime_layer::AsContext>::as_context(self).inner
     }
 }
 
 impl<E, C> AsContextMut<E> for C
 where
-    C: crate::AsContextMut<Engine = E>,
+    C: crate::runtime::wasm_runtime_layer::AsContextMut<Engine = E>,
     E: WasmEngine,
 {
     fn as_context_mut(&mut self) -> <E as WasmEngine>::StoreContextMut<'_, Self::UserState> {
-        <Self as crate::AsContextMut>::as_context_mut(self).inner
+        <Self as crate::runtime::wasm_runtime_layer::AsContextMut>::as_context_mut(self).inner
     }
 }

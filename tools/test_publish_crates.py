@@ -19,7 +19,6 @@ class PublishCratesTests(unittest.TestCase):
             state = pathlib.Path(raw)
             binary = state / "bin"
             binary.mkdir()
-            (state / "published-ocomment-wasm-runtime-layer").touch()
             fake = binary / "cargo"
             fake.write_text(
                 """#!/bin/sh
@@ -36,9 +35,6 @@ for argument in "$@"; do
 done
 identity() {
   case "$manifest" in
-    *wasm_runtime_layer*) echo 'ocomment-wasm-runtime-layer 0.4.2' ;;
-    *wasmi_runtime_layer*) echo 'ocomment-wasmi-runtime-layer 0.31.0' ;;
-    *wasm_component_layer*) echo 'ocomment-wasm-component-layer 0.1.18-ocomment.1' ;;
     *ocomment-core*) echo 'ocomment-core 0.1.0' ;;
     *ocomment-plugin-sdk*) echo 'ocomment-plugin-sdk 0.1.0' ;;
     *ocomment/Cargo.toml) echo 'ocomment 0.1.0' ;;
@@ -62,8 +58,8 @@ case "$command" in
     set -- $(identity)
     package=$1
     printf '%s\n' "$package" >>"$FAKE_CARGO_STATE/publish.log"
-    if [ "$package" = "ocomment-wasm-component-layer" ]; then
-      count_file="$FAKE_CARGO_STATE/component-attempts"
+    if [ "$package" = "ocomment-plugin-sdk" ]; then
+      count_file="$FAKE_CARGO_STATE/sdk-attempts"
       count=0
       if [ -f "$count_file" ]; then count=$(cat "$count_file"); fi
       count=$((count + 1))
@@ -100,11 +96,9 @@ esac
             self.assertEqual(
                 attempts,
                 [
-                    "ocomment-wasmi-runtime-layer",
-                    "ocomment-wasm-component-layer",
-                    "ocomment-wasm-component-layer",
-                    "ocomment-wasm-component-layer",
                     "ocomment-core",
+                    "ocomment-plugin-sdk",
+                    "ocomment-plugin-sdk",
                     "ocomment-plugin-sdk",
                     "ocomment",
                 ],

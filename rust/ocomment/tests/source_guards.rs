@@ -6,9 +6,9 @@
 
 use std::{collections::BTreeSet, fs, path::PathBuf};
 
-/// Every source file of the crate, embedded at compile time so the scan does
-/// not depend on the directory the test runs in. `the_guard_reads_every_source`
-/// keeps this list equal to what is on disk.
+/// Every first-party source file of the crate, embedded at compile time so the
+/// scan does not depend on the directory the test runs in. The internal runtime
+/// is upstream-derived code and cannot obtain the CLI's stdout handle.
 const SOURCES: [(&str, &str); 11] = [
     ("atomic.rs", include_str!("../src/atomic.rs")),
     ("cli.rs", include_str!("../src/cli.rs")),
@@ -118,8 +118,9 @@ fn standard_output_is_locked_in_exactly_one_place() {
     );
 }
 
-/// The embedded list is the whole crate, so a module added later is scanned
-/// rather than silently exempt.
+/// The embedded list is the whole first-party CLI crate, so a module added
+/// later is scanned rather than silently exempt. Upstream-derived runtime
+/// modules are the sole explicit exclusion.
 #[test]
 fn the_guard_reads_every_source() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
@@ -131,6 +132,9 @@ fn the_guard_reads_every_source() {
             let name = entry.file_name().to_str().unwrap().to_owned();
             let name = format!("{prefix}{name}");
             if entry.file_type().unwrap().is_dir() {
+                if name == "runtime" {
+                    continue;
+                }
                 pending.push((format!("{name}/"), entry.path()));
             } else if name.ends_with(".rs") {
                 on_disk.insert(name);
@@ -141,6 +145,54 @@ fn the_guard_reads_every_source() {
     assert_eq!(
         scanned, on_disk,
         "the source list this file scans is not the source list on disk"
+    );
+}
+
+/// Warning suppressions hide cleanup work and can quietly outlive the reason
+/// they were introduced. The release tree keeps every Rust lint actionable.
+#[test]
+fn rust_sources_do_not_suppress_lints() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .to_path_buf();
+    let mut pending = vec![root.clone()];
+    let mut offenders = Vec::new();
+    let markers = [
+        concat!("#[", "allow("),
+        concat!("#![", "allow("),
+        concat!("#[", "expect("),
+        concat!("#![", "expect("),
+    ];
+    while let Some(directory) = pending.pop() {
+        for entry in fs::read_dir(&directory).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if entry.file_type().unwrap().is_dir() {
+                if entry.file_name() != "target" {
+                    pending.push(path);
+                }
+            } else if path.extension().is_some_and(|extension| extension == "rs") {
+                let source = fs::read_to_string(&path).unwrap();
+                for (index, line) in source.lines().enumerate() {
+                    let compact: String = line
+                        .chars()
+                        .filter(|character| !character.is_whitespace())
+                        .collect();
+                    if markers.iter().any(|marker| compact.contains(marker)) {
+                        offenders.push(format!(
+                            "{}:{}",
+                            path.strip_prefix(&root).unwrap().display(),
+                            index + 1
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "Rust lint suppressions must be fixed before release: {offenders:?}"
     );
 }
 

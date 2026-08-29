@@ -1,3 +1,9 @@
+use crate::runtime::{
+    wasm_component_layer::{
+        Component, Engine as ComponentEngine, Linker, List, Record, Store, Value, ValueType,
+    },
+    wasmi_runtime_layer,
+};
 use crate::{config::PluginsConfig, output::wrote};
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use ocomment_core::{
@@ -16,9 +22,6 @@ use std::{
     sync::{Condvar, Mutex},
 };
 use tempfile::NamedTempFile;
-use wasm_component_layer::{
-    Component, Engine as ComponentEngine, Linker, List, Record, Store, Value, ValueType,
-};
 
 const LOCK_NAME: &str = ".ocomment.lock";
 

@@ -4,20 +4,18 @@ use std::hash::*;
 use std::sync::atomic::*;
 use std::sync::*;
 
+use crate::runtime::wasm_runtime_layer;
 use anyhow::*;
 use fxhash::*;
 use id_arena::*;
-#[cfg(feature = "serde")]
-use serde::*;
 
-use crate::values::ComponentType;
-use crate::TypeIdentifier;
-use crate::{require_matches, UnaryComponentType};
-use crate::{AsContextMut, ComponentInner, StoreContextMut};
+use crate::runtime::wasm_component_layer::TypeIdentifier;
+use crate::runtime::wasm_component_layer::values::ComponentType;
+use crate::runtime::wasm_component_layer::{AsContextMut, ComponentInner, StoreContextMut};
+use crate::runtime::wasm_component_layer::{UnaryComponentType, require_matches};
 
 /// Represents a component model interface type.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ValueType {
     /// The boolean type.
     Bool,
@@ -186,7 +184,7 @@ impl Display for ValueType {
 
 impl ValueType {
     /// Creates a value type from a component.
-    pub(crate) fn from_component(
+    pub(super) fn from_component(
         ty: &wit_parser::Type,
         component: &ComponentInner,
         resource_map: Option<&FxHashMap<ResourceType, ResourceType>>,
@@ -210,7 +208,7 @@ impl ValueType {
     }
 
     /// Creates a value type from a component type definition.
-    pub(crate) fn from_component_typedef(
+    pub(super) fn from_component_typedef(
         def: Id<wit_parser::TypeDef>,
         component: &ComponentInner,
         resource_map: Option<&FxHashMap<ResourceType, ResourceType>>,
@@ -281,7 +279,6 @@ impl ValueType {
 
 /// Describes the type of a list of values, all of the same type.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ListType {
     /// The element of the list.
     element: Arc<ValueType>,
@@ -303,7 +300,6 @@ impl ListType {
 
 /// Describes the type of an unordered collection of named fields, each associated with the values.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct RecordType {
     /// The fields of the record.
     pub(crate) fields: Arc<[(usize, Arc<str>, ValueType)]>,
@@ -428,7 +424,6 @@ impl Hash for RecordType {
 
 /// Describes the type of an ordered, unnamed sequence of heterogenously-typed values.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TupleType {
     /// The types of the tuple fields.
     fields: Arc<[ValueType]>,
@@ -487,7 +482,6 @@ impl Hash for TupleType {
 
 /// Describes a single branch of a variant.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct VariantCase {
     /// The name of this case.
     name: Arc<str>,
@@ -518,7 +512,6 @@ impl VariantCase {
 /// Describes a type has multiple possible states. Each state may optionally
 /// have a type associated with it.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct VariantType {
     /// The cases of this variant.
     cases: Arc<[VariantCase]>,
@@ -600,7 +593,6 @@ impl Hash for VariantType {
 
 /// A type that has multiple possible states.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct EnumType {
     /// The cases of the enum.
     cases: Arc<[Arc<str>]>,
@@ -667,7 +659,6 @@ impl Hash for EnumType {
 
 /// A type that may also be the absence of anything.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct OptionType {
     /// The type of this option when something exists.
     ty: Arc<ValueType>,
@@ -687,7 +678,6 @@ impl OptionType {
 
 /// A type that denotes successful or unsuccessful operation.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ResultType {
     /// The types associated with the result variant.
     ok_err: Arc<(Option<ValueType>, Option<ValueType>)>,
@@ -714,7 +704,6 @@ impl ResultType {
 
 /// A type that denotes a set of named bitflags.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct FlagsType {
     /// The names of each flags.
     names: Arc<[Arc<str>]>,
@@ -796,9 +785,9 @@ static RESOURCE_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
 /// Describes the type of a resource. This may either be:
 ///
 /// - An abstract guest resource, associated with a component. Abstract resources
-/// cannot be used to instantiate any values.
+///   cannot be used to instantiate any values.
 /// - An instantiated guest resource, associated with an instance. Instantiated guest
-/// resources identify resources created by WASM.
+///   resources identify resources created by WASM.
 /// - A host resource, which is associated with a native value.
 #[derive(Clone, Debug)]
 pub struct ResourceType {
@@ -829,9 +818,9 @@ impl ResourceType {
         mut ctx: C,
         name: Option<TypeIdentifier>,
         destructor: impl 'static
-            + Send
-            + Sync
-            + Fn(StoreContextMut<'_, C::UserState, C::Engine>, T) -> Result<()>,
+        + Send
+        + Sync
+        + Fn(StoreContextMut<'_, C::UserState, C::Engine>, T) -> Result<()>,
     ) -> Result<Self> {
         let store_id = ctx.as_context().inner.data().id;
         let destructor = wasm_runtime_layer::Func::new(
@@ -897,7 +886,7 @@ impl ResourceType {
     }
 
     /// Creates this type from the given component.
-    pub(crate) fn from_resolve(
+    pub(super) fn from_resolve(
         name: Option<TypeIdentifier>,
         id: Id<wit_parser::TypeDef>,
         component: &ComponentInner,
@@ -967,22 +956,6 @@ impl PartialEq for ResourceType {
 }
 
 impl Eq for ResourceType {}
-
-#[cfg(feature = "serde")]
-impl Serialize for ResourceType {
-    fn serialize<S: Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
-        use serde::ser::*;
-        std::result::Result::Err(S::Error::custom("Cannot serialize resources."))
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<'a> Deserialize<'a> for ResourceType {
-    fn deserialize<D: Deserializer<'a>>(_: D) -> Result<Self, D::Error> {
-        use serde::de::*;
-        std::result::Result::Err(D::Error::custom("Cannot deserialize resources."))
-    }
-}
 
 /// Marks the backing for a resource type.
 #[derive(Clone, Debug)]
@@ -1125,7 +1098,7 @@ impl Display for FuncType {
 
 impl FuncType {
     /// Creates this type from the given component.
-    pub(crate) fn from_component(
+    pub(super) fn from_component(
         func: &wit_parser::Function,
         component: &ComponentInner,
         resource_map: Option<&FxHashMap<ResourceType, ResourceType>>,
@@ -1177,15 +1150,16 @@ impl FuncType {
     }
 
     /// Returns `Ok` if the number and types of items in `params` matches as expected by the [`FuncType`].
-    pub(crate) fn match_params(&self, params: &[crate::values::Value]) -> Result<()> {
+    pub(crate) fn match_params(
+        &self,
+        params: &[crate::runtime::wasm_component_layer::values::Value],
+    ) -> Result<()> {
         if self.params().len() != params.len() {
             bail!("Incorrect parameter length.");
         }
-        if self
-            .params()
+        if self.params().iter().cloned().ne(params
             .iter()
-            .cloned()
-            .ne(params.iter().map(crate::values::Value::ty))
+            .map(crate::runtime::wasm_component_layer::values::Value::ty))
         {
             bail!("Incorrect parameter types.");
         }
@@ -1193,15 +1167,16 @@ impl FuncType {
     }
 
     /// Returns `Ok` if the number and types of items in `results` matches as expected by the [`FuncType`].
-    pub(crate) fn match_results(&self, results: &[crate::values::Value]) -> Result<()> {
+    pub(crate) fn match_results(
+        &self,
+        results: &[crate::runtime::wasm_component_layer::values::Value],
+    ) -> Result<()> {
         if self.results().len() != results.len() {
             bail!("Incorrect result length.");
         }
-        if self
-            .results()
+        if self.results().iter().cloned().ne(results
             .iter()
-            .cloned()
-            .ne(results.iter().map(crate::values::Value::ty))
+            .map(crate::runtime::wasm_component_layer::values::Value::ty))
         {
             bail!("Incorrect result types.");
         }
@@ -1220,10 +1195,13 @@ pub trait ComponentList: 'static + Sized {
 
     /// Attempts to convert this component list into values, storing them
     /// in the provided slice.
-    fn into_values(self, values: &mut [crate::values::Value]) -> Result<()>;
+    fn into_values(
+        self,
+        values: &mut [crate::runtime::wasm_component_layer::values::Value],
+    ) -> Result<()>;
 
     /// Attempts to convert a list of values into a component list of this type.
-    fn from_values(values: &[crate::values::Value]) -> Result<Self>;
+    fn from_values(values: &[crate::runtime::wasm_component_layer::values::Value]) -> Result<Self>;
 }
 
 impl ComponentList for () {
@@ -1231,11 +1209,16 @@ impl ComponentList for () {
 
     fn into_tys(_types: &mut [ValueType]) {}
 
-    fn from_values(_values: &[crate::values::Value]) -> Result<Self> {
+    fn from_values(
+        _values: &[crate::runtime::wasm_component_layer::values::Value],
+    ) -> Result<Self> {
         Ok(())
     }
 
-    fn into_values(self, _values: &mut [crate::values::Value]) -> Result<()> {
+    fn into_values(
+        self,
+        _values: &mut [crate::runtime::wasm_component_layer::values::Value],
+    ) -> Result<()> {
         Ok(())
     }
 }
@@ -1248,23 +1231,19 @@ impl<T: UnaryComponentType> ComponentList for T {
         types[0] = T::ty();
     }
 
-    fn into_values(self, values: &mut [crate::values::Value]) -> Result<()> {
+    fn into_values(
+        self,
+        values: &mut [crate::runtime::wasm_component_layer::values::Value],
+    ) -> Result<()> {
         assert!(values.len() == 1);
         values[0] = T::into_value(self)?;
         Ok(())
     }
 
-    fn from_values(values: &[crate::values::Value]) -> Result<Self> {
+    fn from_values(values: &[crate::runtime::wasm_component_layer::values::Value]) -> Result<Self> {
         assert!(values.len() == 1);
         T::from_value(&values[0])
     }
-}
-
-/// A function that returns a single result, and eats a macro parameter in the process.
-/// Used to count the number of parameters in the macro.
-#[allow(clippy::extra_unused_type_parameters)]
-const fn one<T>() -> usize {
-    1
 }
 
 /// Implements the component list for a tuple with the provided set of parameters.
@@ -1272,26 +1251,26 @@ macro_rules! impl_component_list {
     ( $( ($name:ident, $extra:ident) )+ ) => {
         impl<$($name: ComponentType),+> ComponentList for ($($name,)+)
         {
-            const LEN: usize = { $(one::<$name>() + )+ 0 };
+            const LEN: usize = [$(stringify!($extra)),+].len();
 
-            #[allow(warnings)]
             fn into_tys(types: &mut [ValueType]) {
-                let mut counter = 0;
-                $(types[{ let res = counter; counter += 1; res }] = $name::ty();)+
+                assert_eq!(types.len(), Self::LEN);
+                let mut types = types.iter_mut();
+                $(*types.next().expect("component list length checked") = $name::ty();)+
             }
 
-            #[allow(warnings)]
-            fn into_values(self, values: &mut [crate::values::Value]) -> Result<()> {
+            fn into_values(self, values: &mut [crate::runtime::wasm_component_layer::values::Value]) -> Result<()> {
                 let ($($extra,)+) = self;
-                let mut counter = 0;
-                $(values[{ let res = counter; counter += 1; res }] = $extra.into_value()?;)+
+                assert_eq!(values.len(), Self::LEN);
+                let mut values = values.iter_mut();
+                $(*values.next().expect("component list length checked") = $extra.into_value()?;)+
                 Ok(())
             }
 
-            #[allow(warnings)]
-            fn from_values(values: &[crate::values::Value]) -> Result<Self> {
-                let mut counter = 0;
-                Ok(($($name::from_value(&values[{ let res = counter; counter += 1; res }])?, )+))
+            fn from_values(values: &[crate::runtime::wasm_component_layer::values::Value]) -> Result<Self> {
+                assert_eq!(values.len(), Self::LEN);
+                let mut values = values.iter();
+                Ok(($($name::from_value(values.next().expect("component list length checked"))?, )+))
             }
         }
     };

@@ -2,37 +2,38 @@ use std::marker::*;
 use std::mem::*;
 use std::sync::atomic::*;
 use std::sync::*;
-use std::usize;
 
+use crate::runtime::wasm_runtime_layer;
 use bytemuck::*;
 use wasm_runtime_layer::*;
-#[allow(unused_imports)]
-use wasmtime_environ::component::StringEncoding;
+use wasmtime_environ::component::StringEncoding as RuntimeStringEncoding;
 
-#[allow(unused_imports)]
-use crate::abi::{Generator, *};
-use crate::types::{FuncType, ValueType};
-use crate::values::Value;
-use crate::{AsContext, AsContextMut, StoreContextMut, *};
+use crate::runtime::wasm_component_layer::abi::*;
+use crate::runtime::wasm_component_layer::types::{FuncType, ValueType};
+use crate::runtime::wasm_component_layer::values::Value;
+use crate::runtime::wasm_component_layer::{AsContext, AsContextMut, StoreContextMut, *};
 
 /// Stores the backing implementation for a function.
 #[derive(Clone, Debug)]
-pub(crate) enum FuncImpl {
+pub(super) enum FuncImpl {
     /// A function backed by a guest implementation.
-    GuestFunc(Option<crate::Instance>, Arc<GuestFunc>),
+    GuestFunc(
+        Option<crate::runtime::wasm_component_layer::Instance>,
+        Arc<GuestFunc>,
+    ),
     /// A host-provided function.
     HostFunc(Arc<AtomicUsize>),
 }
 
 /// Stores the data necessary to call a guest function.
 #[derive(Debug)]
-pub(crate) struct GuestFunc {
+pub(super) struct GuestFunc {
     /// The core function to call.
     pub callee: wasm_runtime_layer::Func,
     /// The component for this function.
     pub component: Arc<ComponentInner>,
     /// The string encoding to use.
-    pub encoding: StringEncoding,
+    pub encoding: RuntimeStringEncoding,
     /// The function definition to use.
     pub function: Function,
     /// The memory to use.
@@ -44,7 +45,7 @@ pub(crate) struct GuestFunc {
     /// The state table to use.
     pub state_table: Arc<StateTable>,
     /// The types to use.
-    pub types: Arc<[crate::types::ValueType]>,
+    pub types: Arc<[crate::runtime::wasm_component_layer::types::ValueType]>,
     /// The instance ID to use.
     pub instance_id: u64,
     /// The ID of the interface associated with this function.
@@ -55,11 +56,11 @@ pub(crate) struct GuestFunc {
 #[derive(Clone, Debug)]
 pub struct Func {
     /// The store ID associated with this function.
-    pub(crate) store_id: u64,
+    pub(super) store_id: u64,
     /// The type of this function.
-    pub(crate) ty: FuncType,
+    pub(super) ty: FuncType,
     /// The backing implementation for this function.
-    pub(crate) backing: FuncImpl,
+    pub(super) backing: FuncImpl,
 }
 
 impl Func {
@@ -68,9 +69,9 @@ impl Func {
         mut ctx: C,
         ty: FuncType,
         f: impl 'static
-            + Send
-            + Sync
-            + Fn(StoreContextMut<C::UserState, C::Engine>, &[Value], &mut [Value]) -> Result<()>,
+        + Send
+        + Sync
+        + Fn(StoreContextMut<C::UserState, C::Engine>, &[Value], &mut [Value]) -> Result<()>,
     ) -> Self {
         let mut ctx_mut = ctx.as_context_mut();
         let data = ctx_mut.inner.data_mut();
@@ -196,7 +197,7 @@ impl Func {
     }
 
     /// Ties the given instance to this function.
-    pub(crate) fn instantiate(&self, inst: crate::Instance) -> Self {
+    pub(crate) fn instantiate(&self, inst: crate::runtime::wasm_component_layer::Instance) -> Self {
         if let FuncImpl::GuestFunc(None, y) = &self.backing {
             Self {
                 store_id: self.store_id,
@@ -209,7 +210,7 @@ impl Func {
     }
 
     /// Calls this function from a guest context.
-    pub(crate) fn call_from_guest<C: AsContextMut>(
+    pub(super) fn call_from_guest<C: AsContextMut>(
         &self,
         ctx: C,
         options: &GuestInvokeOptions,
@@ -264,11 +265,11 @@ impl Func {
 }
 
 /// Describes options to invoke an imported function from a guest.
-pub(crate) struct GuestInvokeOptions {
+pub(super) struct GuestInvokeOptions {
     /// The component to use.
     pub component: Arc<ComponentInner>,
     /// The string encoding to use.
-    pub encoding: StringEncoding,
+    pub encoding: RuntimeStringEncoding,
     /// The function definition to use.
     pub function: Function,
     /// The memory to use.
@@ -280,7 +281,7 @@ pub(crate) struct GuestInvokeOptions {
     /// The resource tables to use.
     pub state_table: Arc<StateTable>,
     /// The types to use.
-    pub types: Arc<[crate::types::ValueType]>,
+    pub types: Arc<[crate::runtime::wasm_component_layer::types::ValueType]>,
     /// The instance ID to use.
     pub instance_id: u64,
     /// The store ID to use.
@@ -298,7 +299,7 @@ struct FuncBindgen<'a, C: AsContextMut> {
     /// The context.
     pub ctx: C,
     /// The encoding to use.
-    pub encoding: &'a StringEncoding,
+    pub encoding: &'a RuntimeStringEncoding,
     /// The list of flat results.
     pub flat_results: Vec<wasm_runtime_layer::Value>,
     /// The memory to use.
@@ -314,7 +315,7 @@ struct FuncBindgen<'a, C: AsContextMut> {
     /// The resource tables to use.
     pub resource_tables: &'a Mutex<Vec<HandleTable>>,
     /// The types to use.
-    pub types: &'a [crate::types::ValueType],
+    pub types: &'a [crate::runtime::wasm_component_layer::types::ValueType],
     /// The handles to drop at the call's end.
     pub handles_to_drop: Vec<(u32, i32)>,
     /// The handles to require dropped at the call's end.
@@ -663,8 +664,8 @@ impl<'a, C: AsContextMut> Bindgen for FuncBindgen<'a, C> {
                     operands.pop(),
                     Some(Value::String(x)),
                     match self.encoding {
-                        StringEncoding::Utf8 => Vec::from_iter(x.bytes()),
-                        StringEncoding::Utf16 | StringEncoding::CompactUtf16 =>
+                        RuntimeStringEncoding::Utf8 => Vec::from_iter(x.bytes()),
+                        RuntimeStringEncoding::Utf16 | RuntimeStringEncoding::CompactUtf16 =>
                             x.encode_utf16().flat_map(|a| a.to_le_bytes()).collect(),
                     }
                 );
@@ -764,10 +765,10 @@ impl<'a, C: AsContextMut> Bindgen for FuncBindgen<'a, C> {
                 );
 
                 match self.encoding {
-                    StringEncoding::Utf8 => {
+                    RuntimeStringEncoding::Utf8 => {
                         results.push(Value::String(String::from_utf8(result)?.into()))
                     }
-                    StringEncoding::Utf16 | StringEncoding::CompactUtf16 => {
+                    RuntimeStringEncoding::Utf16 | RuntimeStringEncoding::CompactUtf16 => {
                         ensure!(result.len() & 0b1 == 0, "Invalid string length");
                         results.push(Value::String(
                             String::from_utf16(
@@ -810,7 +811,11 @@ impl<'a, C: AsContextMut> Bindgen for FuncBindgen<'a, C> {
             } => {
                 let ty = self.types[ty.index()].clone();
                 results.push(Value::List(List::new(
-                    require_matches!(ty, crate::types::ValueType::List(x), x),
+                    require_matches!(
+                        ty,
+                        crate::runtime::wasm_component_layer::types::ValueType::List(x),
+                        x
+                    ),
                     operands.drain(..),
                 )?));
             }
@@ -844,12 +849,14 @@ impl<'a, C: AsContextMut> Bindgen for FuncBindgen<'a, C> {
                     "Record types did not match."
                 );
 
-                results.push(Value::Record(crate::values::Record::from_sorted(
-                    official_ty.clone(),
-                    official_ty.fields.iter().map(|(i, name, _)| {
-                        (name.clone(), replace(&mut operands[*i], Value::Bool(false)))
-                    }),
-                )));
+                results.push(Value::Record(
+                    crate::runtime::wasm_component_layer::values::Record::from_sorted(
+                        official_ty.clone(),
+                        official_ty.fields.iter().map(|(i, name, _)| {
+                            (name.clone(), replace(&mut operands[*i], Value::Bool(false)))
+                        }),
+                    ),
+                ));
                 operands.clear();
             }
             Instruction::HandleLower { handle, ty } => match &self.types[ty.index()] {
@@ -965,10 +972,12 @@ impl<'a, C: AsContextMut> Bindgen for FuncBindgen<'a, C> {
                 results.extend(tuple.iter().cloned());
             }
             Instruction::TupleLift { tuple: _, ty } => {
-                results.push(Value::Tuple(crate::values::Tuple::new_unchecked(
-                    require_matches!(&self.types[ty.index()], ValueType::Tuple(x), x.clone()),
-                    operands.drain(..),
-                )));
+                results.push(Value::Tuple(
+                    crate::runtime::wasm_component_layer::values::Tuple::new_unchecked(
+                        require_matches!(&self.types[ty.index()], ValueType::Tuple(x), x.clone()),
+                        operands.drain(..),
+                    ),
+                ));
             }
             Instruction::FlagsLower { flags: _, ty: _ } => {
                 let flags = require_matches!(operands.pop(), Some(Value::Flags(x)), x);
@@ -994,10 +1003,12 @@ impl<'a, C: AsContextMut> Bindgen for FuncBindgen<'a, C> {
                     )),
                 };
 
-                results.push(Value::Flags(crate::values::Flags::new_unchecked(
-                    flags.clone(),
-                    list,
-                )));
+                results.push(Value::Flags(
+                    crate::runtime::wasm_component_layer::values::Flags::new_unchecked(
+                        flags.clone(),
+                        list,
+                    ),
+                ));
             }
             Instruction::ExtractVariantDiscriminant { discriminant_value } => {
                 let (discriminant, val) = match operands
@@ -1006,11 +1017,9 @@ impl<'a, C: AsContextMut> Bindgen for FuncBindgen<'a, C> {
                 {
                     Value::Variant(x) => (x.discriminant(), x.value()),
                     Value::Enum(x) => (x.discriminant(), None),
-                    Value::Option(x) => {
-                        (x.is_some().then_some(1).unwrap_or_default(), (*x).clone())
-                    }
+                    Value::Option(x) => (if x.is_some() { 1 } else { 0 }, (*x).clone()),
                     Value::Result(x) => (
-                        x.is_err().then_some(1).unwrap_or_default(),
+                        if x.is_err() { 1 } else { 0 },
                         match &*x {
                             std::result::Result::Ok(y) => y,
                             std::result::Result::Err(y) => y,
@@ -1035,11 +1044,13 @@ impl<'a, C: AsContextMut> Bindgen for FuncBindgen<'a, C> {
             } => {
                 let variant_ty =
                     require_matches!(&self.types[ty.index()], ValueType::Variant(x), x);
-                results.push(Value::Variant(crate::values::Variant::new(
-                    variant_ty.clone(),
-                    *discriminant as usize,
-                    operands.pop(),
-                )?));
+                results.push(Value::Variant(
+                    crate::runtime::wasm_component_layer::values::Variant::new(
+                        variant_ty.clone(),
+                        *discriminant as usize,
+                        operands.pop(),
+                    )?,
+                ));
             }
             Instruction::EnumLower { enum_: _, ty: _ } => {
                 let en = require_matches!(operands.pop(), Some(Value::Enum(x)), x);
@@ -1051,10 +1062,12 @@ impl<'a, C: AsContextMut> Bindgen for FuncBindgen<'a, C> {
                 discriminant,
             } => {
                 let enum_ty = require_matches!(&self.types[ty.index()], ValueType::Enum(x), x);
-                results.push(Value::Enum(crate::values::Enum::new(
-                    enum_ty.clone(),
-                    *discriminant as usize,
-                )?));
+                results.push(Value::Enum(
+                    crate::runtime::wasm_component_layer::values::Enum::new(
+                        enum_ty.clone(),
+                        *discriminant as usize,
+                    )?,
+                ));
             }
             Instruction::OptionLift {
                 ty, discriminant, ..
@@ -1268,7 +1281,7 @@ pub struct FuncError {
     /// The ID of the interface associated with the function.
     interface: Option<InterfaceIdentifier>,
     /// The instance.
-    instance: crate::Instance,
+    instance: crate::runtime::wasm_component_layer::Instance,
     /// The error.
     error: Error,
 }
@@ -1280,7 +1293,7 @@ impl FuncError {
     }
 
     /// Gets the instance for which this error occurred.
-    pub fn instance(&self) -> &crate::Instance {
+    pub fn instance(&self) -> &crate::runtime::wasm_component_layer::Instance {
         &self.instance
     }
 }

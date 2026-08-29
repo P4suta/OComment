@@ -1,7 +1,6 @@
 [workspace]
 resolver = "2"
 members = ["ocomment-core", "ocomment", "ocomment-plugin-sdk"]
-exclude = ["vendor/wasm_component_layer", "vendor/wasm_runtime_layer", "vendor/wasmi_runtime_layer"]
 
 [workspace.package]
 version = "0.1.0"
@@ -12,27 +11,35 @@ repository = "https://github.com/P4suta/OComment"
 
 [workspace.dependencies]
 anyhow = "1.0.104"
+bytemuck = { version = "1.16.3", default-features = false, features = ["extern_crate_alloc"] }
 clap = { version = "4.6.6", features = ["derive", "string"] }
 clap_complete = "4.6.8"
 clap_mangen = "0.2"
+fxhash = "0.2.1"
 globset = "0.4.20"
+id-arena = { version = "2.2.1", default-features = false }
 ignore = "0.4.26"
 memchr = "2.8.0"
 rayon = "1.12.0"
+ref-cast = { version = "1.0.23", default-features = false }
 regex = "1.13.1"
+semver = { version = "1.0.23", default-features = false }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 sha2 = "0.10.9"
 similar = "2.7.0"
+slab = { version = "0.4.9", default-features = false }
+smallvec = { version = "1.11", default-features = false }
 tempfile = "3.27.0"
 thiserror = "2.0.20"
 toml = "1.1.4"
 tower-lsp = "0.20.0"
 tokio = { version = "1.53.0", features = ["io-std", "macros", "rt-multi-thread", "sync"] }
 unicode-width = "0.2.2"
-wasm_component_layer = { package = "ocomment-wasm-component-layer", path = "vendor/wasm_component_layer", version = "=0.1.18-ocomment.1" }
 wasmi = "0.31.2"
-wasmi_runtime_layer = { package = "ocomment-wasmi-runtime-layer", path = "vendor/wasmi_runtime_layer", version = "=0.31.0" }
+wasmtime-environ = { version = "18.0.1", features = ["component-model"] }
+wit-component = { version = "0.19.0", default-features = false }
+wit-parser = { version = "0.13.0", default-features = false }
 
 [workspace.lints.rust]
 missing_docs = "warn"

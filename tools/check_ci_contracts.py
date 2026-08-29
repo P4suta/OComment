@@ -50,6 +50,10 @@ PINS = {
     "dtolnay/rust-toolchain": ("4360b52568e2003a75bf9bc1d59f33a8e3fc893c", "stable toolchain action"),
     "github/codeql-action": ("db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28", "v4.37.8"),
     "ocaml/setup-ocaml": ("f92e0606b7ae4873dd1238465ea4bf6f8e40d85c", "v3"),
+    "rust-lang/crates-io-auth-action": (
+        "c6f97d42243bad5fab37ca0427f495c86d5b1a18",
+        "v1.0.5",
+    ),
     "sigstore/cosign-installer": ("6f9f17788090df1f26f669e9d70d6ae9567deba6", "v4.1.2"),
     "taiki-e/upload-rust-binary-action": (
         "f0d45ae91ee7b8ee928de7a9d04d893a08bcbec6",
@@ -124,6 +128,8 @@ def main() -> int:
     ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     if "chmod 0755 release/binaries/out/amd64/ocomment" not in ci:
         failures.append("Docker CI does not reproduce the released archive's executable mode")
+    if '"rust/ocomment/src/runtime/**"' not in ci:
+        failures.append("strip CI does not protect the upstream-derived internal runtime")
     for required in (
         "  vscode:",
         "npm run lint",
@@ -182,6 +188,25 @@ def main() -> int:
         failures.append("draft release must depend only on the CLI archive build")
     if 'chmod 0755 "release/binaries/out/$2/ocomment"' not in release:
         failures.append("release workflow does not preserve archive executable mode")
+    publish_crates = re.search(
+        r"(?ms)^  publish-crates:\n(?P<body>.*?)(?=^  finalize:\n)", release
+    )
+    if publish_crates is None:
+        failures.append("release workflow has no publish-crates job")
+    else:
+        for required in (
+            "contents: read",
+            "id-token: write",
+            "id: crates-io-auth",
+            "rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5",
+            "CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token }}",
+        ):
+            if required not in publish_crates.group("body"):
+                failures.append(
+                    f"crates.io Trusted Publishing is missing {required!r}"
+                )
+    if "secrets.CARGO_REGISTRY_TOKEN" in release:
+        failures.append("release workflow must not use a static crates.io token")
 
     release_pr = (ROOT / ".github/workflows/release-pr.yml").read_text(encoding="utf-8")
     for required in (

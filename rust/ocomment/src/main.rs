@@ -7,6 +7,7 @@ mod interactive;
 mod lsp;
 mod output;
 mod plugin;
+pub mod runtime;
 mod values;
 
 use std::{

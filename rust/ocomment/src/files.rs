@@ -193,6 +193,13 @@ fn discover_with_scope(
 ) -> Result<Discovery> {
     let include = compile_globs(&resolved.config.files.include)?;
     let exclude = compile_globs(&resolved.config.files.exclude)?;
+    let loader = LoadContext {
+        resolved,
+        forced_language,
+        forced_dialect,
+        include: &include,
+        exclude: &exclude,
+    };
     let mut discovery = Discovery::default();
     /* NOTE: Only an editor asking for its workspace arrives here without a target;
      * `discover` gives a command line the current directory instead. */
@@ -215,11 +222,7 @@ fn discover_with_scope(
                 &path,
                 explicit_scope,
                 explicit_scope,
-                resolved,
-                forced_language,
-                forced_dialect,
-                &include,
-                &exclude,
+                &loader,
                 &mut discovery,
             );
         } else if path.is_dir() {
@@ -246,17 +249,7 @@ fn discover_with_scope(
             for entry in builder.build() {
                 match entry {
                     Ok(entry) if entry.file_type().is_some_and(|kind| kind.is_file()) => {
-                        load_one(
-                            entry.path(),
-                            explicit_scope,
-                            false,
-                            resolved,
-                            forced_language,
-                            forced_dialect,
-                            &include,
-                            &exclude,
-                            &mut discovery,
-                        );
+                        load_one(entry.path(), explicit_scope, false, &loader, &mut discovery);
                     }
                     Ok(_) => {}
                     Err(error) => discovery.skipped.push(SkippedFile {
@@ -319,18 +312,29 @@ fn reported_path(path: &Path) -> PathBuf {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+/// Shared immutable inputs for loading one discovered path.
+struct LoadContext<'a> {
+    resolved: &'a ResolvedConfig,
+    forced_language: Option<Language>,
+    forced_dialect: Option<Dialect>,
+    include: &'a GlobSet,
+    exclude: &'a GlobSet,
+}
+
 fn load_one(
     path: &Path,
     explicit_scope: bool,
     explicit_path: bool,
-    resolved: &ResolvedConfig,
-    forced_language: Option<Language>,
-    forced_dialect: Option<Dialect>,
-    include: &GlobSet,
-    exclude: &GlobSet,
+    context: &LoadContext<'_>,
     discovery: &mut Discovery,
 ) {
+    let LoadContext {
+        resolved,
+        forced_language,
+        forced_dialect,
+        include,
+        exclude,
+    } = context;
     let path = &reported_path(path);
     /* NOTE: The globs are written relative to the root; the path was typed — or
      * walked — relative to the working directory, so it is measured against
@@ -394,7 +398,7 @@ fn load_one(
         });
         return;
     }
-    let built_in = forced_language
+    let built_in = (*forced_language)
         .map(|language| Detection {
             language,
             dialect: forced_dialect.unwrap_or(Dialect::Standard),

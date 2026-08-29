@@ -829,21 +829,26 @@ name = "ocomment"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bytemuck",
  "clap",
  "clap_complete",
  "clap_mangen",
+ "fxhash",
  "globset",
+ "id-arena",
  "ignore",
  "ocomment-core",
  "ocomment-plugin-sdk",
- "ocomment-wasm-component-layer",
- "ocomment-wasmi-runtime-layer",
  "rayon",
+ "ref-cast",
  "regex",
+ "semver",
  "serde",
  "serde_json",
  "sha2",
  "similar",
+ "slab",
+ "smallvec",
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
@@ -851,6 +856,7 @@ dependencies = [
  "tower-lsp",
  "unicode-width",
  "wasmi",
+ "wasmtime-environ",
  "wat",
  "wit-component",
  "wit-parser",
@@ -877,46 +883,6 @@ dependencies = [
  "ocomment-core",
  "serde",
  "thiserror 2.0.20",
-]
-
-[[package]]
-name = "ocomment-wasm-component-layer"
-version = "0.1.18-ocomment.1"
-dependencies = [
- "anyhow",
- "bytemuck",
- "fxhash",
- "id-arena",
- "ocomment-wasm-runtime-layer",
- "ocomment-wasmi-runtime-layer",
- "ref-cast",
- "semver",
- "slab",
- "wasmi",
- "wasmtime-environ",
- "wit-component",
- "wit-parser",
-]
-
-[[package]]
-name = "ocomment-wasm-runtime-layer"
-version = "0.4.2"
-dependencies = [
- "anyhow",
- "fxhash",
- "ref-cast",
- "smallvec",
-]
-
-[[package]]
-name = "ocomment-wasmi-runtime-layer"
-version = "0.31.0"
-dependencies = [
- "anyhow",
- "ocomment-wasm-runtime-layer",
- "ref-cast",
- "smallvec",
- "wasmi",
 ]
 
 [[package]]

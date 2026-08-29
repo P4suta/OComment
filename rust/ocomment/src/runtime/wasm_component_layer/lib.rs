@@ -106,6 +106,7 @@ use std::any::*;
 use std::sync::atomic::*;
 use std::sync::*;
 
+use crate::runtime::{wasm_runtime_layer, wasmi_runtime_layer};
 use anyhow::*;
 use fxhash::*;
 use id_arena::*;
@@ -117,15 +118,17 @@ use wasmtime_environ::component::*;
 use wit_component::*;
 use wit_parser::*;
 
-pub use crate::func::Func;
-pub use crate::func::*;
-pub use crate::identifier::PackageName;
-pub use crate::identifier::*;
-use crate::require_matches::*;
-pub use crate::types::*;
-pub use crate::types::{FuncType, ValueType, VariantCase};
-pub use crate::values::*;
-pub use crate::values::{Enum, Flags, Record, Tuple, Value, Variant};
+pub use crate::runtime::wasm_component_layer::func::Func;
+pub use crate::runtime::wasm_component_layer::func::*;
+pub use crate::runtime::wasm_component_layer::identifier::PackageName;
+pub use crate::runtime::wasm_component_layer::identifier::*;
+use crate::runtime::wasm_component_layer::require_matches::*;
+pub use crate::runtime::wasm_component_layer::types::*;
+pub use crate::runtime::wasm_component_layer::types::{FuncType, ValueType, VariantCase};
+pub use crate::runtime::wasm_component_layer::values::*;
+pub use crate::runtime::wasm_component_layer::values::{
+    Enum, Flags, Record, Tuple, Value, Variant,
+};
 
 /// A parsed and validated WebAssembly component, which may be used to instantiate [`Instance`]s.
 #[derive(Clone, Debug)]
@@ -286,26 +289,26 @@ impl Component {
         for (_key, item) in &inner.resolve.worlds[inner.world_id].imports {
             match item {
                 WorldItem::Type(x) => {
-                    if inner.resolve.types[*x].kind == TypeDefKind::Resource {
-                        if let Some(name) = &inner.resolve.types[*x].name {
-                            ensure!(
-                                inner
-                                    .import_types
-                                    .root
-                                    .resources
-                                    .insert(
-                                        name.as_str().into(),
-                                        ResourceType::from_resolve(
-                                            inner.type_identifiers[x.index()].clone(),
-                                            *x,
-                                            &inner,
-                                            None
-                                        )?
-                                    )
-                                    .is_none(),
-                                "Duplicate resource import."
-                            );
-                        }
+                    if inner.resolve.types[*x].kind == TypeDefKind::Resource
+                        && let Some(name) = &inner.resolve.types[*x].name
+                    {
+                        ensure!(
+                            inner
+                                .import_types
+                                .root
+                                .resources
+                                .insert(
+                                    name.as_str().into(),
+                                    ResourceType::from_resolve(
+                                        inner.type_identifiers[x.index()].clone(),
+                                        *x,
+                                        &inner,
+                                        None
+                                    )?
+                                )
+                                .is_none(),
+                            "Duplicate resource import."
+                        );
                     }
                 }
                 WorldItem::Interface(x) => {
@@ -336,26 +339,26 @@ impl Component {
         for (_key, item) in &inner.resolve.worlds[inner.world_id].exports {
             match item {
                 WorldItem::Type(x) => {
-                    if inner.resolve.types[*x].kind == TypeDefKind::Resource {
-                        if let Some(name) = &inner.resolve.types[*x].name {
-                            ensure!(
-                                inner
-                                    .export_types
-                                    .root
-                                    .resources
-                                    .insert(
-                                        name.as_str().into(),
-                                        ResourceType::from_resolve(
-                                            inner.type_identifiers[x.index()].clone(),
-                                            *x,
-                                            &inner,
-                                            None
-                                        )?
-                                    )
-                                    .is_none(),
-                                "Duplicate resource export."
-                            );
-                        }
+                    if inner.resolve.types[*x].kind == TypeDefKind::Resource
+                        && let Some(name) = &inner.resolve.types[*x].name
+                    {
+                        ensure!(
+                            inner
+                                .export_types
+                                .root
+                                .resources
+                                .insert(
+                                    name.as_str().into(),
+                                    ResourceType::from_resolve(
+                                        inner.type_identifiers[x.index()].clone(),
+                                        *x,
+                                        &inner,
+                                        None
+                                    )?
+                                )
+                                .is_none(),
+                            "Duplicate resource export."
+                        );
                     }
                 }
                 WorldItem::Interface(x) => {
@@ -510,7 +513,9 @@ impl Component {
                         WorldItem::Type(_) => unreachable!(),
                     };
 
-                    let ty = crate::types::FuncType::from_component(&imp.func, &inner, None)?;
+                    let ty = crate::runtime::wasm_component_layer::types::FuncType::from_component(
+                        &imp.func, &inner, None,
+                    )?;
                     let inst = if let Some(inst) = &imp.instance {
                         inner
                             .import_types
@@ -537,7 +542,7 @@ impl Component {
                     ensure!(
                         inner
                             .generated_trampolines
-                            .insert(idx, GeneratedTrampoline::ImportedFunction(imp))
+                            .insert(idx, GeneratedTrampoline::ImportedFunction(Box::new(imp)))
                             .is_none(),
                         "Attempted to insert duplicate import."
                     );
@@ -657,7 +662,9 @@ impl Component {
                     );
 
                     let export_name = Arc::<str>::from(export_name.as_str());
-                    let ty = crate::types::FuncType::from_component(f, &inner, None)?;
+                    let ty = crate::runtime::wasm_component_layer::types::FuncType::from_component(
+                        f, &inner, None,
+                    )?;
 
                     ensure!(
                         inner
@@ -722,7 +729,7 @@ impl Component {
                                 _ => unreachable!(),
                             },
                             func: f.clone(),
-                            ty: crate::types::FuncType::from_component(f, &inner, None)?,
+                            ty: crate::runtime::wasm_component_layer::types::FuncType::from_component(f, &inner, None)?,
                         };
                         let func_name = Arc::<str>::from(func_name.as_str());
                         ensure!(
@@ -984,7 +991,7 @@ impl ComponentTypes {
 #[derive(Debug)]
 pub struct ComponentTypesInstance {
     /// The functions of the interface.
-    functions: FxHashMap<Arc<str>, crate::types::FuncType>,
+    functions: FxHashMap<Arc<str>, crate::runtime::wasm_component_layer::types::FuncType>,
     /// The resources of the interface.
     resources: FxHashMap<Arc<str>, ResourceType>,
 }
@@ -999,12 +1006,22 @@ impl ComponentTypesInstance {
     }
 
     /// Gets the associated function by name, if any.
-    pub fn func(&self, name: impl AsRef<str>) -> Option<crate::types::FuncType> {
+    pub fn func(
+        &self,
+        name: impl AsRef<str>,
+    ) -> Option<crate::runtime::wasm_component_layer::types::FuncType> {
         self.functions.get(name.as_ref()).cloned()
     }
 
     /// Iterates over all associated functions by name.
-    pub fn funcs(&self) -> impl Iterator<Item = (&'_ str, crate::types::FuncType)> {
+    pub fn funcs(
+        &self,
+    ) -> impl Iterator<
+        Item = (
+            &'_ str,
+            crate::runtime::wasm_component_layer::types::FuncType,
+        ),
+    > {
         self.functions.iter().map(|(k, v)| (&**k, v.clone()))
     }
 
@@ -1014,7 +1031,14 @@ impl ComponentTypesInstance {
     }
 
     /// Iterates over all associated functions by name.
-    pub fn resources(&self) -> impl Iterator<Item = (&'_ str, crate::types::ResourceType)> {
+    pub fn resources(
+        &self,
+    ) -> impl Iterator<
+        Item = (
+            &'_ str,
+            crate::runtime::wasm_component_layer::types::ResourceType,
+        ),
+    > {
         self.resources.iter().map(|(k, v)| (&**k, v.clone()))
     }
 }
@@ -1084,7 +1108,7 @@ impl Linker {
 #[derive(Clone, Debug, Default)]
 pub struct LinkerInstance {
     /// The functions in the interface.
-    functions: FxHashMap<Arc<str>, crate::func::Func>,
+    functions: FxHashMap<Arc<str>, crate::runtime::wasm_component_layer::func::Func>,
     /// The resource types in the interface.
     resources: FxHashMap<Arc<str>, ResourceType>,
 }
@@ -1095,7 +1119,7 @@ impl LinkerInstance {
     pub fn define_func(
         &mut self,
         name: impl Into<Arc<str>>,
-        func: crate::func::Func,
+        func: crate::runtime::wasm_component_layer::func::Func,
     ) -> Result<()> {
         let n = Into::<Arc<str>>::into(name);
         if self.functions.contains_key(&n) {
@@ -1107,7 +1131,10 @@ impl LinkerInstance {
     }
 
     /// Gets the function in this interface with the given name, if any.
-    pub fn func(&self, name: impl AsRef<str>) -> Option<crate::func::Func> {
+    pub fn func(
+        &self,
+        name: impl AsRef<str>,
+    ) -> Option<crate::runtime::wasm_component_layer::func::Func> {
         self.functions.get(name.as_ref()).cloned()
     }
 
@@ -1138,7 +1165,9 @@ impl LinkerInstance {
     }
 
     /// Iterates over all associated functions by name.
-    pub fn funcs(&self) -> impl Iterator<Item = (&'_ str, crate::func::Func)> {
+    pub fn funcs(
+        &self,
+    ) -> impl Iterator<Item = (&'_ str, crate::runtime::wasm_component_layer::func::Func)> {
         self.functions.iter().map(|(k, v)| (&**k, v.clone()))
     }
 
@@ -1259,7 +1288,7 @@ impl Instance {
     fn generate_types(
         component: &Component,
         map: &FxHashMap<ResourceType, ResourceType>,
-    ) -> Result<Arc<[crate::types::ValueType]>> {
+    ) -> Result<Arc<[crate::runtime::wasm_component_layer::types::ValueType]>> {
         let mut types = Vec::with_capacity(component.0.resolve.types.len());
         for (mut id, mut val) in &component.0.resolve.types {
             assert!(
@@ -1273,13 +1302,15 @@ impl Instance {
             }
 
             if val.kind == TypeDefKind::Resource {
-                types.push(crate::types::ValueType::Bool);
+                types.push(crate::runtime::wasm_component_layer::types::ValueType::Bool);
             } else {
-                types.push(crate::types::ValueType::from_component_typedef(
-                    id,
-                    &component.0,
-                    Some(map),
-                )?);
+                types.push(
+                    crate::runtime::wasm_component_layer::types::ValueType::from_component_typedef(
+                        id,
+                        &component.0,
+                        Some(map),
+                    )?,
+                );
             }
         }
         Ok(types.into())
@@ -1446,7 +1477,7 @@ impl Instance {
         func: &Function,
         mapping: &FxHashMap<ResourceType, ResourceType>,
         interface_id: Option<InterfaceIdentifier>,
-    ) -> Result<crate::func::Func> {
+    ) -> Result<crate::runtime::wasm_component_layer::func::Func> {
         let callee = Self::core_export(inner, &ctx, def)
             .expect("Could not get callee export.")
             .into_func()
@@ -1470,9 +1501,13 @@ impl Instance {
                 .expect("Export was not of func type.")
         });
 
-        Ok(crate::func::Func {
+        Ok(crate::runtime::wasm_component_layer::func::Func {
             store_id: ctx.as_context().inner.data().id,
-            ty: crate::types::FuncType::from_component(func, &inner.component.0, Some(mapping))?,
+            ty: crate::runtime::wasm_component_layer::types::FuncType::from_component(
+                func,
+                &inner.component.0,
+                Some(mapping),
+            )?,
             backing: FuncImpl::GuestFunc(
                 None,
                 Arc::new(GuestFunc {
@@ -1520,11 +1555,12 @@ impl Instance {
                     .context("Could not find exported trampoline.")?
                 {
                     GeneratedTrampoline::ImportedFunction(component_import) => {
-                        let expected = crate::types::FuncType::from_component(
-                            &component_import.func,
-                            &inner.component.0,
-                            Some(resource_map),
-                        )?;
+                        let expected =
+                            crate::runtime::wasm_component_layer::types::FuncType::from_component(
+                                &component_import.func,
+                                &inner.component.0,
+                                Some(resource_map),
+                            )?;
                         let func = Self::get_component_import(component_import, linker)?;
                         ensure!(
                             func.ty() == expected,
@@ -1752,7 +1788,7 @@ impl Instance {
     fn get_component_import(
         import: &ComponentImport,
         linker: &Linker,
-    ) -> Result<crate::func::Func> {
+    ) -> Result<crate::runtime::wasm_component_layer::func::Func> {
         let inst = if let Some(name) = &import.instance {
             linker
                 .instance(name)
@@ -1856,7 +1892,7 @@ impl Exports {
 #[derive(Debug)]
 pub struct ExportInstance {
     /// The functions of the interface.
-    functions: FxHashMap<Arc<str>, crate::func::Func>,
+    functions: FxHashMap<Arc<str>, crate::runtime::wasm_component_layer::func::Func>,
     /// The resources of the interface.
     resources: FxHashMap<Arc<str>, ResourceType>,
     /// The instance that owns these exports.
@@ -1874,7 +1910,10 @@ impl ExportInstance {
     }
 
     /// Gets the associated function by name, if any.
-    pub fn func(&self, name: impl AsRef<str>) -> Option<crate::func::Func> {
+    pub fn func(
+        &self,
+        name: impl AsRef<str>,
+    ) -> Option<crate::runtime::wasm_component_layer::func::Func> {
         self.functions.get(name.as_ref()).map(|x| {
             x.instantiate(Instance(
                 self.instance.upgrade().expect("Instance did not exist."),
@@ -1883,7 +1922,9 @@ impl ExportInstance {
     }
 
     /// Iterates over all associated functions by name.
-    pub fn funcs(&self) -> impl Iterator<Item = (&'_ str, crate::func::Func)> {
+    pub fn funcs(
+        &self,
+    ) -> impl Iterator<Item = (&'_ str, crate::runtime::wasm_component_layer::func::Func)> {
         let inst = self.instance.upgrade().expect("Instance did not exist.");
         self.functions
             .iter()
@@ -1917,7 +1958,7 @@ struct InstanceInner {
     /// Stores the instance-specific state.
     pub state_table: Arc<StateTable>,
     /// The list of types for this instance.
-    pub types: Arc<[crate::types::ValueType]>,
+    pub types: Arc<[crate::runtime::wasm_component_layer::types::ValueType]>,
     /// The store ID associated with this instance.
     pub store_id: u64,
 }
@@ -1954,7 +1995,7 @@ struct ComponentExport {
     /// The definition of the export.
     pub def: CoreExport<wasmtime_environ::EntityIndex>,
     /// The type of export.
-    pub ty: crate::types::FuncType,
+    pub ty: crate::runtime::wasm_component_layer::types::FuncType,
 }
 
 /// The store represents all global state that can be manipulated by
@@ -2229,11 +2270,10 @@ struct StoreInner<T, E: backend::WasmEngine> {
 }
 
 /// Denotes a trampoline used by components to interact with the host.
-#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug)]
 enum GeneratedTrampoline {
     /// The guest would like to call an imported function.
-    ImportedFunction(ComponentImport),
+    ImportedFunction(Box<ComponentImport>),
     /// The guest would like to create a new resource.
     ResourceNew(TypeResourceTableIndex),
     /// The guest would like to obtain the representation of a resource.

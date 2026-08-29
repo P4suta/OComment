@@ -48,9 +48,6 @@ publish_one() {
     done
 }
 
-publish_one rust/vendor/wasm_runtime_layer/Cargo.toml
-publish_one rust/vendor/wasmi_runtime_layer/Cargo.toml
-publish_one rust/vendor/wasm_component_layer/Cargo.toml
 publish_one rust/ocomment-core/Cargo.toml
 publish_one rust/ocomment-plugin-sdk/Cargo.toml
 publish_one rust/ocomment/Cargo.toml

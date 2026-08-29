@@ -217,7 +217,7 @@ pub struct CliOverrides {
     pub remove_kind_from: Option<usize>,
 }
 
-/// Where every effective setting for one path came from.
+/// Where every effective disposition setting for one path came from.
 ///
 /// The `*_kind` and `*_regex` vectors run parallel to the vectors in the
 /// [`ScanOptions`] that [`ResolvedConfig::for_path_traced`] returned beside
@@ -225,12 +225,6 @@ pub struct CliOverrides {
 #[derive(Clone, Debug, Default)]
 pub struct PolicyTrace {
     pub policy: Source,
-    /// Where the layout came from. No disposition depends on the layout, so no
-    /// explanation names it yet; it is recorded because the trace answers the
-    /// question for the whole `[policy]` block and `--explain` will not be its
-    /// only caller.
-    #[allow(dead_code)]
-    pub layout: Source,
     pub keep_kind: Vec<Source>,
     pub remove_kind: Vec<Source>,
     pub keep_regex: Vec<Source>,
@@ -289,7 +283,6 @@ impl PolicyTrace {
 struct TracedLayer<'a> {
     source: Source,
     policy: Option<Policy>,
-    layout: Option<Layout>,
     keep_kind: &'a [CommentKind],
     remove_kind: &'a [CommentKind],
     keep_regex: &'a [String],
@@ -526,7 +519,6 @@ impl ResolvedConfig {
             layers.push(TracedLayer {
                 source: Source::Language(chosen_language.as_str().to_owned()),
                 policy: config.policy,
-                layout: config.layout,
                 keep_kind: &config.keep_kind,
                 remove_kind: &config.remove_kind,
                 keep_regex: &config.keep_regex,
@@ -548,7 +540,6 @@ impl ResolvedConfig {
                     paths: value.paths.clone(),
                 },
                 policy: value.policy,
-                layout: value.layout,
                 keep_kind: &value.keep_kind,
                 remove_kind: &value.remove_kind,
                 keep_regex: &value.keep_regex,
@@ -574,7 +565,6 @@ impl ResolvedConfig {
             .collect();
         let mut trace = PolicyTrace {
             policy: scalar_source(cli.policy, "--policy"),
-            layout: scalar_source(cli.layout, "--layout"),
             keep_kind: attribute(
                 &self.config.policy.keep_kind,
                 cli.keep_kind_from,
@@ -599,17 +589,11 @@ impl ResolvedConfig {
             if layer.policy.is_some() {
                 trace.policy = layer.source.clone();
             }
-            if layer.layout.is_some() {
-                trace.layout = layer.source.clone();
-            }
         }
         /* NOTE: Flags are the final layer. Starting the trace at CLI and then
          * replaying path layers would claim that a value which never won did. */
         if cli.policy {
             trace.policy = Source::Cli { flag: "--policy" };
-        }
-        if cli.layout {
-            trace.layout = Source::Cli { flag: "--layout" };
         }
         Ok((chosen_language, options, trace))
     }

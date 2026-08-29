@@ -54,7 +54,6 @@ macro_rules! def_instruction {
 
         impl $name<'_> {
             /// How many operands does this instruction pop from the stack?
-            #[allow(unused_variables)]
             pub fn operands_len(&self) -> usize {
                 match self {
                     $(
@@ -62,13 +61,15 @@ macro_rules! def_instruction {
                             $(
                                 $field,
                             )*
-                        } )? => $num_popped,
+                        } )? => {
+                            $( $(let _ = $field;)* )?
+                            $num_popped
+                        },
                     )*
                 }
             }
 
             /// What is the offset when this instruction pops operands off the stack?
-            #[allow(unused_variables)]
             pub fn operands_offset(&self) -> usize {
                 match self {
                     $(
@@ -77,6 +78,7 @@ macro_rules! def_instruction {
                                 $field,
                             )*
                         } )? => {
+                            $( $(let _ = $field;)* )?
                             0 $(+ $offset_popped)?
                         },
                     )*
@@ -84,7 +86,6 @@ macro_rules! def_instruction {
             }
 
             /// How many results does this instruction push onto the stack?
-            #[allow(unused_variables)]
             pub fn results_len(&self) -> usize {
                 match self {
                     $(
@@ -92,7 +93,10 @@ macro_rules! def_instruction {
                             $(
                                 $field,
                             )*
-                        } )? => $num_pushed,
+                        } )? => {
+                            $( $(let _ = $field;)* )?
+                            $num_pushed
+                        },
                     )*
                 }
             }
@@ -679,7 +683,7 @@ impl<'a, B: Bindgen> Generator<'a, B> {
                     let mut offset = 0;
                     let mut temp = Vec::new();
                     for (_, ty) in func.params.iter() {
-                        temp.truncate(0);
+                        temp.clear();
                         push_wasm(self.resolve, self.variant, ty, &mut temp);
                         for _ in 0..temp.len() {
                             self.emit(&Instruction::GetArg { nth: offset })?;
@@ -933,7 +937,7 @@ impl<'a, B: Bindgen> Generator<'a, B> {
                 // Determine the types of all the wasm values we just
                 // pushed, and record how many. If we pushed too few
                 // then we'll need to push some zeros after this.
-                temp.truncate(0);
+                temp.clear();
                 push_wasm(self.resolve, self.variant, ty, &mut temp);
                 pushed += temp.len();
 
@@ -941,7 +945,7 @@ impl<'a, B: Bindgen> Generator<'a, B> {
                 // bitcasts. This will go through and cast everything
                 // to the right type to ensure all blocks produce the
                 // same set of results.
-                casts.truncate(0);
+                casts.clear();
                 for (actual, expected) in temp.iter().zip(&results[1..]) {
                     casts.push(cast(*actual, *expected));
                 }
@@ -1037,7 +1041,7 @@ impl<'a, B: Bindgen> Generator<'a, B> {
                         .drain(self.stack.len() - temp.len()..)
                         .collect::<Vec<_>>();
                     for field in record.fields.iter() {
-                        temp.truncate(0);
+                        temp.clear();
                         push_wasm(self.resolve, self.variant, &field.ty, &mut temp);
                         self.stack.extend(args.drain(..temp.len()));
                         self.lift(&field.ty)?;
@@ -1052,7 +1056,7 @@ impl<'a, B: Bindgen> Generator<'a, B> {
                         .drain(self.stack.len() - temp.len()..)
                         .collect::<Vec<_>>();
                     for ty in tuple.types.iter() {
-                        temp.truncate(0);
+                        temp.clear();
                         push_wasm(self.resolve, self.variant, ty, &mut temp);
                         self.stack.extend(args.drain(..temp.len()));
                         self.lift(ty)?;
@@ -1147,14 +1151,14 @@ impl<'a, B: Bindgen> Generator<'a, B> {
             {
                 // Push only the values we need for this variant onto
                 // the stack.
-                temp.truncate(0);
+                temp.clear();
                 push_wasm(self.resolve, self.variant, ty, &mut temp);
                 self.stack
                     .extend(block_inputs[..temp.len()].iter().cloned());
 
                 // Cast all the types we have on the stack to the actual
                 // types needed for this variant, if necessary.
-                casts.truncate(0);
+                casts.clear();
                 for (actual, expected) in temp.iter().zip(&params[1..]) {
                     casts.push(cast(*expected, *actual));
                 }

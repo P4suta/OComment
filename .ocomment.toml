@@ -8,9 +8,10 @@ version = 1
 [files]
 hidden = true
 exclude = [
-  # NOTE: Vendored crates, fixture bytes, and packaging or benchmark scratch are
-  # NOTE: not ours to rewrite: fixture comments are the test input itself.
-  "rust/vendor/**",
+  # NOTE: Upstream-derived runtime modules, fixture bytes, and packaging or
+  # NOTE: benchmark scratch are not ours to rewrite: fixture comments are the
+  # NOTE: test input itself.
+  "rust/ocomment/src/runtime/**",
   "spec/fixtures/**",
   "editors/vscode/test-fixtures/**",
   "release-extras/**",

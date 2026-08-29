@@ -156,12 +156,12 @@ jobs:
           rm -rf "${RUNNER_TEMP}/strip"
           mkdir -p "${RUNNER_TEMP}/strip"
           git ls-files -z rust spec | xargs -0 cp --parents -t "${RUNNER_TEMP}/strip"
-          # The copy inherits no configuration of its own, and the patched
-          # crate under rust/vendor is not ours to rewrite. The spec corpus
+          # The copy inherits no configuration of its own, and the internal
+          # upstream-derived runtime is not ours to rewrite. The spec corpus
           # travels with the copy because the crate's spec-fixture tests read
           # it from `../../spec`; it is the tests' input, so it is excluded
           # from the strip rather than rewritten by it.
-          printf 'version = 1\n\n[files]\nexclude = ["rust/vendor/**", "spec/fixtures/**"]\n' \
+          printf 'version = 1\n\n[files]\nexclude = ["rust/ocomment/src/runtime/**", "spec/fixtures/**"]\n' \
             >"${RUNNER_TEMP}/strip/.ocomment.toml"
           cd "${RUNNER_TEMP}/strip"
           "${GITHUB_WORKSPACE}/rust/target/debug/ocomment" \

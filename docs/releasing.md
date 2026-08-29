@@ -33,16 +33,16 @@ Before tagging:
    and are not CLI release inputs.
 2. On the merged `main`, run `./tools/release-check.sh` and confirm the
    cross-target smoke jobs and
-   six expanded-crate artifact checks are green.
+   three expanded-crate artifact checks are green.
 3. Confirm `HEAD` is a clean, signed commit equal to `origin/main`, version
-   `MAJOR.MINOR.PATCH` is still unused by all six crates, and neither its tag nor
-   its GitHub Release exists.
-4. Confirm the crates.io secret, GHCR visibility plan, and required `release`
-   Environment reviewer from the checklist below are ready.
+   `MAJOR.MINOR.PATCH` is still unused by all three crates, and neither its tag
+   nor its GitHub Release exists.
+4. Confirm the crates.io Trusted Publisher entries, GHCR visibility plan, and
+   required `release` Environment reviewer from the checklist below are ready.
 
 Publishing is workflow-owned. After the draft exists, crates.io and GHCR run as
 independent retryable jobs using the tag and already-built artifacts.
-`tools/publish-crates.sh` reads all six package names and versions from Cargo
+`tools/publish-crates.sh` reads all three package names and versions from Cargo
 metadata, skips an exact version already visible in the registry, and resumes
 in dependency order. Only after both destinations succeed does the
 reviewer-protected `release` Environment allow `finalize` to make the GitHub
@@ -55,43 +55,44 @@ The product has three intentionally public crates: `ocomment`,
 `ocomment-core`, and `ocomment-plugin-sdk`. Release-plz manages exactly these
 three as one version group, and only the CLI owns the release changelog.
 
-The registry graph currently also contains three implementation-support forks:
+The CLI used to publish three implementation-support forks:
 `ocomment-wasm-runtime-layer`, `ocomment-wasmi-runtime-layer`, and
-`ocomment-wasm-component-layer`. A crate published to crates.io cannot depend
-on an unpublished path-only package, so the forks have to be resolvable from
-the registry for `ocomment` to install there. They are not an advertised
-OComment API, are excluded from the Rust workspace, and are not managed by
-release-plz. `tools/publish-crates.sh` alone publishes all six in dependency
-order. Reducing that registry-only surface requires folding the forks into a
-product crate or upstreaming their changes; it is a dependency refactor, not a
-reason to duplicate release automation or yank already published versions.
+`ocomment-wasm-component-layer`. Their narrowly patched implementations now live
+as private modules inside `ocomment`, so releases publish only the three product
+crates in dependency order. The support-fork versions already used by
+`ocomment 0.1.0` remain immutable registry history and must not be yanked: doing
+so would break resolution for that release. Do not publish new versions of those
+support crates.
 
 ## One-time publishing setup
 
-1. Authenticate GitHub tooling again if necessary. Log in to crates.io with
-   GitHub, verify the account email, create the initial-publish API token, and
-   store it directly as `CARGO_REGISTRY_TOKEN` in the `crates-io` Environment.
-   Never paste that token into an issue, workflow log, or chat. After the first
-   publication, migrate to Trusted Publishing when practical and revoke or
-   narrow the temporary token. See the
-   [crates.io development update](https://blog.rust-lang.org/2025/07/11/crates-io-development-update-2025-07/).
-2. Configure the `release` Environment with `P4suta` as a required reviewer.
+1. In the crates.io settings for each of `ocomment`, `ocomment-core`, and
+   `ocomment-plugin-sdk`, add a GitHub Trusted Publisher with owner `P4suta`,
+   repository `OComment`, workflow filename `release.yml`, and environment
+   `crates-io`. The release job uses GitHub OIDC to obtain a short-lived token;
+   it does not read a registry secret. After verifying the first trusted
+   publication, revoke the old crates.io API token and delete the now-unused
+   `CARGO_REGISTRY_TOKEN` Environment secret. See the
+   [crates.io Trusted Publishing documentation](https://crates.io/docs/trusted-publishing).
+2. If this repository restricts Actions to an allowlist, permit the official
+   `rust-lang/crates-io-auth-action` at the SHA pinned in `release.yml`.
+3. Configure the `release` Environment with `P4suta` as a required reviewer.
    The approval is intentionally the last gate: leave `finalize` waiting until
    the registries and draft assets have been verified.
-3. The first GHCR package is private. As soon as `publish-container` creates
+4. The first GHCR package is private. As soon as `publish-container` creates
    it, change the package visibility to public before approving `release`.
 
 ## Release sequence
 
 1. Fetch `origin/main` and tags, verify a clean tree and signed `HEAD`, and run
    the metadata and release gates one final time on the exact commit. Check that
-   `vMAJOR.MINOR.PATCH` and its GitHub Release do not exist and that all six
+   `vMAJOR.MINOR.PATCH` and its GitHub Release do not exist and that all three
    target crate versions are unused.
 2. Create and verify a signed annotated `vMAJOR.MINOR.PATCH` tag on that
    commit, then push only that tag ref. Do not move or recreate a release tag.
 3. Monitor the Release workflow. Before either registry result is accepted, it
    must have built and smoke-tested seven target archives, generated the SBOM,
-   checksums, signatures and attestations, published six crates in dependency
+   checksums, signatures and attestations, published three crates in dependency
    order, and pushed the amd64/arm64 image.
 4. Make the new GHCR package public. Inspect its multi-platform manifest,
    verify its cosign signature and GitHub attestation, then run `--version` and

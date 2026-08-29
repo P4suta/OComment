@@ -218,13 +218,13 @@ fn hunk(source: &[u8], edit: &Edit, presentation: &Presentation) -> Vec<String> 
     let inner = if finish > begin { finish - 1 } else { begin };
     let end = line_end(source, inner);
     let after = apply_edits(source, std::slice::from_ref(edit));
-    let shift = edit.replacement.len() as isize - (finish - begin) as isize;
-    let moved = (end as isize + shift).clamp(start as isize, after.len() as isize);
-    #[expect(
-        clippy::cast_sign_loss,
-        reason = "clamped to `start..=after.len()`, both of which are lengths"
-    )]
-    let moved = moved as usize;
+    let removed = finish - begin;
+    let moved = if edit.replacement.len() >= removed {
+        end.saturating_add(edit.replacement.len() - removed)
+    } else {
+        end.saturating_sub(removed - edit.replacement.len())
+    }
+    .clamp(start, after.len());
 
     let mut rows = Vec::new();
     for line in preceding(source, start, CONTEXT) {
