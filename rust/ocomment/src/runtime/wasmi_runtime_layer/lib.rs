@@ -10,16 +10,17 @@ use std::{
     sync::Arc,
 };
 
+use crate::runtime::wasm_runtime_layer;
 use anyhow::{Context, Error, Result};
 use ref_cast::RefCast;
 use smallvec::SmallVec;
 use wasm_runtime_layer::{
+    ExportType, ExternType, FuncType, GlobalType, ImportType, MemoryType, TableType, ValueType,
     backend::{
         AsContext, AsContextMut, Export, Extern, Imports, Value, WasmEngine, WasmExternRef,
         WasmFunc, WasmGlobal, WasmInstance, WasmMemory, WasmModule, WasmStore, WasmStoreContext,
         WasmStoreContextMut, WasmTable,
     },
-    ExportType, ExternType, FuncType, GlobalType, ImportType, MemoryType, TableType, ValueType,
 };
 
 /// The default amount of arguments and return values for which to allocate
@@ -208,9 +209,9 @@ impl WasmFunc<Engine> for Func {
         mut ctx: impl AsContextMut<Engine, UserState = T>,
         ty: FuncType,
         func: impl 'static
-            + Send
-            + Sync
-            + Fn(StoreContextMut<T>, &[Value<Engine>], &mut [Value<Engine>]) -> Result<()>,
+        + Send
+        + Sync
+        + Fn(StoreContextMut<T>, &[Value<Engine>], &mut [Value<Engine>]) -> Result<()>,
     ) -> Self {
         Self::new(wasmi::Func::new(
             ctx.as_context_mut().into_inner(),

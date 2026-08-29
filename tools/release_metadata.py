@@ -64,7 +64,10 @@ def metadata_failures(root: pathlib.Path, version: str) -> list[str]:
                 f"rust/Cargo.lock has {package_name}@{locked.get(package_name)}, expected {version}"
             )
 
-    heading = re.compile(rf"^##\s+\[?{re.escape(version)}\]?(?:\s|$)", re.MULTILINE)
+    heading = re.compile(
+        rf"^##\s+\[?{re.escape(version)}\]?(?:\([^\n)]+\))?(?:\s|$)",
+        re.MULTILINE,
+    )
     changelog = pathlib.Path("CHANGELOG.md")
     if not heading.search((root / changelog).read_text(encoding="utf-8")):
         failures.append(f"{changelog} has no {version} release heading")

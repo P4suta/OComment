@@ -1,0 +1,27 @@
+[workspace]
+changelog_update = false
+dependencies_update = false
+git_release_enable = false
+git_tag_enable = false
+git_tag_name = "v{{ version }}"
+pr_branch_prefix = "release-plz-"
+pr_draft = true
+pr_name = "chore(release): v{{ version }}"
+publish = false
+
+[[package]]
+name = "ocomment-core"
+changelog_update = false
+version_group = "ocomment"
+
+[[package]]
+name = "ocomment-plugin-sdk"
+changelog_update = false
+version_group = "ocomment"
+
+[[package]]
+name = "ocomment"
+changelog_include = ["ocomment-core", "ocomment-plugin-sdk"]
+changelog_path = "../CHANGELOG.md"
+changelog_update = true
+version_group = "ocomment"

@@ -2080,11 +2080,6 @@ pub fn invalid(files: &[ProcessedFile]) -> bool {
     files.iter().any(|file| !file.result.report.valid)
 }
 
-#[allow(dead_code)]
-fn _span(_: ByteSpan) -> Value {
-    Value::Null
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

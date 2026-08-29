@@ -76,7 +76,7 @@
 /// Provides traits for implementing runtime backends.
 pub mod backend;
 
-use crate::backend::*;
+use crate::runtime::wasm_runtime_layer::backend::*;
 use anyhow::Result;
 use fxhash::*;
 use ref_cast::*;
@@ -470,8 +470,8 @@ pub struct ImportType<'module> {
 
 /// An external item to a WebAssembly module.
 ///
-/// This is returned from [`Instance::exports`](crate::Instance::exports)
-/// or [`Instance::get_export`](crate::Instance::get_export).
+/// This is returned from [`Instance::exports`](crate::runtime::wasm_runtime_layer::Instance::exports)
+/// or [`Instance::get_export`](crate::runtime::wasm_runtime_layer::Instance::get_export).
 #[derive(Clone, Debug)]
 pub enum Extern {
     /// A WebAssembly global which acts like a [`Cell<T>`] of sorts, supporting `get` and `set` operations.
@@ -538,26 +538,30 @@ impl Extern {
     }
 }
 
-impl<E: WasmEngine> From<&crate::backend::Extern<E>> for Extern {
-    fn from(value: &crate::backend::Extern<E>) -> Self {
+impl<E: WasmEngine> From<&crate::runtime::wasm_runtime_layer::backend::Extern<E>> for Extern {
+    fn from(value: &crate::runtime::wasm_runtime_layer::backend::Extern<E>) -> Self {
         match value {
-            crate::backend::Extern::Global(x) => Self::Global(Global {
-                global: BackendObject::new(x.clone()),
-            }),
-            crate::backend::Extern::Table(x) => Self::Table(Table {
+            crate::runtime::wasm_runtime_layer::backend::Extern::Global(x) => {
+                Self::Global(Global {
+                    global: BackendObject::new(x.clone()),
+                })
+            }
+            crate::runtime::wasm_runtime_layer::backend::Extern::Table(x) => Self::Table(Table {
                 table: BackendObject::new(x.clone()),
             }),
-            crate::backend::Extern::Memory(x) => Self::Memory(Memory {
-                memory: BackendObject::new(x.clone()),
-            }),
-            crate::backend::Extern::Func(x) => Self::Func(Func {
+            crate::runtime::wasm_runtime_layer::backend::Extern::Memory(x) => {
+                Self::Memory(Memory {
+                    memory: BackendObject::new(x.clone()),
+                })
+            }
+            crate::runtime::wasm_runtime_layer::backend::Extern::Func(x) => Self::Func(Func {
                 func: BackendObject::new(x.clone()),
             }),
         }
     }
 }
 
-impl<E: WasmEngine> From<&Extern> for crate::backend::Extern<E> {
+impl<E: WasmEngine> From<&Extern> for crate::runtime::wasm_runtime_layer::backend::Extern<E> {
     fn from(value: &Extern) -> Self {
         match value {
             Extern::Global(x) => Self::Global(x.global.cast::<E::Global>().clone()),
@@ -579,8 +583,8 @@ pub struct Export {
     pub value: Extern,
 }
 
-impl<E: WasmEngine> From<crate::backend::Export<E>> for Export {
-    fn from(value: crate::backend::Export<E>) -> Self {
+impl<E: WasmEngine> From<crate::runtime::wasm_runtime_layer::backend::Export<E>> for Export {
+    fn from(value: crate::runtime::wasm_runtime_layer::backend::Export<E>) -> Self {
         Self {
             name: value.name,
             value: (&value.value).into(),
@@ -875,7 +879,7 @@ impl PartialEq for Value {
     }
 }
 
-impl<E: WasmEngine> From<&Value> for crate::backend::Value<E> {
+impl<E: WasmEngine> From<&Value> for crate::runtime::wasm_runtime_layer::backend::Value<E> {
     fn from(value: &Value) -> Self {
         match value {
             Value::I32(i32) => Self::I32(*i32),
@@ -893,18 +897,24 @@ impl<E: WasmEngine> From<&Value> for crate::backend::Value<E> {
 }
 
 impl<E: WasmEngine> From<&backend::Value<E>> for Value {
-    fn from(value: &crate::backend::Value<E>) -> Self {
+    fn from(value: &crate::runtime::wasm_runtime_layer::backend::Value<E>) -> Self {
         match value {
-            crate::backend::Value::I32(i32) => Self::I32(*i32),
-            crate::backend::Value::I64(i64) => Self::I64(*i64),
-            crate::backend::Value::F32(f32) => Self::F32(*f32),
-            crate::backend::Value::F64(f64) => Self::F64(*f64),
-            crate::backend::Value::FuncRef(None) => Self::FuncRef(None),
-            crate::backend::Value::FuncRef(Some(func)) => Self::FuncRef(Some(Func {
-                func: BackendObject::new(func.clone()),
-            })),
-            crate::backend::Value::ExternRef(None) => Self::ExternRef(None),
-            crate::backend::Value::ExternRef(Some(extern_ref)) => {
+            crate::runtime::wasm_runtime_layer::backend::Value::I32(i32) => Self::I32(*i32),
+            crate::runtime::wasm_runtime_layer::backend::Value::I64(i64) => Self::I64(*i64),
+            crate::runtime::wasm_runtime_layer::backend::Value::F32(f32) => Self::F32(*f32),
+            crate::runtime::wasm_runtime_layer::backend::Value::F64(f64) => Self::F64(*f64),
+            crate::runtime::wasm_runtime_layer::backend::Value::FuncRef(None) => {
+                Self::FuncRef(None)
+            }
+            crate::runtime::wasm_runtime_layer::backend::Value::FuncRef(Some(func)) => {
+                Self::FuncRef(Some(Func {
+                    func: BackendObject::new(func.clone()),
+                }))
+            }
+            crate::runtime::wasm_runtime_layer::backend::Value::ExternRef(None) => {
+                Self::ExternRef(None)
+            }
+            crate::runtime::wasm_runtime_layer::backend::Value::ExternRef(Some(extern_ref)) => {
                 Self::ExternRef(Some(ExternRef {
                     extern_ref: BackendObject::new(extern_ref.clone()),
                 }))
@@ -955,9 +965,13 @@ impl Func {
         mut ctx: C,
         ty: FuncType,
         func: impl 'static
-            + Send
-            + Sync
-            + Fn(StoreContextMut<'_, C::UserState, C::Engine>, &[Value], &mut [Value]) -> Result<()>,
+        + Send
+        + Sync
+        + Fn(
+            StoreContextMut<'_, C::UserState, C::Engine>,
+            &[Value],
+            &mut [Value],
+        ) -> Result<()>,
     ) -> Self {
         let raw_func = <<C::Engine as WasmEngine>::Func as WasmFunc<C::Engine>>::new(
             ctx.as_context_mut().inner,
@@ -1081,7 +1095,7 @@ impl Module {
     /// Returns an iterator over the exports of the [`Module`].
     pub fn exports<E: WasmEngine>(
         &self,
-        #[allow(unused_variables)] engine: &Engine<E>,
+        _engine: &Engine<E>,
     ) -> impl '_ + Iterator<Item = ExportType<'_>> {
         self.module.cast::<E::Module>().exports()
     }
@@ -1089,18 +1103,14 @@ impl Module {
     /// Looks up an export in this [`Module`] by its `name`.
     ///
     /// Returns `None` if no export with the name was found.
-    pub fn get_export<E: WasmEngine>(
-        &self,
-        #[allow(unused_variables)] engine: &Engine<E>,
-        name: &str,
-    ) -> Option<ExternType> {
+    pub fn get_export<E: WasmEngine>(&self, _engine: &Engine<E>, name: &str) -> Option<ExternType> {
         self.module.cast::<E::Module>().get_export(name)
     }
 
     /// Returns an iterator over the imports of the [`Module`].
     pub fn imports<E: WasmEngine>(
         &self,
-        #[allow(unused_variables)] engine: &Engine<E>,
+        _engine: &Engine<E>,
     ) -> impl '_ + Iterator<Item = ImportType<'_>> {
         self.module.cast::<E::Module>().imports()
     }
@@ -1123,7 +1133,7 @@ pub struct Instance {
 impl Instance {
     /// Creates a new [`Instance`] which runs code from the provided module against the given import set.
     pub fn new<C: AsContextMut>(mut ctx: C, module: &Module, imports: &Imports) -> Result<Self> {
-        let mut backend_imports = crate::backend::Imports::default();
+        let mut backend_imports = crate::runtime::wasm_runtime_layer::backend::Imports::default();
         backend_imports.extend(
             imports
                 .into_iter()
@@ -1311,9 +1321,9 @@ impl std::fmt::Debug for BackendObject {
     }
 }
 
-/// Marks a type that can be cloned into a box and interpreted as an [`Any`](std::any::Any).
+/// Marks a type that can be cloned into a box and interpreted as an [`Any`].
 trait AnyCloneBoxed: Any + Send + Sync {
-    /// Gets this type as an [`Any`](std::any::Any).
+    /// Gets this type as an [`Any`].
     fn as_any(&self) -> &(dyn Any + Send + Sync);
 
     /// Creates a clone of this type into a new box.
@@ -1355,7 +1365,7 @@ impl<T, E: WasmEngine> AsContext for Store<T, E> {
 
     fn as_context(&self) -> StoreContext<'_, Self::UserState, Self::Engine> {
         StoreContext {
-            inner: crate::backend::AsContext::as_context(&self.inner),
+            inner: crate::runtime::wasm_runtime_layer::backend::AsContext::as_context(&self.inner),
         }
     }
 }
@@ -1363,7 +1373,9 @@ impl<T, E: WasmEngine> AsContext for Store<T, E> {
 impl<T, E: WasmEngine> AsContextMut for Store<T, E> {
     fn as_context_mut(&mut self) -> StoreContextMut<'_, Self::UserState, Self::Engine> {
         StoreContextMut {
-            inner: crate::backend::AsContextMut::as_context_mut(&mut self.inner),
+            inner: crate::runtime::wasm_runtime_layer::backend::AsContextMut::as_context_mut(
+                &mut self.inner,
+            ),
         }
     }
 }
@@ -1401,7 +1413,7 @@ impl<'a, T: 'a, E: WasmEngine> AsContext for StoreContext<'a, T, E> {
 
     fn as_context(&self) -> StoreContext<'_, Self::UserState, Self::Engine> {
         StoreContext {
-            inner: crate::backend::AsContext::as_context(&self.inner),
+            inner: crate::runtime::wasm_runtime_layer::backend::AsContext::as_context(&self.inner),
         }
     }
 }
@@ -1413,7 +1425,7 @@ impl<'a, T: 'a, E: WasmEngine> AsContext for StoreContextMut<'a, T, E> {
 
     fn as_context(&self) -> StoreContext<'_, Self::UserState, Self::Engine> {
         StoreContext {
-            inner: crate::backend::AsContext::as_context(&self.inner),
+            inner: crate::runtime::wasm_runtime_layer::backend::AsContext::as_context(&self.inner),
         }
     }
 }
@@ -1421,7 +1433,9 @@ impl<'a, T: 'a, E: WasmEngine> AsContext for StoreContextMut<'a, T, E> {
 impl<'a, T: 'a, E: WasmEngine> AsContextMut for StoreContextMut<'a, T, E> {
     fn as_context_mut(&mut self) -> StoreContextMut<'_, Self::UserState, Self::Engine> {
         StoreContextMut {
-            inner: crate::backend::AsContextMut::as_context_mut(&mut self.inner),
+            inner: crate::runtime::wasm_runtime_layer::backend::AsContextMut::as_context_mut(
+                &mut self.inner,
+            ),
         }
     }
 }

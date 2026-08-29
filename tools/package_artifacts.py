@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build, expand, and test the six crates exactly as they are published."""
+"""Build, expand, and test the three crates exactly as they are published."""
 
 from __future__ import annotations
 
@@ -16,9 +16,6 @@ import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 MANIFESTS = (
-    pathlib.Path("rust/vendor/wasm_runtime_layer/Cargo.toml"),
-    pathlib.Path("rust/vendor/wasmi_runtime_layer/Cargo.toml"),
-    pathlib.Path("rust/vendor/wasm_component_layer/Cargo.toml"),
     pathlib.Path("rust/ocomment-core/Cargo.toml"),
     pathlib.Path("rust/ocomment-plugin-sdk/Cargo.toml"),
     pathlib.Path("rust/ocomment/Cargo.toml"),

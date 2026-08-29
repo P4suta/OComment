@@ -1,0 +1,110 @@
+name: Release PR
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release-plz-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: github.repository == 'P4suta/OComment' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      release_branch: ${{ steps.synchronize.outputs.branch }}
+    permissions:
+      contents: write # NOTE: Create and refresh the release-plz branch.
+      pull-requests: write # NOTE: Create and refresh the draft Release PR.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # NOTE: stable toolchain action
+      - name: Install release-plz 0.3.160
+        shell: bash
+        env:
+          RELEASE_PLZ_SHA256: 2263c4f95eac1513da96a114a77fde20ea038742a8c8050f7514b8f93b828646
+          RELEASE_PLZ_URL: https://github.com/release-plz/release-plz/releases/download/release-plz-v0.3.160/release-plz-x86_64-unknown-linux-gnu.tar.gz
+        run: |
+          set -euo pipefail
+          archive="${RUNNER_TEMP}/release-plz.tar.gz"
+          curl --fail --silent --show-error --location --retry 3 --retry-all-errors \
+            --output "${archive}" "${RELEASE_PLZ_URL}"
+          printf '%s  %s\n' "${RELEASE_PLZ_SHA256}" "${archive}" | sha256sum -c -
+          tar -xzf "${archive}" -C "${RUNNER_TEMP}" release-plz
+          "${RUNNER_TEMP}/release-plz" --version
+          printf '%s\n' "${RUNNER_TEMP}" >>"${GITHUB_PATH}"
+      - name: Prepare the next Rust release
+        id: release-plz
+        shell: bash
+        env:
+          GIT_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          release_pr="$(release-plz release-pr \
+            --manifest-path rust/Cargo.toml \
+            --config release-plz.toml \
+            --output json)"
+          delimiter="release_plz_${RANDOM}_${RANDOM}_$$"
+          while grep -Fqx "${delimiter}" <<<"${release_pr}"; do
+            delimiter="release_plz_${RANDOM}_${RANDOM}_$$"
+          done
+          printf 'pr<<%s\n%s\n%s\n' "${delimiter}" "${release_pr}" "${delimiter}" \
+            >>"${GITHUB_OUTPUT}"
+      - name: Synchronize generated release files
+        id: synchronize
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_PR: ${{ steps.release-plz.outputs.pr }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RELEASE_PR}" ] || [ "${RELEASE_PR}" = "null" ]; then
+            echo "No Rust release changes to prepare"
+            exit 0
+          fi
+
+          pr_number="$(jq -er '.number' <<<"${RELEASE_PR}")"
+          branch="$(jq -er '.head_branch' <<<"${RELEASE_PR}")"
+          gh pr checkout "${pr_number}" --force
+
+          python3 tools/sync_release_docs.py
+          cargo build --manifest-path rust/Cargo.toml --locked -p ocomment
+          python3 tools/release_extras.py --binary rust/target/debug/ocomment
+          cp release-extras/ocomment.1 docs/ocomment.1
+          python3 tools/gen_docs.py
+
+          git add README.md docs release-extras
+          if ! git diff --cached --quiet; then
+            git -c user.name=github-actions \
+              -c "user.email=41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -m "chore(release): synchronize generated files"
+            git push origin "HEAD:${branch}"
+          fi
+          printf 'branch=%s\n' "${branch}" >>"${GITHUB_OUTPUT}"
+
+  dispatch-checks:
+    needs: prepare
+    if: needs.prepare.outputs.release_branch != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write # NOTE: Dispatch only; release preparation runs in the other job.
+    steps:
+      - name: Dispatch checks for the Release PR head
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_BRANCH: ${{ needs.prepare.outputs.release_branch }}
+        run: |
+          set -euo pipefail
+          gh workflow run ci.yml --repo "${GITHUB_REPOSITORY}" --ref "${RELEASE_BRANCH}"
+          gh workflow run docs.yml --repo "${GITHUB_REPOSITORY}" --ref "${RELEASE_BRANCH}"
+          gh workflow run codeql.yml --repo "${GITHUB_REPOSITORY}" --ref "${RELEASE_BRANCH}"

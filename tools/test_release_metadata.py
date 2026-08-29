@@ -54,6 +54,14 @@ class ReleaseMetadataTests(unittest.TestCase):
         failures = release_metadata.metadata_failures(root, "0.1.0")
         self.assertIn("CHANGELOG.md has no 0.1.0 release heading", failures)
 
+    def test_linked_keep_a_changelog_heading_is_accepted(self) -> None:
+        root = self.fixture()
+        (root / "CHANGELOG.md").write_text(
+            "## [0.1.0](https://example.test/v0.1.0) - 2026-08-28\n",
+            encoding="utf-8",
+        )
+        self.assertEqual(release_metadata.metadata_failures(root, "0.1.0"), [])
+
     def test_vscode_metadata_is_not_a_cli_release_input(self) -> None:
         root = self.fixture()
         extension = root / "editors/vscode"
