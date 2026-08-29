@@ -769,16 +769,13 @@ impl<'a, C: AsContextMut> Bindgen for FuncBindgen<'a, C> {
                         results.push(Value::String(String::from_utf8(result)?.into()))
                     }
                     RuntimeStringEncoding::Utf16 | RuntimeStringEncoding::CompactUtf16 => {
-                        ensure!(result.len() & 0b1 == 0, "Invalid string length");
+                        let (code_units, remainder) = result.as_chunks::<2>();
+                        ensure!(remainder.is_empty(), "Invalid string length");
                         results.push(Value::String(
                             String::from_utf16(
-                                &result
-                                    .chunks_exact(2)
-                                    .map(|e| {
-                                        u16::from_be_bytes(
-                                            e.try_into().expect("All chunks must have size 2."),
-                                        )
-                                    })
+                                &code_units
+                                    .iter()
+                                    .map(|bytes| u16::from_be_bytes(*bytes))
                                     .collect::<Vec<_>>(),
                             )?
                             .into(),
