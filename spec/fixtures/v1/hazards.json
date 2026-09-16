@@ -11755,6 +11755,84 @@
         "diagnostics": [],
         "output_utf8": "\n;; KEEPBUILD two\n\n"
       }
+    },
+    {
+      "id": "compact-blank-run-around-a-removed-block",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "compact"
+      },
+      "source_utf8": "import Foundation\n\n// what this is for\n// and what it is not\n\npublic struct P {}\n",
+      "note": "A comment set off by a blank line above and another below is three lines of file for one comment. `compact` drops the lines the comment held, and taking only those would leave the two blanks touching -- a run one line longer than the file ever had, which is what `swift-format` reports as `[RemoveLine] remove line break` and what made a `fix` something a formatter had to be run after. The rule is the narrow one: a removal leaves `max(before, after)` blank lines, so one blank line survives here and the two lines of code keep the single gap they had.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 19,
+            "end": 38,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 39,
+            "end": 60,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "import Foundation\n\npublic struct P {}\n"
+      }
+    },
+    {
+      "id": "compact-keeps-the-longer-blank-run",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "compact"
+      },
+      "source_utf8": "let a = 1\n\n\n// note\n\nlet b = 2\n",
+      "note": "Two blank lines above the comment and one below. What is left is the longer of the two runs the comment stood between, so a file that separated two sections by two blank lines still does: the removal takes `min(before, after)` of the blanks that followed it and never touches the ones above.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 12,
+            "end": 19,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "let a = 1\n\n\nlet b = 2\n"
+      }
+    },
+    {
+      "id": "compact-leaves-a-one-sided-blank-run-alone",
+      "language": "swift",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "compact"
+      },
+      "source_utf8": "let a = 1\n// note\n\nlet b = 2\n",
+      "note": "No blank line above the comment, so nothing is taken from the one below it. Blanks above a removal are never touched and no more are taken than followed the comment, which is what stops a removal from ever joining two lines of code that had a blank line between them.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 10,
+            "end": 17,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "let a = 1\n\nlet b = 2\n"
+      }
     }
   ]
 }

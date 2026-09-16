@@ -30,7 +30,7 @@ standard\t'Like conservative, and remove licence and copyright notices too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_needs_command" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_needs_command" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -148,7 +148,7 @@ standard\t'Like conservative, and remove licence and copyright notices too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -253,7 +253,7 @@ standard\t'Like conservative, and remove licence and copyright notices too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -360,7 +360,7 @@ standard\t'Like conservative, and remove licence and copyright notices too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -465,7 +465,7 @@ standard\t'Like conservative, and remove licence and copyright notices too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -570,7 +570,7 @@ standard\t'Like conservative, and remove licence and copyright notices too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -673,7 +673,7 @@ standard\t'Like conservative, and remove licence and copyright notices too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -776,7 +776,7 @@ standard\t'Like conservative, and remove licence and copyright notices too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -882,7 +882,7 @@ standard\t'Like conservative, and remove licence and copyright notices too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -985,7 +985,7 @@ standard\t'Like conservative, and remove licence and copyright notices too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -1088,7 +1088,7 @@ standard\t'Like conservative, and remove licence and copyright notices too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -1201,7 +1201,7 @@ standard\t'Like conservative, and remove licence and copyright notices too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -1304,7 +1304,7 @@ standard\t'Like conservative, and remove licence and copyright notices too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -1407,7 +1407,7 @@ standard\t'Like conservative, and remove licence and copyright notices too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -1510,7 +1510,7 @@ standard\t'Like conservative, and remove licence and copyright notices too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -1613,7 +1613,7 @@ standard\t'Like conservative, and remove licence and copyright notices too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -1716,7 +1716,7 @@ standard\t'Like conservative, and remove licence and copyright notices too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -1826,7 +1826,7 @@ standard\t'Like conservative, and remove licence and copyright notices too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -1929,7 +1929,7 @@ standard\t'Like conservative, and remove licence and copyright notices too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -2032,7 +2032,7 @@ standard\t'Like conservative, and remove licence and copyright notices too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'

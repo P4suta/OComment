@@ -7,6 +7,19 @@ All notable changes to OComment will be documented here. The project follows
 
 ### Fixed
 
+- `layout = "compact"` no longer lengthens a run of blank lines. A comment set
+  off by a blank line above and another below is three lines of file for one
+  comment; taking only the middle one left the two blanks touching, a run one
+  line longer than the file ever had. A removal now leaves `max(before, after)`
+  blank lines behind, where `before` and `after` are the runs it was standing
+  between — so the blank lines above a removal are never touched, no more are
+  taken than followed the comment, and two lines of code that had a blank line
+  between them still do. `swift-format` reported the old output as `[RemoveLine]
+  remove line break`, `gofmt` closed the gap and `rustfmt` collapsed it, which
+  meant `ocomment fix` had to be followed by a formatter to finish its own edit.
+  On OComment's own Rust sources under `--policy all`, this takes back 12 blank
+  lines across 6 of 59 files.
+
 - The JSON formats carry the position and the text of every comment and
   diagnostic: `line`, `column`, `end_line`, `end_column`, and the comment's own
   bytes under `text`. A byte span is what a patcher needs and not what a

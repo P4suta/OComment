@@ -3201,7 +3201,7 @@ fn sarif_disambiguates_a_leading_segment_that_reads_as_a_drive_letter() {
     );
     let stdout = String::from_utf8(annotated.stdout).unwrap();
     assert!(
-        stdout.contains("::notice file=c%3A/a.rs,"),
+        stdout.contains("::error file=c%3A/a.rs,"),
         "a GitHub annotation lost the path the repository spells:\n{stdout}"
     );
 }
@@ -3385,7 +3385,7 @@ fn machine_reports_encode_raw_unix_paths_without_loss() {
     assert_eq!(github.status.code(), Some(1));
     let annotations = String::from_utf8(github.stdout).unwrap();
     assert!(
-        annotations.contains("::notice file=odd %FF%2C%0A.rs,"),
+        annotations.contains("::error file=odd %FF%2C%0A.rs,"),
         "GitHub output lost or mis-encoded the path:\n{annotations}"
     );
     assert!(!annotations.contains('\u{fffd}'));
@@ -3409,11 +3409,15 @@ fn json_and_jsonl_serde_names_are_frozen() {
         String::from_utf8(jsonl.stdout).unwrap(),
         concat!(
             r#"{"path":"sample.py","language":"python","changed":true,"report":{"language":"python","#,
-            r#""comments":[{"span":{"start":0,"end":22},"kind":"shebang","disposition":{"action":"keep","#,
-            r#""reason":"required source preamble"}},{"span":{"start":23,"end":53},"kind":"license","#,
-            r#""disposition":{"action":"keep","reason":"conservative policy"}},"#,
-            r#"{"span":{"start":61,"end":69},"kind":"line","#,
-            r#""disposition":{"action":"remove"}}],"diagnostics":[],"valid":true},"#,
+            r##""comments":[{"span":{"start":0,"end":22},"line":1,"column":1,"end_line":1,"end_column":23,"##,
+            r##""kind":"shebang","text":"#!/usr/bin/env python3","disposition":{"action":"keep","##,
+            r##""reason":"required source preamble"}},{"span":{"start":23,"end":53},"##,
+            r##""line":2,"column":1,"end_line":2,"end_column":31,"kind":"license","##,
+            r##""text":"# SPDX-License-Identifier: MIT","##,
+            r##""disposition":{"action":"keep","reason":"conservative policy"}},"##,
+            r##"{"span":{"start":61,"end":69},"line":3,"column":8,"end_line":3,"end_column":16,"##,
+            r##""kind":"line","text":"# remove","##,
+            r##""disposition":{"action":"remove"}}],"diagnostics":[],"valid":true},"##,
             r#""edits":[{"span":{"start":61,"end":69},"replacement":""}],"#,
             r#""source_map":{"segments":[{"original":{"start":0,"end":61},"output":{"start":0,"end":61},"exact":true},"#,
             r#"{"original":{"start":61,"end":69},"output":{"start":61,"end":61},"exact":false},"#,
@@ -4244,7 +4248,7 @@ fn quiet_does_not_take_annotations_off_a_machine_format() {
 
     let walked = run(directory.path(), &["check", "--format", "github", "-q"]);
     let stdout = String::from_utf8(walked.stdout).unwrap();
-    assert!(stdout.contains("::notice file=a.rs"), "{stdout}");
+    assert!(stdout.contains("::error file=a.rs"), "{stdout}");
     assert!(
         !stdout.contains("notes.unknownext"),
         "a walked skip was annotated without -v:\n{stdout}"
