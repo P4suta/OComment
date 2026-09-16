@@ -119,12 +119,15 @@ is the only way to give one up.
 | `//> using` | `scala` | `//> using scala "3.3.0"` | `load-bearing` | required by the language or its build |
 | `optimizer-hint` | `oracle` | `/*+ index(t) */` | `optimizer-hint` | required by the language or its build |
 | `version-comment` | `mysql` | `/*!40101 SET NAMES utf8 */` | `version-comment` | required by the language or its build |
+| `webpack` | `javascript` | `/* webpackChunkName: "x" */` | `load-bearing` | required by the language or its build |
+| `vite-ignore` | `javascript` | `/* @vite-ignore */` | `load-bearing` | required by the language or its build |
+| `#__PURE__` | `javascript` | `/*#__PURE__*/` | `load-bearing` | required by the language or its build |
+| `@__PURE__` | `javascript` | `/*@__PURE__*/` | `load-bearing` | required by the language or its build |
+| `#__NO_SIDE_EFFECTS__` | `javascript` | `/*#__NO_SIDE_EFFECTS__*/` | `load-bearing` | required by the language or its build |
 | `shebang` | `shell` | `#!/bin/sh` | `shebang` | required source preamble |
 | `encoding` | `python` | `# -*- coding: utf-8 -*-` | `encoding` | required source preamble |
 | `sourceMappingURL` | `javascript` | `//# sourceMappingURL=bundle.js.map` | `directive` | tool or language directive |
 | `sourceURL` | `javascript` | `//# sourceURL=bundle.js` | `directive` | tool or language directive |
-| `#__PURE__` | `javascript` | `/*#__PURE__*/` | `directive` | tool or language directive |
-| `@__PURE__` | `javascript` | `/*@__PURE__*/` | `directive` | tool or language directive |
 | `lint-and-formatter` | `javascript` | `// eslint-disable-next-line no-eval` | `directive` | tool or language directive |
 | `type-checker` | `python` | `# type: ignore` | `directive` | tool or language directive |
 | `hadolint` | `shell` | `# hadolint ignore=DL3018` | `directive` | tool or language directive |

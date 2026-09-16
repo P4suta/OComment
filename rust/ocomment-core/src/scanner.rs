@@ -6161,9 +6161,36 @@ fn is_load_bearing(name: &str, language: Language) -> bool {
         /* NOTE: `/// <reference path="..." />` adds a file to the compilation
          * rather than describing one, so removing it takes declarations out of
          * scope. */
-        Language::TypeScript => name == "///",
+        Language::TypeScript => name == "///" || bundler_is_load_bearing(name),
+        Language::JavaScript => bundler_is_load_bearing(name),
         _ => false,
     }
+}
+
+/// Whether a bundler instruction decides what the build emits.
+///
+/// Each of these answers the question the tier is drawn on with "what the
+/// toolchain produces". `webpackChunkName` names the file a dynamic import
+/// becomes, and code that fetches a chunk by name stops finding it; a dropped
+/// `@vite-ignore` puts an import expression back into the dependency graph
+/// Vite was told to leave alone; and `#__PURE__` is the annotation that lets a
+/// call be dropped as dead, so removing it leaves the call -- and everything
+/// it reaches -- in the bundle. None of the three changes what a tool reports.
+///
+/// They were reached by `--policy all` alone before, because they were read as
+/// prose or filed with the linter suppressions, and a bundle built from the
+/// stripped source differs from one built from the original.
+fn bundler_is_load_bearing(name: &str) -> bool {
+    matches!(
+        name,
+        "webpack"
+            | "vite-ignore"
+            | "#__pure__"
+            | "@__pure__"
+            | "__pure__"
+            | "#__no_side_effects__"
+            | "__no_side_effects__"
+    )
 }
 
 pub(crate) fn disposition(
@@ -6805,9 +6832,50 @@ fn legal_marker(text: &str) -> Option<&'static str> {
         "licensed under",
         "permission is hereby granted",
         "all rights reserved",
+        /* NOTE: The two a minifier is told to honour. Terser, UglifyJS and
+         * esbuild all keep a comment carrying `@license` or `@preserve`, which
+         * is how a bundle ships the notices its dependencies require. A tool
+         * that removed one would be undoing the arrangement that keeps a build
+         * compliant, and the comment says in as many words that it is the
+         * notice rather than prose about one. */
+        "@license",
+        "@preserve",
     ]
     .into_iter()
     .find(|marker| text.contains(marker))
+}
+
+/// The bundler instruction `compact` opens, or `None` when it opens none.
+///
+/// A magic comment is how a bundler is told something the code cannot say. The
+/// `webpack` family names the chunk a dynamic import becomes, whether to
+/// prefetch it, and which files a context request may reach; `@vite-ignore`
+/// tells Vite to leave an import expression alone. Both decide what comes out
+/// of the build, so they are matched here rather than left to be read as
+/// prose -- which is what they were, and a default run removed them.
+///
+/// `webpack` is taken as a family rather than named one option at a time. The
+/// prefix is the bundler's and nothing else opens with it, so a new option
+/// arrives protected instead of arriving unprotected and silent.
+fn bundler_directive(compact: &str) -> Option<&'static str> {
+    /* NOTE: Every webpack option is `webpack` followed by one word and then a
+     * colon -- `webpackChunkName: "x"`, `webpackIgnore: true` -- and the colon
+     * is what ends the name. The capital that spells the option is not
+     * available to match on, because this text has already been folded to
+     * lower case for the tables above. Without a boundary a bare prefix claims
+     * `webpackish prose`, which is the failure this repository checks every
+     * marker against. */
+    if let Some(rest) = compact.strip_prefix("webpack") {
+        let option = rest
+            .find(|character: char| !character.is_ascii_alphanumeric())
+            .unwrap_or(rest.len());
+        if option > 0 && rest[option..].starts_with(':') {
+            return Some("webpack");
+        }
+    }
+    /* NOTE: `@vite-ignore` stands alone before the import expression, so it
+     * ends at whitespace rather than at a byte. */
+    opens_with_keyword(compact, "vite-ignore").then_some("vite-ignore")
 }
 
 /// The tool or language directive `text` opens, or `None` when it opens none.
@@ -6867,8 +6935,12 @@ fn directive_name(text: &str, language: Language, raw: &[u8]) -> Option<&'static
             .into_iter()
             .find(|prefix| compact.starts_with(prefix)),
         Language::TypeScript => {
-            (raw.starts_with(b"///") && compact.starts_with('<')).then_some("///")
+            if raw.starts_with(b"///") && compact.starts_with('<') {
+                return Some("///");
+            }
+            bundler_directive(compact)
         }
+        Language::JavaScript => bundler_directive(compact),
         Language::C | Language::Cpp => ["pragma", "line "]
             .into_iter()
             .find(|prefix| compact.starts_with(prefix)),

@@ -69,6 +69,17 @@ PROTECTED_SAMPLES: dict[str, tuple[str, str | None, bytes]] = {
     "sourceURL": ("javascript", None, b"//# sourceURL=bundle.js\n"),
     "#__PURE__": ("javascript", None, b"const value = /*#__PURE__*/ factory();\n"),
     "@__PURE__": ("javascript", None, b"const value = /*@__PURE__*/ factory();\n"),
+    "#__NO_SIDE_EFFECTS__": (
+        "javascript",
+        None,
+        b"/*#__NO_SIDE_EFFECTS__*/\nexport function f() {}\n",
+    ),
+    "webpack": (
+        "javascript",
+        None,
+        b'const m = import(/* webpackChunkName: "x" */ "./m");\n',
+    ),
+    "vite-ignore": ("javascript", None, b"const m = import(/* @vite-ignore */ url);\n"),
     "lint-and-formatter": (
         "javascript",
         None,

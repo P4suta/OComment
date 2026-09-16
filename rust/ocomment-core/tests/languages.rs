@@ -412,13 +412,26 @@ const value: string = "// text"; // ordinary
         Language::TypeScript,
         ScanOptions::default(),
     );
+    /* NOTE: Two annotations, two tiers. `#__PURE__` is what lets a call be
+     * dropped as dead, so removing it changes the bundle and it is
+     * load-bearing; `@ts-expect-error` changes what the checker reports and is
+     * a directive. Counting them together would pass whichever tier either one
+     * landed in. */
+    assert_eq!(
+        directives
+            .comments
+            .iter()
+            .filter(|comment| comment.kind == CommentKind::LoadBearing)
+            .count(),
+        1
+    );
     assert_eq!(
         directives
             .comments
             .iter()
             .filter(|comment| comment.kind == CommentKind::Directive)
             .count(),
-        2
+        1
     );
     assert_eq!(removable(&directives), 1);
 }

@@ -18,7 +18,7 @@ version = 1
 # NOTE: is the only way out.
 protected = [
   "shebang", "encoding",
-  "sourceMappingURL", "sourceURL", "#__PURE__", "@__PURE__",
+  "sourceMappingURL", "sourceURL",
   "lint-and-formatter", "type-checker",
   "hadolint", ":schema", "taplo:", "---@diagnostic", "luacheck:",
   "selene:", "stylua:", "luacov:", "yaml-language-server:", "yamllint",
@@ -39,8 +39,78 @@ load_bearing = [
   # NOTE: the question above with "what the toolchain produces". They sat under
   # NOTE: `protected` and `--policy all` took them, which is how a mysqldump
   # NOTE: came out of a removal still restoring, into a different database.
-  "optimizer-hint", "version-comment"
+  "optimizer-hint", "version-comment",
+  # NOTE: The bundlers'. A webpack magic comment names the file a dynamic
+  # NOTE: import becomes, `@vite-ignore` keeps an import expression out of the
+  # NOTE: dependency graph, and `#__PURE__` is the annotation that lets a call
+  # NOTE: be dropped as dead. Each decides what comes out of the build. The
+  # NOTE: first two were read as prose and a default run removed them; the
+  # NOTE: third sat with the linter suppressions, which `all` is entitled to.
+  "webpack", "vite-ignore",
+  "#__PURE__", "@__PURE__", "#__NO_SIDE_EFFECTS__"
 ]
+
+# NOTE: Every built-in language, and what it was found to have in the
+# NOTE: load-bearing tier. A language whose value is an empty list has been
+# NOTE: surveyed and found to have none: a directive it recognises is addressed
+# NOTE: to a tool, and `--policy all` is entitled to it.
+# NOTE:
+# NOTE: The point of writing the empty ones down is that "this language has no
+# NOTE: load-bearing comment" and "nobody has looked at this language" are
+# NOTE: indistinguishable in a catalogue that only lists what exists, and they
+# NOTE: are not the same claim. `tools/check_directives.py` requires every
+# NOTE: language the binary reports to appear here, so adding a language means
+# NOTE: answering the question rather than inheriting an answer.
+[load_bearing_by_language]
+go = ["go:", "+build"]
+swift = ["swift-tools-version:"]
+ruby = ["frozen_string_literal:", "warn_indent:", "shareable_constant_value:"]
+shell = ["syntax="]
+dart = ["@dart"]
+scala = ["//> using"]
+typescript = ["triple-slash-reference", "webpack", "vite-ignore", "#__PURE__", "@__PURE__", "#__NO_SIDE_EFFECTS__"]
+javascript = ["webpack", "vite-ignore", "#__PURE__", "@__PURE__", "#__NO_SIDE_EFFECTS__"]
+sql = ["optimizer-hint", "version-comment"]
+
+# NOTE: Surveyed and empty. The reason each one is empty is worth a line,
+# NOTE: because the next reader's question is whether it was looked at.
+# NOTE:
+# NOTE: The languages that carry their instructions in syntax rather than in
+# NOTE: comments: Rust and Java (attributes and annotations), Kotlin, C#, Zig,
+# NOTE: PHP, Perl, OCaml. C and C++ put `#line` and `#pragma` in the
+# NOTE: preprocessor, which is not a comment, and the `/* FALLTHRU */` GCC
+# NOTE: reads only decides a warning.
+rust = []
+ocaml = []
+c = []
+cpp = []
+java = []
+kotlin = []
+csharp = []
+zig = []
+php = []
+perl = []
+# NOTE: Python's one candidate is the encoding declaration, and that is its own
+# NOTE: kind with its own protection; `# type: ignore` addresses a checker.
+python = []
+# NOTE: The data and markup languages. A schema reference -- `#:schema`,
+# NOTE: `# yaml-language-server:` -- tells a validator what to check against
+# NOTE: and changes no output. HTML's conditional comments were read by
+# NOTE: browsers no longer supported, and an HTML comment is already kept by
+# NOTE: every policy but `all`.
+toml = []
+yaml = []
+jsonc = []
+html = []
+css = []
+markdown = []
+# NOTE: The component formats. Their script and style bodies are scanned as the
+# NOTE: language they are written in, so a bundler annotation inside one is
+# NOTE: judged as JavaScript and is covered above.
+vue = []
+svelte = []
+lua = []
+r = []
 
 [policy.conservative]
 remove = ["line", "block", "doc-line", "doc-block"]

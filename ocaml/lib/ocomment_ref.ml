@@ -403,6 +403,29 @@ let directive_compact text =
   text |> String.to_seq |>
     Seq.drop_while (fun character -> String.contains "!/*#@ " character) |> String.of_seq
 
+(* NOTE: The bundler instructions, which decide what a build emits rather than
+   what a tool reports.  Every webpack option is the word followed by one more
+   word and a colon -- "webpackChunkName: \"x\"" -- and the colon is the
+   boundary; the capital that spells the option is gone, because this text has
+   already been folded to lower case.  Without the boundary the prefix claims
+   "webpackish prose". *)
+let bundler_directive compact =
+  let webpack =
+    match String.length compact >= 7 && String.sub compact 0 7 = "webpack" with
+    | false -> false
+    | true ->
+      let rest = String.sub compact 7 (String.length compact - 7) in
+      let rec option index =
+        if index >= String.length rest then index
+        else match rest.[index] with
+          | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' -> option (index + 1)
+          | _ -> index
+      in
+      let stop = option 0 in
+      stop > 0 && stop < String.length rest && rest.[stop] = ':'
+  in
+  webpack || opens_with_keyword compact "vite-ignore"
+
 let is_directive language text raw =
   let compact = directive_compact text in
   let prefixes = ["sourcemappingurl="; "sourceurl="; "#__pure__"; "@__pure__";
@@ -418,7 +441,10 @@ let is_directive language text raw =
   match language with
   | Go -> String.starts_with ~prefix:"go:" compact || String.starts_with ~prefix:"+build" compact ||
       String.starts_with ~prefix:"line " compact
-  | TypeScript -> String.starts_with ~prefix:"///" raw && String.starts_with ~prefix:"<" compact
+  | TypeScript ->
+    (String.starts_with ~prefix:"///" raw && String.starts_with ~prefix:"<" compact)
+    || bundler_directive compact
+  | JavaScript -> bundler_directive compact
   | C | Cpp -> String.starts_with ~prefix:"pragma" compact || String.starts_with ~prefix:"line " compact
   | Python -> List.exists (fun prefix -> String.starts_with ~prefix compact)
       ["pyright:"; "mypy:"; "ruff:"; "fmt:"]
@@ -602,6 +628,17 @@ let is_directive language text raw =
    not the program it builds.  "go:" is otherwise taken whole -- the namespace
    is the compiler's, and a marker protected in error is one comment left behind
    where a marker missed in error is a silent change to the build. *)
+(* NOTE: Which of the bundler instructions decide what the build emits.  All of
+   them do: "webpackChunkName" names the file a dynamic import becomes,
+   "@vite-ignore" keeps an import expression out of the graph, and "#__PURE__"
+   is what lets a call be dropped as dead, so removing it leaves the call and
+   everything it reaches in the bundle. *)
+let bundler_is_load_bearing compact =
+  bundler_directive compact ||
+  List.exists (fun prefix -> String.starts_with ~prefix compact)
+    ["#__pure__"; "@__pure__"; "__pure__"; "#__no_side_effects__";
+     "__no_side_effects__"]
+
 let is_load_bearing language text raw =
   let compact = directive_compact text in
   match language with
@@ -616,7 +653,9 @@ let is_load_bearing language text raw =
     compact = "> using" || String.starts_with ~prefix:"> using " compact
     || String.starts_with ~prefix:"> using\t" compact
   | TypeScript ->
-    String.starts_with ~prefix:"///" raw && String.starts_with ~prefix:"<" compact
+    (String.starts_with ~prefix:"///" raw && String.starts_with ~prefix:"<" compact)
+    || bundler_is_load_bearing compact
+  | JavaScript -> bundler_is_load_bearing compact
   | _ -> false
 
 let within_first_two_lines source finish =

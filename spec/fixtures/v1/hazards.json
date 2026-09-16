@@ -772,14 +772,14 @@
         "layout": "lines"
       },
       "source_utf8": "const x = /*#__PURE__*/ factory();\n// @ts-expect-error\ncall();\n// remove\n",
-      "note": "Bundler and type-checker annotations: `/*#__PURE__*/` and `// @ts-expect-error` change what tools do and are directives `safe` keeps.",
+      "note": "A bundler annotation and a type-checker annotation, which are not the same tier: `/*#__PURE__*/` is what lets a call be dropped as dead, so removing it changes the bundle, while `// @ts-expect-error` changes what a checker reports. The first is load-bearing and out of reach of every policy; the second is a directive `standard` keeps.",
       "expect": {
         "valid": true,
         "comments": [
           {
             "start": 10,
             "end": 23,
-            "kind": "directive",
+            "kind": "load-bearing",
             "action": "keep"
           },
           {
@@ -11599,6 +11599,102 @@
         ],
         "diagnostics": [],
         "output_utf8": "select /*+ INDEX(t idx) */ 1 from dual; \n"
+      }
+    },
+    {
+      "id": "javascript-webpack-magic-comment-survives-policy-all",
+      "language": "javascript",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "const m = import(/* webpackChunkName: \"x\" */ \"./m\");\n// remove\n",
+      "note": "A webpack magic comment names the chunk a dynamic import becomes, so removing it renames an emitted file; no policy reaches it, and the ordinary comment beside it still goes.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 17,
+            "end": 44,
+            "kind": "load-bearing",
+            "action": "keep"
+          },
+          {
+            "start": 53,
+            "end": 62,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "const m = import(/* webpackChunkName: \"x\" */ \"./m\");\n\n"
+      }
+    },
+    {
+      "id": "javascript-vite-ignore-survives-policy-all",
+      "language": "javascript",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "const m = import(/* @vite-ignore */ url);\n// remove\n",
+      "note": "`@vite-ignore` keeps an import expression out of the dependency graph, so removing it puts it back; no policy reaches it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 17,
+            "end": 35,
+            "kind": "load-bearing",
+            "action": "keep"
+          },
+          {
+            "start": 42,
+            "end": 51,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "const m = import(/* @vite-ignore */ url);\n\n"
+      }
+    },
+    {
+      "id": "javascript-bundler-near-misses-are-prose",
+      "language": "javascript",
+      "operation": "transform",
+      "options": {
+        "policy": "standard",
+        "layout": "lines"
+      },
+      "source_utf8": "/* webpackish prose */\n/* webpack prose */\n/* @vite-ignoreish */\n",
+      "note": "The boundary each bundler marker ends at, read from the other side: a webpack option is one word and a colon, and `@vite-ignore` stands alone, so prose that merely opens with either spelling is prose.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 22,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 23,
+            "end": 42,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 43,
+            "end": 64,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\n\n\n"
       }
     }
   ]

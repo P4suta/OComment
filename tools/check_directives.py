@@ -180,7 +180,7 @@ SAMPLES: dict[str, Sample] = {
         # NOTE: boundary after it to get wrong; `#__PURE__ish` is still the
         # NOTE: bundler's marker with rubbish appended.
         "/* a note about #__PURE__ elsewhere */",
-        KEPT_AS_DIRECTIVE,
+        KEPT_AS_LOAD_BEARING,
     ),
     "@__PURE__": Sample(
         "javascript",
@@ -188,7 +188,38 @@ SAMPLES: dict[str, Sample] = {
         f"const value = {SLOT} factory();\n// control\n",
         "/*@__PURE__*/",
         "/* a note about @__PURE__ elsewhere */",
-        KEPT_AS_DIRECTIVE,
+        KEPT_AS_LOAD_BEARING,
+    ),
+    "#__NO_SIDE_EFFECTS__": Sample(
+        "javascript",
+        None,
+        f"{SLOT}\nexport function f() {{}}\n// control\n",
+        "/*#__NO_SIDE_EFFECTS__*/",
+        "/* a note about #__NO_SIDE_EFFECTS__ elsewhere */",
+        KEPT_AS_LOAD_BEARING,
+    ),
+    "webpack": Sample(
+        "javascript",
+        None,
+        f'const m = import({SLOT} "./m");\n// control\n',
+        '/* webpackChunkName: "x" */',
+        # NOTE: The same option with the colon taken out. A webpack option is
+        # NOTE: the word, one more word, and a colon, so this is the marker
+        # NOTE: right up to the byte that ends its name -- which is the byte
+        # NOTE: worth getting wrong, and the one `/* webpackish prose */` would
+        # NOTE: never have exercised.
+        '/* webpackChunkName "x" */',
+        KEPT_AS_LOAD_BEARING,
+    ),
+    "vite-ignore": Sample(
+        "javascript",
+        None,
+        f"const m = import({SLOT} url);\n// control\n",
+        "/* @vite-ignore */",
+        # NOTE: The marker stands alone before the import expression, so it
+        # NOTE: ends at whitespace and `@vite-ignoreish` is not it.
+        "/* @vite-ignoreish */",
+        KEPT_AS_LOAD_BEARING,
     ),
     "lint-and-formatter": Sample(
         "javascript",
@@ -708,6 +739,58 @@ def protected_names() -> tuple[list[str], list[str]]:
     return tiers[0], tiers[1]
 
 
+def check_language_survey(binary: pathlib.Path, failures: list[str]) -> None:
+    """Every language the binary has must state what it has in the tier.
+
+    A catalogue that lists only what exists cannot tell "this language has no
+    load-bearing comment" from "nobody has looked at this language", and those
+    are different claims. `[load_bearing_by_language]` makes the second one
+    impossible to leave implicit: a language missing from it is a language that
+    was added without the question being asked, and that is how a tier ends up
+    covering seven languages out of thirty without anyone deciding it should.
+
+    The markers each entry names are checked against the tier itself, so an
+    entry cannot drift into naming something the tier does not hold.
+    """
+    with DIRECTIVES.open("rb") as stream:
+        table = tomllib.load(stream)
+    survey = table.get("load_bearing_by_language")
+    if not isinstance(survey, dict):
+        failures.append(
+            f"{DIRECTIVES.relative_to(ROOT)} has no `[load_bearing_by_language]` table"
+        )
+        return
+
+    listing = subprocess.run(
+        [str(binary), "languages"],
+        capture_output=True,
+        check=True,
+        text=True,
+    ).stdout.splitlines()
+    languages = {line.split("\t", 1)[0] for line in listing[1:] if line.strip()}
+
+    for language in sorted(languages - set(survey)):
+        failures.append(
+            f"`{language}` is a built-in language but {DIRECTIVES.relative_to(ROOT)}"
+            " does not say what it holds in the load-bearing tier; add it to"
+            " `[load_bearing_by_language]`, with an empty list if it holds nothing"
+        )
+    for language in sorted(set(survey) - languages):
+        failures.append(
+            f"`{language}` is in `[load_bearing_by_language]` but is not a"
+            " built-in language"
+        )
+
+    _, load_bearing = protected_names()
+    for language in sorted(set(survey) & languages):
+        for marker in survey[language]:
+            if marker not in load_bearing:
+                failures.append(
+                    f"`{language}` names `{marker}` in `[load_bearing_by_language]`,"
+                    " but `load_bearing` does not list it"
+                )
+
+
 def marker_word(marker: str) -> str:
     """The first word of a marker, past whatever punctuation opens it.
 
@@ -867,6 +950,7 @@ def main() -> int:
     for name in names:
         if name in SAMPLES:
             check_sample(binary, name, failures)
+    check_language_survey(binary, failures)
 
     if failures:
         print("\n".join(failures))
