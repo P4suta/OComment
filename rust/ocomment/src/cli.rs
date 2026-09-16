@@ -6,6 +6,7 @@ use crate::{
         ProcessedResult, RenderOptions, Verbosity,
     },
     plugin,
+    trace::{TraceMode, trace_decisions, trace_discovery},
     values::{CommentKindArg, DialectArg, LanguageArg, LayoutArg, PolicyArg},
 };
 use anyhow::{Context, Result, bail, ensure};
@@ -223,6 +224,9 @@ struct OutputArgs {
     /// List every comment human `check` and `scan` met and name the rule and setting behind each one.
     #[arg(long, global = true)]
     explain: bool,
+    /// Record how the run reached its verdicts, on standard error.
+    #[arg(long, global = true, value_enum, default_value_t, value_name = "WHEN")]
+    trace: TraceChoice,
     /// When to draw the live scanning counter on standard error.
     #[arg(long, global = true, value_enum, default_value_t, value_name = "WHEN")]
     progress: AutoChoice,
@@ -269,6 +273,32 @@ enum AutoChoice {
     Auto,
     Always,
     Never,
+}
+
+/// Whether a run records what it did, and in which spelling.
+///
+/// Off by default because the trace is for the run you are investigating
+/// rather than the run you are doing, and a diagnostic nobody asked for is
+/// noise on the stream the summary already uses.
+#[derive(Clone, Copy, Debug, Default, ValueEnum)]
+enum TraceChoice {
+    /// Record nothing, and collect nothing to record.
+    #[default]
+    Off,
+    /// One line per step, for a person reading a terminal.
+    Human,
+    /// One JSON object per line, against `spec/trace.schema.json`.
+    Json,
+}
+
+impl From<TraceChoice> for TraceMode {
+    fn from(value: TraceChoice) -> Self {
+        match value {
+            TraceChoice::Off => Self::Off,
+            TraceChoice::Human => Self::Human,
+            TraceChoice::Json => Self::Json,
+        }
+    }
 }
 
 #[derive(Subcommand)]
@@ -607,7 +637,14 @@ fn run_target(
     let discovery = read_targets(&paths, stdin, &resolved, common)?;
     let total = discovery.files.len();
     let counter = Progress::default();
+    let trace_mode = TraceMode::from(common.output.trace);
     let explain = common.output.explain;
+    /* NOTE: Two different questions about the same material. `--explain` asks
+     * for it to be printed under each finding on standard output; the trace
+     * asks for it to name the rule in each recorded decision on standard
+     * error. Either one needs it collected, and neither pays for it alone, but
+     * asking for a trace must not start annotating the product. */
+    let needs_explanations = explain || trace_mode.is_on();
     let materialize_output = operation == Operation::Fix
         || flags.interactive
         || (operation == Operation::Diff && common.output.format == OutputFormat::Human);
@@ -617,6 +654,23 @@ fn run_target(
     );
     let needs_plan =
         materialize_output || materialize_source_map || common.output.format == OutputFormat::Sarif;
+    {
+        let stderr = io::stderr();
+        let mut sink = stderr.lock();
+        /* NOTE: First, because every later event is judged against the settings
+         * this one names, and a reader who is about to ask "why did it do
+         * that?" is usually asking about a layer they forgot was there. */
+        let layers = config_trace(&resolved.trace);
+        crate::trace::emit(
+            &mut sink,
+            trace_mode,
+            &crate::trace::TraceEvent::ConfigResolved {
+                root: output::sanitize_path(&resolved.root.to_string_lossy()),
+                sources: &layers,
+            },
+        )?;
+        trace_discovery(&mut sink, trace_mode, &discovery.files, &discovery.skipped)?;
+    }
     let mut scanners = HashMap::new();
     for file in &discovery.files {
         if !scanners.contains_key(&file.options.scan) {
@@ -631,7 +685,7 @@ fn run_target(
         .map(|file| {
             /* NOTE: Only an explaining run pays for the trace; every other one takes
              * the hot path it always took. */
-            let trace = if explain {
+            let trace = if needs_explanations {
                 let (traced_language, traced_options, trace) =
                     resolved.for_path_traced(&file.path, file.language, file.dialect)?;
                 debug_assert_eq!(traced_language, file.language);
@@ -759,6 +813,11 @@ fn run_target(
             })
             .collect();
         apply_transaction(plans)?;
+    }
+    {
+        let stderr = io::stderr();
+        let mut sink = stderr.lock();
+        trace_decisions(&mut sink, trace_mode, &files, &explanations)?;
     }
     output::render_explained(
         &files,

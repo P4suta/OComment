@@ -21,6 +21,13 @@ pub struct SourceFile {
     pub options: TransformOptions,
     pub profile: Option<DeclarativeProfile>,
     pub plugin: Option<String>,
+    /// What decided the language: `extension`, `reserved-filename`, `shebang`,
+    /// `content`, `command-line`, or `configuration-routing`.
+    ///
+    /// Detection already answers this and the answer was being dropped. It is
+    /// the first thing a run that scanned a file as the wrong language needs,
+    /// and the only place it can come from is the decision itself.
+    pub detection: &'static str,
 }
 
 #[derive(Clone, Debug)]
@@ -111,7 +118,9 @@ pub fn stdin_source(
         })
         .or_else(|| detect_language(None, &bytes));
     let Some(Detection {
-        language, dialect, ..
+        language,
+        dialect,
+        reason: detection_reason,
     }) = detection
     else {
         return Err(skipped(STDIN_LANGUAGE_HELP, true));
@@ -134,6 +143,7 @@ pub fn stdin_source(
         options,
         profile: None,
         plugin: None,
+        detection: detection_reason,
     })
 }
 
@@ -408,7 +418,7 @@ fn load_one(
     let Detection {
         language: detected_language,
         dialect: detected_dialect,
-        ..
+        reason: detection_reason,
     } = built_in.unwrap_or(Detection {
         language: Language::Unknown,
         dialect: Dialect::Standard,
@@ -459,6 +469,7 @@ fn load_one(
         options,
         profile,
         plugin,
+        detection: detection_reason,
     });
 }
 

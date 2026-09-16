@@ -8,6 +8,7 @@ mod lsp;
 mod output;
 mod plugin;
 pub mod runtime;
+mod trace;
 mod values;
 
 use std::{

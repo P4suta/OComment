@@ -97,6 +97,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
@@ -204,6 +207,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
@@ -304,6 +310,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
@@ -407,6 +416,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
@@ -507,6 +519,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
@@ -607,6 +622,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
@@ -704,6 +722,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
@@ -801,6 +822,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--fix[For the Lefthook hook, run \`fix\` instead of \`check\`]' \
 '(--stdout)--force[Replace the file if it already exists]' \
@@ -902,6 +926,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
@@ -1000,6 +1027,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
@@ -1097,6 +1127,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
@@ -1205,6 +1238,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
@@ -1303,6 +1339,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
@@ -1401,6 +1440,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
@@ -1498,6 +1540,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
@@ -1596,6 +1641,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
@@ -1694,6 +1742,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
@@ -1840,6 +1891,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
@@ -1938,6 +1992,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
@@ -2035,6 +2092,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \

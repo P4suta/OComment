@@ -4,7 +4,7 @@
 .SH NAME
 ocomment \- Check and remove source\-code comments safely
 .SH SYNOPSIS
-\fBocomment\fR [\fB\-\-config\fR] [\fB\-\-policy\fR] [\fB\-\-layout\fR] [\fB\-\-language\fR] [\fB\-\-dialect\fR] [\fB\-\-keep\-kind\fR] [\fB\-\-remove\-kind\fR] [\fB\-\-force\-invalid\fR] [\fB\-\-force\-protected\fR] [\fB\-\-format\fR] [\fB\-\-color\fR] [\fB\-\-hyperlinks\fR] [\fB\-\-no\-preview\fR] [\fB\-\-explain\fR] [\fB\-\-progress\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIPATH\fR] [\fIsubcommands\fR]
+\fBocomment\fR [\fB\-\-config\fR] [\fB\-\-policy\fR] [\fB\-\-layout\fR] [\fB\-\-language\fR] [\fB\-\-dialect\fR] [\fB\-\-keep\-kind\fR] [\fB\-\-remove\-kind\fR] [\fB\-\-force\-invalid\fR] [\fB\-\-force\-protected\fR] [\fB\-\-format\fR] [\fB\-\-color\fR] [\fB\-\-hyperlinks\fR] [\fB\-\-no\-preview\fR] [\fB\-\-explain\fR] [\fB\-\-trace\fR] [\fB\-\-progress\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIPATH\fR] [\fIsubcommands\fR]
 .SH DESCRIPTION
 OComment scans source bytes without requiring UTF\-8 and reports or removes comment tokens. The default policy keeps licence notices, tool and language directives, shebangs and encoding lines, and removes ordinary and doc comments. Rewrites are prepared and committed as one rollback\-backed transaction.
 .SH OPTIONS
@@ -293,6 +293,21 @@ Omit the one\-line comment text from human `check` and `scan` lines
 .TP
 \fB\-\-explain\fR
 List every comment human `check` and `scan` met and name the rule and setting behind each one
+.TP
+\fB\-\-trace\fR \fI<WHEN>\fR [default: off]
+Record how the run reached its verdicts, on standard error
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+off: Record nothing, and collect nothing to record
+.IP \(bu 2
+human: One line per step, for a person reading a terminal
+.IP \(bu 2
+json: One JSON object per line, against `spec/trace.schema.json`
+.RE
 .TP
 \fB\-\-progress\fR \fI<WHEN>\fR [default: auto]
 When to draw the live scanning counter on standard error

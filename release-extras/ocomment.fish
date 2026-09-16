@@ -1,6 +1,6 @@
 # Print an optspec for argparse to handle cmd's options that are independent of any subcommand.
 function __fish_ocomment_global_optspecs
-    string join \n config= policy= layout= language= dialect= keep-kind= remove-kind= force-invalid force-protected format= color= hyperlinks= no-preview explain progress= q/quiet v/verbose h/help V/version
+    string join \n config= policy= layout= language= dialect= keep-kind= remove-kind= force-invalid force-protected format= color= hyperlinks= no-preview explain trace= progress= q/quiet v/verbose h/help V/version
 end
 
 function __fish_ocomment_needs_command
@@ -114,6 +114,9 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_needs_command" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_needs_command" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_needs_command" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -229,6 +232,9 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -331,6 +337,9 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -435,6 +444,9 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -537,6 +549,9 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -639,6 +654,9 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -739,6 +757,9 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -839,6 +860,9 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -942,6 +966,9 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -1042,6 +1069,9 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -1142,6 +1172,9 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -1252,6 +1285,9 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -1352,6 +1388,9 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -1452,6 +1491,9 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -1552,6 +1594,9 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -1652,6 +1697,9 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -1752,6 +1800,9 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -1859,6 +1910,9 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -1959,6 +2013,9 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -2059,6 +2116,9 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"

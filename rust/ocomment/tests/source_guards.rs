@@ -9,7 +9,7 @@ use std::{collections::BTreeSet, fs, path::PathBuf};
 /// Every first-party source file of the crate, embedded at compile time so the
 /// scan does not depend on the directory the test runs in. The internal runtime
 /// is upstream-derived code and cannot obtain the CLI's stdout handle.
-const SOURCES: [(&str, &str); 11] = [
+const SOURCES: [(&str, &str); 12] = [
     ("atomic.rs", include_str!("../src/atomic.rs")),
     ("cli.rs", include_str!("../src/cli.rs")),
     ("config.rs", include_str!("../src/config.rs")),
@@ -20,6 +20,7 @@ const SOURCES: [(&str, &str); 11] = [
     ("main.rs", include_str!("../src/main.rs")),
     ("output.rs", include_str!("../src/output.rs")),
     ("plugin.rs", include_str!("../src/plugin.rs")),
+    ("trace.rs", include_str!("../src/trace.rs")),
     ("values.rs", include_str!("../src/values.rs")),
 ];
 

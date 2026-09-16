@@ -221,6 +221,16 @@ Output:
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
 
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
+
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
@@ -422,6 +432,16 @@ Output:
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
 
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
+
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
@@ -608,6 +628,16 @@ Output:
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
 
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
+
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
@@ -785,6 +815,16 @@ Output:
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
 
       --progress <WHEN>
           When to draw the live scanning counter on standard error
@@ -964,6 +1004,16 @@ Output:
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
 
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
+
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
@@ -1132,6 +1182,16 @@ Output:
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
 
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
+
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
@@ -1299,6 +1359,16 @@ Output:
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
 
       --progress <WHEN>
           When to draw the live scanning counter on standard error
@@ -1484,6 +1554,16 @@ Output:
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
 
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
+
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
@@ -1659,6 +1739,16 @@ Output:
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
 
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
+
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
@@ -1826,6 +1916,16 @@ Output:
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
 
       --progress <WHEN>
           When to draw the live scanning counter on standard error
@@ -2003,6 +2103,16 @@ Output:
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
 
       --progress <WHEN>
           When to draw the live scanning counter on standard error
@@ -2185,6 +2295,16 @@ Output:
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
 
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
+
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
@@ -2357,6 +2477,16 @@ Output:
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
 
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
+
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
@@ -2524,6 +2654,16 @@ Output:
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
 
       --progress <WHEN>
           When to draw the live scanning counter on standard error
@@ -2697,6 +2837,16 @@ Output:
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
 
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
+
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
@@ -2869,6 +3019,16 @@ Output:
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
 
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
+
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
@@ -3040,6 +3200,16 @@ Output:
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
 
       --progress <WHEN>
           When to draw the live scanning counter on standard error
@@ -3215,6 +3385,16 @@ Output:
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
 
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
+
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
@@ -3383,6 +3563,16 @@ Output:
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
 
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
+
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
@@ -3550,6 +3740,16 @@ Output:
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
 
       --progress <WHEN>
           When to draw the live scanning counter on standard error

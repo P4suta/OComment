@@ -242,3 +242,35 @@ is about a broken file rather than about a policy.
 each value came from, `ocomment doctor` reports the environment around
 it, and `ocomment scan --format json` gives the byte span and kind of
 every comment for a tool to read.
+
+## `--explain` and `--trace` answer different questions
+
+`--explain` is about one comment: the rule that decided it and the
+setting behind that rule, printed under the finding it belongs to. It
+is part of the report, so it goes to standard output and only the two
+commands that write a report of comments accept it.
+
+`--trace` is about the run: which layer of configuration applied, what
+evidence chose each file's language, which files were never scanned and
+why, what was decided for every comment, and which edits were planned
+from those decisions. It is a diagnostic rather than a product, so it
+goes to **standard error** and every command accepts it.
+
+That separation is what lets the two be combined with anything else:
+`--trace json` beside `--format json` leaves the document on standard
+output byte-for-byte identical to the one the same run writes without
+it. Standard error also carries the run summary, so a reader that needs
+every line to parse should add `--quiet`:
+
+```console
+$ ocomment check --quiet --trace json 2>trace.jsonl >/dev/null
+$ head -2 trace.jsonl
+{"event":"config-resolved","root":"/repo","sources":["built-in defaults"]}
+{"event":"file-detected","path":"src/main.rs","language":"rust","dialect":"standard","how":"extension","bytes":18}
+```
+
+The stream is described by `spec/trace.schema.json`. What it does not
+record is the scanner's recursion into an embedded language — a
+`<script>` body read as JavaScript, a Markdown fence read as the
+language its info string names. Those comments are reported at their
+byte span in the outer file, as they are everywhere else.
