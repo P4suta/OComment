@@ -171,7 +171,7 @@ pub use detect::{Detection, detect_language, shebang_interpreters};
 pub use incremental::{DocumentChange, IncrementalDocument, IncrementalError, PositionEncoding};
 pub use profile::{
     BlockDelimiter, DeclarativeProfile, LineDelimiter, ProfileError, ProtectedPattern,
-    StringDelimiter, scan_profile, transform_profile, validate_profile,
+    ProtectionTier, StringDelimiter, scan_profile, transform_profile, validate_profile,
 };
 pub use scanner::{
     DispositionPatterns, PreparedScanner, explain_comment, explain_comment_with,

@@ -135,10 +135,9 @@ pub struct StringDelimiter {
 
 /// A substring that makes a comment a kept directive.
 ///
-/// A comment whose text contains it is recorded as a
-/// [`CommentKind::Directive`], which every policy but
-/// [`Policy::All`](crate::Policy::All) keeps, and `reason` becomes the reason
-/// on its [`Disposition::Keep`](crate::Disposition::Keep).
+/// A comment whose text contains it is recorded under the kind its
+/// [`ProtectionTier`] names, and `reason` becomes the reason on its
+/// [`Disposition::Keep`](crate::Disposition::Keep).
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProtectedPattern {
@@ -147,6 +146,48 @@ pub struct ProtectedPattern {
     pub contains: String,
     /// Why such a comment is kept, phrased for a human. It must not be blank.
     pub reason: String,
+    /// How strongly it is kept. Defaults to [`ProtectionTier::Tool`], which is
+    /// what every profile written before this field existed asked for.
+    #[serde(default)]
+    pub tier: ProtectionTier,
+}
+
+/// How strongly a [`ProtectedPattern`] asks for its comment to be kept.
+///
+/// A profile describes a syntax this crate has no scanner for, and the person
+/// writing one knows something about that syntax that the policy cannot: a
+/// marker their toolchain reads is not the same as a marker their linter
+/// reads, and only one of the two is a choice a policy gets to make. Without
+/// the distinction every profile protection was the weaker one, so
+/// [`Policy::All`](crate::Policy::All) removed a marker a build depended on
+/// and the profile had no way to say otherwise.
+///
+/// The default is the weaker tier because that is what a profile written
+/// without this field already meant, and because claiming the stronger one
+/// should be an act rather than an accident.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ProtectionTier {
+    /// Addressed to a tool. Every policy but
+    /// [`Policy::All`](crate::Policy::All) keeps it, recorded as
+    /// [`CommentKind::Directive`].
+    #[default]
+    Tool,
+    /// Read by the language or its build as part of the program. No policy
+    /// removes it and only
+    /// [`ScanOptions::force_protected`](crate::ScanOptions::force_protected)
+    /// does, recorded as [`CommentKind::LoadBearing`].
+    LoadBearing,
+}
+
+impl ProtectionTier {
+    /// The comment kind a match under this tier is recorded as.
+    pub const fn kind(self) -> CommentKind {
+        match self {
+            Self::Tool => CommentKind::Directive,
+            Self::LoadBearing => CommentKind::LoadBearing,
+        }
+    }
 }
 
 /// Why a [`DeclarativeProfile`] cannot be interpreted.
@@ -478,8 +519,8 @@ fn profile_comment(
         .protected_patterns
         .iter()
         .find(|pattern| raw.contains(&pattern.contains));
-    if protected.is_some() {
-        kind = CommentKind::Directive;
+    if let Some(pattern) = protected {
+        kind = pattern.tier.kind();
     }
     let mut disposition = disposition(kind, options, &source[start..end], patterns);
     if let (Some(pattern), crate::Disposition::Keep { reason }) = (protected, &mut disposition) {
@@ -509,6 +550,7 @@ fn validate_token(token: &str, name: &'static str) -> Result<(), ProfileError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Policy;
     #[test]
     fn rejects_prefix_ambiguity() {
         let profile = DeclarativeProfile {
@@ -531,6 +573,69 @@ mod tests {
             validate_profile(&profile),
             Err(ProfileError::AmbiguousDelimiter(..))
         ));
+    }
+
+    /// A profile says how strongly each protection asks, and `all` honours it.
+    ///
+    /// Both halves are checked, because a tier that is only ever observed
+    /// keeping has not been shown to be a tier: the tool-tier pattern must be
+    /// taken by `all`, and the load-bearing one must survive it and then go
+    /// when `force_protected` says so.
+    #[test]
+    fn a_profile_protection_states_which_tier_it_claims() {
+        let profile = DeclarativeProfile {
+            name: "demo".into(),
+            line_comments: vec![LineDelimiter {
+                start: ";;".into(),
+                requires_boundary: false,
+                kind: CommentKind::Line,
+            }],
+            protected_patterns: vec![
+                ProtectedPattern {
+                    contains: "KEEPTOOL".into(),
+                    reason: "tool tier".into(),
+                    tier: ProtectionTier::Tool,
+                },
+                ProtectedPattern {
+                    contains: "KEEPBUILD".into(),
+                    reason: "build tier".into(),
+                    tier: ProtectionTier::LoadBearing,
+                },
+            ],
+            ..Default::default()
+        };
+        let source = b";; KEEPTOOL one\n;; KEEPBUILD two\n;; ordinary\n";
+
+        let conservative =
+            scan_profile(source, &profile, ScanOptions::default()).expect("valid profile");
+        assert_eq!(conservative.comments[0].kind, CommentKind::Directive);
+        assert_eq!(conservative.comments[1].kind, CommentKind::LoadBearing);
+        assert!(!conservative.comments[0].disposition.is_remove());
+        assert!(!conservative.comments[1].disposition.is_remove());
+
+        let all = ScanOptions {
+            policy: Policy::All,
+            ..Default::default()
+        };
+        let stripped = scan_profile(source, &profile, all.clone()).expect("valid profile");
+        assert!(
+            stripped.comments[0].disposition.is_remove(),
+            "the tool tier is what `all` is entitled to take"
+        );
+        assert!(
+            !stripped.comments[1].disposition.is_remove(),
+            "no policy reaches the load-bearing tier"
+        );
+
+        let forced = ScanOptions {
+            force_protected: true,
+            ..all
+        };
+        let forced = scan_profile(source, &profile, forced).expect("valid profile");
+        assert!(
+            forced.comments[1].disposition.is_remove(),
+            "force_protected is the one way out, and a tier with no way out is untestable"
+        );
     }
 
     #[test]

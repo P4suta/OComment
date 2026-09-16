@@ -45,7 +45,15 @@ type transform_result = { output : bytes; edits : edit list; report : scan_repor
 type line_delimiter = { line_start : string; requires_boundary : bool; line_kind : comment_kind }
 type block_delimiter = { block_start : string; block_end_token : string; nested : bool; block_kind : comment_kind }
 type string_delimiter = { string_start : string; string_end : string; escape : string option; multiline : bool }
-type protected_pattern = { pattern : string; reason : string }
+(* NOTE: `tier` is how strongly the pattern asks for the comment.  A profile
+   describes a syntax with no built-in scanner, and its author knows something
+   the policy cannot: a marker their toolchain reads is not a marker their
+   linter reads.  Without it every profile protection was the weaker one and
+   `all` took a marker a build depended on. *)
+type protection_tier = Tool | ProfileLoadBearing
+
+type protected_pattern =
+  { pattern : string; reason : string; tier : protection_tier }
 type declarative_profile = {
   name : string; extensions : string list; line_comments : line_delimiter list;
   block_comments : block_delimiter list; strings : string_delimiter list;

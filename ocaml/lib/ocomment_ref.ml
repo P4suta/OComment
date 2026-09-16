@@ -65,7 +65,15 @@ type string_delimiter = {
   multiline : bool;
 }
 
-type protected_pattern = { pattern : string; reason : string }
+(* NOTE: `tier` is how strongly the pattern asks for the comment.  A profile
+   describes a syntax with no built-in scanner, and its author knows something
+   the policy cannot: a marker their toolchain reads is not a marker their
+   linter reads.  Without it every profile protection was the weaker one and
+   `all` took a marker a build depended on. *)
+type protection_tier = Tool | ProfileLoadBearing
+
+type protected_pattern =
+  { pattern : string; reason : string; tier : protection_tier }
 
 type declarative_profile = {
   name : string;
@@ -6397,7 +6405,9 @@ let profile_comment source profile options start finish kind =
   match List.find_opt (fun item -> contains raw item.pattern) profile.protected_patterns with
   | None -> { span = { start; finish }; kind; disposition = disposition options kind raw }
   | Some protected ->
-    let kind = Directive in
+    let kind = match protected.tier with
+      | Tool -> Directive
+      | ProfileLoadBearing -> LoadBearing in
     let selected = disposition options kind raw in
     let disposition = match selected with Keep _ -> Keep protected.reason | Remove -> Remove in
     { span = { start; finish }; kind; disposition }

@@ -129,7 +129,10 @@ let profile_of_json json =
          | `String value -> Some value | _ -> None);
        multiline = bool_or false "multiline" item } : string_delimiter)) in
   let protected_patterns = list_or_empty "protected_patterns" json |> List.map (fun item ->
-    ({ pattern = member_string "contains" item; reason = member_string "reason" item }
+    ({ pattern = member_string "contains" item; reason = member_string "reason" item;
+       tier = (match Yojson.Safe.Util.member "tier" item with
+         | `String "load-bearing" -> ProfileLoadBearing
+         | _ -> Tool) }
       : protected_pattern)) in
   ({ name = member_string "name" json; extensions = strings "extensions" json;
      line_comments; block_comments; strings = string_delimiters; protected_patterns }

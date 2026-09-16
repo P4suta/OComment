@@ -11696,6 +11696,65 @@
         "diagnostics": [],
         "output_utf8": "\n\n\n"
       }
+    },
+    {
+      "id": "declarative-profile-tiers-under-policy-all",
+      "language": "c",
+      "operation": "transform-profile",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "profile": {
+        "name": "demo",
+        "extensions": [
+          "demo"
+        ],
+        "line_comments": [
+          {
+            "start": ";;",
+            "kind": "line"
+          }
+        ],
+        "protected_patterns": [
+          {
+            "contains": "KEEPTOOL",
+            "reason": "tool tier"
+          },
+          {
+            "contains": "KEEPBUILD",
+            "reason": "build tier",
+            "tier": "load-bearing"
+          }
+        ]
+      },
+      "source_utf8": ";; KEEPTOOL one\n;; KEEPBUILD two\n;; ordinary\n",
+      "note": "A profile states how strongly each protection asks. The default tier is the tool tier, which `--policy all` is entitled to take; a pattern declaring `tier = \"load-bearing\"` says the toolchain reads it, and no policy reaches that. Without the distinction every profile protection was the weaker one, so `all` removed markers a build depended on and the profile had no way to say otherwise.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 15,
+            "kind": "directive",
+            "action": "remove"
+          },
+          {
+            "start": 16,
+            "end": 32,
+            "kind": "load-bearing",
+            "action": "keep"
+          },
+          {
+            "start": 33,
+            "end": 44,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\n;; KEEPBUILD two\n\n"
+      }
     }
   ]
 }

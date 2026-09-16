@@ -127,6 +127,26 @@ escape = "\\"
 [[profiles.lisp.protected_patterns]]
 contains = "ocomment: keep"
 reason = "local directive"
+
+[[profiles.lisp.protected_patterns]]
+contains = "lisp-build:"
+reason = "read by the build"
+tier = "load-bearing"
 ```
 
-Complex lexical grammars should use a WASM scanner plugin instead.
+A protected pattern says how strongly it asks. `tier = "tool"` is the default
+and the weaker one: the comment is recorded as a `directive`, every policy but
+`all` keeps it, and `all` is entitled to take it. `tier = "load-bearing"`
+records it as `load-bearing`, which no policy removes and only
+`--force-protected` does.
+
+The distinction is the one the built-in languages already draw, and a profile
+needs it for the same reason. A profile describes a syntax OComment has no
+scanner for, so its author is the only one who knows whether a marker is read
+by their toolchain or by their linter — and removing the first changes what the
+build produces while removing the second changes what a tool reports. Declaring
+the stronger tier is deliberate: a pattern that says nothing gets the weaker
+one, which is what every profile written before this field meant.
+
+Complex lexical grammars should use a WASM scanner plugin instead. A plugin
+returns the comment kind itself, so it can return `load-bearing` directly.
