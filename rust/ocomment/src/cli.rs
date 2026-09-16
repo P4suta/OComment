@@ -28,9 +28,10 @@ use std::{
 
 const LONG_ABOUT: &str = "\
 OComment scans source bytes without requiring UTF-8 and reports or removes \
-comment tokens. The default policy protects source preambles and tool or \
-language directives. Rewrites are prepared and committed as one \
-rollback-backed transaction.";
+comment tokens. The default policy keeps licence notices, tool and language \
+directives, shebangs and encoding lines, and removes ordinary and doc \
+comments. Rewrites are prepared and committed as one rollback-backed \
+transaction.";
 
 const AFTER_LONG_HELP: &str = "\
 EXIT STATUS
@@ -192,7 +193,8 @@ struct PolicyArgs {
     /// Apply the edits that are still provably safe when the source fails to scan.
     #[arg(long, global = true)]
     force_invalid: bool,
-    /// Remove protected comments such as shebang and encoding preambles.
+    /// Remove protected comments: shebangs, encoding lines, and the
+    /// directives the language or its build reads.
     #[arg(long, global = true)]
     force_protected: bool,
 }

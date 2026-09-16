@@ -485,7 +485,7 @@ pub enum CommentKind {
     /// the catalogue.
     Directive,
     /// A license or copyright notice, such as an SPDX identifier. Only
-    /// [`Policy::Legal`] keeps one.
+    /// [`Policy::Conservative`] keeps one.
     License,
     /// An HTML `<!-- ... -->` comment, which the DOM exposes to scripts.
     HtmlComment,
@@ -683,7 +683,7 @@ pub enum DispositionExplanation {
         /// The directive's name, when the catalogue could name it.
         name: Option<&'static str>,
     },
-    /// A license or copyright notice under [`Policy::Legal`].
+    /// A license or copyright notice under [`Policy::Conservative`].
     KeptLicense {
         /// The marker that identified it, such as `spdx-license-identifier`.
         marker: Option<&'static str>,
@@ -698,9 +698,24 @@ pub enum DispositionExplanation {
         pattern: String,
     },
     /// The policy removes every comment it is offered.
-    RemovedByPolicy(Policy),
-    /// Nothing protected an ordinary comment, so the policy default removed it.
-    RemovedByDefault(Policy),
+    RemovedByPolicy {
+        /// The policy that removed it.
+        policy: Policy,
+        /// The kind it was removed as.
+        kind: CommentKind,
+    },
+    /// Nothing protected the comment, so the policy default removed it.
+    ///
+    /// A policy removes several kinds and removes them for different reasons,
+    /// so the kind is part of the answer: it is what tells a reader which
+    /// setting they would have to change to keep this one. Without it a
+    /// license notice and an ordinary line comment give the same explanation.
+    RemovedByDefault {
+        /// The policy whose default applied.
+        policy: Policy,
+        /// The kind it was removed as.
+        kind: CommentKind,
+    },
     /// A comment every rule above would have removed, kept because a block
     /// scalar's body ends at it and a comment the run keeps sits below it,
     /// deep enough that the body would take that comment back.
@@ -730,9 +745,34 @@ impl DispositionExplanation {
             | Self::KeptStructural { .. } => Action::Keep,
             Self::RemovedByKind(_)
             | Self::RemovedByRegex { .. }
-            | Self::RemovedByPolicy(_)
-            | Self::RemovedByDefault(_) => Action::Remove,
+            | Self::RemovedByPolicy { .. }
+            | Self::RemovedByDefault { .. } => Action::Remove,
         }
+    }
+}
+
+/// What a policy removed, named as the kind rather than as "comments".
+///
+/// A policy default removes more than one kind, and a reader who is told only
+/// that "the policy removes ordinary comments" cannot tell whether the comment
+/// in front of them was ordinary. Naming the kind is what makes the sentence
+/// checkable against the kind the same line already reports.
+///
+/// The kinds a policy default cannot reach — a shebang, a load-bearing
+/// directive — are spelled generically rather than omitted, so that adding a
+/// kind cannot silently produce a sentence with a hole in it.
+const fn removed_noun(kind: CommentKind) -> &'static str {
+    match kind {
+        CommentKind::Line | CommentKind::Block => "ordinary comments",
+        CommentKind::DocLine | CommentKind::DocBlock => "doc comments",
+        CommentKind::License => "license comments",
+        CommentKind::HtmlComment => "HTML comments",
+        CommentKind::Directive => "tool and language directives",
+        CommentKind::OptimizerHint => "optimizer hints",
+        CommentKind::VersionComment => "version-gated comments",
+        CommentKind::Shebang => "shebang lines",
+        CommentKind::Encoding => "encoding declarations",
+        CommentKind::LoadBearing => "comments the language or its build reads",
     }
 }
 
@@ -762,13 +802,19 @@ impl fmt::Display for DispositionExplanation {
                 Some(name) => write!(f, "kept: tool or language directive `{name}`"),
                 None => write!(f, "kept: `{kind}` is a tool or language directive"),
             },
-            Self::KeptLicense { marker } => match marker {
-                Some(marker) => write!(
-                    f,
-                    "kept: policy legal protects license comments, and this one says `{marker}`"
-                ),
-                None => f.write_str("kept: policy legal protects license comments"),
-            },
+            /* NOTE: The policy is spelled through `Policy` rather than written
+             * out, so that renaming one cannot leave this sentence naming a
+             * policy the binary no longer accepts. */
+            Self::KeptLicense { marker } => {
+                let policy = Policy::Conservative;
+                match marker {
+                    Some(marker) => write!(
+                        f,
+                        "kept: policy {policy} protects license comments, and this one says `{marker}`"
+                    ),
+                    None => write!(f, "kept: policy {policy} protects license comments"),
+                }
+            }
             Self::RemovedByKind(kind) => {
                 write!(
                     f,
@@ -778,11 +824,14 @@ impl fmt::Display for DispositionExplanation {
             Self::RemovedByRegex { index, pattern } => {
                 write!(f, "removed: matched remove_regex #{index} `{pattern}`")
             }
-            Self::RemovedByPolicy(policy) => {
-                write!(f, "removed: policy `{policy}` removes every comment")
+            Self::RemovedByPolicy { policy, kind } => {
+                write!(
+                    f,
+                    "removed: policy `{policy}` removes every comment, this one a `{kind}`"
+                )
             }
-            Self::RemovedByDefault(policy) => {
-                write!(f, "removed: policy `{policy}` removes ordinary comments")
+            Self::RemovedByDefault { policy, kind } => {
+                write!(f, "removed: policy `{policy}` removes {}", removed_noun(*kind))
             }
             Self::KeptStructural { language } => write!(
                 f,
@@ -933,14 +982,24 @@ pub enum ExternalSpanError {
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Policy {
-    /// The default. Removes ordinary, documentation, and license comments;
-    /// keeps directives, HTML comments, SQL hints and version comments, and
-    /// the shebang or encoding preamble. A [`CommentKind::LoadBearing`]
-    /// directive is kept under every policy.
+    /// The default. Removes ordinary and documentation comments; keeps
+    /// license notices, directives, HTML comments, SQL hints and version
+    /// comments, and the shebang or encoding preamble. A
+    /// [`CommentKind::LoadBearing`] directive is kept under every policy.
+    ///
+    /// Was spelled `legal`, which named the one kind it adds rather than
+    /// where it sits, and which left the weaker-sounding `safe` as the
+    /// default that removed licence notices.
     #[default]
-    Safe,
-    /// As [`Self::Safe`], but license and copyright notices are kept too.
-    Legal,
+    #[serde(alias = "legal")]
+    Conservative,
+    /// As [`Self::Conservative`], and license and copyright notices go too.
+    ///
+    /// Was spelled `safe` and was the default. It is neither the safest
+    /// policy nor a safe default for a repository that states its licence in
+    /// its sources: REUSE compliance does not survive it.
+    #[serde(alias = "safe")]
+    Standard,
     /// Removes every comment, directives and HTML comments included. The
     /// shebang and encoding preamble survive, and so does a
     /// [`CommentKind::LoadBearing`] directive the language or its build reads
@@ -950,21 +1009,43 @@ pub enum Policy {
 }
 
 impl Policy {
-    /// Every CLI-visible policy.
-    pub const ALL: [Self; 3] = [Self::Safe, Self::Legal, Self::All];
+    /// Every CLI-visible policy, weakest first.
+    ///
+    /// The order is the order of how much a policy takes, so that a list of
+    /// them reads as a scale. It is also the order help output uses, which is
+    /// where a reader forms the expectation that the names have an order at
+    /// all.
+    pub const ALL: [Self; 3] = [Self::Conservative, Self::Standard, Self::All];
 
     /// The canonical name, identical to the serde representation.
     pub const fn as_str(self) -> &'static str {
         match self {
-            Self::Safe => "safe",
-            Self::Legal => "legal",
+            Self::Conservative => "conservative",
+            Self::Standard => "standard",
             Self::All => "all",
         }
     }
 
     /// Accepted spellings besides [`Self::as_str`], already case-folded.
+    ///
+    /// The former names are kept so that an existing configuration and an
+    /// existing command line both still resolve. They resolve to the same
+    /// behaviour they always named; what changed is which one is the default.
     pub const fn aliases(self) -> &'static [&'static str] {
-        &[]
+        match self {
+            Self::Conservative => &["legal"],
+            Self::Standard => &["safe"],
+            Self::All => &[],
+        }
+    }
+
+    /// The name this policy used to go by, for a deprecation notice.
+    pub const fn former_name(self) -> Option<&'static str> {
+        match self {
+            Self::Conservative => Some("legal"),
+            Self::Standard => Some("safe"),
+            Self::All => None,
+        }
     }
 }
 
@@ -1072,7 +1153,7 @@ impl FromStr for Layout {
 
 /// Everything that decides what a scan finds and what it does with it.
 ///
-/// [`Self::default`] is the [`Policy::Safe`] policy with no overrides.
+/// [`Self::default`] is the [`Policy::Standard`] policy with no overrides.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ScanOptions {
@@ -1099,7 +1180,7 @@ pub struct ScanOptions {
 impl Default for ScanOptions {
     fn default() -> Self {
         Self {
-            policy: Policy::Safe,
+            policy: Policy::Standard,
             dialect: Dialect::Standard,
             force_invalid: false,
             force_protected: false,

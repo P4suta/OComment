@@ -85,7 +85,7 @@ fn compact(source: &str) -> String {
     String::from_utf8(transformed(
         source.as_bytes(),
         Language::Rust,
-        Policy::Safe,
+        Policy::Standard,
         Layout::Compact,
     ))
     .expect("compact never splits a character")
@@ -96,7 +96,7 @@ fn lines(source: &str) -> String {
     String::from_utf8(transformed(
         source.as_bytes(),
         Language::Rust,
-        Policy::Safe,
+        Policy::Standard,
         Layout::Lines,
     ))
     .expect("lines never splits a character")
@@ -198,7 +198,7 @@ fn lines_and_columns_are_not_touched_by_the_compact_rules() {
         String::from_utf8(transformed(
             source.as_bytes(),
             Language::Rust,
-            Policy::Safe,
+            Policy::Standard,
             Layout::Lines,
         ))
         .unwrap(),
@@ -208,7 +208,7 @@ fn lines_and_columns_are_not_touched_by_the_compact_rules() {
         String::from_utf8(transformed(
             source.as_bytes(),
             Language::Rust,
-            Policy::Safe,
+            Policy::Standard,
             Layout::Columns,
         ))
         .unwrap(),
@@ -263,7 +263,7 @@ fn a_unicode_line_terminator_ends_a_line_like_any_other() {
         String::from_utf8(transformed(
             source.as_bytes(),
             Language::JavaScript,
-            Policy::Safe,
+            Policy::Standard,
             Layout::Compact,
         ))
         .unwrap(),
@@ -275,7 +275,7 @@ fn a_unicode_line_terminator_ends_a_line_like_any_other() {
         String::from_utf8(transformed(
             source.as_bytes(),
             Language::JavaScript,
-            Policy::Safe,
+            Policy::Standard,
             Layout::Lines,
         ))
         .unwrap(),

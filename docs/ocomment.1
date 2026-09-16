@@ -6,7 +6,7 @@ ocomment \- Check and remove source\-code comments safely
 .SH SYNOPSIS
 \fBocomment\fR [\fB\-\-config\fR] [\fB\-\-policy\fR] [\fB\-\-layout\fR] [\fB\-\-language\fR] [\fB\-\-dialect\fR] [\fB\-\-keep\-kind\fR] [\fB\-\-remove\-kind\fR] [\fB\-\-force\-invalid\fR] [\fB\-\-force\-protected\fR] [\fB\-\-format\fR] [\fB\-\-color\fR] [\fB\-\-hyperlinks\fR] [\fB\-\-no\-preview\fR] [\fB\-\-explain\fR] [\fB\-\-progress\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIPATH\fR] [\fIsubcommands\fR]
 .SH DESCRIPTION
-OComment scans source bytes without requiring UTF\-8 and reports or removes comment tokens. The default policy protects source preambles and tool or language directives. Rewrites are prepared and committed as one rollback\-backed transaction.
+OComment scans source bytes without requiring UTF\-8 and reports or removes comment tokens. The default policy keeps licence notices, tool and language directives, shebangs and encoding lines, and removes ordinary and doc comments. Rewrites are prepared and committed as one rollback\-backed transaction.
 .SH OPTIONS
 .TP
 \fB\-\-config\fR \fI<FILE>\fR
@@ -30,11 +30,11 @@ Which classes of comment the run is allowed to remove
 \fIPossible values:\fR
 .RS 14
 .IP \(bu 2
-safe: Remove ordinary and doc comments; keep preambles and directives
+conservative: Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines
 .IP \(bu 2
-legal: Like safe, and keep licence and copyright comments as well
+standard: Like conservative, and remove licence and copyright notices too
 .IP \(bu 2
-all: Remove every comment except the preambles and load\-bearing directives the language itself reads
+all: Remove every comment except shebangs, encoding lines and the directives the language itself reads
 .RE
 .TP
 \fB\-\-layout\fR \fI<LAYOUT>\fR
@@ -184,7 +184,7 @@ doc\-block: A delimited documentation comment
 .IP \(bu 2
 directive: A tool or language directive such as a pragma or lint control
 .IP \(bu 2
-license: A licence or copyright preamble
+license: A licence or copyright notice
 .IP \(bu 2
 html\-comment: A DOM\-observable HTML comment
 .IP \(bu 2
@@ -196,7 +196,7 @@ optimizer\-hint: A compiler or database optimizer hint
 .IP \(bu 2
 version\-comment: A MySQL versioned comment that the server executes
 .IP \(bu 2
-load\-bearing: A directive the language or its build reads as part of the program, such as          `//go:build`
+load\-bearing: A directive the language or its build reads as part of the program, such as `//go:build`
 .RE
 .TP
 \fB\-\-remove\-kind\fR \fI<KIND>\fR
@@ -217,7 +217,7 @@ doc\-block: A delimited documentation comment
 .IP \(bu 2
 directive: A tool or language directive such as a pragma or lint control
 .IP \(bu 2
-license: A licence or copyright preamble
+license: A licence or copyright notice
 .IP \(bu 2
 html\-comment: A DOM\-observable HTML comment
 .IP \(bu 2
@@ -229,14 +229,14 @@ optimizer\-hint: A compiler or database optimizer hint
 .IP \(bu 2
 version\-comment: A MySQL versioned comment that the server executes
 .IP \(bu 2
-load\-bearing: A directive the language or its build reads as part of the program, such as          `//go:build`
+load\-bearing: A directive the language or its build reads as part of the program, such as `//go:build`
 .RE
 .TP
 \fB\-\-force\-invalid\fR
 Apply the edits that are still provably safe when the source fails to scan
 .TP
 \fB\-\-force\-protected\fR
-Remove protected comments such as shebang and encoding preambles
+Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 .SH OUTPUT
 .TP
 \fB\-\-format\fR \fI<FORMAT>\fR [default: human]

@@ -2,10 +2,11 @@
 
 ## Does the default policy really remove documentation comments?
 
-Yes. `safe` removes `doc-line` and `doc-block` along with ordinary comments; it
-is *safe* in the sense that it never removes something another program reads,
-not in the sense that it never removes something a human wrote. Documentation
-comments are commentary, and a build artifact usually wants them gone.
+Yes. `conservative` removes `doc-line` and `doc-block` along with ordinary
+comments. It is conservative about what another program reads -- a directive, a
+licence notice, a shebang -- not about what a human wrote. Documentation
+comments are commentary, and a build artifact usually wants them gone. Keep
+them with `keep_kind = ["doc-line", "doc-block"]`.
 
 If your project wants them kept — this one does — say so once:
 

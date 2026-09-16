@@ -7,7 +7,7 @@ follow_symlinks = false
 ignore = true
 
 [policy]
-mode = "safe"
+mode = "conservative"
 layout = "lines"
 keep_kind = []
 remove_kind = []

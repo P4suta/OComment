@@ -5,8 +5,9 @@ version = 1
 # NOTE:
 # NOTE: `protected` is the tool tier: a linter suppression, a formatter switch,
 # NOTE: a coverage pragma. Removing one makes a tool noisier or quieter and
-# NOTE: leaves the program the same program, so `safe` and `legal` keep them
-# NOTE: and `all` — which said it would take every comment — removes them.
+# NOTE: leaves the program the same program, so `conservative` and `standard`
+# NOTE: keep them and `all` — which said it would take every comment — removes
+# NOTE: them.
 # NOTE:
 # NOTE: `load_bearing` is the tier `all` does not reach. The language, its
 # NOTE: compiler or its build system reads these as part of the program: remove
@@ -35,13 +36,13 @@ load_bearing = [
   "@dart", "swift-tools-version:", "//> using"
 ]
 
-[policy.safe]
-remove = ["line", "block", "doc-line", "doc-block", "license"]
-keep = ["directive", "load-bearing", "html-comment", "shebang", "encoding", "optimizer-hint", "version-comment"]
-
-[policy.legal]
+[policy.conservative]
 remove = ["line", "block", "doc-line", "doc-block"]
 keep = ["license", "directive", "load-bearing", "html-comment", "shebang", "encoding", "optimizer-hint", "version-comment"]
+
+[policy.standard]
+remove = ["line", "block", "doc-line", "doc-block", "license"]
+keep = ["directive", "load-bearing", "html-comment", "shebang", "encoding", "optimizer-hint", "version-comment"]
 
 [policy.all]
 remove = ["line", "block", "doc-line", "doc-block", "license", "directive", "html-comment", "optimizer-hint", "version-comment"]

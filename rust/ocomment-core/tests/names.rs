@@ -305,15 +305,32 @@ fn comment_kind_parsing_folds_case_and_underscores() {
 
 #[test]
 fn policy_and_layout_aliases_are_pinned() {
-    assert_eq!(Policy::from_str("safe"), Ok(Policy::Safe));
-    assert_eq!(Policy::from_str("legal"), Ok(Policy::Legal));
+    assert_eq!(Policy::from_str("safe"), Ok(Policy::Standard));
+    assert_eq!(Policy::from_str("legal"), Ok(Policy::Conservative));
     assert_eq!(Policy::from_str("all"), Ok(Policy::All));
-    assert_eq!(Policy::from_str("SAFE"), Ok(Policy::Safe));
+    assert_eq!(Policy::from_str("SAFE"), Ok(Policy::Standard));
     assert_eq!(Layout::from_str("lines"), Ok(Layout::Lines));
     assert_eq!(Layout::from_str("columns"), Ok(Layout::Columns));
     assert_eq!(Layout::from_str("compact"), Ok(Layout::Compact));
     assert_eq!(Layout::from_str("Compact"), Ok(Layout::Compact));
-    assert!(Policy::ALL.iter().all(|value| value.aliases().is_empty()));
+    /* NOTE: The policies carry their former spellings so that a configuration
+     * or a command line written against the old names still resolves, and to
+     * the same behaviour those names always had. Pinning them here is what
+     * stops the compatibility from being dropped by accident. */
+    assert_eq!(Policy::Conservative.aliases(), ["legal"]);
+    assert_eq!(Policy::Standard.aliases(), ["safe"]);
+    assert!(Policy::All.aliases().is_empty());
+    assert_eq!(Policy::Conservative.former_name(), Some("legal"));
+    assert_eq!(Policy::Standard.former_name(), Some("safe"));
+    assert_eq!(Policy::All.former_name(), None);
+    /* NOTE: The order of `ALL` is how much each policy takes, weakest first,
+     * and help output reads it in that order. A reordering would make the
+     * names stop describing a scale. */
+    assert_eq!(
+        Policy::ALL.map(Policy::as_str),
+        ["conservative", "standard", "all"]
+    );
+    assert_eq!(Policy::default(), Policy::Conservative);
     assert!(Layout::ALL.iter().all(|value| value.aliases().is_empty()));
 }
 
@@ -350,10 +367,10 @@ fn disposition_display_is_human_readable() {
     assert_eq!(Disposition::Remove.to_string(), "remove");
     assert_eq!(
         Disposition::Keep {
-            reason: "legal policy".to_owned()
+            reason: "conservative policy".to_owned()
         }
         .to_string(),
-        "keep (legal policy)"
+        "keep (conservative policy)"
     );
 }
 
@@ -365,21 +382,22 @@ fn disposition_serde_shape_is_frozen() {
     );
     assert_eq!(
         serde_json::to_value(Disposition::Keep {
-            reason: "legal policy".to_owned()
+            reason: "conservative policy".to_owned()
         })
         .unwrap(),
-        serde_json::json!({"action": "keep", "reason": "legal policy"})
+        serde_json::json!({"action": "keep", "reason": "conservative policy"})
     );
 }
 
-/// The differential protocol freezes these six strings; the OCaml reference
+/// The differential protocol freezes these seven strings; the OCaml reference
 /// compares them byte-for-byte.
-const KEEP_REASONS: [&str; 6] = [
-    "kept by kind or regex override",
+const KEEP_REASONS: [&str; 7] = [
+    "kept by keep_kind",
+    "kept by keep_regex",
     "required source preamble",
     "HTML comments are DOM-observable",
     "tool or language directive",
-    "legal policy",
+    "conservative policy",
     "structural in a YAML block scalar trail",
 ];
 
@@ -408,7 +426,21 @@ fn keep_reasons_are_observable_through_scan() {
             },
             comments: 1,
             index: 0,
-            reason: "kept by kind or regex override",
+            reason: "kept by keep_kind",
+        },
+        /* NOTE: The companion of the fixture above. The two rules used to
+         * share one reason, so one fixture covered both and neither was
+         * actually observed on its own. */
+        ReasonFixture {
+            source: b"// keep me\n",
+            language: Language::Rust,
+            options: ScanOptions {
+                keep_regex: vec!["keep me".into()],
+                ..Default::default()
+            },
+            comments: 1,
+            index: 0,
+            reason: "kept by keep_regex",
         },
         ReasonFixture {
             source: b"#!/bin/sh\n",
@@ -438,12 +470,12 @@ fn keep_reasons_are_observable_through_scan() {
             source: b"// Copyright 2026 Example\n",
             language: Language::Rust,
             options: ScanOptions {
-                policy: Policy::Legal,
+                policy: Policy::Conservative,
                 ..Default::default()
             },
             comments: 1,
             index: 0,
-            reason: "legal policy",
+            reason: "conservative policy",
         },
         /* NOTE: The one reason that needs a second comment to exist at all: the
          * block scalar leans on the first comment only because the directive

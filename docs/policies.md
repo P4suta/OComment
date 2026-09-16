@@ -38,10 +38,10 @@ block comment that spans several lines.
 Each of these is `ocomment strip --language rust --policy <mode>` reading
 the sample on standard input.
 
-### `safe`
+### `conservative`
 
 ```text
-
+// SPDX-License-Identifier: MIT OR Apache-2.0
 
 // rustfmt::skip
 
@@ -54,10 +54,10 @@ pub fn add(a: u32, b: u32) -> u32 {
 }
 ```
 
-### `legal`
+### `standard`
 
 ```text
-// SPDX-License-Identifier: MIT OR Apache-2.0
+
 
 // rustfmt::skip
 
@@ -86,7 +86,7 @@ pub fn add(a: u32, b: u32) -> u32 {
 }
 ```
 
-`safe` and `legal` differ over the licence header alone, and `all`
+`conservative` and `standard` differ over the licence header alone, and `all`
 is the only one that takes the `// rustfmt::skip` directive out.
 `all` still refuses to touch a shebang or an encoding preamble until
 `--force-protected` is given as well; see
@@ -95,12 +95,12 @@ is the only one that takes the `// rustfmt::skip` directive out.
 ## What each layout leaves behind
 
 Each of these is `ocomment strip --language rust --layout <layout>`
-reading the same sample, under the default `safe` policy.
+reading the same sample, under the default `conservative` policy.
 
 ### `lines`
 
 ```text
-
+// SPDX-License-Identifier: MIT OR Apache-2.0
 
 // rustfmt::skip
 
@@ -116,7 +116,7 @@ pub fn add(a: u32, b: u32) -> u32 {
 ### `columns`
 
 ```text
-                                             
+// SPDX-License-Identifier: MIT OR Apache-2.0
 
 // rustfmt::skip
                      
@@ -132,6 +132,7 @@ pub fn add(a: u32, b: u32) -> u32 {
 ### `compact`
 
 ```text
+// SPDX-License-Identifier: MIT OR Apache-2.0
 
 // rustfmt::skip
 pub fn add(a: u32, b: u32) -> u32 {
@@ -163,7 +164,7 @@ no ending at all if the file stopped there without one.
 version = 1
 
 [policy]
-mode = "legal"
+mode = "conservative"
 layout = "lines"
 
 [[overrides]]

@@ -2044,13 +2044,13 @@ fn yaml_layouts_leave_a_line_columns_or_nothing() {
 }
 
 #[test]
-fn legal_policy_and_force_protected_are_ordered() {
+fn conservative_policy_and_force_protected_are_ordered() {
     let source = b"#!/usr/bin/env node\n// SPDX-License-Identifier: MIT\n// ordinary\n";
     let legal = scan(
         source,
         Language::JavaScript,
         ScanOptions {
-            policy: Policy::Legal,
+            policy: Policy::Conservative,
             ..Default::default()
         },
     );
@@ -5206,7 +5206,7 @@ fn swift_comment_forms_carry_their_kinds() {
             (91, 98, CommentKind::Line),
         ]
     );
-    /* NOTE: eight, not six: `Policy::Safe` removes a documentation comment as
+    /* NOTE: eight, not six: `Policy::Standard` removes a documentation comment as
      * readily as an ordinary one — what it protects is the preamble and the
      * directive — so the two markers decide the reported kind here rather than
      * the disposition. */

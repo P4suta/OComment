@@ -6,7 +6,7 @@
       "language": "rust",
       "operation": "transform",
       "options": {
-        "policy": "safe",
+        "policy": "standard",
         "layout": "lines"
       },
       "source_utf8": "r#\"// string\"# /* block */\r\n// line\r\n",
@@ -66,7 +66,7 @@
       "language": "ocaml",
       "operation": "transform",
       "options": {
-        "policy": "safe",
+        "policy": "standard",
         "layout": "lines"
       },
       "source_utf8": "\"(* string *)\" (* outer (* nested *) end *)\n",
@@ -114,7 +114,7 @@
       "language": "c",
       "operation": "transform",
       "options": {
-        "policy": "safe",
+        "policy": "standard",
         "layout": "lines"
       },
       "source_utf8": "char *s = \"// string\"; /* block */\n// line\n",
@@ -174,7 +174,7 @@
       "language": "cpp",
       "operation": "transform",
       "options": {
-        "policy": "safe",
+        "policy": "standard",
         "layout": "lines"
       },
       "source_utf8": "auto s = \"/* string */\"; // line\n",
@@ -222,7 +222,7 @@
       "language": "go",
       "operation": "transform",
       "options": {
-        "policy": "safe",
+        "policy": "standard",
         "layout": "lines"
       },
       "source_utf8": "var s = `// raw`; /* block */\n",
@@ -270,7 +270,7 @@
       "language": "java",
       "operation": "transform",
       "options": {
-        "policy": "safe",
+        "policy": "standard",
         "layout": "lines"
       },
       "source_utf8": "String s = \"// raw\"; // line\n",
@@ -318,7 +318,7 @@
       "language": "javascript",
       "operation": "transform",
       "options": {
-        "policy": "safe",
+        "policy": "standard",
         "layout": "lines"
       },
       "source_utf8": "const s = \"// raw\"; /* block */\n",
@@ -366,7 +366,7 @@
       "language": "typescript",
       "operation": "transform",
       "options": {
-        "policy": "safe",
+        "policy": "standard",
         "layout": "lines"
       },
       "source_utf8": "const s: string = \"// raw\"; // line\n",
@@ -414,7 +414,7 @@
       "language": "python",
       "operation": "transform",
       "options": {
-        "policy": "safe",
+        "policy": "standard",
         "layout": "lines"
       },
       "source_utf8": "s = \"# raw\"  # line\n",
@@ -462,7 +462,7 @@
       "language": "shell",
       "operation": "transform",
       "options": {
-        "policy": "safe",
+        "policy": "standard",
         "layout": "lines"
       },
       "source_utf8": "s='# raw' # line\n",
@@ -510,7 +510,7 @@
       "language": "html",
       "operation": "transform",
       "options": {
-        "policy": "safe",
+        "policy": "standard",
         "layout": "lines"
       },
       "source_utf8": "<!-- visible --><script>let x=1;// line\n</script>",
@@ -570,7 +570,7 @@
       "language": "css",
       "operation": "transform",
       "options": {
-        "policy": "safe",
+        "policy": "standard",
         "layout": "lines"
       },
       "source_utf8": "a{content:\"/* raw */\";/* block */}\n",
@@ -618,7 +618,7 @@
       "language": "jsonc",
       "operation": "transform",
       "options": {
-        "policy": "safe",
+        "policy": "standard",
         "layout": "lines"
       },
       "source_utf8": "{\"x\":\"// raw\" // line\n}\n",
@@ -666,7 +666,7 @@
       "language": "sql",
       "operation": "transform",
       "options": {
-        "policy": "safe",
+        "policy": "standard",
         "layout": "lines"
       },
       "source_utf8": "select '-- raw'; -- line\n/* block */\n",
@@ -726,7 +726,7 @@
       "language": "kotlin",
       "operation": "transform",
       "options": {
-        "policy": "safe",
+        "policy": "standard",
         "layout": "lines"
       },
       "source_utf8": "val s = \"// raw\" // line\n/* outer /* nested */ end */",
@@ -786,7 +786,7 @@
       "language": "toml",
       "operation": "transform",
       "options": {
-        "policy": "safe",
+        "policy": "standard",
         "layout": "lines"
       },
       "source_utf8": "#:schema https://example.test/pyproject.json\nkey = \"# opaque\" # remove\n",
@@ -846,7 +846,7 @@
       "language": "lua",
       "operation": "transform",
       "options": {
-        "policy": "safe",
+        "policy": "standard",
         "layout": "lines"
       },
       "source_utf8": "---@diagnostic disable-next-line: undefined-global\nprint([[-- opaque]]) -- remove\n",
@@ -906,7 +906,7 @@
       "language": "yaml",
       "operation": "transform",
       "options": {
-        "policy": "safe",
+        "policy": "standard",
         "layout": "lines"
       },
       "source_utf8": "# yamllint disable-line rule:line-length\nkey: \"# opaque\" # remove\n",
@@ -966,7 +966,7 @@
       "language": "php",
       "operation": "transform",
       "options": {
-        "policy": "safe",
+        "policy": "standard",
         "layout": "lines"
       },
       "source_utf8": "<?php // phpcs:disable\r\n$s = '// opaque'; // remove\r\n?>\r\n<p># html</p>\r\n",
@@ -1026,7 +1026,7 @@
       "language": "ruby",
       "operation": "transform",
       "options": {
-        "policy": "safe",
+        "policy": "standard",
         "layout": "lines"
       },
       "source_utf8": "#!/usr/bin/env ruby\r\n# frozen_string_literal: true\r\nx = '# opaque' # remove\r\n=begin\r\ndoc\r\n=end\r\n",
@@ -1110,7 +1110,7 @@
       "language": "zig",
       "operation": "transform",
       "options": {
-        "policy": "safe",
+        "policy": "standard",
         "layout": "lines"
       },
       "source_utf8": "// zig fmt: off\r\nconst s = \"// string\";\r\n/// doc\r\n// line\r\n",
@@ -1182,7 +1182,7 @@
       "language": "r",
       "operation": "transform",
       "options": {
-        "policy": "safe",
+        "policy": "standard",
         "layout": "lines"
       },
       "source_utf8": "# styler: off\r\nx <- \"# string\"\r\n#' doc\r\n# line\r\n",
@@ -1254,7 +1254,7 @@
       "language": "dart",
       "operation": "transform",
       "options": {
-        "policy": "safe",
+        "policy": "standard",
         "layout": "lines"
       },
       "source_utf8": "// dart format off\r\nvar s = '// string';\r\n/// doc\r\n// line\r\n",
@@ -1326,7 +1326,7 @@
       "language": "swift",
       "operation": "transform",
       "options": {
-        "policy": "safe",
+        "policy": "standard",
         "layout": "lines"
       },
       "source_utf8": "// swift-tools-version:5.9\r\nlet s = \"// string\"\r\n/// doc\r\n// line\r\n",
@@ -1398,7 +1398,7 @@
       "language": "csharp",
       "operation": "transform",
       "options": {
-        "policy": "safe",
+        "policy": "standard",
         "layout": "lines"
       },
       "source_utf8": "// <auto-generated/>\r\nvar s = \"// string\";\r\n/// doc\r\n// line\r\n",
@@ -1470,7 +1470,7 @@
       "language": "scala",
       "operation": "transform",
       "options": {
-        "policy": "safe",
+        "policy": "standard",
         "layout": "lines"
       },
       "source_utf8": "//> using scala \"3.3.0\"\nval a = s\"${1 /* in */}\"  // line\n/** doc */\nval b = <a>// text</a>\n",
@@ -1548,7 +1548,7 @@
       "language": "vue",
       "operation": "transform",
       "options": {
-        "policy": "safe",
+        "policy": "standard",
         "layout": "lines"
       },
       "source_utf8": "<template>\n<!-- note -->\n<div>{{ x /* c */ }}</div>\n</template>\n<script setup lang=\"ts\">\n// ts\nconst n: number = 1\n</script>\n<style lang=\"scss\">\n// scss\n.a { color: red; }\n</style>\n",
@@ -1590,7 +1590,7 @@
       "language": "svelte",
       "operation": "transform",
       "options": {
-        "policy": "safe",
+        "policy": "standard",
         "layout": "lines"
       },
       "source_utf8": "<script lang=\"ts\">\n// ts\n</script>\n<style lang=\"scss\">\n// scss\n</style>\n<p>{x /* c */}</p>\n<!-- note -->\n",
@@ -1632,7 +1632,7 @@
       "language": "markdown",
       "operation": "transform",
       "options": {
-        "policy": "safe",
+        "policy": "standard",
         "layout": "lines"
       },
       "source_utf8": "text\n<!-- note -->\nmore\n```rust\n// c\n```\n`// inline`\n",
@@ -1662,7 +1662,7 @@
       "language": "perl",
       "operation": "transform",
       "options": {
-        "policy": "safe",
+        "policy": "standard",
         "layout": "lines"
       },
       "source_utf8": "=head1 NAME\n# not a comment\n=cut\nmy $x = 'a#b';\nif ($x =~ /a#b/) { print \"yes\\n\" }\nmy $y = $x / 2; # division\n",

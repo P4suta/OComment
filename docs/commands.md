@@ -46,7 +46,7 @@ blocks below. `ocomment man` renders the same material as a manual page.
 
 ```console
 $ ocomment --help
-OComment scans source bytes without requiring UTF-8 and reports or removes comment tokens. The default policy protects source preambles and tool or language directives. Rewrites are prepared and committed as one rollback-backed transaction.
+OComment scans source bytes without requiring UTF-8 and reports or removes comment tokens. The default policy keeps licence notices, tool and language directives, shebangs and encoding lines, and removes ordinary and doc comments. Rewrites are prepared and committed as one rollback-backed transaction.
 
 Usage: ocomment [OPTIONS] [PATH]...
        ocomment <COMMAND>
@@ -86,9 +86,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
+          - conservative: Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines
+          - standard:     Like conservative, and remove licence and copyright notices too
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -165,13 +165,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -182,19 +182,19 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
@@ -287,9 +287,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
+          - conservative: Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines
+          - standard:     Like conservative, and remove licence and copyright notices too
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -366,13 +366,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -383,19 +383,19 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
@@ -473,9 +473,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
+          - conservative: Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines
+          - standard:     Like conservative, and remove licence and copyright notices too
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -552,13 +552,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -569,19 +569,19 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
@@ -651,9 +651,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
+          - conservative: Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines
+          - standard:     Like conservative, and remove licence and copyright notices too
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -730,13 +730,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -747,19 +747,19 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
@@ -829,9 +829,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
+          - conservative: Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines
+          - standard:     Like conservative, and remove licence and copyright notices too
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -908,13 +908,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -925,19 +925,19 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
@@ -997,9 +997,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
+          - conservative: Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines
+          - standard:     Like conservative, and remove licence and copyright notices too
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -1076,13 +1076,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -1093,19 +1093,19 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
@@ -1165,9 +1165,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
+          - conservative: Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines
+          - standard:     Like conservative, and remove licence and copyright notices too
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -1244,13 +1244,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -1261,19 +1261,19 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
@@ -1349,9 +1349,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
+          - conservative: Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines
+          - standard:     Like conservative, and remove licence and copyright notices too
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -1428,13 +1428,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -1445,19 +1445,19 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
@@ -1524,9 +1524,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
+          - conservative: Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines
+          - standard:     Like conservative, and remove licence and copyright notices too
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -1603,13 +1603,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -1620,19 +1620,19 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
@@ -1692,9 +1692,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
+          - conservative: Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines
+          - standard:     Like conservative, and remove licence and copyright notices too
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -1771,13 +1771,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -1788,19 +1788,19 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
@@ -1869,9 +1869,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
+          - conservative: Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines
+          - standard:     Like conservative, and remove licence and copyright notices too
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -1948,13 +1948,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -1965,19 +1965,19 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
@@ -2050,9 +2050,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
+          - conservative: Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines
+          - standard:     Like conservative, and remove licence and copyright notices too
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -2129,13 +2129,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -2146,19 +2146,19 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
@@ -2222,9 +2222,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
+          - conservative: Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines
+          - standard:     Like conservative, and remove licence and copyright notices too
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -2301,13 +2301,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -2318,19 +2318,19 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
@@ -2390,9 +2390,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
+          - conservative: Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines
+          - standard:     Like conservative, and remove licence and copyright notices too
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -2469,13 +2469,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -2486,19 +2486,19 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
@@ -2562,9 +2562,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
+          - conservative: Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines
+          - standard:     Like conservative, and remove licence and copyright notices too
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -2641,13 +2641,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -2658,19 +2658,19 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
@@ -2734,9 +2734,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
+          - conservative: Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines
+          - standard:     Like conservative, and remove licence and copyright notices too
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -2813,13 +2813,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -2830,19 +2830,19 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
@@ -2906,9 +2906,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
+          - conservative: Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines
+          - standard:     Like conservative, and remove licence and copyright notices too
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -2985,13 +2985,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -3002,19 +3002,19 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
@@ -3080,9 +3080,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
+          - conservative: Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines
+          - standard:     Like conservative, and remove licence and copyright notices too
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -3159,13 +3159,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -3176,19 +3176,19 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
@@ -3248,9 +3248,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
+          - conservative: Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines
+          - standard:     Like conservative, and remove licence and copyright notices too
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -3327,13 +3327,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -3344,19 +3344,19 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
@@ -3416,9 +3416,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
+          - conservative: Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines
+          - standard:     Like conservative, and remove licence and copyright notices too
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -3495,13 +3495,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -3512,19 +3512,19 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
-          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>

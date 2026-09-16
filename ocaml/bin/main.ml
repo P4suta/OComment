@@ -136,7 +136,10 @@ let profile_of_json json =
     : declarative_profile)
 
 let options json =
-  let policy = match Yojson.Safe.Util.member "policy" json with `String "all" -> All | `String "legal" -> Legal | _ -> Safe in
+  let policy = match Yojson.Safe.Util.member "policy" json with
+    | `String "all" -> All
+    | `String ("standard" | "safe") -> (Standard : policy)
+    | _ -> Conservative in
   let layout = match Yojson.Safe.Util.member "layout" json with `String "columns" -> Columns | `String "compact" -> Compact | _ -> Lines in
   let dialect = match Yojson.Safe.Util.member "dialect" json with `String value -> dialect_of_string value | _ -> Standard in
   let force_invalid = match Yojson.Safe.Util.member "force_invalid" json with `Bool value -> value | _ -> false in

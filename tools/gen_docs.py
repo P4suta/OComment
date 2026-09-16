@@ -651,8 +651,55 @@ def languages_page() -> str:
     return "\n".join(lines) + "\n"
 
 
-POLICIES = ("safe", "legal", "all")
+POLICIES = ("conservative", "standard", "all")
 LAYOUTS = ("lines", "columns", "compact")
+
+
+def check_value_lists(cli: Cli) -> None:
+    """Refuse to document a policy or layout list the binary does not have.
+
+    These two tuples used to be the only statement of which policies exist, so
+    renaming a policy in the source left this generator producing the old page
+    and reporting it as current -- a check that passed because both sides of it
+    were stale. The binary lists its own accepted values under `--help`, so
+    that is the side to believe, and a disagreement is a failure rather than a
+    silent regeneration.
+    """
+    help_text = cli.run(["check", "--help"]).stdout.decode("utf-8")
+    for flag, expected in (("--policy", POLICIES), ("--layout", LAYOUTS)):
+        found = possible_values(help_text, flag)
+        if found != list(expected):
+            raise SystemExit(
+                f"tools/gen_docs.py lists {list(expected)} for `{flag}`, but the"
+                f" binary accepts {found}; update the list in this file"
+            )
+
+
+def possible_values(help_text: str, flag: str) -> list[str]:
+    """The values clap prints under `flag`, in the order it prints them."""
+    lines = help_text.splitlines()
+    for index, line in enumerate(lines):
+        if line.strip().startswith(flag):
+            break
+    else:
+        raise SystemExit(f"`{flag}` is not in the help text")
+    values: list[str] = []
+    seen_header = False
+    for line in lines[index + 1 :]:
+        stripped = line.strip()
+        if stripped == "Possible values:":
+            seen_header = True
+            continue
+        if not seen_header:
+            if stripped and not line.startswith(" " * 10):
+                break
+            continue
+        if stripped.startswith("- "):
+            values.append(stripped[2:].split(":", 1)[0].strip())
+            continue
+        if not stripped:
+            break
+    return values
 
 POLICY_SAMPLE = """\
 // SPDX-License-Identifier: MIT OR Apache-2.0
@@ -726,7 +773,7 @@ def policies_page(cli: Cli, workspace: pathlib.Path) -> str:
     lines.extend(
         [
             "",
-            "`safe` and `legal` differ over the licence header alone, and `all`",
+            "`conservative` and `standard` differ over the licence header alone, and `all`",
             "is the only one that takes the `// rustfmt::skip` directive out.",
             "`all` still refuses to touch a shebang or an encoding preamble until",
             "`--force-protected` is given as well; see",
@@ -735,7 +782,7 @@ def policies_page(cli: Cli, workspace: pathlib.Path) -> str:
             "## What each layout leaves behind",
             "",
             "Each of these is `ocomment strip --language rust --layout <layout>`",
-            "reading the same sample, under the default `safe` policy.",
+            "reading the same sample, under the default `conservative` policy.",
         ]
     )
     outputs = {}
@@ -805,7 +852,7 @@ def policies_page(cli: Cli, workspace: pathlib.Path) -> str:
             "version = 1",
             "",
             "[policy]",
-            'mode = "legal"',
+            'mode = "conservative"',
             'layout = "lines"',
             "",
             "[[overrides]]",
@@ -826,7 +873,7 @@ def policies_page(cli: Cli, workspace: pathlib.Path) -> str:
 WHY_CONFIG = r"""version = 1
 
 [policy]
-mode = "safe"
+mode = "conservative"
 keep_regex = ['^//\s*NOTE\b']
 
 [[overrides]]
@@ -1098,7 +1145,7 @@ def why_kept_page(cli: Cli, workspace: pathlib.Path) -> str:
             "",
             "[[overrides]]",
             'paths = ["vendor/**"]',
-            'policy = "legal"',
+            'policy = "conservative"',
             "```",
             "",
             "`keep_kind` names whole kinds from the first column of the table above,",
@@ -1187,6 +1234,7 @@ def main() -> int:
         workspace = pathlib.Path(directory)
         (workspace / "config").mkdir()
         cli = Cli(binary, workspace)
+        check_value_lists(cli)
 
         rendered = cli.run(["man"]).stdout
         if not MAN_PAGE.is_file():

@@ -178,7 +178,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -236,7 +236,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -294,7 +294,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -352,7 +352,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -410,7 +410,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -468,7 +468,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -526,7 +526,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -878,7 +878,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -936,7 +936,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -994,7 +994,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -1052,7 +1052,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -1110,7 +1110,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -1180,7 +1180,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -1350,7 +1350,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -1408,7 +1408,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -1466,7 +1466,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -1524,7 +1524,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -1582,7 +1582,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -1640,7 +1640,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -1698,7 +1698,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)

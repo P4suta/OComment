@@ -21,7 +21,7 @@ include = []
 exclude = ["vendor/**"]
 
 [policy]
-mode = "safe"                 # NOTE: safe, legal, all
+mode = "conservative"         # NOTE: conservative, standard, all
 layout = "lines"              # NOTE: lines, columns, compact
 keep_kind = ["directive"]
 remove_kind = []

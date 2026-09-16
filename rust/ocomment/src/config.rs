@@ -67,7 +67,11 @@ pub struct PolicyConfig {
 impl Default for PolicyConfig {
     fn default() -> Self {
         Self {
-            mode: Policy::Safe,
+            /* NOTE: Deferred to the core enum rather than named here, so the
+             * built-in default the CLI reports and the default the library
+             * documents cannot drift apart. They did: renaming the policies
+             * left this line naming the old default under its new spelling. */
+            mode: Policy::default(),
             layout: Layout::Lines,
             keep_kind: Vec::new(),
             remove_kind: Vec::new(),
@@ -266,8 +270,8 @@ impl PolicyTrace {
             }
             /* NOTE: Every one of these is the policy having the last word, whether it
              * took the comment out or protected it. */
-            DispositionExplanation::RemovedByPolicy(_)
-            | DispositionExplanation::RemovedByDefault(_)
+            DispositionExplanation::RemovedByPolicy { .. }
+            | DispositionExplanation::RemovedByDefault { .. }
             | DispositionExplanation::KeptLicense { .. } => (&self.policy, "mode"),
             // NOTE: A built-in rule, decided by no setting at all.
             DispositionExplanation::ProtectedPreamble

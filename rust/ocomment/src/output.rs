@@ -382,9 +382,14 @@ fn explanation_line(
         file.language,
         &material.options,
     );
+    /* NOTE: These were exclusive, which left a removal saying which setting
+     * took the comment out and never saying how to get it back. The setting
+     * and the way back answer different questions, so a verdict that has both
+     * gets both. */
+    let step = next_step(&verdict);
     let tail = match material.trace.origin_of(&verdict, &material.options) {
-        Some(origin) => format!(" ({origin})"),
-        None => next_step(&verdict),
+        Some(origin) => format!(" ({origin}){step}"),
+        None => step,
     };
     format!(
         "    {}{}{}",
@@ -413,14 +418,33 @@ fn write_explanation(
     ))
 }
 
-/// How to overrule a built-in rule, which no setting decided and no table can
-/// be pointed at for.
+/// The flag that would overrule this verdict, for the verdicts a flag can.
+///
+/// A keep needs this when no setting decided it and no table can be pointed
+/// at. A removal needs it for a different reason: naming the setting that took
+/// a comment out does not tell a reader how to get it back, and the removals
+/// worth getting back — a license notice, a doc comment — each have a
+/// different answer. The policy is spelled through [`Policy`] rather than
+/// written out, so renaming a policy renames it here too.
 fn next_step(verdict: &DispositionExplanation) -> String {
     match verdict {
         DispositionExplanation::ProtectedPreamble
         | DispositionExplanation::KeptLoadBearing { .. } => {
             "; add --force-protected to remove it".to_owned()
         }
+        /* NOTE: The removals a reader is most likely to have wanted kept. A
+         * license notice is the one with a legal cost to losing, and a doc
+         * comment is the one a policy takes wholesale from a repository that
+         * publishes documentation. Both are recoverable, and neither is
+         * recoverable by the same flag. */
+        DispositionExplanation::RemovedByDefault {
+            kind: CommentKind::License,
+            ..
+        } => format!("; use --policy {} to keep it", Policy::Conservative),
+        DispositionExplanation::RemovedByDefault {
+            kind: kind @ (CommentKind::DocLine | CommentKind::DocBlock),
+            ..
+        } => format!("; use --keep-kind {kind} to keep it"),
         DispositionExplanation::KeptHtml => format!(
             "; use --remove-kind {} or --policy all to remove it",
             CommentKind::HtmlComment

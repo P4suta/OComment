@@ -285,7 +285,10 @@ fn an_invalid_regex_explains_the_same_way_the_scanner_scans() {
     let explanation = explain(CommentKind::Line, "// plain", Language::Rust, &options);
     assert_eq!(
         explanation,
-        DispositionExplanation::RemovedByDefault(Policy::Safe)
+        DispositionExplanation::RemovedByDefault {
+            policy: Policy::Standard,
+            kind: CommentKind::Line,
+        }
     );
     assert_eq!(
         explanation.action().is_remove(),
@@ -401,7 +404,10 @@ fn the_preamble_is_protected_until_it_is_forced() {
     };
     assert_eq!(
         explain(CommentKind::Shebang, "#!/bin/sh", Language::Shell, &forced),
-        DispositionExplanation::RemovedByDefault(Policy::Safe)
+        DispositionExplanation::RemovedByDefault {
+            policy: Policy::Standard,
+            kind: CommentKind::Shebang,
+        }
     );
     let forced_all = ScanOptions {
         force_protected: true,
@@ -415,7 +421,10 @@ fn the_preamble_is_protected_until_it_is_forced() {
             Language::Shell,
             &forced_all
         ),
-        DispositionExplanation::RemovedByPolicy(Policy::All)
+        DispositionExplanation::RemovedByPolicy {
+            policy: Policy::All,
+            kind: CommentKind::Shebang,
+        }
     );
 }
 
@@ -456,7 +465,7 @@ fn a_keep_override_outranks_every_later_branch() {
 #[test]
 fn a_remove_override_outranks_the_policy_protections() {
     let options = ScanOptions {
-        policy: Policy::Legal,
+        policy: Policy::Conservative,
         remove_kinds: vec![CommentKind::License, CommentKind::HtmlComment],
         ..Default::default()
     };
@@ -506,7 +515,10 @@ fn policy_all_removes_what_the_other_policies_protect() {
         let explanation = explain(kind, raw, language, &options);
         assert_eq!(
             explanation,
-            DispositionExplanation::RemovedByPolicy(Policy::All),
+            DispositionExplanation::RemovedByPolicy {
+                policy: Policy::All,
+                kind,
+            },
             "{kind} under policy all"
         );
         assert!(explanation.to_string().contains("all"));
@@ -515,7 +527,7 @@ fn policy_all_removes_what_the_other_policies_protect() {
 
 #[test]
 fn html_comments_are_kept_by_both_conservative_policies() {
-    for policy in [Policy::Safe, Policy::Legal] {
+    for policy in [Policy::Standard, Policy::Conservative] {
         let options = ScanOptions {
             policy,
             ..Default::default()
@@ -587,9 +599,9 @@ fn an_unnamed_directive_kind_still_explains_itself() {
 }
 
 #[test]
-fn a_license_is_kept_only_by_the_legal_policy_and_names_its_marker() {
+fn a_license_is_kept_only_by_the_conservative_policy_and_names_its_marker() {
     let legal = ScanOptions {
-        policy: Policy::Legal,
+        policy: Policy::Conservative,
         ..Default::default()
     };
     for (raw, marker) in [
@@ -618,14 +630,17 @@ fn a_license_is_kept_only_by_the_legal_policy_and_names_its_marker() {
     );
     assert_eq!(
         explanation,
-        DispositionExplanation::RemovedByDefault(Policy::Safe)
+        DispositionExplanation::RemovedByDefault {
+            policy: Policy::Standard,
+            kind: CommentKind::License,
+        }
     );
-    assert!(explanation.to_string().contains("safe"));
+    assert!(explanation.to_string().contains("standard"));
 }
 
 #[test]
 fn ordinary_comments_fall_through_to_the_policy_default() {
-    for policy in [Policy::Safe, Policy::Legal] {
+    for policy in [Policy::Standard, Policy::Conservative] {
         let options = ScanOptions {
             policy,
             ..Default::default()
@@ -639,7 +654,7 @@ fn ordinary_comments_fall_through_to_the_policy_default() {
             let explanation = explain(kind, raw, Language::Rust, &options);
             assert_eq!(
                 explanation,
-                DispositionExplanation::RemovedByDefault(policy),
+                DispositionExplanation::RemovedByDefault { policy, kind },
                 "{kind} under policy {policy}"
             );
             assert_eq!(explanation.action(), Action::Remove);
@@ -660,7 +675,7 @@ fn the_action_helper_is_the_inverse_of_a_removal() {
 #[test]
 fn explaining_a_report_leaves_the_report_alone() {
     let options = ScanOptions {
-        policy: Policy::Legal,
+        policy: Policy::Conservative,
         keep_regex: vec!["(?i)ordinary".into()],
         ..Default::default()
     };

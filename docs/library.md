@@ -89,7 +89,7 @@ diagnostic, or a breakpoint pointing at the right place after a removal.
 Every comment is classified as a `CommentKind` first — from its delimiters, then
 from its own text and position — and the `Policy` then decides that kind:
 
-| Kind | `safe` | `legal` | `all` |
+| Kind | `conservative` | `standard` | `all` |
 | --- | --- | --- | --- |
 | `line`, `block`, `doc-line`, `doc-block` | remove | remove | remove |
 | `license` | remove | keep | remove |

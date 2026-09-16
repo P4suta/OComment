@@ -2416,7 +2416,7 @@ fn check_help_groups_options_and_lists_possible_values() {
     assert_eq!(short.status.code(), Some(0));
     let short = String::from_utf8(short.stdout).unwrap();
     assert!(
-        short.contains("[possible values: safe, legal, all]"),
+        short.contains("[possible values: conservative, standard, all]"),
         "`check -h` lacks the policy values:\n{short}"
     );
     assert!(short.contains("Policy:"), "no Policy heading:\n{short}");
@@ -2428,8 +2428,8 @@ fn check_help_groups_options_and_lists_possible_values() {
     assert!(long.contains("Policy:"), "no Policy heading:\n{long}");
     assert!(long.contains("Output:"), "no Output heading:\n{long}");
     for needle in [
-        "- safe:",
-        "- legal:",
+        "- conservative:",
+        "- standard:",
         "- all:",
         "- lines:",
         "- rust:",
@@ -2450,7 +2450,7 @@ fn unknown_policy_value_reports_the_possible_values() {
     let error = String::from_utf8_lossy(&output.stderr);
     assert!(error.contains("invalid value 'foo'"), "{error}");
     assert!(
-        error.contains("[possible values: safe, legal, all]"),
+        error.contains("[possible values: conservative, standard, all]"),
         "{error}"
     );
 }
@@ -2566,7 +2566,7 @@ fn bash_completions_carry_the_policy_values() {
     let output = run(directory.path(), &["completions", "bash"]);
     assert_eq!(output.status.code(), Some(0));
     let script = String::from_utf8(output.stdout).unwrap();
-    for value in ["safe", "legal", "all"] {
+    for value in ["conservative", "standard", "all"] {
         assert!(
             script.contains(value),
             "bash completions lack the policy value {value}"
@@ -2650,7 +2650,7 @@ fn config_explain_prints_canonical_policy_and_layout() {
     assert_eq!(output.status.code(), Some(0));
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(
-        stdout.contains("policy: safe; layout: lines"),
+        stdout.contains("policy: conservative; layout: lines"),
         "config explain output is:\n{stdout}"
     );
     /* NOTE: Only the policy line is pinned: the surrounding lines print filesystem
@@ -3253,15 +3253,13 @@ fn json_and_jsonl_serde_names_are_frozen() {
             r#"{"path":"sample.py","language":"python","changed":true,"report":{"language":"python","#,
             r#""comments":[{"span":{"start":0,"end":22},"kind":"shebang","disposition":{"action":"keep","#,
             r#""reason":"required source preamble"}},{"span":{"start":23,"end":53},"kind":"license","#,
-            r#""disposition":{"action":"remove"}},{"span":{"start":61,"end":69},"kind":"line","#,
+            r#""disposition":{"action":"keep","reason":"conservative policy"}},"#,
+            r#"{"span":{"start":61,"end":69},"kind":"line","#,
             r#""disposition":{"action":"remove"}}],"diagnostics":[],"valid":true},"#,
-            r#""edits":[{"span":{"start":23,"end":53},"replacement":""},"#,
-            r#"{"span":{"start":61,"end":69},"replacement":""}],"#,
-            r#""source_map":{"segments":[{"original":{"start":0,"end":23},"output":{"start":0,"end":23},"exact":true},"#,
-            r#"{"original":{"start":23,"end":53},"output":{"start":23,"end":23},"exact":false},"#,
-            r#"{"original":{"start":53,"end":61},"output":{"start":23,"end":31},"exact":true},"#,
-            r#"{"original":{"start":61,"end":69},"output":{"start":31,"end":31},"exact":false},"#,
-            r#"{"original":{"start":69,"end":70},"output":{"start":31,"end":32},"exact":true}]}}"#,
+            r#""edits":[{"span":{"start":61,"end":69},"replacement":""}],"#,
+            r#""source_map":{"segments":[{"original":{"start":0,"end":61},"output":{"start":0,"end":61},"exact":true},"#,
+            r#"{"original":{"start":61,"end":69},"output":{"start":61,"end":61},"exact":false},"#,
+            r#"{"original":{"start":69,"end":70},"output":{"start":61,"end":62},"exact":true}]}}"#,
             "\n"
         ),
         "the JSONL protocol changed"
@@ -3283,7 +3281,12 @@ fn json_and_jsonl_serde_names_are_frozen() {
         comments[0]["disposition"]["reason"],
         "required source preamble"
     );
-    assert_eq!(comments[1]["disposition"]["action"], "remove");
+    assert_eq!(comments[1]["disposition"]["action"], "keep");
+    assert_eq!(
+        comments[1]["disposition"]["reason"], "conservative policy",
+        "the default policy keeps a licence notice"
+    );
+    assert_eq!(comments[2]["disposition"]["action"], "remove");
     assert_eq!(value["files"][0]["language"], "python");
 }
 
@@ -5867,7 +5870,7 @@ fn check_explain_names_the_override_and_the_pattern_that_kept_a_comment() {
          * rather than sent to a file that never mentions it. The pattern the
          * same file does set is named with the file, spelled the way the reader
          * typed their way into the directory. */
-        "removed: policy `safe` removes ordinary comments (built-in defaults)",
+        "removed: policy `conservative` removes ordinary comments (built-in defaults)",
         "a.rs:1:1: kept line comment: // API stays",
         "kept: matched keep_regex #0 `(?i)^// api` ([policy] in .ocomment.toml)",
     ] {
@@ -5971,7 +5974,7 @@ fn explain_names_the_command_line_when_a_flag_set_the_policy() {
 
     let output = run(
         directory.path(),
-        &["check", "--explain", "--policy", "legal"],
+        &["check", "--explain", "--policy", "conservative"],
     );
     assert_eq!(
         output.status.code(),
@@ -5982,13 +5985,13 @@ fn explain_names_the_command_line_when_a_flag_set_the_policy() {
     let report = String::from_utf8(output.stdout).unwrap();
     for needle in [
         "notice.rs:1:1: kept license comment: // Copyright 2026 Example",
-        "kept: policy legal protects license comments, and this one says `copyright` \
+        "kept: policy conservative protects license comments, and this one says `copyright` \
          (--policy on the command line)",
-        "removed: policy `legal` removes ordinary comments (--policy on the command line)",
+        "removed: policy `conservative` removes ordinary comments (--policy on the command line)",
     ] {
         assert!(
             report.contains(needle),
-            "`check --explain --policy legal` lacks {needle:?}:\n{report}"
+            "`check --explain --policy conservative` lacks {needle:?}:\n{report}"
         );
     }
 }
@@ -6125,9 +6128,10 @@ fn scan_explain_annotates_every_listed_comment() {
         "`scan --explain` changed the listing:\n{stdout}"
     );
     assert!(
-        lines.get(3).is_some_and(
-            |line| line.starts_with("    removed: policy `safe` removes ordinary comments")
-        ),
+        lines
+            .get(3)
+            .is_some_and(|line| line
+                .starts_with("    removed: policy `conservative` removes ordinary comments")),
         "`scan --explain` did not explain the removal:\n{stdout}"
     );
     assert_no_debug_leak("human scan --explain output", &stdout);

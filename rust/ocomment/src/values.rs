@@ -84,12 +84,19 @@ macro_rules! value_enum_wrapper {
     };
 }
 
+/* NOTE: These name the kinds each policy takes, rather than summarising them
+ * as "preambles". A reader deciding between two policies is deciding about
+ * licence notices, and the word "preamble" is the one that hid that: it reads
+ * as "the header at the top of the file", which is exactly where a licence
+ * notice sits, while the code means the shebang and the encoding line. */
 value_enum_wrapper!(PolicyArg, Policy, |value| match value {
-    Policy::Safe => "Remove ordinary and doc comments; keep preambles and directives",
-    Policy::Legal => "Like safe, and keep licence and copyright comments as well",
+    Policy::Conservative =>
+        "Remove ordinary and doc comments; keep licence notices, directives, \
+         shebangs and encoding lines",
+    Policy::Standard => "Like conservative, and remove licence and copyright notices too",
     Policy::All =>
-        "Remove every comment except the preambles and load-bearing directives the \
-         language itself reads",
+        "Remove every comment except shebangs, encoding lines and the \
+         directives the language itself reads",
 });
 
 value_enum_wrapper!(LayoutArg, Layout, |value| match value {
@@ -167,14 +174,14 @@ value_enum_wrapper!(CommentKindArg, CommentKind, |value| match value {
     CommentKind::DocLine => "A documentation comment running to the end of the line",
     CommentKind::DocBlock => "A delimited documentation comment",
     CommentKind::Directive => "A tool or language directive such as a pragma or lint control",
-    CommentKind::License => "A licence or copyright preamble",
+    CommentKind::License => "A licence or copyright notice",
     CommentKind::HtmlComment => "A DOM-observable HTML comment",
     CommentKind::Shebang => "The interpreter line starting an executable script",
     CommentKind::Encoding => "A source encoding declaration",
     CommentKind::OptimizerHint => "A compiler or database optimizer hint",
     CommentKind::VersionComment => "A MySQL versioned comment that the server executes",
     CommentKind::LoadBearing =>
-        "A directive the language or its build reads as part of the program, such as          `//go:build`",
+        "A directive the language or its build reads as part of the program, such as `//go:build`",
 });
 
 #[cfg(test)]

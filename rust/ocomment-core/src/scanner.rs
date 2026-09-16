@@ -6161,9 +6161,19 @@ pub(crate) fn disposition(
     raw: &[u8],
     patterns: &DispositionPatterns,
 ) -> Disposition {
-    if options.keep_kinds.contains(&kind) || (patterns.keep_active && patterns.keep.is_match(raw)) {
+    /* NOTE: These were one branch reading "kept by kind or regex override",
+     * which named both rules and confirmed neither. A reader who has to decide
+     * whether to edit `keep_kind` or `keep_regex` was told to look at both.
+     * The tests are ordered as the rules are, so the branch order is the
+     * answer. */
+    if options.keep_kinds.contains(&kind) {
         return Disposition::Keep {
-            reason: "kept by kind or regex override".into(),
+            reason: "kept by keep_kind".into(),
+        };
+    }
+    if patterns.keep_active && patterns.keep.is_match(raw) {
+        return Disposition::Keep {
+            reason: "kept by keep_regex".into(),
         };
     }
     if let Some(reason) = protected_reason(kind)
@@ -6194,9 +6204,9 @@ pub(crate) fn disposition(
             reason: "tool or language directive".into(),
         };
     }
-    if kind == CommentKind::License && options.policy == Policy::Legal {
+    if kind == CommentKind::License && options.policy == Policy::Conservative {
         return Disposition::Keep {
-            reason: "legal policy".into(),
+            reason: "conservative policy".into(),
         };
     }
     Disposition::Remove
@@ -6254,7 +6264,10 @@ fn legal_marker_of(raw: &[u8]) -> Option<&'static str> {
 /// let mut options = ScanOptions::default();
 /// let why = explain_disposition(CommentKind::Line, b"// note", Language::Rust, &options);
 /// assert_eq!(why.action(), Action::Remove);
-/// assert!(matches!(why, DispositionExplanation::RemovedByDefault(Policy::Safe)));
+/// assert!(matches!(
+///     why,
+///     DispositionExplanation::RemovedByDefault { policy: Policy::Standard, .. }
+/// ));
 ///
 /// options.keep_regex.push(r"^//\s*NOTE\b".into());
 /// let kept = explain_disposition(CommentKind::Line, b"// NOTE: why", Language::Rust, &options);
@@ -6310,7 +6323,10 @@ pub fn explain_disposition_with(
         return DispositionExplanation::RemovedByRegex { index, pattern };
     }
     if options.policy == Policy::All {
-        return DispositionExplanation::RemovedByPolicy(options.policy);
+        return DispositionExplanation::RemovedByPolicy {
+            policy: options.policy,
+            kind,
+        };
     }
     if kind == CommentKind::HtmlComment {
         return DispositionExplanation::KeptHtml;
@@ -6324,12 +6340,15 @@ pub fn explain_disposition_with(
             name: directive_name_of(raw, language),
         };
     }
-    if kind == CommentKind::License && options.policy == Policy::Legal {
+    if kind == CommentKind::License && options.policy == Policy::Conservative {
         return DispositionExplanation::KeptLicense {
             marker: legal_marker_of(raw),
         };
     }
-    DispositionExplanation::RemovedByDefault(options.policy)
+    DispositionExplanation::RemovedByDefault {
+        policy: options.policy,
+        kind,
+    }
 }
 
 /// Name the rule that decided the fate of a comment a scan actually found.
@@ -7131,7 +7150,7 @@ fn opens_with_keyword(text: &str, keyword: &str) -> bool {
 /// documentation comment JEP 467 added in JDK 23. `//!` is Rust's inner-doc
 /// marker and means nothing here, so a comment opening with it is an ordinary
 /// line comment — reading it as documentation would hide it from
-/// [`crate::Policy::Safe`] in a language that never wrote it as one.
+/// [`crate::Policy::Standard`] in a language that never wrote it as one.
 fn java_line_kind(bytes: &[u8], index: usize) -> CommentKind {
     if starts(bytes, index, b"///") {
         CommentKind::DocLine
@@ -7159,7 +7178,7 @@ fn java_block_kind(bytes: &[u8], index: usize) -> CommentKind {
 /// company with Lua's `----` and Zig's `////`. `//!` is Rust's inner-doc
 /// marker and means nothing here, so a comment opening with it is an ordinary
 /// line comment — reading it as documentation would hide it from
-/// [`crate::Policy::Safe`] in a language that never wrote it as one.
+/// [`crate::Policy::Standard`] in a language that never wrote it as one.
 fn dart_line_kind(bytes: &[u8], index: usize) -> CommentKind {
     if starts(bytes, index, b"///") {
         CommentKind::DocLine
@@ -7189,7 +7208,7 @@ fn dart_block_kind(bytes: &[u8], index: usize) -> CommentKind {
 /// `///`, which is where Swift keeps company with Dart and parts company with
 /// Lua's `----` and Zig's `////`. `//!` is Rust's inner-doc marker and means
 /// nothing here, so a comment opening with it is an ordinary line comment —
-/// reading it as documentation would hide it from [`crate::Policy::Safe`] in a
+/// reading it as documentation would hide it from [`crate::Policy::Standard`] in a
 /// language that never wrote it as one.
 fn swift_line_kind(bytes: &[u8], index: usize) -> CommentKind {
     if starts(bytes, index, b"///") {
@@ -11323,7 +11342,7 @@ mod tests {
             source,
             Language::C,
             ScanOptions {
-                policy: Policy::Legal,
+                policy: Policy::Conservative,
                 keep_regex: vec!["KEEP".into()],
                 remove_regex: vec!["REMOVE".into()],
                 ..Default::default()

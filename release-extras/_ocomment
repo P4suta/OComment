@@ -16,9 +16,9 @@ _ocomment() {
     local context curcontext="$curcontext" state line
     _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove licence and copyright notices too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -75,31 +75,31 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -123,9 +123,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
             (check)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove licence and copyright notices too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -182,25 +182,25 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
@@ -208,7 +208,7 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -223,9 +223,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 (fix)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove licence and copyright notices too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -282,25 +282,25 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
@@ -311,7 +311,7 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '(--staged --dry-run -q --quiet)-i[Ask about each comment in turn and remove only the accepted ones]' \
 '(--staged --dry-run -q --quiet)--interactive[Ask about each comment in turn and remove only the accepted ones]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -326,9 +326,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 (diff)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove licence and copyright notices too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -385,25 +385,25 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
@@ -411,7 +411,7 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -426,9 +426,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 (scan)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove licence and copyright notices too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -485,25 +485,25 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
@@ -511,7 +511,7 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -526,9 +526,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 (strip)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove licence and copyright notices too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -585,31 +585,31 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -623,9 +623,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 (lsp)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove licence and copyright notices too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -682,31 +682,31 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -720,9 +720,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 (init)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove licence and copyright notices too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -779,25 +779,25 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
@@ -806,7 +806,7 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '(--stdout)--force[Replace the file if it already exists]' \
 '--stdout[Print the template to standard output and write no file]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -821,9 +821,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 (config)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove licence and copyright notices too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -880,31 +880,31 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -919,9 +919,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 (languages)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove licence and copyright notices too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -978,31 +978,31 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -1016,9 +1016,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 (plugin)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove licence and copyright notices too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -1075,31 +1075,31 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -1124,9 +1124,9 @@ _arguments "${_arguments_options[@]}" : \
 '--sha256=[Expected SHA-256 digest of the component, verified before install]:HEX:_default' \
 '--identity=[Publisher identity recorded alongside the pinned digest]:IDENTITY:_default' \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove licence and copyright notices too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -1183,31 +1183,31 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -1222,9 +1222,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 (remove)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove licence and copyright notices too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -1281,31 +1281,31 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -1320,9 +1320,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 (list)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove licence and copyright notices too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -1379,31 +1379,31 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -1417,9 +1417,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 (update)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove licence and copyright notices too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -1476,31 +1476,31 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -1515,9 +1515,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 (verify)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove licence and copyright notices too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -1574,31 +1574,31 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -1613,9 +1613,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 (new)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove licence and copyright notices too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -1672,31 +1672,31 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -1759,9 +1759,9 @@ esac
 (completions)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove licence and copyright notices too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -1818,31 +1818,31 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -1857,9 +1857,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 (doctor)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove licence and copyright notices too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -1916,31 +1916,31 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -1954,9 +1954,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 (man)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove licence and copyright notices too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -2013,31 +2013,31 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
-load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \

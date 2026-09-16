@@ -757,7 +757,7 @@ mod tests {
     }
 
     #[test]
-    fn html_is_byte_identical_in_safe_mode() {
+    fn html_is_byte_identical_in_standard_mode() {
         let input = b"a<!-- visible\ncomment -->b";
         assert_eq!(
             transform(input, Language::Html, TransformOptions::default()).output,

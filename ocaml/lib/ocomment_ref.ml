@@ -3,6 +3,13 @@ type language =
   | Shell | Html | Css | Jsonc | Sql | Kotlin | Toml | Lua | Yaml | Php | Ruby
   | Zig | R | Dart | Swift | CSharp | Scala | Vue | Svelte | Markdown | Perl | Unknown
 
+(* NOTE: Defined before `dialect` because both carry a `Standard`, and OCaml
+   resolves a bare constructor to the last type that declares it.  The dialect's
+   is used throughout this file and the policy's is used once, so the dialect is
+   the one worth leaving unannotated; the single policy use is written
+   `(Standard : policy)`. *)
+type policy = Conservative | Standard | All
+
 type dialect =
   | Standard | Jsx | Tsx | ObjectiveC | ObjectiveCpp | GnuC | GnuCpp | Cuda
   | PosixSh | Bash53 | Zsh | PostgreSql | MySql | Sqlite | TSql | Oracle | Scss
@@ -18,7 +25,6 @@ type disposition = Remove | Keep of string
 type severity = Error | Warning | Info | Hint
 type diagnostic = { code : string; message : string; severity : severity; span : byte_span }
 type comment = { span : byte_span; kind : comment_kind; disposition : disposition }
-type policy = Safe | Legal | All
 type layout = Lines | Columns | Compact
 
 type scan_options = {
@@ -71,7 +77,7 @@ type declarative_profile = {
 }
 
 let default_scan_options = {
-  policy = Safe; dialect = Standard; force_invalid = false; force_protected = false;
+  policy = Conservative; dialect = Standard; force_invalid = false; force_protected = false;
   keep_kinds = []; remove_kinds = []; keep_regex = []; remove_regex = [];
 }
 
@@ -226,8 +232,8 @@ let regex_matches patterns raw =
     with Re.Perl.Parse_error | Re.Perl.Not_supported -> false) patterns
 
 let disposition options kind raw =
-  if mem_kind kind options.keep_kinds || regex_matches options.keep_regex raw then
-    Keep "kept by kind or regex override"
+  if mem_kind kind options.keep_kinds then Keep "kept by keep_kind"
+  else if regex_matches options.keep_regex raw then Keep "kept by keep_regex"
   else if (kind = Shebang || kind = Encoding) && not options.force_protected then Keep "required source preamble"
   else if kind = LoadBearing && not options.force_protected then
     Keep "required by the language or its build"
@@ -235,7 +241,7 @@ let disposition options kind raw =
   else if options.policy = All then Remove
   else if kind = HtmlComment then Keep "HTML comments are DOM-observable"
   else if kind = Directive || kind = OptimizerHint || kind = VersionComment then Keep "tool or language directive"
-  else if kind = License && options.policy = Legal then Keep "legal policy"
+  else if kind = License && options.policy = Conservative then Keep "conservative policy"
   else Remove
 
 let contains text needle =

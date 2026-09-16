@@ -69,7 +69,7 @@
   },
   "$defs": {
     "strings": { "type": "array", "items": { "type": "string" }, "default": [] },
-    "policy": { "enum": ["safe", "legal", "all"], "default": "safe" },
+    "policy": { "enum": ["conservative", "standard", "all", "legal", "safe"], "default": "conservative" },
     "language": { "enum": ["rust", "ocaml", "c", "cpp", "go", "java", "javascript", "typescript", "python", "shell", "html", "css", "jsonc", "sql", "kotlin", "toml", "lua", "yaml", "php", "ruby", "zig", "r", "dart", "swift", "csharp", "scala", "vue", "svelte", "markdown", "perl"] },
     "kind": { "enum": ["line", "block", "doc-line", "doc-block", "directive", "license", "html-comment", "shebang", "encoding", "optimizer-hint", "version-comment", "load-bearing"] },
     "kinds": { "type": "array", "items": { "$ref": "#/$defs/kind" }, "default": [] },

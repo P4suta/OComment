@@ -10,14 +10,14 @@ pre-commit:
   parallel: true
   commands:
     ocomment:
-      # NOTE: Prefer an installed CLI; fall back to the workspace copy so a
-      # NOTE: fresh clone gets the same gate without `cargo install` first.
-      run: |
-        if command -v ocomment >/dev/null 2>&1; then
-          ocomment check --staged
-        else
-          cargo run --quiet --manifest-path rust/Cargo.toml --locked -p ocomment -- check --staged
-        fi
+      # NOTE: Built from this workspace rather than taken from PATH. A tool that
+      # NOTE: gates its own repository has to be the version in that repository:
+      # NOTE: an installed copy is whatever was last `cargo install`ed, so a
+      # NOTE: commit that changes what OComment accepts gets judged by a build
+      # NOTE: that predates the change. That happened -- an installed 0.1.0
+      # NOTE: rejected this repository's own configuration for naming a policy
+      # NOTE: that the commit adding it had just introduced.
+      run: cargo run --quiet --manifest-path rust/Cargo.toml --locked -p ocomment -- check --staged
     rustfmt:
       glob: "rust/**/*.rs"
       run: cargo fmt --all --manifest-path rust/Cargo.toml -- --check

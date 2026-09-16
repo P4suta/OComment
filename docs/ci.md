@@ -51,7 +51,7 @@ repos:
 ```
 
 Both hooks accept the full CLI surface through `args`, for example
-`args: ["--policy", "legal"]` or `args: ["--config", "ci/.ocomment.toml"]`.
+`args: ["--policy", "standard"]` or `args: ["--config", "ci/.ocomment.toml"]`.
 
 ### Judging the commit rather than the disk
 

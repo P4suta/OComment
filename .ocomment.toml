@@ -27,7 +27,7 @@ exclude = [
 ]
 
 [policy]
-mode = "legal"
+mode = "conservative"
 layout = "lines"
 keep_kind = ["doc-line", "doc-block"]
 keep_regex = [

@@ -3,6 +3,10 @@ type language =
   | Shell | Html | Css | Jsonc | Sql | Kotlin | Toml | Lua | Yaml | Php | Ruby
   | Zig | R | Dart | Swift | CSharp | Scala | Vue | Svelte | Markdown | Perl | Unknown
 
+(* NOTE: Declared before `dialect` for the reason the implementation gives: both
+   carry a `Standard`, and the dialect's is the one worth leaving unannotated. *)
+type policy = Conservative | Standard | All
+
 type dialect =
   | Standard | Jsx | Tsx | ObjectiveC | ObjectiveCpp | GnuC | GnuCpp | Cuda
   | PosixSh | Bash53 | Zsh | PostgreSql | MySql | Sqlite | TSql | Oracle | Scss
@@ -18,7 +22,6 @@ type disposition = Remove | Keep of string
 type severity = Error | Warning | Info | Hint
 type diagnostic = { code : string; message : string; severity : severity; span : byte_span }
 type comment = { span : byte_span; kind : comment_kind; disposition : disposition }
-type policy = Safe | Legal | All
 type layout = Lines | Columns | Compact
 
 type scan_options = {

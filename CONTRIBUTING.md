@@ -92,7 +92,7 @@ sit *below* the body's own indentation, where a surviving comment is what the
 body would swallow and the comment above it is the only thing holding it out;
 and a few thousand generated documents of nested mappings, sequences, and block
 scalars with comments in every position, in LF and in CRLF. It strips every one
-of them under all three layouts and all three policies — `safe`, `legal` and
+of them under all three layouts and all three policies — `conservative`, `standard` and
 `all`, because each keeps a different comment and only a survivor makes the
 hazard reachable — and asserts that PyYAML reads the same value out of it
 afterwards. A document PyYAML rejects *before* the removal is skipped: YAML has
@@ -148,7 +148,7 @@ finding a permanent gate rather than a run someone remembers.
 
 ## Comments carry a tag
 
-OComment checks its own repository. `.ocomment.toml` runs the `legal` policy
+OComment checks its own repository. `.ocomment.toml` runs the `conservative` policy
 with `doc-line` and `doc-block` kept, so documentation is never at risk, and it
 keeps any comment whose first word is one of these tags:
 
