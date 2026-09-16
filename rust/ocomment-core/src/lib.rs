@@ -82,14 +82,18 @@
 //! | --- | --- | --- | --- |
 //! | `line`, `block`, `doc-line`, `doc-block` | remove | remove | remove |
 //! | `license` | keep | remove | remove |
-//! | `directive`, `html-comment`, `optimizer-hint`, `version-comment` | keep | keep | remove |
+//! | `directive`, `html-comment` | keep | keep | remove |
 //! | `shebang`, `encoding` | keep | keep | keep unless forced |
-//! | `load-bearing` | keep | keep | keep unless forced |
+//! | `load-bearing`, `optimizer-hint`, `version-comment` | keep | keep | keep unless forced |
 //!
 //! The shebang and the encoding declaration are the two a source needs to keep
-//! working, and a [`CommentKind::LoadBearing`] directive is read by the
-//! language or its build as part of the program, so even [`Policy::All`]
-//! leaves all three until [`ScanOptions::force_protected`] says otherwise.
+//! working; a [`CommentKind::LoadBearing`] directive is read by the language or
+//! its build as part of the program; and a SQL
+//! [`CommentKind::VersionComment`] is a statement the server executes while a
+//! [`CommentKind::OptimizerHint`] decides the plan it produces. Removing any of
+//! them changes what the toolchain produces rather than what a tool reports, so
+//! even [`Policy::All`] leaves them until [`ScanOptions::force_protected`] says
+//! otherwise.
 //! The policy is the last word
 //! rather than the first: [`ScanOptions::keep_kinds`],
 //! [`ScanOptions::keep_regex`], [`ScanOptions::remove_kinds`] and

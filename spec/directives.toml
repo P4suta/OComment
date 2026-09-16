@@ -19,7 +19,7 @@ version = 1
 protected = [
   "shebang", "encoding",
   "sourceMappingURL", "sourceURL", "#__PURE__", "@__PURE__",
-  "lint-and-formatter", "type-checker", "optimizer-hint", "version-comment",
+  "lint-and-formatter", "type-checker",
   "hadolint", ":schema", "taplo:", "---@diagnostic", "luacheck:",
   "selene:", "stylua:", "luacov:", "yaml-language-server:", "yamllint",
   "renovate:", "checkov:skip", "trivy:ignore", "nosec", "kics-scan", "@schema",
@@ -33,7 +33,13 @@ protected = [
 load_bearing = [
   "go:", "+build", "triple-slash-reference", "syntax=",
   "frozen_string_literal:", "warn_indent:", "shareable_constant_value:",
-  "@dart", "swift-tools-version:", "//> using"
+  "@dart", "swift-tools-version:", "//> using",
+  # NOTE: SQL's two. `/*!40101 SET ... */` is a statement the server executes
+  # NOTE: and `/*+ ... */` changes the plan the server produces, so both answer
+  # NOTE: the question above with "what the toolchain produces". They sat under
+  # NOTE: `protected` and `--policy all` took them, which is how a mysqldump
+  # NOTE: came out of a removal still restoring, into a different database.
+  "optimizer-hint", "version-comment"
 ]
 
 [policy.conservative]
@@ -45,5 +51,5 @@ remove = ["line", "block", "doc-line", "doc-block", "license"]
 keep = ["directive", "load-bearing", "html-comment", "shebang", "encoding", "optimizer-hint", "version-comment"]
 
 [policy.all]
-remove = ["line", "block", "doc-line", "doc-block", "license", "directive", "html-comment", "optimizer-hint", "version-comment"]
-keep_without_force_protected = ["shebang", "encoding", "load-bearing"]
+remove = ["line", "block", "doc-line", "doc-block", "license", "directive", "html-comment"]
+keep_without_force_protected = ["shebang", "encoding", "load-bearing", "optimizer-hint", "version-comment"]

@@ -11538,6 +11538,68 @@
         ],
         "diagnostics": []
       }
+    },
+    {
+      "id": "sql-version-comment-survives-policy-all",
+      "language": "sql",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines",
+        "dialect": "mysql"
+      },
+      "source_utf8": "/*!40101 SET NAMES utf8 */;\n-- prose\n",
+      "note": "A MySQL version-gated comment is a statement the server executes, so no policy removes it and `--policy all` is no exception; the ordinary comment beside it goes.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 26,
+            "kind": "version-comment",
+            "action": "keep"
+          },
+          {
+            "start": 28,
+            "end": 36,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "/*!40101 SET NAMES utf8 */;\n\n"
+      }
+    },
+    {
+      "id": "sql-optimizer-hint-survives-policy-all",
+      "language": "sql",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines",
+        "dialect": "oracle"
+      },
+      "source_utf8": "select /*+ INDEX(t idx) */ 1 from dual; -- prose\n",
+      "note": "An optimizer hint changes the plan the server produces rather than what a tool reports, so `--policy all` keeps it and takes the ordinary comment beside it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 7,
+            "end": 26,
+            "kind": "optimizer-hint",
+            "action": "keep"
+          },
+          {
+            "start": 40,
+            "end": 48,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "select /*+ INDEX(t idx) */ 1 from dual; \n"
+      }
     }
   ]
 }

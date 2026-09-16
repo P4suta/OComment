@@ -222,7 +222,7 @@ SAMPLES: dict[str, Sample] = {
         # NOTE: a hint a hint; a block comment that merely opens with one is an
         # NOTE: ordinary comment about the index.
         "/* + index(t) */",
-        KEPT_AS_DIRECTIVE,
+        KEPT_AS_LOAD_BEARING,
     ),
     "version-comment": Sample(
         "sql",
@@ -230,7 +230,7 @@ SAMPLES: dict[str, Sample] = {
         f"{SLOT} -- control\n",
         "/*!40101 SET NAMES utf8 */",
         "/* !40101 SET NAMES utf8 */",
-        KEPT_AS_DIRECTIVE,
+        KEPT_AS_LOAD_BEARING,
     ),
     "syntax=": Sample(
         "shell",

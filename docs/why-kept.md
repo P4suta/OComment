@@ -82,8 +82,8 @@ comment out of the column its kind lands in.
 | `html-comment` | kept | kept | removed |
 | `shebang` | kept | kept | kept unless `--force-protected` |
 | `encoding` | kept | kept | kept unless `--force-protected` |
-| `optimizer-hint` | kept | kept | removed |
-| `version-comment` | kept | kept | removed |
+| `optimizer-hint` | kept | kept | kept unless `--force-protected` |
+| `version-comment` | kept | kept | kept unless `--force-protected` |
 
 ## Markers that survive a removal
 
@@ -117,6 +117,8 @@ is the only way to give one up.
 | `@dart` | `dart` | `// @dart = 2.12` | `load-bearing` | required by the language or its build |
 | `swift-tools-version:` | `swift` | `// swift-tools-version:5.9` | `load-bearing` | required by the language or its build |
 | `//> using` | `scala` | `//> using scala "3.3.0"` | `load-bearing` | required by the language or its build |
+| `optimizer-hint` | `oracle` | `/*+ index(t) */` | `optimizer-hint` | required by the language or its build |
+| `version-comment` | `mysql` | `/*!40101 SET NAMES utf8 */` | `version-comment` | required by the language or its build |
 | `shebang` | `shell` | `#!/bin/sh` | `shebang` | required source preamble |
 | `encoding` | `python` | `# -*- coding: utf-8 -*-` | `encoding` | required source preamble |
 | `sourceMappingURL` | `javascript` | `//# sourceMappingURL=bundle.js.map` | `directive` | tool or language directive |
@@ -125,8 +127,6 @@ is the only way to give one up.
 | `@__PURE__` | `javascript` | `/*@__PURE__*/` | `directive` | tool or language directive |
 | `lint-and-formatter` | `javascript` | `// eslint-disable-next-line no-eval` | `directive` | tool or language directive |
 | `type-checker` | `python` | `# type: ignore` | `directive` | tool or language directive |
-| `optimizer-hint` | `oracle` | `/*+ index(t) */` | `optimizer-hint` | tool or language directive |
-| `version-comment` | `mysql` | `/*!40101 SET NAMES utf8 */` | `version-comment` | tool or language directive |
 | `hadolint` | `shell` | `# hadolint ignore=DL3018` | `directive` | tool or language directive |
 | `:schema` | `toml` | `#:schema https://example.test/pyproject.json` | `directive` | tool or language directive |
 | `taplo:` | `toml` | `# taplo: array_auto_expand = false` | `directive` | tool or language directive |

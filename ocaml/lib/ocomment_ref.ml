@@ -235,12 +235,16 @@ let disposition options kind raw =
   if mem_kind kind options.keep_kinds then Keep "kept by keep_kind"
   else if regex_matches options.keep_regex raw then Keep "kept by keep_regex"
   else if (kind = Shebang || kind = Encoding) && not options.force_protected then Keep "required source preamble"
-  else if kind = LoadBearing && not options.force_protected then
+  (* NOTE: The SQL pair sits with LoadBearing: `/*!...*/` is a statement the
+     server executes and `/*+ ... */` changes the plan it produces, so neither
+     is something `all` gets to take. *)
+  else if (kind = LoadBearing || kind = OptimizerHint || kind = VersionComment)
+          && not options.force_protected then
     Keep "required by the language or its build"
   else if mem_kind kind options.remove_kinds || regex_matches options.remove_regex raw then Remove
   else if options.policy = All then Remove
   else if kind = HtmlComment then Keep "HTML comments are DOM-observable"
-  else if kind = Directive || kind = OptimizerHint || kind = VersionComment then Keep "tool or language directive"
+  else if kind = Directive then Keep "tool or language directive"
   else if kind = License && options.policy = Conservative then Keep "conservative policy"
   else Remove
 

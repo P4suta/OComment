@@ -93,8 +93,9 @@ from its own text and position — and the `Policy` then decides that kind:
 | --- | --- | --- | --- |
 | `line`, `block`, `doc-line`, `doc-block` | remove | remove | remove |
 | `license` | remove | keep | remove |
-| `directive`, `html-comment`, `optimizer-hint`, `version-comment` | keep | keep | remove |
+| `directive`, `html-comment` | keep | keep | remove |
 | `shebang`, `encoding` | keep | keep | keep unless forced |
+| `load-bearing`, `optimizer-hint`, `version-comment` | keep | keep | keep unless forced |
 
 The policy is the last word rather than the first: `keep_kinds`, `keep_regex`,
 `remove_kinds` and `remove_regex` on `ScanOptions` are all tested before it, in

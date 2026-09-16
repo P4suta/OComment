@@ -581,20 +581,54 @@ fn a_kept_directive_names_the_matched_directive() {
 }
 
 #[test]
-fn an_unnamed_directive_kind_still_explains_itself() {
+fn the_sql_comments_the_server_reads_are_out_of_reach_of_every_policy() {
+    // NOTE: Both of these are read by the server as part of the statement: a
+    // NOTE: version-gated comment is executed, and an optimizer hint decides
+    // NOTE: the plan. That makes them load-bearing rather than directives
+    // NOTE: addressed to a tool, so `all` does not reach them. It used to take
+    // NOTE: both, which left a dumped database restoring into a different one
+    // NOTE: with nothing failing.
     for (kind, raw) in [
         (CommentKind::OptimizerHint, "/*+ INDEX(t idx) */"),
         (CommentKind::VersionComment, "/*!40000 ALTER TABLE t */"),
     ] {
-        let explanation = explain(kind, raw, Language::Sql, &ScanOptions::default());
+        for policy in Policy::ALL {
+            let options = ScanOptions {
+                policy,
+                ..Default::default()
+            };
+            let explanation = explain(kind, raw, Language::Sql, &options);
+            assert_eq!(
+                explanation,
+                DispositionExplanation::KeptLoadBearing { name: None },
+                "{raw} under policy {policy}"
+            );
+            assert_eq!(explanation.action(), Action::Keep, "{raw} under {policy}");
+            let sentence = explanation.to_string();
+            assert!(sentence.contains("language or its build"), "{sentence}");
+        }
+    }
+    // NOTE: The one way out, and the half of the claim that would otherwise
+    // NOTE: never be observed failing: a gate that only ever keeps has not
+    // NOTE: been shown to be a gate.
+    for (kind, raw) in [
+        (CommentKind::OptimizerHint, "/*+ INDEX(t idx) */"),
+        (CommentKind::VersionComment, "/*!40000 ALTER TABLE t */"),
+    ] {
+        let forced = ScanOptions {
+            policy: Policy::All,
+            force_protected: true,
+            ..Default::default()
+        };
+        let explanation = explain(kind, raw, Language::Sql, &forced);
         assert_eq!(
             explanation,
-            DispositionExplanation::KeptDirective { kind, name: None },
-            "{raw}"
+            DispositionExplanation::RemovedByPolicy {
+                policy: Policy::All,
+                kind,
+            },
+            "{raw} with --force-protected"
         );
-        let sentence = explanation.to_string();
-        assert!(sentence.contains("directive"), "{sentence}");
-        assert!(sentence.contains(kind.as_str()), "{sentence}");
     }
 }
 

@@ -6095,7 +6095,18 @@ impl DispositionPatterns {
 const fn protected_reason(kind: CommentKind) -> Option<&'static str> {
     match kind {
         CommentKind::Shebang | CommentKind::Encoding => Some("required source preamble"),
-        CommentKind::LoadBearing => Some("required by the language or its build"),
+        /* NOTE: A SQL optimizer hint and a version-gated comment are here for
+         * the reason the load-bearing tier exists at all. `/*!40101 SET ... */`
+         * is a statement the server executes -- this crate's own `CommentKind`
+         * documentation says so -- and `/*+ ... */` changes the plan the server
+         * produces. Both answer "what does removing it change?" with "what the
+         * toolchain produces", which is the line `spec/directives.toml` draws,
+         * and `--policy all` was taking both: a mysqldump run through it came
+         * out missing statements that still restored, quietly, into a different
+         * database than the one dumped. */
+        CommentKind::LoadBearing | CommentKind::OptimizerHint | CommentKind::VersionComment => {
+            Some("required by the language or its build")
+        }
         _ => None,
     }
 }
@@ -6196,10 +6207,7 @@ pub(crate) fn disposition(
             reason: "HTML comments are DOM-observable".into(),
         };
     }
-    if matches!(
-        kind,
-        CommentKind::Directive | CommentKind::OptimizerHint | CommentKind::VersionComment
-    ) {
+    if kind == CommentKind::Directive {
         return Disposition::Keep {
             reason: "tool or language directive".into(),
         };
@@ -6308,12 +6316,13 @@ pub fn explain_disposition_with(
         return DispositionExplanation::KeptByRegex { index, pattern };
     }
     if protected_reason(kind).is_some() && !options.force_protected {
-        return if kind == CommentKind::LoadBearing {
-            DispositionExplanation::KeptLoadBearing {
-                name: directive_name_of(raw, language),
+        return match kind {
+            CommentKind::Shebang | CommentKind::Encoding => {
+                DispositionExplanation::ProtectedPreamble
             }
-        } else {
-            DispositionExplanation::ProtectedPreamble
+            _ => DispositionExplanation::KeptLoadBearing {
+                name: directive_name_of(raw, language),
+            },
         };
     }
     if options.remove_kinds.contains(&kind) {
@@ -6331,10 +6340,7 @@ pub fn explain_disposition_with(
     if kind == CommentKind::HtmlComment {
         return DispositionExplanation::KeptHtml;
     }
-    if matches!(
-        kind,
-        CommentKind::Directive | CommentKind::OptimizerHint | CommentKind::VersionComment
-    ) {
+    if kind == CommentKind::Directive {
         return DispositionExplanation::KeptDirective {
             kind,
             name: directive_name_of(raw, language),
