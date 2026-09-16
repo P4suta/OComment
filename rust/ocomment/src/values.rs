@@ -6,6 +6,7 @@
 //! the single source of truth; this module only adds the per-value help clap
 //! needs for `--help`, error messages, and shell completions.
 
+use crate::output::AnnotationLevel;
 use clap::{ValueEnum, builder::PossibleValue};
 use ocomment_core::{CommentKind, Dialect, Language, Layout, Policy};
 use std::ops::Deref;
@@ -97,6 +98,12 @@ value_enum_wrapper!(PolicyArg, Policy, |value| match value {
     Policy::All =>
         "Remove every comment except shebangs, encoding lines and the \
          directives the language itself reads",
+});
+
+value_enum_wrapper!(AnnotationLevelArg, AnnotationLevel, |value| match value {
+    AnnotationLevel::Error => "Annotate as an error, which fails a job that checks annotations",
+    AnnotationLevel::Warning => "Annotate as a warning",
+    AnnotationLevel::Notice => "Annotate as a notice, which GitHub folds away beside an error",
 });
 
 value_enum_wrapper!(LayoutArg, Layout, |value| match value {

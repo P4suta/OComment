@@ -2,11 +2,11 @@ use crate::{
     atomic::{WritePlan, apply_transaction},
     config, files, git, interactive, lsp,
     output::{
-        self, Explanations, FileExplanation, Operation, OutputFormat, Presentation, ProcessedFile,
-        ProcessedResult, RenderOptions, Verbosity,
+        self, AnnotationLevel, Explanations, FileExplanation, Operation, OutputFormat,
+        Presentation, ProcessedFile, ProcessedResult, RenderOptions, Verbosity,
     },
     plugin,
-    values::{CommentKindArg, DialectArg, LanguageArg, LayoutArg, PolicyArg},
+    values::{AnnotationLevelArg, CommentKindArg, DialectArg, LanguageArg, LayoutArg, PolicyArg},
 };
 use anyhow::{Context, Result, bail, ensure};
 use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
@@ -217,9 +217,12 @@ struct OutputArgs {
     /// When to emit terminal hyperlinks for reported paths.
     #[arg(long, global = true, value_enum, default_value_t, value_name = "WHEN")]
     hyperlinks: AutoChoice,
-    /// Omit the one-line comment text from human `check` and `scan` lines.
+    /// Omit the comment text from human `check` and `scan` lines and from the JSON formats.
     #[arg(long, global = true)]
     no_preview: bool,
+    /// The level `--format github` annotates a removable comment at (default: the run's exit status).
+    #[arg(long, global = true, value_enum, value_name = "LEVEL")]
+    annotation_level: Option<AnnotationLevelArg>,
     /// List every comment human `check` and `scan` met and name the rule and setting behind each one.
     #[arg(long, global = true)]
     explain: bool,
@@ -601,6 +604,7 @@ fn run_target(
             presentation,
             verbosity,
             preview: !common.output.no_preview,
+            annotation_level: common.output.annotation_level.map(AnnotationLevel::from),
             dry_run: flags.dry_run,
         });
     }
@@ -774,6 +778,7 @@ fn run_target(
             force_invalid: resolved.config.policy.force_invalid,
             applied,
             policy: resolved.config.policy.mode,
+            annotation_level: common.output.annotation_level.map(AnnotationLevel::from),
         },
         &explanations,
     )?;

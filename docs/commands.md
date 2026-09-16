@@ -216,7 +216,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -417,7 +425,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -603,7 +619,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -781,7 +805,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -959,7 +991,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -1127,7 +1167,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -1295,7 +1343,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -1479,7 +1535,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -1654,7 +1718,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -1822,7 +1894,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -1999,7 +2079,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -2180,7 +2268,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -2352,7 +2448,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -2520,7 +2624,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -2692,7 +2804,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -2864,7 +2984,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -3036,7 +3164,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -3210,7 +3346,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -3378,7 +3522,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -3546,7 +3698,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one

@@ -70,10 +70,15 @@
     "comment": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["span", "kind", "disposition"],
+      "required": ["span", "line", "column", "end_line", "end_column", "kind", "disposition"],
       "properties": {
         "span": { "$ref": "#/$defs/span" },
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 },
+        "end_line": { "type": "integer", "minimum": 1 },
+        "end_column": { "type": "integer", "minimum": 1 },
         "kind": { "$ref": "#/$defs/kind" },
+        "text": { "type": "string" },
         "disposition": { "$ref": "#/$defs/disposition" }
       }
     },
@@ -93,12 +98,16 @@
     "diagnostic": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["code", "message", "severity", "span"],
+      "required": ["code", "message", "severity", "span", "line", "column", "end_line", "end_column"],
       "properties": {
         "code": { "type": "string" },
         "message": { "type": "string" },
         "severity": { "enum": ["error", "warning", "info", "hint"] },
-        "span": { "$ref": "#/$defs/span" }
+        "span": { "$ref": "#/$defs/span" },
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 },
+        "end_line": { "type": "integer", "minimum": 1 },
+        "end_column": { "type": "integer", "minimum": 1 }
       }
     },
     "edit": {

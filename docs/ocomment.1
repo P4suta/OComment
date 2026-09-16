@@ -4,7 +4,7 @@
 .SH NAME
 ocomment \- Check and remove source\-code comments safely
 .SH SYNOPSIS
-\fBocomment\fR [\fB\-\-config\fR] [\fB\-\-policy\fR] [\fB\-\-layout\fR] [\fB\-\-language\fR] [\fB\-\-dialect\fR] [\fB\-\-keep\-kind\fR] [\fB\-\-remove\-kind\fR] [\fB\-\-force\-invalid\fR] [\fB\-\-force\-protected\fR] [\fB\-\-format\fR] [\fB\-\-color\fR] [\fB\-\-hyperlinks\fR] [\fB\-\-no\-preview\fR] [\fB\-\-explain\fR] [\fB\-\-progress\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIPATH\fR] [\fIsubcommands\fR]
+\fBocomment\fR [\fB\-\-config\fR] [\fB\-\-policy\fR] [\fB\-\-layout\fR] [\fB\-\-language\fR] [\fB\-\-dialect\fR] [\fB\-\-keep\-kind\fR] [\fB\-\-remove\-kind\fR] [\fB\-\-force\-invalid\fR] [\fB\-\-force\-protected\fR] [\fB\-\-format\fR] [\fB\-\-color\fR] [\fB\-\-hyperlinks\fR] [\fB\-\-no\-preview\fR] [\fB\-\-annotation\-level\fR] [\fB\-\-explain\fR] [\fB\-\-progress\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIPATH\fR] [\fIsubcommands\fR]
 .SH DESCRIPTION
 OComment scans source bytes without requiring UTF\-8 and reports or removes comment tokens. The default policy keeps licence notices, tool and language directives, shebangs and encoding lines, and removes ordinary and doc comments. Rewrites are prepared and committed as one rollback\-backed transaction.
 .SH OPTIONS
@@ -289,7 +289,22 @@ never
 .RE
 .TP
 \fB\-\-no\-preview\fR
-Omit the one\-line comment text from human `check` and `scan` lines
+Omit the comment text from human `check` and `scan` lines and from the JSON formats
+.TP
+\fB\-\-annotation\-level\fR \fI<LEVEL>\fR
+The level `\-\-format github` annotates a removable comment at (default: the run\*(Aqs exit status)
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+error: Annotate as an error, which fails a job that checks annotations
+.IP \(bu 2
+warning: Annotate as a warning
+.IP \(bu 2
+notice: Annotate as a notice, which GitHub folds away beside an error
+.RE
 .TP
 \fB\-\-explain\fR
 List every comment human `check` and `scan` met and name the rule and setting behind each one

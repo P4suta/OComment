@@ -2731,7 +2731,7 @@ fn github_annotations_use_kebab_comment_kinds() {
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert_eq!(
         stdout,
-        "::notice file=doc.rs,line=1,col=1::removable doc-block comment\n"
+        "::error file=doc.rs,line=1,col=1::removable doc-block comment\n"
     );
     assert_no_debug_leak("github annotations", &stdout);
     assert!(!stdout.contains("Remove"), "github output is:\n{stdout}");
@@ -3245,8 +3245,108 @@ fn github_annotations_report_repository_paths() {
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert_eq!(
         stdout,
-        "::notice file=sub/doc.rs,line=1,col=1::removable doc-block comment\n"
+        "::error file=sub/doc.rs,line=1,col=1::removable doc-block comment\n"
     );
+}
+
+/// The `::` level a removable comment is annotated at is the one its run's
+/// exit status justifies.
+///
+/// `check` answers a finding with 1, and a gate that fails on that 1 was
+/// posting `::notice` about the comments it failed over -- which reads in the
+/// checks tab as though nothing had gone wrong, and which GitHub folds away
+/// where it surfaces an error. `scan` ends at 0 whatever it finds, so it is
+/// offering the same comments for information and says so.
+#[test]
+fn github_annotations_follow_the_exit_status() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(directory.path().join("a.rs"), b"fn main() {} // remove\n").unwrap();
+
+    let checked = run(directory.path(), &["check", "a.rs", "--format", "github"]);
+    assert_eq!(checked.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8(checked.stdout).unwrap(),
+        "::error file=a.rs,line=1,col=14::removable line comment\n"
+    );
+
+    let scanned = run(directory.path(), &["scan", "a.rs", "--format", "github"]);
+    assert_eq!(scanned.status.code(), Some(0));
+    assert_eq!(
+        String::from_utf8(scanned.stdout).unwrap(),
+        "::notice file=a.rs,line=1,col=14::removable line comment\n"
+    );
+
+    /* NOTE: A job that posts annotations without gating on them, or gates
+     * without wanting the red, says so and is believed. */
+    let overruled = run(
+        directory.path(),
+        &[
+            "check",
+            "a.rs",
+            "--format",
+            "github",
+            "--annotation-level",
+            "warning",
+        ],
+    );
+    assert_eq!(overruled.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8(overruled.stdout).unwrap(),
+        "::warning file=a.rs,line=1,col=14::removable line comment\n"
+    );
+}
+
+/// A machine format carries the position and the text the human report prints.
+///
+/// A byte span is what a patcher needs and not what a reporter needs: turning
+/// `13..22` into `1:14` means reopening the file and counting line breaks,
+/// which is work the run has already done. Until this held, `--format json`
+/// was less useful to a machine than the prose was to a person.
+#[test]
+fn json_carries_the_position_and_text_the_human_report_prints() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join("a.rs"),
+        b"fn main() {}\nlet s = \"ok\"; // hello\n",
+    )
+    .unwrap();
+
+    let human = run(directory.path(), &["check", "a.rs"]);
+    let reported = String::from_utf8(human.stdout).unwrap();
+    assert!(
+        reported.starts_with("a.rs:2:15: removable line comment: // hello"),
+        "the human report moved: {reported}"
+    );
+
+    let scanned = run(directory.path(), &["scan", "a.rs", "--format", "json"]);
+    assert_eq!(scanned.status.code(), Some(0));
+    let document: serde_json::Value = serde_json::from_slice(&scanned.stdout).unwrap();
+    let comment = &document["files"][0]["report"]["comments"][0];
+    assert_eq!(comment["line"], 2);
+    assert_eq!(comment["column"], 15);
+    assert_eq!(comment["text"], "// hello");
+    /* INVARIANT: The positions are derived from the span beside them, so the
+     * end is the half-open one the span already promises: one past the last
+     * byte of the comment. */
+    assert_eq!(comment["end_line"], 2);
+    assert_eq!(
+        comment["end_column"].as_u64().unwrap(),
+        comment["column"].as_u64().unwrap()
+            + (comment["span"]["end"].as_u64().unwrap()
+                - comment["span"]["start"].as_u64().unwrap())
+    );
+
+    /* NOTE: `--no-preview` is how a report over a large tree stays small, and
+     * it drops the comment text here for the reason it drops the preview from
+     * a human line. */
+    let terse = run(
+        directory.path(),
+        &["scan", "a.rs", "--format", "json", "--no-preview"],
+    );
+    let document: serde_json::Value = serde_json::from_slice(&terse.stdout).unwrap();
+    let comment = &document["files"][0]["report"]["comments"][0];
+    assert!(comment.get("text").is_none(), "{comment}");
+    assert_eq!(comment["line"], 2);
 }
 
 /// SARIF locations are URIs and GitHub `file=` values are workflow-command
@@ -4074,7 +4174,10 @@ fn github_annotations_fold_walked_skips_away_unless_asked() {
 
     let quiet = run(directory.path(), &["check", "--format", "github"]);
     let stdout = String::from_utf8(quiet.stdout).unwrap();
-    assert!(stdout.contains("::notice file=a.rs"), "{stdout}");
+    /* NOTE: A finding is annotated at the level its run's exit status
+     * justifies, and `check` answers a finding with 1; a skip is not a finding
+     * and stays a notice whatever the run returns. */
+    assert!(stdout.contains("::error file=a.rs"), "{stdout}");
     assert!(
         !stdout.contains("notes.unknownext"),
         "a walked skip was annotated without -v:\n{stdout}"

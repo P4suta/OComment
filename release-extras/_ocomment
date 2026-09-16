@@ -97,10 +97,13 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -204,12 +207,15 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -304,6 +310,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
@@ -312,7 +321,7 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '(--staged --dry-run -q --quiet)--interactive[Ask about each comment in turn and remove only the accepted ones]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -407,12 +416,15 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -507,12 +519,15 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -607,10 +622,13 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -704,10 +722,13 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -801,13 +822,16 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--fix[For the Lefthook hook, run \`fix\` instead of \`check\`]' \
 '(--stdout)--force[Replace the file if it already exists]' \
 '--stdout[Print the template to standard output and write no file]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -902,10 +926,13 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -1000,10 +1027,13 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -1097,10 +1127,13 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -1205,10 +1238,13 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -1303,10 +1339,13 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -1401,10 +1440,13 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -1498,10 +1540,13 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -1596,10 +1641,13 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -1694,10 +1742,13 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -1840,10 +1891,13 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -1938,10 +1992,13 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -2035,10 +2092,13 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \

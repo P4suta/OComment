@@ -146,8 +146,21 @@ code into a verdict.
 
 ### Annotate a pull request
 
-`format: github` is the default and writes `::notice` annotations that GitHub
-renders on the changed lines.
+`format: github` is the default and writes annotations that GitHub renders on
+the changed lines.
+
+The level of each one is the level its run's exit status justifies: `check`
+and `diff` answer a finding with exit 1, so what they report is an `::error`,
+while `scan` and `fix` end at 0 whatever they find and report a `::notice`.
+That way a job which fails on the 1 does not describe the comments it failed
+over as though nothing had gone wrong — and GitHub folds a notice away where
+it surfaces an error, so the annotation was easy to miss entirely.
+
+A job that posts annotations without gating on them, or gates without wanting
+the red, says so with `--annotation-level <error|warning|notice>` and is
+believed. A diagnostic — a file that would not scan at all — stays an
+`::error` whatever that flag says, because it is not a finding the run is
+offering an opinion about.
 
 ```yaml
 name: Comments

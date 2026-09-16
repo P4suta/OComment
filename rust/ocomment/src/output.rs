@@ -7,13 +7,15 @@ use clap::ValueEnum;
 #[cfg(test)]
 use ocomment_core::TransformResult;
 use ocomment_core::{
-    ByteSpan, Comment, CommentKind, Disposition, DispositionExplanation, DispositionPatterns, Edit,
-    Language, Policy, ScanOptions, ScanReport, SourceMap, TransformPlan, explain_comment_with,
+    ByteSpan, Comment, CommentKind, Diagnostic, Disposition, DispositionExplanation,
+    DispositionPatterns, Edit, Language, Policy, ScanOptions, ScanReport, Severity, SourceMap,
+    TransformPlan, explain_comment_with,
 };
 use serde::{Serialize, Serializer, ser::SerializeSeq};
 use serde_json::{Value, json};
 use similar::{Algorithm, ChangeTag, capture_diff_slices, group_diff_ops};
 use std::{
+    borrow::Cow,
     collections::BTreeMap,
     io::{self, BufWriter, Write},
     path::{Component, Path, PathBuf},
@@ -79,6 +81,44 @@ pub struct RenderOptions {
     /// The policy the run was asked for. Only `all` promises to take every
     /// comment out, so only `all` owes an explanation for the ones it keeps.
     pub policy: Policy,
+    /// `--annotation-level`: the `::` level `--format github` reports a
+    /// removable comment at, or `None` to take it from the exit status the
+    /// operation will produce.
+    pub annotation_level: Option<AnnotationLevel>,
+}
+
+/// The three levels a GitHub Actions workflow command can carry.
+///
+/// A diagnostic is always `::error` whatever this says: a file that would not
+/// scan is not a finding the run is offering an opinion about, it is a file
+/// the run could not read.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AnnotationLevel {
+    Error,
+    Warning,
+    Notice,
+}
+
+impl AnnotationLevel {
+    /// Every CLI-visible level, loudest first, which is the order a reader
+    /// choosing one is deciding in.
+    pub const ALL: [Self; 3] = [Self::Error, Self::Warning, Self::Notice];
+
+    /// The canonical name, which is also the workflow command GitHub reads.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Error => "error",
+            Self::Warning => "warning",
+            Self::Notice => "notice",
+        }
+    }
+
+    /// Accepted spellings besides [`Self::as_str`]. There are none: these three
+    /// are GitHub's own words and renaming them would only invite a value that
+    /// does not reach the log.
+    pub const fn aliases(self) -> &'static [&'static str] {
+        &[]
+    }
 }
 
 /// What one run found, counted once for the end-of-run summary.
@@ -303,9 +343,124 @@ struct JsonFile<'a> {
     path: String,
     language: Language,
     changed: bool,
-    report: &'a ocomment_core::ScanReport,
+    report: JsonReport<'a>,
     edits: &'a [ocomment_core::Edit],
     source_map: &'a SourceMap,
+}
+
+/// The scan report as a machine format writes it: everything
+/// [`ScanReport`] holds, and where each comment and diagnostic *is* besides.
+///
+/// A byte span is the right primitive for a patcher and the wrong one for a
+/// reporter. Turning `0..27` into `1:1` means reopening the file and counting
+/// line breaks, and that is work this run has already done — the human report
+/// has printed `path:line:column` and the comment text since the beginning, so
+/// a caller that chose JSON because it was the machine format was handed less
+/// than the caller that chose prose. Every position here is derived from the
+/// span beside it, so the two cannot come apart.
+#[derive(Serialize)]
+struct JsonReport<'a> {
+    language: Language,
+    comments: Vec<JsonComment<'a>>,
+    diagnostics: Vec<JsonDiagnostic<'a>>,
+    valid: bool,
+}
+
+/// Where something the scanner reported sits, in the spelling every other
+/// OComment report uses.
+///
+/// Lines and columns are one-based and columns are counted in bytes, which is
+/// what the human report prints and what `--format github` puts in an
+/// annotation. `end_line` and `end_column` address the byte *after* the last
+/// one, matching the half-open [`ByteSpan`] they come from: a comment that
+/// ends at the end of its line has an `end_column` one past its last byte
+/// rather than a position on the next line.
+#[derive(Serialize)]
+struct JsonPosition {
+    line: usize,
+    column: usize,
+    end_line: usize,
+    end_column: usize,
+}
+
+impl JsonPosition {
+    fn of(lines: &LineIndex, span: ByteSpan) -> Self {
+        let (line, column) = lines.line_column(span.start);
+        let (end_line, end_column) = lines.line_column(span.end);
+        Self {
+            line,
+            column,
+            end_line,
+            end_column,
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct JsonComment<'a> {
+    span: ByteSpan,
+    #[serde(flatten)]
+    position: JsonPosition,
+    kind: CommentKind,
+    /// The comment's own bytes, decoded lossily the way every other text this
+    /// tool serialises is. `--no-preview` leaves it out, which is the way to
+    /// keep a report over a large tree small.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    text: Option<Cow<'a, str>>,
+    disposition: &'a Disposition,
+}
+
+#[derive(Serialize)]
+struct JsonDiagnostic<'a> {
+    code: &'a str,
+    message: &'a str,
+    severity: Severity,
+    span: ByteSpan,
+    #[serde(flatten)]
+    position: JsonPosition,
+}
+
+/// The report of one file, with the positions filled in from its source.
+fn json_report<'a>(report: &'a ScanReport, source: &'a [u8], preview: bool) -> JsonReport<'a> {
+    let lines = LineIndex::new(source);
+    JsonReport {
+        language: report.language,
+        comments: report
+            .comments
+            .iter()
+            .map(|comment| JsonComment {
+                span: comment.span,
+                position: JsonPosition::of(&lines, comment.span),
+                kind: comment.kind,
+                text: preview.then(|| slice_text(source, comment.span)),
+                disposition: &comment.disposition,
+            })
+            .collect(),
+        diagnostics: report
+            .diagnostics
+            .iter()
+            .map(|diagnostic: &Diagnostic| JsonDiagnostic {
+                code: &diagnostic.code,
+                message: &diagnostic.message,
+                severity: diagnostic.severity,
+                span: diagnostic.span,
+                position: JsonPosition::of(&lines, diagnostic.span),
+            })
+            .collect(),
+        valid: report.valid,
+    }
+}
+
+/// The bytes of `span`, decoded lossily and left whole.
+///
+/// The human preview folds a comment onto one line and cuts it to a terminal
+/// width; neither is done here. A machine format that truncated would be
+/// handing its caller a comment that is not the comment in the file, and a
+/// caller that wants it shorter can cut it itself.
+fn slice_text(source: &[u8], span: ByteSpan) -> Cow<'_, str> {
+    let start = span.start.min(source.len());
+    let end = span.end.clamp(start, source.len());
+    String::from_utf8_lossy(&source[start..end])
 }
 
 /// The one-line label for a comment OComment would delete.
@@ -757,10 +912,10 @@ pub fn render_explained(
     let mut output = stdout();
     match options.format {
         OutputFormat::Human => render_human(&mut output, files, skipped, options, explanations),
-        OutputFormat::Json => render_json(&mut output, files, skipped),
-        OutputFormat::Jsonl => render_jsonl(&mut output, files, skipped),
+        OutputFormat::Json => render_json(&mut output, files, skipped, options.preview),
+        OutputFormat::Jsonl => render_jsonl(&mut output, files, skipped, options.preview),
         OutputFormat::Sarif => render_sarif(&mut output, files, skipped),
-        OutputFormat::Github => render_github(&mut output, files, skipped, options.verbosity),
+        OutputFormat::Github => render_github(&mut output, files, skipped, options),
     }?;
     finish(&mut output)
 }
@@ -1278,6 +1433,7 @@ fn render_json(
     output: &mut impl Write,
     files: &[ProcessedFile],
     skipped: &[SkippedFile],
+    preview: bool,
 ) -> Result<()> {
     #[derive(Serialize)]
     struct Document<'a> {
@@ -1289,7 +1445,7 @@ fn render_json(
         &mut *output,
         &Document {
             version: 1,
-            files: JsonFiles(files),
+            files: JsonFiles(files, preview),
             skipped: JsonSkipped(skipped),
         },
     )
@@ -1298,7 +1454,7 @@ fn render_json(
     Ok(())
 }
 
-struct JsonFiles<'a>(&'a [ProcessedFile]);
+struct JsonFiles<'a>(&'a [ProcessedFile], bool);
 
 impl Serialize for JsonFiles<'_> {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -1307,7 +1463,7 @@ impl Serialize for JsonFiles<'_> {
     {
         let mut sequence = serializer.serialize_seq(Some(self.0.len()))?;
         for file in self.0 {
-            sequence.serialize_element(&json_file(file))?;
+            sequence.serialize_element(&json_file(file, self.1))?;
         }
         sequence.end()
     }
@@ -1342,9 +1498,10 @@ fn render_jsonl(
     output: &mut impl Write,
     files: &[ProcessedFile],
     skipped: &[SkippedFile],
+    preview: bool,
 ) -> Result<()> {
     for file in files {
-        serde_json::to_writer(&mut *output, &json_file(file)).map_err(write_error)?;
+        serde_json::to_writer(&mut *output, &json_file(file, preview)).map_err(write_error)?;
         wrote(writeln!(output))?;
     }
     for item in skipped {
@@ -1358,12 +1515,12 @@ fn render_jsonl(
     Ok(())
 }
 
-fn json_file(file: &ProcessedFile) -> JsonFile<'_> {
+fn json_file(file: &ProcessedFile, preview: bool) -> JsonFile<'_> {
     JsonFile {
         path: file.path.to_string_lossy().into_owned(),
         language: file.language,
         changed: file.result.changed(),
-        report: &file.result.report,
+        report: json_report(&file.result.report, &file.source, preview),
         edits: &file.result.edits,
         source_map: file.result.source_map(),
     }
@@ -1872,12 +2029,35 @@ fn fix_for_span(file: &ProcessedFile, span: ByteSpan) -> (ByteSpan, String) {
         )
 }
 
+/// The `::` level a removable comment is annotated at.
+///
+/// An annotation level is a claim about what the run means, and the run
+/// already makes that claim in its exit status: `check` and `diff` answer a
+/// finding with 1 and every other operation ends at 0 whatever it found. A
+/// gate that fails on the 1 was posting `::notice` about the very comments it
+/// failed over, which reads in the checks tab as though nothing was wrong --
+/// and GitHub folds notices away where it surfaces errors. So the level
+/// follows the status: what fails the run is an error, and what is offered for
+/// information is a notice. `--annotation-level` overrules it for a job that
+/// posts annotations without gating on them, or gates without wanting the red.
+fn annotation_level(options: &RenderOptions) -> &'static str {
+    if let Some(level) = options.annotation_level {
+        return level.as_str();
+    }
+    match options.operation {
+        Operation::Check | Operation::Diff => "error",
+        Operation::Scan | Operation::Fix => "notice",
+    }
+}
+
 fn render_github(
     output: &mut impl Write,
     files: &[ProcessedFile],
     skipped: &[SkippedFile],
-    verbosity: Verbosity,
+    options: &RenderOptions,
 ) -> Result<()> {
+    let verbosity = options.verbosity;
+    let level = annotation_level(options);
     for file in files {
         if file.result.report.diagnostics.is_empty()
             && !file
@@ -1900,7 +2080,7 @@ fn render_github(
             let (line, column) = lines.line_column(comment.span.start);
             wrote(writeln!(
                 output,
-                "::notice file={},line={line},col={column}::{}",
+                "::{level} file={},line={line},col={column}::{}",
                 github_path(&file.path),
                 removable_label(comment.kind)
             ))?;

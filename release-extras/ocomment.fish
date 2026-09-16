@@ -1,6 +1,6 @@
 # Print an optspec for argparse to handle cmd's options that are independent of any subcommand.
 function __fish_ocomment_global_optspecs
-    string join \n config= policy= layout= language= dialect= keep-kind= remove-kind= force-invalid force-protected format= color= hyperlinks= no-preview explain progress= q/quiet v/verbose h/help V/version
+    string join \n config= policy= layout= language= dialect= keep-kind= remove-kind= force-invalid force-protected format= color= hyperlinks= no-preview annotation-level= explain progress= q/quiet v/verbose h/help V/version
 end
 
 function __fish_ocomment_needs_command
@@ -114,12 +114,15 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_needs_command" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_needs_command" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
 complete -c ocomment -n "__fish_ocomment_needs_command" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_needs_command" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_needs_command" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
-complete -c ocomment -n "__fish_ocomment_needs_command" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
+complete -c ocomment -n "__fish_ocomment_needs_command" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_needs_command" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
 complete -c ocomment -n "__fish_ocomment_needs_command" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_needs_command" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
@@ -229,6 +232,9 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -236,7 +242,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l staged -d 'R
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l index-only -d 'With `--staged`, do not attempt a uniquely mappable working-tree update'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
-complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
+complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
@@ -331,6 +337,9 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -340,7 +349,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l dry-run -d 'Pr
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -s i -l interactive -d 'Ask about each comment in turn and remove only the accepted ones'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
-complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
+complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
@@ -435,6 +444,9 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -442,7 +454,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l staged -d 'Re
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l index-only -d 'With `--staged`, do not attempt a uniquely mappable working-tree update'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
-complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
+complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
@@ -537,6 +549,9 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -544,7 +559,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l staged -d 'Re
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l index-only -d 'With `--staged`, do not attempt a uniquely mappable working-tree update'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
-complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
+complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
@@ -639,12 +654,15 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
-complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
+complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
@@ -739,12 +757,15 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
-complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
+complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
@@ -839,6 +860,9 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -847,7 +871,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l force -d 'Rep
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l stdout -d 'Print the template to standard output and write no file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
-complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
+complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
@@ -942,12 +966,15 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
-complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
+complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
@@ -1042,12 +1069,15 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
-complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
+complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
@@ -1142,12 +1172,15 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
@@ -1252,12 +1285,15 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
@@ -1352,12 +1388,15 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
@@ -1452,12 +1491,15 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
@@ -1552,12 +1594,15 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
@@ -1652,12 +1697,15 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
@@ -1752,12 +1800,15 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
@@ -1859,12 +1910,15 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
-complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
+complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
@@ -1959,12 +2013,15 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
-complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
+complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
@@ -2059,12 +2116,15 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
-complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
+complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'

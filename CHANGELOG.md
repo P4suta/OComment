@@ -7,6 +7,27 @@ All notable changes to OComment will be documented here. The project follows
 
 ### Fixed
 
+- The JSON formats carry the position and the text of every comment and
+  diagnostic: `line`, `column`, `end_line`, `end_column`, and the comment's own
+  bytes under `text`. A byte span is what a patcher needs and not what a
+  reporter needs, so a caller that chose `--format json` because it was the
+  machine format had to reopen the file and count line breaks to say where a
+  finding was — work the run had already done for the prose it does not read.
+  Positions are one-based, columns are counted in bytes as everywhere else, and
+  `end_line`/`end_column` address the byte after the last one, matching the
+  half-open span beside them. `--no-preview` leaves `text` out, which is how a
+  report over a large tree stays small.
+
+- `--format github` annotates a removable comment at the level its run's exit
+  status justifies: `::error` from `check` and `diff`, which answer a finding
+  with 1, and `::notice` from `scan` and `fix`, which end at 0 whatever they
+  find. A gate that failed on the 1 was posting notices about the very comments
+  it failed over, which reads in the checks tab as though nothing had gone
+  wrong — and GitHub folds a notice away where it surfaces an error. The new
+  `--annotation-level <error|warning|notice>` overrules it for a job that posts
+  annotations without gating on them, or gates without wanting the red; a
+  diagnostic stays an `::error` regardless.
+
 - `--policy all` no longer removes a directive the language or its build reads
   as part of the program. Those are now their own comment kind,
   `load-bearing`, held back from every `remove` policy the way a shebang and an
