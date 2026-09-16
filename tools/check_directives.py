@@ -56,6 +56,11 @@ DIRECTIVES = ROOT / "spec/directives.toml"
 # NOTE: reads it, and the report says which, so the samples below say it too.
 KEPT_AS_PREAMBLE = "required source preamble"
 KEPT_AS_DIRECTIVE = "tool or language directive"
+# NOTE: The third reason, and the only one a `remove` policy cannot overrule.
+# NOTE: `spec/directives.toml` files these under `load_bearing`, and the two
+# NOTE: lists are checked against each other below so that a marker cannot be
+# NOTE: promoted in the spec without its sample saying what changed.
+KEPT_AS_LOAD_BEARING = "required by the language or its build"
 
 # NOTE: Where the marker goes in a sample's template. It is substituted rather
 # NOTE: than formatted, so a sample is free to contain braces of its own.
@@ -128,7 +133,7 @@ SAMPLES: dict[str, Sample] = {
         # NOTE: protecting it is right. What the marker still promises is that
         # NOTE: it opens the comment, so the near-miss mentions it instead.
         "// a note about go:build linux",
-        KEPT_AS_DIRECTIVE,
+        KEPT_AS_LOAD_BEARING,
     ),
     "+build": Sample(
         "go",
@@ -136,7 +141,7 @@ SAMPLES: dict[str, Sample] = {
         f"{SLOT}\n// control\n",
         "// +build linux",
         "// a note about +build linux",
-        KEPT_AS_DIRECTIVE,
+        KEPT_AS_LOAD_BEARING,
     ),
     "triple-slash-reference": Sample(
         "typescript",
@@ -148,7 +153,7 @@ SAMPLES: dict[str, Sample] = {
         # NOTE: the boundary left to get wrong is the opener. Two slashes are
         # NOTE: an ordinary comment that happens to quote the directive.
         '// <reference path="types.d.ts" />',
-        KEPT_AS_DIRECTIVE,
+        KEPT_AS_LOAD_BEARING,
     ),
     "sourceMappingURL": Sample(
         "javascript",
@@ -236,7 +241,7 @@ SAMPLES: dict[str, Sample] = {
         # NOTE: marker carries its own boundary and `syntax=ish` is the
         # NOTE: directive naming a frontend that does not exist.
         "# a note about syntax=docker/dockerfile:1",
-        KEPT_AS_DIRECTIVE,
+        KEPT_AS_LOAD_BEARING,
     ),
     "hadolint": Sample(
         "shell",
@@ -441,7 +446,7 @@ SAMPLES: dict[str, Sample] = {
         f"{SLOT}\n# control\n",
         "# frozen_string_literal: true",
         f"# frozen_string_literal{NEGATIVE_SUFFIX}",
-        KEPT_AS_DIRECTIVE,
+        KEPT_AS_LOAD_BEARING,
     ),
     "warn_indent:": Sample(
         "ruby",
@@ -449,7 +454,7 @@ SAMPLES: dict[str, Sample] = {
         f"{SLOT}\n# control\n",
         "# warn_indent: true",
         f"# warn_indent{NEGATIVE_SUFFIX}",
-        KEPT_AS_DIRECTIVE,
+        KEPT_AS_LOAD_BEARING,
     ),
     "shareable_constant_value:": Sample(
         "ruby",
@@ -457,7 +462,7 @@ SAMPLES: dict[str, Sample] = {
         f"{SLOT}\n# control\n",
         "# shareable_constant_value: literal",
         f"# shareable_constant_value{NEGATIVE_SUFFIX}",
-        KEPT_AS_DIRECTIVE,
+        KEPT_AS_LOAD_BEARING,
     ),
     # NOTE: The three tools every Ruby project runs. `rubocop:` and `standard:`
     # NOTE: are namespaces -- `disable`, `enable`, `todo` -- so letters run on
@@ -535,7 +540,7 @@ SAMPLES: dict[str, Sample] = {
         f"{SLOT}\n// control\n",
         "// @dart = 2.12",
         f"// @dart{NEGATIVE_SUFFIX}",
-        KEPT_AS_DIRECTIVE,
+        KEPT_AS_LOAD_BEARING,
     ),
     # NOTE: `dart_style` matches its two markers by equality on the whole comment
     # NOTE: rather than by prefix -- `front_end/piece_writer.dart` switches on
@@ -581,7 +586,7 @@ SAMPLES: dict[str, Sample] = {
         f"{SLOT}\n// control\n",
         "// swift-tools-version:5.9",
         "// a note about swift-tools-version:5.9",
-        KEPT_AS_DIRECTIVE,
+        KEPT_AS_LOAD_BEARING,
     ),
     "swiftlint:": Sample(
         "swift",
@@ -666,7 +671,7 @@ SAMPLES: dict[str, Sample] = {
         f"{SLOT}\n// control\n",
         "//> using scala \"3.3.0\"",
         "// a note about //> using scala",
-        KEPT_AS_DIRECTIVE,
+        KEPT_AS_LOAD_BEARING,
     ),
     "@schema": Sample(
         "yaml",
@@ -683,14 +688,24 @@ SAMPLES: dict[str, Sample] = {
 }
 
 
-def protected_names() -> list[str]:
-    """The `protected` list the shared spec publishes."""
+def protected_names() -> tuple[list[str], list[str]]:
+    """The two protection tiers the shared spec publishes, in its own order.
+
+    `protected` is the tool tier a `remove` policy may take; `load_bearing` is
+    the tier it may not, because the language or its build reads those as part
+    of the program. The distinction is the whole point of this check, so a spec
+    missing either list is an error rather than an empty tier that quietly
+    tests nothing.
+    """
     with DIRECTIVES.open("rb") as stream:
         table = tomllib.load(stream)
-    names = table.get("protected")
-    if not isinstance(names, list) or not names:
-        raise SystemExit(f"{DIRECTIVES.relative_to(ROOT)} lists nothing under `protected`")
-    return names
+    tiers = []
+    for key in ("protected", "load_bearing"):
+        names = table.get(key)
+        if not isinstance(names, list) or not names:
+            raise SystemExit(f"{DIRECTIVES.relative_to(ROOT)} lists nothing under `{key}`")
+        tiers.append(names)
+    return tiers[0], tiers[1]
 
 
 def marker_word(marker: str) -> str:
@@ -706,9 +721,13 @@ def marker_word(marker: str) -> str:
     return match.group() if match else ""
 
 
-def scan(binary: pathlib.Path, sample: Sample, comment: str) -> list[dict]:
+def scan(
+    binary: pathlib.Path, sample: Sample, comment: str, policy: str | None = None
+) -> list[dict]:
     """Every comment the binary reports for one built sample, in source order."""
     arguments = [str(binary), "scan", "--format", "json", "--language", sample.language]
+    if policy is not None:
+        arguments += ["--policy", policy]
     if sample.dialect is not None:
         arguments += ["--dialect", sample.dialect]
     completed = subprocess.run(
@@ -761,6 +780,47 @@ def check_sample(binary: pathlib.Path, name: str, failures: list[str]) -> None:
             " so the marker is matched loosely enough to protect a comment that"
             " is only about it"
         )
+    check_policy_all(binary, sample, where, failures)
+
+
+def check_policy_all(
+    binary: pathlib.Path, sample: Sample, where: str, failures: list[str]
+) -> None:
+    """Run the same sample under `--policy all` and hold the tier to its promise.
+
+    This is the check the two tiers exist for. Under the default policy every
+    marker in the spec is kept and the two are indistinguishable; `all` is
+    where they part, and it is the run a project reaches for when it wants
+    comments gone -- so it is also the run that used to delete a build
+    constraint. A tool-tier marker has to go, because `all` said it would take
+    every comment and a linter suppression is one. A load-bearing marker has to
+    stay, because removing it would change what compiles or what the code does,
+    and no policy is offered that choice.
+    """
+    comments = scan(binary, sample, sample.marker, policy="all")
+    if len(comments) != 2:
+        failures.append(
+            f"{where}: {len(comments)} comments found under --policy all, expected 2"
+        )
+        return
+    action = comments[0]["disposition"].get("action")
+    # NOTE: A preamble is held back from `all` by the same force_protected gate
+    # NOTE: as a load-bearing directive -- it is the older half of that gate --
+    # NOTE: so the two expect a keep and only the tool tier expects a removal.
+    if sample.reason in (KEPT_AS_LOAD_BEARING, KEPT_AS_PREAMBLE):
+        if action != "keep":
+            failures.append(
+                f"{where}: `{sample.marker}` is {sample.reason} and --policy all"
+                f" {action}s it; the language or its build reads that comment, so"
+                " a run that took it would change the code rather than a report"
+                " about it"
+            )
+    elif action != "remove":
+        failures.append(
+            f"{where}: `{sample.marker}` is in the tool tier and --policy all"
+            f" {action}s it; `all` promised to take every comment a tool merely"
+            " reads, and a marker it holds back belongs under `load_bearing`"
+        )
 
 
 def main() -> int:
@@ -775,7 +835,8 @@ def main() -> int:
     if not binary.is_file():
         parser.error(f"CLI binary does not exist: {binary}")
 
-    names = protected_names()
+    tool_tier, load_bearing = protected_names()
+    names = tool_tier + load_bearing
     failures: list[str] = []
     for name in sorted(set(names) - set(SAMPLES)):
         failures.append(
@@ -786,6 +847,23 @@ def main() -> int:
         failures.append(
             f"`{name}` has a sample but {DIRECTIVES.relative_to(ROOT)} does not protect it"
         )
+    # INVARIANT: The tier a marker is filed under in the shared spec and the
+    # INVARIANT: reason its sample expects are two spellings of one decision, so
+    # INVARIANT: they are compared rather than both trusted. Moving a marker
+    # INVARIANT: between the lists is meant to be a visible act: it changes what
+    # INVARIANT: `--policy all` does to a real checkout.
+    for name in sorted(set(load_bearing) & set(SAMPLES)):
+        if SAMPLES[name].reason != KEPT_AS_LOAD_BEARING:
+            failures.append(
+                f"`{name}` is under `load_bearing` in {DIRECTIVES.relative_to(ROOT)}"
+                f" but its sample expects {SAMPLES[name].reason!r}"
+            )
+    for name in sorted(set(tool_tier) & set(SAMPLES)):
+        if SAMPLES[name].reason == KEPT_AS_LOAD_BEARING:
+            failures.append(
+                f"`{name}` expects {KEPT_AS_LOAD_BEARING!r} but"
+                f" {DIRECTIVES.relative_to(ROOT)} files it under `protected`"
+            )
     for name in names:
         if name in SAMPLES:
             check_sample(binary, name, failures)
@@ -794,8 +872,10 @@ def main() -> int:
         print("\n".join(failures))
         return 1
     print(
-        f"{len(names)} protected directives in spec/directives.toml are recognised,"
-        " and none of them protects the near-miss written in its place"
+        f"{len(names)} protected directives in spec/directives.toml are recognised"
+        f" ({len(load_bearing)} of them load-bearing and out of reach of"
+        " --policy all), and none of them protects the near-miss written in its"
+        " place"
     )
     return 0
 

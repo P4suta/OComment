@@ -238,13 +238,13 @@
           {
             "start": 0,
             "end": 16,
-            "kind": "directive",
+            "kind": "load-bearing",
             "action": "keep"
           },
           {
             "start": 17,
             "end": 32,
-            "kind": "directive",
+            "kind": "load-bearing",
             "action": "keep"
           },
           {
@@ -749,7 +749,7 @@
           {
             "start": 0,
             "end": 35,
-            "kind": "directive",
+            "kind": "load-bearing",
             "action": "keep"
           },
           {
@@ -1060,7 +1060,7 @@
           {
             "start": 0,
             "end": 28,
-            "kind": "directive",
+            "kind": "load-bearing",
             "action": "keep"
           },
           {
@@ -6436,7 +6436,7 @@
           {
             "start": 0,
             "end": 29,
-            "kind": "directive",
+            "kind": "load-bearing",
             "action": "keep"
           },
           {
@@ -8599,7 +8599,7 @@
           {
             "start": 0,
             "end": 15,
-            "kind": "directive",
+            "kind": "load-bearing",
             "action": "keep"
           },
           {
@@ -9515,7 +9515,7 @@
           {
             "start": 0,
             "end": 26,
-            "kind": "directive",
+            "kind": "load-bearing",
             "action": "keep"
           },
           {

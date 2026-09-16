@@ -34,6 +34,14 @@ fn fixtures() -> Vec<(Language, &'static [u8])> {
             b"// eslint-disable-next-line\n/* ordinary */\n".as_slice(),
         ),
         (Language::Html, b"<!-- observable -->\n".as_slice()),
+        /* NOTE: A build constraint, which is the kind no `remove` policy
+         * reaches: the tool tier above it is `// rustfmt::skip`, and what
+         * separates the two is that removing this one changes which files the
+         * compiler is given rather than what a linter says about them. */
+        (
+            Language::Go,
+            b"//go:build linux\n// +build linux\n\npackage main\n// ordinary\n".as_slice(),
+        ),
         (Language::Shell, b"#!/bin/sh\n# ordinary\n".as_slice()),
         (
             Language::Python,

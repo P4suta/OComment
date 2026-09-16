@@ -932,9 +932,17 @@ def policy_matrix() -> list[str]:
 
 
 def protected_table(cli: Cli, cwd: pathlib.Path) -> list[str]:
-    """One row per marker `spec/directives.toml` protects, scanned for real."""
+    """One row per marker `spec/directives.toml` protects, scanned for real.
+
+    Both tiers are listed, the load-bearing one first: those are the markers no
+    `remove` policy reaches, so a reader asking whether `--policy all` is safe
+    to point at their repository is reading this half of the table. The `Kept
+    because` column is the scanner's own answer and is what tells the two
+    apart, which is why the tiers are not labelled again here.
+    """
     with DIRECTIVES.open("rb") as stream:
-        names = tomllib.load(stream)["protected"]
+        table = tomllib.load(stream)
+    names = table["load_bearing"] + table["protected"]
     lines = [
         "| Marker | Language | Written as | Kind | Kept because |",
         "| --- | --- | --- | --- | --- |",
@@ -1019,6 +1027,19 @@ def why_kept_page(cli: Cli, workspace: pathlib.Path) -> str:
             "or an optimiser hint changes what a compiler, a linter, or a database",
             "does with the file. Each row below is scanned by the binary that built",
             "this page, so the table cannot claim a protection that is not there.",
+            "",
+            "The `Kept because` column says which of two protections a marker has,",
+            "and the difference is what `--policy all` does to it. A marker kept as",
+            "a *tool or language directive* is addressed to something that reports",
+            "on the code -- a linter, a formatter, a coverage tool -- so losing it",
+            "makes that tool noisier and leaves the program alone, and `all` is",
+            "free to take it. A marker kept as *required by the language or its",
+            "build* is read by the language itself, by its compiler or by its",
+            "package manager, and losing it changes what compiles or what the code",
+            "does: `//go:build linux` decides whether the file is compiled at all,",
+            "and `// swift-tools-version:` decides whether a `Package.swift` is a",
+            "manifest. No policy is offered that choice, and `--force-protected`",
+            "is the only way to give one up.",
             "",
         ]
     )

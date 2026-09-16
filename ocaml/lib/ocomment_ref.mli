@@ -12,7 +12,7 @@ type byte_span = { start : int; finish : int }
 
 type comment_kind =
   | Line | Block | DocLine | DocBlock | Directive | License | HtmlComment
-  | Shebang | Encoding | OptimizerHint | VersionComment
+  | Shebang | Encoding | OptimizerHint | VersionComment | LoadBearing
 
 type disposition = Remove | Keep of string
 type severity = Error | Warning | Info | Hint

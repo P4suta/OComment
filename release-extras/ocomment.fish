@@ -27,7 +27,7 @@ end
 complete -c ocomment -n "__fish_ocomment_needs_command" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
 complete -c ocomment -n "__fish_ocomment_needs_command" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
 legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+all\t'Remove every comment except the preambles and load-bearing directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_needs_command" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
 compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
@@ -89,7 +89,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_needs_command" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -100,7 +101,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_needs_command" -l format -d 'Output encoding' -r -f -a "human\t''
 json\t''
 jsonl\t''
@@ -140,7 +142,7 @@ complete -c ocomment -n "__fish_ocomment_needs_command" -a "help" -d 'Print this
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
 legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+all\t'Remove every comment except the preambles and load-bearing directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
 compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
@@ -202,7 +204,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -213,7 +216,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l format -d 'Output encoding' -r -f -a "human\t''
 json\t''
 jsonl\t''
@@ -240,7 +244,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand check" -s h -l help -d
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
 legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+all\t'Remove every comment except the preambles and load-bearing directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
 compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
@@ -302,7 +306,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -313,7 +318,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l format -d 'Output encoding' -r -f -a "human\t''
 json\t''
 jsonl\t''
@@ -342,7 +348,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -s h -l help -d '
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
 legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+all\t'Remove every comment except the preambles and load-bearing directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
 compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
@@ -404,7 +410,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -415,7 +422,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l format -d 'Output encoding' -r -f -a "human\t''
 json\t''
 jsonl\t''
@@ -442,7 +450,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -s h -l help -d 
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
 legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+all\t'Remove every comment except the preambles and load-bearing directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
 compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
@@ -504,7 +512,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -515,7 +524,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l format -d 'Output encoding' -r -f -a "human\t''
 json\t''
 jsonl\t''
@@ -542,7 +552,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -s h -l help -d 
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
 legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+all\t'Remove every comment except the preambles and load-bearing directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
 compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
@@ -604,7 +614,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -615,7 +626,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l format -d 'Output encoding' -r -f -a "human\t''
 json\t''
 jsonl\t''
@@ -640,7 +652,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -s h -l help -d
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
 legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+all\t'Remove every comment except the preambles and load-bearing directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
 compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
@@ -702,7 +714,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -713,7 +726,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l format -d 'Output encoding' -r -f -a "human\t''
 json\t''
 jsonl\t''
@@ -738,7 +752,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -s h -l help -d '
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
 legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+all\t'Remove every comment except the preambles and load-bearing directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
 compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
@@ -800,7 +814,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -811,7 +826,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l format -d 'Output encoding' -r -f -a "human\t''
 json\t''
 jsonl\t''
@@ -839,7 +855,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand init" -s h -l help -d 
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
 legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+all\t'Remove every comment except the preambles and load-bearing directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
 compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
@@ -901,7 +917,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -912,7 +929,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l format -d 'Output encoding' -r -f -a "human\t''
 json\t''
 jsonl\t''
@@ -937,7 +955,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand config" -s h -l help -
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
 legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+all\t'Remove every comment except the preambles and load-bearing directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
 compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
@@ -999,7 +1017,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -1010,7 +1029,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l format -d 'Output encoding' -r -f -a "human\t''
 json\t''
 jsonl\t''
@@ -1035,7 +1055,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -s h -l hel
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
 legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+all\t'Remove every comment except the preambles and load-bearing directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
 compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
@@ -1097,7 +1117,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -1108,7 +1129,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l format -d 'Output encoding' -r -f -a "human\t''
 json\t''
 jsonl\t''
@@ -1143,7 +1165,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_see
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
 legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+all\t'Remove every comment except the preambles and load-bearing directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
 compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
@@ -1205,7 +1227,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -1216,7 +1239,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l format -d 'Output encoding' -r -f -a "human\t''
 json\t''
 jsonl\t''
@@ -1241,7 +1265,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_see
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
 legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+all\t'Remove every comment except the preambles and load-bearing directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
 compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
@@ -1303,7 +1327,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -1314,7 +1339,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l format -d 'Output encoding' -r -f -a "human\t''
 json\t''
 jsonl\t''
@@ -1339,7 +1365,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_see
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
 legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+all\t'Remove every comment except the preambles and load-bearing directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
 compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
@@ -1401,7 +1427,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -1412,7 +1439,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l format -d 'Output encoding' -r -f -a "human\t''
 json\t''
 jsonl\t''
@@ -1437,7 +1465,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_see
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
 legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+all\t'Remove every comment except the preambles and load-bearing directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
 compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
@@ -1499,7 +1527,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -1510,7 +1539,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l format -d 'Output encoding' -r -f -a "human\t''
 json\t''
 jsonl\t''
@@ -1535,7 +1565,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_see
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
 legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+all\t'Remove every comment except the preambles and load-bearing directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
 compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
@@ -1597,7 +1627,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -1608,7 +1639,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l format -d 'Output encoding' -r -f -a "human\t''
 json\t''
 jsonl\t''
@@ -1633,7 +1665,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_see
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
 legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+all\t'Remove every comment except the preambles and load-bearing directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
 compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
@@ -1695,7 +1727,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -1706,7 +1739,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l format -d 'Output encoding' -r -f -a "human\t''
 json\t''
 jsonl\t''
@@ -1738,7 +1772,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_see
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
 legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+all\t'Remove every comment except the preambles and load-bearing directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
 compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
@@ -1800,7 +1834,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -1811,7 +1846,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l format -d 'Output encoding' -r -f -a "human\t''
 json\t''
 jsonl\t''
@@ -1836,7 +1872,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -s h -l h
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
 legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+all\t'Remove every comment except the preambles and load-bearing directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
 compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
@@ -1898,7 +1934,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -1909,7 +1946,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l format -d 'Output encoding' -r -f -a "human\t''
 json\t''
 jsonl\t''
@@ -1934,7 +1972,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -s h -l help -
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
 legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+all\t'Remove every comment except the preambles and load-bearing directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
 compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
@@ -1996,7 +2034,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
@@ -2007,7 +2046,8 @@ html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as          `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l format -d 'Output encoding' -r -f -a "human\t''
 json\t''
 jsonl\t''

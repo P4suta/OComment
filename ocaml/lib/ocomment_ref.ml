@@ -12,7 +12,7 @@ type byte_span = { start : int; finish : int }
 
 type comment_kind =
   | Line | Block | DocLine | DocBlock | Directive | License | HtmlComment
-  | Shebang | Encoding | OptimizerHint | VersionComment
+  | Shebang | Encoding | OptimizerHint | VersionComment | LoadBearing
 
 type disposition = Remove | Keep of string
 type severity = Error | Warning | Info | Hint
@@ -118,7 +118,7 @@ let string_of_comment_kind = function
   | Line -> "line" | Block -> "block" | DocLine -> "doc-line" | DocBlock -> "doc-block"
   | Directive -> "directive" | License -> "license" | HtmlComment -> "html-comment"
   | Shebang -> "shebang" | Encoding -> "encoding" | OptimizerHint -> "optimizer-hint"
-  | VersionComment -> "version-comment"
+  | VersionComment -> "version-comment" | LoadBearing -> "load-bearing"
 
 let starts source index token =
   let source_length = Bytes.length source and token_length = String.length token in
@@ -229,6 +229,8 @@ let disposition options kind raw =
   if mem_kind kind options.keep_kinds || regex_matches options.keep_regex raw then
     Keep "kept by kind or regex override"
   else if (kind = Shebang || kind = Encoding) && not options.force_protected then Keep "required source preamble"
+  else if kind = LoadBearing && not options.force_protected then
+    Keep "required by the language or its build"
   else if mem_kind kind options.remove_kinds || regex_matches options.remove_regex raw then Remove
   else if options.policy = All then Remove
   else if kind = HtmlComment then Keep "HTML comments are DOM-observable"
@@ -384,9 +386,15 @@ let dart_language_version raw =
               | None -> false
               | Some index -> spaces index = length
 
+(* NOTE: The comment with the punctuation that opens it dropped, which is what
+   every directive rule below is asked of.  It is shared with is_load_bearing so
+   that the two predicates cannot disagree about where a marker begins. *)
+let directive_compact text =
+  text |> String.to_seq |>
+    Seq.drop_while (fun character -> String.contains "!/*#@ " character) |> String.of_seq
+
 let is_directive language text raw =
-  let compact = text |> String.to_seq |>
-    Seq.drop_while (fun character -> String.contains "!/*#@ " character) |> String.of_seq in
+  let compact = directive_compact text in
   let prefixes = ["sourcemappingurl="; "sourceurl="; "#__pure__"; "@__pure__";
     "__pure__"; "#__no_side_effects__"; "__no_side_effects__"; "ts-ignore";
     "ts-expect-error"; "ts-nocheck"; "ts-check"; "eslint"; "prettier-ignore";
@@ -568,6 +576,39 @@ let is_directive language text raw =
     || String.starts_with ~prefix:"> using\t" compact
   | _ -> false
 
+(* NOTE: Which of the directives above the language or its build reads as part
+   of the program, as against the far larger set a tool merely reads to decide
+   what to report.  The question each one answers is whether removing it changes
+   what the toolchain *produces*: a dropped "swiftlint:disable" makes a linter
+   noisier and the program is the same program, while a dropped "//go:build"
+   compiles a file that was never meant for this platform and the build is green
+   either way.  The second failure is the one nothing downstream catches, so
+   these are held back from every "remove" policy and force_protected is the
+   only way out.
+
+   This is asked only of comments is_directive has already claimed, so it is a
+   filter over that set rather than a second catalogue: "line " is Go's and is
+   deliberately absent, because it moves the positions the compiler reports and
+   not the program it builds.  "go:" is otherwise taken whole -- the namespace
+   is the compiler's, and a marker protected in error is one comment left behind
+   where a marker missed in error is a silent change to the build. *)
+let is_load_bearing language text raw =
+  let compact = directive_compact text in
+  match language with
+  | Go -> String.starts_with ~prefix:"go:" compact ||
+      String.starts_with ~prefix:"+build" compact
+  | Swift -> String.starts_with ~prefix:"swift-tools-version:" compact
+  | Ruby -> List.exists (fun prefix -> String.starts_with ~prefix compact)
+      ["frozen_string_literal:"; "warn_indent:"; "shareable_constant_value:"]
+  | Shell -> String.starts_with ~prefix:"syntax=" compact
+  | Dart -> dart_language_version raw
+  | Scala ->
+    compact = "> using" || String.starts_with ~prefix:"> using " compact
+    || String.starts_with ~prefix:"> using\t" compact
+  | TypeScript ->
+    String.starts_with ~prefix:"///" raw && String.starts_with ~prefix:"<" compact
+  | _ -> false
+
 let within_first_two_lines source finish =
   let limit = min finish (Bytes.length source) in
   let rec loop index line_breaks =
@@ -648,7 +689,10 @@ let classify source language lexical start finish =
     encoding_declaration source start raw then Encoding
   else if language = Sql && String.starts_with ~prefix:"/*+" raw then OptimizerHint
   else if language = Sql && String.starts_with ~prefix:"/*!" raw then VersionComment
-  else if is_legal text then License else if is_directive language text raw then Directive else lexical
+  else if is_legal text then License
+  else if is_directive language text raw then
+    (if is_load_bearing language text raw then LoadBearing else Directive)
+  else lexical
 
 (* NOTE: One YAML block scalar, as the two things the lines below it depend on:
    where its body stopped, and whether its header asked to keep the empty lines

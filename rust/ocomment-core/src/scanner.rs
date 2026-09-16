@@ -78,10 +78,17 @@ impl PreparedScanner {
 /// assert_eq!(report.comments[0].kind, CommentKind::Line);
 /// assert!(report.comments[0].disposition.is_remove());
 ///
-/// // A build tag is a directive, and the default policy keeps one.
+/// // A build tag decides which files the compiler is given, so it is
+/// // load-bearing: no policy removes one, and `--policy all` is no exception.
 /// let tagged = scan(b"//go:build linux\n", Language::Go, ScanOptions::default());
-/// assert_eq!(tagged.comments[0].kind, CommentKind::Directive);
+/// assert_eq!(tagged.comments[0].kind, CommentKind::LoadBearing);
 /// assert!(!tagged.comments[0].disposition.is_remove());
+///
+/// // A lint suppression is addressed to a tool rather than to the build, so
+/// // the default policy keeps it and `all` is free to take it.
+/// let linted = scan(b"// rustfmt::skip\n", Language::Rust, ScanOptions::default());
+/// assert_eq!(linted.comments[0].kind, CommentKind::Directive);
+/// assert!(!linted.comments[0].disposition.is_remove());
 /// ```
 pub fn scan(source: &[u8], language: Language, options: ScanOptions) -> ScanReport {
     scan_internal(source, language, options, 0, false, None).0
@@ -6074,6 +6081,80 @@ impl DispositionPatterns {
     }
 }
 
+/* NOTE: The two tiers of protection, and the sentence each one gives the
+ * report. A shebang and an encoding declaration are held back by the file's
+ * own syntax: take one away and the bytes below it are read as something else.
+ * A load-bearing directive is held back by what reads it — the compiler, the
+ * package manager, the container builder — and taking one away leaves a file
+ * that still parses and no longer means what it meant. Neither is a choice a
+ * policy gets to make, because no run that removed one of them meant to: the
+ * question `--policy all` answers is which *comments* go, and these are
+ * instructions wearing a comment's syntax. `force_protected` is the one way
+ * out, and it is spelled out rather than implied so that a run which gives up
+ * a build constraint had to say so. */
+const fn protected_reason(kind: CommentKind) -> Option<&'static str> {
+    match kind {
+        CommentKind::Shebang | CommentKind::Encoding => Some("required source preamble"),
+        CommentKind::LoadBearing => Some("required by the language or its build"),
+        _ => None,
+    }
+}
+
+/* NOTE: Which directives are load-bearing, told from the far larger set that
+ * is not by one question: does removing it change what the toolchain
+ * *produces*, or only what a tool *says*? A dropped `swiftlint:disable` makes
+ * a linter noisier and the program is the same program; a dropped
+ * `//go:build` compiles a file that was never meant for this platform, and the
+ * build is green either way. The second failure is the one nothing downstream
+ * catches, so the line is drawn there.
+ *
+ * `go:` is taken whole rather than split at `go:build` and `go:embed`. The
+ * namespace is the compiler's, `//go:generate` is the only member of it a
+ * project could argue is bookkeeping, and the argument is not worth the
+ * asymmetry: a marker protected in error is one comment left behind that
+ * `--force-protected` takes away, while a marker missed in error is a silent
+ * change to the build. Protect generously, and say why. */
+fn is_load_bearing(name: &str, language: Language) -> bool {
+    match language {
+        /* NOTE: `//go:build` and its retired `// +build` twin decide whether
+         * the file is compiled at all, `//go:embed` decides what a variable
+         * holds, and `//go:noescape` and its neighbours decide what the
+         * compiler is allowed to assume. */
+        Language::Go => matches!(name, "go:" | "+build"),
+        /* NOTE: SwiftPM reads this line before it reads the manifest, and
+         * decides which version of the package description the rest of the
+         * file is written against. Without it the manifest is read as one
+         * written for the oldest tools version there is, which today is no
+         * longer supported at all. */
+        Language::Swift => name == "swift-tools-version:",
+        /* NOTE: The magic comments the Ruby *parser* reads out of the head of
+         * a file, as against the suppressions `rubocop:` and `standard:`
+         * address to a checker. `frozen_string_literal` decides whether every
+         * string literal in the file is frozen, which is a difference a
+         * program can observe by mutating one. */
+        Language::Ruby => matches!(
+            name,
+            "frozen_string_literal:" | "warn_indent:" | "shareable_constant_value:"
+        ),
+        /* NOTE: A Dockerfile is scanned as shell, and `# syntax=` names the
+         * BuildKit frontend that reads everything under it. A different
+         * frontend is a different language. */
+        Language::Shell => name == "syntax=",
+        /* NOTE: `// @dart=2.9` opts the library out of null safety, so the
+         * types in the file mean something else without it. */
+        Language::Dart => name == "@dart",
+        /* NOTE: Scala CLI reads `//> using` for the dependencies, the compiler
+         * options and the Scala version the file is built with. It is a build
+         * file that happens to live inside the source. */
+        Language::Scala => name == "//> using",
+        /* NOTE: `/// <reference path="..." />` adds a file to the compilation
+         * rather than describing one, so removing it takes declarations out of
+         * scope. */
+        Language::TypeScript => name == "///",
+        _ => false,
+    }
+}
+
 pub(crate) fn disposition(
     kind: CommentKind,
     options: &ScanOptions,
@@ -6085,10 +6166,11 @@ pub(crate) fn disposition(
             reason: "kept by kind or regex override".into(),
         };
     }
-    let hard = matches!(kind, CommentKind::Shebang | CommentKind::Encoding);
-    if hard && !options.force_protected {
+    if let Some(reason) = protected_reason(kind)
+        && !options.force_protected
+    {
         return Disposition::Keep {
-            reason: "required source preamble".into(),
+            reason: reason.into(),
         };
     }
     if options.remove_kinds.contains(&kind)
@@ -6212,9 +6294,14 @@ pub fn explain_disposition_with(
     if let Some((index, pattern)) = first_match(&patterns.keep, raw, &options.keep_regex) {
         return DispositionExplanation::KeptByRegex { index, pattern };
     }
-    let hard = matches!(kind, CommentKind::Shebang | CommentKind::Encoding);
-    if hard && !options.force_protected {
-        return DispositionExplanation::ProtectedPreamble;
+    if protected_reason(kind).is_some() && !options.force_protected {
+        return if kind == CommentKind::LoadBearing {
+            DispositionExplanation::KeptLoadBearing {
+                name: directive_name_of(raw, language),
+            }
+        } else {
+            DispositionExplanation::ProtectedPreamble
+        };
     }
     if options.remove_kinds.contains(&kind) {
         return DispositionExplanation::RemovedByKind(kind);
@@ -6368,8 +6455,12 @@ fn classify_comment(
     if legal_marker(trimmed).is_some() {
         return CommentKind::License;
     }
-    if directive_name(trimmed, language, raw).is_some() {
-        return CommentKind::Directive;
+    if let Some(name) = directive_name(trimmed, language, raw) {
+        return if is_load_bearing(name, language) {
+            CommentKind::LoadBearing
+        } else {
+            CommentKind::Directive
+        };
     }
     lexical
 }

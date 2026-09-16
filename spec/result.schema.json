@@ -135,7 +135,7 @@
       "enum": ["rust", "ocaml", "c", "cpp", "go", "java", "javascript", "typescript", "python", "shell", "html", "css", "jsonc", "sql", "kotlin", "toml", "lua", "yaml", "php", "ruby", "zig", "r", "dart", "swift", "csharp", "scala", "vue", "svelte", "markdown", "perl", "unknown"]
     },
     "kind": {
-      "enum": ["line", "block", "doc-line", "doc-block", "directive", "license", "html-comment", "shebang", "encoding", "optimizer-hint", "version-comment"]
+      "enum": ["line", "block", "doc-line", "doc-block", "directive", "license", "html-comment", "shebang", "encoding", "optimizer-hint", "version-comment", "load-bearing"]
     }
   }
 }

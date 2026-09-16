@@ -271,6 +271,7 @@ impl PolicyTrace {
             | DispositionExplanation::KeptLicense { .. } => (&self.policy, "mode"),
             // NOTE: A built-in rule, decided by no setting at all.
             DispositionExplanation::ProtectedPreamble
+            | DispositionExplanation::KeptLoadBearing { .. }
             | DispositionExplanation::KeptHtml
             | DispositionExplanation::KeptDirective { .. }
             | DispositionExplanation::KeptStructural { .. } => return None,

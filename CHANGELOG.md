@@ -5,6 +5,37 @@ All notable changes to OComment will be documented here. The project follows
 
 ## Unreleased
 
+### Fixed
+
+- `--policy all` no longer removes a directive the language or its build reads
+  as part of the program. Those are now their own comment kind,
+  `load-bearing`, held back from every `remove` policy the way a shebang and an
+  encoding declaration already were; `--force-protected` is the one way to give
+  one up, and a run that keeps one says so on standard error. The kind covers
+  `//go:build`, `// +build` and the rest of Go's `go:` namespace,
+  `// swift-tools-version:`, Ruby's `# frozen_string_literal:`,
+  `# shareable_constant_value:` and `# warn_indent:` magic comments, a
+  Dockerfile's `# syntax=`, Dart's `// @dart=`, Scala CLI's `//> using`, and
+  TypeScript's `/// <reference ... />`.
+
+  Until now `ocomment fix --policy all` deleted all of them. The failure was
+  quiet in the worst way: a `Package.swift` that lost its tools version stopped
+  being a manifest SwiftPM could read, and a Go file that lost its build
+  constraint still compiled — on every platform, rather than the one it was
+  written for. Lint suppressions such as `// swiftlint:` and `# rubocop:` are
+  unchanged and `all` still removes them, because a run that loses one gets a
+  noisier tool rather than a different program.
+
+  `spec/directives.toml` now files every protected marker under `protected` or
+  `load_bearing`, and `tools/check_directives.py` runs each one under
+  `--policy all` to hold the two tiers to that promise.
+
+### Changed
+
+- `--keep-kind` and `--remove-kind` accept `load-bearing`, machine formats
+  report it, and a WASM scanner plugin may return it. Anything that pinned the
+  eleven comment kinds sees a twelfth.
+
 ## 0.1.0
 
 ### Added

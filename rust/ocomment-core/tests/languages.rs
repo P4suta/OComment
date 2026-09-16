@@ -154,15 +154,43 @@ fn cpp_raw_strings_hide_delimiters_and_invalid_raw_strings_stop_fix() {
 fn go_build_and_compiler_directives_are_protected() {
     let source = b"//go:build linux\n// +build linux\n//line generated.go:1\n// ordinary\n";
     let report = scan(source, Language::Go, ScanOptions::default());
+    /* NOTE: Three directives, and the tier is the difference between them.
+     * A build constraint decides which files the compiler is given at all, so
+     * it is load-bearing and no policy takes it; `//line` moves the positions
+     * the compiler *reports* and leaves the program it builds alone, so it
+     * stays in the tool tier that `--policy all` is free to clear out. */
     assert_eq!(
         report
             .comments
             .iter()
-            .filter(|comment| comment.kind == CommentKind::Directive)
-            .count(),
-        3
+            .map(|comment| comment.kind)
+            .collect::<Vec<_>>(),
+        vec![
+            CommentKind::LoadBearing,
+            CommentKind::LoadBearing,
+            CommentKind::Directive,
+            CommentKind::Line,
+        ]
     );
     assert_eq!(removable(&report), 1);
+    let stripped = scan(
+        source,
+        Language::Go,
+        ScanOptions {
+            policy: Policy::All,
+            ..ScanOptions::default()
+        },
+    );
+    assert_eq!(
+        stripped
+            .comments
+            .iter()
+            .filter(|comment| !comment.disposition.is_remove())
+            .count(),
+        2,
+        "--policy all took a build constraint: {:?}",
+        stripped.comments
+    );
 }
 
 #[test]
@@ -374,7 +402,9 @@ const value: string = "// text"; // ordinary
 "#;
     let report = scan(source, Language::TypeScript, ScanOptions::default());
     assert_eq!(report.comments.len(), 2);
-    assert_eq!(report.comments[0].kind, CommentKind::Directive);
+    /* NOTE: A triple-slash reference adds a file to the compilation rather than
+     * describing one, so removing it takes declarations out of scope. */
+    assert_eq!(report.comments[0].kind, CommentKind::LoadBearing);
     assert_eq!(removable(&report), 1);
 
     let directives = scan(
@@ -470,7 +500,11 @@ fn dockerfile_parser_and_linter_directives_are_protected() {
     assert_eq!(
         kinds,
         vec![
-            CommentKind::Directive,
+            /* NOTE: `# syntax=` names the BuildKit frontend that reads
+             * everything under it, and a different frontend is a different
+             * language; `hadolint` and `shellcheck` only decide what is
+             * reported about the file. */
+            CommentKind::LoadBearing,
             CommentKind::Line,
             CommentKind::Directive,
             CommentKind::Directive,
@@ -3735,9 +3769,14 @@ fn ruby_tool_directives_are_protected() {
     assert_eq!(
         kinds,
         [
-            CommentKind::Directive,
-            CommentKind::Directive,
-            CommentKind::Directive,
+            /* NOTE: The first three are the parser's own magic comments,
+             * which decide whether a literal is frozen, what Ractor may
+             * share and how the parser treats indentation; the three after
+             * them are Sorbet, RuboCop and StandardRB deciding what gets
+             * reported. */
+            CommentKind::LoadBearing,
+            CommentKind::LoadBearing,
+            CommentKind::LoadBearing,
             CommentKind::Directive,
             CommentKind::Directive,
             CommentKind::Directive,
@@ -4968,8 +5007,14 @@ fn dart_tool_and_language_directives_are_protected() {
     let report = scan(source, Language::Dart, ScanOptions::default());
     assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
     assert_eq!(report.comments.len(), 6, "{:?}", report.comments);
-    for comment in &report.comments[..5] {
+    /* NOTE: `// @dart = 2.12` opts the library out of null safety, so the
+     * types in the file mean something else without it; the four below it are
+     * addressed to the formatter, the analyzer and the coverage tool. */
+    assert_eq!(report.comments[0].kind, CommentKind::LoadBearing);
+    for comment in &report.comments[1..5] {
         assert_eq!(comment.kind, CommentKind::Directive, "{comment:?}");
+    }
+    for comment in &report.comments[..5] {
         assert!(!comment.disposition.is_remove(), "{comment:?}");
     }
     assert_eq!(report.comments[5].kind, CommentKind::Line);
@@ -4986,9 +5031,11 @@ fn dart_tool_and_language_directives_are_protected() {
     ] {
         let report = scan(near_miss, Language::Dart, ScanOptions::default());
         assert_eq!(report.comments.len(), 1, "{near_miss:?}");
-        assert_ne!(
-            report.comments[0].kind,
-            CommentKind::Directive,
+        assert!(
+            !matches!(
+                report.comments[0].kind,
+                CommentKind::Directive | CommentKind::LoadBearing
+            ),
             "{near_miss:?} was read as a directive"
         );
         assert_eq!(removable(&report), 1, "{near_miss:?}");
@@ -5491,7 +5538,10 @@ fn swift_directives_are_kept_and_a_near_miss_is_not() {
             .map(|comment| comment.kind)
             .collect::<Vec<_>>(),
         vec![
-            CommentKind::Directive,
+            /* NOTE: SwiftPM reads the tools version before it reads the
+             * manifest, so that one is load-bearing; the four after it are
+             * SwiftLint and the two formatters. */
+            CommentKind::LoadBearing,
             CommentKind::Directive,
             CommentKind::Directive,
             CommentKind::Directive,
@@ -6349,8 +6399,8 @@ fn scala_directives_are_kept_and_a_near_miss_is_not() {
             .map(|comment| (comment.span.start, comment.span.end, comment.kind))
             .collect::<Vec<_>>(),
         vec![
-            (0, 23, CommentKind::Directive),
-            (24, 33, CommentKind::Directive),
+            (0, 23, CommentKind::LoadBearing),
+            (24, 33, CommentKind::LoadBearing),
             (34, 47, CommentKind::Line),
             (48, 62, CommentKind::Line),
             (63, 72, CommentKind::Line),

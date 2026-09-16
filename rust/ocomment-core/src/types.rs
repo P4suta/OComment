@@ -498,11 +498,17 @@ pub enum CommentKind {
     /// A SQL version-gated comment, `/*! ... */`, whose body the server
     /// executes.
     VersionComment,
+    /// A directive the language or its build reads as part of the program:
+    /// `//go:build`, `# frozen_string_literal:`, `// swift-tools-version:`.
+    /// Removing one changes what compiles or what the code does, rather than
+    /// what a tool reports about it, so a `remove` policy does not reach it
+    /// and only [`ScanOptions::force_protected`] gives it up.
+    LoadBearing,
 }
 
 impl CommentKind {
     /// Every CLI-visible comment kind.
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::Line,
         Self::Block,
         Self::DocLine,
@@ -514,6 +520,7 @@ impl CommentKind {
         Self::Encoding,
         Self::OptimizerHint,
         Self::VersionComment,
+        Self::LoadBearing,
     ];
 
     /// The canonical name, identical to the serde representation.
@@ -530,6 +537,7 @@ impl CommentKind {
             Self::Encoding => "encoding",
             Self::OptimizerHint => "optimizer-hint",
             Self::VersionComment => "version-comment",
+            Self::LoadBearing => "load-bearing",
         }
     }
 
@@ -543,7 +551,8 @@ impl CommentKind {
             | Self::Shebang
             | Self::Encoding
             | Self::OptimizerHint
-            | Self::VersionComment => &[],
+            | Self::VersionComment
+            | Self::LoadBearing => &[],
             Self::DocLine => &["doc"],
             Self::Directive => &["pragma"],
             Self::License => &["legal"],
@@ -659,6 +668,14 @@ pub enum DispositionExplanation {
     ProtectedPreamble,
     /// An HTML comment, which the DOM exposes to scripts.
     KeptHtml,
+    /// A directive the language or its build reads as part of the program.
+    /// Removing it would change what compiles or what the code does, so no
+    /// `remove` policy reaches it and only [`ScanOptions::force_protected`]
+    /// gives it up.
+    KeptLoadBearing {
+        /// The directive's name, when the catalogue could name it.
+        name: Option<&'static str>,
+    },
     /// A directive addressed to a tool or to the compiler.
     KeptDirective {
         /// The kind that was classified as a directive.
@@ -706,6 +723,7 @@ impl DispositionExplanation {
             Self::KeptByKind(_)
             | Self::KeptByRegex { .. }
             | Self::ProtectedPreamble
+            | Self::KeptLoadBearing { .. }
             | Self::KeptHtml
             | Self::KeptDirective { .. }
             | Self::KeptLicense { .. }
@@ -730,6 +748,15 @@ impl fmt::Display for DispositionExplanation {
             Self::ProtectedPreamble => {
                 f.write_str("kept: required source preamble, removable only with force_protected")
             }
+            Self::KeptLoadBearing { name } => match name {
+                Some(name) => write!(
+                    f,
+                    "kept: `{name}` is read by the language or its build, so removing it would change the code rather than a report about it"
+                ),
+                None => f.write_str(
+                    "kept: the language or its build reads this comment, so removing it would change the code rather than a report about it",
+                ),
+            },
             Self::KeptHtml => f.write_str("kept: HTML comments are DOM-observable"),
             Self::KeptDirective { kind, name } => match name {
                 Some(name) => write!(f, "kept: tool or language directive `{name}`"),
@@ -908,13 +935,16 @@ pub enum ExternalSpanError {
 pub enum Policy {
     /// The default. Removes ordinary, documentation, and license comments;
     /// keeps directives, HTML comments, SQL hints and version comments, and
-    /// the shebang or encoding preamble.
+    /// the shebang or encoding preamble. A [`CommentKind::LoadBearing`]
+    /// directive is kept under every policy.
     #[default]
     Safe,
     /// As [`Self::Safe`], but license and copyright notices are kept too.
     Legal,
     /// Removes every comment, directives and HTML comments included. The
-    /// shebang and encoding preamble still survive unless
+    /// shebang and encoding preamble survive, and so does a
+    /// [`CommentKind::LoadBearing`] directive the language or its build reads
+    /// as part of the program; all three go only when
     /// [`ScanOptions::force_protected`] is set.
     All,
 }

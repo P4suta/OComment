@@ -88,7 +88,7 @@ Policy:
           Possible values:
           - safe:  Remove ordinary and doc comments; keep preambles and directives
           - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -171,6 +171,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -187,6 +188,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
@@ -287,7 +289,7 @@ Policy:
           Possible values:
           - safe:  Remove ordinary and doc comments; keep preambles and directives
           - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -370,6 +372,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -386,6 +389,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
@@ -471,7 +475,7 @@ Policy:
           Possible values:
           - safe:  Remove ordinary and doc comments; keep preambles and directives
           - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -554,6 +558,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -570,6 +575,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
@@ -647,7 +653,7 @@ Policy:
           Possible values:
           - safe:  Remove ordinary and doc comments; keep preambles and directives
           - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -730,6 +736,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -746,6 +753,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
@@ -823,7 +831,7 @@ Policy:
           Possible values:
           - safe:  Remove ordinary and doc comments; keep preambles and directives
           - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -906,6 +914,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -922,6 +931,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
@@ -989,7 +999,7 @@ Policy:
           Possible values:
           - safe:  Remove ordinary and doc comments; keep preambles and directives
           - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -1072,6 +1082,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -1088,6 +1099,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
@@ -1155,7 +1167,7 @@ Policy:
           Possible values:
           - safe:  Remove ordinary and doc comments; keep preambles and directives
           - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -1238,6 +1250,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -1254,6 +1267,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
@@ -1337,7 +1351,7 @@ Policy:
           Possible values:
           - safe:  Remove ordinary and doc comments; keep preambles and directives
           - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -1420,6 +1434,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -1436,6 +1451,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
@@ -1510,7 +1526,7 @@ Policy:
           Possible values:
           - safe:  Remove ordinary and doc comments; keep preambles and directives
           - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -1593,6 +1609,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -1609,6 +1626,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
@@ -1676,7 +1694,7 @@ Policy:
           Possible values:
           - safe:  Remove ordinary and doc comments; keep preambles and directives
           - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -1759,6 +1777,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -1775,6 +1794,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
@@ -1851,7 +1871,7 @@ Policy:
           Possible values:
           - safe:  Remove ordinary and doc comments; keep preambles and directives
           - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -1934,6 +1954,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -1950,6 +1971,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
@@ -2030,7 +2052,7 @@ Policy:
           Possible values:
           - safe:  Remove ordinary and doc comments; keep preambles and directives
           - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -2113,6 +2135,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -2129,6 +2152,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
@@ -2200,7 +2224,7 @@ Policy:
           Possible values:
           - safe:  Remove ordinary and doc comments; keep preambles and directives
           - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -2283,6 +2307,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -2299,6 +2324,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
@@ -2366,7 +2392,7 @@ Policy:
           Possible values:
           - safe:  Remove ordinary and doc comments; keep preambles and directives
           - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -2449,6 +2475,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -2465,6 +2492,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
@@ -2536,7 +2564,7 @@ Policy:
           Possible values:
           - safe:  Remove ordinary and doc comments; keep preambles and directives
           - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -2619,6 +2647,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -2635,6 +2664,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
@@ -2706,7 +2736,7 @@ Policy:
           Possible values:
           - safe:  Remove ordinary and doc comments; keep preambles and directives
           - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -2789,6 +2819,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -2805,6 +2836,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
@@ -2876,7 +2908,7 @@ Policy:
           Possible values:
           - safe:  Remove ordinary and doc comments; keep preambles and directives
           - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -2959,6 +2991,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -2975,6 +3008,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
@@ -3048,7 +3082,7 @@ Policy:
           Possible values:
           - safe:  Remove ordinary and doc comments; keep preambles and directives
           - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -3131,6 +3165,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -3147,6 +3182,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
@@ -3214,7 +3250,7 @@ Policy:
           Possible values:
           - safe:  Remove ordinary and doc comments; keep preambles and directives
           - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -3297,6 +3333,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -3313,6 +3350,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan
@@ -3380,7 +3418,7 @@ Policy:
           Possible values:
           - safe:  Remove ordinary and doc comments; keep preambles and directives
           - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - all:   Remove every comment except the preambles and load-bearing directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -3463,6 +3501,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -3479,6 +3518,7 @@ Policy:
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as          `//go:build`
 
       --force-invalid
           Apply the edits that are still provably safe when the source fails to scan

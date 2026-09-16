@@ -18,7 +18,7 @@ _ocomment() {
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
 '--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
 legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -80,7 +80,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -91,7 +92,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
@@ -123,7 +125,7 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
 '--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
 legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -185,7 +187,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -196,7 +199,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
@@ -221,7 +225,7 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
 '--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
 legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -283,7 +287,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -294,7 +299,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
@@ -322,7 +328,7 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
 '--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
 legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -384,7 +390,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -395,7 +402,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
@@ -420,7 +428,7 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
 '--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
 legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -482,7 +490,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -493,7 +502,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
@@ -518,7 +528,7 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
 '--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
 legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -580,7 +590,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -591,7 +602,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
@@ -613,7 +625,7 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
 '--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
 legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -675,7 +687,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -686,7 +699,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
@@ -708,7 +722,7 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
 '--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
 legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -770,7 +784,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -781,7 +796,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
@@ -807,7 +823,7 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
 '--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
 legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -869,7 +885,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -880,7 +897,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
@@ -903,7 +921,7 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
 '--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
 legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -965,7 +983,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -976,7 +995,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
@@ -998,7 +1018,7 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
 '--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
 legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -1060,7 +1080,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -1071,7 +1092,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
@@ -1104,7 +1126,7 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
 '--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
 legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -1166,7 +1188,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -1177,7 +1200,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
@@ -1200,7 +1224,7 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
 '--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
 legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -1262,7 +1286,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -1273,7 +1298,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
@@ -1296,7 +1322,7 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
 '--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
 legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -1358,7 +1384,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -1369,7 +1396,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
@@ -1391,7 +1419,7 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
 '--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
 legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -1453,7 +1481,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -1464,7 +1493,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
@@ -1487,7 +1517,7 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
 '--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
 legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -1549,7 +1579,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -1560,7 +1591,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
@@ -1583,7 +1615,7 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
 '--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
 legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -1645,7 +1677,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -1656,7 +1689,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
@@ -1727,7 +1761,7 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
 '--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
 legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -1789,7 +1823,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -1800,7 +1835,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
@@ -1823,7 +1859,7 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
 '--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
 legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -1885,7 +1921,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -1896,7 +1933,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
@@ -1918,7 +1956,7 @@ _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
 '--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
 legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+all\:"Remove every comment except the preambles and load-bearing directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
 compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
@@ -1980,7 +2018,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
@@ -1991,7 +2030,8 @@ html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as          \`//go\:build\`"))' \
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \

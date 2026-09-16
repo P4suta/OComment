@@ -182,17 +182,24 @@ pub(crate) fn skip_label(reason: &str) -> &str {
 /// drifting apart from the scanner.
 const PROTECTED_PREAMBLE: &str = "required source preamble";
 
-/// How many comments were kept only because `--force-protected` was absent.
+/// The `Keep` reason the core scanner gives a directive the language or its
+/// build reads, which `--force-protected` would likewise have removed. It is
+/// frozen by the differential protocol beside [`PROTECTED_PREAMBLE`], and for
+/// the same reason: the summary matches on it to name what `all` left behind.
+const LOAD_BEARING: &str = "required by the language or its build";
+
+/// How many comments carry `protection`, the `Keep` reason of one of the two
+/// tiers `--force-protected` would have given up.
 ///
 /// Counted from the disposition rather than from the comment kind: a shebang
 /// held back by `--keep-kind shebang` stays kept whatever `--force-protected`
 /// says, and advertising the flag for it would be a lie.
-fn protected_preambles(files: &[ProcessedFile]) -> usize {
+fn kept_for(files: &[ProcessedFile], protection: &str) -> usize {
     files
         .iter()
         .flat_map(|file| &file.result.report.comments)
         .filter(|comment| {
-            matches!(&comment.disposition, Disposition::Keep { reason } if reason == PROTECTED_PREAMBLE)
+            matches!(&comment.disposition, Disposition::Keep { reason } if reason == protection)
         })
         .count()
 }
@@ -410,7 +417,8 @@ fn write_explanation(
 /// be pointed at for.
 fn next_step(verdict: &DispositionExplanation) -> String {
     match verdict {
-        DispositionExplanation::ProtectedPreamble => {
+        DispositionExplanation::ProtectedPreamble
+        | DispositionExplanation::KeptLoadBearing { .. } => {
             "; add --force-protected to remove it".to_owned()
         }
         DispositionExplanation::KeptHtml => format!(
@@ -893,18 +901,28 @@ fn render_human(
      * and saying so every run would be noise. `all` said it would take
      * everything, so what it left behind is the surprise worth a line. */
     if options.policy == Policy::All {
-        let protected = protected_preambles(files);
-        if protected > 0 {
-            /* NOTE: The line counts what it kept, so the pronoun that stands for it
-             * has to agree with that count. */
-            let pronoun = if protected == 1 { "it" } else { "them" };
-            note(
-                &mut report,
-                &format!(
-                    "{} kept; add --force-protected to remove {pronoun}.",
-                    comments(protected, "protected preamble")
-                ),
-            )?;
+        /* NOTE: Two protections and two lines, because the two are not the same
+         * surprise. A preamble was held back by the file's own syntax; a
+         * load-bearing directive was held back by what reads it, and a reader
+         * who asked for every comment to go is owed the difference rather than
+         * a count that runs them together. */
+        for (protection, adjective) in [
+            (PROTECTED_PREAMBLE, "protected preamble"),
+            (LOAD_BEARING, "load-bearing"),
+        ] {
+            let protected = kept_for(files, protection);
+            if protected > 0 {
+                /* NOTE: The line counts what it kept, so the pronoun that stands for it
+                 * has to agree with that count. */
+                let pronoun = if protected == 1 { "it" } else { "them" };
+                note(
+                    &mut report,
+                    &format!(
+                        "{} kept; add --force-protected to remove {pronoun}.",
+                        comments(protected, adjective)
+                    ),
+                )?;
+            }
         }
     }
     if summary.invalid_files > 0 && !options.force_invalid {

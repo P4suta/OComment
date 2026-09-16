@@ -474,7 +474,7 @@ fn a_swift_file_keeps_its_tools_version_and_hides_a_slash_pair_in_a_regex() {
     let report = &document["files"][0]["report"];
     assert_eq!(report["language"], "swift");
     assert_eq!(report["comments"].as_array().unwrap().len(), 5);
-    assert_eq!(report["comments"][0]["kind"], "directive");
+    assert_eq!(report["comments"][0]["kind"], "load-bearing");
     assert_eq!(report["comments"][0]["disposition"]["action"], "keep");
     assert_eq!(report["comments"][1]["span"]["start"], 52);
     assert_eq!(report["comments"][2]["span"]["start"], 92);
@@ -492,6 +492,35 @@ fn a_swift_file_keeps_its_tools_version_and_hides_a_slash_pair_in_a_regex() {
     assert_eq!(
         fs::read(&path).unwrap(),
         b"// swift-tools-version:5.9\nlet url = #/https://x/#  \nlet greeting = \"hi \\( \"there\"  )\" \n\n"
+    );
+
+    /* NOTE: And the run this line is classified `load-bearing` for. `--policy
+     * all` is what a project reaches for when it wants every comment gone, and
+     * it is the one policy that says so about directives too -- so until the
+     * tools-version line was held back from it, `ocomment fix --policy all`
+     * left a manifest SwiftPM reads as one written against the oldest tools
+     * version there is, which it no longer supports at all. The file still
+     * parses either way, which is why nothing downstream catches it. */
+    let stripped = run(
+        directory.path(),
+        &["fix", "Package.swift", "--policy", "all"],
+    );
+    assert_eq!(
+        stripped.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&stripped.stderr)
+    );
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        b"// swift-tools-version:5.9\nlet url = #/https://x/#  \nlet greeting = \"hi \\( \"there\"  )\" \n\n",
+        "--policy all took the line SwiftPM reads before it reads the manifest"
+    );
+    assert!(
+        String::from_utf8_lossy(&stripped.stderr)
+            .contains("1 load-bearing comment kept; add --force-protected to remove it."),
+        "--policy all kept the line without saying so:\n{}",
+        String::from_utf8_lossy(&stripped.stderr)
     );
 }
 
@@ -630,7 +659,7 @@ fn a_gemfile_is_scanned_as_ruby_by_its_name_alone() {
     let report = &document["files"][0]["report"];
     assert_eq!(report["language"], "ruby");
     assert_eq!(report["comments"].as_array().unwrap().len(), 3);
-    assert_eq!(report["comments"][0]["kind"], "directive");
+    assert_eq!(report["comments"][0]["kind"], "load-bearing");
     assert_eq!(report["comments"][0]["disposition"]["action"], "keep");
 
     let fixed = run(directory.path(), &["fix", "Gemfile"]);
@@ -2823,7 +2852,7 @@ fn strip_and_config_refuse_the_formats_they_cannot_honour() {
 
 /// Every comment kind a rule id can name, in the spelling `CommentKind`
 /// serialises. A kind added without a rule to describe it fails this test.
-const SARIF_KINDS: [&str; 11] = [
+const SARIF_KINDS: [&str; 12] = [
     "line",
     "block",
     "doc-line",
@@ -2835,6 +2864,7 @@ const SARIF_KINDS: [&str; 11] = [
     "encoding",
     "optimizer-hint",
     "version-comment",
+    "load-bearing",
 ];
 
 /// The SARIF failure levels OComment reports at. `none` is a level too, but
@@ -6296,7 +6326,7 @@ fn a_scala_file_keeps_its_directive_and_hides_xml_text() {
     let report = &document["files"][0]["report"];
     assert_eq!(report["language"], "scala");
     assert_eq!(report["comments"].as_array().unwrap().len(), 4);
-    assert_eq!(report["comments"][0]["kind"], "directive");
+    assert_eq!(report["comments"][0]["kind"], "load-bearing");
     assert_eq!(report["comments"][0]["disposition"]["action"], "keep");
     assert_eq!(report["comments"][0]["span"]["start"], 0);
     assert_eq!(report["comments"][0]["span"]["end"], 23);

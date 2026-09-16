@@ -78,6 +78,7 @@ comment out of the column its kind lands in.
 | `doc-block` | removed | removed | removed |
 | `license` | removed | kept | removed |
 | `directive` | kept | kept | removed |
+| `load-bearing` | kept | kept | kept unless `--force-protected` |
 | `html-comment` | kept | kept | removed |
 | `shebang` | kept | kept | kept unless `--force-protected` |
 | `encoding` | kept | kept | kept unless `--force-protected` |
@@ -91,13 +92,33 @@ or an optimiser hint changes what a compiler, a linter, or a database
 does with the file. Each row below is scanned by the binary that built
 this page, so the table cannot claim a protection that is not there.
 
+The `Kept because` column says which of two protections a marker has,
+and the difference is what `--policy all` does to it. A marker kept as
+a *tool or language directive* is addressed to something that reports
+on the code -- a linter, a formatter, a coverage tool -- so losing it
+makes that tool noisier and leaves the program alone, and `all` is
+free to take it. A marker kept as *required by the language or its
+build* is read by the language itself, by its compiler or by its
+package manager, and losing it changes what compiles or what the code
+does: `//go:build linux` decides whether the file is compiled at all,
+and `// swift-tools-version:` decides whether a `Package.swift` is a
+manifest. No policy is offered that choice, and `--force-protected`
+is the only way to give one up.
+
 | Marker | Language | Written as | Kind | Kept because |
 | --- | --- | --- | --- | --- |
+| `go:` | `go` | `//go:build linux` | `load-bearing` | required by the language or its build |
+| `+build` | `go` | `// +build linux` | `load-bearing` | required by the language or its build |
+| `triple-slash-reference` | `typescript` | `/// <reference path="types.d.ts" />` | `load-bearing` | required by the language or its build |
+| `syntax=` | `shell` | `# syntax=docker/dockerfile:1` | `load-bearing` | required by the language or its build |
+| `frozen_string_literal:` | `ruby` | `# frozen_string_literal: true` | `load-bearing` | required by the language or its build |
+| `warn_indent:` | `ruby` | `# warn_indent: true` | `load-bearing` | required by the language or its build |
+| `shareable_constant_value:` | `ruby` | `# shareable_constant_value: literal` | `load-bearing` | required by the language or its build |
+| `@dart` | `dart` | `// @dart = 2.12` | `load-bearing` | required by the language or its build |
+| `swift-tools-version:` | `swift` | `// swift-tools-version:5.9` | `load-bearing` | required by the language or its build |
+| `//> using` | `scala` | `//> using scala "3.3.0"` | `load-bearing` | required by the language or its build |
 | `shebang` | `shell` | `#!/bin/sh` | `shebang` | required source preamble |
 | `encoding` | `python` | `# -*- coding: utf-8 -*-` | `encoding` | required source preamble |
-| `go:` | `go` | `//go:build linux` | `directive` | tool or language directive |
-| `+build` | `go` | `// +build linux` | `directive` | tool or language directive |
-| `triple-slash-reference` | `typescript` | `/// <reference path="types.d.ts" />` | `directive` | tool or language directive |
 | `sourceMappingURL` | `javascript` | `//# sourceMappingURL=bundle.js.map` | `directive` | tool or language directive |
 | `sourceURL` | `javascript` | `//# sourceURL=bundle.js` | `directive` | tool or language directive |
 | `#__PURE__` | `javascript` | `/*#__PURE__*/` | `directive` | tool or language directive |
@@ -106,7 +127,6 @@ this page, so the table cannot claim a protection that is not there.
 | `type-checker` | `python` | `# type: ignore` | `directive` | tool or language directive |
 | `optimizer-hint` | `oracle` | `/*+ index(t) */` | `optimizer-hint` | tool or language directive |
 | `version-comment` | `mysql` | `/*!40101 SET NAMES utf8 */` | `version-comment` | tool or language directive |
-| `syntax=` | `shell` | `# syntax=docker/dockerfile:1` | `directive` | tool or language directive |
 | `hadolint` | `shell` | `# hadolint ignore=DL3018` | `directive` | tool or language directive |
 | `:schema` | `toml` | `#:schema https://example.test/pyproject.json` | `directive` | tool or language directive |
 | `taplo:` | `toml` | `# taplo: array_auto_expand = false` | `directive` | tool or language directive |
@@ -127,27 +147,21 @@ this page, so the table cannot claim a protection that is not there.
 | `@phpstan-ignore` | `php` | `// @phpstan-ignore-next-line` | `directive` | tool or language directive |
 | `@psalm-suppress` | `php` | `/** @psalm-suppress InvalidReturnType */` | `directive` | tool or language directive |
 | `@codeCoverageIgnore` | `php` | `// @codeCoverageIgnoreStart` | `directive` | tool or language directive |
-| `frozen_string_literal:` | `ruby` | `# frozen_string_literal: true` | `directive` | tool or language directive |
-| `warn_indent:` | `ruby` | `# warn_indent: true` | `directive` | tool or language directive |
-| `shareable_constant_value:` | `ruby` | `# shareable_constant_value: literal` | `directive` | tool or language directive |
 | `rubocop:` | `ruby` | `# rubocop:disable Style/Documentation` | `directive` | tool or language directive |
 | `standard:` | `ruby` | `# standard:disable Style/StringLiterals` | `directive` | tool or language directive |
 | `typed:` | `ruby` | `# typed: strict` | `directive` | tool or language directive |
 | `zig fmt:` | `zig` | `// zig fmt: off` | `directive` | tool or language directive |
 | `styler:` | `r` | `# styler: off` | `directive` | tool or language directive |
 | `nocov` | `r` | `# nocov start` | `directive` | tool or language directive |
-| `@dart` | `dart` | `// @dart = 2.12` | `directive` | tool or language directive |
 | `dart format` | `dart` | `// dart format off` | `directive` | tool or language directive |
 | `ignore:` | `dart` | `// ignore: unused_local_variable` | `directive` | tool or language directive |
 | `ignore_for_file:` | `dart` | `// ignore_for_file: unused_import` | `directive` | tool or language directive |
-| `swift-tools-version:` | `swift` | `// swift-tools-version:5.9` | `directive` | tool or language directive |
 | `swiftlint:` | `swift` | `// swiftlint:disable force_cast` | `directive` | tool or language directive |
 | `swiftformat:` | `swift` | `// swiftformat:disable redundantSelf` | `directive` | tool or language directive |
 | `swift-format-ignore` | `swift` | `// swift-format-ignore` | `directive` | tool or language directive |
 | `<auto-generated` | `csharp` | `// <auto-generated/>` | `directive` | tool or language directive |
 | `ReSharper` | `csharp` | `// ReSharper disable once UnusedMember.Local` | `directive` | tool or language directive |
 | `csharpier-ignore` | `csharp` | `// csharpier-ignore` | `directive` | tool or language directive |
-| `//> using` | `scala` | `//> using scala "3.3.0"` | `directive` | tool or language directive |
 
 `--remove-kind directive` or `--policy all` removes a directive anyway.
 A shebang and an encoding preamble need `--force-protected` on top of

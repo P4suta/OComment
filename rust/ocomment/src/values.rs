@@ -87,7 +87,9 @@ macro_rules! value_enum_wrapper {
 value_enum_wrapper!(PolicyArg, Policy, |value| match value {
     Policy::Safe => "Remove ordinary and doc comments; keep preambles and directives",
     Policy::Legal => "Like safe, and keep licence and copyright comments as well",
-    Policy::All => "Remove every comment that no keep override protects",
+    Policy::All =>
+        "Remove every comment except the preambles and load-bearing directives the \
+         language itself reads",
 });
 
 value_enum_wrapper!(LayoutArg, Layout, |value| match value {
@@ -171,6 +173,8 @@ value_enum_wrapper!(CommentKindArg, CommentKind, |value| match value {
     CommentKind::Encoding => "A source encoding declaration",
     CommentKind::OptimizerHint => "A compiler or database optimizer hint",
     CommentKind::VersionComment => "A MySQL versioned comment that the server executes",
+    CommentKind::LoadBearing =>
+        "A directive the language or its build reads as part of the program, such as          `//go:build`",
 });
 
 #[cfg(test)]

@@ -194,11 +194,11 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -252,11 +252,11 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -310,11 +310,11 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -368,11 +368,11 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -426,11 +426,11 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -484,11 +484,11 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -542,11 +542,11 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -894,11 +894,11 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -952,11 +952,11 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -1010,11 +1010,11 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -1068,11 +1068,11 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -1126,11 +1126,11 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -1196,11 +1196,11 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -1366,11 +1366,11 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -1424,11 +1424,11 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -1482,11 +1482,11 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -1540,11 +1540,11 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -1598,11 +1598,11 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -1656,11 +1656,11 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -1714,11 +1714,11 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --format)

@@ -92,7 +92,7 @@ fn dialect_names_are_stable() {
 #[test]
 fn comment_kind_names_are_stable() {
     check_stable_names!(CommentKind);
-    assert_eq!(CommentKind::ALL.len(), 11);
+    assert_eq!(CommentKind::ALL.len(), 12);
 }
 
 #[test]
@@ -279,6 +279,8 @@ fn comment_kind_aliases_are_pinned() {
         ("encoding", CommentKind::Encoding),
         ("optimizer-hint", CommentKind::OptimizerHint),
         ("version-comment", CommentKind::VersionComment),
+        ("load-bearing", CommentKind::LoadBearing),
+        ("load_bearing", CommentKind::LoadBearing),
     ];
     for (text, expected) in cases {
         assert_eq!(CommentKind::from_str(text), Ok(expected), "`{text}`");
