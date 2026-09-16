@@ -782,6 +782,22 @@ fn run_target(
         },
         &explanations,
     )?;
+    /* NOTE: A setting that matched nothing is worth saying only where "nothing"
+     * means something. A walk is the caller saying "everything under here", so
+     * a pattern that met no comment in it is a pattern that is doing no work;
+     * a run over named files is a caller asking about those files, and a
+     * pattern that has nothing to say about them has not thereby failed. So
+     * this is asked of a walk and not of a list, and never of `-q`, which
+     * drops every note. */
+    let walked = !stdin && (paths.is_empty() || paths.iter().any(|path| path.is_dir()));
+    if walked && verbosity != Verbosity::Quiet {
+        let (_, root_options, root_trace) = resolved.for_path_traced(
+            &resolved.root.clone(),
+            Language::Unknown,
+            Dialect::Standard,
+        )?;
+        output::report_unused_settings(&files, &root_options.scan, &root_trace)?;
+    }
     if invalid {
         return Ok(2);
     }
@@ -1320,6 +1336,60 @@ fn run_config(args: ConfigArgs, common: &CommonArgs) -> Result<u8> {
                         "policy: {}; layout: {}",
                         resolved.config.policy.mode, resolved.config.policy.layout
                     ))?;
+                    /* NOTE: The three lines above are the whole of what this
+                     * used to print, which left it explaining a configuration
+                     * without naming anything the configuration says. A
+                     * `keep_regex` is the setting most likely to be wrong and
+                     * was the one setting `explain` would not show. */
+                    let (_, root_options, root_trace) = resolved.for_path_traced(
+                        &resolved.root.clone(),
+                        Language::Unknown,
+                        Dialect::Standard,
+                    )?;
+                    let scan = &root_options.scan;
+                    let mut wrote_any = false;
+                    for (key, kinds) in [
+                        ("keep_kind", &scan.keep_kinds),
+                        ("remove_kind", &scan.remove_kinds),
+                    ] {
+                        for (index, kind) in kinds.iter().enumerate() {
+                            wrote_any = true;
+                            output::wrote(writeln!(
+                                stdout,
+                                "{key} #{index} `{kind}`{}",
+                                setting_origin(&root_trace, key, index)
+                            ))?;
+                        }
+                    }
+                    for (key, patterns) in [
+                        ("keep_regex", &scan.keep_regex),
+                        ("remove_regex", &scan.remove_regex),
+                    ] {
+                        for (index, pattern) in patterns.iter().enumerate() {
+                            wrote_any = true;
+                            output::wrote(writeln!(
+                                stdout,
+                                "{key} #{index} `{}`{}",
+                                output::sanitize_message(pattern),
+                                setting_origin(&root_trace, key, index)
+                            ))?;
+                        }
+                    }
+                    if wrote_any {
+                        /* NOTE: This page lists the settings; only a run can say
+                         * which of them met anything, because that is a fact
+                         * about the files rather than about the table. */
+                        output::wrote(writeln!(
+                            stdout,
+                            "a walk reports any of these that met no comment; \
+                             `ocomment check` over the root is that walk"
+                        ))?;
+                    } else {
+                        output::wrote(writeln!(
+                            stdout,
+                            "no keep_kind, remove_kind, keep_regex or remove_regex is set"
+                        ))?;
+                    }
                 }
                 ConfigAction::Schema => unreachable!(),
             }
@@ -1327,6 +1397,14 @@ fn run_config(args: ConfigArgs, common: &CommonArgs) -> Result<u8> {
     }
     output::finish(&mut stdout)?;
     Ok(0)
+}
+
+/// ` ([policy] in .ocomment.toml)`, or nothing at all when the trace cannot
+/// place the setting.
+fn setting_origin(trace: &config::PolicyTrace, key: &str, index: usize) -> String {
+    trace
+        .origin_at(key, index)
+        .map_or_else(String::new, |origin| format!(" ({origin})"))
 }
 
 /// The shared language table, embedded from `spec/languages.toml` at build

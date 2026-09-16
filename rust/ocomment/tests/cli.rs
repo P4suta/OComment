@@ -2716,6 +2716,123 @@ fn config_explain_prints_canonical_policy_and_layout() {
         !policy_line.contains("Safe") && !policy_line.contains("Lines"),
         "config explain still Debug-prints the enums:\n{policy_line}"
     );
+    assert!(
+        stdout.contains("no keep_kind, remove_kind, keep_regex or remove_regex is set"),
+        "config explain said nothing about the lists it resolved:\n{stdout}"
+    );
+}
+
+/// `config explain` names every kind and pattern it resolved, and where each
+/// one was written.
+///
+/// It used to print three lines -- precedence, root, policy and layout -- and
+/// so explained a configuration without naming anything the configuration
+/// said. A `keep_regex` is the setting most likely to be wrong and was the one
+/// setting `explain` would not show.
+#[test]
+fn config_explain_names_every_pattern_and_kind_it_resolved() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        b"version = 1\n\n[policy]\nmode = \"all\"\nkeep_kind = [\"directive\"]\nkeep_regex = ['^// *determinism:allow']\n",
+    )
+    .unwrap();
+
+    let output = run(directory.path(), &["config", "explain"]);
+    assert_eq!(output.status.code(), Some(0));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("keep_kind #0 `directive` ([policy] in "),
+        "config explain lost the kind it resolved:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("keep_regex #0 `^// *determinism:allow` ([policy] in "),
+        "config explain lost the pattern it resolved:\n{stdout}"
+    );
+    /* NOTE: The index is what the run's own report counts from, so the two
+     * spellings of the same setting line up. */
+    assert!(
+        stdout.contains("`ocomment check` over the root is that walk"),
+        "config explain did not say where to learn which of them fire:\n{stdout}"
+    );
+}
+
+/// A setting that matched nothing is reported instead of being left silent.
+///
+/// This is the failure that looks like success: a `keep_regex` you believe is
+/// holding a comment back, which is not, and which `fix` therefore removes.
+/// The pattern below is the real one this came from -- written against the
+/// text of the comment and matched against the whole token, so the `^` is
+/// anchored in front of a `//` that is always there.
+#[test]
+fn a_setting_that_matched_nothing_is_reported() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        b"version = 1\n\n[policy]\nmode = \"all\"\nkeep_regex = ['^\\s*rustfmt::', 'neverMatchesAnything']\nkeep_kind = [\"html-comment\"]\n",
+    )
+    .unwrap();
+    fs::write(
+        directory.path().join("a.rs"),
+        b"// rustfmt::skip\nfn main() {} // ordinary\n",
+    )
+    .unwrap();
+
+    let walked = run(directory.path(), &["check"]);
+    let stderr = String::from_utf8(walked.stderr).unwrap();
+    assert!(
+        stderr.contains(
+            "keep_regex #0 `^\\s*rustfmt::` matched none of the 2 comments this run scanned"
+        ),
+        "the pattern that protects nothing was not reported:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("keep_regex #1 `neverMatchesAnything` matched none of the"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("keep_kind `html-comment` met no comment of that kind"),
+        "{stderr}"
+    );
+    /* NOTE: The one sentence that turns the report into a fix. */
+    assert!(
+        stderr.contains("matched against the whole comment token"),
+        "the report did not say why the pattern missed:\n{stderr}"
+    );
+    /* INVARIANT: Commentary about the run goes to standard error, so a
+     * `--format json` consumer keeps a clean pipe. */
+    let stdout = String::from_utf8(walked.stdout).unwrap();
+    assert!(!stdout.contains("keep_regex"), "{stdout}");
+}
+
+/// The report is about a walk, where "nothing matched" means the pattern is
+/// doing no work. A run over named files is a caller asking about those files,
+/// and a pattern with nothing to say about them has not thereby failed.
+#[test]
+fn an_unused_setting_is_not_reported_for_a_narrowed_or_quiet_run() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        b"version = 1\n\n[policy]\nmode = \"all\"\nkeep_regex = ['neverMatchesAnything']\n",
+    )
+    .unwrap();
+    fs::write(directory.path().join("a.rs"), b"fn main() {} // ordinary\n").unwrap();
+
+    let named = run(directory.path(), &["check", "a.rs"]);
+    assert!(
+        !String::from_utf8(named.stderr)
+            .unwrap()
+            .contains("keep_regex"),
+        "a run over one named file reported a pattern as unused"
+    );
+
+    let quiet = run(directory.path(), &["check", "-q"]);
+    assert!(
+        !String::from_utf8(quiet.stderr)
+            .unwrap()
+            .contains("keep_regex"),
+        "-q kept a note"
+    );
 }
 
 #[test]

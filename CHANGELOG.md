@@ -7,6 +7,30 @@ All notable changes to OComment will be documented here. The project follows
 
 ### Fixed
 
+- A `keep_regex`, `remove_regex`, `keep_kind` or `remove_kind` that matched
+  nothing is reported instead of being left silent. This is the failure that
+  looks like success: a pattern you believe is holding a comment back, which is
+  not, and which `fix` therefore removes. The one this came from was
+  `^\s*swiftlint:` — written against the text of the comment and matched
+  against the whole token, so the `^` is anchored in front of a `//` that is
+  always there and the pattern can never match. Nothing said a word about it.
+  A run now names every setting that met no comment, says where it was written,
+  and adds the sentence that turns the report into a fix: a pattern is matched
+  against the whole comment token, so `^` is the comment's own first byte.
+
+  The report goes to standard error beside the summary, so a `--format json`
+  consumer keeps a clean pipe, and `-q` drops it with every other note. It is
+  asked of a run that walked a directory and not of one over named files: a
+  walk is the caller saying *everything under here*, so a pattern that met
+  nothing in it is doing no work, while a pattern with nothing to say about one
+  named file has not thereby failed.
+
+- `ocomment config explain` names every `keep_kind`, `remove_kind`,
+  `keep_regex` and `remove_regex` it resolved, and where each one was written,
+  with the index the reports above count from. It used to print three lines —
+  precedence, root, policy and layout — and so explained a configuration
+  without naming anything the configuration said.
+
 - `layout = "compact"` no longer lengthens a run of blank lines. A comment set
   off by a blank line above and another below is three lines of file for one
   comment; taking only the middle one left the two blanks touching, a run one

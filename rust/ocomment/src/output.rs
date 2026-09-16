@@ -16,7 +16,7 @@ use serde_json::{Value, json};
 use similar::{Algorithm, ChangeTag, capture_diff_slices, group_diff_ops};
 use std::{
     borrow::Cow,
-    collections::BTreeMap,
+    collections::{BTreeMap, HashSet},
     io::{self, BufWriter, Write},
     path::{Component, Path, PathBuf},
 };
@@ -191,6 +191,133 @@ fn removable_count(file: &ProcessedFile) -> usize {
         .iter()
         .filter(|comment| comment.disposition.is_remove())
         .count()
+}
+
+/// Say which keep or remove settings this run never used.
+///
+/// A setting that does nothing is the one failure a protection tool must not
+/// keep to itself, because it fails in the direction that looks like success:
+/// a `keep_regex` you believe is holding a comment back, which is not, and
+/// which `fix` therefore removes. The pattern in this project's own reports
+/// was `^\s*swiftlint:` — written against the text of the comment, matched
+/// against the whole token, and so anchored in front of a `//` that is always
+/// there. Nothing said a word about it.
+///
+/// So the rule is that no setting is silently ignored: it works, or the run
+/// says it did not. The report goes to standard error beside the summary,
+/// because it is commentary about the run rather than the run's product, and
+/// `-q` drops it with the rest of the commentary.
+///
+/// It is written from the comments the run actually scanned, so it says "this
+/// run" and means it. A run narrowed to a handful of paths is expected to meet
+/// fewer patterns than a walk of the repository, which is why the caller only
+/// asks for this where the run walked a directory.
+pub fn report_unused_settings(
+    files: &[ProcessedFile],
+    options: &ScanOptions,
+    trace: &PolicyTrace,
+) -> Result<()> {
+    if options.keep_regex.is_empty()
+        && options.remove_regex.is_empty()
+        && options.keep_kinds.is_empty()
+        && options.remove_kinds.is_empty()
+    {
+        return Ok(());
+    }
+    /* NOTE: A pattern list that will not compile is already a diagnostic, and
+     * the scanner went on as though the list were empty. Reporting every
+     * pattern in it as unused would bury that diagnostic under its own
+     * consequences. */
+    let Ok(patterns) = DispositionPatterns::compile(options) else {
+        return Ok(());
+    };
+
+    let mut keep_seen = vec![false; options.keep_regex.len()];
+    let mut remove_seen = vec![false; options.remove_regex.len()];
+    let mut kinds = HashSet::new();
+    let mut scanned = 0usize;
+    for file in files {
+        for comment in &file.result.report.comments {
+            scanned += 1;
+            let start = comment.span.start.min(file.source.len());
+            let end = comment.span.end.clamp(start, file.source.len());
+            let raw = &file.source[start..end];
+            for index in patterns.keep_matches(raw) {
+                if let Some(seen) = keep_seen.get_mut(index) {
+                    *seen = true;
+                }
+            }
+            for index in patterns.remove_matches(raw) {
+                if let Some(seen) = remove_seen.get_mut(index) {
+                    *seen = true;
+                }
+            }
+            kinds.insert(comment.kind);
+        }
+    }
+
+    let stderr = io::stderr();
+    let mut report = stderr.lock();
+    let mut unmatched_pattern = false;
+    for (key, sources, seen) in [
+        ("keep_regex", &options.keep_regex, &keep_seen),
+        ("remove_regex", &options.remove_regex, &remove_seen),
+    ] {
+        for (index, pattern) in sources.iter().enumerate() {
+            if seen.get(index).copied().unwrap_or(true) {
+                continue;
+            }
+            unmatched_pattern = true;
+            note(
+                &mut report,
+                &format!(
+                    "{key} #{index} `{}` matched none of the {} this run scanned; {}",
+                    sanitize_message(pattern),
+                    comments(scanned, ""),
+                    origin_clause(trace, key, index)
+                ),
+            )?;
+        }
+    }
+    for (key, wanted) in [
+        ("keep_kind", &options.keep_kinds),
+        ("remove_kind", &options.remove_kinds),
+    ] {
+        for (index, kind) in wanted.iter().enumerate() {
+            if kinds.contains(kind) {
+                continue;
+            }
+            note(
+                &mut report,
+                &format!(
+                    "{key} `{kind}` met no comment of that kind among the {} this run scanned; {}",
+                    comments(scanned, ""),
+                    origin_clause(trace, key, index)
+                ),
+            )?;
+        }
+    }
+    /* NOTE: The one sentence that turns the report into a fix. Every pattern is
+     * tried against the comment as it is written, opener and all, and a
+     * pattern written against the text inside it is the mistake this whole
+     * report exists to catch. */
+    if unmatched_pattern {
+        note(
+            &mut report,
+            "A pattern is matched against the whole comment token, so `^` is the \
+             comment's own first byte — the `//`, `#` or `/*` — and not the text after it.",
+        )?;
+    }
+    Ok(())
+}
+
+/// `([policy] in .ocomment.toml)`, or the shorter phrasing for a setting the
+/// trace cannot place.
+fn origin_clause(trace: &PolicyTrace, key: &str, index: usize) -> String {
+    match trace.origin_at(key, index) {
+        Some(origin) => format!("it is set in {origin}"),
+        None => "it is set in the resolved configuration".to_owned(),
+    }
 }
 
 /// Fold a skip reason onto a short label the summary can group by.

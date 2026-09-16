@@ -282,6 +282,23 @@ impl PolicyTrace {
         };
         Some(source.describe(self.origins.get(key).map(PathBuf::as_path)))
     }
+
+    /// Where the `key` entry at `index` was written, worded exactly as
+    /// [`Self::origin_of`] words the setting behind a verdict.
+    ///
+    /// `origin_of` starts from a comment and asks which setting decided it.
+    /// This starts from the setting, which is what a report about a setting
+    /// *nothing* decided has to do: there is no comment to ask about.
+    pub fn origin_at(&self, key: &str, index: usize) -> Option<String> {
+        let source = match key {
+            "keep_kind" => self.keep_kind.get(index),
+            "remove_kind" => self.remove_kind.get(index),
+            "keep_regex" => self.keep_regex.get(index),
+            "remove_regex" => self.remove_regex.get(index),
+            _ => None,
+        }?;
+        Some(source.describe(self.origins.get(key).map(PathBuf::as_path)))
+    }
 }
 
 /// One layer of the policy merge, as the trace replays it.
