@@ -21,7 +21,7 @@ standard\:"Like conservative, and remove licence and copyright notices too"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -97,13 +97,16 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -131,7 +134,7 @@ standard\:"Like conservative, and remove licence and copyright notices too"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -207,6 +210,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
@@ -215,7 +221,7 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -234,7 +240,7 @@ standard\:"Like conservative, and remove licence and copyright notices too"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -310,6 +316,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
@@ -321,7 +330,7 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '(--staged --dry-run -q --quiet)--interactive[Ask about each comment in turn and remove only the accepted ones]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -340,7 +349,7 @@ standard\:"Like conservative, and remove licence and copyright notices too"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -416,6 +425,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
@@ -424,7 +436,7 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -443,7 +455,7 @@ standard\:"Like conservative, and remove licence and copyright notices too"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -519,6 +531,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
@@ -527,7 +542,7 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -546,7 +561,7 @@ standard\:"Like conservative, and remove licence and copyright notices too"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -622,13 +637,16 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -646,7 +664,7 @@ standard\:"Like conservative, and remove licence and copyright notices too"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -722,13 +740,16 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -746,7 +767,7 @@ standard\:"Like conservative, and remove licence and copyright notices too"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -822,6 +843,9 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
@@ -831,7 +855,7 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--stdout[Print the template to standard output and write no file]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -850,7 +874,7 @@ standard\:"Like conservative, and remove licence and copyright notices too"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -926,13 +950,16 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -951,7 +978,7 @@ standard\:"Like conservative, and remove licence and copyright notices too"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1027,13 +1054,16 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -1051,7 +1081,7 @@ standard\:"Like conservative, and remove licence and copyright notices too"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1127,13 +1157,16 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -1162,7 +1195,7 @@ standard\:"Like conservative, and remove licence and copyright notices too"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1238,13 +1271,16 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -1263,7 +1299,7 @@ standard\:"Like conservative, and remove licence and copyright notices too"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1339,13 +1375,16 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -1364,7 +1403,7 @@ standard\:"Like conservative, and remove licence and copyright notices too"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1440,13 +1479,16 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -1464,7 +1506,7 @@ standard\:"Like conservative, and remove licence and copyright notices too"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1540,13 +1582,16 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -1565,7 +1610,7 @@ standard\:"Like conservative, and remove licence and copyright notices too"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1641,13 +1686,16 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -1666,7 +1714,7 @@ standard\:"Like conservative, and remove licence and copyright notices too"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1742,13 +1790,16 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -1815,7 +1866,7 @@ standard\:"Like conservative, and remove licence and copyright notices too"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1891,13 +1942,16 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -1916,7 +1970,7 @@ standard\:"Like conservative, and remove licence and copyright notices too"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1992,13 +2046,16 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
@@ -2016,7 +2073,7 @@ standard\:"Like conservative, and remove licence and copyright notices too"
 all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -2092,13 +2149,16 @@ load-bearing\:"A directive the language or its build reads as part of the progra
 '--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 '--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
 '--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \

@@ -3,8 +3,8 @@ use crate::{
     config::ResolvedConfig,
     files::SkippedFile,
     output::{
-        self, Operation, OutputFormat, Presentation, ProcessedFile, ProcessedResult, RenderOptions,
-        Verbosity,
+        self, AnnotationLevel, Operation, OutputFormat, Presentation, ProcessedFile,
+        ProcessedResult, RenderOptions, Verbosity,
     },
     plugin::PluginHost,
 };
@@ -43,6 +43,8 @@ pub struct StagedRequest<'a> {
     pub presentation: Presentation,
     pub verbosity: Verbosity,
     pub preview: bool,
+    /// `--annotation-level`, passed through to `--format github`.
+    pub annotation_level: Option<AnnotationLevel>,
     /// The run only previews the patch; `fix --dry-run` writes nothing to
     /// the index and reports what a real run would remove.
     pub dry_run: bool,
@@ -61,6 +63,7 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
         presentation,
         verbosity,
         preview,
+        annotation_level,
         dry_run,
     } = request;
     let root = repository_root()?;
@@ -243,6 +246,7 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
             preview,
             explain: false,
             dry_run,
+            annotation_level,
             force_invalid: resolved.config.policy.force_invalid,
             applied,
             policy: resolved.config.policy.mode,

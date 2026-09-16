@@ -6079,6 +6079,22 @@ impl DispositionPatterns {
             remove_active: false,
         }
     }
+
+    /// Every [`ScanOptions::keep_regex`] entry that matches `raw`, by index.
+    ///
+    /// [`explain_disposition_with`] answers which pattern *decided* a comment,
+    /// which is the first one that matched. This answers which patterns
+    /// matched at all, so a caller can tell a pattern that is doing nothing
+    /// from a pattern that is merely standing behind another — and report the
+    /// first as the mistake it usually is.
+    pub fn keep_matches(&self, raw: &[u8]) -> impl Iterator<Item = usize> + '_ {
+        self.keep.matches(raw).into_iter()
+    }
+
+    /// The same for [`ScanOptions::remove_regex`].
+    pub fn remove_matches(&self, raw: &[u8]) -> impl Iterator<Item = usize> + '_ {
+        self.remove.matches(raw).into_iter()
+    }
 }
 
 /* NOTE: The two tiers of protection, and the sentence each one gives the

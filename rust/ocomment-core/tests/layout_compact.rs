@@ -1,10 +1,12 @@
 //! What [`Layout::Compact`] leaves behind, line by line.
 //!
-//! `compact` is `lines` plus one promise: a line that held nothing but a
-//! removed comment goes away instead of staying behind as a blank one. Every
-//! case here is a source where that promise is visible, and each is checked
-//! against `lines` as well, because the two layouts have to differ exactly
-//! where the promise says they do and nowhere else.
+//! `compact` is `lines` plus two promises: a line that held nothing but a
+//! removed comment goes away instead of staying behind as a blank one, and a
+//! removal never leaves a longer run of blank lines than the one it was
+//! already standing next to. Every case here is a source where one of those is
+//! visible, and each is checked against `lines` as well, because the two
+//! layouts have to differ exactly where the promises say they do and nowhere
+//! else.
 
 use ocomment_core::{
     ByteSpan, CommentKind, Disposition, Language, Layout, Policy, ScanOptions, TransformOptions,
@@ -114,6 +116,61 @@ fn indentation_of_a_removed_line_goes_with_it() {
     let source = "fn main() {\n    // note\n    let x = 1;\n}\n";
     assert_eq!(compact(source), "fn main() {\n    let x = 1;\n}\n");
     assert_eq!(lines(source), "fn main() {\n    \n    let x = 1;\n}\n");
+}
+
+/// A removal never leaves a longer run of blank lines than the file already
+/// had beside it.
+///
+/// A comment set off by a blank line above and another below is three lines of
+/// file for one comment. Taking only the middle one leaves the two blanks
+/// touching, which is a run one line longer than the file ever had, in a place
+/// where the file had never put one -- and it is what made `ocomment fix`
+/// something a formatter had to be run after. `swift-format` calls it
+/// `[RemoveLine]`, `gofmt` closes it, `rustfmt` collapses it.
+#[test]
+fn a_removal_does_not_lengthen_the_blank_run_it_stood_in() {
+    let source = "use std::io;\n\n// what this is for\n// and what it is not\n\npub struct P;\n";
+    assert_eq!(compact(source), "use std::io;\n\npub struct P;\n");
+    /* NOTE: `lines` keeps every line it finds, blank or not, which is the whole
+     * of the difference between the two layouts here. */
+    assert_eq!(lines(source), "use std::io;\n\n\n\n\npub struct P;\n");
+}
+
+/// What is left is the longer of the two runs the comment stood between, so a
+/// file that separated two sections by two blank lines still does.
+#[test]
+fn the_longer_of_the_two_blank_runs_survives() {
+    assert_eq!(compact("a\n\n\n// note\n\nb\n"), "a\n\n\nb\n");
+    assert_eq!(compact("a\n\n// note\n\n\nb\n"), "a\n\n\nb\n");
+}
+
+/// Blank lines above a removal are never taken, and no more are taken than
+/// followed the comment. So a removal can never join two lines of code that
+/// had a blank line between them, whichever side that blank line was on.
+#[test]
+fn a_one_sided_blank_run_is_left_alone() {
+    assert_eq!(compact("a\n// note\n\nb\n"), "a\n\nb\n");
+    assert_eq!(compact("a\n\n// note\nb\n"), "a\n\nb\n");
+    assert_eq!(compact("a\n// note\nb\n"), "a\nb\n");
+}
+
+/// Comments on consecutive lines are separate comments and separate edits, and
+/// the blank runs either side belong to the block they make together. Counting
+/// them one comment at a time would leave the run behind.
+#[test]
+fn comments_separated_by_blanks_collapse_as_one_block() {
+    assert_eq!(compact("a\n\n// one\n\n// two\n\nb\n"), "a\n\nb\n");
+    assert_eq!(compact("a\n\n// one\n// two\n\nb\n"), "a\n\nb\n");
+}
+
+/// A comment with code beside it is not holding a line of its own, so nothing
+/// about the blank lines around that line is the comment's to give up.
+#[test]
+fn a_comment_sharing_a_line_with_code_takes_no_blank_lines() {
+    assert_eq!(
+        compact("a\n\nlet x = 1; // note\n\nb\n"),
+        "a\n\nlet x = 1;\n\nb\n"
+    );
 }
 
 #[test]

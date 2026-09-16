@@ -6686,16 +6686,138 @@ let compact_edit source (comment : comment) line_start floor ceiling =
    comment was sheltering too (see `lines_a_removal_must_swallow`).  Taking the
    line is what `compact` does anyway, so this only ever widens what it takes,
    and it is what keeps all three layouts writing the same bytes there. *)
+
+(* NOTE: Where every line of the source begins, in order, starting at 0.  A
+   source ending with a terminator gets a final entry at its length: the empty
+   last line, which is a line start with nothing on it and which
+   `line_is_blank` therefore refuses to call a blank line. *)
+let line_starts source =
+  let length = Bytes.length source in
+  let rec loop index acc =
+    if index >= length then List.rev acc
+    else match unicode_line_terminator_width source index with
+      | Some width -> loop (index + width) ((index + width) :: acc)
+      | None -> loop (index + 1) acc in
+  Array.of_list (loop 0 [0])
+
+(* NOTE: The index of the line `offset` falls on: the last start at or before
+   it. *)
+let line_of starts offset =
+  let rec loop low high =
+    if low >= high then low
+    else
+      let mid = (low + high + 1) / 2 in
+      if starts.(mid) <= offset then loop mid high else loop low (mid - 1) in
+  loop 0 (Array.length starts - 1)
+
+(* NOTE: Whether the line holds nothing but blanks and its terminator.  The
+   blanks are the ones Rust's `is_ascii_whitespace` names once the terminator
+   is taken off: space, tab and form feed. *)
+let line_is_blank source starts line =
+  if line < 0 || line >= Array.length starts then false
+  else
+    let start = starts.(line) in
+    let finish =
+      if line + 1 < Array.length starts then starts.(line + 1) else Bytes.length source in
+    if start >= finish then false
+    else
+      let rec loop index =
+        if index >= finish then true
+        else match unicode_line_terminator_width source index with
+          | Some width -> loop (index + width)
+          | None ->
+            match Bytes.get source index with
+            | ' ' | '\t' | '\012' -> loop (index + 1)
+            | _ -> false in
+      loop start
+
+(* NOTE: Take back the blank lines a removal *created*.  Dropping the line a
+   comment held is what `compact` is for, and it is not the whole of what the
+   comment occupied: a comment set off by a blank line above and another below
+   is three lines of file for one comment, and taking only the middle one
+   leaves the two blanks touching -- a run one line longer than the file ever
+   had.
+
+   The rule is the narrow one: a removal never leaves more consecutive blank
+   lines than the longest run it was already standing next to.  With `before`
+   blanks above and `after` below it takes `min before after` of the ones
+   below, leaving `max before after`.  Blanks above are never touched and the
+   count taken can never exceed the count that followed the comment, so two
+   lines of code that had a blank line between them still do.
+
+   A swallowed line is excluded: that is the one place all three layouts are
+   required to write the same bytes. *)
+let collapse_created_blank_runs source edits =
+  let array = Array.of_list edits in
+  let count = Array.length array in
+  if count = 0 then []
+  else begin
+    let starts = line_starts source in
+    let source_length = Bytes.length source in
+    let at_line_start offset = starts.(line_of starts offset) = offset in
+    let span_of index = (fst array.(index) : edit).span in
+    let rec walk index =
+      if index >= count then ()
+      else
+        let edit, collapsible = array.(index) in
+        if (not collapsible) || Bytes.length edit.replacement > 0
+           || not (at_line_start edit.span.start)
+        then walk (index + 1)
+        else begin
+          (* NOTE: Comments written on consecutive lines are separate comments
+             and separate edits, and the blank runs either side belong to the
+             block they make together rather than to any one of them. *)
+          let rec extend last =
+            if last + 1 >= count then last
+            else
+              let next, next_collapsible = array.(last + 1) in
+              if next_collapsible && Bytes.length next.replacement = 0
+                 && (span_of last).finish = next.span.start
+              then extend (last + 1) else last in
+          let last = extend index in
+          let last_edit = fst array.(last) in
+          let run_end = last_edit.span.finish in
+          if at_line_start run_end then begin
+            let rec count_before line acc =
+              if line > 0 && line_is_blank source starts (line - 1)
+              then count_before (line - 1) (acc + 1) else acc in
+            let before = count_before (line_of starts edit.span.start) 0 in
+            let rec count_after line acc =
+              if line_is_blank source starts line
+              then count_after (line + 1) (acc + 1) else acc in
+            let after = count_after (line_of starts run_end) 0 in
+            let rec advance offset remaining =
+              if remaining = 0 then offset
+              else
+                let next = line_of starts offset + 1 in
+                if next < Array.length starts then advance starts.(next) (remaining - 1)
+                else offset in
+            let stop = advance run_end (min before after) in
+            (* INVARIANT: The blanks a removal takes must not reach the next
+               edit.  They cannot in fact -- the line that edit is on holds a
+               comment and so is not blank -- but the clamp is what keeps the
+               edits provably sorted and non-overlapping. *)
+            let ceiling =
+              if last + 1 < count then (span_of (last + 1)).start else source_length in
+            let finish = max run_end (min stop ceiling) in
+            array.(last) <- ({ last_edit with span = { last_edit.span with finish } }, true)
+          end;
+          walk (last + 1)
+        end in
+    walk 0;
+    Array.to_list array |> List.map fst
+  end
+
 let compact_edits source comments swallowed =
   let rec loop index scan line_start floor edits = function
-    | [] -> List.rev edits
+    | [] -> collapse_created_blank_runs source (List.rev edits)
     | (comment : comment) :: tail -> match comment.disposition with
       | Keep _ -> loop (index + 1) scan line_start floor edits tail
       | Remove -> match swallowed index with
       | Some (line : byte_span) ->
         let span = { start = max line.start floor; finish = max line.finish floor } in
         loop (index + 1) span.finish span.finish span.finish
-          ({ span; replacement = Bytes.empty } :: edits) tail
+          (({ span; replacement = Bytes.empty }, false) :: edits) tail
       | None ->
         let rec advance scan line_start =
           if scan >= comment.span.start then (scan, line_start)
@@ -6709,7 +6831,7 @@ let compact_edits source comments swallowed =
         let ceiling = max comment.span.finish
           (match tail with next :: _ -> next.span.start | [] -> Bytes.length source) in
         let edit = compact_edit source comment line_start floor ceiling in
-        loop (index + 1) scan line_start edit.span.finish (edit :: edits) tail
+        loop (index + 1) scan line_start edit.span.finish ((edit, true) :: edits) tail
   in loop 0 0 0 0 [] comments
 
 (* PERF:

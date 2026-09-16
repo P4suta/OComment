@@ -2716,6 +2716,123 @@ fn config_explain_prints_canonical_policy_and_layout() {
         !policy_line.contains("Safe") && !policy_line.contains("Lines"),
         "config explain still Debug-prints the enums:\n{policy_line}"
     );
+    assert!(
+        stdout.contains("no keep_kind, remove_kind, keep_regex or remove_regex is set"),
+        "config explain said nothing about the lists it resolved:\n{stdout}"
+    );
+}
+
+/// `config explain` names every kind and pattern it resolved, and where each
+/// one was written.
+///
+/// It used to print three lines -- precedence, root, policy and layout -- and
+/// so explained a configuration without naming anything the configuration
+/// said. A `keep_regex` is the setting most likely to be wrong and was the one
+/// setting `explain` would not show.
+#[test]
+fn config_explain_names_every_pattern_and_kind_it_resolved() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        b"version = 1\n\n[policy]\nmode = \"all\"\nkeep_kind = [\"directive\"]\nkeep_regex = ['^// *determinism:allow']\n",
+    )
+    .unwrap();
+
+    let output = run(directory.path(), &["config", "explain"]);
+    assert_eq!(output.status.code(), Some(0));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("keep_kind #0 `directive` ([policy] in "),
+        "config explain lost the kind it resolved:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("keep_regex #0 `^// *determinism:allow` ([policy] in "),
+        "config explain lost the pattern it resolved:\n{stdout}"
+    );
+    /* NOTE: The index is what the run's own report counts from, so the two
+     * spellings of the same setting line up. */
+    assert!(
+        stdout.contains("`ocomment check` over the root is that walk"),
+        "config explain did not say where to learn which of them fire:\n{stdout}"
+    );
+}
+
+/// A setting that matched nothing is reported instead of being left silent.
+///
+/// This is the failure that looks like success: a `keep_regex` you believe is
+/// holding a comment back, which is not, and which `fix` therefore removes.
+/// The pattern below is the real one this came from -- written against the
+/// text of the comment and matched against the whole token, so the `^` is
+/// anchored in front of a `//` that is always there.
+#[test]
+fn a_setting_that_matched_nothing_is_reported() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        b"version = 1\n\n[policy]\nmode = \"all\"\nkeep_regex = ['^\\s*rustfmt::', 'neverMatchesAnything']\nkeep_kind = [\"html-comment\"]\n",
+    )
+    .unwrap();
+    fs::write(
+        directory.path().join("a.rs"),
+        b"// rustfmt::skip\nfn main() {} // ordinary\n",
+    )
+    .unwrap();
+
+    let walked = run(directory.path(), &["check"]);
+    let stderr = String::from_utf8(walked.stderr).unwrap();
+    assert!(
+        stderr.contains(
+            "keep_regex #0 `^\\s*rustfmt::` matched none of the 2 comments this run scanned"
+        ),
+        "the pattern that protects nothing was not reported:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("keep_regex #1 `neverMatchesAnything` matched none of the"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("keep_kind `html-comment` met no comment of that kind"),
+        "{stderr}"
+    );
+    /* NOTE: The one sentence that turns the report into a fix. */
+    assert!(
+        stderr.contains("matched against the whole comment token"),
+        "the report did not say why the pattern missed:\n{stderr}"
+    );
+    /* INVARIANT: Commentary about the run goes to standard error, so a
+     * `--format json` consumer keeps a clean pipe. */
+    let stdout = String::from_utf8(walked.stdout).unwrap();
+    assert!(!stdout.contains("keep_regex"), "{stdout}");
+}
+
+/// The report is about a walk, where "nothing matched" means the pattern is
+/// doing no work. A run over named files is a caller asking about those files,
+/// and a pattern with nothing to say about them has not thereby failed.
+#[test]
+fn an_unused_setting_is_not_reported_for_a_narrowed_or_quiet_run() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        b"version = 1\n\n[policy]\nmode = \"all\"\nkeep_regex = ['neverMatchesAnything']\n",
+    )
+    .unwrap();
+    fs::write(directory.path().join("a.rs"), b"fn main() {} // ordinary\n").unwrap();
+
+    let named = run(directory.path(), &["check", "a.rs"]);
+    assert!(
+        !String::from_utf8(named.stderr)
+            .unwrap()
+            .contains("keep_regex"),
+        "a run over one named file reported a pattern as unused"
+    );
+
+    let quiet = run(directory.path(), &["check", "-q"]);
+    assert!(
+        !String::from_utf8(quiet.stderr)
+            .unwrap()
+            .contains("keep_regex"),
+        "-q kept a note"
+    );
 }
 
 #[test]
@@ -2731,7 +2848,7 @@ fn github_annotations_use_kebab_comment_kinds() {
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert_eq!(
         stdout,
-        "::notice file=doc.rs,line=1,col=1::removable doc-block comment\n"
+        "::error file=doc.rs,line=1,col=1::removable doc-block comment\n"
     );
     assert_no_debug_leak("github annotations", &stdout);
     assert!(!stdout.contains("Remove"), "github output is:\n{stdout}");
@@ -3201,7 +3318,7 @@ fn sarif_disambiguates_a_leading_segment_that_reads_as_a_drive_letter() {
     );
     let stdout = String::from_utf8(annotated.stdout).unwrap();
     assert!(
-        stdout.contains("::notice file=c%3A/a.rs,"),
+        stdout.contains("::error file=c%3A/a.rs,"),
         "a GitHub annotation lost the path the repository spells:\n{stdout}"
     );
 }
@@ -3245,8 +3362,108 @@ fn github_annotations_report_repository_paths() {
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert_eq!(
         stdout,
-        "::notice file=sub/doc.rs,line=1,col=1::removable doc-block comment\n"
+        "::error file=sub/doc.rs,line=1,col=1::removable doc-block comment\n"
     );
+}
+
+/// The `::` level a removable comment is annotated at is the one its run's
+/// exit status justifies.
+///
+/// `check` answers a finding with 1, and a gate that fails on that 1 was
+/// posting `::notice` about the comments it failed over -- which reads in the
+/// checks tab as though nothing had gone wrong, and which GitHub folds away
+/// where it surfaces an error. `scan` ends at 0 whatever it finds, so it is
+/// offering the same comments for information and says so.
+#[test]
+fn github_annotations_follow_the_exit_status() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(directory.path().join("a.rs"), b"fn main() {} // remove\n").unwrap();
+
+    let checked = run(directory.path(), &["check", "a.rs", "--format", "github"]);
+    assert_eq!(checked.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8(checked.stdout).unwrap(),
+        "::error file=a.rs,line=1,col=14::removable line comment\n"
+    );
+
+    let scanned = run(directory.path(), &["scan", "a.rs", "--format", "github"]);
+    assert_eq!(scanned.status.code(), Some(0));
+    assert_eq!(
+        String::from_utf8(scanned.stdout).unwrap(),
+        "::notice file=a.rs,line=1,col=14::removable line comment\n"
+    );
+
+    /* NOTE: A job that posts annotations without gating on them, or gates
+     * without wanting the red, says so and is believed. */
+    let overruled = run(
+        directory.path(),
+        &[
+            "check",
+            "a.rs",
+            "--format",
+            "github",
+            "--annotation-level",
+            "warning",
+        ],
+    );
+    assert_eq!(overruled.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8(overruled.stdout).unwrap(),
+        "::warning file=a.rs,line=1,col=14::removable line comment\n"
+    );
+}
+
+/// A machine format carries the position and the text the human report prints.
+///
+/// A byte span is what a patcher needs and not what a reporter needs: turning
+/// `13..22` into `1:14` means reopening the file and counting line breaks,
+/// which is work the run has already done. Until this held, `--format json`
+/// was less useful to a machine than the prose was to a person.
+#[test]
+fn json_carries_the_position_and_text_the_human_report_prints() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join("a.rs"),
+        b"fn main() {}\nlet s = \"ok\"; // hello\n",
+    )
+    .unwrap();
+
+    let human = run(directory.path(), &["check", "a.rs"]);
+    let reported = String::from_utf8(human.stdout).unwrap();
+    assert!(
+        reported.starts_with("a.rs:2:15: removable line comment: // hello"),
+        "the human report moved: {reported}"
+    );
+
+    let scanned = run(directory.path(), &["scan", "a.rs", "--format", "json"]);
+    assert_eq!(scanned.status.code(), Some(0));
+    let document: serde_json::Value = serde_json::from_slice(&scanned.stdout).unwrap();
+    let comment = &document["files"][0]["report"]["comments"][0];
+    assert_eq!(comment["line"], 2);
+    assert_eq!(comment["column"], 15);
+    assert_eq!(comment["text"], "// hello");
+    /* INVARIANT: The positions are derived from the span beside them, so the
+     * end is the half-open one the span already promises: one past the last
+     * byte of the comment. */
+    assert_eq!(comment["end_line"], 2);
+    assert_eq!(
+        comment["end_column"].as_u64().unwrap(),
+        comment["column"].as_u64().unwrap()
+            + (comment["span"]["end"].as_u64().unwrap()
+                - comment["span"]["start"].as_u64().unwrap())
+    );
+
+    /* NOTE: `--no-preview` is how a report over a large tree stays small, and
+     * it drops the comment text here for the reason it drops the preview from
+     * a human line. */
+    let terse = run(
+        directory.path(),
+        &["scan", "a.rs", "--format", "json", "--no-preview"],
+    );
+    let document: serde_json::Value = serde_json::from_slice(&terse.stdout).unwrap();
+    let comment = &document["files"][0]["report"]["comments"][0];
+    assert!(comment.get("text").is_none(), "{comment}");
+    assert_eq!(comment["line"], 2);
 }
 
 /// SARIF locations are URIs and GitHub `file=` values are workflow-command
@@ -3285,7 +3502,7 @@ fn machine_reports_encode_raw_unix_paths_without_loss() {
     assert_eq!(github.status.code(), Some(1));
     let annotations = String::from_utf8(github.stdout).unwrap();
     assert!(
-        annotations.contains("::notice file=odd %FF%2C%0A.rs,"),
+        annotations.contains("::error file=odd %FF%2C%0A.rs,"),
         "GitHub output lost or mis-encoded the path:\n{annotations}"
     );
     assert!(!annotations.contains('\u{fffd}'));
@@ -3309,11 +3526,15 @@ fn json_and_jsonl_serde_names_are_frozen() {
         String::from_utf8(jsonl.stdout).unwrap(),
         concat!(
             r#"{"path":"sample.py","language":"python","changed":true,"report":{"language":"python","#,
-            r#""comments":[{"span":{"start":0,"end":22},"kind":"shebang","disposition":{"action":"keep","#,
-            r#""reason":"required source preamble"}},{"span":{"start":23,"end":53},"kind":"license","#,
-            r#""disposition":{"action":"keep","reason":"conservative policy"}},"#,
-            r#"{"span":{"start":61,"end":69},"kind":"line","#,
-            r#""disposition":{"action":"remove"}}],"diagnostics":[],"valid":true},"#,
+            r##""comments":[{"span":{"start":0,"end":22},"line":1,"column":1,"end_line":1,"end_column":23,"##,
+            r##""kind":"shebang","text":"#!/usr/bin/env python3","disposition":{"action":"keep","##,
+            r##""reason":"required source preamble"}},{"span":{"start":23,"end":53},"##,
+            r##""line":2,"column":1,"end_line":2,"end_column":31,"kind":"license","##,
+            r##""text":"# SPDX-License-Identifier: MIT","##,
+            r##""disposition":{"action":"keep","reason":"conservative policy"}},"##,
+            r##"{"span":{"start":61,"end":69},"line":3,"column":8,"end_line":3,"end_column":16,"##,
+            r##""kind":"line","text":"# remove","##,
+            r##""disposition":{"action":"remove"}}],"diagnostics":[],"valid":true},"##,
             r#""edits":[{"span":{"start":61,"end":69},"replacement":""}],"#,
             r#""source_map":{"segments":[{"original":{"start":0,"end":61},"output":{"start":0,"end":61},"exact":true},"#,
             r#"{"original":{"start":61,"end":69},"output":{"start":61,"end":61},"exact":false},"#,
@@ -4074,7 +4295,10 @@ fn github_annotations_fold_walked_skips_away_unless_asked() {
 
     let quiet = run(directory.path(), &["check", "--format", "github"]);
     let stdout = String::from_utf8(quiet.stdout).unwrap();
-    assert!(stdout.contains("::notice file=a.rs"), "{stdout}");
+    /* NOTE: A finding is annotated at the level its run's exit status
+     * justifies, and `check` answers a finding with 1; a skip is not a finding
+     * and stays a notice whatever the run returns. */
+    assert!(stdout.contains("::error file=a.rs"), "{stdout}");
     assert!(
         !stdout.contains("notes.unknownext"),
         "a walked skip was annotated without -v:\n{stdout}"
@@ -4141,7 +4365,7 @@ fn quiet_does_not_take_annotations_off_a_machine_format() {
 
     let walked = run(directory.path(), &["check", "--format", "github", "-q"]);
     let stdout = String::from_utf8(walked.stdout).unwrap();
-    assert!(stdout.contains("::notice file=a.rs"), "{stdout}");
+    assert!(stdout.contains("::error file=a.rs"), "{stdout}");
     assert!(
         !stdout.contains("notes.unknownext"),
         "a walked skip was annotated without -v:\n{stdout}"

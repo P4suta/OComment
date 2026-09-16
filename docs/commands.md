@@ -96,7 +96,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -216,7 +216,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -307,7 +315,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -427,7 +435,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -503,7 +519,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -623,7 +639,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -691,7 +715,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -811,7 +835,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -879,7 +911,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -999,7 +1031,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -1057,7 +1097,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -1177,7 +1217,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -1235,7 +1283,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -1355,7 +1403,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -1429,7 +1485,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -1549,7 +1605,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -1614,7 +1678,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -1734,7 +1798,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -1792,7 +1864,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -1912,7 +1984,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -1979,7 +2059,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -2099,7 +2179,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -2170,7 +2258,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -2290,7 +2378,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -2352,7 +2448,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -2472,7 +2568,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -2530,7 +2634,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -2650,7 +2754,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -2712,7 +2824,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -2832,7 +2944,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -2894,7 +3014,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -3014,7 +3134,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -3076,7 +3204,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -3196,7 +3324,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -3260,7 +3396,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -3380,7 +3516,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -3438,7 +3582,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -3558,7 +3702,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one
@@ -3616,7 +3768,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -3736,7 +3888,15 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
           List every comment human `check` and `scan` met and name the rule and setting behind each one

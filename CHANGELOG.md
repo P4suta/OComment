@@ -7,6 +7,64 @@ All notable changes to OComment will be documented here. The project follows
 
 ### Fixed
 
+- A `keep_regex`, `remove_regex`, `keep_kind` or `remove_kind` that matched
+  nothing is reported instead of being left silent. This is the failure that
+  looks like success: a pattern you believe is holding a comment back, which is
+  not, and which `fix` therefore removes. The one this came from was
+  `^\s*swiftlint:` — written against the text of the comment and matched
+  against the whole token, so the `^` is anchored in front of a `//` that is
+  always there and the pattern can never match. Nothing said a word about it.
+  A run now names every setting that met no comment, says where it was written,
+  and adds the sentence that turns the report into a fix: a pattern is matched
+  against the whole comment token, so `^` is the comment's own first byte.
+
+  The report goes to standard error beside the summary, so a `--format json`
+  consumer keeps a clean pipe, and `-q` drops it with every other note. It is
+  asked of a run that walked a directory and not of one over named files: a
+  walk is the caller saying *everything under here*, so a pattern that met
+  nothing in it is doing no work, while a pattern with nothing to say about one
+  named file has not thereby failed.
+
+- `ocomment config explain` names every `keep_kind`, `remove_kind`,
+  `keep_regex` and `remove_regex` it resolved, and where each one was written,
+  with the index the reports above count from. It used to print three lines —
+  precedence, root, policy and layout — and so explained a configuration
+  without naming anything the configuration said.
+
+- `layout = "compact"` no longer lengthens a run of blank lines. A comment set
+  off by a blank line above and another below is three lines of file for one
+  comment; taking only the middle one left the two blanks touching, a run one
+  line longer than the file ever had. A removal now leaves `max(before, after)`
+  blank lines behind, where `before` and `after` are the runs it was standing
+  between — so the blank lines above a removal are never touched, no more are
+  taken than followed the comment, and two lines of code that had a blank line
+  between them still do. `swift-format` reported the old output as `[RemoveLine]
+  remove line break`, `gofmt` closed the gap and `rustfmt` collapsed it, which
+  meant `ocomment fix` had to be followed by a formatter to finish its own edit.
+  On OComment's own Rust sources under `--policy all`, this takes back 12 blank
+  lines across 6 of 59 files.
+
+- The JSON formats carry the position and the text of every comment and
+  diagnostic: `line`, `column`, `end_line`, `end_column`, and the comment's own
+  bytes under `text`. A byte span is what a patcher needs and not what a
+  reporter needs, so a caller that chose `--format json` because it was the
+  machine format had to reopen the file and count line breaks to say where a
+  finding was — work the run had already done for the prose it does not read.
+  Positions are one-based, columns are counted in bytes as everywhere else, and
+  `end_line`/`end_column` address the byte after the last one, matching the
+  half-open span beside them. `--no-preview` leaves `text` out, which is how a
+  report over a large tree stays small.
+
+- `--format github` annotates a removable comment at the level its run's exit
+  status justifies: `::error` from `check` and `diff`, which answer a finding
+  with 1, and `::notice` from `scan` and `fix`, which end at 0 whatever they
+  find. A gate that failed on the 1 was posting notices about the very comments
+  it failed over, which reads in the checks tab as though nothing had gone
+  wrong — and GitHub folds a notice away where it surfaces an error. The new
+  `--annotation-level <error|warning|notice>` overrules it for a job that posts
+  annotations without gating on them, or gates without wanting the red; a
+  diagnostic stays an `::error` regardless.
+
 - `--policy all` no longer removes a directive the language or its build reads
   as part of the program. Those are now their own comment kind,
   `load-bearing`, held back from every `remove` policy the way a shebang and an

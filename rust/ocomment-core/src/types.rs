@@ -1115,6 +1115,17 @@ pub enum Layout {
     /// Being alone on a line is judged from the original bytes, so a line
     /// holding two comments and nothing else keeps its terminator: neither
     /// comment was alone on it.
+    ///
+    /// A removal never leaves more consecutive blank lines than the longest
+    /// run it was already standing next to. A comment set off by a blank line
+    /// above and another below is three lines of file for one comment, and
+    /// taking only the middle one would leave the two blanks touching — a run
+    /// one line longer than the file ever had. So a removal with `before`
+    /// blanks above it and `after` below takes `min(before, after)` of the
+    /// ones below, leaving `max(before, after)` behind. Blank lines above a
+    /// removal are never touched and no more are taken than followed the
+    /// comment, so two lines of code that had a blank line between them still
+    /// do.
     Compact,
 }
 
