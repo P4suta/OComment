@@ -29,7 +29,14 @@ jobs:
           components: clippy,rustfmt
       - run: cargo fmt --all --manifest-path rust/Cargo.toml -- --check
       - run: cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets --locked -- -D warnings
+      # NOTE: The tests that name a file with raw non-UTF-8 bytes skip
+      # NOTE: themselves on a filesystem that refuses such a name, which is how
+      # NOTE: they stop failing on macOS for a reason that is not about
+      # NOTE: OComment. ext4 holds one, so here the skip is a failure and the
+      # NOTE: property is actually observed rather than merely compiled.
       - run: cargo test --manifest-path rust/Cargo.toml --workspace --all-targets --locked
+        env:
+          OCOMMENT_REQUIRE_NON_UTF8_PATHS: "1"
       # NOTE: `--all-targets` above builds every target but silently drops the
       # NOTE: doctests, so the examples in the library rustdoc are only ever
       # NOTE: compiled and run by this step.

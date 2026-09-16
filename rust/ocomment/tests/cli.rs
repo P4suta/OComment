@@ -11,6 +11,56 @@ fn binary() -> &'static str {
     env!("CARGO_BIN_EXE_ocomment")
 }
 
+/// Create a file whose name is raw bytes, or report that this filesystem will
+/// not hold one.
+///
+/// A Unix filename is a byte string, and what OComment does with one that is
+/// not UTF-8 is a property worth pinning: a path must reach a report, a patch
+/// and the Git index as the bytes the OS gave, never as U+FFFD. Not every Unix
+/// filesystem agrees that a name is bytes. APFS and HFS+ reject a name that is
+/// not well-formed UTF-8 with `EILSEQ`, so on macOS these tests have nothing to
+/// run against and used to fail there for a reason that says nothing about
+/// OComment.
+///
+/// Skipping is only honest if it cannot quietly become permanent, so the skip
+/// is announced and `OCOMMENT_REQUIRE_NON_UTF8_PATHS` turns it into a failure.
+/// CI sets that variable on the platforms whose filesystems do hold such a
+/// name, which is what keeps the property observed rather than merely
+/// compiled.
+#[cfg(unix)]
+fn write_non_utf8_file(
+    directory: &Path,
+    name: &[u8],
+    contents: &[u8],
+) -> Option<std::ffi::OsString> {
+    use std::os::unix::ffi::OsStringExt;
+
+    let name = std::ffi::OsString::from_vec(name.to_vec());
+    let Err(error) = fs::write(directory.join(&name), contents) else {
+        return Some(name);
+    };
+    /* NOTE: Which error a filesystem gives for a name it will not have is not
+     * worth encoding: `EILSEQ` is 84 on Linux and 92 on macOS, and a test that
+     * hard-codes either is wrong somewhere. Writing a name nothing can object
+     * to separates "this name" from "this directory", which is the distinction
+     * that matters and the one that needs no errno at all. */
+    let probe = directory.join("probe-utf8-name.rs");
+    match fs::write(&probe, contents) {
+        Ok(()) => drop(fs::remove_file(&probe)),
+        Err(other) => panic!("the test directory is not writable at all: {other}"),
+    }
+    assert!(
+        std::env::var_os("OCOMMENT_REQUIRE_NON_UTF8_PATHS").is_none(),
+        "this filesystem rejected a non-UTF-8 filename, and \
+         OCOMMENT_REQUIRE_NON_UTF8_PATHS says that is not allowed here: {error}"
+    );
+    eprintln!(
+        "skipping: this filesystem rejects non-UTF-8 filenames ({error}); \
+         set OCOMMENT_REQUIRE_NON_UTF8_PATHS to make that a failure"
+    );
+    None
+}
+
 fn run(directory: &Path, arguments: &[&str]) -> Output {
     Command::new(binary())
         .current_dir(directory)
@@ -129,13 +179,12 @@ fn check_diff_and_fix_follow_the_exit_contract() {
 #[cfg(unix)]
 #[test]
 fn diff_is_byte_preserving_and_git_applies_quoted_non_utf8_paths() {
-    use std::os::unix::ffi::OsStringExt;
-
     let directory = repository();
-    let name = std::ffi::OsString::from_vec(b"odd\n\xfe.rs".to_vec());
-    let path = directory.path().join(&name);
     let original = b"let raw = b\"\xff\"; // remove me\n";
-    fs::write(&path, original).unwrap();
+    let Some(name) = write_non_utf8_file(directory.path(), b"odd\n\xfe.rs", original) else {
+        return;
+    };
+    let path = directory.path().join(&name);
 
     let output = Command::new(binary())
         .current_dir(directory.path())
@@ -1774,12 +1823,16 @@ fn staged_new_rename_delete_and_unusual_paths_are_handled_from_index_blobs() {
 #[cfg(unix)]
 #[test]
 fn staged_non_utf8_paths_remain_os_native() {
-    use std::os::unix::ffi::{OsStrExt, OsStringExt};
+    use std::os::unix::ffi::OsStrExt;
 
     let directory = repository();
-    let name = std::ffi::OsString::from_vec(b"non-\xff.rs".to_vec());
-    let path = directory.path().join(&name);
-    fs::write(&path, b"let value = 1; // remove\n").unwrap();
+    let Some(name) = write_non_utf8_file(
+        directory.path(),
+        b"non-\xff.rs",
+        b"let value = 1; // remove\n",
+    ) else {
+        return;
+    };
     git_with_path(directory.path(), &["add", "--"], &name);
 
     let output = run(directory.path(), &["fix", "--staged", "--index-only"]);
@@ -3202,11 +3255,16 @@ fn github_annotations_report_repository_paths() {
 #[cfg(unix)]
 #[test]
 fn machine_reports_encode_raw_unix_paths_without_loss() {
-    use std::{ffi::OsString, os::unix::ffi::OsStringExt};
-
     let directory = tempfile::tempdir().unwrap();
-    let name = OsString::from_vec(b"odd \xff,\n.rs".to_vec());
-    fs::write(directory.path().join(&name), b"let value = 1; // remove\n").unwrap();
+    if write_non_utf8_file(
+        directory.path(),
+        b"odd \xff,\n.rs",
+        b"let value = 1; // remove\n",
+    )
+    .is_none()
+    {
+        return;
+    }
 
     let sarif = run(directory.path(), &["check", ".", "--format", "sarif"]);
     assert_eq!(sarif.status.code(), Some(1));
@@ -5151,7 +5209,13 @@ fn a_missing_path_says_where_it_was_looked_for() {
 #[test]
 fn a_configuration_without_a_version_says_how_to_add_one() {
     let directory = tempfile::tempdir().unwrap();
-    let config = directory.path().join(".ocomment.toml");
+    /* NOTE: Resolved, because the error names the file OComment found and
+     * OComment resolves what it finds. On macOS the system temporary directory
+     * is reached through a symlink -- `/var` is `/private/var` -- so a test
+     * that compares against `TempDir::path` compares against a spelling the
+     * binary never prints. */
+    let root = directory.path().canonicalize().unwrap();
+    let config = root.join(".ocomment.toml");
     fs::write(&config, b"[policy]\nmode = \"all\"\n").unwrap();
     fs::write(
         directory.path().join("sample.rs"),
