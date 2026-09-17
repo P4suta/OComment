@@ -6697,6 +6697,29 @@ fn legal_marker(text: &str) -> Option<&'static str> {
 /// The tool or language directive `text` opens, or `None` when it opens none.
 /// The name is the prefix that matched, so an explanation can point at the
 /// directive a reader recognises instead of at the whole comment.
+/// Names the Go directive a comment opens, distinguishing the two conventions Go
+/// uses.
+///
+/// `//go:` and `//line` are read by the compiler and have to begin at the marker
+/// itself: `// go:generate` and `// line …` are ordinary prose that happens to
+/// start with the word, and the toolchain ignores them. `// +build` is the older
+/// build constraint and is the opposite — the space is part of it.
+///
+/// The distinction is taken from the raw bytes rather than from `compact`, which
+/// has already had leading whitespace trimmed off and so cannot tell the two
+/// apart. Reading it from `compact` kept every `// line …` in a Go file, and a
+/// doc comment is a run of `//` lines: keeping one line out of the middle of one
+/// and removing the rest leaves a fragment whose subject is gone.
+fn go_directive(compact: &str, raw: &[u8]) -> Option<&'static str> {
+    if raw.starts_with(b"//go:") || raw.starts_with(b"/*go:") {
+        return Some("go:");
+    }
+    if raw.starts_with(b"//line ") || raw.starts_with(b"/*line ") {
+        return Some("line ");
+    }
+    compact.starts_with("+build").then_some("+build")
+}
+
 fn directive_name(text: &str, language: Language, raw: &[u8]) -> Option<&'static str> {
     let compact = text.trim_start_matches(['!', '/', '*', '#', '@', ' ']);
     let common = [
@@ -6747,9 +6770,7 @@ fn directive_name(text: &str, language: Language, raw: &[u8]) -> Option<&'static
         return Some("shellcheck");
     }
     match language {
-        Language::Go => ["go:", "+build", "line "]
-            .into_iter()
-            .find(|prefix| compact.starts_with(prefix)),
+        Language::Go => go_directive(compact, raw),
         Language::TypeScript => {
             (raw.starts_with(b"///") && compact.starts_with('<')).then_some("///")
         }
