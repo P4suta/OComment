@@ -532,6 +532,15 @@ fn profile_comment(
     options: &ScanOptions,
     patterns: &DispositionPatterns,
 ) -> Comment {
+    /* NOTE: The same classification the built-in scanners run, so that a
+     * licence header or a cross-language tool directive is the kind it is
+     * whichever reader found it. Without this a `# SPDX-License-Identifier:`
+     * was a licence in a Python file and an ordinary comment in a `.gitignore`
+     * -- the same bytes, kept by one reader and removed by the other.
+     * `Language::Unknown` is the truth about a profile: it is not one of the
+     * built-in languages, so the language-specific directives do not apply and
+     * the profile declares its own below. */
+    kind = crate::scanner::classify_comment(source, Language::Unknown, kind, start, end, 0);
     let raw = String::from_utf8_lossy(&source[start..end]);
     let protected = profile
         .protected_patterns

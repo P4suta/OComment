@@ -2352,7 +2352,41 @@ fn note_fix_scope(resolved: &config::ResolvedConfig, common: &CommonArgs) -> Res
 }
 
 /// The `--verbose` header: where the run is rooted, what it was pointed at,
+/// The policy named on the command line under a name that has moved, and the
+/// name it moved to.
+///
+/// `legal` and `safe` still resolve, to `conservative` and `standard`, so that
+/// a repository which pinned one of them does not break on an upgrade. That
+/// bargain has two halves and only one of them was kept: a name that goes on
+/// working while nobody is told it changed is a bridge the reader does not know
+/// they are standing on, and the day it is taken away is the day they find out.
+///
+/// Read from the raw arguments because clap resolves an alias to its variant
+/// and keeps no record of which spelling arrived.
+fn renamed_policy() -> Option<(String, &'static str)> {
+    let arguments: Vec<String> = std::env::args().collect();
+    let mut spellings = arguments
+        .iter()
+        .enumerate()
+        .filter_map(|(index, argument)| {
+            argument
+                .strip_prefix("--policy=")
+                .map(ToOwned::to_owned)
+                .or_else(|| (argument == "--policy").then(|| arguments.get(index + 1).cloned())?)
+        });
+    spellings.find_map(|spelling| {
+        ocomment_core::Policy::ALL
+            .into_iter()
+            .find(|policy| policy.aliases().contains(&spelling.as_str()))
+            .map(|policy| (spelling, policy.as_str()))
+    })
+}
+
 /// and which configuration files it merged.
+///
+/// The one line here that is not `-v` material is the renaming notice: a run
+/// steered by a name that has moved has to say so at the volume of an ordinary
+/// note, because the reader of that line is the one who has not noticed.
 fn trace_run(
     resolved: &config::ResolvedConfig,
     paths: &[PathBuf],
@@ -2378,6 +2412,17 @@ fn trace_run(
             verbosity,
             Detail::Verbose,
             &format!("config: {source}"),
+        )?;
+    }
+    if let Some((spelling, name)) = renamed_policy() {
+        output::note(
+            &mut report,
+            verbosity,
+            Detail::Normal,
+            &format!(
+                "`--policy {spelling}` is the old name for `{name}` and still resolves to it; \
+                 the spelling will not always"
+            ),
         )?;
     }
     Ok(())

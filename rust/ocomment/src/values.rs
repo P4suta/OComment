@@ -93,10 +93,10 @@ macro_rules! value_enum_wrapper {
 value_enum_wrapper!(PolicyArg, Policy, |value| match value {
     Policy::Conservative =>
         "Remove ordinary comments; keep documentation, licence notices, \
-         directives, shebangs and encoding lines",
+         directives, shebangs and encoding lines (was `legal`)",
     Policy::Standard =>
         "Like conservative, and remove documentation, licence and copyright \
-         comments too",
+         comments too (was `safe`)",
     Policy::All =>
         "Remove every comment except shebangs, encoding lines and the \
          directives the language itself reads",
