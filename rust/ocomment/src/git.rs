@@ -285,7 +285,7 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
     }
     match operation {
         Operation::Check | Operation::Diff if output::changed(&files) => Ok(1),
-        _ => Ok(0),
+        Operation::Check | Operation::Scan | Operation::Diff | Operation::Fix => Ok(0),
     }
 }
 

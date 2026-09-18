@@ -119,7 +119,7 @@ impl Verbosity {
     pub const fn at_least_normal(self) -> Self {
         match self.0 {
             Level::Quiet => Self(Level::Normal),
-            loud => Self(loud),
+            loud @ Level::Normal | loud @ Level::Verbose => Self(loud),
         }
     }
 }
@@ -924,7 +924,15 @@ fn next_step(verdict: &DispositionExplanation) -> String {
         DispositionExplanation::KeptStructural { .. } => {
             "; the comment under it has to go first".to_owned()
         }
-        _ => String::new(),
+        DispositionExplanation::KeptByKind(_)
+        | DispositionExplanation::KeptByRegex { .. }
+        | DispositionExplanation::KeptDocumentation { .. }
+        | DispositionExplanation::KeptLicense { .. }
+        | DispositionExplanation::RemovedByKind(_)
+        | DispositionExplanation::RemovedByRegex { .. }
+        | DispositionExplanation::RemovedByPolicy { .. }
+        | DispositionExplanation::RemovedByDefault { .. }
+        | DispositionExplanation::KeptByTag { .. } => String::new(),
     }
 }
 
@@ -3233,7 +3241,20 @@ fn instruction(verdict: &DispositionExplanation) -> String {
         DispositionExplanation::RemovedAsExpired { age, limit, .. } => {
             format!("do it or drop it ({age} old, {limit} allowed)")
         }
-        _ => "remove".to_owned(),
+        DispositionExplanation::KeptByKind(_)
+        | DispositionExplanation::KeptByRegex { .. }
+        | DispositionExplanation::ProtectedPreamble
+        | DispositionExplanation::KeptHtml
+        | DispositionExplanation::KeptLoadBearing { .. }
+        | DispositionExplanation::KeptDirective { .. }
+        | DispositionExplanation::KeptDocumentation { .. }
+        | DispositionExplanation::KeptLicense { .. }
+        | DispositionExplanation::RemovedByKind(_)
+        | DispositionExplanation::RemovedByRegex { .. }
+        | DispositionExplanation::RemovedByPolicy { .. }
+        | DispositionExplanation::RemovedByDefault { .. }
+        | DispositionExplanation::KeptByTag { .. }
+        | DispositionExplanation::KeptStructural { .. } => "remove".to_owned(),
     }
 }
 
@@ -3470,7 +3491,7 @@ fn write_agent(
             comments(removable, ""),
             match options.operation {
                 Operation::Fix => "have gone",
-                _ => "go",
+                Operation::Check | Operation::Scan | Operation::Diff => "go",
             },
             plural(paths.len(), "file")
         ));

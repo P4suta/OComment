@@ -1,3 +1,9 @@
+//! The `ocomment` command.
+//!
+//! Every module below has a side effect: files, Git, plugins, output, hooks.
+//! The engine that decides what a comment is has none and lives in
+//! `ocomment-core`.
+
 mod atomic;
 mod cli;
 mod config;

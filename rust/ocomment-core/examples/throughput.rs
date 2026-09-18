@@ -6,6 +6,48 @@
 use ocomment_core::{Dialect, Language, ScanOptions, scan};
 use std::{env, hint::black_box, process::ExitCode, time::Instant};
 
+/// One filler line, one removable comment, and the dialect to lex them under.
+type Sample = (&'static [u8], &'static [u8], Dialect);
+
+/// The languages whose lexical surface needs a sample of its own.
+///
+/// A table rather than a `match`, so that a language added later takes
+/// [`C_FAMILY`] because nobody wrote it an entry -- which is a decision a
+/// reader can see -- rather than because it fell into a wildcard arm.
+const SAMPLES: &[(Language, &[u8], &[u8], Dialect)] = &[
+    (
+        Language::JavaScript,
+        b"const text = `opaque // text ${value + 1}`; const re = /[/*]+/g; value += 1;\n",
+        b"/* removable */\n",
+        Dialect::Standard,
+    ),
+    (
+        Language::TypeScript,
+        b"const text = `opaque // text ${value + 1}`; const re = /[/*]+/g; value += 1;\n",
+        b"/* removable */\n",
+        Dialect::Standard,
+    ),
+    (
+        Language::Shell,
+        b"value='opaque # text'; printf '%s\\n' \"$value\"; value=${value#prefix}\n",
+        b"# removable\n",
+        Dialect::Bash53,
+    ),
+    (
+        Language::Rust,
+        b"let text = r#\"opaque /* text */\"#; value = value.wrapping_add(1);\n",
+        b"// removable\n",
+        Dialect::Standard,
+    ),
+];
+
+/// What a language with no entry of its own lexes as.
+const C_FAMILY: Sample = (
+    b"const char *text = \"opaque /* text */\"; value = value + 1;\n",
+    b"/* removable */\n",
+    Dialect::Standard,
+);
+
 fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
@@ -37,28 +79,12 @@ fn run() -> Result<(), String> {
     let target = mebibytes
         .checked_mul(1024 * 1024)
         .ok_or_else(|| "requested input is too large".to_owned())?;
-    let (filler, comment, dialect): (&[u8], &[u8], Dialect) = match language {
-        Language::JavaScript | Language::TypeScript => (
-            b"const text = `opaque // text ${value + 1}`; const re = /[/*]+/g; value += 1;\n",
-            b"/* removable */\n",
-            Dialect::Standard,
-        ),
-        Language::Shell => (
-            b"value='opaque # text'; printf '%s\\n' \"$value\"; value=${value#prefix}\n",
-            b"# removable\n",
-            Dialect::Bash53,
-        ),
-        Language::Rust => (
-            b"let text = r#\"opaque /* text */\"#; value = value.wrapping_add(1);\n",
-            b"// removable\n",
-            Dialect::Standard,
-        ),
-        _ => (
-            b"const char *text = \"opaque /* text */\"; value = value + 1;\n",
-            b"/* removable */\n",
-            Dialect::Standard,
-        ),
-    };
+    let (filler, comment, dialect) = SAMPLES
+        .iter()
+        .find(|(candidate, ..)| *candidate == language)
+        .map_or(C_FAMILY, |(_, filler, comment, dialect)| {
+            (*filler, *comment, *dialect)
+        });
     /* PERF: Keep comment allocation realistic: one span per 4 KiB rather than one
      * span per source line. The filler still exercises each language's string
      * and other lexically sensitive states. */

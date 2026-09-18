@@ -1263,7 +1263,30 @@ impl<'a> Scanner<'a> {
                     });
                 }
             }
-            _ => {}
+            Language::Ocaml
+            | Language::Java
+            | Language::JavaScript
+            | Language::TypeScript
+            | Language::Python
+            | Language::Shell
+            | Language::Html
+            | Language::Sql
+            | Language::Toml
+            | Language::Lua
+            | Language::Yaml
+            | Language::Php
+            | Language::Ruby
+            | Language::Zig
+            | Language::R
+            | Language::Dart
+            | Language::Swift
+            | Language::CSharp
+            | Language::Scala
+            | Language::Vue
+            | Language::Svelte
+            | Language::Markdown
+            | Language::Perl
+            | Language::Unknown => {}
         }
         None
     }
@@ -6121,7 +6144,34 @@ impl<'a> Scanner<'a> {
                     Language::JavaScript | Language::TypeScript => child.scan_javascript(),
                     Language::Css if dialect == Dialect::Sass => child.scan_sass(),
                     Language::Css => child.scan_c_family(),
-                    _ => {}
+                    Language::Rust
+                    | Language::Ocaml
+                    | Language::C
+                    | Language::Cpp
+                    | Language::Go
+                    | Language::Java
+                    | Language::Python
+                    | Language::Shell
+                    | Language::Html
+                    | Language::Jsonc
+                    | Language::Sql
+                    | Language::Kotlin
+                    | Language::Toml
+                    | Language::Lua
+                    | Language::Yaml
+                    | Language::Php
+                    | Language::Ruby
+                    | Language::Zig
+                    | Language::R
+                    | Language::Dart
+                    | Language::Swift
+                    | Language::CSharp
+                    | Language::Scala
+                    | Language::Vue
+                    | Language::Svelte
+                    | Language::Markdown
+                    | Language::Perl
+                    | Language::Unknown => {}
                 }
                 self.merge_child(child);
             }
@@ -6389,7 +6439,29 @@ fn is_load_bearing(name: &str, language: Language) -> bool {
          * scope. */
         Language::TypeScript => name == "///" || bundler_is_load_bearing(name),
         Language::JavaScript => bundler_is_load_bearing(name),
-        _ => false,
+        Language::Rust
+        | Language::Ocaml
+        | Language::C
+        | Language::Cpp
+        | Language::Java
+        | Language::Python
+        | Language::Html
+        | Language::Css
+        | Language::Jsonc
+        | Language::Sql
+        | Language::Kotlin
+        | Language::Toml
+        | Language::Lua
+        | Language::Yaml
+        | Language::Php
+        | Language::Zig
+        | Language::R
+        | Language::CSharp
+        | Language::Vue
+        | Language::Svelte
+        | Language::Markdown
+        | Language::Perl
+        | Language::Unknown => false,
     }
 }
 
@@ -6503,7 +6575,16 @@ pub(crate) fn disposition(
              * is the API documentation, and it ships. Removing one empties a
              * page on docs.rs, pkg.go.dev or a javadoc site, which is a public
              * loss of the same kind as removing a licence notice. */
-            _ => "conservative policy",
+            CommentKind::Line
+            | CommentKind::Block
+            | CommentKind::DocLine
+            | CommentKind::DocBlock
+            | CommentKind::License
+            | CommentKind::Shebang
+            | CommentKind::Encoding
+            | CommentKind::OptimizerHint
+            | CommentKind::VersionComment
+            | CommentKind::LoadBearing => "conservative policy",
         }
         .into(),
     }
@@ -6609,7 +6690,16 @@ pub fn explain_disposition_with(
             CommentKind::Shebang | CommentKind::Encoding => {
                 DispositionExplanation::ProtectedPreamble
             }
-            _ => DispositionExplanation::KeptLoadBearing {
+            CommentKind::Line
+            | CommentKind::Block
+            | CommentKind::DocLine
+            | CommentKind::DocBlock
+            | CommentKind::Directive
+            | CommentKind::License
+            | CommentKind::HtmlComment
+            | CommentKind::OptimizerHint
+            | CommentKind::VersionComment
+            | CommentKind::LoadBearing => DispositionExplanation::KeptLoadBearing {
                 name: directive_name_of(raw, language),
             },
         };
@@ -7426,7 +7516,19 @@ fn directive_name(text: &str, language: Language, raw: &[u8]) -> Option<&'static
             || compact.starts_with("> using ")
             || compact.starts_with("> using\t"))
         .then_some("//> using"),
-        _ => None,
+        Language::Rust
+        | Language::Ocaml
+        | Language::Java
+        | Language::Html
+        | Language::Css
+        | Language::Jsonc
+        | Language::Sql
+        | Language::Kotlin
+        | Language::Vue
+        | Language::Svelte
+        | Language::Markdown
+        | Language::Perl
+        | Language::Unknown => None,
     }
 }
 
@@ -11244,7 +11346,36 @@ fn next_c_family_trigger(
         Language::Css if dialect == Dialect::Scss => remaining
             .iter()
             .position(|byte| matches!(byte, b'/' | b'"' | b'\'' | b'#' | b'u' | b'U')),
-        _ => memchr3(b'/', b'"', b'\'', remaining),
+        Language::Rust
+        | Language::Ocaml
+        | Language::C
+        | Language::Cpp
+        | Language::Java
+        | Language::JavaScript
+        | Language::TypeScript
+        | Language::Python
+        | Language::Shell
+        | Language::Html
+        | Language::Css
+        | Language::Jsonc
+        | Language::Sql
+        | Language::Kotlin
+        | Language::Toml
+        | Language::Lua
+        | Language::Yaml
+        | Language::Php
+        | Language::Ruby
+        | Language::Zig
+        | Language::R
+        | Language::Dart
+        | Language::Swift
+        | Language::CSharp
+        | Language::Scala
+        | Language::Vue
+        | Language::Svelte
+        | Language::Markdown
+        | Language::Perl
+        | Language::Unknown => memchr3(b'/', b'"', b'\'', remaining),
     }?;
     Some(start + primary)
 }

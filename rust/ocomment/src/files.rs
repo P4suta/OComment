@@ -264,7 +264,9 @@ pub fn proposed_source(
     }
     match classify(&path, bytes, true, &context) {
         Looked::Fatal(error) => return Err(error),
-        looked => discovery.absorb(looked),
+        looked @ Looked::Nothing | looked @ Looked::Found(_) | looked @ Looked::Passed(_) => {
+            discovery.absorb(looked)
+        }
     }
     Ok(discovery)
 }

@@ -896,7 +896,30 @@ pub fn supported_dialects(language: Language) -> &'static [Dialect] {
             Dialect::TSql,
             Dialect::Oracle,
         ],
-        _ => &[Dialect::Standard],
+        Language::Rust
+        | Language::Ocaml
+        | Language::Go
+        | Language::Java
+        | Language::Python
+        | Language::Html
+        | Language::Jsonc
+        | Language::Kotlin
+        | Language::Toml
+        | Language::Lua
+        | Language::Yaml
+        | Language::Php
+        | Language::Ruby
+        | Language::Zig
+        | Language::R
+        | Language::Dart
+        | Language::Swift
+        | Language::CSharp
+        | Language::Scala
+        | Language::Vue
+        | Language::Svelte
+        | Language::Markdown
+        | Language::Perl
+        | Language::Unknown => &[Dialect::Standard],
     }
 }
 
@@ -998,7 +1021,12 @@ fn merge_value(base: &mut toml::Value, overlay: toml::Value) {
                                 base.insert(key, toml::Value::Array(incoming));
                             }
                         }
-                        other => {
+                        other @ toml::Value::String(_)
+                        | other @ toml::Value::Integer(_)
+                        | other @ toml::Value::Float(_)
+                        | other @ toml::Value::Boolean(_)
+                        | other @ toml::Value::Datetime(_)
+                        | other @ toml::Value::Table(_) => {
                             base.insert(key, other);
                         }
                     }
@@ -1057,7 +1085,10 @@ pub(crate) fn lexical(path: &Path) -> PathBuf {
             {
                 resolved.pop();
             }
-            component => resolved.push(component),
+            component @ Component::Prefix(_)
+            | component @ Component::RootDir
+            | component @ Component::ParentDir
+            | component @ Component::Normal(_) => resolved.push(component),
         }
     }
     resolved

@@ -1,3 +1,9 @@
+//! The LSP server, exercised over its own stdio protocol.
+//!
+//! An editor speaks to this over a pipe and never links the crate, so the
+//! cases here do the same: they write framed JSON-RPC in and read framed
+//! JSON-RPC out.
+
 use serde_json::{Value, json};
 use std::{
     io::{BufRead, BufReader, Read, Write},

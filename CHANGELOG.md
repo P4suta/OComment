@@ -100,6 +100,22 @@ All notable changes to OComment will be documented here. The project follows
 
 ### Changed
 
+- `clippy::wildcard_enum_match_arm` is denied across the workspace, and the
+  `ocomment` crate inherits the workspace lints at all — it never had, so
+  `missing_docs` had not applied to it either. Twenty-one arms went; five of
+  them were latent wrong answers rather than noise, including a `_ =>` that
+  explained any comment kind added later as *load-bearing* and another that
+  gave one the keep reason of a policy that had not decided it. Two `_ =>`
+  arms over `Language` became lookup tables instead, which is better code than
+  the twenty-nine-variant arm the lint asks for.
+
+  The internal runtime is the one exception and it is a path rather than a
+  judgement: it is upstream-derived, so a rule about the decisions *this*
+  program makes does not reach it, and rewriting its match arms would put a
+  patch between us and every version we take next.
+  `rust_sources_do_not_suppress_lints` now carries that one path and compares
+  the list exactly, so a second exception fails there.
+
 - `--format json` and `--format jsonl` no longer carry the source map unless
   `--source-map` asks for it. It is one segment per unchanged run of bytes, so
   a file with twenty-five comments in it produced several hundred lines of a
