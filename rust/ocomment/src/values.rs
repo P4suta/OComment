@@ -92,9 +92,11 @@ macro_rules! value_enum_wrapper {
  * notice sits, while the code means the shebang and the encoding line. */
 value_enum_wrapper!(PolicyArg, Policy, |value| match value {
     Policy::Conservative =>
-        "Remove ordinary and doc comments; keep licence notices, directives, \
-         shebangs and encoding lines",
-    Policy::Standard => "Like conservative, and remove licence and copyright notices too",
+        "Remove ordinary comments; keep documentation, licence notices, \
+         directives, shebangs and encoding lines",
+    Policy::Standard =>
+        "Like conservative, and remove documentation, licence and copyright \
+         comments too",
     Policy::All =>
         "Remove every comment except shebangs, encoding lines and the \
          directives the language itself reads",

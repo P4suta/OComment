@@ -683,6 +683,15 @@ pub enum DispositionExplanation {
         /// The directive's name, when the catalogue could name it.
         name: Option<&'static str>,
     },
+    /// A documentation comment under [`Policy::Conservative`].
+    ///
+    /// It is the API documentation rather than a remark about the code, so
+    /// removing it takes something published: a page on docs.rs, an entry on
+    /// pkg.go.dev, a javadoc section.
+    KeptDocumentation {
+        /// Which of the two documentation kinds it is.
+        kind: CommentKind,
+    },
     /// A license or copyright notice under [`Policy::Conservative`].
     KeptLicense {
         /// The marker that identified it, such as `spdx-license-identifier`.
@@ -741,6 +750,7 @@ impl DispositionExplanation {
             | Self::KeptLoadBearing { .. }
             | Self::KeptHtml
             | Self::KeptDirective { .. }
+            | Self::KeptDocumentation { .. }
             | Self::KeptLicense { .. }
             | Self::KeptStructural { .. } => Action::Keep,
             Self::RemovedByKind(_)
@@ -805,6 +815,11 @@ impl fmt::Display for DispositionExplanation {
             /* NOTE: The policy is spelled through `Policy` rather than written
              * out, so that renaming one cannot leave this sentence naming a
              * policy the binary no longer accepts. */
+            Self::KeptDocumentation { kind } => write!(
+                f,
+                "kept: policy {} protects documentation comments, and this is a `{kind}`",
+                Policy::Conservative
+            ),
             Self::KeptLicense { marker } => {
                 let policy = Policy::Conservative;
                 match marker {

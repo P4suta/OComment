@@ -677,9 +677,14 @@ fn an_r_file_keeps_its_lint_directive_and_its_raw_string() {
         "{}",
         String::from_utf8_lossy(&fixed.stderr)
     );
+    /* NOTE: The two `#'` lines survive. They are roxygen2 documentation, which
+     * is what generates this package's NAMESPACE and its `.Rd` pages, so
+     * removing them would change what the package exports -- and the default
+     * policy keeps documentation for that reason. Only the untagged remark
+     * goes. */
     assert_eq!(
         fs::read(&path).unwrap(),
-        b"\n\nadd <- function(a, b) a + b  # nolint\npattern <- r\"(\\d+ # not a comment)\"\ntotal <- 1 \n"
+        b"#' Add two numbers.\n#' @export\nadd <- function(a, b) a + b  # nolint\npattern <- r\"(\\d+ # not a comment)\"\ntotal <- 1 \n"
     );
 }
 
@@ -2649,7 +2654,13 @@ fn human_check_names_comment_kinds_in_canonical_spelling() {
         b"/** doc */\nfn main() {}\n",
     )
     .unwrap();
-    let output = run(directory.path(), &["check", "doc.rs"]);
+    /* NOTE: The policy is named because the default keeps documentation
+     * comments; what this pins is the spelling of the kind in the report, not
+     * which policy reaches one. */
+    let output = run(
+        directory.path(),
+        &["check", "doc.rs", "--policy", "standard"],
+    );
     assert_eq!(output.status.code(), Some(1));
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(
@@ -2843,7 +2854,12 @@ fn github_annotations_use_kebab_comment_kinds() {
         b"/** doc */\nfn main() {}\n",
     )
     .unwrap();
-    let output = run(directory.path(), &["check", "doc.rs", "--format", "github"]);
+    let output = run(
+        directory.path(),
+        &[
+            "check", "doc.rs", "--format", "github", "--policy", "standard",
+        ],
+    );
     assert_eq!(output.status.code(), Some(1));
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert_eq!(
@@ -2862,7 +2878,12 @@ fn sarif_keeps_kebab_rule_ids_and_canonical_messages() {
         b"/** doc */\nfn main() {}\n",
     )
     .unwrap();
-    let output = run(directory.path(), &["check", "doc.rs", "--format", "sarif"]);
+    let output = run(
+        directory.path(),
+        &[
+            "check", "doc.rs", "--format", "sarif", "--policy", "standard",
+        ],
+    );
     assert_eq!(output.status.code(), Some(1));
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     let result = &value["runs"][0]["results"][0];
@@ -3199,7 +3220,14 @@ fn sarif_locates_reported_files_under_the_source_root() {
     .unwrap();
     let output = run(
         directory.path(),
-        &["check", "sub/./doc.rs", "--format", "sarif"],
+        &[
+            "check",
+            "sub/./doc.rs",
+            "--format",
+            "sarif",
+            "--policy",
+            "standard",
+        ],
     );
     assert_eq!(output.status.code(), Some(1));
     let report = String::from_utf8(output.stdout).unwrap();
@@ -3356,7 +3384,14 @@ fn github_annotations_report_repository_paths() {
     .unwrap();
     let output = run(
         directory.path(),
-        &["check", "sub/./doc.rs", "--format", "github"],
+        &[
+            "check",
+            "sub/./doc.rs",
+            "--format",
+            "github",
+            "--policy",
+            "standard",
+        ],
     );
     assert_eq!(output.status.code(), Some(1));
     let stdout = String::from_utf8(output.stdout).unwrap();

@@ -141,6 +141,30 @@ let starts source index token =
     (Bytes.get source (index + offset) = String.get token offset && loop (offset + 1)) in
   loop 0
 
+(* NOTE: "///" opens a documentation comment and "////" does not: a fourth slash
+   makes the divider people rule a file with, and it documents nothing.  rustc's
+   lexer draws the line there, and Doxygen, JSDoc and KDoc agree by recognising
+   no documentation in one either.  "//!" carries its own boundary in the "!".
+
+   Getting this wrong is the error a user cannot see: a comment wrongly called
+   ordinary is removed and appears in a diff they can reject, while one wrongly
+   called documentation is kept, and a remover quietly leaves it behind. *)
+let c_line_kind source index =
+  if starts source index "//!" then DocLine
+  else if starts source index "///" && not (starts source index "////") then DocLine
+  else Line
+
+(* NOTE: "/**" opens a documentation comment; "/***" and "/**/" do not.  rustc
+   reads the two bytes after the "/*" and takes a doc comment only when the
+   first is "*" and the second is neither "*" nor "/", which is what makes
+   "/**/" the empty block comment and "/***/" an ordinary one. *)
+let c_block_kind source index =
+  if starts source index "/*!" then DocBlock
+  else if starts source index "/**"
+          && not (starts source index "/***")
+          && not (starts source index "/**/") then DocBlock
+  else Block
+
 let find_from source index token =
   let source_length = Bytes.length source and token_length = String.length token in
   let index = max 0 index in
@@ -253,7 +277,11 @@ let disposition options kind raw =
   else if options.policy = All then Remove
   else if kind = HtmlComment then Keep "HTML comments are DOM-observable"
   else if kind = Directive then Keep "tool or language directive"
-  else if kind = License && options.policy = Conservative then Keep "conservative policy"
+  (* NOTE: A documentation comment is the API documentation and it ships, so
+     removing one empties a published page.  That is a loss of the same kind as
+     removing a licence notice, and this policy already declined that kind. *)
+  else if (kind = License || kind = DocLine || kind = DocBlock)
+          && options.policy = Conservative then Keep "conservative policy"
   else Remove
 
 let contains text needle =
@@ -1057,12 +1085,12 @@ and scan_kotlin_expression source options accumulator index depth =
       index
     end else if starts source index "//" then begin
       let finish = line_end source (index + 2) in
-      let kind = if starts source index "///" || starts source index "//!" then DocLine else Line in
+      let kind = c_line_kind source index in
       add_comment accumulator source Kotlin options kind index finish;
       loop finish braces
     end else if starts source index "/*" then begin
       let finish, closed = block_end source index true in
-      let kind = if starts source index "/**" || starts source index "/*!" then DocBlock else Block in
+      let kind = c_block_kind source index in
       add_comment accumulator source Kotlin options kind index finish;
       if not closed then add_error accumulator "unterminated-comment"
         "unterminated Kotlin block comment" index finish;
@@ -1131,7 +1159,7 @@ and scan_scss_interpolation source options accumulator language index depth =
         loop finish braces
       end else if starts source cursor "/*" then begin
         let finish, closed = block_end source cursor false in
-        let kind = if starts source cursor "/**" || starts source cursor "/*!" then DocBlock else Block in
+        let kind = c_block_kind source cursor in
         add_comment accumulator source language options kind cursor finish;
         if not closed then add_error accumulator "unterminated-comment"
           "unterminated SCSS block comment" cursor finish;
@@ -1241,12 +1269,12 @@ let scan_sass source language options accumulator =
     if index >= length then ()
     else if starts source index "//" then begin
       let finish = sass_silent_comment_end source index in
-      let kind = if starts source index "///" || starts source index "//!" then DocLine else Line in
+      let kind = c_line_kind source index in
       add_comment accumulator source language options kind index finish;
       loop finish
     end else if starts source index "/*" then begin
       let finish, closed = block_end source index false in
-      let kind = if starts source index "/**" || starts source index "/*!" then DocBlock else Block in
+      let kind = c_block_kind source index in
       add_comment accumulator source language options kind index finish;
       if not closed then add_error accumulator "unterminated-comment"
         "unterminated Sass block comment" index finish;
@@ -1267,11 +1295,11 @@ let scan_slash_unmapped source language options accumulator =
     if index >= Bytes.length source then ()
     else if line_comments && starts source index "//" then begin
       let finish = line_end source (index + 2) in
-      let kind = if starts source index "///" || starts source index "//!" then DocLine else Line in
+      let kind = c_line_kind source index in
       add_comment accumulator source language options kind index finish; loop finish
     end else if starts source index "/*" then begin
       let finish, closed = block_end source index nested in
-      let kind = if starts source index "/**" || starts source index "/*!" then DocBlock else Block in
+      let kind = c_block_kind source index in
       add_comment accumulator source language options kind index finish;
       if not closed then add_error accumulator "unterminated-comment" "unterminated block comment" index finish;
       loop finish
@@ -1512,14 +1540,14 @@ let rec scan_js_code source language options accumulator index stop_brace depth 
     end else if starts source index "//" then begin
       let finish = js_line_end source (index + 2) in
       add_comment accumulator source language options
-        (if starts source index "///" || starts source index "//!" then DocLine else Line)
+        (c_line_kind source index)
         index finish;
       loop finish brace_depth regex_allowed control_parentheses pending_control
         brace_blocks statement_start pending_block
     end else if starts source index "/*" then begin
       let finish, closed = block_end source index false in
       add_comment accumulator source language options
-        (if starts source index "/**" || starts source index "/*!" then DocBlock else Block)
+        (c_block_kind source index)
         index finish;
       if not closed then add_error accumulator "unterminated-comment"
         "unterminated JavaScript block comment" index finish;

@@ -6,7 +6,7 @@ ocomment \- Check and remove source\-code comments safely
 .SH SYNOPSIS
 \fBocomment\fR [\fB\-\-config\fR] [\fB\-\-policy\fR] [\fB\-\-layout\fR] [\fB\-\-language\fR] [\fB\-\-dialect\fR] [\fB\-\-keep\-kind\fR] [\fB\-\-remove\-kind\fR] [\fB\-\-deny\-skipped\fR] [\fB\-\-force\-invalid\fR] [\fB\-\-force\-protected\fR] [\fB\-\-format\fR] [\fB\-\-color\fR] [\fB\-\-hyperlinks\fR] [\fB\-\-no\-preview\fR] [\fB\-\-annotation\-level\fR] [\fB\-\-explain\fR] [\fB\-\-trace\fR] [\fB\-\-progress\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIPATH\fR] [\fIsubcommands\fR]
 .SH DESCRIPTION
-OComment scans source bytes without requiring UTF\-8 and reports or removes comment tokens. The default policy keeps licence notices, tool and language directives, shebangs and encoding lines, and removes ordinary and doc comments. Rewrites are prepared and committed as one rollback\-backed transaction.
+OComment scans source bytes without requiring UTF\-8 and reports or removes comment tokens. The default policy removes ordinary comments and keeps the ones something else depends on: documentation, licence notices, tool and language directives, shebangs and encoding lines. Rewrites are prepared and committed as one rollback\-backed transaction.
 .SH OPTIONS
 .TP
 \fB\-\-config\fR \fI<FILE>\fR
@@ -30,9 +30,9 @@ Which classes of comment the run is allowed to remove
 \fIPossible values:\fR
 .RS 14
 .IP \(bu 2
-conservative: Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines
+conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines
 .IP \(bu 2
-standard: Like conservative, and remove licence and copyright notices too
+standard: Like conservative, and remove documentation, licence and copyright comments too
 .IP \(bu 2
 all: Remove every comment except shebangs, encoding lines and the directives the language itself reads
 .RE

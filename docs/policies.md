@@ -44,7 +44,7 @@ the sample on standard input.
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 // rustfmt::skip
-
+/// Adds two numbers.
 pub fn add(a: u32, b: u32) -> u32 {
     let total = a +  b; 
     
@@ -103,7 +103,7 @@ reading the same sample, under the default `conservative` policy.
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 // rustfmt::skip
-
+/// Adds two numbers.
 pub fn add(a: u32, b: u32) -> u32 {
     let total = a +  b; 
     
@@ -119,7 +119,7 @@ pub fn add(a: u32, b: u32) -> u32 {
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 // rustfmt::skip
-                     
+/// Adds two numbers.
 pub fn add(a: u32, b: u32) -> u32 {
     let total = a +                   b;                            
                                                            
@@ -135,6 +135,7 @@ pub fn add(a: u32, b: u32) -> u32 {
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 // rustfmt::skip
+/// Adds two numbers.
 pub fn add(a: u32, b: u32) -> u32 {
     let total = a +  b;
     total

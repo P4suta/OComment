@@ -11833,6 +11833,272 @@
         "diagnostics": [],
         "output_utf8": "let a = 1\n\nlet b = 2\n"
       }
+    },
+    {
+      "id": "rust-empty-block-is-not-documentation",
+      "language": "rust",
+      "operation": "scan",
+      "options": {
+        "policy": "conservative"
+      },
+      "source_utf8": "fn f() {}\n/**/\n",
+      "note": "`/**/` is the empty block comment, not a doc comment: rustc takes a doc comment only when the byte after `/*` is `*` and the one after that is neither `*` nor `/`. Under the default policy, which keeps documentation, calling it documentation would leave it behind -- and a comment wrongly kept is the error a user never sees.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 10,
+            "end": 14,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "rust-three-stars-is-not-documentation",
+      "language": "rust",
+      "operation": "scan",
+      "options": {
+        "policy": "conservative"
+      },
+      "source_utf8": "fn f() {}\n/***/\n",
+      "note": "`/***/` opens with `/**` and is still an ordinary comment, because the byte after the second star is another star. Under the default policy, which keeps documentation, calling it documentation would leave it behind -- and a comment wrongly kept is the error a user never sees.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 10,
+            "end": 15,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "rust-three-stars-with-text-is-not-documentation",
+      "language": "rust",
+      "operation": "scan",
+      "options": {
+        "policy": "conservative"
+      },
+      "source_utf8": "fn f() {}\n/*** text */\n",
+      "note": "The same rule with a body: `/***` documents nothing, and rustc accepts it in a position where a doc comment would be E0585. Under the default policy, which keeps documentation, calling it documentation would leave it behind -- and a comment wrongly kept is the error a user never sees.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 10,
+            "end": 22,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "rust-four-slashes-is-not-documentation",
+      "language": "rust",
+      "operation": "scan",
+      "options": {
+        "policy": "conservative"
+      },
+      "source_utf8": "fn f() {}\n//// four slashes\n",
+      "note": "`////` is the divider people rule a file with. rustc's lexer says so in as many words -- more than three slashes is not a doc comment -- and Doxygen, JSDoc and KDoc recognise no documentation in one either. Under the default policy, which keeps documentation, calling it documentation would leave it behind -- and a comment wrongly kept is the error a user never sees.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 10,
+            "end": 27,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "rust-three-slashes-is-documentation",
+      "language": "rust",
+      "operation": "scan",
+      "options": {
+        "policy": "conservative"
+      },
+      "source_utf8": "fn f() {}\n/// one line of documentation\n",
+      "note": "The other side of the doc-marker boundary: this one does document, and the default policy keeps it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 10,
+            "end": 39,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "rust-bang-slash-is-documentation",
+      "language": "rust",
+      "operation": "scan",
+      "options": {
+        "policy": "conservative"
+      },
+      "source_utf8": "fn f() {}\n//! inner documentation\n",
+      "note": "The other side of the doc-marker boundary: this one does document, and the default policy keeps it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 10,
+            "end": 33,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "rust-two-stars-is-documentation",
+      "language": "rust",
+      "operation": "scan",
+      "options": {
+        "policy": "conservative"
+      },
+      "source_utf8": "fn f() {}\n/** a real doc */\n",
+      "note": "The other side of the doc-marker boundary: this one does document, and the default policy keeps it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 10,
+            "end": 27,
+            "kind": "doc-block",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "rust-bang-star-is-documentation",
+      "language": "rust",
+      "operation": "scan",
+      "options": {
+        "policy": "conservative"
+      },
+      "source_utf8": "fn f() {}\n/*! an inner block doc */\n",
+      "note": "The other side of the doc-marker boundary: this one does document, and the default policy keeps it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 10,
+            "end": 35,
+            "kind": "doc-block",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "rust-adversarial-corpus",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "compact"
+      },
+      "source_utf8": "// SPDX-License-Identifier: MIT\n//! Inner doc at the top.\n\n/** A block doc comment. */\npub const A: &str = \"//\";\n\n/// One line of documentation.\npub fn hazards() -> usize {\n    let raw_deep = r##\"a \"# inside // and /* here\"##;\n    let raw_star = r#\"closing */ inside a raw string\"#;\n    let byte = b\"// not a comment\";\n    let byte_raw = br#\"// nor this\"#;\n    let slash = '/';\n    let quote = '\\'';\n    let backslash = '\\\\';\n    let nul = '\\u{0}';\n    let solidus = \"\\u{2F}\\u{2F} escaped slashes\";\n    let ends_in_escape = \"trailing \\\\\";\n    let lifetime: &'static str = \"//\";\n    let nested = 1 /* outer /* inner */ still outer */ + 2;\n    let empty = 3 /**/ + 4;\n    let stars = 5 /***/ + 6;\n    let joined = 7/*x*/+ 8;\n    let negate = -/*x*/-9_i32;\n    let cast = 10_i32 as/*x*/i32;\n    let generic: Vec<Vec/*x*/<u8>> = Vec::new();\n    let attr = ATTRIBUTED;\n    raw_deep.len() + raw_star.len() + byte.len() + byte_raw.len() + solidus.len()\n        + ends_in_escape.len() + lifetime.len() + generic.len() + attr.len()\n        + usize::try_from(nested + empty + stars + joined + negate.abs() + cast).unwrap_or(0)\n        + usize::from(slash == quote || backslash == nul)\n}\n\n#[doc = \"// not a comment either\"]\npub const ATTRIBUTED: &str = \"/* nor this */\";\n\nmacro_rules! holding {\n    () => {\n        \"// inside a macro body\"\n    };\n}\n\n/// The macro's expansion, which is a string and not a comment.\npub fn expanded() -> &'static str {\n    holding!()\n}\n",
+      "note": "A file written to break a comment remover, contributed by a project that runs OComment over 470 Rust files: `//` inside `r#\"...\"#` and `r##\"...\"##`, byte and raw byte strings, `'/'` and `'\\''` char literals, `\\u{2F}\\u{2F}` escapes, a string ending in a backslash, a lifetime beside a `\"//\"`, a nested block comment, a `#[doc]` attribute and a macro body that both hold comment tokens as text. The token-joining cases are the ones that matter most: `7/*x*/+ 8`, `as/*x*/i32`, `Vec/*x*/<u8>`, and `-/*x*/-9`, where joining the two minus signs would compile and change the answer. rustc accepts the file before and after the removal, and the removal is idempotent.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 31,
+            "kind": "license",
+            "action": "remove"
+          },
+          {
+            "start": 32,
+            "end": 57,
+            "kind": "doc-line",
+            "action": "remove"
+          },
+          {
+            "start": 59,
+            "end": 86,
+            "kind": "doc-block",
+            "action": "remove"
+          },
+          {
+            "start": 114,
+            "end": 144,
+            "kind": "doc-line",
+            "action": "remove"
+          },
+          {
+            "start": 597,
+            "end": 632,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 656,
+            "end": 660,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 684,
+            "end": 689,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 713,
+            "end": 718,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 741,
+            "end": 746,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 778,
+            "end": 783,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 812,
+            "end": 817,
+            "kind": "block",
+            "action": "remove"
+          },
+          {
+            "start": 1339,
+            "end": 1402,
+            "kind": "doc-line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\npub const A: &str = \"//\";\n\npub fn hazards() -> usize {\n    let raw_deep = r##\"a \"# inside // and /* here\"##;\n    let raw_star = r#\"closing */ inside a raw string\"#;\n    let byte = b\"// not a comment\";\n    let byte_raw = br#\"// nor this\"#;\n    let slash = '/';\n    let quote = '\\'';\n    let backslash = '\\\\';\n    let nul = '\\u{0}';\n    let solidus = \"\\u{2F}\\u{2F} escaped slashes\";\n    let ends_in_escape = \"trailing \\\\\";\n    let lifetime: &'static str = \"//\";\n    let nested = 1  + 2;\n    let empty = 3  + 4;\n    let stars = 5  + 6;\n    let joined = 7 + 8;\n    let negate = - -9_i32;\n    let cast = 10_i32 as i32;\n    let generic: Vec<Vec <u8>> = Vec::new();\n    let attr = ATTRIBUTED;\n    raw_deep.len() + raw_star.len() + byte.len() + byte_raw.len() + solidus.len()\n        + ends_in_escape.len() + lifetime.len() + generic.len() + attr.len()\n        + usize::try_from(nested + empty + stars + joined + negate.abs() + cast).unwrap_or(0)\n        + usize::from(slash == quote || backslash == nul)\n}\n\n#[doc = \"// not a comment either\"]\npub const ATTRIBUTED: &str = \"/* nor this */\";\n\nmacro_rules! holding {\n    () => {\n        \"// inside a macro body\"\n    };\n}\n\npub fn expanded() -> &'static str {\n    holding!()\n}\n"
+      }
     }
   ]
 }

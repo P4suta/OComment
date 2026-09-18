@@ -80,7 +80,8 @@
 //!
 //! | Kind | [`Policy::Conservative`] | [`Policy::Standard`] | [`Policy::All`] |
 //! | --- | --- | --- | --- |
-//! | `line`, `block`, `doc-line`, `doc-block` | remove | remove | remove |
+//! | `line`, `block` | remove | remove | remove |
+//! | `doc-line`, `doc-block` | keep | remove | remove |
 //! | `license` | keep | remove | remove |
 //! | `directive`, `html-comment` | keep | keep | remove |
 //! | `shebang`, `encoding` | keep | keep | keep unless forced |

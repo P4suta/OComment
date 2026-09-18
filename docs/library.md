@@ -91,7 +91,8 @@ from its own text and position — and the `Policy` then decides that kind:
 
 | Kind | `conservative` | `standard` | `all` |
 | --- | --- | --- | --- |
-| `line`, `block`, `doc-line`, `doc-block` | remove | remove | remove |
+| `line`, `block` | remove | remove | remove |
+| `doc-line`, `doc-block` | keep | remove | remove |
 | `license` | remove | keep | remove |
 | `directive`, `html-comment` | keep | keep | remove |
 | `shebang`, `encoding` | keep | keep | keep unless forced |

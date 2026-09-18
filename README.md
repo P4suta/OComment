@@ -112,9 +112,10 @@ operations exit 0. JSON, JSONL, SARIF, and GitHub annotation output are
 available through `--format`. Run `ocomment --help` for every option and
 `ocomment man` for the manual page.
 
-The default `conservative` policy removes ordinary and documentation comments
-while keeping licence notices, tool and language directives, shebangs and
-encoding lines. `standard` removes licence and copyright comments as well.
+The default `conservative` policy removes ordinary comments and keeps the ones
+something else depends on: documentation, licence notices, tool and language
+directives, shebangs and encoding lines. `standard` removes documentation,
+licence and copyright comments as well.
 `all` removes every comment token, but still needs `--force-protected` before
 touching a shebang, an encoding line, or a directive the language itself
 reads. The three are named in the order of how much they take.

@@ -6255,7 +6255,17 @@ pub(crate) fn disposition(
             reason: "tool or language directive".into(),
         };
     }
-    if kind == CommentKind::License && options.policy == Policy::Conservative {
+    /* NOTE: A documentation comment is not commentary about the code: it is the
+     * API documentation, and it ships. Removing one empties a page on docs.rs,
+     * pkg.go.dev or a javadoc site, which is a public loss of the same kind as
+     * removing a licence notice -- and this policy already decided that kind
+     * does not go by default. A project that wants them gone asks for
+     * `standard`, which is a sentence someone types on purpose. */
+    if matches!(
+        kind,
+        CommentKind::License | CommentKind::DocLine | CommentKind::DocBlock
+    ) && options.policy == Policy::Conservative
+    {
         return Disposition::Keep {
             reason: "conservative policy".into(),
         };
@@ -6389,10 +6399,15 @@ pub fn explain_disposition_with(
             name: directive_name_of(raw, language),
         };
     }
-    if kind == CommentKind::License && options.policy == Policy::Conservative {
-        return DispositionExplanation::KeptLicense {
-            marker: legal_marker_of(raw),
-        };
+    if options.policy == Policy::Conservative {
+        if kind == CommentKind::License {
+            return DispositionExplanation::KeptLicense {
+                marker: legal_marker_of(raw),
+            };
+        }
+        if matches!(kind, CommentKind::DocLine | CommentKind::DocBlock) {
+            return DispositionExplanation::KeptDocumentation { kind };
+        }
     }
     DispositionExplanation::RemovedByDefault {
         policy: options.policy,
@@ -8110,20 +8125,53 @@ fn dart_language_version(raw: &[u8]) -> bool {
     past_spaces(rest).is_empty()
 }
 
+/// The kind of a C-family line comment.
+///
+/// `///` opens a documentation comment and `////` does not: a fourth slash
+/// makes the divider people rule a file with, and it documents nothing.
+/// rustc's lexer draws the line in exactly that place -- "`////` (more than 3
+/// slashes) is not considered a doc comment" -- and Doxygen, JSDoc and KDoc
+/// agree by not recognising one either. Lua's `----` and Dart's `////` are the
+/// same question answered differently by those languages, which is why they
+/// have [`lua_line_kind`] and [`dart_line_kind`] of their own.
+///
+/// `//!` has no such rule: it is Rust's inner-doc marker and carries its own
+/// boundary in the `!`.
+///
+/// Getting this wrong is the error a user cannot see. A comment wrongly called
+/// ordinary is removed and shows up in a diff they can reject; a comment
+/// wrongly called documentation is kept, and a tool whose whole job is to
+/// remove comments quietly leaves it behind.
 fn line_kind(bytes: &[u8], index: usize) -> CommentKind {
-    if starts(bytes, index, b"///") || starts(bytes, index, b"//!") {
-        CommentKind::DocLine
-    } else {
-        CommentKind::Line
+    if starts(bytes, index, b"//!") {
+        return CommentKind::DocLine;
     }
+    if starts(bytes, index, b"///") && !starts(bytes, index, b"////") {
+        return CommentKind::DocLine;
+    }
+    CommentKind::Line
 }
 
+/// The kind of a C-family block comment.
+///
+/// `/**` opens a documentation comment; `/***` and `/**/` do not. rustc's
+/// lexer reads the two bytes after the `/*` and takes a doc comment only when
+/// the first is `*` and the second is neither `*` nor `/`, which is what makes
+/// `/**/` the empty block comment and `/***/` an ordinary one. JSDoc and
+/// Doxygen recognise neither as documentation either.
+///
+/// `/*!` is the inner-doc and Doxygen marker and carries its own boundary.
 fn block_kind(bytes: &[u8], index: usize) -> CommentKind {
-    if starts(bytes, index, b"/**") || starts(bytes, index, b"/*!") {
-        CommentKind::DocBlock
-    } else {
-        CommentKind::Block
+    if starts(bytes, index, b"/*!") {
+        return CommentKind::DocBlock;
     }
+    if starts(bytes, index, b"/**")
+        && !starts(bytes, index, b"/***")
+        && !starts(bytes, index, b"/**/")
+    {
+        return CommentKind::DocBlock;
+    }
+    CommentKind::Block
 }
 
 /// The kind of a Lua short comment.

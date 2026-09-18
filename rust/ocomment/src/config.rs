@@ -272,6 +272,7 @@ impl PolicyTrace {
              * took the comment out or protected it. */
             DispositionExplanation::RemovedByPolicy { .. }
             | DispositionExplanation::RemovedByDefault { .. }
+            | DispositionExplanation::KeptDocumentation { .. }
             | DispositionExplanation::KeptLicense { .. } => (&self.policy, "mode"),
             // NOTE: A built-in rule, decided by no setting at all.
             DispositionExplanation::ProtectedPreamble

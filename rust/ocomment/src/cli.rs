@@ -29,10 +29,10 @@ use std::{
 
 const LONG_ABOUT: &str = "\
 OComment scans source bytes without requiring UTF-8 and reports or removes \
-comment tokens. The default policy keeps licence notices, tool and language \
-directives, shebangs and encoding lines, and removes ordinary and doc \
-comments. Rewrites are prepared and committed as one rollback-backed \
-transaction.";
+comment tokens. The default policy removes ordinary comments and keeps the \
+ones something else depends on: documentation, licence notices, tool and \
+language directives, shebangs and encoding lines. Rewrites are prepared and \
+committed as one rollback-backed transaction.";
 
 const AFTER_LONG_HELP: &str = "\
 EXIT STATUS

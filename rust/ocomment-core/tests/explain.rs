@@ -682,8 +682,6 @@ fn ordinary_comments_fall_through_to_the_policy_default() {
         for (kind, raw) in [
             (CommentKind::Line, "// plain"),
             (CommentKind::Block, "/* block */"),
-            (CommentKind::DocLine, "/// doc line"),
-            (CommentKind::DocBlock, "/** doc block */"),
         ] {
             let explanation = explain(kind, raw, Language::Rust, &options);
             assert_eq!(
@@ -693,6 +691,57 @@ fn ordinary_comments_fall_through_to_the_policy_default() {
             );
             assert_eq!(explanation.action(), Action::Remove);
         }
+    }
+}
+
+/// A documentation comment is the API documentation, so the two policies part
+/// company over it exactly as they do over a licence notice.
+#[test]
+fn documentation_is_kept_by_the_conservative_policy_and_taken_by_the_standard_one() {
+    for (kind, raw) in [
+        (CommentKind::DocLine, "/// doc line"),
+        (CommentKind::DocBlock, "/** doc block */"),
+    ] {
+        let conservative = explain(
+            kind,
+            raw,
+            Language::Rust,
+            &ScanOptions {
+                policy: Policy::Conservative,
+                ..Default::default()
+            },
+        );
+        assert_eq!(
+            conservative,
+            DispositionExplanation::KeptDocumentation { kind },
+            "{kind} under the default policy"
+        );
+        assert_eq!(conservative.action(), Action::Keep);
+        assert!(
+            conservative.to_string().contains("documentation"),
+            "{conservative}"
+        );
+
+        /* NOTE: The other half. A tier only ever observed keeping has not been
+         * shown to be a tier, and `standard` is the policy someone reaches for
+         * when they do mean to take the documentation. */
+        let standard = explain(
+            kind,
+            raw,
+            Language::Rust,
+            &ScanOptions {
+                policy: Policy::Standard,
+                ..Default::default()
+            },
+        );
+        assert_eq!(
+            standard,
+            DispositionExplanation::RemovedByDefault {
+                policy: Policy::Standard,
+                kind,
+            },
+            "{kind} under policy standard"
+        );
     }
 }
 

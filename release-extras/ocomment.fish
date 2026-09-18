@@ -25,8 +25,8 @@ function __fish_ocomment_using_subcommand
 end
 
 complete -c ocomment -n "__fish_ocomment_needs_command" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_needs_command" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines'
-standard\t'Like conservative, and remove licence and copyright notices too'
+complete -c ocomment -n "__fish_ocomment_needs_command" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_needs_command" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
@@ -149,8 +149,8 @@ complete -c ocomment -n "__fish_ocomment_needs_command" -a "doctor" -d 'Diagnose
 complete -c ocomment -n "__fish_ocomment_needs_command" -a "man" -d 'Render the roff manual page to stdout'
 complete -c ocomment -n "__fish_ocomment_needs_command" -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines'
-standard\t'Like conservative, and remove licence and copyright notices too'
+complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
@@ -258,8 +258,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand check" -s q -l quiet -
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines'
-standard\t'Like conservative, and remove licence and copyright notices too'
+complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
@@ -369,8 +369,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -s q -l quiet -d 
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines'
-standard\t'Like conservative, and remove licence and copyright notices too'
+complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
@@ -478,8 +478,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -s q -l quiet -d
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines'
-standard\t'Like conservative, and remove licence and copyright notices too'
+complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
@@ -587,8 +587,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -s q -l quiet -d
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines'
-standard\t'Like conservative, and remove licence and copyright notices too'
+complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
@@ -694,8 +694,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -s q -l quiet -
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines'
-standard\t'Like conservative, and remove licence and copyright notices too'
+complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
@@ -801,8 +801,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -s q -l quiet -d 
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines'
-standard\t'Like conservative, and remove licence and copyright notices too'
+complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
@@ -911,8 +911,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand init" -s q -l quiet -d
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines'
-standard\t'Like conservative, and remove licence and copyright notices too'
+complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
@@ -1018,8 +1018,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand config" -s q -l quiet 
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines'
-standard\t'Like conservative, and remove licence and copyright notices too'
+complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
@@ -1125,8 +1125,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -s q -l qui
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines'
-standard\t'Like conservative, and remove licence and copyright notices too'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
@@ -1242,8 +1242,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_see
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l sha256 -d 'Expected SHA-256 digest of the component, verified before install' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l identity -d 'Publisher identity recorded alongside the pinned digest' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines'
-standard\t'Like conservative, and remove licence and copyright notices too'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
@@ -1349,8 +1349,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_see
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines'
-standard\t'Like conservative, and remove licence and copyright notices too'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
@@ -1456,8 +1456,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_see
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines'
-standard\t'Like conservative, and remove licence and copyright notices too'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
@@ -1563,8 +1563,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_see
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines'
-standard\t'Like conservative, and remove licence and copyright notices too'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
@@ -1670,8 +1670,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_see
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines'
-standard\t'Like conservative, and remove licence and copyright notices too'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
@@ -1777,8 +1777,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_see
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines'
-standard\t'Like conservative, and remove licence and copyright notices too'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
@@ -1891,8 +1891,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_see
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from help" -f -a "new" -d 'Scaffold a new plugin crate from the scanner WIT world'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines'
-standard\t'Like conservative, and remove licence and copyright notices too'
+complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
@@ -1998,8 +1998,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -s q -l q
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines'
-standard\t'Like conservative, and remove licence and copyright notices too'
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
@@ -2107,8 +2107,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -s q -l quie
 complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines'
-standard\t'Like conservative, and remove licence and copyright notices too'
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
@@ -2214,8 +2214,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -s q -l quie
 complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines'
-standard\t'Like conservative, and remove licence and copyright notices too'
+complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
@@ -2321,8 +2321,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -s q -l quiet 
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary and doc comments; keep licence notices, directives, shebangs and encoding lines'
-standard\t'Like conservative, and remove licence and copyright notices too'
+complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too'
 all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
