@@ -106,11 +106,61 @@ def self_test_shell_rule() -> int:
     return 0
 
 
+def members_missing_workspace_lints(manifests: dict[str, str]) -> list[str]:
+    """Complain about a workspace member that does not inherit the lints.
+
+    `[workspace.lints]` does nothing on its own: a member has to opt in with
+    `[lints] workspace = true`, and a member that forgets is silently outside
+    every rule the workspace states. Three of this repository's four crates had
+    opted in and the fourth had not, so neither `missing_docs` nor the
+    exhaustive-match rule had ever applied to the CLI.
+
+    Takes the manifests rather than reading them, so the negative control can
+    hand it a workspace that is wrong.
+    """
+    return [
+        f"{name} does not inherit the workspace lints;"
+        " add `[lints]\nworkspace = true` to its Cargo.toml"
+        for name, text in sorted(manifests.items())
+        if not re.search(r"^\[lints\]\s*\nworkspace\s*=\s*true", text, re.MULTILINE)
+    ]
+
+
+def member_manifests() -> dict[str, str]:
+    """Every workspace member's manifest, by the directory it sits in.
+
+    The member list comes from the workspace manifest rather than from a glob,
+    so a directory that is not a member is not asked about and a member that is
+    not a directory fails loudly.
+    """
+    workspace = tomllib.loads((ROOT / "rust/Cargo.toml").read_text(encoding="utf-8"))
+    manifests = {}
+    for member in workspace["workspace"]["members"]:
+        path = ROOT / "rust" / member / "Cargo.toml"
+        manifests[member] = path.read_text(encoding="utf-8")
+    return manifests
+
+
+def self_test_lint_rule() -> int:
+    """Watch the lint-inheritance rule refuse something.
+
+    Every member inherits today, so the rule reports nothing for the same
+    reason an empty room is quiet.
+    """
+    if not members_missing_workspace_lints({"forgetful": "[package]\nname = 'x'\n"}):
+        print("the lint rule did not object to a member that opts out", file=sys.stderr)
+        return 1
+    if members_missing_workspace_lints({"careful": "[lints]\nworkspace = true\n"}):
+        print("the lint rule objects to a member that opts in", file=sys.stderr)
+        return 1
+    return 0
+
+
 def main() -> int:
     # NOTE: Asked of every run rather than behind a flag. A negative control
     # NOTE: nobody remembers to ask for is a negative control that stops
     # NOTE: happening, and this one costs nothing.
-    if self_test_shell_rule() != 0:
+    if self_test_shell_rule() != 0 or self_test_lint_rule() != 0:
         return 1
     failures = []
     seen = set()
@@ -203,6 +253,7 @@ def main() -> int:
     # NOTE: and a shell step is the one thing here that does not survive the
     # NOTE: Windows job it stands in for. `cargo xtask` is where a new one goes.
     failures.extend(refuse_shell_scripts(shell_scripts_here()))
+    failures.extend(members_missing_workspace_lints(member_manifests()))
 
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     if not re.search(r"^FROM rust:1\.88-alpine@sha256:[0-9a-f]{64} AS builder$", dockerfile, re.MULTILINE):
@@ -384,7 +435,8 @@ def main() -> int:
         return 1
     print(
         f"{len(PINS)} reviewed action pins and CI/release contracts match"
-        " (and the shell rule was watched refusing one)"
+        f" ({len(member_manifests())} workspace members inherit the lints, and"
+        " both self-checking rules were watched refusing one)"
     )
     return 0
 
