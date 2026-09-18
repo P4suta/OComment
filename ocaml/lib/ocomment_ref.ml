@@ -5987,19 +5987,29 @@ let javascript_mime_types =
    of the markup.  An absent or empty "type" is classic JavaScript, "module" is
    a keyword rather than a MIME type, and a parameter such as "; charset=utf-8"
    is no part of what HTML calls the essence. *)
+let mime_essence kind =
+  let essence = match String.index_opt kind ';' with
+    | Some at -> String.sub kind 0 at
+    | None -> kind in
+  match String.trim essence with "" -> None | value -> Some (String.lowercase_ascii value)
+
 let html_script_language kind =
-  match kind with
+  match Option.bind kind mime_essence with
   | None -> Some JavaScript
-  | Some value ->
-    let essence = match String.index_opt value ';' with
-      | Some at -> String.sub value 0 at
-      | None -> value in
-    let essence = String.trim essence in
-    if essence = "" then Some JavaScript
-    else
-      let lower = String.lowercase_ascii essence in
-      if lower = "module" || List.mem lower javascript_mime_types then Some JavaScript
-      else None
+  | Some essence ->
+    if essence = "module" || List.mem essence javascript_mime_types then Some JavaScript
+    else None
+
+(** The language an HTML "<style>" body is written in, from its "type"
+   attribute; [None] for a type that is not CSS, which makes the block opaque.
+
+   HTML allows the attribute and allows exactly one value for it: an element
+   carrying any other does not apply its styles, which makes its contents
+   something other than the stylesheet this would otherwise read them as. *)
+let html_style_language kind =
+  match Option.bind kind mime_essence with
+  | None -> Some Css
+  | Some essence -> if essence = "text/css" then Some Css else None
 
 let tag_has_attribute attrs name =
   let expected = Bytes.to_string name in
@@ -6446,13 +6456,15 @@ let rec scan_html source language options accumulator =
     | Some _ -> tag_end (index + 1) quote
     | None when character = '\'' || character = '"' -> tag_end (index + 1) (Some character)
     | None when character = '>' -> Some (index + 1) | None -> tag_end (index + 1) None in
+  (* NOTE: The name alone does not settle what the element holds -- that is what
+     its "type" is for -- so this returns the name and the caller reads it. *)
   let embedded_start index =
     if ascii_case_starts source index "<script" &&
       tag_boundary (if index + 7 < Bytes.length source then Some (Bytes.get source (index + 7)) else None)
-    then Some ("script", JavaScript)
+    then Some "script"
     else if ascii_case_starts source index "<style" &&
       tag_boundary (if index + 6 < Bytes.length source then Some (Bytes.get source (index + 6)) else None)
-    then Some ("style", Css)
+    then Some "style"
     else None in
   let find_close start name =
     let token = "</" ^ name in
@@ -6481,18 +6493,18 @@ let rec scan_html source language options accumulator =
       add_comment accumulator source language options HtmlComment index finish;
       if not closed then add_error accumulator "unterminated-comment" "unterminated HTML comment" index finish; loop finish
     end else match embedded_start index with
-    | Some (name, embedded) -> (match tag_end (index + 1) None with
+    | Some name -> (match tag_end (index + 1) None with
       | None -> add_error accumulator "unterminated-html-tag"
           "unterminated HTML raw-text start tag" index (Bytes.length source)
       | Some content_start ->
-        (* NOTE: "<script>" says what it holds and a raw-text element that holds
-           something else is skipped whole, the way an unknown "lang" on a
-           single-file component is.  "<style>" has no such attribute. *)
+        (* NOTE: A raw-text element says what it holds, and one holding something
+           else is skipped whole, the way an unknown "lang" on a single-file
+           component is. *)
         let attrs = Bytes.sub source (index + 1 + String.length name)
           (max 0 (content_start - 1 - (index + 1 + String.length name))) in
+        let kind = tag_attr_value attrs (Bytes.of_string "type") in
         let embedded =
-          if name = "script" then html_script_language (tag_attr_value attrs (Bytes.of_string "type"))
-          else Some embedded in
+          if name = "script" then html_script_language kind else html_style_language kind in
         let closing = find_close content_start name in
         let content_finish = match closing with Some value -> value | None -> Bytes.length source in
         (match embedded with

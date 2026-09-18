@@ -5382,7 +5382,7 @@ impl<'a> Scanner<'a> {
                 continue;
             }
             if bytes[index] == b'<' {
-                if let Some((name, language)) = html_embedded_start(bytes, index) {
+                if let Some(name) = html_embedded_start(bytes, index) {
                     let Some(content_start) = html_tag_end(bytes, index) else {
                         self.error(
                             "unterminated-html-tag",
@@ -5391,15 +5391,15 @@ impl<'a> Scanner<'a> {
                         );
                         return;
                     };
-                    /* NOTE: `<script>` says what it holds and a raw-text element
-                     * that holds something else is skipped whole, the way an
-                     * unknown `lang` on a single-file component is. `<style>`
-                     * has no such attribute and is always CSS. */
+                    /* NOTE: A raw-text element says what it holds, and one
+                     * holding something else is skipped whole, the way an
+                     * unknown `lang` on a single-file component is. */
                     let attrs = &bytes[index + 1 + name.len()..content_start.saturating_sub(1)];
+                    let kind = tag_attr_value(attrs, b"type");
                     let language = if name == b"script" {
-                        html_script_language(tag_attr_value(attrs, b"type"))
+                        html_script_language(kind)
                     } else {
-                        Some(language)
+                        html_style_language(kind)
                     };
                     let close = find_html_close(bytes, content_start, name);
                     let content_end = close.unwrap_or(bytes.len());
@@ -10479,6 +10479,23 @@ const JAVASCRIPT_MIME_TYPES: [&[u8]; 16] = [
     b"text/x-javascript",
 ];
 
+/// What is left of a `type` attribute once the parameters are gone, lowercased.
+///
+/// `text/javascript; charset=utf-8` is JavaScript, so a parameter is no part of
+/// what decides. `None` when nothing is left, which HTML treats the way it
+/// treats an absent attribute.
+fn mime_essence(kind: &[u8]) -> Option<Vec<u8>> {
+    let essence = kind.split(|byte| *byte == b';').next().unwrap_or(kind);
+    let first = essence
+        .iter()
+        .position(|byte| !byte.is_ascii_whitespace())?;
+    let last = essence
+        .iter()
+        .rposition(|byte| !byte.is_ascii_whitespace())
+        .unwrap_or(first);
+    Some(essence[first..=last].to_ascii_lowercase())
+}
+
 /// The language an HTML `<script>` body is written in, from its `type`
 /// attribute; `None` for a type that is not JavaScript, which makes the block
 /// opaque.
@@ -10492,30 +10509,38 @@ const JAVASCRIPT_MIME_TYPES: [&[u8]; 16] = [
 /// An absent or empty `type` is classic JavaScript, and `module` is a keyword
 /// rather than a MIME type.
 fn html_script_language(kind: Option<&[u8]>) -> Option<Language> {
-    let Some(kind) = kind else {
+    let Some(essence) = kind.and_then(mime_essence) else {
         return Some(Language::JavaScript);
     };
-    /* NOTE: A parameter such as `; charset=utf-8` is no part of what HTML calls
-     * the essence, and the essence is what decides. */
-    let essence = kind.split(|byte| *byte == b';').next().unwrap_or(kind);
-    let Some(first) = essence.iter().position(|byte| !byte.is_ascii_whitespace()) else {
-        return Some(Language::JavaScript);
-    };
-    let last = essence
-        .iter()
-        .rposition(|byte| !byte.is_ascii_whitespace())
-        .unwrap_or(first);
-    let lower = essence[first..=last].to_ascii_lowercase();
-    (lower == b"module" || JAVASCRIPT_MIME_TYPES.contains(&lower.as_slice()))
+    (essence == b"module" || JAVASCRIPT_MIME_TYPES.contains(&essence.as_slice()))
         .then_some(Language::JavaScript)
 }
 
-fn html_embedded_start(bytes: &[u8], start: usize) -> Option<(&'static [u8], Language)> {
+/// The language an HTML `<style>` body is written in, from its `type`
+/// attribute; `None` for a type that is not CSS, which makes the block opaque.
+///
+/// HTML allows the attribute and allows exactly one value for it: an element
+/// carrying any other does not apply its styles, which makes its contents
+/// something other than the stylesheet this would otherwise read them as.
+fn html_style_language(kind: Option<&[u8]>) -> Option<Language> {
+    let Some(essence) = kind.and_then(mime_essence) else {
+        return Some(Language::Css);
+    };
+    (essence == b"text/css").then_some(Language::Css)
+}
+
+/// The name of the raw-text element starting at `start`, or `None` when the tag
+/// there opens neither.
+///
+/// The name alone does not settle what the element holds -- that is what its
+/// `type` is for -- so this returns only the name, and the caller reads the
+/// attribute.
+fn html_embedded_start(bytes: &[u8], start: usize) -> Option<&'static [u8]> {
     let rest = &bytes[start..];
     if starts_ascii_case(rest, b"<script") && tag_boundary(rest.get(7).copied()) {
-        Some((b"script", Language::JavaScript))
+        Some(b"script")
     } else if starts_ascii_case(rest, b"<style") && tag_boundary(rest.get(6).copied()) {
-        Some((b"style", Language::Css))
+        Some(b"style")
     } else {
         None
     }

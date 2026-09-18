@@ -703,6 +703,37 @@
       }
     },
     {
+      "id": "html-style-holding-something-else-is-opaque",
+      "language": "html",
+      "operation": "scan",
+      "source_utf8": "<style type=\"text/template\">/* gone */</style>",
+      "note": "HTML allows `<style>` a `type` and allows it one value. An element carrying any other does not apply its styles, so its contents are not the stylesheet this would otherwise read them as, and the rule that reads a `<script>` reads this too.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "html-style-with-a-css-type-is-css",
+      "language": "html",
+      "operation": "scan",
+      "source_utf8": "<style type=\"text/css; charset=utf-8\">/* gone */</style>",
+      "note": "The other side of it, with the parameter HTML strips before deciding.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 38,
+            "end": 48,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
       "id": "html-script-holding-markup-is-opaque",
       "language": "html",
       "operation": "scan",
