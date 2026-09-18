@@ -682,6 +682,116 @@ SAMPLES: dict[str, Sample] = {
     # NOTE: `int    a     =    1;` unformatted under the marker and reformatted
     # NOTE: it under `// csharpier-ignore some text`, under `//  csharpier-ignore`
     # NOTE: with a second space, and under the near-miss below.
+
+    # NOTE: The tool tier of the languages whose entries were blank. Eclipse
+    # NOTE: reads `$NON-NLS-n$` and stops reporting the string literal on that
+    # NOTE: line as one that was never externalised; Checkstyle's suppression
+    # NOTE: filter reads `CHECKSTYLE:OFF`; SonarQube reads `NOSONAR` in most of
+    # NOTE: the languages it analyses; Eclipse and IntelliJ both read
+    # NOTE: `@formatter:off`. Each near-miss is a comment that opens with the
+    # NOTE: same letters and means nothing to the tool.
+    "$non-nls": Sample(
+        "java",
+        None,
+        f"{SLOT}\n// control\n",
+        "//$NON-NLS-1$",
+        "// a note about $NON-NLS-1$",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "checkstyle:": Sample(
+        "java",
+        None,
+        f"{SLOT}\n// control\n",
+        "// CHECKSTYLE:OFF",
+        "// checkstyle is configured in the build file",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "nosonar": Sample(
+        "java",
+        None,
+        f"{SLOT}\n// control\n",
+        "// NOSONAR the cast is checked above",
+        "// nosonarqube is what the product is called",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "formatter:": Sample(
+        "java",
+        None,
+        f"{SLOT}\n// control\n",
+        "// @formatter:off",
+        "// formatters are configured elsewhere",
+        KEPT_AS_DIRECTIVE,
+    ),
+
+    # NOTE: Python's two blank spots. `# pylint: disable=` turns one check off
+    # NOTE: and `# pragma: no cover` takes the line out of the coverage report,
+    # NOTE: which is the same job `# nocov` does for R and
+    # NOTE: `@codeCoverageIgnore` for PHP.
+    "pylint:": Sample(
+        "python",
+        None,
+        f"{SLOT}\n# control\n",
+        "# pylint: disable=invalid-name",
+        "# pylint is run in the pipeline",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "pragma:": Sample(
+        "python",
+        None,
+        f"{SLOT}\n# control\n",
+        "# pragma: no cover",
+        "# pragmatism about naming",
+        KEPT_AS_DIRECTIVE,
+    ),
+
+    # NOTE: Perl::Critic is addressed and released by a phrase rather than by a
+    # NOTE: prefix, so each near-miss is the phrase with a longer word in place
+    # NOTE: of its last.
+    "no critic": Sample(
+        "perl",
+        None,
+        f"{SLOT}\n# control\n",
+        "## no critic (ProhibitMagicNumbers)",
+        "# no criticism intended",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "use critic": Sample(
+        "perl",
+        None,
+        f"{SLOT}\n# control\n",
+        "## use critic",
+        "# use critical thinking",
+        KEPT_AS_DIRECTIVE,
+    ),
+
+    # NOTE: Three more the survey asked for. cppcheck reads its own name as a
+    # NOTE: prefix, so the near-miss is a comment that mentions it; staticcheck's
+    # NOTE: two are named in full because `lint:` alone is also a note about
+    # NOTE: linting; scalafmt reads its pair by equality.
+    "cppcheck-suppress": Sample(
+        "c",
+        None,
+        f"{SLOT}\n// control\n",
+        "// cppcheck-suppress nullPointer",
+        "// a note about cppcheck-suppress",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "lint:ignore": Sample(
+        "go",
+        None,
+        f"{SLOT}\n// control\n",
+        "//lint:ignore SA1000 the pattern is checked",
+        "// lint: we should add one",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "format:": Sample(
+        "scala",
+        None,
+        f"{SLOT}\n// control\n",
+        "// format: off",
+        "// format: off for now",
+        KEPT_AS_DIRECTIVE,
+    ),
     "csharpier-ignore": Sample(
         "csharp",
         None,
@@ -740,26 +850,29 @@ def protected_names() -> tuple[list[str], list[str]]:
 
 
 def check_language_survey(binary: pathlib.Path, failures: list[str]) -> None:
-    """Every language the binary has must state what it has in the tier.
+    """Every language the binary has must state what it holds in both tiers.
 
     A catalogue that lists only what exists cannot tell "this language has no
     load-bearing comment" from "nobody has looked at this language", and those
-    are different claims. `[load_bearing_by_language]` makes the second one
-    impossible to leave implicit: a language missing from it is a language that
-    was added without the question being asked, and that is how a tier ends up
-    covering seven languages out of thirty without anyone deciding it should.
+    are different claims. The two survey tables make the second one impossible
+    to leave implicit: a language missing from one is a language that was added
+    without the question being asked, and that is how a tier ends up covering
+    seven languages out of thirty without anyone deciding it should.
+
+    Both tiers are surveyed, because the tier that decides whether a default
+    `fix` takes a comment out is the tool tier, and it went years with `java`
+    and `perl` holding nothing while every other language named its linter's
+    marker. Nothing said so, because only the other tier was being asked.
 
     The markers each entry names are checked against the tier itself, so an
-    entry cannot drift into naming something the tier does not hold.
+    entry cannot drift into naming something the tier does not hold. The
+    cross-language markers -- `eslint`, `noqa`, `nolint`, `NOSONAR`, the
+    formatter pragmas -- are left out of the entries on purpose: they are
+    recognised in every language, so naming them in each would turn the survey
+    into a list that is the same everywhere and says nothing about any of them.
     """
     with DIRECTIVES.open("rb") as stream:
         table = tomllib.load(stream)
-    survey = table.get("load_bearing_by_language")
-    if not isinstance(survey, dict):
-        failures.append(
-            f"{DIRECTIVES.relative_to(ROOT)} has no `[load_bearing_by_language]` table"
-        )
-        return
 
     listing = subprocess.run(
         [str(binary), "languages"],
@@ -768,27 +881,33 @@ def check_language_survey(binary: pathlib.Path, failures: list[str]) -> None:
         text=True,
     ).stdout.splitlines()
     languages = {line.split("\t", 1)[0] for line in listing[1:] if line.strip()}
+    protected, load_bearing = protected_names()
 
-    for language in sorted(languages - set(survey)):
-        failures.append(
-            f"`{language}` is a built-in language but {DIRECTIVES.relative_to(ROOT)}"
-            " does not say what it holds in the load-bearing tier; add it to"
-            " `[load_bearing_by_language]`, with an empty list if it holds nothing"
-        )
-    for language in sorted(set(survey) - languages):
-        failures.append(
-            f"`{language}` is in `[load_bearing_by_language]` but is not a"
-            " built-in language"
-        )
-
-    _, load_bearing = protected_names()
-    for language in sorted(set(survey) & languages):
-        for marker in survey[language]:
-            if marker not in load_bearing:
-                failures.append(
-                    f"`{language}` names `{marker}` in `[load_bearing_by_language]`,"
-                    " but `load_bearing` does not list it"
-                )
+    for key, tier, label in (
+        ("load_bearing_by_language", load_bearing, "load-bearing tier"),
+        ("protected_by_language", protected, "tool tier"),
+    ):
+        survey = table.get(key)
+        if not isinstance(survey, dict):
+            failures.append(f"{DIRECTIVES.relative_to(ROOT)} has no `[{key}]` table")
+            continue
+        for language in sorted(languages - set(survey)):
+            failures.append(
+                f"`{language}` is a built-in language but {DIRECTIVES.relative_to(ROOT)}"
+                f" does not say what it holds in the {label}; add it to `[{key}]`,"
+                " with an empty list if it holds nothing of its own"
+            )
+        for language in sorted(set(survey) - languages):
+            failures.append(
+                f"`{language}` is in `[{key}]` but is not a built-in language"
+            )
+        for language in sorted(set(survey) & languages):
+            for marker in survey[language]:
+                if marker not in tier:
+                    failures.append(
+                        f"`{language}` names `{marker}` in `[{key}]`, but"
+                        f" `{key.removesuffix('_by_language')}` does not list it"
+                    )
 
 
 def marker_word(marker: str) -> str:

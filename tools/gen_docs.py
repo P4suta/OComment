@@ -150,6 +150,17 @@ PROTECTED_SAMPLES: dict[str, tuple[str, str | None, bytes]] = {
     "ReSharper": ("csharp", None, b"// ReSharper disable once UnusedMember.Local\n"),
     "csharpier-ignore": ("csharp", None, b"// csharpier-ignore\n"),
     "//> using": ("scala", None, b'//> using scala "3.3.0"\n'),
+    "formatter:": ("java", None, b"// @formatter:off\n"),
+    "nosonar": ("java", None, b'String s = "x"; // NOSONAR\n'),
+    "pylint:": ("python", None, b"value = 1  # pylint: disable=invalid-name\n"),
+    "pragma:": ("python", None, b"def f():  # pragma: no cover\n    pass\n"),
+    "$non-nls": ("java", None, b'String s = "x"; //$NON-NLS-1$\n'),
+    "checkstyle:": ("java", None, b"// CHECKSTYLE:OFF\n"),
+    "no critic": ("perl", None, b"my $x = 1;  ## no critic\n"),
+    "use critic": ("perl", None, b"my $x = 1;  ## use critic\n"),
+    "cppcheck-suppress": ("c", None, b"// cppcheck-suppress nullPointer\n"),
+    "lint:ignore": ("go", None, b"//lint:ignore SA1000 the pattern is checked\n"),
+    "format:": ("scala", None, b"// format: off\n"),
 }
 
 BANNER = (

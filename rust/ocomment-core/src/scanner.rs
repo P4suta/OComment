@@ -7304,6 +7304,7 @@ fn directive_name(text: &str, language: Language, raw: &[u8]) -> Option<&'static
         "istanbul ignore",
         "c8 ignore",
         "coverage:",
+        "formatter:",
         "ocomment:",
         "region",
         "endregion",
@@ -7322,8 +7323,18 @@ fn directive_name(text: &str, language: Language, raw: &[u8]) -> Option<&'static
     if opens_with_keyword(compact, "shellcheck") {
         return Some("shellcheck");
     }
+    /* NOTE: `NOSONAR` is a whole word for the same reason, and it is asked of
+     * every language because SonarQube analyses most of them and reads the
+     * same word in each. A reason may follow it or nothing may. */
+    if opens_with_keyword(compact, "nosonar") {
+        return Some("nosonar");
+    }
     match language {
-        Language::Go => ["go:", "+build", "line "]
+        /* NOTE: staticcheck's two are named in full rather than by the
+         * namespace in front of them, because `lint:` alone is also how a
+         * person writes a note to themselves about linting. `line ` is the
+         * compiler's position directive and keeps its space. */
+        Language::Go => ["go:", "+build", "line ", "lint:ignore", "lint:file-ignore"]
             .into_iter()
             .find(|prefix| compact.starts_with(prefix)),
         Language::TypeScript => {
@@ -7333,10 +7344,10 @@ fn directive_name(text: &str, language: Language, raw: &[u8]) -> Option<&'static
             bundler_directive(compact)
         }
         Language::JavaScript => bundler_directive(compact),
-        Language::C | Language::Cpp => ["pragma", "line "]
+        Language::C | Language::Cpp => ["pragma", "line ", "cppcheck-suppress"]
             .into_iter()
             .find(|prefix| compact.starts_with(prefix)),
-        Language::Python => ["pyright:", "mypy:", "ruff:", "fmt:"]
+        Language::Python => ["pyright:", "mypy:", "ruff:", "fmt:", "pylint:", "pragma:"]
             .into_iter()
             .find(|prefix| compact.starts_with(prefix)),
         /* NOTE: A Dockerfile is detected as shell, and two of its comment lines are
@@ -7524,13 +7535,36 @@ fn directive_name(text: &str, language: Language, raw: &[u8]) -> Option<&'static
          * and the boundary is what keeps a comment that only opens with the
          * same letters — `//> usingless`, or `//>> using` with one `>` more —
          * from being kept as one. */
-        Language::Scala => (compact == "> using"
-            || compact.starts_with("> using ")
-            || compact.starts_with("> using\t"))
-        .then_some("//> using"),
+        Language::Scala => {
+            /* NOTE: scalafmt reads these two by equality, so a comment that
+             * only opens with the same words -- `// format: off for now` --
+             * turns nothing off and is not one. */
+            if matches!(compact, "format: off" | "format: on") {
+                return Some("format:");
+            }
+            (compact == "> using"
+                || compact.starts_with("> using ")
+                || compact.starts_with("> using\t"))
+            .then_some("//> using")
+        }
+        /* NOTE: Eclipse reads `$NON-NLS-n$` at the end of the line it is on
+         * and stops reporting the string literal there as one that was never
+         * externalised; Checkstyle's suppression filter reads `CHECKSTYLE:OFF`
+         * and `:ON` as the ends of a region it says nothing about. Both carry
+         * their own boundary, the first in the `$` and the second in the
+         * colon, and neither is spelled by anything else. */
+        Language::Java => ["$non-nls", "checkstyle:"]
+            .into_iter()
+            .find(|prefix| compact.starts_with(prefix)),
+        /* NOTE: Perl::Critic is addressed as `## no critic` and released as
+         * `## use critic`, both followed by a policy list or by nothing, and
+         * both matched to the end of the phrase so that prose opening `no
+         * criticism` is not read as one. */
+        Language::Perl => ["no critic", "use critic"]
+            .into_iter()
+            .find(|keyword| opens_with_keyword(compact, keyword)),
         Language::Rust
         | Language::Ocaml
-        | Language::Java
         | Language::Html
         | Language::Css
         | Language::Jsonc
@@ -7539,7 +7573,6 @@ fn directive_name(text: &str, language: Language, raw: &[u8]) -> Option<&'static
         | Language::Vue
         | Language::Svelte
         | Language::Markdown
-        | Language::Perl
         | Language::Unknown => None,
     }
 }
