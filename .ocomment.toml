@@ -20,6 +20,11 @@ exclude = [
   # NOTE: removing their example comments would change the documented policy
   # NOTE: output rather than clean up generator prose.
   "docs/policies.md",
+  # NOTE: The starter file `ocomment init` writes. Its comments are addressed to
+  # NOTE: whoever runs that command, not to a reader of this repository, so the
+  # NOTE: tag convention below does not apply to them.
+  "spec/default-config.toml",
+  "rust/ocomment/assets/default-config.toml",
   # NOTE: Licence texts and the rendered manual page carry no comments to find
   # NOTE: and are not ours to reformat, so they are excluded rather than left
   # NOTE: to be reported as an unknown language every run.

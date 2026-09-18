@@ -915,7 +915,7 @@ fn parse_layer(path: &Path, require_version: bool) -> Result<toml::Value> {
              * as it was spelled, with nothing in it a terminal would act on. */
             crate::output::sanitize_path(&path.display().to_string()),
             crate::output::sanitize_message(&message),
-            unknown_key_hint(&message)
+            unknown_key_hint(&message) + &unknown_value_hint(&message)
         )
     })?;
     if require_version && config.version != Some(1) {
@@ -1045,6 +1045,29 @@ fn extend_unique<T: Clone + Eq>(target: &mut Vec<T>, values: &[T]) {
         if !target.contains(value) {
             target.push(value.clone());
         }
+    }
+}
+
+/// What to say when a value is one this build does not know.
+///
+/// A configuration written for a newer OComment reaches an older one as
+/// `unknown variant \`conservative\``. That is accurate and says nothing about
+/// the fix, and the reader cannot work it out: both builds answer `--version`
+/// with the same number for the whole of a release cycle, so neither they nor
+/// the file can tell which binary is running. Naming the build turns "unknown
+/// variant" into "reinstall".
+///
+/// Only for an unknown *value*. An unknown key is a typo far more often than
+/// it is a version skew, and [`unknown_key_hint`] already answers that one by
+/// naming the key the writer meant.
+fn unknown_value_hint(message: &str) -> String {
+    if message.contains("unknown variant") {
+        format!(
+            "; this is ocomment {}, so a value it does not know may belong to a newer one",
+            env!("CARGO_PKG_VERSION")
+        )
+    } else {
+        String::new()
     }
 }
 
