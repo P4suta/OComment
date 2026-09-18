@@ -703,6 +703,37 @@
       }
     },
     {
+      "id": "html-script-holding-markup-is-opaque",
+      "language": "html",
+      "operation": "scan",
+      "source_utf8": "<script type=\"text/x-template\"><a href=//host/p>x</a></script>",
+      "note": "A `<script>` whose `type` is not a JavaScript one holds a data block the browser does not execute, and this reads none of it. Scanned as JavaScript the unquoted `href=//host/p` is a line comment reaching the end of the element, and a default `fix` deletes the markup after it.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "html-script-module-is-javascript",
+      "language": "html",
+      "operation": "scan",
+      "source_utf8": "<script type=\"module\">const x = 1; // gone</script>",
+      "note": "The other side of the same rule: `module` is a keyword rather than a MIME type, and an element carrying it is JavaScript. A rule that only ever closed doors would pass by refusing every `<script>` that names itself.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 35,
+            "end": 42,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
       "id": "forced-invalid-html-embedded",
       "language": "html",
       "operation": "transform",

@@ -605,6 +605,34 @@ fn html_comments_are_explicit_only_and_embedded_languages_recurse() {
     assert!(boundary.valid);
     assert_eq!(boundary.comments.len(), 1);
 
+    /* NOTE: What a `<script>` holds is what its `type` says it holds. Read as
+     * JavaScript, the unquoted `href=` below opens a line comment that runs to
+     * the end of the element, and a default `fix` takes the markup with it. */
+    let template = br#"<script type="text/x-template"><a href=//host/p>x</a></script>"#;
+    assert!(
+        scan(template, Language::Html, ScanOptions::default())
+            .comments
+            .is_empty(),
+        "a data block the browser does not execute was read as JavaScript"
+    );
+    for kind in [
+        r#" type="module""#,
+        r#" type="text/javascript""#,
+        r#" TYPE="TEXT/JAVASCRIPT""#,
+        r#" type="text/javascript; charset=utf-8""#,
+        r#" type="" "#,
+        "",
+    ] {
+        let source = format!("<script{kind}>const x = 1; // gone</script>");
+        assert_eq!(
+            scan(source.as_bytes(), Language::Html, ScanOptions::default())
+                .comments
+                .len(),
+            1,
+            "a `<script>` that names itself JavaScript was skipped: {kind:?}"
+        );
+    }
+
     let invalid_source = b"<script>const x = 1; // known\n";
     let invalid = transform(invalid_source, Language::Html, TransformOptions::default());
     assert!(!invalid.report.valid);

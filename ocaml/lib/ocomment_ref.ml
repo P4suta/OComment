@@ -5962,6 +5962,45 @@ let tag_attr_value attrs name =
         attribute.tag_value
     else None) (parse_tag_attributes attrs)
 
+(** The MIME types an HTML "<script>" element may carry and still hold
+   JavaScript.
+
+   HTML decides this, not this scanner: a "type" outside this list makes the
+   element a data block, which the browser does not execute and this tool does
+   not read.  The list is a citation rather than a guess, which is what lets the
+   default for a "type" not on it be "look at nothing" instead of "assume the
+   common case".  The Rust engine holds the same list as
+   [JAVASCRIPT_MIME_TYPES]. *)
+let javascript_mime_types =
+  [ "application/ecmascript"; "application/javascript"; "application/x-ecmascript";
+    "application/x-javascript"; "text/ecmascript"; "text/javascript";
+    "text/javascript1.0"; "text/javascript1.1"; "text/javascript1.2";
+    "text/javascript1.3"; "text/javascript1.4"; "text/javascript1.5";
+    "text/jscript"; "text/livescript"; "text/x-ecmascript"; "text/x-javascript" ]
+
+(** The language an HTML "<script>" body is written in, from its "type"
+   attribute; [None] for a type that is not JavaScript, which makes the block
+   opaque.
+
+   A "text/x-template" element holds markup, and reading it as JavaScript turns
+   an unquoted [href=//host/path] into a line comment and a fix into a deletion
+   of the markup.  An absent or empty "type" is classic JavaScript, "module" is
+   a keyword rather than a MIME type, and a parameter such as "; charset=utf-8"
+   is no part of what HTML calls the essence. *)
+let html_script_language kind =
+  match kind with
+  | None -> Some JavaScript
+  | Some value ->
+    let essence = match String.index_opt value ';' with
+      | Some at -> String.sub value 0 at
+      | None -> value in
+    let essence = String.trim essence in
+    if essence = "" then Some JavaScript
+    else
+      let lower = String.lowercase_ascii essence in
+      if lower = "module" || List.mem lower javascript_mime_types then Some JavaScript
+      else None
+
 let tag_has_attribute attrs name =
   let expected = Bytes.to_string name in
   List.exists (fun attribute -> tag_name_equals attrs attribute expected)
@@ -6446,15 +6485,26 @@ let rec scan_html source language options accumulator =
       | None -> add_error accumulator "unterminated-html-tag"
           "unterminated HTML raw-text start tag" index (Bytes.length source)
       | Some content_start ->
+        (* NOTE: "<script>" says what it holds and a raw-text element that holds
+           something else is skipped whole, the way an unknown "lang" on a
+           single-file component is.  "<style>" has no such attribute. *)
+        let attrs = Bytes.sub source (index + 1 + String.length name)
+          (max 0 (content_start - 1 - (index + 1 + String.length name))) in
+        let embedded =
+          if name = "script" then html_script_language (tag_attr_value attrs (Bytes.of_string "type"))
+          else Some embedded in
         let closing = find_close content_start name in
         let content_finish = match closing with Some value -> value | None -> Bytes.length source in
-        let child_source = Bytes.sub source content_start (content_finish - content_start) in
-        let child = { comments_rev = []; diagnostics_rev = []; yaml_blocks_rev = [] } in
-        if embedded = JavaScript
-        then scan_javascript ~offset:content_start child_source embedded options child
-        else scan_slash child_source embedded options child;
-        merge content_start { language = embedded; comments = List.rev child.comments_rev;
-          diagnostics = List.rev child.diagnostics_rev; valid = true };
+        (match embedded with
+        | None -> ()
+        | Some embedded ->
+          let child_source = Bytes.sub source content_start (content_finish - content_start) in
+          let child = { comments_rev = []; diagnostics_rev = []; yaml_blocks_rev = [] } in
+          if embedded = JavaScript
+          then scan_javascript ~offset:content_start child_source embedded options child
+          else scan_slash child_source embedded options child;
+          merge content_start { language = embedded; comments = List.rev child.comments_rev;
+            diagnostics = List.rev child.diagnostics_rev; valid = true });
         (match closing with
         | None -> add_error accumulator "unterminated-embedded-language"
             "unterminated HTML script or style element" index (Bytes.length source)
