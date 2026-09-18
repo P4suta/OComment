@@ -633,6 +633,27 @@ fn html_comments_are_explicit_only_and_embedded_languages_recurse() {
         );
     }
 
+    /* NOTE: `<style>` carries the same attribute and HTML allows it one value.
+     * An element carrying any other does not apply its styles, so its contents
+     * are not the stylesheet this would otherwise read them as. */
+    for (kind, found) in [
+        (r#" type="text/css""#, 1),
+        (r#" TYPE="TEXT/CSS""#, 1),
+        (r#" type="text/css; charset=utf-8""#, 1),
+        ("", 1),
+        (r#" type="text/plain""#, 0),
+        (r#" type="text/template""#, 0),
+    ] {
+        let source = format!("<style{kind}>/* gone */</style>");
+        assert_eq!(
+            scan(source.as_bytes(), Language::Html, ScanOptions::default())
+                .comments
+                .len(),
+            found,
+            "a `<style>` element was read against what its type says: {kind:?}"
+        );
+    }
+
     let invalid_source = b"<script>const x = 1; // known\n";
     let invalid = transform(invalid_source, Language::Html, TransformOptions::default());
     assert!(!invalid.report.valid);
