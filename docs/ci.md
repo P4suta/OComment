@@ -314,7 +314,7 @@ python3 tools/check_directives.py --binary rust/target/release/ocomment
 ```
 
 The `rust` CI job runs it next to `tools/check_hooks.py` and
-`tools/check_embedded_specs.py`, and `tools/release-check.sh` runs it again
+`tools/check_embedded_specs.py`, and `cargo xtask release-check` runs it again
 against the release binary before a tag is pushed.
 
 ## Putting this on a repository that already exists

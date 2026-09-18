@@ -122,7 +122,7 @@ the output when applied in one pass.
    specification the case exercises and say what is supposed to happen. A case
    whose expected behaviour cannot be sourced is a bug report, not a fixture.
 3. Leave `expect` out for the moment and run
-   `opam exec -- ./tools/differential.sh`. A mismatch between the two
+   `opam exec -- cargo xtask differential`. A mismatch between the two
    implementations is a real finding; settle it before recording anything.
 4. Record `expect` with `python3 tools/differential.py --record` once that run
    is green, then run both consumers again.

@@ -64,7 +64,7 @@ All notable changes to OComment will be documented here. The project follows
   witnesses that their generators reach the case each property is about, and a
   negative control for the one property whose claim is that nothing was found.
 
-- `sh tools/preflight.sh` runs everything CI checks that a laptop can, in the
+- `cargo xtask preflight` runs everything CI checks that a laptop can, in the
   order that fails soonest, and `lefthook install` wires it into `pre-push`.
   Waiting eight minutes to be told about a stale manual page is not a review
   cycle. `tools/check_ci_contracts.py` holds the script against
@@ -72,6 +72,13 @@ All notable changes to OComment will be documented here. The project follows
   locally — and it now also fails when `docs/SUMMARY.md` lists a chapter Git
   does not track, which is how `docs/agents.md` reached CI unpushed, hidden by
   a global ignore that most repositories want.
+
+  `differential`, `release-check` and `package-list` are tasks too, so the only
+  shell script left in `tools/` is the one the release workflow runs, and
+  `check_ci_contracts.py` fails on a new one. A task runner is code: the code
+  that decides what a gate does should be read and typed by the same toolchain
+  as what it gates, and a shell step is the one thing here that would not
+  survive the Windows job it stands in for.
 
 - `ocomment tags` counts what this tree's comments actually open with and says
   which way the convention has drifted: a tag the configuration allows that

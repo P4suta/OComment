@@ -132,7 +132,7 @@ def main() -> int:
                 f" ({'it is not on disk either' if not (ROOT / path).is_file() else 'it is ignored or unstaged'})"
             )
 
-    # NOTE: Every `tools/*.py` gate CI runs also runs in `tools/preflight.sh`.
+    # NOTE: Every `tools/*.py` gate CI runs also runs in `cargo xtask preflight`.
     # NOTE: A push that has to wait eight minutes to hear about a stale manual
     # NOTE: page is not a review cycle, and the only way the local sweep stays
     # NOTE: worth trusting is if adding a gate to CI and not to it fails here.
@@ -140,15 +140,30 @@ def main() -> int:
     # NOTE: is named in `LOCALLY_UNREACHABLE` rather than silently skipped.
     LOCALLY_UNREACHABLE = frozenset({"tools/package_artifacts.py"})
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-    preflight = (ROOT / "tools/preflight.sh").read_text(encoding="utf-8")
+    preflight = (ROOT / "rust/xtask/src/main.rs").read_text(encoding="utf-8")
     for tool in sorted(set(re.findall(r"tools/[a-z_]+\.py", workflow))):
         if tool in LOCALLY_UNREACHABLE:
             continue
         if tool not in preflight:
             failures.append(
-                f"{tool} runs in CI and not in tools/preflight.sh, so a push"
+                f"{tool} runs in CI and not in `cargo xtask preflight`, so a push"
                 " cannot be trusted to pass"
             )
+
+    # NOTE: No standalone shell script but the one the release workflow runs.
+    # NOTE: A task runner is code, and the code that decides what a gate does
+    # NOTE: should be read and typed by the same toolchain as what it gates --
+    # NOTE: and a shell step is the one thing here that does not survive the
+    # NOTE: Windows job it stands in for. `cargo xtask` is where a new one goes.
+    SHELL_KEPT = frozenset({"tools/publish-crates.sh"})
+    shells = {
+        str(path.relative_to(ROOT))
+        for path in ROOT.glob("tools/*.sh")
+    } - SHELL_KEPT
+    for shell in sorted(shells):
+        failures.append(
+            f"{shell} is a shell script; add a `cargo xtask` task instead"
+        )
 
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     if not re.search(r"^FROM rust:1\.88-alpine@sha256:[0-9a-f]{64} AS builder$", dockerfile, re.MULTILINE):

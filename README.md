@@ -234,7 +234,7 @@ newlines, and non-UTF-8 bytes outside edited spans are preserved.
 ```sh
 cargo test --manifest-path rust/Cargo.toml --workspace --all-targets --locked
 dune runtest --root ocaml
-./tools/differential.sh
+cargo xtask differential
 python3 tools/check_embedded_specs.py
 ```
 

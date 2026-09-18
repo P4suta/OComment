@@ -46,15 +46,15 @@ are the cross-check.
 ## Before you push
 
 ```sh
-sh tools/preflight.sh            # NOTE: everything CI checks that a laptop can
-sh tools/preflight.sh --quick    # NOTE: everything but the slowest three
+cargo xtask preflight            # NOTE: everything CI checks that a laptop can
+cargo xtask preflight --quick    # NOTE: everything but the slowest three
 ```
 
 Waiting eight minutes to be told about a stale manual page is not a review
 cycle. Every gate below that a laptop can run, runs there, in the order that
-fails soonest for the least money — and `tools/check_ci_contracts.py` holds the
-script against `.github/workflows/ci.yml`, so a gate added to CI cannot quietly
-stop running locally.
+fails soonest for the least money — and `tools/check_ci_contracts.py` holds the task
+against `.github/workflows/ci.yml`, so a gate added to CI cannot quietly stop
+running locally.
 
 `lefthook install` wires it into `pre-push`. What is deliberately left to CI:
 the three-operating-system matrices, the Docker image, CodeQL, and the VS Code
@@ -70,7 +70,7 @@ cargo fmt --manifest-path rust/Cargo.toml --all -- --check
 cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets --locked -- -D warnings
 cargo test --manifest-path rust/Cargo.toml --workspace --all-targets --locked
 opam exec -- dune runtest --root ocaml
-opam exec -- ./tools/differential.sh
+opam exec -- cargo xtask differential
 python3 tools/check_embedded_specs.py
 python3 tools/check_hooks.py
 python3 tools/check_editor_ids.py
@@ -79,7 +79,7 @@ python3 -m unittest tools/test_release_metadata.py tools/test_publish_crates.py
 python3 tools/check_directives.py
 python3 tools/validate_schemas.py
 python3 tools/yaml_roundtrip.py
-./tools/package-list.sh
+cargo xtask package-list
 ocomment
 actionlint
 lefthook validate
