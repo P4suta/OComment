@@ -175,7 +175,7 @@ pub use profile::{
     ProtectionTier, StringDelimiter, scan_profile, transform_profile, validate_profile,
 };
 pub use scanner::{
-    DispositionPatterns, PreparedScanner, explain_comment, explain_comment_with,
+    DispositionPatterns, PreparedScanner, comment_text, explain_comment, explain_comment_with,
     explain_disposition, explain_disposition_with, scan,
 };
 pub use transform::{apply_edits, plan_report, transform, transform_plan, transform_spans};

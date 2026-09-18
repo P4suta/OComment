@@ -14,6 +14,7 @@ mod plugin;
 mod ratchet;
 pub mod runtime;
 mod selftest;
+mod tags;
 mod trace;
 mod values;
 

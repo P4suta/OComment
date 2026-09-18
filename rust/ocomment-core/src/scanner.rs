@@ -7066,6 +7066,16 @@ fn is_encoding_declaration(source: &[u8], start: usize, raw: &[u8]) -> bool {
         .is_some_and(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
 }
 
+/// A comment's text: its delimiters removed, and the common prefix a block
+/// comment's continuation lines carry removed with them.
+///
+/// The same reading `[policy.allow] tags` matches against, so a caller that
+/// wants to know what a comment *says* asks the same question the tag rule
+/// asks rather than writing a second answer to it.
+pub fn comment_text(raw: &[u8]) -> &[u8] {
+    strip_comment_markers(raw)
+}
+
 pub(crate) fn strip_comment_markers(raw: &[u8]) -> &[u8] {
     let mut start = 0;
     let mut end = raw.len();

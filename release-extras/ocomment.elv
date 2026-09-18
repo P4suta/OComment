@@ -61,6 +61,7 @@ set edit:completion:arg-completer[ocomment] = {|@words|
             cand plugin 'Manage sandboxed WASM scanner plugins'
             cand completions 'Generate shell completions'
             cand coverage 'Report which files a walk scanned and which it passed over, and why'
+            cand tags 'Count the tags this tree''s comments open with, against the ones it allows'
             cand ratchet 'Check the tree against its ledger, or record the tree in one'
             cand hook 'Answer an agent editing hook in the host''s own protocol'
             cand selftest 'Re-run the shared corpus against this binary and report any disagreement'
@@ -680,6 +681,40 @@ set edit:completion:arg-completer[ocomment] = {|@words|
             cand -h 'Print help (see more with ''--help'')'
             cand --help 'Print help (see more with ''--help'')'
         }
+        &'ocomment;tags'= {
+            cand --base 'Check only the working-tree files that differ from this revision''s merge base with HEAD'
+            cand --config 'Read this configuration file instead of discovering `.ocomment.toml`'
+            cand --policy 'Which classes of comment the run is allowed to remove'
+            cand --layout 'How the bytes left behind by a removed comment are laid out'
+            cand --language 'Force this language instead of detecting it from path and contents'
+            cand --dialect 'Force this dialect of the selected language'
+            cand --keep-kind 'Comma-separated comment kinds to protect on top of the policy'
+            cand --remove-kind 'Comma-separated comment kinds to remove regardless of the policy'
+            cand --deny-skipped 'Fail when a file was passed over for one of these reasons, rather than noting it'
+            cand --format 'Output encoding'
+            cand --color 'When to colour terminal output'
+            cand --hyperlinks 'When to emit terminal hyperlinks for reported paths'
+            cand --annotation-level 'The level `--format github` annotates a removable comment at (default: the run''s exit status)'
+            cand --trace 'Record how the run reached its verdicts, on standard error'
+            cand --progress 'When to draw the live scanning counter on standard error'
+            cand -j 'How many threads the run uses to walk, read and scan; 0 chooses one per core'
+            cand --jobs 'How many threads the run uses to walk, read and scan; 0 chooses one per core'
+            cand --summary 'Also write the end-of-run counts to this file, as one JSON object'
+            cand --staged 'Read and update Git index blobs rather than treating the working tree as the source'
+            cand --index-only 'With `--staged`, do not attempt a uniquely mappable working-tree update'
+            cand --include-generated 'Scan files another tool writes: lock files, recorded seeds, generated output'
+            cand --force-invalid 'Apply the edits that are still provably safe when the source fails to scan'
+            cand --force-protected 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
+            cand --no-preview 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
+            cand --explain 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+            cand --source-map 'Include the byte-for-byte map from the output back to the source in the JSON formats'
+            cand -q 'Drop the run summary and notes; the command''s product (findings, patch, listing) is still written'
+            cand --quiet 'Drop the run summary and notes; the command''s product (findings, patch, listing) is still written'
+            cand -v 'Trace what is scanned and summarize every comment kind and skipped file'
+            cand --verbose 'Trace what is scanned and summarize every comment kind and skipped file'
+            cand -h 'Print help (see more with ''--help'')'
+            cand --help 'Print help (see more with ''--help'')'
+        }
         &'ocomment;ratchet'= {
             cand --base 'Check only the working-tree files that differ from this revision''s merge base with HEAD'
             cand --config 'Read this configuration file instead of discovering `.ocomment.toml`'
@@ -852,6 +887,7 @@ set edit:completion:arg-completer[ocomment] = {|@words|
             cand plugin 'Manage sandboxed WASM scanner plugins'
             cand completions 'Generate shell completions'
             cand coverage 'Report which files a walk scanned and which it passed over, and why'
+            cand tags 'Count the tags this tree''s comments open with, against the ones it allows'
             cand ratchet 'Check the tree against its ledger, or record the tree in one'
             cand hook 'Answer an agent editing hook in the host''s own protocol'
             cand selftest 'Re-run the shared corpus against this binary and report any disagreement'
@@ -900,6 +936,8 @@ set edit:completion:arg-completer[ocomment] = {|@words|
         &'ocomment;help;completions'= {
         }
         &'ocomment;help;coverage'= {
+        }
+        &'ocomment;help;tags'= {
         }
         &'ocomment;help;ratchet'= {
         }

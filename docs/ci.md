@@ -317,6 +317,44 @@ The `rust` CI job runs it next to `tools/check_hooks.py` and
 `tools/check_embedded_specs.py`, and `tools/release-check.sh` runs it again
 against the release binary before a tag is pushed.
 
+## Putting this on a repository that already exists
+
+A repository with eleven thousand comments cannot turn the rule it wants on
+today. The order below tightens one axis at a time, and each step leaves a gate
+that passes.
+
+**1. Find out what is there.** `ocomment coverage` says which files were read
+and which were passed over; a gate over 85% of a tree is not the gate you
+think it is, so close that first with `[files]` and, where a format has no
+built-in scanner, a `[profiles.<name>]` entry. `ocomment tags` says which tags
+your comments already open with — that list, not a list you invent, is the one
+to start `[policy.allow] tags` from.
+
+**2. Protect what your own tools read.** `[policy] protected` names the markers
+your build, your linter or your test runner reads. This is the step that has to
+come before any removal, because it is the only one whose omission changes what
+the code *does*. `ocomment scan --policy all --explain` over a directory you
+know well is a quick way to find what you have been relying on.
+
+**3. Gate the new work, not the old.** `ocomment check --base main` in a pull
+request checks only what the branch changed. The tree stays as it is and
+nothing new is added to it, which is most of the value and costs no cleanup at
+all.
+
+**4. Record the distance, and close it.** `[ratchet] ledger` counts what each
+file holds today and fails when a file holds more — and when it holds fewer,
+asking to be updated, so the number in the file is always the number in the
+tree. See [the configuration guide](configuration.md#getting-to-a-rule-you-cannot-turn-on-today).
+
+**5. Tighten one axis.** `max_lines`, then `trailing = false`, then deadlines on
+the tags that are promises. Each is a separate number the ledger can carry to
+zero. `ocomment check --format agent` is the report to hand somebody — or
+something — that is going to do the editing.
+
+**6. Drop the ledger.** When it reaches zero, delete it and make the bare run
+the gate. A ledger that has nothing left to say is a file that describes a
+repository that no longer exists.
+
 ## Gating a branch on what it changed
 
 ```console

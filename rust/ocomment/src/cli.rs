@@ -5,7 +5,7 @@ use crate::{
         self, AnnotationLevel, Detail, Explanations, FileExplanation, Operation, OutputFormat,
         Presentation, ProcessedFile, ProcessedResult, RenderOptions, Verbosity,
     },
-    plugin, ratchet, selftest,
+    plugin, ratchet, selftest, tags,
     trace::{TraceMode, trace_decisions, trace_discovery},
     values::{AnnotationLevelArg, CommentKindArg, DialectArg, LanguageArg, LayoutArg, PolicyArg},
 };
@@ -370,6 +370,8 @@ enum Command {
     },
     /// Report which files a walk scanned and which it passed over, and why
     Coverage(TargetArgs),
+    /// Count the tags this tree's comments open with, against the ones it allows
+    Tags(TargetArgs),
     /// Check the tree against its ledger, or record the tree in one
     Ratchet(RatchetArgs),
     /// Answer an agent editing hook in the host's own protocol
@@ -649,6 +651,7 @@ pub fn run() -> Result<u8> {
         Some(Command::Plugin(args)) => run_plugin(args, &common),
         Some(Command::Completions { shell }) => run_completions(shell),
         Some(Command::Coverage(target)) => run_coverage(&target, &common),
+        Some(Command::Tags(target)) => run_tags(&target, &common),
         Some(Command::Ratchet(args)) => run_ratchet(&args, &common),
         Some(Command::Hook(args)) => hook::run(args.surface, &common),
         Some(Command::Selftest) => selftest::run(common.output.format, common.verbosity()),
@@ -2067,6 +2070,40 @@ fn run_coverage(target: &TargetArgs, common: &CommonArgs) -> Result<u8> {
         common.policy.deny_skipped.as_deref(),
         common.verbosity(),
     )
+}
+
+/// Count the tags this tree writes, and say which way the convention has
+/// drifted.
+///
+/// Reports rather than gates, as `coverage` does: what to do about a tag
+/// nobody configured is a decision about that tag, and a run that failed would
+/// be making it.
+fn run_tags(target: &TargetArgs, common: &CommonArgs) -> Result<u8> {
+    let mut resolved = config::load(common.config.as_deref())?;
+    apply_cli_overrides(&mut resolved, common);
+    let (paths, stdin) = target_paths(&target.paths, false, target.git.staged)?;
+    ensure!(
+        !stdin,
+        "tags reports on a walk; standard input is one source with no walk around it"
+    );
+    let discovery = read_targets(&paths, stdin, &resolved, common)?;
+    let plugin_host = plugin::PluginHost::load(&resolved.root, &resolved.config.plugins)?;
+    let mut inventory = tags::Inventory::new(&resolved.config.policy.allow);
+    let mut scanners = HashMap::new();
+    for file in &discovery.files {
+        if !scanners.contains_key(&file.options.scan) {
+            let scanner = PreparedScanner::new(file.options.scan.clone())
+                .context("cannot prepare comment policy")?;
+            scanners.insert(file.options.scan.clone(), Arc::new(scanner));
+        }
+        let scanner = scanners
+            .get(&file.options.scan)
+            .expect("every discovered policy was prepared");
+        let report = scan_bytes(&file.source, file, scanner, &plugin_host)?;
+        inventory.absorb(file, &report);
+    }
+    tags::render(&inventory, common.output.format)?;
+    Ok(0)
 }
 
 /// `1` when a skip the run refuses to pass over happened, `0` otherwise.

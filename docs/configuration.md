@@ -160,6 +160,38 @@ and silences nothing a line above it. The protections no policy reaches — a
 shebang, an encoding line, a directive the language or its build reads — are
 out for the reason they are always out.
 
+### Taking stock of the convention
+
+```console
+$ ocomment tags
+  INVARIANT	101
+  NOTE	1482
+  PERF	7
+! XXX	4
+
+Allowed and never written: SAFETY.
+
+Written and not allowed: XXX (4). These are comments this run removes today;
+add one to `[policy.allow] tags` to keep it, or to `[policy.allow.expiry]` to
+keep it for a while.
+```
+
+A convention drifts in two directions and the report looks both ways. A tag
+nobody writes any more is a line of configuration that protects nothing and
+reads like a rule; a tag people write that nobody configured is a comment the
+run removes today, which is usually the first anybody hears of it. The `!` is
+the second kind.
+
+It reports rather than gates, as `ocomment coverage` does: what to do about an
+unconfigured tag is a decision about that tag, and a run that failed would be
+making it for you. `--format json` gives the same four lists as fields.
+
+The question it asks is not quite the one `tags` matches. The rule asks *does
+this comment carry the tag `NOTE`?*, and `// NOTEBOOK entry` does not; the
+inventory asks *what word does this comment open with?*, and the answer there
+is `NOTEBOOK` — which is what you want to see, because that comment is one the
+run removes and the listing is where you would find out.
+
 ### Tags that are promises
 
 A `TODO` is not the same kind of thing as a `SAFETY`. One records why the code

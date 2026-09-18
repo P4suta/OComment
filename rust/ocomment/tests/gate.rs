@@ -239,3 +239,44 @@ protected = [
         "a keep_regex no longer holds a comment back:\n{stdout}"
     );
 }
+
+/// A convention drifts in two directions and the report looks both ways.
+#[test]
+fn the_tag_inventory_reports_both_kinds_of_drift() {
+    let directory = tempfile::tempdir().expect("a temporary directory");
+    let path = directory.path();
+    fs::write(
+        path.join(".ocomment.toml"),
+        b"version = 1\n\n[policy.allow]\ntags = [\"NOTE\", \"SAFETY\"]\n",
+    )
+    .expect("writable");
+    fs::write(
+        path.join("a.rs"),
+        b"// NOTE: a reason\n// XXX: undone\n// XXX: again\nfn a() {}\n",
+    )
+    .expect("writable");
+
+    let output = run(path, &["tags"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(output.status.code(), Some(0), "an inventory is not a gate");
+    assert!(stdout.contains("  NOTE\t1"), "{stdout}");
+    /* NOTE: Marked on its listing line as well as in the sentence: the listing
+     * is what a reader scans. */
+    assert!(stdout.contains("! XXX\t2"), "{stdout}");
+    assert!(
+        stdout.contains("Allowed and never written: SAFETY."),
+        "a tag the configuration protects and nothing writes went unreported:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("Written and not allowed: XXX (2)."),
+        "a tag this tree writes and nothing allows went unreported, which is \
+         usually the first anybody hears of it:\n{stdout}"
+    );
+
+    let json = run(path, &["tags", "--format", "json"]);
+    let document: serde_json::Value =
+        serde_json::from_slice(&json.stdout).expect("the inventory parses as JSON");
+    assert_eq!(document["counts"]["XXX"], 2);
+    assert_eq!(document["unused"][0], "SAFETY");
+    assert_eq!(document["unconfigured"][0]["tag"], "XXX");
+}
