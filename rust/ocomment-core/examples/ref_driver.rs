@@ -65,24 +65,12 @@ fn handle(request: &Value) -> Result<Value, String> {
             .ok_or("missing source_base64")?,
     )?;
     let options_value = request.get("options").unwrap_or(&Value::Null);
-    let policy = match options_value
-        .get("policy")
-        .and_then(Value::as_str)
-        .unwrap_or("safe")
-    {
-        "all" => Policy::All,
-        "legal" => Policy::Legal,
-        _ => Policy::Safe,
-    };
-    let layout = match options_value
-        .get("layout")
-        .and_then(Value::as_str)
-        .unwrap_or("lines")
-    {
-        "columns" => Layout::Columns,
-        "compact" => Layout::Compact,
-        _ => Layout::Lines,
-    };
+    /* NOTE: Read through the enums' own deserializers rather than matched here.
+     * The hand-written match had a `_` arm, so a spelling it did not list
+     * became the default instead of an error, and the driver went on to
+     * compare the reference against a policy the fixture never asked for. */
+    let policy = option_enum::<Policy>(options_value, "policy")?.unwrap_or_default();
+    let layout = option_enum::<Layout>(options_value, "layout")?.unwrap_or_default();
     let dialect = option_enum::<Dialect>(options_value, "dialect")?.unwrap_or_default();
     let keep_kinds = option_list::<CommentKind>(options_value, "keep_kinds")?;
     let remove_kinds = option_list::<CommentKind>(options_value, "remove_kinds")?;
@@ -103,6 +91,10 @@ fn handle(request: &Value) -> Result<Value, String> {
         remove_kinds,
         keep_regex,
         remove_regex,
+        /* NOTE: Read through the type's own deserializer, so a fixture can ask
+         * for these and the OCaml reference is held to the same answer. */
+        allow: option_enum(options_value, "allow")?.unwrap_or_default(),
+        protected: option_enum(options_value, "protected")?.unwrap_or_default(),
     };
     match operation {
         "apply_edits" => {

@@ -1562,17 +1562,12 @@ z: 1
         assert_eq!(reopened.source(), &closed[..]);
         assert_eq!(reopened.report(), &expected);
         assert_eq!(reopened.safe_checkpoints(), expected_checkpoints);
-        /* NOTE: The document above is invalid — a delimiter word holding a line
-         * terminator matches no line of the body, so the here-document runs off
-         * the end — and an invalid report is never reused, which leaves the
-         * watermark unexercised. This one is valid, and its checkpoints are
-         * withdrawn by nothing but the reach. `#` is an ordinary word character
-         * to the delimiter parse, so `<<#"` reads a word that opens a quote;
-         * the quote finds no partner and the parse gives up at the end of the
-         * document, having read every byte of it. The scan rewinds to the byte
-         * after the operator, where `#` is a comment opener instead, and lexes
-         * a comment, a line, and a comment — line starts a checkpoint would
-         * otherwise be offered at. */
+        /* NOTE: The document above is invalid, and an invalid report is never
+         * reused, which leaves the watermark unexercised. This one is valid and
+         * its checkpoints are withdrawn by nothing but the reach: `<<#"` reads
+         * a word that opens a quote, the quote finds no partner, and the parse
+         * gives up having read every byte — then the scan rewinds to where `#`
+         * is a comment opener instead. */
         let mut giving_up = IncrementalDocument::new(
             b"cat <<#\"\nx\n# c\n".to_vec(),
             Language::Shell,

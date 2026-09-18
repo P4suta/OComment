@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/P4suta/OComment/spec/trace.schema.json",
+  "title": "OComment trace stream",
+  "description": "One JSON object per line on standard error, in the order the run took the steps. The stream is diagnostic: the run's product goes to standard output, so `--trace json` may be combined with any `--format`. Standard error also carries the run summary unless `--quiet` is given, so a reader that requires every line to parse should pass `--quiet`.",
+  "oneOf": [
+    { "$ref": "#/$defs/configResolved" },
+    { "$ref": "#/$defs/fileDetected" },
+    { "$ref": "#/$defs/fileSkipped" },
+    { "$ref": "#/$defs/commentDecided" },
+    { "$ref": "#/$defs/editPlanned" },
+    { "$ref": "#/$defs/fileSummary" }
+  ],
+  "$defs": {
+    "configResolved": {
+      "type": "object", "additionalProperties": false,
+      "required": ["event", "root", "sources"],
+      "properties": {
+        "event": { "const": "config-resolved" },
+        "root": { "type": "string" },
+        "sources": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "fileDetected": {
+      "type": "object", "additionalProperties": false,
+      "required": ["event", "path", "language", "dialect", "how", "bytes"],
+      "properties": {
+        "event": { "const": "file-detected" },
+        "path": { "type": "string" },
+        "language": { "type": "string" },
+        "dialect": { "type": "string" },
+        "how": { "enum": ["extension", "reserved-filename", "shebang", "content", "command-line", "configuration-routing"] },
+        "bytes": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "fileSkipped": {
+      "type": "object", "additionalProperties": false,
+      "required": ["event", "path", "reason", "error"],
+      "properties": {
+        "event": { "const": "file-skipped" },
+        "path": { "type": "string" },
+        "reason": { "type": "string" },
+        "error": { "type": "boolean" }
+      }
+    },
+    "commentDecided": {
+      "type": "object", "additionalProperties": false,
+      "required": ["event", "path", "line", "column", "kind", "action"],
+      "properties": {
+        "event": { "const": "comment-decided" },
+        "path": { "type": "string" },
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 },
+        "kind": { "enum": ["line", "block", "doc-line", "doc-block", "directive", "license", "html-comment", "shebang", "encoding", "optimizer-hint", "version-comment", "load-bearing"] },
+        "action": { "enum": ["keep", "remove"] },
+        "rule": { "type": "string" }
+      }
+    },
+    "editPlanned": {
+      "type": "object", "additionalProperties": false,
+      "required": ["event", "path", "start", "end", "replacement_bytes"],
+      "properties": {
+        "event": { "const": "edit-planned" },
+        "path": { "type": "string" },
+        "start": { "type": "integer", "minimum": 0 },
+        "end": { "type": "integer", "minimum": 0 },
+        "replacement_bytes": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "fileSummary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["event", "path", "comments", "removable", "changed", "valid"],
+      "properties": {
+        "event": { "const": "file-summary" },
+        "path": { "type": "string" },
+        "comments": { "type": "integer", "minimum": 0 },
+        "removable": { "type": "integer", "minimum": 0 },
+        "changed": { "type": "boolean" },
+        "valid": { "type": "boolean" }
+      }
+    }
+  }
+}

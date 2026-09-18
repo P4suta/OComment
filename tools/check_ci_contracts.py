@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import pathlib
 import re
+import subprocess
 import sys
 import tomllib
 
@@ -68,7 +69,8 @@ def main() -> int:
     seen = set()
     for path in AUTOMATION:
         text = path.read_text(encoding="utf-8")
-        for line_number, line in enumerate(text.splitlines(), start=1):
+        lines = text.splitlines()
+        for line_number, line in enumerate(lines, start=1):
             if "uses:" not in line or line.lstrip().startswith("#"):
                 continue
             if re.search(r"\buses:\s*\./", line):
@@ -91,13 +93,62 @@ def main() -> int:
                 failures.append(
                     f"{path.relative_to(ROOT)}:{line_number}: {action} is {revision}, expected {expected[0]}"
                 )
-            if comment is None or expected[1] not in comment:
+            # NOTE: Beside the line or on the line above it. This repository's
+            # NOTE: own `[policy.allow] trailing = false` forbids the first
+            # NOTE: spelling, so the annotation moved; what has to hold is that
+            # NOTE: the pin carries the note, not where the note sits.
+            above = lines[line_number - 2].strip() if line_number >= 2 else ""
+            annotation = comment or (above[1:].strip() if above.startswith("#") else "")
+            if expected[1] not in annotation:
                 failures.append(
                     f"{path.relative_to(ROOT)}:{line_number}: {action} needs version comment {expected[1]!r}"
                 )
     unused = sorted(set(PINS) - seen)
     if unused:
         failures.append(f"reviewed action pin table has unused entries: {', '.join(unused)}")
+
+    # NOTE: Every chapter the book lists has to be a file Git tracks. A page
+    # NOTE: that exists only in a working tree builds here and fails in CI,
+    # NOTE: which is what happened: a global ignore hid `docs/agents.md` --
+    # NOTE: most repositories keep an agent instruction file as private
+    # NOTE: scratch -- so `git add` never saw it and `mdbook build` could not
+    # NOTE: read the chapter. `.gitignore` un-ignores it now; this is what
+    # NOTE: notices the next one before it is pushed.
+    summary = (ROOT / "docs/SUMMARY.md").read_text(encoding="utf-8")
+    tracked = set(
+        subprocess.run(
+            ["git", "ls-files", "docs"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.split()
+    )
+    for chapter in sorted(set(re.findall(r"\]\(([^)#]+\.md)\)", summary))):
+        path = f"docs/{chapter}"
+        if path not in tracked:
+            failures.append(
+                f"docs/SUMMARY.md lists {chapter}, which Git does not track"
+                f" ({'it is not on disk either' if not (ROOT / path).is_file() else 'it is ignored or unstaged'})"
+            )
+
+    # NOTE: Every `tools/*.py` gate CI runs also runs in `tools/preflight.sh`.
+    # NOTE: A push that has to wait eight minutes to hear about a stale manual
+    # NOTE: page is not a review cycle, and the only way the local sweep stays
+    # NOTE: worth trusting is if adding a gate to CI and not to it fails here.
+    # NOTE: A job a laptop cannot run -- the OS matrices, Docker, CodeQL, npm --
+    # NOTE: is named in `LOCALLY_UNREACHABLE` rather than silently skipped.
+    LOCALLY_UNREACHABLE = frozenset({"tools/package_artifacts.py"})
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    preflight = (ROOT / "tools/preflight.sh").read_text(encoding="utf-8")
+    for tool in sorted(set(re.findall(r"tools/[a-z_]+\.py", workflow))):
+        if tool in LOCALLY_UNREACHABLE:
+            continue
+        if tool not in preflight:
+            failures.append(
+                f"{tool} runs in CI and not in tools/preflight.sh, so a push"
+                " cannot be trusted to pass"
+            )
 
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     if not re.search(r"^FROM rust:1\.88-alpine@sha256:[0-9a-f]{64} AS builder$", dockerfile, re.MULTILINE):
@@ -224,7 +275,7 @@ def main() -> int:
         "gh workflow run docs.yml",
         "gh workflow run codeql.yml",
         "dispatch-checks:",
-        "actions: write # NOTE: Dispatch only",
+        "actions: write",
     ):
         if required not in release_pr:
             failures.append(f"Release PR automation is missing {required!r}")

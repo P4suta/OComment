@@ -1,12 +1,6 @@
-# NOTE: Hook definitions consumed by pre-commit when this repository is used as a
-# NOTE: `repo:` entry. Both hooks deliberately receive every text file selected by
-# NOTE: pre-commit: OComment's detector, not a second extension list, decides which
-# NOTE: files are supported. This is what lets reserved names and extensionless
-# NOTE: shebang scripts reach the same detector as an ordinary CLI run.
-# NOTE:
-# NOTE: `language: system` requires `ocomment` to already be on PATH: pre-commit's
-# NOTE: `language: rust` runs `cargo install --path .` at the checkout root, and this
-# NOTE: repository's manifest lives in rust/, so it cannot build these hooks.
+# NOTE: Hook definitions pre-commit reads when this repository is a `repo:`
+# NOTE: entry. Why they take every text file, and why `language: system`:
+# NOTE: see "The published pre-commit hooks" in docs/ci.md.
 - id: ocomment-check
   name: ocomment check
   description: 'Report removable comments in the text files from pre-commit staging; pre-commit temporarily hides unstaged changes, exit 1 blocks the commit, and exit 2 reports an invalid source, configuration, plugin, or I/O failure.'

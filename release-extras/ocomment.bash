@@ -25,6 +25,9 @@ _ocomment() {
             ocomment,config)
                 cmd="ocomment__subcmd__config"
                 ;;
+            ocomment,coverage)
+                cmd="ocomment__subcmd__coverage"
+                ;;
             ocomment,diff)
                 cmd="ocomment__subcmd__diff"
                 ;;
@@ -36,6 +39,9 @@ _ocomment() {
                 ;;
             ocomment,help)
                 cmd="ocomment__subcmd__help"
+                ;;
+            ocomment,hook)
+                cmd="ocomment__subcmd__hook"
                 ;;
             ocomment,init)
                 cmd="ocomment__subcmd__init"
@@ -52,11 +58,20 @@ _ocomment() {
             ocomment,plugin)
                 cmd="ocomment__subcmd__plugin"
                 ;;
+            ocomment,ratchet)
+                cmd="ocomment__subcmd__ratchet"
+                ;;
             ocomment,scan)
                 cmd="ocomment__subcmd__scan"
                 ;;
+            ocomment,selftest)
+                cmd="ocomment__subcmd__selftest"
+                ;;
             ocomment,strip)
                 cmd="ocomment__subcmd__strip"
+                ;;
+            ocomment,tags)
+                cmd="ocomment__subcmd__tags"
                 ;;
             ocomment__subcmd__help,check)
                 cmd="ocomment__subcmd__help__subcmd__check"
@@ -66,6 +81,9 @@ _ocomment() {
                 ;;
             ocomment__subcmd__help,config)
                 cmd="ocomment__subcmd__help__subcmd__config"
+                ;;
+            ocomment__subcmd__help,coverage)
+                cmd="ocomment__subcmd__help__subcmd__coverage"
                 ;;
             ocomment__subcmd__help,diff)
                 cmd="ocomment__subcmd__help__subcmd__diff"
@@ -78,6 +96,9 @@ _ocomment() {
                 ;;
             ocomment__subcmd__help,help)
                 cmd="ocomment__subcmd__help__subcmd__help"
+                ;;
+            ocomment__subcmd__help,hook)
+                cmd="ocomment__subcmd__help__subcmd__hook"
                 ;;
             ocomment__subcmd__help,init)
                 cmd="ocomment__subcmd__help__subcmd__init"
@@ -94,11 +115,20 @@ _ocomment() {
             ocomment__subcmd__help,plugin)
                 cmd="ocomment__subcmd__help__subcmd__plugin"
                 ;;
+            ocomment__subcmd__help,ratchet)
+                cmd="ocomment__subcmd__help__subcmd__ratchet"
+                ;;
             ocomment__subcmd__help,scan)
                 cmd="ocomment__subcmd__help__subcmd__scan"
                 ;;
+            ocomment__subcmd__help,selftest)
+                cmd="ocomment__subcmd__help__subcmd__selftest"
+                ;;
             ocomment__subcmd__help,strip)
                 cmd="ocomment__subcmd__help__subcmd__strip"
+                ;;
+            ocomment__subcmd__help,tags)
+                cmd="ocomment__subcmd__help__subcmd__tags"
                 ;;
             ocomment__subcmd__help__subcmd__plugin,add)
                 cmd="ocomment__subcmd__help__subcmd__plugin__subcmd__add"
@@ -167,7 +197,7 @@ _ocomment() {
 
     case "${cmd}" in
         ocomment)
-            opts="-q -v -h -V --config --policy --layout --language --dialect --keep-kind --remove-kind --force-invalid --force-protected --format --color --hyperlinks --no-preview --explain --progress --quiet --verbose --help --version check fix diff scan strip lsp init config languages plugin completions doctor man help"
+            opts="-j -q -v -h -V --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help --version check fix diff scan strip lsp init config languages plugin completions coverage tags ratchet hook selftest doctor man help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -178,7 +208,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -194,15 +224,19 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --deny-skipped)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -213,8 +247,28 @@ _ocomment() {
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
                     return 0
                     ;;
+                --annotation-level)
+                    COMPREPLY=($(compgen -W "error warning notice" -- "${cur}"))
+                    return 0
+                    ;;
+                --trace)
+                    COMPREPLY=($(compgen -W "off human json" -- "${cur}"))
+                    return 0
+                    ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -225,18 +279,22 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__check)
-            opts="-q -v -h --staged --index-only --config --policy --layout --language --dialect --keep-kind --remove-kind --force-invalid --force-protected --format --color --hyperlinks --no-preview --explain --progress --quiet --verbose --help"
+            opts="-j -q -v -h --staged --index-only --base --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --base)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --config)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -252,15 +310,19 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --deny-skipped)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -271,8 +333,28 @@ _ocomment() {
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
                     return 0
                     ;;
+                --annotation-level)
+                    COMPREPLY=($(compgen -W "error warning notice" -- "${cur}"))
+                    return 0
+                    ;;
+                --trace)
+                    COMPREPLY=($(compgen -W "off human json" -- "${cur}"))
+                    return 0
+                    ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -283,7 +365,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__completions)
-            opts="-q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --force-invalid --force-protected --format --color --hyperlinks --no-preview --explain --progress --quiet --verbose --help bash elvish fish powershell zsh"
+            opts="-j -q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help bash elvish fish powershell zsh"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -294,7 +376,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -310,15 +392,19 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --deny-skipped)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -329,8 +415,28 @@ _ocomment() {
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
                     return 0
                     ;;
+                --annotation-level)
+                    COMPREPLY=($(compgen -W "error warning notice" -- "${cur}"))
+                    return 0
+                    ;;
+                --trace)
+                    COMPREPLY=($(compgen -W "off human json" -- "${cur}"))
+                    return 0
+                    ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -341,7 +447,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__config)
-            opts="-q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --force-invalid --force-protected --format --color --hyperlinks --no-preview --explain --progress --quiet --verbose --help show locate explain schema"
+            opts="-j -q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help show locate explain schema"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -352,7 +458,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -368,15 +474,19 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --deny-skipped)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -387,8 +497,114 @@ _ocomment() {
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
                     return 0
                     ;;
+                --annotation-level)
+                    COMPREPLY=($(compgen -W "error warning notice" -- "${cur}"))
+                    return 0
+                    ;;
+                --trace)
+                    COMPREPLY=($(compgen -W "off human json" -- "${cur}"))
+                    return 0
+                    ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ocomment__subcmd__coverage)
+            opts="-j -q -v -h --staged --index-only --base --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --base)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --policy)
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    return 0
+                    ;;
+                --layout)
+                    COMPREPLY=($(compgen -W "lines columns compact" -- "${cur}"))
+                    return 0
+                    ;;
+                --language)
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala vue svelte markdown perl" -- "${cur}"))
+                    return 0
+                    ;;
+                --dialect)
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss sass" -- "${cur}"))
+                    return 0
+                    ;;
+                --keep-kind)
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --remove-kind)
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --deny-skipped)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --format)
+                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
+                    return 0
+                    ;;
+                --color)
+                    COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --hyperlinks)
+                    COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --annotation-level)
+                    COMPREPLY=($(compgen -W "error warning notice" -- "${cur}"))
+                    return 0
+                    ;;
+                --trace)
+                    COMPREPLY=($(compgen -W "off human json" -- "${cur}"))
+                    return 0
+                    ;;
+                --progress)
+                    COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -399,18 +615,22 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__diff)
-            opts="-q -v -h --staged --index-only --config --policy --layout --language --dialect --keep-kind --remove-kind --force-invalid --force-protected --format --color --hyperlinks --no-preview --explain --progress --quiet --verbose --help"
+            opts="-j -q -v -h --staged --index-only --base --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --base)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --config)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -426,15 +646,19 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --deny-skipped)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -445,8 +669,28 @@ _ocomment() {
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
                     return 0
                     ;;
+                --annotation-level)
+                    COMPREPLY=($(compgen -W "error warning notice" -- "${cur}"))
+                    return 0
+                    ;;
+                --trace)
+                    COMPREPLY=($(compgen -W "off human json" -- "${cur}"))
+                    return 0
+                    ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -457,7 +701,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__doctor)
-            opts="-q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --force-invalid --force-protected --format --color --hyperlinks --no-preview --explain --progress --quiet --verbose --help"
+            opts="-j -q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -468,7 +712,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -484,15 +728,19 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --deny-skipped)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -503,8 +751,28 @@ _ocomment() {
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
                     return 0
                     ;;
+                --annotation-level)
+                    COMPREPLY=($(compgen -W "error warning notice" -- "${cur}"))
+                    return 0
+                    ;;
+                --trace)
+                    COMPREPLY=($(compgen -W "off human json" -- "${cur}"))
+                    return 0
+                    ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -515,18 +783,22 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__fix)
-            opts="-i -q -v -h --staged --index-only --dry-run --interactive --config --policy --layout --language --dialect --keep-kind --remove-kind --force-invalid --force-protected --format --color --hyperlinks --no-preview --explain --progress --quiet --verbose --help"
+            opts="-i -j -q -v -h --staged --index-only --base --dry-run --interactive --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --base)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --config)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -542,15 +814,19 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --deny-skipped)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -561,8 +837,28 @@ _ocomment() {
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
                     return 0
                     ;;
+                --annotation-level)
+                    COMPREPLY=($(compgen -W "error warning notice" -- "${cur}"))
+                    return 0
+                    ;;
+                --trace)
+                    COMPREPLY=($(compgen -W "off human json" -- "${cur}"))
+                    return 0
+                    ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -573,7 +869,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__help)
-            opts="check fix diff scan strip lsp init config languages plugin completions doctor man help"
+            opts="check fix diff scan strip lsp init config languages plugin completions coverage tags ratchet hook selftest doctor man help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -615,6 +911,20 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__help__subcmd__config)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ocomment__subcmd__help__subcmd__coverage)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
@@ -671,6 +981,20 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__help__subcmd__help)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ocomment__subcmd__help__subcmd__hook)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
@@ -838,7 +1162,35 @@ _ocomment() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
+        ocomment__subcmd__help__subcmd__ratchet)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
         ocomment__subcmd__help__subcmd__scan)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ocomment__subcmd__help__subcmd__selftest)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
@@ -866,8 +1218,22 @@ _ocomment() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
-        ocomment__subcmd__init)
-            opts="-q -v -h --fix --force --stdout --config --policy --layout --language --dialect --keep-kind --remove-kind --force-invalid --force-protected --format --color --hyperlinks --no-preview --explain --progress --quiet --verbose --help config lefthook"
+        ocomment__subcmd__help__subcmd__tags)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ocomment__subcmd__hook)
+            opts="-j -q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help claude-code"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -878,7 +1244,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -894,15 +1260,19 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --deny-skipped)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -913,8 +1283,110 @@ _ocomment() {
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
                     return 0
                     ;;
+                --annotation-level)
+                    COMPREPLY=($(compgen -W "error warning notice" -- "${cur}"))
+                    return 0
+                    ;;
+                --trace)
+                    COMPREPLY=($(compgen -W "off human json" -- "${cur}"))
+                    return 0
+                    ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ocomment__subcmd__init)
+            opts="-j -q -v -h --fix --force --stdout --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help config lefthook"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --policy)
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    return 0
+                    ;;
+                --layout)
+                    COMPREPLY=($(compgen -W "lines columns compact" -- "${cur}"))
+                    return 0
+                    ;;
+                --language)
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala vue svelte markdown perl" -- "${cur}"))
+                    return 0
+                    ;;
+                --dialect)
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss sass" -- "${cur}"))
+                    return 0
+                    ;;
+                --keep-kind)
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --remove-kind)
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --deny-skipped)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --format)
+                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
+                    return 0
+                    ;;
+                --color)
+                    COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --hyperlinks)
+                    COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --annotation-level)
+                    COMPREPLY=($(compgen -W "error warning notice" -- "${cur}"))
+                    return 0
+                    ;;
+                --trace)
+                    COMPREPLY=($(compgen -W "off human json" -- "${cur}"))
+                    return 0
+                    ;;
+                --progress)
+                    COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -925,7 +1397,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__languages)
-            opts="-q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --force-invalid --force-protected --format --color --hyperlinks --no-preview --explain --progress --quiet --verbose --help"
+            opts="-j -q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -936,7 +1408,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -952,15 +1424,19 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --deny-skipped)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -971,8 +1447,28 @@ _ocomment() {
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
                     return 0
                     ;;
+                --annotation-level)
+                    COMPREPLY=($(compgen -W "error warning notice" -- "${cur}"))
+                    return 0
+                    ;;
+                --trace)
+                    COMPREPLY=($(compgen -W "off human json" -- "${cur}"))
+                    return 0
+                    ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -983,7 +1479,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__lsp)
-            opts="-q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --force-invalid --force-protected --format --color --hyperlinks --no-preview --explain --progress --quiet --verbose --help"
+            opts="-j -q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -994,7 +1490,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -1010,15 +1506,19 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --deny-skipped)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -1029,8 +1529,28 @@ _ocomment() {
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
                     return 0
                     ;;
+                --annotation-level)
+                    COMPREPLY=($(compgen -W "error warning notice" -- "${cur}"))
+                    return 0
+                    ;;
+                --trace)
+                    COMPREPLY=($(compgen -W "off human json" -- "${cur}"))
+                    return 0
+                    ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -1041,7 +1561,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__man)
-            opts="-q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --force-invalid --force-protected --format --color --hyperlinks --no-preview --explain --progress --quiet --verbose --help"
+            opts="-j -q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1052,7 +1572,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -1068,15 +1588,19 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --deny-skipped)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -1087,8 +1611,28 @@ _ocomment() {
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
                     return 0
                     ;;
+                --annotation-level)
+                    COMPREPLY=($(compgen -W "error warning notice" -- "${cur}"))
+                    return 0
+                    ;;
+                --trace)
+                    COMPREPLY=($(compgen -W "off human json" -- "${cur}"))
+                    return 0
+                    ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -1099,7 +1643,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__plugin)
-            opts="-q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --force-invalid --force-protected --format --color --hyperlinks --no-preview --explain --progress --quiet --verbose --help add remove list update verify new help"
+            opts="-j -q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help add remove list update verify new help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1110,7 +1654,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -1126,15 +1670,19 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --deny-skipped)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -1145,8 +1693,28 @@ _ocomment() {
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
                     return 0
                     ;;
+                --annotation-level)
+                    COMPREPLY=($(compgen -W "error warning notice" -- "${cur}"))
+                    return 0
+                    ;;
+                --trace)
+                    COMPREPLY=($(compgen -W "off human json" -- "${cur}"))
+                    return 0
+                    ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -1157,7 +1725,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__plugin__subcmd__add)
-            opts="-q -v -h --name --sha256 --identity --config --policy --layout --language --dialect --keep-kind --remove-kind --force-invalid --force-protected --format --color --hyperlinks --no-preview --explain --progress --quiet --verbose --help"
+            opts="-j -q -v -h --name --sha256 --identity --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1180,7 +1748,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -1196,15 +1764,19 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --deny-skipped)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -1215,8 +1787,28 @@ _ocomment() {
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
                     return 0
                     ;;
+                --annotation-level)
+                    COMPREPLY=($(compgen -W "error warning notice" -- "${cur}"))
+                    return 0
+                    ;;
+                --trace)
+                    COMPREPLY=($(compgen -W "off human json" -- "${cur}"))
+                    return 0
+                    ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -1339,7 +1931,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__plugin__subcmd__list)
-            opts="-q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --force-invalid --force-protected --format --color --hyperlinks --no-preview --explain --progress --quiet --verbose --help"
+            opts="-j -q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1350,7 +1942,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -1366,15 +1958,19 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --deny-skipped)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -1385,8 +1981,28 @@ _ocomment() {
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
                     return 0
                     ;;
+                --annotation-level)
+                    COMPREPLY=($(compgen -W "error warning notice" -- "${cur}"))
+                    return 0
+                    ;;
+                --trace)
+                    COMPREPLY=($(compgen -W "off human json" -- "${cur}"))
+                    return 0
+                    ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -1397,7 +2013,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__plugin__subcmd__new)
-            opts="-q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --force-invalid --force-protected --format --color --hyperlinks --no-preview --explain --progress --quiet --verbose --help"
+            opts="-j -q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1408,7 +2024,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -1424,15 +2040,19 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --deny-skipped)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -1443,8 +2063,28 @@ _ocomment() {
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
                     return 0
                     ;;
+                --annotation-level)
+                    COMPREPLY=($(compgen -W "error warning notice" -- "${cur}"))
+                    return 0
+                    ;;
+                --trace)
+                    COMPREPLY=($(compgen -W "off human json" -- "${cur}"))
+                    return 0
+                    ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -1455,7 +2095,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__plugin__subcmd__remove)
-            opts="-q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --force-invalid --force-protected --format --color --hyperlinks --no-preview --explain --progress --quiet --verbose --help"
+            opts="-j -q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1466,7 +2106,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -1482,15 +2122,19 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --deny-skipped)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -1501,8 +2145,28 @@ _ocomment() {
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
                     return 0
                     ;;
+                --annotation-level)
+                    COMPREPLY=($(compgen -W "error warning notice" -- "${cur}"))
+                    return 0
+                    ;;
+                --trace)
+                    COMPREPLY=($(compgen -W "off human json" -- "${cur}"))
+                    return 0
+                    ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -1513,7 +2177,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__plugin__subcmd__update)
-            opts="-q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --force-invalid --force-protected --format --color --hyperlinks --no-preview --explain --progress --quiet --verbose --help"
+            opts="-j -q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1524,7 +2188,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -1540,15 +2204,19 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --deny-skipped)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -1559,8 +2227,28 @@ _ocomment() {
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
                     return 0
                     ;;
+                --annotation-level)
+                    COMPREPLY=($(compgen -W "error warning notice" -- "${cur}"))
+                    return 0
+                    ;;
+                --trace)
+                    COMPREPLY=($(compgen -W "off human json" -- "${cur}"))
+                    return 0
+                    ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -1571,7 +2259,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__plugin__subcmd__verify)
-            opts="-q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --force-invalid --force-protected --format --color --hyperlinks --no-preview --explain --progress --quiet --verbose --help"
+            opts="-j -q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1582,7 +2270,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -1598,15 +2286,19 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --deny-skipped)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -1617,8 +2309,114 @@ _ocomment() {
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
                     return 0
                     ;;
+                --annotation-level)
+                    COMPREPLY=($(compgen -W "error warning notice" -- "${cur}"))
+                    return 0
+                    ;;
+                --trace)
+                    COMPREPLY=($(compgen -W "off human json" -- "${cur}"))
+                    return 0
+                    ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ocomment__subcmd__ratchet)
+            opts="-j -q -v -h --update --staged --index-only --base --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --base)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --policy)
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    return 0
+                    ;;
+                --layout)
+                    COMPREPLY=($(compgen -W "lines columns compact" -- "${cur}"))
+                    return 0
+                    ;;
+                --language)
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala vue svelte markdown perl" -- "${cur}"))
+                    return 0
+                    ;;
+                --dialect)
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss sass" -- "${cur}"))
+                    return 0
+                    ;;
+                --keep-kind)
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --remove-kind)
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --deny-skipped)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --format)
+                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
+                    return 0
+                    ;;
+                --color)
+                    COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --hyperlinks)
+                    COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --annotation-level)
+                    COMPREPLY=($(compgen -W "error warning notice" -- "${cur}"))
+                    return 0
+                    ;;
+                --trace)
+                    COMPREPLY=($(compgen -W "off human json" -- "${cur}"))
+                    return 0
+                    ;;
+                --progress)
+                    COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -1629,18 +2427,22 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__scan)
-            opts="-q -v -h --staged --index-only --config --policy --layout --language --dialect --keep-kind --remove-kind --force-invalid --force-protected --format --color --hyperlinks --no-preview --explain --progress --quiet --verbose --help"
+            opts="-j -q -v -h --staged --index-only --base --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --base)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --config)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -1656,15 +2458,19 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --deny-skipped)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -1675,8 +2481,110 @@ _ocomment() {
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
                     return 0
                     ;;
+                --annotation-level)
+                    COMPREPLY=($(compgen -W "error warning notice" -- "${cur}"))
+                    return 0
+                    ;;
+                --trace)
+                    COMPREPLY=($(compgen -W "off human json" -- "${cur}"))
+                    return 0
+                    ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ocomment__subcmd__selftest)
+            opts="-j -q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --policy)
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    return 0
+                    ;;
+                --layout)
+                    COMPREPLY=($(compgen -W "lines columns compact" -- "${cur}"))
+                    return 0
+                    ;;
+                --language)
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala vue svelte markdown perl" -- "${cur}"))
+                    return 0
+                    ;;
+                --dialect)
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss sass" -- "${cur}"))
+                    return 0
+                    ;;
+                --keep-kind)
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --remove-kind)
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --deny-skipped)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --format)
+                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
+                    return 0
+                    ;;
+                --color)
+                    COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --hyperlinks)
+                    COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --annotation-level)
+                    COMPREPLY=($(compgen -W "error warning notice" -- "${cur}"))
+                    return 0
+                    ;;
+                --trace)
+                    COMPREPLY=($(compgen -W "off human json" -- "${cur}"))
+                    return 0
+                    ;;
+                --progress)
+                    COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -1687,7 +2595,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__strip)
-            opts="-q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --force-invalid --force-protected --format --color --hyperlinks --no-preview --explain --progress --quiet --verbose --help"
+            opts="-j -q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1698,7 +2606,7 @@ _ocomment() {
                     return 0
                     ;;
                 --policy)
-                    COMPREPLY=($(compgen -W "safe legal all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
                     return 0
                     ;;
                 --layout)
@@ -1714,15 +2622,19 @@ _ocomment() {
                     return 0
                     ;;
                 --keep-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
                     return 0
                     ;;
                 --remove-kind)
-                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --deny-skipped)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -1733,8 +2645,114 @@ _ocomment() {
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
                     return 0
                     ;;
+                --annotation-level)
+                    COMPREPLY=($(compgen -W "error warning notice" -- "${cur}"))
+                    return 0
+                    ;;
+                --trace)
+                    COMPREPLY=($(compgen -W "off human json" -- "${cur}"))
+                    return 0
+                    ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ocomment__subcmd__tags)
+            opts="-j -q -v -h --staged --index-only --base --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --base)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --policy)
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    return 0
+                    ;;
+                --layout)
+                    COMPREPLY=($(compgen -W "lines columns compact" -- "${cur}"))
+                    return 0
+                    ;;
+                --language)
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala vue svelte markdown perl" -- "${cur}"))
+                    return 0
+                    ;;
+                --dialect)
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss sass" -- "${cur}"))
+                    return 0
+                    ;;
+                --keep-kind)
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --remove-kind)
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --deny-skipped)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --format)
+                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
+                    return 0
+                    ;;
+                --color)
+                    COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --hyperlinks)
+                    COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --annotation-level)
+                    COMPREPLY=($(compgen -W "error warning notice" -- "${cur}"))
+                    return 0
+                    ;;
+                --trace)
+                    COMPREPLY=($(compgen -W "off human json" -- "${cur}"))
+                    return 0
+                    ;;
+                --progress)
+                    COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)

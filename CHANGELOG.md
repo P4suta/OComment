@@ -5,9 +5,287 @@ All notable changes to OComment will be documented here. The project follows
 
 ## Unreleased
 
+### Added
+
+- `--base <REV>` checks only the working-tree files that differ from that
+  revision's merge base with HEAD. The merge base and not the tip: on a branch
+  several commits behind its trunk a plain diff reports every file the trunk
+  changed as well, and a gate that reported those would be asking this branch
+  to answer for somebody else's work. A path named beside it narrows it
+  further, and unlike a path named on its own it keeps the walk's limits — a
+  generated file the branch touched is still passed over.
+
+- A run that examined nothing says so. `--base` with no changed files and
+  `--staged` with nothing staged both report nothing and exit 0, which reads
+  exactly like a clean tree; that is how `--staged` under
+  `pre-commit run --all-files` becomes a gate that is green forever. Both runs
+  stay correct and the silence goes.
+
+- `--summary <FILE>` writes the end-of-run counts as one JSON object, whatever
+  `--format` the run wrote its product in, against the new
+  `spec/summary.schema.json`. The counts are the ones the run already made, so
+  there is no second scan and no parsing of the product to get at them.
+
+  The GitHub Action uses it for `findings-count`, `files-with-findings`,
+  `files-scanned`, `removed-count` and `summary-file`, and writes a table of
+  the same numbers to the job summary unless `step-summary: false`. A run that
+  failed before it finished reports those outputs as empty rather than as zero:
+  "none found" and "never looked" are different answers.
+
+- `--jobs <N>` sets how many threads the run uses to walk, read and scan. The
+  walk is parallel now — `ignore`'s own parallel walker, then the reads and the
+  language detection across a thread pool — where it used to read every file on
+  one thread before any scanning began. Measured on this repository, 176 files:
+  33 ms on one thread, 16 ms on eight. Output order does not move: the
+  candidates are sorted before any of them is opened, so two runs over the same
+  tree write the same bytes however many threads they used. The count was
+  previously settable only through `RAYON_NUM_THREADS`, which is an
+  implementation detail leaking as a user interface and was documented nowhere.
+
+- `--explain` works with `--format json` and `--format jsonl`, which carry the
+  rule as fields rather than as the sentence the human report composes: `rule`
+  to match on, `detail` as prose, `setting` naming the table and file it was
+  written in, and `next_step` when a flag would overrule it. SARIF and the
+  GitHub workflow commands still refuse it, because neither has anywhere to put
+  it.
+
+- `rust/ocomment-core/tests/layout_format.rs` asks `gofmt` and `rustfmt`
+  whether the bytes a removal leaves are bytes they still call normal. The
+  answer is `compact` and only `compact`, in every position a comment can sit;
+  `lines` and `columns` never conform and are not meant to, because the empty
+  line and the padding are what they promise. That table is pinned in both
+  directions, so a layout that stopped conforming fails and so does one that
+  started.
+
+- `tools/check_gate_symmetry.py` fails when a test suite has never once watched
+  anything be refused. A gate observed only accepting is half a gate, and the
+  half nobody watched is the half that silently stops working — which has
+  happened here. It found one suite: the property tests, which now carry
+  witnesses that their generators reach the case each property is about, and a
+  negative control for the one property whose claim is that nothing was found.
+
+- `sh tools/preflight.sh` runs everything CI checks that a laptop can, in the
+  order that fails soonest, and `lefthook install` wires it into `pre-push`.
+  Waiting eight minutes to be told about a stale manual page is not a review
+  cycle. `tools/check_ci_contracts.py` holds the script against
+  `.github/workflows/ci.yml`, so a gate added to CI cannot quietly stop running
+  locally — and it now also fails when `docs/SUMMARY.md` lists a chapter Git
+  does not track, which is how `docs/agents.md` reached CI unpushed, hidden by
+  a global ignore that most repositories want.
+
+- `ocomment tags` counts what this tree's comments actually open with and says
+  which way the convention has drifted: a tag the configuration allows that
+  nothing writes, and a tag people write that nothing allows — the second being
+  comments the run removes today, which is usually the first anybody hears of
+  it. It reports rather than gates, as `coverage` does. `ocomment_core::comment_text`
+  is published so a caller reads a comment's text the way the tag rule does.
+
+- `[policy] protected` names the markers your own tools read, and decides what
+  those comments *are*. The catalogue knows the tools everybody uses and cannot
+  know yours, and `keep_regex` cannot stand in for one: a pattern holds a
+  comment back and leaves it an ordinary line comment, so `--policy all` —
+  having said it would take every comment — takes it, and a build that read the
+  marker stops reading it. An entry records it under a kind instead:
+  `tier = "tool"` makes it a `directive`, which every policy but `all` keeps,
+  and `tier = "load-bearing"` makes it one no policy reaches. `reason` is what
+  the report prints, in your words. The same field a declarative profile
+  carries, applied to every file rather than to one format.
+
+### Changed
+
+- `--format json` and `--format jsonl` no longer carry the source map unless
+  `--source-map` asks for it. It is one segment per unchanged run of bytes, so
+  a file with twenty-five comments in it produced several hundred lines of a
+  report the caller had chosen *because* it was the machine format. `edits` is
+  unchanged and still always present.
+
+- This repository passes its own gate at zero. It previously ran a ledger
+  against `max_lines = 1` with 1674 comments above the line, which is the
+  feature working as designed and the wrong use of it here: a tool whose own
+  repository cannot pass its own rules is arguing that the rules are
+  unreasonable. The rules are now a tag on every comment, `max_lines = 8`,
+  `trailing = false`, and deadlines on `TODO`, `FIXME` and `HACK` — and every
+  comment that broke one was fixed rather than recorded.
+
+  What made that reachable is that documentation is exempt from the length
+  rule, because it is documentation. The long rationale that used to sit in
+  `# NOTE:` blocks at the head of `spec/*.toml` is in `docs/` now, where a
+  reader finds it; the long `// NOTE:` blocks in front of a Rust item are `///`
+  doc comments, the OCaml ones are `(**`, and the Python ones are module
+  docstrings. The rest was compressed. The rule is not "explain less", it is
+  "explain where a reader will look".
+
+  The ledger itself is unchanged and still documented: it is for a repository
+  that cannot get there today.
+
+- `[[overrides]]` may carry its own `[policy.allow]`, replacing the global one
+  whole for the paths it matches. A subtree with a different convention could
+  set a policy and a pattern list and not the rules about a comment's shape,
+  which is the half a tag convention actually lives in.
+
+### Fixed
+
+- `--explain` no longer contradicts the line above it. A comment kept by
+  `[policy.allow] tags` was reported as `kept line comment` with
+  `removed: policy \`conservative\` removes ordinary comments` underneath, and
+  one taken by `max_lines` was explained as an ordinary policy removal with no
+  mention of length. The cause was structural: the three shape rules are
+  decided over the whole file — how long a run is, whether code sits before a
+  comment — and the explanation was re-derived from the comment's own bytes,
+  which cannot see any of that. The scanner now records the rule it reached
+  (`ShapeRule`) and the explanation reads it, so the two cannot disagree. Both
+  fields are written from one value, and the option sweep that was supposed to
+  catch this now destructures `ScanOptions` exhaustively, so a rule added later
+  fails to compile until it is covered.
+
+- A blank line ends a run of comments. `max_lines` measures a run of adjacent
+  comments as one paragraph, and it was counting across blank lines: `// a`,
+  five blank lines and `// b` came to seven lines of commentary with nobody
+  having written a long comment. A blank line is how a writer says the next
+  remark is a separate remark.
+
+- A tag is a word rather than a prefix. `tags = ["NOTE"]` allowed `NOTE` and
+  also allowed `NOTEBOOK`, which is a way through a project's own convention
+  that reads like a typo. What may follow a tag is punctuation, space, or the
+  end of the text.
+
+- The shape rules no longer reach a comment somebody named outright or one that
+  is not prose. `keep_kind` and `keep_regex` are a project saying *keep exactly
+  this* and a shape rule is a project saying *keep things like this*; the
+  specific wins. This repository pins every GitHub Action to a SHA and writes
+  the version beside it as a comment Dependabot rewrites, and `trailing = false`
+  was taking all of them with no way to have both settings mean what they say.
+  Directives are out for a sharper reason: `x = 1  # noqa` silences a warning
+  about the line it is on and silences nothing a line above it, so removing one
+  for being trailing would change what the build does.
+
+
+- A `keep_regex`, `remove_regex`, `keep_kind` or `remove_kind` that matched
+  nothing is reported instead of being left silent. This is the failure that
+  looks like success: a pattern you believe is holding a comment back, which is
+  not, and which `fix` therefore removes. The one this came from was
+  `^\s*swiftlint:` — written against the text of the comment and matched
+  against the whole token, so the `^` is anchored in front of a `//` that is
+  always there and the pattern can never match. Nothing said a word about it.
+  A run now names every setting that met no comment, says where it was written,
+  and adds the sentence that turns the report into a fix: a pattern is matched
+  against the whole comment token, so `^` is the comment's own first byte.
+
+  The report goes to standard error beside the summary, so a `--format json`
+  consumer keeps a clean pipe, and `-q` drops it with every other note. It is
+  asked of a run that walked a directory and not of one over named files: a
+  walk is the caller saying *everything under here*, so a pattern that met
+  nothing in it is doing no work, while a pattern with nothing to say about one
+  named file has not thereby failed.
+
+- `ocomment config explain` names every `keep_kind`, `remove_kind`,
+  `keep_regex` and `remove_regex` it resolved, and where each one was written,
+  with the index the reports above count from. It used to print three lines —
+  precedence, root, policy and layout — and so explained a configuration
+  without naming anything the configuration said.
+
+- `layout = "compact"` no longer lengthens a run of blank lines. A comment set
+  off by a blank line above and another below is three lines of file for one
+  comment; taking only the middle one left the two blanks touching, a run one
+  line longer than the file ever had. A removal now leaves `max(before, after)`
+  blank lines behind, where `before` and `after` are the runs it was standing
+  between — so the blank lines above a removal are never touched, no more are
+  taken than followed the comment, and two lines of code that had a blank line
+  between them still do. `swift-format` reported the old output as `[RemoveLine]
+  remove line break`, `gofmt` closed the gap and `rustfmt` collapsed it, which
+  meant `ocomment fix` had to be followed by a formatter to finish its own edit.
+  On OComment's own Rust sources under `--policy all`, this takes back 12 blank
+  lines across 6 of 59 files.
+
+- The JSON formats carry the position and the text of every comment and
+  diagnostic: `line`, `column`, `end_line`, `end_column`, and the comment's own
+  bytes under `text`. A byte span is what a patcher needs and not what a
+  reporter needs, so a caller that chose `--format json` because it was the
+  machine format had to reopen the file and count line breaks to say where a
+  finding was — work the run had already done for the prose it does not read.
+  Positions are one-based, columns are counted in bytes as everywhere else, and
+  `end_line`/`end_column` address the byte after the last one, matching the
+  half-open span beside them. `--no-preview` leaves `text` out, which is how a
+  report over a large tree stays small.
+
+- `--format github` annotates a removable comment at the level its run's exit
+  status justifies: `::error` from `check` and `diff`, which answer a finding
+  with 1, and `::notice` from `scan` and `fix`, which end at 0 whatever they
+  find. A gate that failed on the 1 was posting notices about the very comments
+  it failed over, which reads in the checks tab as though nothing had gone
+  wrong — and GitHub folds a notice away where it surfaces an error. The new
+  `--annotation-level <error|warning|notice>` overrules it for a job that posts
+  annotations without gating on them, or gates without wanting the red; a
+  diagnostic stays an `::error` regardless.
+
+- `--policy all` no longer removes a directive the language or its build reads
+  as part of the program. Those are now their own comment kind,
+  `load-bearing`, held back from every `remove` policy the way a shebang and an
+  encoding declaration already were; `--force-protected` is the one way to give
+  one up, and a run that keeps one says so on standard error. The kind covers
+  `//go:build`, `// +build` and the rest of Go's `go:` namespace,
+  `// swift-tools-version:`, Ruby's `# frozen_string_literal:`,
+  `# shareable_constant_value:` and `# warn_indent:` magic comments, a
+  Dockerfile's `# syntax=`, Dart's `// @dart=`, Scala CLI's `//> using`, and
+  TypeScript's `/// <reference ... />`.
+
+  Until now `ocomment fix --policy all` deleted all of them. The failure was
+  quiet in the worst way: a `Package.swift` that lost its tools version stopped
+  being a manifest SwiftPM could read, and a Go file that lost its build
+  constraint still compiled — on every platform, rather than the one it was
+  written for. Lint suppressions such as `// swiftlint:` and `# rubocop:` are
+  unchanged and `all` still removes them, because a run that loses one gets a
+  noisier tool rather than a different program.
+
+  `spec/directives.toml` now files every protected marker under `protected` or
+  `load_bearing`, and `tools/check_directives.py` runs each one under
+  `--policy all` to hold the two tiers to that promise.
+
+### Changed
+
+- `--keep-kind` and `--remove-kind` accept `load-bearing`, machine formats
+  report it, and a WASM scanner plugin may return it. Anything that pinned the
+  eleven comment kinds sees a twelfth.
+
 ## 0.1.0
 
 ### Added
+
+- `--format agent`, a report for a reader that is going to act on it. One line
+  per comment, location first and the verb second, where the verb is the rule
+  that decided it: a comment that is only too long says `shorten to 1 line` and
+  one that only sits in the wrong place says `move above the code`. Then the
+  rule the project judges by, once, so the next comment is written differently;
+  then the way through. A clean run writes nothing at all on either stream,
+  which is what makes the format usable as the body of a hook decision.
+
+- `ocomment hook claude-code` answers an agent host's editing hook in that
+  host's protocol. `PreToolUse` is asked before the edit lands: the hook works
+  out what the file would become — `Write` carries the whole file, `Edit` and
+  `MultiEdit` carry replacements it applies in memory — judges it with the same
+  machinery `check` uses, and denies the edit with the agent report as the
+  reason. Nothing is written and the file is untouched. `PostToolUse` reports
+  back on what already landed. Every event that is not an edit gets no answer,
+  and a clean edit gets no answer either: the hook never says `allow`, because
+  waving an edit past its user's permission rules is not what it was asked
+  about. One file holds every line specific to a host.
+
+- `[policy.allow.expiry]` gives a tag a deadline. A `TODO` is not the same kind
+  of thing as a `SAFETY`: one records why the code is the way it is and is true
+  for as long as the code is, and the other says somebody will do something.
+  Treating them alike forces a bad answer — forbid the `TODO` and nobody obeys
+  it, permit it and the repository carries one from four years ago that
+  everybody reads past. A tag under `expiry` is allowed exactly as any other
+  until the line carrying it reaches the configured age, and is a finding after
+  that, every run, until somebody does it or deletes it.
+
+  The clock is the repository's: the age of a line is the age of the commit
+  that introduced it. Writing one therefore costs nothing, `"0d"` means the
+  deadline starts at the next commit, and `check --staged` never reports one —
+  the pre-commit gate is about what you are adding, and what you are adding is
+  new. Outside a repository the age cannot be read and nothing is removed on a
+  guess.
+
 
 - Byte-oriented scanners and transformations for 30 built-in languages and the
   documented dialects.

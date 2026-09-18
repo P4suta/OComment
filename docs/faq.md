@@ -1,11 +1,15 @@
 # FAQ
 
-## Does the default policy really remove documentation comments?
+## Does the default policy remove documentation comments?
 
-Yes. `safe` removes `doc-line` and `doc-block` along with ordinary comments; it
-is *safe* in the sense that it never removes something another program reads,
-not in the sense that it never removes something a human wrote. Documentation
-comments are commentary, and a build artifact usually wants them gone.
+No. A doc comment is not commentary about the code, it is the API
+documentation, and it ships: removing one empties a page on docs.rs, an entry
+on pkg.go.dev, a section of a javadoc site. That is a public loss of the same
+kind as removing a licence notice, and the default declines both.
+
+`standard` takes them, which is a policy someone names on purpose. If you want
+them gone for one build artifact and kept in the source, that is what
+`[[overrides]]` is for.
 
 If your project wants them kept — this one does — say so once:
 

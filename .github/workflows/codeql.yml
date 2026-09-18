@@ -22,10 +22,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      actions: read # NOTE: Read workflow metadata used by CodeQL.
-      contents: read # NOTE: Check out the repository source.
-      packages: read # NOTE: Download CodeQL query packs.
-      security-events: write # NOTE: Upload code-scanning results.
+      # NOTE: Read workflow metadata used by CodeQL.
+      actions: read
+      # NOTE: Check out the repository source.
+      contents: read
+      # NOTE: Download CodeQL query packs.
+      packages: read
+      # NOTE: Upload code-scanning results.
+      security-events: write
     strategy:
       fail-fast: false
       matrix:

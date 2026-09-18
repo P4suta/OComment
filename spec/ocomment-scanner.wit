@@ -4,7 +4,7 @@ interface types {
   record span { start: u64, end: u64 }
   enum comment-kind {
     line, block, doc-line, doc-block, directive, license, html-comment,
-    shebang, encoding, optimizer-hint, version-comment
+    shebang, encoding, optimizer-hint, version-comment, load-bearing
   }
   record comment { location: span, kind: comment-kind }
   record scan-options { language: string, dialect: string, configuration: list<u8> }

@@ -38,13 +38,13 @@ block comment that spans several lines.
 Each of these is `ocomment strip --language rust --policy <mode>` reading
 the sample on standard input.
 
-### `safe`
+### `conservative`
 
 ```text
-
+// SPDX-License-Identifier: MIT OR Apache-2.0
 
 // rustfmt::skip
-
+/// Adds two numbers.
 pub fn add(a: u32, b: u32) -> u32 {
     let total = a +  b; 
     
@@ -54,10 +54,10 @@ pub fn add(a: u32, b: u32) -> u32 {
 }
 ```
 
-### `legal`
+### `standard`
 
 ```text
-// SPDX-License-Identifier: MIT OR Apache-2.0
+
 
 // rustfmt::skip
 
@@ -86,7 +86,7 @@ pub fn add(a: u32, b: u32) -> u32 {
 }
 ```
 
-`safe` and `legal` differ over the licence header alone, and `all`
+`conservative` and `standard` differ over the licence header alone, and `all`
 is the only one that takes the `// rustfmt::skip` directive out.
 `all` still refuses to touch a shebang or an encoding preamble until
 `--force-protected` is given as well; see
@@ -95,15 +95,15 @@ is the only one that takes the `// rustfmt::skip` directive out.
 ## What each layout leaves behind
 
 Each of these is `ocomment strip --language rust --layout <layout>`
-reading the same sample, under the default `safe` policy.
+reading the same sample, under the default `conservative` policy.
 
 ### `lines`
 
 ```text
-
+// SPDX-License-Identifier: MIT OR Apache-2.0
 
 // rustfmt::skip
-
+/// Adds two numbers.
 pub fn add(a: u32, b: u32) -> u32 {
     let total = a +  b; 
     
@@ -116,10 +116,10 @@ pub fn add(a: u32, b: u32) -> u32 {
 ### `columns`
 
 ```text
-                                             
+// SPDX-License-Identifier: MIT OR Apache-2.0
 
 // rustfmt::skip
-                     
+/// Adds two numbers.
 pub fn add(a: u32, b: u32) -> u32 {
     let total = a +                   b;                            
                                                            
@@ -132,8 +132,10 @@ pub fn add(a: u32, b: u32) -> u32 {
 ### `compact`
 
 ```text
+// SPDX-License-Identifier: MIT OR Apache-2.0
 
 // rustfmt::skip
+/// Adds two numbers.
 pub fn add(a: u32, b: u32) -> u32 {
     let total = a +  b;
     total
@@ -157,13 +159,27 @@ were. A surviving line keeps the ending it had in the source - the
 same LF or CRLF, from inside the comment if that is where it was - or
 no ending at all if the file stopped there without one.
 
+### Which one a formatter accepts
+
+`compact`, and only `compact`. This is measured rather than argued:
+`rust/ocomment-core/tests/layout_format.rs` strips a source that
+`gofmt` and `rustfmt` already call normal, in every position a
+comment can sit, and asks each formatter about the result. `lines`
+and `columns` never conform and are not meant to - the empty line
+and the padding are the promise - so a pipeline that runs
+`gofmt -l` or `cargo fmt --check` beside OComment wants `compact`.
+
+The test pins that table in both directions, so a layout that
+stopped conforming fails and so does one that started: the second
+is a layout that has quietly changed what it promises.
+
 ## Where they are set
 
 ```toml
 version = 1
 
 [policy]
-mode = "legal"
+mode = "conservative"
 layout = "lines"
 
 [[overrides]]

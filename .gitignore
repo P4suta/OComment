@@ -20,3 +20,11 @@ __pycache__/
 /editors/vscode/.vscode-test/
 *.vsix
 /rust/target*/
+
+# NOTE: A global ignore commonly hides an agent instruction file, because in
+# NOTE: most repositories it is somebody's private scratch. Here it is a
+# NOTE: published page: AGENTS.md is the entry point for an agent working on
+# NOTE: OComment, docs/agents.md is a chapter of the book, and the docs build
+# NOTE: fails without it.
+!AGENTS.md
+!docs/agents.md

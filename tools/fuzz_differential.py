@@ -24,6 +24,63 @@ The exit status is 0 when every response agreed. Otherwise the divergences are
 collapsed into distinct signatures -- the shape of the disagreement, not the
 source that produced it -- and one shrunken repro is printed per signature, so a
 thousand instances of one bug are reported once.
+
+The per-language pools
+----------------------
+
+Four languages need shapes a per-token pool would practically never
+assemble, so they are listed rather than discovered.
+
+`YAML_STRUCTURE`
+    The shapes a YAML block scalar needs to open at all. Its body is the one
+    lexical state a single byte cannot reach: the header wants an indicator
+    where a node may begin and then the end of the line, and the body wants a
+    line indented past the node, so a per-token pool without these opens one
+    about as often as it opens a Lua long bracket without `--[[`. `key:\n` and
+    a bare `-` on its own line put the node that owns a body on an earlier
+    line than the header, which is the one thing about a YAML line the line
+    itself does not say; `!!str` and `&a` are the node properties that may
+    stand between the two, and `|+` the chomping that makes the blank lines
+    under a body content.
+
+`RUBY_STRUCTURE`
+    The shapes Ruby needs before a generated source reaches its lexical states
+    at all. Four of Ruby's tokens are spelled with a byte that is also an
+    operator, so the pool carries the whole opener rather than the byte: a
+    percent literal with each kind of delimiter, a here document header with
+    the terminator line that ends one, an interpolation, a character literal,
+    and a regular expression. `=begin` and `__END__` are here for the reason
+    the YAML headers are -- both are whole words at column zero that a per-
+    byte pool would practically never assemble. The last three are the
+    interpolation boundary a here document header may be written across: the
+    body such a header asks for belongs to the line the header stands on, not
+    to the interpolation, and only a pool that can assemble an opener inside
+    `"#{ ... }"` puts that in front of the two scanners.
+
+`SWIFT_STRUCTURE`
+    The shapes Swift needs. A run of `#` renames both the delimiter and the
+    escape of a raw string, so the pool carries one-hash and two-hash openers
+    with the closers and the `\#(` that opens an interpolation inside one;
+    `#\"\"\"#` is the shape that reads as two things at once. `#/` and `/#`
+    delimit the regular expression literal that may hold an unescaped `/` and
+    may span lines, and `/a\//` is the bare literal whose last two bytes spell
+    `//`. The apostrophe is the delimiter the language does not have and the
+    compiler lexes anyway, and the last three are the instructions a Swift
+    tool reads.
+
+`CSHARP_STRUCTURE`
+    The shapes C# needs. Its eight string forms are opened by a run of "$" and
+    "@" in front of a run of quotes, and which rule applies turns on the
+    length of both runs, so the pool carries the openers whole rather than the
+    bytes: "@\"" and "$@\"" carry line breaks, "$\"" carries a hole that may,
+    and "$$\"\"\"" needs two braces to open one where a single "{" is content.
+    "{{" and "}}" are an escape in one form and content in another, and "u8"
+    is the suffix that follows a closing quote. The directive words after them
+    are the lines lexed by rules of their own -- four of them take the rest of
+    the line as a message and the rest lex a string and a "//" -- and the last
+    three are the instructions a C# tool reads. The two Unicode escapes are
+    the line terminators ECMA-334 counts and this repository's other C-family
+    scanners do not.
 """
 
 import argparse
@@ -77,16 +134,7 @@ MARKUP = [
 ]
 SHELL_STRUCTURE = ["<<EOF", "EOF", "${", "$(", ")", "case", "esac", "in", "|", "&&"]
 
-# NOTE: The shapes a YAML block scalar needs to open at all. Its body is the one
-# NOTE: lexical state a single byte cannot reach: the header wants an indicator
-# NOTE: where a node may begin and then the end of the line, and the body wants
-# NOTE: a line indented past the node, so a per-token pool without these opens
-# NOTE: one about as often as it opens a Lua long bracket without `--[[`.
-# NOTE: `key:\n` and a bare `-` on its own line put the node that owns a body on
-# NOTE: an earlier line than the header, which is the one thing about a YAML line
-# NOTE: the line itself does not say; `!!str` and `&a` are the node properties
-# NOTE: that may stand between the two, and `|+` the chomping that makes the
-# NOTE: blank lines under a body content.
+# NOTE: See "The per-language pools" in this file's docstring.
 YAML_STRUCTURE = [
     "key: ", "- ", ": |", ": >-", "|2-", "|+", "\n  ", "%YAML 1.2", "...",
     "key:\n", "\n-\n", "!!str ", "&a ",
@@ -101,18 +149,7 @@ PHP_STRUCTURE = [
     "{$a}", "${a}", "phpcs:ignore", "@phpstan-ignore-next-line",
 ]
 
-# NOTE: The shapes Ruby needs before a generated source reaches its lexical
-# NOTE: states at all. Four of Ruby's tokens are spelled with a byte that is also
-# NOTE: an operator, so the pool carries the whole opener rather than the byte:
-# NOTE: a percent literal with each kind of delimiter, a here document header
-# NOTE: with the terminator line that ends one, an interpolation, a character
-# NOTE: literal, and a regular expression. `=begin` and `__END__` are here for
-# NOTE: the reason the YAML headers are -- both are whole words at column zero
-# NOTE: that a per-byte pool would practically never assemble. The last three
-# NOTE: are the interpolation boundary a here document header may be written
-# NOTE: across: the body such a header asks for belongs to the line the header
-# NOTE: stands on, not to the interpolation, and only a pool that can assemble
-# NOTE: an opener inside `"#{ ... }"` puts that in front of the two scanners.
+# NOTE: See "The per-language pools" in this file's docstring.
 RUBY_STRUCTURE = [
     "%w[", "%q(", "%r{", "%Q{", "<<~EOS", "<<EOS", "EOS", "?c", "?\\", "=begin",
     "=end", "__END__", "#{", "/re/", "$\"", "@a", ":sym", "empty?", "puts ",
@@ -155,15 +192,7 @@ DART_STRUCTURE = [
     "'''", "// @dart = 2.12", "// dart format off", "ignore_for_file:",
 ]
 
-# NOTE: The shapes Swift needs. A run of `#` renames both the delimiter and the
-# NOTE: escape of a raw string, so the pool carries one-hash and two-hash
-# NOTE: openers with the closers and the `\#(` that opens an interpolation
-# NOTE: inside one; `#"""#` is the shape that reads as two things at once.
-# NOTE: `#/` and `/#` delimit the regular expression literal that may hold an
-# NOTE: unescaped `/` and may span lines, and `/a\//` is the bare literal whose
-# NOTE: last two bytes spell `//`. The apostrophe is the delimiter the language
-# NOTE: does not have and the compiler lexes anyway, and the last three are the
-# NOTE: instructions a Swift tool reads.
+# NOTE: See "The per-language pools" in this file's docstring.
 SWIFT_STRUCTURE = [
     "#\"", "\"#", "##\"", "\"##", "#\"\"\"", "\"\"\"#", "#\"\"\"#", "\\#(", "\\(",
     "#/", "/#", "##/", "/##", "/a\\//", "a /b/ c", "'", "#if", "#warning(",
@@ -171,18 +200,7 @@ SWIFT_STRUCTURE = [
     "// swift-format-ignore",
 ]
 
-# NOTE: The shapes C# needs. Its eight string forms are opened by a run of "$"
-# NOTE: and "@" in front of a run of quotes, and which rule applies turns on the
-# NOTE: length of both runs, so the pool carries the openers whole rather than
-# NOTE: the bytes: "@\"" and "$@\"" carry line breaks, "$\"" carries a hole that
-# NOTE: may, and "$$\"\"\"" needs two braces to open one where a single "{" is
-# NOTE: content. "{{" and "}}" are an escape in one form and content in another,
-# NOTE: and "u8" is the suffix that follows a closing quote. The directive words
-# NOTE: after them are the lines lexed by rules of their own -- four of them take
-# NOTE: the rest of the line as a message and the rest lex a string and a "//" --
-# NOTE: and the last three are the instructions a C# tool reads. The two Unicode
-# NOTE: escapes are the line terminators ECMA-334 counts and this repository's
-# NOTE: other C-family scanners do not.
+# NOTE: See "The per-language pools" in this file's docstring.
 CSHARP_STRUCTURE = [
     "@\"", "$\"", "$@\"", "@$\"", "$$\"\"\"", "$\"\"\"", "\"\"\"\"", "{{", "}}", "u8",
     "@class", "$$", "\u2028", "\u0085",

@@ -17,6 +17,21 @@ Every example comes out of the built binary or out of `spec/`, never out of
 prose, so nothing on the generated pages can claim behaviour the binary does not
 have. Only the standard library is used, because this runs in a job that
 installs nothing beyond the toolchain.
+
+PROTECTED_SAMPLES
+-----------------
+
+One sample for every name in the `protected` list of `spec/directives.toml`,
+written the way a project really writes it and holding exactly one comment.
+`protected_table` fails when the spec names a marker that has no sample there,
+so a marker added to the shared spec cannot reach a release undocumented, and
+it fails again when the binary does not in fact keep one, so the table can
+never promise a protection that is not there.
+
+`tools/check_directives.py` proves the same names are protected, with negative
+controls this page has no use for. The two lists are kept apart on purpose:
+each is checked against the shared spec, and a docs generator that imported a
+checker would fail for two different reasons at once.
 """
 
 from __future__ import annotations
@@ -43,18 +58,7 @@ DEFAULT_BINARIES = (
     ROOT / "rust/target/release/ocomment",
 )
 
-# INVARIANT: One sample for every name in the `protected` list of
-# INVARIANT: `spec/directives.toml`, written the way a project really writes it
-# INVARIANT: and holding exactly one comment. `protected_table` fails when the
-# INVARIANT: spec names a marker that has no sample here, so a marker added to
-# INVARIANT: the shared spec cannot reach a release undocumented, and it fails
-# INVARIANT: again when the binary does not in fact keep one, so the table can
-# INVARIANT: never promise a protection that is not there.
-# NOTE: `tools/check_directives.py` proves the same names are protected, with
-# NOTE: negative controls this page has no use for. The two lists are kept
-# NOTE: apart on purpose: each is checked against the shared spec, and a docs
-# NOTE: generator that imported a checker would fail for two different reasons
-# NOTE: at once.
+# INVARIANT: See "PROTECTED_SAMPLES" in this file's docstring.
 PROTECTED_SAMPLES: dict[str, tuple[str, str | None, bytes]] = {
     "shebang": ("shell", None, b"#!/bin/sh\n"),
     "encoding": ("python", None, b"# -*- coding: utf-8 -*-\n"),
@@ -69,6 +73,17 @@ PROTECTED_SAMPLES: dict[str, tuple[str, str | None, bytes]] = {
     "sourceURL": ("javascript", None, b"//# sourceURL=bundle.js\n"),
     "#__PURE__": ("javascript", None, b"const value = /*#__PURE__*/ factory();\n"),
     "@__PURE__": ("javascript", None, b"const value = /*@__PURE__*/ factory();\n"),
+    "#__NO_SIDE_EFFECTS__": (
+        "javascript",
+        None,
+        b"/*#__NO_SIDE_EFFECTS__*/\nexport function f() {}\n",
+    ),
+    "webpack": (
+        "javascript",
+        None,
+        b'const m = import(/* webpackChunkName: "x" */ "./m");\n',
+    ),
+    "vite-ignore": ("javascript", None, b"const m = import(/* @vite-ignore */ url);\n"),
     "lint-and-formatter": (
         "javascript",
         None,
@@ -651,8 +666,55 @@ def languages_page() -> str:
     return "\n".join(lines) + "\n"
 
 
-POLICIES = ("safe", "legal", "all")
+POLICIES = ("conservative", "standard", "all")
 LAYOUTS = ("lines", "columns", "compact")
+
+
+def check_value_lists(cli: Cli) -> None:
+    """Refuse to document a policy or layout list the binary does not have.
+
+    These two tuples used to be the only statement of which policies exist, so
+    renaming a policy in the source left this generator producing the old page
+    and reporting it as current -- a check that passed because both sides of it
+    were stale. The binary lists its own accepted values under `--help`, so
+    that is the side to believe, and a disagreement is a failure rather than a
+    silent regeneration.
+    """
+    help_text = cli.run(["check", "--help"]).stdout.decode("utf-8")
+    for flag, expected in (("--policy", POLICIES), ("--layout", LAYOUTS)):
+        found = possible_values(help_text, flag)
+        if found != list(expected):
+            raise SystemExit(
+                f"tools/gen_docs.py lists {list(expected)} for `{flag}`, but the"
+                f" binary accepts {found}; update the list in this file"
+            )
+
+
+def possible_values(help_text: str, flag: str) -> list[str]:
+    """The values clap prints under `flag`, in the order it prints them."""
+    lines = help_text.splitlines()
+    for index, line in enumerate(lines):
+        if line.strip().startswith(flag):
+            break
+    else:
+        raise SystemExit(f"`{flag}` is not in the help text")
+    values: list[str] = []
+    seen_header = False
+    for line in lines[index + 1 :]:
+        stripped = line.strip()
+        if stripped == "Possible values:":
+            seen_header = True
+            continue
+        if not seen_header:
+            if stripped and not line.startswith(" " * 10):
+                break
+            continue
+        if stripped.startswith("- "):
+            values.append(stripped[2:].split(":", 1)[0].strip())
+            continue
+        if not stripped:
+            break
+    return values
 
 POLICY_SAMPLE = """\
 // SPDX-License-Identifier: MIT OR Apache-2.0
@@ -726,7 +788,7 @@ def policies_page(cli: Cli, workspace: pathlib.Path) -> str:
     lines.extend(
         [
             "",
-            "`safe` and `legal` differ over the licence header alone, and `all`",
+            "`conservative` and `standard` differ over the licence header alone, and `all`",
             "is the only one that takes the `// rustfmt::skip` directive out.",
             "`all` still refuses to touch a shebang or an encoding preamble until",
             "`--force-protected` is given as well; see",
@@ -735,7 +797,7 @@ def policies_page(cli: Cli, workspace: pathlib.Path) -> str:
             "## What each layout leaves behind",
             "",
             "Each of these is `ocomment strip --language rust --layout <layout>`",
-            "reading the same sample, under the default `safe` policy.",
+            "reading the same sample, under the default `conservative` policy.",
         ]
     )
     outputs = {}
@@ -799,13 +861,27 @@ def policies_page(cli: Cli, workspace: pathlib.Path) -> str:
             "same LF or CRLF, from inside the comment if that is where it was - or",
             "no ending at all if the file stopped there without one.",
             "",
+            "### Which one a formatter accepts",
+            "",
+            "`compact`, and only `compact`. This is measured rather than argued:",
+            "`rust/ocomment-core/tests/layout_format.rs` strips a source that",
+            "`gofmt` and `rustfmt` already call normal, in every position a",
+            "comment can sit, and asks each formatter about the result. `lines`",
+            "and `columns` never conform and are not meant to - the empty line",
+            "and the padding are the promise - so a pipeline that runs",
+            "`gofmt -l` or `cargo fmt --check` beside OComment wants `compact`.",
+            "",
+            "The test pins that table in both directions, so a layout that",
+            "stopped conforming fails and so does one that started: the second",
+            "is a layout that has quietly changed what it promises.",
+            "",
             "## Where they are set",
             "",
             "```toml",
             "version = 1",
             "",
             "[policy]",
-            'mode = "legal"',
+            'mode = "conservative"',
             'layout = "lines"',
             "",
             "[[overrides]]",
@@ -826,7 +902,7 @@ def policies_page(cli: Cli, workspace: pathlib.Path) -> str:
 WHY_CONFIG = r"""version = 1
 
 [policy]
-mode = "safe"
+mode = "conservative"
 keep_regex = ['^//\s*NOTE\b']
 
 [[overrides]]
@@ -932,9 +1008,17 @@ def policy_matrix() -> list[str]:
 
 
 def protected_table(cli: Cli, cwd: pathlib.Path) -> list[str]:
-    """One row per marker `spec/directives.toml` protects, scanned for real."""
+    """One row per marker `spec/directives.toml` protects, scanned for real.
+
+    Both tiers are listed, the load-bearing one first: those are the markers no
+    `remove` policy reaches, so a reader asking whether `--policy all` is safe
+    to point at their repository is reading this half of the table. The `Kept
+    because` column is the scanner's own answer and is what tells the two
+    apart, which is why the tiers are not labelled again here.
+    """
     with DIRECTIVES.open("rb") as stream:
-        names = tomllib.load(stream)["protected"]
+        table = tomllib.load(stream)
+    names = table["load_bearing"] + table["protected"]
     lines = [
         "| Marker | Language | Written as | Kind | Kept because |",
         "| --- | --- | --- | --- | --- |",
@@ -1020,6 +1104,19 @@ def why_kept_page(cli: Cli, workspace: pathlib.Path) -> str:
             "does with the file. Each row below is scanned by the binary that built",
             "this page, so the table cannot claim a protection that is not there.",
             "",
+            "The `Kept because` column says which of two protections a marker has,",
+            "and the difference is what `--policy all` does to it. A marker kept as",
+            "a *tool or language directive* is addressed to something that reports",
+            "on the code -- a linter, a formatter, a coverage tool -- so losing it",
+            "makes that tool noisier and leaves the program alone, and `all` is",
+            "free to take it. A marker kept as *required by the language or its",
+            "build* is read by the language itself, by its compiler or by its",
+            "package manager, and losing it changes what compiles or what the code",
+            "does: `//go:build linux` decides whether the file is compiled at all,",
+            "and `// swift-tools-version:` decides whether a `Package.swift` is a",
+            "manifest. No policy is offered that choice, and `--force-protected`",
+            "is the only way to give one up.",
+            "",
         ]
     )
     lines.extend(protected_table(cli, workspace))
@@ -1077,7 +1174,7 @@ def why_kept_page(cli: Cli, workspace: pathlib.Path) -> str:
             "",
             "[[overrides]]",
             'paths = ["vendor/**"]',
-            'policy = "legal"',
+            'policy = "conservative"',
             "```",
             "",
             "`keep_kind` names whole kinds from the first column of the table above,",
@@ -1087,6 +1184,32 @@ def why_kept_page(cli: Cli, workspace: pathlib.Path) -> str:
             "of the comment; this repository uses exactly that to require a tag on",
             "every explanatory comment it keeps. Both are lists, and `--explain`",
             "reports the index it matched, so `keep_regex #0` is the first entry.",
+            "",
+            "That the pattern is matched against the whole token is the detail",
+            "worth reading twice, because a pattern written against the text",
+            "inside the comment silently protects nothing: `^\\s*rustfmt::`",
+            "anchors in front of a `//` that is always there and can never",
+            "match. A setting that protects nothing is the one failure that",
+            "looks like success, so a run that walks a directory names every",
+            "`keep_kind`, `remove_kind`, `keep_regex` and `remove_regex` that",
+            "met no comment:",
+            "",
+            "```console",
+            "$ ocomment check",
+            "keep_regex #0 `^\\s*rustfmt::` matched none of the 2 comments this "
+            "run scanned; it is set in [policy] in .ocomment.toml",
+            "A pattern is matched against the whole comment token, so `^` is the "
+            "comment's own first byte — the `//`, `#` or `/*` — and not the text "
+            "after it.",
+            "```",
+            "",
+            "The report goes to standard error beside the summary, so a",
+            "`--format json` consumer keeps a clean pipe, and `-q` drops it with",
+            "every other note. A run over named files stays quiet: a walk is the",
+            "caller saying *everything under here*, so a pattern that met",
+            "nothing in it is a pattern doing no work, while a run over one file",
+            "is a question about that file and a pattern with nothing to say",
+            "about it has not thereby failed.",
             "",
             "## Keeping less",
             "",
@@ -1100,9 +1223,44 @@ def why_kept_page(cli: Cli, workspace: pathlib.Path) -> str:
             "## When the answer is still surprising",
             "",
             "`ocomment config explain` prints the resolved configuration and where",
-            "each value came from, `ocomment doctor` reports the environment around",
-            "it, and `ocomment scan --format json` gives the byte span and kind of",
-            "every comment for a tool to read.",
+            "each value came from, naming every kind and pattern it resolved with",
+            "the index the reports above count from, `ocomment doctor` reports the",
+            "environment around it, and `ocomment scan --format json` gives the",
+            "span, the line, the column and the text of every comment for a tool",
+            "to read.",
+            "",
+            "## `--explain` and `--trace` answer different questions",
+            "",
+            "`--explain` is about one comment: the rule that decided it and the",
+            "setting behind that rule, printed under the finding it belongs to. It",
+            "is part of the report, so it goes to standard output and only the two",
+            "commands that write a report of comments accept it.",
+            "",
+            "`--trace` is about the run: which layer of configuration applied, what",
+            "evidence chose each file's language, which files were never scanned and",
+            "why, what was decided for every comment, and which edits were planned",
+            "from those decisions. It is a diagnostic rather than a product, so it",
+            "goes to **standard error** and every command accepts it.",
+            "",
+            "That separation is what lets the two be combined with anything else:",
+            "`--trace json` beside `--format json` leaves the document on standard",
+            "output byte-for-byte identical to the one the same run writes without",
+            "it. Standard error also carries the run summary, so a reader that needs",
+            "every line to parse should add `--quiet`:",
+            "",
+            "```console",
+            "$ ocomment check --quiet --trace json 2>trace.jsonl >/dev/null",
+            "$ head -2 trace.jsonl",
+            '{"event":"config-resolved","root":"/repo","sources":["built-in defaults"]}',
+            '{"event":"file-detected","path":"src/main.rs","language":"rust",'
+            '"dialect":"standard","how":"extension","bytes":18}',
+            "```",
+            "",
+            "The stream is described by `spec/trace.schema.json`. What it does not",
+            "record is the scanner's recursion into an embedded language — a",
+            "`<script>` body read as JavaScript, a Markdown fence read as the",
+            "language its info string names. Those comments are reported at their",
+            "byte span in the outer file, as they are everywhere else.",
         ]
     )
     return "\n".join(lines) + "\n"
@@ -1166,6 +1324,7 @@ def main() -> int:
         workspace = pathlib.Path(directory)
         (workspace / "config").mkdir()
         cli = Cli(binary, workspace)
+        check_value_lists(cli)
 
         rendered = cli.run(["man"]).stdout
         if not MAN_PAGE.is_file():

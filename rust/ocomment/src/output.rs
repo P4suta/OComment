@@ -2,19 +2,21 @@ use crate::{
     config::PolicyTrace,
     files::{NO_LANGUAGE, STDIN_PATH, SkippedFile},
 };
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::ValueEnum;
 #[cfg(test)]
 use ocomment_core::TransformResult;
 use ocomment_core::{
-    ByteSpan, Comment, CommentKind, Disposition, DispositionExplanation, DispositionPatterns, Edit,
-    Language, Policy, ScanOptions, ScanReport, SourceMap, TransformPlan, explain_comment_with,
+    ByteSpan, Comment, CommentKind, Diagnostic, Disposition, DispositionExplanation,
+    DispositionPatterns, Edit, Language, Policy, Protection, ScanOptions, ScanReport, Severity,
+    SourceMap, TransformPlan, explain_comment_with,
 };
 use serde::{Serialize, Serializer, ser::SerializeSeq};
 use serde_json::{Value, json};
 use similar::{Algorithm, ChangeTag, capture_diff_slices, group_diff_ops};
 use std::{
-    collections::BTreeMap,
+    borrow::Cow,
+    collections::{BTreeMap, HashSet},
     io::{self, BufWriter, Write},
     path::{Component, Path, PathBuf},
 };
@@ -28,6 +30,8 @@ pub enum OutputFormat {
     Jsonl,
     Sarif,
     Github,
+    /// The report as an instruction, for a reader that is going to act on it.
+    Agent,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -45,14 +49,79 @@ pub struct Presentation {
 }
 
 /// How much of the human report a run is allowed to write.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum Verbosity {
-    /// Only errors and diagnostics.
+///
+/// Deliberately opaque, and deliberately not comparable. The convention in
+/// CONTRIBUTING.md is that standard output carries the command's product and
+/// standard error carries the summary and the notes, and that `-q` drops the
+/// second — and that was a convention rather than a mechanism, so three
+/// separate tests of the quiet level grew on the product side. One of them
+/// left `ocomment check -q` exiting 1 having printed nothing at all, which is
+/// exactly the shape a pre-commit hook wants and the one thing it could not
+/// get.
+///
+/// Every one of those was written by somebody asking "is this run quiet?" and
+/// deciding for themselves. There is now no way to ask. [`Level`] is private
+/// and this type has no `PartialEq`, so `verbosity == Verbosity::Quiet` does
+/// not compile; the only question available is [`Self::shows`], which answers
+/// for a [`Detail`] rather than for a level, and the only writer that consults
+/// it is [`note`].
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Verbosity(Level);
+
+/// The levels, private so that nothing outside this module can match on one.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, PartialOrd, Ord)]
+enum Level {
+    /// Only the product, and the errors that decide an exit code.
     Quiet,
     #[default]
     Normal,
     /// Everything, including the per-kind breakdown and every skipped file.
     Verbose,
+}
+
+/// How much a line of commentary is worth saying.
+///
+/// A note is `Normal` unless it is the kind of thing only a `-v` run wants,
+/// and saying which is the whole of what a caller has to decide. Whether the
+/// run is quiet is not their business.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Detail {
+    /// Said unless the run asked for quiet.
+    Normal,
+    /// Said only when the run asked for detail.
+    Verbose,
+}
+
+impl Verbosity {
+    /// The verbosity the `-q` and `-v` flags describe.
+    pub const fn from_flags(quiet: bool, verbose: bool) -> Self {
+        Self(match (quiet, verbose) {
+            (true, _) => Level::Quiet,
+            (_, true) => Level::Verbose,
+            _ => Level::Normal,
+        })
+    }
+
+    /// Whether a note at this level of detail is written.
+    pub fn shows(self, detail: Detail) -> bool {
+        match detail {
+            Detail::Normal => self.0 >= Level::Normal,
+            Detail::Verbose => self.0 >= Level::Verbose,
+        }
+    }
+
+    /// This verbosity with quiet raised to normal.
+    ///
+    /// One caller: an editor asking for diagnostics is asking for the report
+    /// in a machine format, not for commentary about it, and a client told to
+    /// work quietly is still owed the notice for a path it named and the error
+    /// for a file it could not read.
+    pub const fn at_least_normal(self) -> Self {
+        match self.0 {
+            Level::Quiet => Self(Level::Normal),
+            loud => Self(loud),
+        }
+    }
 }
 
 /// Everything the renderer needs besides the results themselves.
@@ -64,6 +133,8 @@ pub struct RenderOptions {
     pub verbosity: Verbosity,
     /// Human lines carry a one-line rendering of the comment text.
     pub preview: bool,
+    /// What a machine format carries besides the verdicts.
+    pub json: JsonOptions,
     /// Human `check` and `scan` lines carry every comment, kept ones included,
     /// each under an indented line naming the rule that decided it.
     pub explain: bool,
@@ -79,6 +150,44 @@ pub struct RenderOptions {
     /// The policy the run was asked for. Only `all` promises to take every
     /// comment out, so only `all` owes an explanation for the ones it keeps.
     pub policy: Policy,
+    /// `--annotation-level`: the `::` level `--format github` reports a
+    /// removable comment at, or `None` to take it from the exit status the
+    /// operation will produce.
+    pub annotation_level: Option<AnnotationLevel>,
+}
+
+/// The three levels a GitHub Actions workflow command can carry.
+///
+/// A diagnostic is always `::error` whatever this says: a file that would not
+/// scan is not a finding the run is offering an opinion about, it is a file
+/// the run could not read.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AnnotationLevel {
+    Error,
+    Warning,
+    Notice,
+}
+
+impl AnnotationLevel {
+    /// Every CLI-visible level, loudest first, which is the order a reader
+    /// choosing one is deciding in.
+    pub const ALL: [Self; 3] = [Self::Error, Self::Warning, Self::Notice];
+
+    /// The canonical name, which is also the workflow command GitHub reads.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Error => "error",
+            Self::Warning => "warning",
+            Self::Notice => "notice",
+        }
+    }
+
+    /// Accepted spellings besides [`Self::as_str`]. There are none: these three
+    /// are GitHub's own words and renaming them would only invite a value that
+    /// does not reach the log.
+    pub const fn aliases(self) -> &'static [&'static str] {
+        &[]
+    }
 }
 
 /// What one run found, counted once for the end-of-run summary.
@@ -153,6 +262,140 @@ fn removable_count(file: &ProcessedFile) -> usize {
         .count()
 }
 
+/// Say which keep or remove settings this run never used.
+///
+/// A setting that does nothing is the one failure a protection tool must not
+/// keep to itself, because it fails in the direction that looks like success:
+/// a `keep_regex` you believe is holding a comment back, which is not, and
+/// which `fix` therefore removes. The pattern in this project's own reports
+/// was `^\s*swiftlint:` — written against the text of the comment, matched
+/// against the whole token, and so anchored in front of a `//` that is always
+/// there. Nothing said a word about it.
+///
+/// So the rule is that no setting is silently ignored: it works, or the run
+/// says it did not. The report goes to standard error beside the summary,
+/// because it is commentary about the run rather than the run's product, and
+/// `-q` drops it with the rest of the commentary.
+///
+/// It is written from the comments the run actually scanned, so it says "this
+/// run" and means it. A run narrowed to a handful of paths is expected to meet
+/// fewer patterns than a walk of the repository, which is why the caller only
+/// asks for this where the run walked a directory.
+pub fn report_unused_settings(
+    files: &[ProcessedFile],
+    options: &ScanOptions,
+    trace: &PolicyTrace,
+    verbosity: Verbosity,
+) -> Result<()> {
+    if options.keep_regex.is_empty()
+        && options.remove_regex.is_empty()
+        && options.keep_kinds.is_empty()
+        && options.remove_kinds.is_empty()
+    {
+        return Ok(());
+    }
+    /* NOTE: A pattern list that will not compile is already a diagnostic, and
+     * the scanner went on as though the list were empty. Reporting every
+     * pattern in it as unused would bury that diagnostic under its own
+     * consequences. */
+    let Ok(patterns) = DispositionPatterns::compile(options) else {
+        return Ok(());
+    };
+
+    let mut keep_seen = vec![false; options.keep_regex.len()];
+    let mut remove_seen = vec![false; options.remove_regex.len()];
+    let mut kinds = HashSet::new();
+    let mut scanned = 0usize;
+    for file in files {
+        for comment in &file.result.report.comments {
+            scanned += 1;
+            let start = comment.span.start.min(file.source.len());
+            let end = comment.span.end.clamp(start, file.source.len());
+            let raw = &file.source[start..end];
+            for index in patterns.keep_matches(raw) {
+                if let Some(seen) = keep_seen.get_mut(index) {
+                    *seen = true;
+                }
+            }
+            for index in patterns.remove_matches(raw) {
+                if let Some(seen) = remove_seen.get_mut(index) {
+                    *seen = true;
+                }
+            }
+            kinds.insert(comment.kind);
+        }
+    }
+
+    let stderr = io::stderr();
+    let mut report = stderr.lock();
+    let mut unmatched_pattern = false;
+    for (key, sources, seen) in [
+        ("keep_regex", &options.keep_regex, &keep_seen),
+        ("remove_regex", &options.remove_regex, &remove_seen),
+    ] {
+        for (index, pattern) in sources.iter().enumerate() {
+            if seen.get(index).copied().unwrap_or(true) {
+                continue;
+            }
+            unmatched_pattern = true;
+            note(
+                &mut report,
+                verbosity,
+                Detail::Normal,
+                &format!(
+                    "{key} #{index} `{}` matched none of the {} this run scanned; {}",
+                    sanitize_message(pattern),
+                    comments(scanned, ""),
+                    origin_clause(trace, key, index)
+                ),
+            )?;
+        }
+    }
+    for (key, wanted) in [
+        ("keep_kind", &options.keep_kinds),
+        ("remove_kind", &options.remove_kinds),
+    ] {
+        for (index, kind) in wanted.iter().enumerate() {
+            if kinds.contains(kind) {
+                continue;
+            }
+            note(
+                &mut report,
+                verbosity,
+                Detail::Normal,
+                &format!(
+                    "{key} `{kind}` met no comment of that kind among the {} this run scanned; {}",
+                    comments(scanned, ""),
+                    origin_clause(trace, key, index)
+                ),
+            )?;
+        }
+    }
+    /* NOTE: The one sentence that turns the report into a fix. Every pattern is
+     * tried against the comment as it is written, opener and all, and a
+     * pattern written against the text inside it is the mistake this whole
+     * report exists to catch. */
+    if unmatched_pattern {
+        note(
+            &mut report,
+            verbosity,
+            Detail::Normal,
+            "A pattern is matched against the whole comment token, so `^` is the \
+             comment's own first byte — the `//`, `#` or `/*` — and not the text after it.",
+        )?;
+    }
+    Ok(())
+}
+
+/// `([policy] in .ocomment.toml)`, or the shorter phrasing for a setting the
+/// trace cannot place.
+fn origin_clause(trace: &PolicyTrace, key: &str, index: usize) -> String {
+    match trace.origin_at(key, index) {
+        Some(origin) => format!("it is set in {origin}"),
+        None => "it is set in the resolved configuration".to_owned(),
+    }
+}
+
 /// Fold a skip reason onto a short label the summary can group by.
 ///
 /// The per-file line says what to do about one file; the summary counts many,
@@ -182,17 +425,24 @@ pub(crate) fn skip_label(reason: &str) -> &str {
 /// drifting apart from the scanner.
 const PROTECTED_PREAMBLE: &str = "required source preamble";
 
-/// How many comments were kept only because `--force-protected` was absent.
+/// The `Keep` reason the core scanner gives a directive the language or its
+/// build reads, which `--force-protected` would likewise have removed. It is
+/// frozen by the differential protocol beside [`PROTECTED_PREAMBLE`], and for
+/// the same reason: the summary matches on it to name what `all` left behind.
+const LOAD_BEARING: &str = "required by the language or its build";
+
+/// How many comments carry `protection`, the `Keep` reason of one of the two
+/// tiers `--force-protected` would have given up.
 ///
 /// Counted from the disposition rather than from the comment kind: a shebang
 /// held back by `--keep-kind shebang` stays kept whatever `--force-protected`
 /// says, and advertising the flag for it would be a lie.
-fn protected_preambles(files: &[ProcessedFile]) -> usize {
+fn kept_for(files: &[ProcessedFile], protection: &str) -> usize {
     files
         .iter()
         .flat_map(|file| &file.result.report.comments)
         .filter(|comment| {
-            matches!(&comment.disposition, Disposition::Keep { reason } if reason == PROTECTED_PREAMBLE)
+            matches!(&comment.disposition, Disposition::Keep { reason } if reason == protection)
         })
         .count()
 }
@@ -296,9 +546,220 @@ struct JsonFile<'a> {
     path: String,
     language: Language,
     changed: bool,
-    report: &'a ocomment_core::ScanReport,
+    report: JsonReport<'a>,
     edits: &'a [ocomment_core::Edit],
-    source_map: &'a SourceMap,
+    /// The byte-for-byte mapping from the output back to the source.
+    ///
+    /// Left out unless `--source-map` asks for it. It is one segment per
+    /// unchanged run, so a file with twenty-five comments in it produced
+    /// several hundred lines of a report the caller had asked for because it
+    /// was the machine format — and the thing a machine format is for is being
+    /// read, not scrolled past.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source_map: Option<&'a SourceMap>,
+}
+
+/// The scan report as a machine format writes it: everything
+/// [`ScanReport`] holds, and where each comment and diagnostic *is* besides.
+///
+/// A byte span is the right primitive for a patcher and the wrong one for a
+/// reporter. Turning `0..27` into `1:1` means reopening the file and counting
+/// line breaks, and that is work this run has already done — the human report
+/// has printed `path:line:column` and the comment text since the beginning, so
+/// a caller that chose JSON because it was the machine format was handed less
+/// than the caller that chose prose. Every position here is derived from the
+/// span beside it, so the two cannot come apart.
+#[derive(Serialize)]
+struct JsonReport<'a> {
+    language: Language,
+    comments: Vec<JsonComment<'a>>,
+    diagnostics: Vec<JsonDiagnostic<'a>>,
+    valid: bool,
+}
+
+/// Where something the scanner reported sits, in the spelling every other
+/// OComment report uses.
+///
+/// Lines and columns are one-based and columns are counted in bytes, which is
+/// what the human report prints and what `--format github` puts in an
+/// annotation. `end_line` and `end_column` address the byte *after* the last
+/// one, matching the half-open [`ByteSpan`] they come from: a comment that
+/// ends at the end of its line has an `end_column` one past its last byte
+/// rather than a position on the next line.
+#[derive(Serialize)]
+struct JsonPosition {
+    line: usize,
+    column: usize,
+    end_line: usize,
+    end_column: usize,
+}
+
+impl JsonPosition {
+    fn of(lines: &LineIndex, span: ByteSpan) -> Self {
+        let (line, column) = lines.line_column(span.start);
+        let (end_line, end_column) = lines.line_column(span.end);
+        Self {
+            line,
+            column,
+            end_line,
+            end_column,
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct JsonComment<'a> {
+    span: ByteSpan,
+    #[serde(flatten)]
+    position: JsonPosition,
+    kind: CommentKind,
+    /// Which rule decided it, and where that rule was written.
+    ///
+    /// Present when `--explain` asked for it. The human report has printed
+    /// this under each finding since the rule table was written down, and a
+    /// caller that chose a machine format was handed the verdict without the
+    /// reason — so the reason arrives here in fields rather than in the
+    /// sentence the human report composes from them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    explanation: Option<JsonExplanation>,
+    /// The comment's own bytes, decoded lossily the way every other text this
+    /// tool serialises is. `--no-preview` leaves it out, which is the way to
+    /// keep a report over a large tree small.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    text: Option<Cow<'a, str>>,
+    disposition: &'a Disposition,
+}
+
+/// A verdict's reasoning, in fields.
+#[derive(Serialize)]
+struct JsonExplanation {
+    /// The rule's own name, in the vocabulary [`DispositionExplanation`] uses:
+    /// `removed-by-length`, `kept-by-tag`, `kept-load-bearing`.
+    rule: String,
+    /// The same rule as the human report words it.
+    detail: String,
+    /// Where the setting behind it was written — a table and a file — or
+    /// absent when a built-in rule decided and there is no table to point at.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    setting: Option<String>,
+    /// The flag that would overrule it, when one would.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    next_step: Option<String>,
+}
+
+#[derive(Serialize)]
+struct JsonDiagnostic<'a> {
+    code: &'a str,
+    message: &'a str,
+    severity: Severity,
+    span: ByteSpan,
+    #[serde(flatten)]
+    position: JsonPosition,
+}
+
+/// The report of one file, with the positions filled in from its source.
+fn json_report<'a>(
+    report: &'a ScanReport,
+    source: &'a [u8],
+    language: Language,
+    preview: bool,
+    explainer: Option<&Explainer<'_>>,
+) -> JsonReport<'a> {
+    let lines = LineIndex::new(source);
+    JsonReport {
+        language: report.language,
+        comments: report
+            .comments
+            .iter()
+            .map(|comment| JsonComment {
+                span: comment.span,
+                position: JsonPosition::of(&lines, comment.span),
+                kind: comment.kind,
+                explanation: explainer
+                    .map(|explainer| json_explanation(explainer, comment, source, language)),
+                text: preview.then(|| slice_text(source, comment.span)),
+                disposition: &comment.disposition,
+            })
+            .collect(),
+        diagnostics: report
+            .diagnostics
+            .iter()
+            .map(|diagnostic: &Diagnostic| JsonDiagnostic {
+                code: &diagnostic.code,
+                message: &diagnostic.message,
+                severity: diagnostic.severity,
+                span: diagnostic.span,
+                position: JsonPosition::of(&lines, diagnostic.span),
+            })
+            .collect(),
+        valid: report.valid,
+    }
+}
+
+fn json_explanation(
+    explainer: &Explainer<'_>,
+    comment: &Comment,
+    source: &[u8],
+    language: Language,
+) -> JsonExplanation {
+    let start = comment.span.start.min(source.len());
+    let end = comment.span.end.clamp(start, source.len());
+    let verdict = explain_comment_with(
+        &explainer.patterns,
+        comment,
+        &source[start..end],
+        language,
+        &explainer.material.options,
+    );
+    let step = next_step(&verdict);
+    JsonExplanation {
+        rule: explanation_rule(&verdict),
+        detail: verdict.to_string(),
+        setting: explainer
+            .material
+            .trace
+            .origin_of(&verdict, &explainer.material.options),
+        next_step: (!step.is_empty()).then(|| step.trim_start_matches("; ").to_owned()),
+    }
+}
+
+/// The rule's own name, as a machine reads it.
+///
+/// Exhaustive, so a verdict added later has to be named rather than falling
+/// into a bucket a caller would then be matching against forever.
+fn explanation_rule(verdict: &DispositionExplanation) -> String {
+    match verdict {
+        DispositionExplanation::KeptByKind(_) => "kept-by-kind",
+        DispositionExplanation::KeptByRegex { .. } => "kept-by-regex",
+        DispositionExplanation::ProtectedPreamble => "protected-preamble",
+        DispositionExplanation::KeptHtml => "kept-html",
+        DispositionExplanation::KeptLoadBearing { .. } => "kept-load-bearing",
+        DispositionExplanation::KeptDirective { .. } => "kept-directive",
+        DispositionExplanation::KeptDocumentation { .. } => "kept-documentation",
+        DispositionExplanation::KeptLicense { .. } => "kept-license",
+        DispositionExplanation::KeptByTag { .. } => "kept-by-tag",
+        DispositionExplanation::KeptStructural { .. } => "kept-structural",
+        DispositionExplanation::RemovedByKind(_) => "removed-by-kind",
+        DispositionExplanation::RemovedByRegex { .. } => "removed-by-regex",
+        DispositionExplanation::RemovedByPolicy { .. } => "removed-by-policy",
+        DispositionExplanation::RemovedByDefault { .. } => "removed-by-default",
+        DispositionExplanation::RemovedAsTrailing => "removed-as-trailing",
+        DispositionExplanation::RemovedAsExpired { .. } => "removed-as-expired",
+        DispositionExplanation::RemovedByLength { .. } => "removed-by-length",
+    }
+    .to_owned()
+}
+
+/// The bytes of `span`, decoded lossily and left whole.
+///
+/// The human preview folds a comment onto one line and cuts it to a terminal
+/// width; neither is done here. A machine format that truncated would be
+/// handing its caller a comment that is not the comment in the file, and a
+/// caller that wants it shorter can cut it itself.
+fn slice_text(source: &[u8], span: ByteSpan) -> Cow<'_, str> {
+    let start = span.start.min(source.len());
+    let end = span.end.clamp(start, source.len());
+    String::from_utf8_lossy(&source[start..end])
 }
 
 /// The one-line label for a comment OComment would delete.
@@ -375,9 +836,14 @@ fn explanation_line(
         file.language,
         &material.options,
     );
+    /* NOTE: These were exclusive, which left a removal saying which setting
+     * took the comment out and never saying how to get it back. The setting
+     * and the way back answer different questions, so a verdict that has both
+     * gets both. */
+    let step = next_step(&verdict);
     let tail = match material.trace.origin_of(&verdict, &material.options) {
-        Some(origin) => format!(" ({origin})"),
-        None => next_step(&verdict),
+        Some(origin) => format!(" ({origin}){step}"),
+        None => step,
     };
     format!(
         "    {}{}{}",
@@ -406,19 +872,51 @@ fn write_explanation(
     ))
 }
 
-/// How to overrule a built-in rule, which no setting decided and no table can
-/// be pointed at for.
+/// The flag that would overrule this verdict, for the verdicts a flag can.
+///
+/// A keep needs this when no setting decided it and no table can be pointed
+/// at. A removal needs it for a different reason: naming the setting that took
+/// a comment out does not tell a reader how to get it back, and the removals
+/// worth getting back — a license notice, a doc comment — each have a
+/// different answer. The policy is spelled through [`Policy`] rather than
+/// written out, so renaming a policy renames it here too.
 fn next_step(verdict: &DispositionExplanation) -> String {
     match verdict {
-        DispositionExplanation::ProtectedPreamble => {
+        DispositionExplanation::ProtectedPreamble
+        | DispositionExplanation::KeptLoadBearing { .. } => {
             "; add --force-protected to remove it".to_owned()
         }
+        /* NOTE: The removals a reader is most likely to have wanted kept. A
+         * license notice is the one with a legal cost to losing, and a doc
+         * comment is the one a policy takes wholesale from a repository that
+         * publishes documentation. Both are recoverable, and neither is
+         * recoverable by the same flag. */
+        DispositionExplanation::RemovedByDefault {
+            kind: CommentKind::License,
+            ..
+        } => format!("; use --policy {} to keep it", Policy::Conservative),
+        DispositionExplanation::RemovedByDefault {
+            kind: kind @ (CommentKind::DocLine | CommentKind::DocBlock),
+            ..
+        } => format!("; use --keep-kind {kind} to keep it"),
         DispositionExplanation::KeptHtml => format!(
             "; use --remove-kind {} or --policy all to remove it",
             CommentKind::HtmlComment
         ),
         DispositionExplanation::KeptDirective { kind, .. } => {
             format!("; use --remove-kind {kind} or --policy all to remove it")
+        }
+        /* NOTE: The two shape rules, and the only removals whose way out is an
+         * edit to the comment rather than a flag: both are satisfied by
+         * rewriting it, and neither has a flag that would keep it as it is. */
+        DispositionExplanation::RemovedAsTrailing => {
+            "; move it onto a line of its own above the code".to_owned()
+        }
+        DispositionExplanation::RemovedAsExpired { .. } => {
+            "; do it, or delete the comment".to_owned()
+        }
+        DispositionExplanation::RemovedByLength { limit, .. } => {
+            format!("; cut the run to {}", plural(*limit, "line"))
         }
         /* NOTE: The one keep with no flag behind it. `--policy all` does not
          * reach it either: what holds the body open is whatever comment is
@@ -687,7 +1185,15 @@ fn output_failure(error: io::Error) -> anyhow::Error {
 /// a closed pipe is dropped and only a real write failure is raised. What must
 /// not happen is what `eprintln!` does, which is panic, and so abort under the
 /// release profile.
-pub fn note(writer: &mut impl Write, line: &str) -> Result<()> {
+pub fn note(
+    writer: &mut impl Write,
+    verbosity: Verbosity,
+    detail: Detail,
+    line: &str,
+) -> Result<()> {
+    if !verbosity.shows(detail) {
+        return Ok(());
+    }
     match writeln!(writer, "{line}") {
         Err(error) if error.kind() != io::ErrorKind::BrokenPipe => {
             Err(anyhow::Error::new(error).context("cannot write standard error"))
@@ -725,10 +1231,13 @@ pub fn render_explained(
     let mut output = stdout();
     match options.format {
         OutputFormat::Human => render_human(&mut output, files, skipped, options, explanations),
-        OutputFormat::Json => render_json(&mut output, files, skipped),
-        OutputFormat::Jsonl => render_jsonl(&mut output, files, skipped),
+        OutputFormat::Json => render_json(&mut output, files, skipped, options.json, explanations),
+        OutputFormat::Jsonl => {
+            render_jsonl(&mut output, files, skipped, options.json, explanations)
+        }
         OutputFormat::Sarif => render_sarif(&mut output, files, skipped),
-        OutputFormat::Github => render_github(&mut output, files, skipped, options.verbosity),
+        OutputFormat::Github => render_github(&mut output, files, skipped, options),
+        OutputFormat::Agent => render_agent(&mut output, files, skipped, options, explanations),
     }?;
     finish(&mut output)
 }
@@ -742,8 +1251,7 @@ fn render_human(
 ) -> Result<()> {
     let operation = options.operation;
     let presentation = options.presentation;
-    let quiet = options.verbosity == Verbosity::Quiet;
-    let verbose = options.verbosity == Verbosity::Verbose;
+    let verbose = options.verbosity.shows(Detail::Verbose);
     for file in files {
         if operation == Operation::Diff && file.result.changed() {
             /* NOTE: The patch is the product of `diff`, so `-q` keeps it and drops
@@ -758,7 +1266,7 @@ fn render_human(
         let reports_comments = match operation {
             Operation::Scan => !file.result.report.comments.is_empty(),
             Operation::Fix => false,
-            Operation::Check | Operation::Diff if quiet => false,
+            // NOTE: The findings are the product of `check`, as the patch is of `diff`.
             Operation::Check | Operation::Diff if options.explain => {
                 !file.result.report.comments.is_empty()
             }
@@ -812,8 +1320,6 @@ fn render_human(
                 ))?;
                 write_explanation(output, file, comment, explainer, options)?;
             }
-        } else if quiet {
-            continue;
         } else if operation == Operation::Fix {
             if options.applied && file.result.changed() {
                 wrote(writeln!(
@@ -877,34 +1383,53 @@ fn render_human(
     let mut report = stderr.lock();
     if operation == Operation::Diff && options.dry_run {
         for line in &skips {
-            note(&mut report, line)?;
+            note(&mut report, options.verbosity, Detail::Normal, line)?;
         }
-    }
-    if quiet {
-        return Ok(());
     }
     let summary = Summary::compute(files, skipped, operation);
     let folded = !verbose && skipped.iter().any(|item| !item.error && !item.explicit);
-    if verbose && let Some(line) = kind_breakdown(files, options) {
-        note(&mut report, &line)?;
+    if let Some(line) = kind_breakdown(files, options) {
+        note(&mut report, options.verbosity, Detail::Verbose, &line)?;
     }
-    note(&mut report, &summary_report(&summary, options, folded))?;
+    note(
+        &mut report,
+        options.verbosity,
+        Detail::Normal,
+        &summary_report(&summary, options, folded),
+    )?;
+    /* NOTE: After the verdict, because it is about the verdict: the count comes
+     * first and then where that count is and what would answer it. */
+    for line in concentration(files, options) {
+        note(&mut report, options.verbosity, Detail::Normal, &line)?;
+    }
     /* NOTE: Under any other policy a kept preamble is one of many deliberate keeps
      * and saying so every run would be noise. `all` said it would take
      * everything, so what it left behind is the surprise worth a line. */
     if options.policy == Policy::All {
-        let protected = protected_preambles(files);
-        if protected > 0 {
-            /* NOTE: The line counts what it kept, so the pronoun that stands for it
-             * has to agree with that count. */
-            let pronoun = if protected == 1 { "it" } else { "them" };
-            note(
-                &mut report,
-                &format!(
-                    "{} kept; add --force-protected to remove {pronoun}.",
-                    comments(protected, "protected preamble")
-                ),
-            )?;
+        /* NOTE: Two protections and two lines, because the two are not the same
+         * surprise. A preamble was held back by the file's own syntax; a
+         * load-bearing directive was held back by what reads it, and a reader
+         * who asked for every comment to go is owed the difference rather than
+         * a count that runs them together. */
+        for (protection, adjective) in [
+            (PROTECTED_PREAMBLE, "protected preamble"),
+            (LOAD_BEARING, "load-bearing"),
+        ] {
+            let protected = kept_for(files, protection);
+            if protected > 0 {
+                /* NOTE: The line counts what it kept, so the pronoun that stands for it
+                 * has to agree with that count. */
+                let pronoun = if protected == 1 { "it" } else { "them" };
+                note(
+                    &mut report,
+                    options.verbosity,
+                    Detail::Normal,
+                    &format!(
+                        "{} kept; add --force-protected to remove {pronoun}.",
+                        comments(protected, adjective)
+                    ),
+                )?;
+            }
         }
     }
     if summary.invalid_files > 0 && !options.force_invalid {
@@ -915,6 +1440,8 @@ fn render_human(
         };
         note(
             &mut report,
+            options.verbosity,
+            Detail::Normal,
             &format!(
                 "{} {verb} invalid syntax; nothing was written for {pronoun} \
                  (use --force-invalid to apply known-safe edits).",
@@ -940,8 +1467,9 @@ fn render_human(
 /// the end-of-run summary counts those instead — `-v` is how a reader asks for
 /// the list. Both renderers share this so the two cannot drift apart.
 pub(crate) fn skip_is_visible(item: &SkippedFile, verbosity: Verbosity) -> bool {
+    // NOTE: An I/O error decides the exit code, so it is named however quiet the run.
     item.error
-        || (verbosity != Verbosity::Quiet && (item.explicit || verbosity == Verbosity::Verbose))
+        || (verbosity.shows(Detail::Normal) && (item.explicit || verbosity.shows(Detail::Verbose)))
 }
 
 pub(crate) fn skip_lines(
@@ -1016,6 +1544,132 @@ pub(crate) fn interactive_summary(outcome: InteractiveOutcome) -> String {
 
 /// The whole end-of-run summary: the verdict for the run, the folded skips,
 /// and the I/O errors that were listed one by one above it.
+/// How many files a concentrated report names before it stops.
+///
+/// Enough to see where the work is and short enough to read without
+/// scrolling. A caller who wants the whole distribution has `--format json`.
+const TOP_FILES: usize = 5;
+
+/// How many findings a run has to have before it is worth summarising.
+///
+/// Under this a reader has already read every line by the time they reach the
+/// summary, and telling them where the findings are would be telling them what
+/// they just saw.
+const CONCENTRATION_THRESHOLD: usize = 10;
+
+/// The lines that turn a wall of findings into something to act on.
+///
+/// A run reporting twenty-one removable comments has told the reader what it
+/// found and nothing about what to do. Two things it already knows would
+/// answer that: which files hold the findings, and whether they are all of one
+/// kind -- because if they are, one flag makes the run clean, and the reader
+/// should not have to work that out from the list.
+///
+/// Both are held back below [`CONCENTRATION_THRESHOLD`] findings, where the
+/// list is short enough to have been read already.
+fn concentration(files: &[ProcessedFile], options: &RenderOptions) -> Vec<String> {
+    let mut per_file: Vec<(&Path, usize)> = Vec::new();
+    /* NOTE: Counted into a slot per kind rather than a map, as `kind_breakdown`
+     * does, because `CommentKind` is an enum with a canonical order and
+     * `CommentKind::ALL` is that order. */
+    let mut kinds = [0usize; CommentKind::ALL.len()];
+    let mut total = 0usize;
+    for file in files {
+        let mut count = 0usize;
+        for comment in &file.result.report.comments {
+            if comment.disposition.is_remove() {
+                count += 1;
+                let slot = CommentKind::ALL
+                    .iter()
+                    .position(|kind| *kind == comment.kind)
+                    .expect("CommentKind::ALL lists every kind");
+                kinds[slot] += 1;
+            }
+        }
+        if count > 0 {
+            per_file.push((file.path.as_path(), count));
+            total += count;
+        }
+    }
+    if total < CONCENTRATION_THRESHOLD {
+        return Vec::new();
+    }
+
+    let mut lines = Vec::new();
+    /* NOTE: Most findings first, then by path, so two runs over the same tree
+     * print the same ranking. */
+    per_file.sort_by(|left, right| right.1.cmp(&left.1).then(left.0.cmp(right.0)));
+    let named = per_file.len().min(TOP_FILES);
+    lines.push(format!(
+        "where they are: {}{}",
+        per_file
+            .iter()
+            .take(named)
+            .map(|(path, count)| format!("{} {count}", sanitize_path(&path.to_string_lossy())))
+            .collect::<Vec<_>>()
+            .join(", "),
+        if per_file.len() > named {
+            format!(", and {} more files", per_file.len() - named)
+        } else {
+            String::new()
+        }
+    ));
+
+    // NOTE: One suggestion, and the best one available; see `advice_for`.
+    let present: Vec<CommentKind> = CommentKind::ALL
+        .into_iter()
+        .enumerate()
+        .filter(|(slot, _)| kinds[*slot] > 0)
+        .map(|(_, kind)| kind)
+        .collect();
+    if options.operation != Operation::Fix
+        && let Some(advice) = advice_for(&present, options.policy)
+    {
+        lines.push(advice);
+    }
+    lines
+}
+
+/// The shortest change that would make a run clean, if one exists.
+///
+/// A policy if a policy answers; otherwise the one `--keep-kind` that names
+/// every kind present. Both are computed from `Policy::keeps`, which is the
+/// table the scanner itself decides by — an earlier version guessed at that
+/// table here and guessed wrong.
+///
+/// One suggestion, and the best one available. The rule used to be "only when
+/// one kind accounts for everything", which read `--keep-kind` as taking one
+/// kind — it is variadic, so two kinds is still one flag. The case that got it
+/// wrong is not an edge: a Rust crate with both documentation and a licence
+/// header produces exactly two kinds and never one, which is every crate on
+/// crates.io.
+///
+/// The order is by how good the advice is. A named policy beats a list of
+/// kinds: it is shorter, it is the configuration the project should be keeping
+/// anyway, and it teaches the tool's own vocabulary rather than its escape
+/// hatches.
+fn advice_for(present: &[CommentKind], current: Policy) -> Option<String> {
+    if let Some(policy) = Policy::strongest_keeping(present)
+        && policy != current
+    {
+        return Some(format!("`--policy {policy}` would make this run clean"));
+    }
+    /* NOTE: Only when the kinds are ones a `keep_kind` can name. A protected
+     * kind reaching this list means the run passed `--force-protected`, and
+     * `--keep-kind shebang` is not the answer to that -- dropping the flag is. */
+    if present
+        .iter()
+        .any(|kind| kind.protection() != Protection::None)
+    {
+        return None;
+    }
+    let names: Vec<&str> = present.iter().map(|kind| kind.as_str()).collect();
+    Some(format!(
+        "`--keep-kind {}` would make this run clean",
+        names.join(",")
+    ))
+}
+
 fn summary_report(summary: &Summary, options: &RenderOptions, folded: bool) -> String {
     let skips = skip_clause(summary, folded);
     let nothing = nothing_to(options);
@@ -1087,8 +1741,13 @@ fn summary_line(summary: &Summary, options: &RenderOptions) -> String {
         }
         Operation::Fix => {
             if options.applied && summary.files_changed > 0 {
+                /* NOTE: The evidence, not just the count. What makes a tool safe
+                 * to wire into a hook is not an accuracy claim, it is being able
+                 * to say what was checked: every file written here was re-scanned
+                 * first and had to lex cleanly and hold nothing removable, or
+                 * nothing would have been written at all. */
                 format!(
-                    "Removed {} in {} ({scanned} scanned).",
+                    "Removed {} in {} ({scanned} scanned); each re-scanned clean and idempotent before writing.",
                     comments(summary.comments_removed, ""),
                     plural(summary.files_changed, "file")
                 )
@@ -1236,6 +1895,8 @@ fn render_json(
     output: &mut impl Write,
     files: &[ProcessedFile],
     skipped: &[SkippedFile],
+    json: JsonOptions,
+    explanations: &Explanations,
 ) -> Result<()> {
     #[derive(Serialize)]
     struct Document<'a> {
@@ -1247,7 +1908,7 @@ fn render_json(
         &mut *output,
         &Document {
             version: 1,
-            files: JsonFiles(files),
+            files: JsonFiles(files, json, explanations),
             skipped: JsonSkipped(skipped),
         },
     )
@@ -1256,7 +1917,7 @@ fn render_json(
     Ok(())
 }
 
-struct JsonFiles<'a>(&'a [ProcessedFile]);
+struct JsonFiles<'a>(&'a [ProcessedFile], JsonOptions, &'a Explanations);
 
 impl Serialize for JsonFiles<'_> {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -1265,7 +1926,7 @@ impl Serialize for JsonFiles<'_> {
     {
         let mut sequence = serializer.serialize_seq(Some(self.0.len()))?;
         for file in self.0 {
-            sequence.serialize_element(&json_file(file))?;
+            sequence.serialize_element(&json_file(file, &self.1, self.2))?;
         }
         sequence.end()
     }
@@ -1300,9 +1961,12 @@ fn render_jsonl(
     output: &mut impl Write,
     files: &[ProcessedFile],
     skipped: &[SkippedFile],
+    json: JsonOptions,
+    explanations: &Explanations,
 ) -> Result<()> {
     for file in files {
-        serde_json::to_writer(&mut *output, &json_file(file)).map_err(write_error)?;
+        serde_json::to_writer(&mut *output, &json_file(file, &json, explanations))
+            .map_err(write_error)?;
         wrote(writeln!(output))?;
     }
     for item in skipped {
@@ -1316,15 +1980,38 @@ fn render_jsonl(
     Ok(())
 }
 
-fn json_file(file: &ProcessedFile) -> JsonFile<'_> {
+fn json_file<'a>(
+    file: &'a ProcessedFile,
+    options: &JsonOptions,
+    explanations: &'a Explanations,
+) -> JsonFile<'a> {
+    let explainer = options
+        .explain
+        .then(|| explanations.get(&file.path))
+        .flatten()
+        .map(Explainer::new);
     JsonFile {
         path: file.path.to_string_lossy().into_owned(),
         language: file.language,
         changed: file.result.changed(),
-        report: &file.result.report,
+        report: json_report(
+            &file.result.report,
+            &file.source,
+            file.language,
+            options.preview,
+            explainer.as_ref(),
+        ),
         edits: &file.result.edits,
-        source_map: file.result.source_map(),
+        source_map: options.source_map.then(|| file.result.source_map()),
     }
+}
+
+/// What a machine format carries besides the verdicts.
+#[derive(Clone, Copy, Debug)]
+pub struct JsonOptions {
+    pub preview: bool,
+    pub explain: bool,
+    pub source_map: bool,
 }
 
 /// Where a SARIF reader is sent to learn what the tool itself is.
@@ -1830,12 +2517,35 @@ fn fix_for_span(file: &ProcessedFile, span: ByteSpan) -> (ByteSpan, String) {
         )
 }
 
+/// The `::` level a removable comment is annotated at.
+///
+/// An annotation level is a claim about what the run means, and the run
+/// already makes that claim in its exit status: `check` and `diff` answer a
+/// finding with 1 and every other operation ends at 0 whatever it found. A
+/// gate that fails on the 1 was posting `::notice` about the very comments it
+/// failed over, which reads in the checks tab as though nothing was wrong --
+/// and GitHub folds notices away where it surfaces errors. So the level
+/// follows the status: what fails the run is an error, and what is offered for
+/// information is a notice. `--annotation-level` overrules it for a job that
+/// posts annotations without gating on them, or gates without wanting the red.
+fn annotation_level(options: &RenderOptions) -> &'static str {
+    if let Some(level) = options.annotation_level {
+        return level.as_str();
+    }
+    match options.operation {
+        Operation::Check | Operation::Diff => "error",
+        Operation::Scan | Operation::Fix => "notice",
+    }
+}
+
 fn render_github(
     output: &mut impl Write,
     files: &[ProcessedFile],
     skipped: &[SkippedFile],
-    verbosity: Verbosity,
+    options: &RenderOptions,
 ) -> Result<()> {
+    let verbosity = options.verbosity;
+    let level = annotation_level(options);
     for file in files {
         if file.result.report.diagnostics.is_empty()
             && !file
@@ -1858,7 +2568,7 @@ fn render_github(
             let (line, column) = lines.line_column(comment.span.start);
             wrote(writeln!(
                 output,
-                "::notice file={},line={line},col={column}::{}",
+                "::{level} file={},line={line},col={column}::{}",
                 github_path(&file.path),
                 removable_label(comment.kind)
             ))?;
@@ -1880,10 +2590,7 @@ fn render_github(
      * still owed the notice for the path its caller named and the error for
      * the file it could not read. So the visibility rule below is asked at
      * `Normal` however quiet the run was, and only `-v` widens it. */
-    let visibility = match verbosity {
-        Verbosity::Quiet => Verbosity::Normal,
-        loud => loud,
-    };
+    let visibility = verbosity.at_least_normal();
     /* NOTE: An annotation costs the reader a line of the checks tab, so a walked
      * skip is folded away here exactly as it is in the human report: a run
      * over a repository with forty Markdown files in it must not post forty
@@ -2499,4 +3206,373 @@ mod tests {
         let source = b"let x = 1; // TODO remove\n";
         assert_eq!(preview(source, ByteSpan::new(11, 25), 72), "// TODO remove");
     }
+}
+
+/// How many display columns an agent-facing preview may occupy.
+///
+/// Wider than the human one: a terminal has a right-hand edge and the reader of
+/// this format does not, and a comment cut off at its first clause is a comment
+/// the reader has to open the file to see.
+const AGENT_PREVIEW_COLUMNS: usize = 160;
+
+/// What a run wants the reader to do about one comment, in the imperative.
+///
+/// The verb *is* the reason. `RemovedByLength` and `RemovedAsTrailing` are the
+/// two removals whose way out is an edit to the comment rather than a flag —
+/// shortening it, moving it — and telling a reader to delete a comment that
+/// only had to move is wrong advice however correct the verdict was.
+fn instruction(verdict: &DispositionExplanation) -> String {
+    match verdict {
+        DispositionExplanation::RemovedByLength { limit, .. } => {
+            format!("shorten to {}", plural(*limit, "line"))
+        }
+        DispositionExplanation::RemovedAsTrailing => "move above the code".to_owned(),
+        /* NOTE: Two things to do, and the report must not pick. Deleting the
+         * line satisfies the rule and loses the promise; doing the work
+         * satisfies both. Only whoever reads it knows which. */
+        DispositionExplanation::RemovedAsExpired { age, limit, .. } => {
+            format!("do it or drop it ({age} old, {limit} allowed)")
+        }
+        _ => "remove".to_owned(),
+    }
+}
+
+/// The one sentence that says what this project accepts, when every file with a
+/// finding was judged by the same rules.
+///
+/// A report that lists what has to change and never says what would have been
+/// acceptable teaches nothing: the reader fixes these three comments and writes
+/// the fourth the same way. When the files disagree — a `[[overrides]]` table
+/// covering part of the tree — there is no one sentence to write, and none is
+/// written rather than one that is true of some of the findings.
+fn accepted_here(files: &[ProcessedFile], explanations: &Explanations) -> Option<String> {
+    let mut rules: Option<&ScanOptions> = None;
+    for file in files {
+        if removable_count(file) == 0 {
+            continue;
+        }
+        let options = &explanations.get(&file.path)?.options;
+        match rules {
+            Some(first) if first.allow != options.allow || first.policy != options.policy => {
+                return None;
+            }
+            Some(_) => {}
+            None => rules = Some(options),
+        }
+    }
+    let options = rules?;
+    let mut sentence = format!(
+        "rule: policy `{}` removes {} comments",
+        options.policy,
+        join_with_and(&removed_kinds(options.policy))
+    );
+    let mut allowances = Vec::new();
+    if !options.allow.tags.is_empty() {
+        allowances.push(format!(
+            "a comment tagged {}",
+            join_with_or(&options.allow.tags)
+        ));
+    }
+    if let Some(limit) = options.allow.max_lines {
+        allowances.push(format!(
+            "at most {} of adjacent comments",
+            plural(limit, "line")
+        ));
+    }
+    if options.allow.trailing == Some(false) {
+        allowances.push("never beside code".to_owned());
+    }
+    for (tag, limit) in &options.allow.expiry {
+        allowances.push(if *limit == ocomment_core::Age::ZERO {
+            format!("a comment tagged {tag} until it is committed")
+        } else {
+            format!("a comment tagged {tag} for {limit} after the commit that adds it")
+        });
+    }
+    if !allowances.is_empty() {
+        sentence.push_str(&format!(". Allowed: {}", allowances.join(", ")));
+    }
+    sentence.push('.');
+    Some(sentence)
+}
+
+/// The kinds a policy takes out, named rather than counted.
+///
+/// What a report of removals owes its reader is the set it is drawn from. The
+/// kinds no policy reaches are left out: they are not what this run is about,
+/// and naming them would suggest the reader could have to deal with one.
+fn removed_kinds(policy: Policy) -> Vec<String> {
+    CommentKind::ALL
+        .into_iter()
+        .filter(|kind| kind.protection() == Protection::None && !policy.keeps(*kind))
+        .map(|kind| kind.as_str().to_owned())
+        .collect()
+}
+
+/// `a, b and c`, for a list a reader is being told the whole of.
+fn join_with_and(items: &[String]) -> String {
+    join_with(items, "and")
+}
+
+/// `a, b or c`, for a list a reader is choosing one item from.
+fn join_with_or(items: &[String]) -> String {
+    join_with(items, "or")
+}
+
+fn join_with(items: &[String], conjunction: &str) -> String {
+    match items {
+        [] => String::new(),
+        [only] => only.clone(),
+        [first, second] => format!("{first} {conjunction} {second}"),
+        [rest @ .., last] => format!("{}, {conjunction} {last}", rest.join(", ")),
+    }
+}
+
+/// Whether the bytes under judgement are the ones on the disk.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Subject {
+    /// They are, so `ocomment fix` is a way to do what the report asks.
+    OnDisk,
+    /// They are not: a hook judged an edit before it was written. There is no
+    /// file to fix, and telling a reader to run `fix` on one would send them
+    /// to bytes that do not exist yet.
+    Proposed,
+}
+
+/// The whole agent report as one string, or `None` when there is nothing to
+/// say.
+///
+/// Silence is the pass. A caller embedding this in a hook decision needs to
+/// know whether there is a decision to make, and a report that says "nothing
+/// to do" is a report the caller has to parse to find that out.
+pub fn agent_report(
+    files: &[ProcessedFile],
+    skipped: &[SkippedFile],
+    options: &RenderOptions,
+    explanations: &Explanations,
+    subject: Subject,
+) -> Option<String> {
+    let mut report = Vec::new();
+    write_agent(&mut report, files, skipped, options, explanations, subject).ok()?;
+    (!report.is_empty()).then(|| String::from_utf8_lossy(&report).into_owned())
+}
+
+/// The report for a reader that is going to act on it rather than read it.
+///
+/// Three parts, in the order they are needed: what has to change, one line per
+/// comment and the verb first; the rule that decided them, so the next comment
+/// is written differently; and the command that would do it instead. A clean
+/// run writes nothing at all, which is what makes this format usable as the
+/// body of a hook decision.
+fn render_agent(
+    output: &mut impl Write,
+    files: &[ProcessedFile],
+    skipped: &[SkippedFile],
+    options: &RenderOptions,
+    explanations: &Explanations,
+) -> Result<()> {
+    write_agent(
+        output,
+        files,
+        skipped,
+        options,
+        explanations,
+        Subject::OnDisk,
+    )
+}
+
+fn write_agent(
+    output: &mut impl Write,
+    files: &[ProcessedFile],
+    skipped: &[SkippedFile],
+    options: &RenderOptions,
+    explanations: &Explanations,
+    subject: Subject,
+) -> Result<()> {
+    let mut lines = Vec::new();
+    let mut paths: Vec<String> = Vec::new();
+    let mut invalid = 0usize;
+    for file in files {
+        let has_findings = removable_count(file) > 0;
+        if !has_findings && file.result.report.diagnostics.is_empty() {
+            continue;
+        }
+        let display = sanitize_path(&file.path.to_string_lossy());
+        if has_findings {
+            paths.push(display.clone());
+        }
+        let index = LineIndex::new(&file.source);
+        let explainer = explanations.get(&file.path).map(Explainer::new);
+        for diagnostic in &file.result.report.diagnostics {
+            invalid += 1;
+            let (line, column) = index.line_column(diagnostic.span.start);
+            lines.push(format!(
+                "{display}:{line}:{column} fix the syntax: {} [{}]",
+                sanitize_message(&diagnostic.message),
+                sanitize_message(&diagnostic.code)
+            ));
+        }
+        for comment in file
+            .result
+            .report
+            .comments
+            .iter()
+            .filter(|comment| comment.disposition.is_remove())
+        {
+            let (line, column) = index.line_column(comment.span.start);
+            let start = comment.span.start.min(file.source.len());
+            let end = comment.span.end.clamp(start, file.source.len());
+            let verdict = explainer.as_ref().map(|explainer| {
+                explain_comment_with(
+                    &explainer.patterns,
+                    comment,
+                    &file.source[start..end],
+                    file.language,
+                    &explainer.material.options,
+                )
+            });
+            let action = verdict.as_ref().map_or_else(
+                || "remove".to_owned(),
+                |verdict: &DispositionExplanation| instruction(verdict),
+            );
+            lines.push(format!(
+                "{display}:{line}:{column} {action}: {}",
+                preview(&file.source, comment.span, AGENT_PREVIEW_COLUMNS)
+            ));
+        }
+    }
+    /* NOTE: A file the run could not read is a hole in the answer rather than a
+     * finding, and is reported whatever it would have contained. A file passed
+     * over for a reason — an unknown language, a size limit — is not: this
+     * report is a list of things to change, and a caller who wants the passing
+     * over to be a finding says so with `--deny-skipped`, which decides the
+     * exit code. Twenty "not checked" lines in front of an agent asked to fix
+     * one file are twenty instructions it cannot carry out. */
+    let unreadable: Vec<&SkippedFile> = skipped.iter().filter(|item| item.error).collect();
+    for item in &unreadable {
+        lines.push(format!(
+            "{}: could not be read: {}",
+            sanitize_path(&item.path.to_string_lossy()),
+            sanitize_message(&item.reason)
+        ));
+    }
+    if lines.is_empty() {
+        return Ok(());
+    }
+
+    paths.sort_unstable();
+    paths.dedup();
+    let removable = lines.len() - invalid - unreadable.len();
+    let mut headline = Vec::new();
+    if removable > 0 {
+        headline.push(format!(
+            "{} to {} in {}",
+            comments(removable, ""),
+            match options.operation {
+                Operation::Fix => "have gone",
+                _ => "go",
+            },
+            plural(paths.len(), "file")
+        ));
+    }
+    if invalid > 0 {
+        headline.push(format!("{} that will not parse", plural(invalid, "file")));
+    }
+    if !unreadable.is_empty() {
+        headline.push(format!("{} unreadable", plural(unreadable.len(), "file")));
+    }
+    wrote(writeln!(output, "ocomment: {}.", headline.join(", ")))?;
+    wrote(writeln!(output))?;
+    for line in &lines {
+        wrote(writeln!(output, "{line}"))?;
+    }
+    let mut tail = Vec::new();
+    if let Some(rule) = accepted_here(files, explanations) {
+        tail.push(rule);
+    }
+    if removable > 0 && options.operation != Operation::Fix {
+        /* NOTE: `fix` is offered only for files it could open. Standard input
+         * has no name to hand it, and a proposal has no file yet. */
+        let fixable =
+            subject == Subject::OnDisk && paths.iter().all(|path| path != crate::files::STDIN_PATH);
+        tail.push(if fixable {
+            format!(
+                "next: edit them, or run `ocomment fix {}`.",
+                paths.join(" ")
+            )
+        } else {
+            "next: write it without them.".to_owned()
+        });
+    }
+    if !tail.is_empty() {
+        wrote(writeln!(output))?;
+        for line in &tail {
+            wrote(writeln!(output, "{}", fold(line)))?;
+        }
+    }
+    Ok(())
+}
+
+/// The end-of-run summary as one JSON object, whatever `--format` the run
+/// wrote its product in.
+///
+/// The human summary goes to standard error and the machine formats carry no
+/// summary at all, so a caller that wants the *numbers* — a CI job setting an
+/// output, a dashboard, a script deciding whether to open a pull request — has
+/// had to re-derive them by parsing the product. This is the same count the
+/// run already made, written once, to a file the caller names so it cannot
+/// collide with the product on either stream.
+pub fn write_summary(
+    path: &Path,
+    files: &[ProcessedFile],
+    skipped: &[SkippedFile],
+    operation: Operation,
+) -> Result<()> {
+    let summary = Summary::compute(files, skipped, operation);
+    let mut kinds: BTreeMap<&str, usize> = BTreeMap::new();
+    let mut per_file: Vec<(String, usize)> = Vec::new();
+    for file in files {
+        let mut removable = 0usize;
+        for comment in &file.result.report.comments {
+            if comment.disposition.is_remove() {
+                removable += 1;
+                *kinds.entry(comment.kind.as_str()).or_default() += 1;
+            }
+        }
+        if removable > 0 {
+            per_file.push((report_path(&file.path), removable));
+        }
+    }
+    /* NOTE: Most findings first, then by path, so two runs over the same tree
+     * write the same bytes. */
+    per_file.sort_by(|left, right| right.1.cmp(&left.1).then(left.0.cmp(&right.0)));
+    per_file.truncate(TOP_FILES);
+    let document = json!({
+        "version": 1,
+        "operation": match operation {
+            Operation::Check => "check",
+            Operation::Scan => "scan",
+            Operation::Diff => "diff",
+            Operation::Fix => "fix",
+        },
+        "files_scanned": summary.files_scanned,
+        "files_with_findings": summary.files_with_removable,
+        "removable_comments": summary.removable_comments,
+        "kept_comments": summary.kept_comments,
+        "files_changed": summary.files_changed,
+        "comments_removed": summary.comments_removed,
+        "invalid_files": summary.invalid_files,
+        "skipped_files": summary.skipped_by_reason.values().sum::<usize>() + summary.named_skips,
+        "skipped_by_reason": summary.skipped_by_reason,
+        "io_errors": summary.io_errors,
+        "removable_by_kind": kinds,
+        "top_files": per_file
+            .into_iter()
+            .map(|(path, removable)| json!({ "path": path, "removable": removable }))
+            .collect::<Vec<_>>(),
+    });
+    let rendered =
+        serde_json::to_string_pretty(&document).map_err(|error| output_failure(error.into()))?;
+    std::fs::write(path, format!("{rendered}\n"))
+        .with_context(|| format!("cannot write the run summary to {}", path.display()))
 }

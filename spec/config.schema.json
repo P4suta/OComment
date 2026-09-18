@@ -14,6 +14,7 @@
         "hidden": { "type": "boolean", "default": false },
         "follow_symlinks": { "type": "boolean", "default": false },
         "ignore": { "type": "boolean", "default": true },
+        "include_generated": { "type": "boolean", "default": false },
         "include": { "$ref": "#/$defs/strings" },
         "exclude": { "$ref": "#/$defs/strings" }
       }
@@ -28,12 +29,18 @@
         "keep_regex": { "$ref": "#/$defs/strings" },
         "remove_regex": { "$ref": "#/$defs/strings" },
         "force_invalid": { "type": "boolean", "default": false },
-        "force_protected": { "type": "boolean", "default": false }
+        "force_protected": { "type": "boolean", "default": false },
+        "allow": { "$ref": "#/$defs/allowRules" },
+        "protected": { "type": "array", "items": { "$ref": "#/$defs/protectedPattern" } }
       }
     },
     "git": {
       "type": "object", "additionalProperties": false,
       "properties": { "staged": { "type": "boolean" }, "index_only": { "type": "boolean" } }
+    },
+    "ratchet": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "ledger": { "type": "string" } }
     },
     "lsp": {
       "type": "object", "additionalProperties": false,
@@ -69,9 +76,9 @@
   },
   "$defs": {
     "strings": { "type": "array", "items": { "type": "string" }, "default": [] },
-    "policy": { "enum": ["safe", "legal", "all"], "default": "safe" },
+    "policy": { "enum": ["conservative", "standard", "all", "legal", "safe"], "default": "conservative" },
     "language": { "enum": ["rust", "ocaml", "c", "cpp", "go", "java", "javascript", "typescript", "python", "shell", "html", "css", "jsonc", "sql", "kotlin", "toml", "lua", "yaml", "php", "ruby", "zig", "r", "dart", "swift", "csharp", "scala", "vue", "svelte", "markdown", "perl"] },
-    "kind": { "enum": ["line", "block", "doc-line", "doc-block", "directive", "license", "html-comment", "shebang", "encoding", "optimizer-hint", "version-comment"] },
+    "kind": { "enum": ["line", "block", "doc-line", "doc-block", "directive", "license", "html-comment", "shebang", "encoding", "optimizer-hint", "version-comment", "load-bearing"] },
     "kinds": { "type": "array", "items": { "$ref": "#/$defs/kind" }, "default": [] },
     "languageConfig": {
       "type": "object", "additionalProperties": false,
@@ -93,7 +100,8 @@
         "keep_kind": { "$ref": "#/$defs/kinds" },
         "remove_kind": { "$ref": "#/$defs/kinds" },
         "keep_regex": { "$ref": "#/$defs/strings" },
-        "remove_regex": { "$ref": "#/$defs/strings" }
+        "remove_regex": { "$ref": "#/$defs/strings" },
+        "allow": { "$ref": "#/$defs/allowRules" }
       }
     },
     "dialect": {
@@ -110,6 +118,7 @@
       ],
       "properties": {
         "name": { "type": "string", "minLength": 1 }, "extensions": { "$ref": "#/$defs/strings" },
+        "filenames": { "$ref": "#/$defs/strings" },
         "line_comments": { "type": "array", "items": { "$ref": "#/$defs/lineDelimiter" } },
         "block_comments": { "type": "array", "items": { "$ref": "#/$defs/blockDelimiter" } },
         "strings": { "type": "array", "items": { "$ref": "#/$defs/stringDelimiter" } },
@@ -142,11 +151,29 @@
         "multiline": { "type": "boolean", "default": false }
       }
     },
+    "allowRules": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "tags": { "$ref": "#/$defs/strings" },
+        "max_lines": { "type": "integer", "minimum": 1 },
+        "trailing": { "type": "boolean" },
+        "expiry": {
+          "type": "object",
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "string", "pattern": "^[0-9]+ *[dDwW]?$" },
+              { "type": "integer", "minimum": 0 }
+            ]
+          }
+        }
+      }
+    },
     "protectedPattern": {
       "type": "object", "additionalProperties": false, "required": ["contains", "reason"],
       "properties": {
         "contains": { "type": "string", "minLength": 1 },
-        "reason": { "type": "string", "minLength": 1 }
+        "reason": { "type": "string", "minLength": 1 },
+        "tier": { "enum": ["tool", "load-bearing"], "default": "tool" }
       }
     }
   }

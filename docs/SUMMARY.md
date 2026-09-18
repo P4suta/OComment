@@ -10,6 +10,7 @@
 - [Why was this comment kept?](why-kept.md)
 - [Languages and dialects](languages.md)
 - [Editors and LSP](editors.md)
+- [Agents](agents.md)
 - [CI and hooks](ci.md)
 - [Docker](docker.md)
 - [Library](library.md)

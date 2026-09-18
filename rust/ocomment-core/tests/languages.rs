@@ -154,15 +154,43 @@ fn cpp_raw_strings_hide_delimiters_and_invalid_raw_strings_stop_fix() {
 fn go_build_and_compiler_directives_are_protected() {
     let source = b"//go:build linux\n// +build linux\n//line generated.go:1\n// ordinary\n";
     let report = scan(source, Language::Go, ScanOptions::default());
+    /* NOTE: Three directives, and the tier is the difference between them.
+     * A build constraint decides which files the compiler is given at all, so
+     * it is load-bearing and no policy takes it; `//line` moves the positions
+     * the compiler *reports* and leaves the program it builds alone, so it
+     * stays in the tool tier that `--policy all` is free to clear out. */
     assert_eq!(
         report
             .comments
             .iter()
-            .filter(|comment| comment.kind == CommentKind::Directive)
-            .count(),
-        3
+            .map(|comment| comment.kind)
+            .collect::<Vec<_>>(),
+        vec![
+            CommentKind::LoadBearing,
+            CommentKind::LoadBearing,
+            CommentKind::Directive,
+            CommentKind::Line,
+        ]
     );
     assert_eq!(removable(&report), 1);
+    let stripped = scan(
+        source,
+        Language::Go,
+        ScanOptions {
+            policy: Policy::All,
+            ..ScanOptions::default()
+        },
+    );
+    assert_eq!(
+        stripped
+            .comments
+            .iter()
+            .filter(|comment| !comment.disposition.is_remove())
+            .count(),
+        2,
+        "--policy all took a build constraint: {:?}",
+        stripped.comments
+    );
 }
 
 #[test]
@@ -374,7 +402,9 @@ const value: string = "// text"; // ordinary
 "#;
     let report = scan(source, Language::TypeScript, ScanOptions::default());
     assert_eq!(report.comments.len(), 2);
-    assert_eq!(report.comments[0].kind, CommentKind::Directive);
+    /* NOTE: A triple-slash reference adds a file to the compilation rather than
+     * describing one, so removing it takes declarations out of scope. */
+    assert_eq!(report.comments[0].kind, CommentKind::LoadBearing);
     assert_eq!(removable(&report), 1);
 
     let directives = scan(
@@ -382,13 +412,26 @@ const value: string = "// text"; // ordinary
         Language::TypeScript,
         ScanOptions::default(),
     );
+    /* NOTE: Two annotations, two tiers. `#__PURE__` is what lets a call be
+     * dropped as dead, so removing it changes the bundle and it is
+     * load-bearing; `@ts-expect-error` changes what the checker reports and is
+     * a directive. Counting them together would pass whichever tier either one
+     * landed in. */
+    assert_eq!(
+        directives
+            .comments
+            .iter()
+            .filter(|comment| comment.kind == CommentKind::LoadBearing)
+            .count(),
+        1
+    );
     assert_eq!(
         directives
             .comments
             .iter()
             .filter(|comment| comment.kind == CommentKind::Directive)
             .count(),
-        2
+        1
     );
     assert_eq!(removable(&directives), 1);
 }
@@ -470,7 +513,11 @@ fn dockerfile_parser_and_linter_directives_are_protected() {
     assert_eq!(
         kinds,
         vec![
-            CommentKind::Directive,
+            /* NOTE: `# syntax=` names the BuildKit frontend that reads
+             * everything under it, and a different frontend is a different
+             * language; `hadolint` and `shellcheck` only decide what is
+             * reported about the file. */
+            CommentKind::LoadBearing,
             CommentKind::Line,
             CommentKind::Directive,
             CommentKind::Directive,
@@ -2010,13 +2057,13 @@ fn yaml_layouts_leave_a_line_columns_or_nothing() {
 }
 
 #[test]
-fn legal_policy_and_force_protected_are_ordered() {
+fn conservative_policy_and_force_protected_are_ordered() {
     let source = b"#!/usr/bin/env node\n// SPDX-License-Identifier: MIT\n// ordinary\n";
     let legal = scan(
         source,
         Language::JavaScript,
         ScanOptions {
-            policy: Policy::Legal,
+            policy: Policy::Conservative,
             ..Default::default()
         },
     );
@@ -2305,15 +2352,12 @@ fn a_character_literal_never_reaches_across_a_line_terminator() {
         ByteSpan::new(8, unterminated.len() - 1)
     );
 
-    /* NOTE: The non-ASCII window stops at the terminator like the others, and
-     * the apostrophe it then read as no literal is left unreported. Within one
-     * line `\u{e4}` behind an apostrophe is a Unicode lifetime or loop label as
-     * readily as an unterminated character literal -- Rust identifiers are XID
-     * -- and `rustc` separates them in the parser, which is where E0762 comes
-     * from. A lexer with a line-bounded window cannot, so it keeps the file
-     * valid: over-keeping a comment is the safe direction. The reading of line
-     * 2 is unchanged either way: its apostrophe opens nothing and the `//`
-     * behind it is the comment it looks like. */
+    /* NOTE: The non-ASCII window stops at the terminator like the others, so
+     * the apostrophe it read as no literal goes unreported: within one line a
+     * `\u{e4}` behind an apostrophe is a Unicode lifetime as readily as an
+     * unterminated literal, `rustc` separates them in the parser where E0762
+     * comes from, and a line-bounded lexer cannot. It keeps the file valid
+     * instead, which is the safe direction. */
     let across = "let a = '\u{e4}\n'; // remove\n".as_bytes();
     let report = scan(across, Language::Rust, ScanOptions::default());
     assert!(report.valid, "{:?}", report.diagnostics);
@@ -3735,9 +3779,14 @@ fn ruby_tool_directives_are_protected() {
     assert_eq!(
         kinds,
         [
-            CommentKind::Directive,
-            CommentKind::Directive,
-            CommentKind::Directive,
+            /* NOTE: The first three are the parser's own magic comments,
+             * which decide whether a literal is frozen, what Ractor may
+             * share and how the parser treats indentation; the three after
+             * them are Sorbet, RuboCop and StandardRB deciding what gets
+             * reported. */
+            CommentKind::LoadBearing,
+            CommentKind::LoadBearing,
+            CommentKind::LoadBearing,
             CommentKind::Directive,
             CommentKind::Directive,
             CommentKind::Directive,
@@ -4968,8 +5017,14 @@ fn dart_tool_and_language_directives_are_protected() {
     let report = scan(source, Language::Dart, ScanOptions::default());
     assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
     assert_eq!(report.comments.len(), 6, "{:?}", report.comments);
-    for comment in &report.comments[..5] {
+    /* NOTE: `// @dart = 2.12` opts the library out of null safety, so the
+     * types in the file mean something else without it; the four below it are
+     * addressed to the formatter, the analyzer and the coverage tool. */
+    assert_eq!(report.comments[0].kind, CommentKind::LoadBearing);
+    for comment in &report.comments[1..5] {
         assert_eq!(comment.kind, CommentKind::Directive, "{comment:?}");
+    }
+    for comment in &report.comments[..5] {
         assert!(!comment.disposition.is_remove(), "{comment:?}");
     }
     assert_eq!(report.comments[5].kind, CommentKind::Line);
@@ -4986,9 +5041,11 @@ fn dart_tool_and_language_directives_are_protected() {
     ] {
         let report = scan(near_miss, Language::Dart, ScanOptions::default());
         assert_eq!(report.comments.len(), 1, "{near_miss:?}");
-        assert_ne!(
-            report.comments[0].kind,
-            CommentKind::Directive,
+        assert!(
+            !matches!(
+                report.comments[0].kind,
+                CommentKind::Directive | CommentKind::LoadBearing
+            ),
             "{near_miss:?} was read as a directive"
         );
         assert_eq!(removable(&report), 1, "{near_miss:?}");
@@ -5159,7 +5216,7 @@ fn swift_comment_forms_carry_their_kinds() {
             (91, 98, CommentKind::Line),
         ]
     );
-    /* NOTE: eight, not six: `Policy::Safe` removes a documentation comment as
+    /* NOTE: eight, not six: `Policy::Standard` removes a documentation comment as
      * readily as an ordinary one — what it protects is the preamble and the
      * directive — so the two markers decide the reported kind here rather than
      * the disposition. */
@@ -5491,7 +5548,10 @@ fn swift_directives_are_kept_and_a_near_miss_is_not() {
             .map(|comment| comment.kind)
             .collect::<Vec<_>>(),
         vec![
-            CommentKind::Directive,
+            /* NOTE: SwiftPM reads the tools version before it reads the
+             * manifest, so that one is load-bearing; the four after it are
+             * SwiftLint and the two formatters. */
+            CommentKind::LoadBearing,
             CommentKind::Directive,
             CommentKind::Directive,
             CommentKind::Directive,
@@ -6349,8 +6409,8 @@ fn scala_directives_are_kept_and_a_near_miss_is_not() {
             .map(|comment| (comment.span.start, comment.span.end, comment.kind))
             .collect::<Vec<_>>(),
         vec![
-            (0, 23, CommentKind::Directive),
-            (24, 33, CommentKind::Directive),
+            (0, 23, CommentKind::LoadBearing),
+            (24, 33, CommentKind::LoadBearing),
             (34, 47, CommentKind::Line),
             (48, 62, CommentKind::Line),
             (63, 72, CommentKind::Line),

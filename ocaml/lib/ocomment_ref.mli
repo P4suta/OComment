@@ -3,6 +3,10 @@ type language =
   | Shell | Html | Css | Jsonc | Sql | Kotlin | Toml | Lua | Yaml | Php | Ruby
   | Zig | R | Dart | Swift | CSharp | Scala | Vue | Svelte | Markdown | Perl | Unknown
 
+(** Declared before `dialect` for the reason the implementation gives: both
+   carry a `Standard`, and the dialect's is the one worth leaving unannotated. *)
+type policy = Conservative | Standard | All
+
 type dialect =
   | Standard | Jsx | Tsx | ObjectiveC | ObjectiveCpp | GnuC | GnuCpp | Cuda
   | PosixSh | Bash53 | Zsh | PostgreSql | MySql | Sqlite | TSql | Oracle | Scss
@@ -12,14 +16,47 @@ type byte_span = { start : int; finish : int }
 
 type comment_kind =
   | Line | Block | DocLine | DocBlock | Directive | License | HtmlComment
-  | Shebang | Encoding | OptimizerHint | VersionComment
+  | Shebang | Encoding | OptimizerHint | VersionComment | LoadBearing
+
+type protection = NoProtection | Preamble | LoadBearingTier
 
 type disposition = Remove | Keep of string
 type severity = Error | Warning | Info | Hint
 type diagnostic = { code : string; message : string; severity : severity; span : byte_span }
-type comment = { span : byte_span; kind : comment_kind; disposition : disposition }
-type policy = Safe | Legal | All
+
+(** A rule about a comment's shape rather than its kind, recorded because
+   nothing can re-derive it from the comment's own bytes. *)
+type shape_rule = Tagged of string | Trailing | TooLong of int * int
+
+type comment =
+  { span : byte_span; kind : comment_kind; disposition : disposition;
+    shape : shape_rule option }
 type layout = Lines | Columns | Compact
+
+(** What a comment has to be beyond being of a kind the policy keeps.  The
+   policy decides by kind, and a kind is a coarse thing to decide by: a one-line
+   rationale and a forty-line essay are both Line.  These are the other axes,
+   and they cut across the policy rather than under it. *)
+type allow_rules = {
+  tags : string list;
+  max_lines : int option;
+  trailing : bool option;
+  (* NOTE: Tags that carry a deadline.  Allowed here exactly as `tags` are:
+     measuring the age of a line means reading a repository, and neither this
+     implementation nor the Rust scanner does any I/O, so the verdict that
+     takes one back is reached by a caller with a clock.  The names are still
+     needed, because until the deadline passes these are ordinary allowed
+     tags and the two implementations have to agree about that. *)
+  expiring_tags : string list;
+}
+
+(** How strongly a protected pattern asks for its comment.  The weaker
+   tier records it as a directive that every policy but `all` keeps; the
+   stronger one records it as a comment no policy reaches. *)
+type protection_tier = Tool | ProfileLoadBearing
+
+type protected_pattern =
+  { pattern : string; reason : string; tier : protection_tier }
 
 type scan_options = {
   policy : policy;
@@ -30,6 +67,12 @@ type scan_options = {
   remove_kinds : comment_kind list;
   keep_regex : string list;
   remove_regex : string list;
+  allow : allow_rules;
+  (* NOTE: Markers this project's own tools read.  The catalogue this
+     implementation ships knows the tools everybody uses and cannot know yours,
+     and a `keep_regex` leaves the comment ordinary -- which `all` is entitled
+     to remove.  A pattern here decides what the comment is. *)
+  protected : protected_pattern list;
 }
 
 type transform_options = { scan : scan_options; layout : layout }
@@ -42,7 +85,12 @@ type transform_result = { output : bytes; edits : edit list; report : scan_repor
 type line_delimiter = { line_start : string; requires_boundary : bool; line_kind : comment_kind }
 type block_delimiter = { block_start : string; block_end_token : string; nested : bool; block_kind : comment_kind }
 type string_delimiter = { string_start : string; string_end : string; escape : string option; multiline : bool }
-type protected_pattern = { pattern : string; reason : string }
+
+(** `tier` is how strongly the pattern asks for the comment.  A profile
+   describes a syntax with no built-in scanner, and its author knows something
+   the policy cannot: a marker their toolchain reads is not a marker their
+   linter reads.  Without it every profile protection was the weaker one and
+   `all` took a marker a build depended on. *)
 type declarative_profile = {
   name : string; extensions : string list; line_comments : line_delimiter list;
   block_comments : block_delimiter list; strings : string_delimiter list;

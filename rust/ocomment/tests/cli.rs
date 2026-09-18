@@ -11,6 +11,56 @@ fn binary() -> &'static str {
     env!("CARGO_BIN_EXE_ocomment")
 }
 
+/// Create a file whose name is raw bytes, or report that this filesystem will
+/// not hold one.
+///
+/// A Unix filename is a byte string, and what OComment does with one that is
+/// not UTF-8 is a property worth pinning: a path must reach a report, a patch
+/// and the Git index as the bytes the OS gave, never as U+FFFD. Not every Unix
+/// filesystem agrees that a name is bytes. APFS and HFS+ reject a name that is
+/// not well-formed UTF-8 with `EILSEQ`, so on macOS these tests have nothing to
+/// run against and used to fail there for a reason that says nothing about
+/// OComment.
+///
+/// Skipping is only honest if it cannot quietly become permanent, so the skip
+/// is announced and `OCOMMENT_REQUIRE_NON_UTF8_PATHS` turns it into a failure.
+/// CI sets that variable on the platforms whose filesystems do hold such a
+/// name, which is what keeps the property observed rather than merely
+/// compiled.
+#[cfg(unix)]
+fn write_non_utf8_file(
+    directory: &Path,
+    name: &[u8],
+    contents: &[u8],
+) -> Option<std::ffi::OsString> {
+    use std::os::unix::ffi::OsStringExt;
+
+    let name = std::ffi::OsString::from_vec(name.to_vec());
+    let Err(error) = fs::write(directory.join(&name), contents) else {
+        return Some(name);
+    };
+    /* NOTE: Which error a filesystem gives for a name it will not have is not
+     * worth encoding: `EILSEQ` is 84 on Linux and 92 on macOS, and a test that
+     * hard-codes either is wrong somewhere. Writing a name nothing can object
+     * to separates "this name" from "this directory", which is the distinction
+     * that matters and the one that needs no errno at all. */
+    let probe = directory.join("probe-utf8-name.rs");
+    match fs::write(&probe, contents) {
+        Ok(()) => drop(fs::remove_file(&probe)),
+        Err(other) => panic!("the test directory is not writable at all: {other}"),
+    }
+    assert!(
+        std::env::var_os("OCOMMENT_REQUIRE_NON_UTF8_PATHS").is_none(),
+        "this filesystem rejected a non-UTF-8 filename, and \
+         OCOMMENT_REQUIRE_NON_UTF8_PATHS says that is not allowed here: {error}"
+    );
+    eprintln!(
+        "skipping: this filesystem rejects non-UTF-8 filenames ({error}); \
+         set OCOMMENT_REQUIRE_NON_UTF8_PATHS to make that a failure"
+    );
+    None
+}
+
 fn run(directory: &Path, arguments: &[&str]) -> Output {
     Command::new(binary())
         .current_dir(directory)
@@ -129,13 +179,12 @@ fn check_diff_and_fix_follow_the_exit_contract() {
 #[cfg(unix)]
 #[test]
 fn diff_is_byte_preserving_and_git_applies_quoted_non_utf8_paths() {
-    use std::os::unix::ffi::OsStringExt;
-
     let directory = repository();
-    let name = std::ffi::OsString::from_vec(b"odd\n\xfe.rs".to_vec());
-    let path = directory.path().join(&name);
     let original = b"let raw = b\"\xff\"; // remove me\n";
-    fs::write(&path, original).unwrap();
+    let Some(name) = write_non_utf8_file(directory.path(), b"odd\n\xfe.rs", original) else {
+        return;
+    };
+    let path = directory.path().join(&name);
 
     let output = Command::new(binary())
         .current_dir(directory.path())
@@ -188,18 +237,27 @@ fn diff_is_byte_preserving_and_git_applies_quoted_non_utf8_paths() {
     assert_eq!(fs::read(path).unwrap(), b"let raw = b\"\xff\"; \n");
 }
 
-/* NOTE: A lock file carries no extension the detector can use, so the whole
- * name has to reach it through the binary for the run to scan the file at all.
- * `Cargo.lock` is the one every Rust checkout has. */
+/// A lock file carries no extension the detector can use, so the whole
+/// name has to reach it through the binary for the run to scan the file at all.
+/// `Cargo.lock` is the one every Rust checkout has.
 #[test]
 fn a_toml_lock_file_is_scanned_under_its_reserved_name() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("Cargo.lock");
     fs::write(&path, b"# generated\nname = \"# opaque\" # remove\n").unwrap();
 
+    /* NOTE: `--include-generated`, because a lock file is passed over by
+     * default now. The reserved-name detection this pins is still what decides
+     * the language once the file is read. */
     let scanned = run(
         directory.path(),
-        &["scan", "Cargo.lock", "--format", "json"],
+        &[
+            "scan",
+            "Cargo.lock",
+            "--format",
+            "json",
+            "--include-generated",
+        ],
     );
     assert_eq!(
         scanned.status.code(),
@@ -212,7 +270,10 @@ fn a_toml_lock_file_is_scanned_under_its_reserved_name() {
     assert_eq!(report["language"], "toml");
     assert_eq!(report["comments"].as_array().unwrap().len(), 2);
 
-    let fixed = run(directory.path(), &["fix", "Cargo.lock"]);
+    let fixed = run(
+        directory.path(),
+        &["fix", "Cargo.lock", "--include-generated"],
+    );
     assert_eq!(
         fixed.status.code(),
         Some(0),
@@ -222,10 +283,10 @@ fn a_toml_lock_file_is_scanned_under_its_reserved_name() {
     assert_eq!(fs::read(&path).unwrap(), b"\nname = \"# opaque\" \n");
 }
 
-/* NOTE: A `.clang-format` file is YAML with no extension for the detector to go
- * on and a hidden name besides, so naming it is what gets it scanned at all:
- * the whole name reaches the detector, and an explicitly named path lifts the
- * hidden-file rule the walk applies on its own. */
+/// A `.clang-format` file is YAML with no extension for the detector to go
+/// on and a hidden name besides, so naming it is what gets it scanned at all:
+/// the whole name reaches the detector, and an explicitly named path lifts the
+/// hidden-file rule the walk applies on its own.
 #[test]
 fn a_yaml_configuration_is_scanned_under_its_reserved_name() {
     let directory = tempfile::tempdir().unwrap();
@@ -264,9 +325,9 @@ fn a_yaml_configuration_is_scanned_under_its_reserved_name() {
     );
 }
 
-/* NOTE: A Lua script installed as a command carries no extension at all, so the
- * `#!` line is the only evidence the run has; this is the path from the file
- * name through the detector and out the other side as a Lua scan. */
+/// A Lua script installed as a command carries no extension at all, so the
+/// `#!` line is the only evidence the run has; this is the path from the file
+/// name through the detector and out the other side as a Lua scan.
 #[test]
 fn a_lua_script_is_scanned_from_its_shebang_alone() {
     let directory = tempfile::tempdir().unwrap();
@@ -302,9 +363,9 @@ fn a_lua_script_is_scanned_from_its_shebang_alone() {
     );
 }
 
-/* NOTE: A PHP template is two languages in one file and only the code half is
- * scanned: the inline HTML around the tags is content, so the `<!-- -->` comment
- * in it survives a run that removes the `//` comment inside them. */
+/// A PHP template is two languages in one file and only the code half is
+/// scanned: the inline HTML around the tags is content, so the `<!-- -->` comment
+/// in it survives a run that removes the `//` comment inside them.
 #[test]
 fn a_php_template_is_scanned_only_inside_its_tags() {
     let directory = tempfile::tempdir().unwrap();
@@ -343,12 +404,12 @@ fn a_php_template_is_scanned_only_inside_its_tags() {
     );
 }
 
-/* NOTE: Zig is the one built-in language with no block comment, and this is what
- * that costs a run end to end: `// zig fmt: off` is the only instruction the
- * formatter reads out of a comment and is kept, the `//` written on a
- * multiline string literal line is content the way one inside a quoted string
- * is, and only the ordinary comment beside them is removed. `zig ast-check`
- * (0.16.0) accepts the file below. */
+/// Zig is the one built-in language with no block comment, and this is what
+/// that costs a run end to end: `// zig fmt: off` is the only instruction the
+/// formatter reads out of a comment and is kept, the `//` written on a
+/// multiline string literal line is content the way one inside a quoted string
+/// is, and only the ordinary comment beside them is removed. `zig ast-check`
+/// (0.16.0) accepts the file below.
 #[test]
 fn a_zig_file_keeps_its_fmt_directive_and_its_multiline_string() {
     let directory = tempfile::tempdir().unwrap();
@@ -387,16 +448,17 @@ fn a_zig_file_keeps_its_fmt_directive_and_its_multiline_string() {
     );
 }
 
-/* NOTE: Dart is the one built-in C-family language whose block comment nests, and
- * this is what that plus its interpolation costs a run end to end: the outer
- * `/*` is closed by the second `*/` and not the first, `${ ... }` is code so
- * the comment written inside the string is a comment of its own, and
- * `// dart format off` is one of the four instructions a Dart tool reads and is
- * kept. Ground truth, Dart SDK 3.13.2 `scanString`: `SINGLE_LINE_COMMENT` at
- * [0,18), `MULTI_LINE_COMMENT "/* who */
-"` at [48,57) inside the interpolation,
- * `SINGLE_LINE_COMMENT` at [61,70), and `MULTI_LINE_COMMENT` at [71,106).
- * `dart analyze` accepts both the file below and the bytes `fix` leaves. */
+/// Dart is the one built-in C-family language whose block comment nests, and
+/// this is what that plus its interpolation costs a run end to end: the outer
+/// opener is closed by the second terminator and not the first, `${ ... }` is
+/// code so the comment written inside the string is a comment of its own, and
+/// `// dart format off` is one of the four instructions a Dart tool reads and
+/// is kept.
+///
+/// Ground truth, Dart SDK 3.13.2 `scanString`: `SINGLE_LINE_COMMENT` at
+/// [0,18), a `MULTI_LINE_COMMENT` at [48,57) inside the interpolation,
+/// `SINGLE_LINE_COMMENT` at [61,70), and `MULTI_LINE_COMMENT` at [71,106).
+/// `dart analyze` accepts both the file below and the bytes `fix` leaves.
 #[test]
 fn a_dart_file_keeps_its_format_directive_and_nests_its_block_comment() {
     let directory = tempfile::tempdir().unwrap();
@@ -438,18 +500,18 @@ fn a_dart_file_keeps_its_format_directive_and_nests_its_block_comment() {
     );
 }
 
-/* NOTE: Swift is the one built-in language whose regular expression literal can
- * carry a `//` with no quote in front of it, and this is what that costs a run
- * end to end: `#/https://x/#` holds two slashes that are pattern rather than
- * comment, `\( ... )` is code so the block comment written inside the string is
- * a comment of its own, the outer `/*` is closed by the second `*/` and not the
- * first, and `// swift-tools-version:` is kept because SwiftPM reads it before
- * it reads a manifest at all. Ground truth, the SwiftSyntax parser of the Swift
- * 6.3.3 toolchain: `lineComment` at [0,26), a `regexLiteralPattern` at [39,48),
- * `lineComment` at [52,61), `blockComment` at [92,101) inside the
- * interpolation, `lineComment` at [105,114), and `blockComment` at [115,150).
- * `swift-frontend -dump-parse -swift-version 6` accepts both the file below and
- * the bytes `fix` leaves. */
+/// Swift is the one built-in language whose regular expression literal can
+/// carry a `//` with no quote in front of it, and this is what that costs a run
+/// end to end: `#/https://x/#` holds two slashes that are pattern rather than
+/// comment, `\( ... )` is code so the block comment written inside the string is
+/// a comment of its own, the outer `/*` is closed by the second `*/` and not the
+/// first, and `// swift-tools-version:` is kept because SwiftPM reads it before
+/// it reads a manifest at all. Ground truth, the SwiftSyntax parser of the Swift
+/// 6.3.3 toolchain: `lineComment` at [0,26), a `regexLiteralPattern` at [39,48),
+/// `lineComment` at [52,61), `blockComment` at [92,101) inside the
+/// interpolation, `lineComment` at [105,114), and `blockComment` at [115,150).
+/// `swift-frontend -dump-parse -swift-version 6` accepts both the file below and
+/// the bytes `fix` leaves.
 #[test]
 fn a_swift_file_keeps_its_tools_version_and_hides_a_slash_pair_in_a_regex() {
     let directory = tempfile::tempdir().unwrap();
@@ -474,7 +536,7 @@ fn a_swift_file_keeps_its_tools_version_and_hides_a_slash_pair_in_a_regex() {
     let report = &document["files"][0]["report"];
     assert_eq!(report["language"], "swift");
     assert_eq!(report["comments"].as_array().unwrap().len(), 5);
-    assert_eq!(report["comments"][0]["kind"], "directive");
+    assert_eq!(report["comments"][0]["kind"], "load-bearing");
     assert_eq!(report["comments"][0]["disposition"]["action"], "keep");
     assert_eq!(report["comments"][1]["span"]["start"], 52);
     assert_eq!(report["comments"][2]["span"]["start"], 92);
@@ -493,22 +555,51 @@ fn a_swift_file_keeps_its_tools_version_and_hides_a_slash_pair_in_a_regex() {
         fs::read(&path).unwrap(),
         b"// swift-tools-version:5.9\nlet url = #/https://x/#  \nlet greeting = \"hi \\( \"there\"  )\" \n\n"
     );
+
+    /* NOTE: And the run this line is classified `load-bearing` for. `--policy
+     * all` is what a project reaches for when it wants every comment gone, and
+     * it is the one policy that says so about directives too -- so until the
+     * tools-version line was held back from it, `ocomment fix --policy all`
+     * left a manifest SwiftPM reads as one written against the oldest tools
+     * version there is, which it no longer supports at all. The file still
+     * parses either way, which is why nothing downstream catches it. */
+    let stripped = run(
+        directory.path(),
+        &["fix", "Package.swift", "--policy", "all"],
+    );
+    assert_eq!(
+        stripped.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&stripped.stderr)
+    );
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        b"// swift-tools-version:5.9\nlet url = #/https://x/#  \nlet greeting = \"hi \\( \"there\"  )\" \n\n",
+        "--policy all took the line SwiftPM reads before it reads the manifest"
+    );
+    assert!(
+        String::from_utf8_lossy(&stripped.stderr)
+            .contains("1 load-bearing comment kept; add --force-protected to remove it."),
+        "--policy all kept the line without saying so:\n{}",
+        String::from_utf8_lossy(&stripped.stderr)
+    );
 }
 
-/* NOTE: C# is the one built-in language whose *lines* are lexed two ways, and
- * this is what that costs a run end to end: `#region` takes the rest of its line
- * as the label an editor folds under, so the `//` in it is not a comment, while
- * the `//` behind `#endregion` is one; the format clause behind the `:` of an
- * interpolation hole is text, so the `//` in it is not a comment either; a
- * verbatim string carries its `\` and hides the `//` inside it; and a block
- * comment does not nest, so its first closing delimiter ends it and the `//`
- * behind the leftovers opens a comment of its own. `// <auto-generated/>` is kept because Roslyn exempts a
- * file carrying one from every analyzer that opts out of generated code. Ground
- * truth, the Roslyn lexer the .NET SDK 10.0.400 ships:
- * `SingleLineCommentTrivia` at [0,20), `PreprocessingMessageTrivia` at [29,53),
- * `SingleLineCommentTrivia` at [125,134), `MultiLineCommentTrivia` at [135,155),
- * and `SingleLineCommentTrivia` at [156,165) and [177,186). It reports no
- * lexical diagnostic for the file below, nor for the bytes `fix` leaves. */
+/// C# is the one built-in language whose *lines* are lexed two ways, and
+/// this is what that costs a run end to end: `#region` takes the rest of its line
+/// as the label an editor folds under, so the `//` in it is not a comment, while
+/// the `//` behind `#endregion` is one; the format clause behind the `:` of an
+/// interpolation hole is text, so the `//` in it is not a comment either; a
+/// verbatim string carries its `\` and hides the `//` inside it; and a block
+/// comment does not nest, so its first closing delimiter ends it and the `//`
+/// behind the leftovers opens a comment of its own. `// <auto-generated/>` is kept because Roslyn exempts a
+/// file carrying one from every analyzer that opts out of generated code. Ground
+/// truth, the Roslyn lexer the .NET SDK 10.0.400 ships:
+/// `SingleLineCommentTrivia` at [0,20), `PreprocessingMessageTrivia` at [29,53),
+/// `SingleLineCommentTrivia` at [125,134), `MultiLineCommentTrivia` at [135,155),
+/// and `SingleLineCommentTrivia` at [156,165) and [177,186). It reports no
+/// lexical diagnostic for the file below, nor for the bytes `fix` leaves.
 #[test]
 fn a_csharp_file_keeps_its_generated_marker_and_its_directive_lines() {
     let directory = tempfile::tempdir().unwrap();
@@ -519,9 +610,19 @@ fn a_csharp_file_keeps_its_generated_marker_and_its_directive_lines() {
     )
     .unwrap();
 
+    /* NOTE: `--include-generated`, because `<auto-generated/>` is now a reason
+     * to pass the file over entirely: a generated file's comments belong to the
+     * tool that wrote them. What this test is about is what the scanner does
+     * with the file when it is asked to look. */
     let scanned = run(
         directory.path(),
-        &["scan", "Program.cs", "--format", "json"],
+        &[
+            "scan",
+            "Program.cs",
+            "--format",
+            "json",
+            "--include-generated",
+        ],
     );
     assert_eq!(
         scanned.status.code(),
@@ -542,7 +643,10 @@ fn a_csharp_file_keeps_its_generated_marker_and_its_directive_lines() {
     assert_eq!(report["comments"][4]["span"]["start"], 177);
     assert_eq!(report["comments"][4]["span"]["end"], 186);
 
-    let fixed = run(directory.path(), &["fix", "Program.cs"]);
+    let fixed = run(
+        directory.path(),
+        &["fix", "Program.cs", "--include-generated"],
+    );
     assert_eq!(
         fixed.status.code(),
         Some(0),
@@ -555,14 +659,14 @@ fn a_csharp_file_keeps_its_generated_marker_and_its_directive_lines() {
     );
 }
 
-/* NOTE: R is the one built-in language whose extension is written in upper case
- * as often as in lower — `analysis.R` and `analysis.r` are the same kind of
- * file — so this is the run that proves the suffix is folded before it is
- * looked up. It is also what a roxygen comment costs end to end: `#'` is
- * documentation and the default policy takes it, `# nolint` is lintr's
- * instruction and is kept, and the `#` inside the raw string is content. R
- * 4.3.3 `getParseData` reads the file below as `COMMENT` at [0,19), [20,30),
- * [60,68) and [116,124), with `STR_CONST` covering [80,104). */
+/// R is the one built-in language whose extension is written in upper case
+/// as often as in lower — `analysis.R` and `analysis.r` are the same kind of
+/// file — so this is the run that proves the suffix is folded before it is
+/// looked up. It is also what a roxygen comment costs end to end: `#'` is
+/// documentation and the default policy takes it, `# nolint` is lintr's
+/// instruction and is kept, and the `#` inside the raw string is content. R
+/// 4.3.3 `getParseData` reads the file below as `COMMENT` at [0,19), [20,30),
+/// [60,68) and [116,124), with `STR_CONST` covering [80,104).
 #[test]
 fn an_r_file_keeps_its_lint_directive_and_its_raw_string() {
     let directory = tempfile::tempdir().unwrap();
@@ -599,16 +703,21 @@ fn an_r_file_keeps_its_lint_directive_and_its_raw_string() {
         "{}",
         String::from_utf8_lossy(&fixed.stderr)
     );
+    /* NOTE: The two `#'` lines survive. They are roxygen2 documentation, which
+     * is what generates this package's NAMESPACE and its `.Rd` pages, so
+     * removing them would change what the package exports -- and the default
+     * policy keeps documentation for that reason. Only the untagged remark
+     * goes. */
     assert_eq!(
         fs::read(&path).unwrap(),
-        b"\n\nadd <- function(a, b) a + b  # nolint\npattern <- r\"(\\d+ # not a comment)\"\ntotal <- 1 \n"
+        b"#' Add two numbers.\n#' @export\nadd <- function(a, b) a + b  # nolint\npattern <- r\"(\\d+ # not a comment)\"\ntotal <- 1 \n"
     );
 }
 
-/* NOTE: A `Gemfile` carries no extension, so it reaches the Ruby scanner by its
- * whole name alone — and once there, the magic comment at the head of it is a
- * directive the default policy keeps, where the embedded document below it is
- * an ordinary comment the same run removes. */
+/// A `Gemfile` carries no extension, so it reaches the Ruby scanner by its
+/// whole name alone — and once there, the magic comment at the head of it is a
+/// directive the default policy keeps, where the embedded document below it is
+/// an ordinary comment the same run removes.
 #[test]
 fn a_gemfile_is_scanned_as_ruby_by_its_name_alone() {
     let directory = tempfile::tempdir().unwrap();
@@ -630,7 +739,7 @@ fn a_gemfile_is_scanned_as_ruby_by_its_name_alone() {
     let report = &document["files"][0]["report"];
     assert_eq!(report["language"], "ruby");
     assert_eq!(report["comments"].as_array().unwrap().len(), 3);
-    assert_eq!(report["comments"][0]["kind"], "directive");
+    assert_eq!(report["comments"][0]["kind"], "load-bearing");
     assert_eq!(report["comments"][0]["disposition"]["action"], "keep");
 
     let fixed = run(directory.path(), &["fix", "Gemfile"]);
@@ -1745,12 +1854,16 @@ fn staged_new_rename_delete_and_unusual_paths_are_handled_from_index_blobs() {
 #[cfg(unix)]
 #[test]
 fn staged_non_utf8_paths_remain_os_native() {
-    use std::os::unix::ffi::{OsStrExt, OsStringExt};
+    use std::os::unix::ffi::OsStrExt;
 
     let directory = repository();
-    let name = std::ffi::OsString::from_vec(b"non-\xff.rs".to_vec());
-    let path = directory.path().join(&name);
-    fs::write(&path, b"let value = 1; // remove\n").unwrap();
+    let Some(name) = write_non_utf8_file(
+        directory.path(),
+        b"non-\xff.rs",
+        b"let value = 1; // remove\n",
+    ) else {
+        return;
+    };
     git_with_path(directory.path(), &["add", "--"], &name);
 
     let output = run(directory.path(), &["fix", "--staged", "--index-only"]);
@@ -2387,7 +2500,7 @@ fn check_help_groups_options_and_lists_possible_values() {
     assert_eq!(short.status.code(), Some(0));
     let short = String::from_utf8(short.stdout).unwrap();
     assert!(
-        short.contains("[possible values: safe, legal, all]"),
+        short.contains("[possible values: conservative, standard, all]"),
         "`check -h` lacks the policy values:\n{short}"
     );
     assert!(short.contains("Policy:"), "no Policy heading:\n{short}");
@@ -2399,8 +2512,8 @@ fn check_help_groups_options_and_lists_possible_values() {
     assert!(long.contains("Policy:"), "no Policy heading:\n{long}");
     assert!(long.contains("Output:"), "no Output heading:\n{long}");
     for needle in [
-        "- safe:",
-        "- legal:",
+        "- conservative:",
+        "- standard:",
         "- all:",
         "- lines:",
         "- rust:",
@@ -2421,7 +2534,7 @@ fn unknown_policy_value_reports_the_possible_values() {
     let error = String::from_utf8_lossy(&output.stderr);
     assert!(error.contains("invalid value 'foo'"), "{error}");
     assert!(
-        error.contains("[possible values: safe, legal, all]"),
+        error.contains("[possible values: conservative, standard, all]"),
         "{error}"
     );
 }
@@ -2537,7 +2650,7 @@ fn bash_completions_carry_the_policy_values() {
     let output = run(directory.path(), &["completions", "bash"]);
     assert_eq!(output.status.code(), Some(0));
     let script = String::from_utf8(output.stdout).unwrap();
-    for value in ["safe", "legal", "all"] {
+    for value in ["conservative", "standard", "all"] {
         assert!(
             script.contains(value),
             "bash completions lack the policy value {value}"
@@ -2567,7 +2680,13 @@ fn human_check_names_comment_kinds_in_canonical_spelling() {
         b"/** doc */\nfn main() {}\n",
     )
     .unwrap();
-    let output = run(directory.path(), &["check", "doc.rs"]);
+    /* NOTE: The policy is named because the default keeps documentation
+     * comments; what this pins is the spelling of the kind in the report, not
+     * which policy reaches one. */
+    let output = run(
+        directory.path(),
+        &["check", "doc.rs", "--policy", "standard"],
+    );
     assert_eq!(output.status.code(), Some(1));
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(
@@ -2621,7 +2740,7 @@ fn config_explain_prints_canonical_policy_and_layout() {
     assert_eq!(output.status.code(), Some(0));
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(
-        stdout.contains("policy: safe; layout: lines"),
+        stdout.contains("policy: conservative; layout: lines"),
         "config explain output is:\n{stdout}"
     );
     /* NOTE: Only the policy line is pinned: the surrounding lines print filesystem
@@ -2634,6 +2753,123 @@ fn config_explain_prints_canonical_policy_and_layout() {
         !policy_line.contains("Safe") && !policy_line.contains("Lines"),
         "config explain still Debug-prints the enums:\n{policy_line}"
     );
+    assert!(
+        stdout.contains("no keep_kind, remove_kind, keep_regex or remove_regex is set"),
+        "config explain said nothing about the lists it resolved:\n{stdout}"
+    );
+}
+
+/// `config explain` names every kind and pattern it resolved, and where each
+/// one was written.
+///
+/// It used to print three lines -- precedence, root, policy and layout -- and
+/// so explained a configuration without naming anything the configuration
+/// said. A `keep_regex` is the setting most likely to be wrong and was the one
+/// setting `explain` would not show.
+#[test]
+fn config_explain_names_every_pattern_and_kind_it_resolved() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        b"version = 1\n\n[policy]\nmode = \"all\"\nkeep_kind = [\"directive\"]\nkeep_regex = ['^// *determinism:allow']\n",
+    )
+    .unwrap();
+
+    let output = run(directory.path(), &["config", "explain"]);
+    assert_eq!(output.status.code(), Some(0));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("keep_kind #0 `directive` ([policy] in "),
+        "config explain lost the kind it resolved:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("keep_regex #0 `^// *determinism:allow` ([policy] in "),
+        "config explain lost the pattern it resolved:\n{stdout}"
+    );
+    /* NOTE: The index is what the run's own report counts from, so the two
+     * spellings of the same setting line up. */
+    assert!(
+        stdout.contains("`ocomment check` over the root is that walk"),
+        "config explain did not say where to learn which of them fire:\n{stdout}"
+    );
+}
+
+/// A setting that matched nothing is reported instead of being left silent.
+///
+/// This is the failure that looks like success: a `keep_regex` you believe is
+/// holding a comment back, which is not, and which `fix` therefore removes.
+/// The pattern below is the real one this came from -- written against the
+/// text of the comment and matched against the whole token, so the `^` is
+/// anchored in front of a `//` that is always there.
+#[test]
+fn a_setting_that_matched_nothing_is_reported() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        b"version = 1\n\n[policy]\nmode = \"all\"\nkeep_regex = ['^\\s*rustfmt::', 'neverMatchesAnything']\nkeep_kind = [\"html-comment\"]\n",
+    )
+    .unwrap();
+    fs::write(
+        directory.path().join("a.rs"),
+        b"// rustfmt::skip\nfn main() {} // ordinary\n",
+    )
+    .unwrap();
+
+    let walked = run(directory.path(), &["check"]);
+    let stderr = String::from_utf8(walked.stderr).unwrap();
+    assert!(
+        stderr.contains(
+            "keep_regex #0 `^\\s*rustfmt::` matched none of the 2 comments this run scanned"
+        ),
+        "the pattern that protects nothing was not reported:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("keep_regex #1 `neverMatchesAnything` matched none of the"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("keep_kind `html-comment` met no comment of that kind"),
+        "{stderr}"
+    );
+    /* NOTE: The one sentence that turns the report into a fix. */
+    assert!(
+        stderr.contains("matched against the whole comment token"),
+        "the report did not say why the pattern missed:\n{stderr}"
+    );
+    /* INVARIANT: Commentary about the run goes to standard error, so a
+     * `--format json` consumer keeps a clean pipe. */
+    let stdout = String::from_utf8(walked.stdout).unwrap();
+    assert!(!stdout.contains("keep_regex"), "{stdout}");
+}
+
+/// The report is about a walk, where "nothing matched" means the pattern is
+/// doing no work. A run over named files is a caller asking about those files,
+/// and a pattern with nothing to say about them has not thereby failed.
+#[test]
+fn an_unused_setting_is_not_reported_for_a_narrowed_or_quiet_run() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        b"version = 1\n\n[policy]\nmode = \"all\"\nkeep_regex = ['neverMatchesAnything']\n",
+    )
+    .unwrap();
+    fs::write(directory.path().join("a.rs"), b"fn main() {} // ordinary\n").unwrap();
+
+    let named = run(directory.path(), &["check", "a.rs"]);
+    assert!(
+        !String::from_utf8(named.stderr)
+            .unwrap()
+            .contains("keep_regex"),
+        "a run over one named file reported a pattern as unused"
+    );
+
+    let quiet = run(directory.path(), &["check", "-q"]);
+    assert!(
+        !String::from_utf8(quiet.stderr)
+            .unwrap()
+            .contains("keep_regex"),
+        "-q kept a note"
+    );
 }
 
 #[test]
@@ -2644,12 +2880,17 @@ fn github_annotations_use_kebab_comment_kinds() {
         b"/** doc */\nfn main() {}\n",
     )
     .unwrap();
-    let output = run(directory.path(), &["check", "doc.rs", "--format", "github"]);
+    let output = run(
+        directory.path(),
+        &[
+            "check", "doc.rs", "--format", "github", "--policy", "standard",
+        ],
+    );
     assert_eq!(output.status.code(), Some(1));
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert_eq!(
         stdout,
-        "::notice file=doc.rs,line=1,col=1::removable doc-block comment\n"
+        "::error file=doc.rs,line=1,col=1::removable doc-block comment\n"
     );
     assert_no_debug_leak("github annotations", &stdout);
     assert!(!stdout.contains("Remove"), "github output is:\n{stdout}");
@@ -2663,7 +2904,12 @@ fn sarif_keeps_kebab_rule_ids_and_canonical_messages() {
         b"/** doc */\nfn main() {}\n",
     )
     .unwrap();
-    let output = run(directory.path(), &["check", "doc.rs", "--format", "sarif"]);
+    let output = run(
+        directory.path(),
+        &[
+            "check", "doc.rs", "--format", "sarif", "--policy", "standard",
+        ],
+    );
     assert_eq!(output.status.code(), Some(1));
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     let result = &value["runs"][0]["results"][0];
@@ -2823,7 +3069,7 @@ fn strip_and_config_refuse_the_formats_they_cannot_honour() {
 
 /// Every comment kind a rule id can name, in the spelling `CommentKind`
 /// serialises. A kind added without a rule to describe it fails this test.
-const SARIF_KINDS: [&str; 11] = [
+const SARIF_KINDS: [&str; 12] = [
     "line",
     "block",
     "doc-line",
@@ -2835,6 +3081,7 @@ const SARIF_KINDS: [&str; 11] = [
     "encoding",
     "optimizer-hint",
     "version-comment",
+    "load-bearing",
 ];
 
 /// The SARIF failure levels OComment reports at. `none` is a level too, but
@@ -2999,7 +3246,14 @@ fn sarif_locates_reported_files_under_the_source_root() {
     .unwrap();
     let output = run(
         directory.path(),
-        &["check", "sub/./doc.rs", "--format", "sarif"],
+        &[
+            "check",
+            "sub/./doc.rs",
+            "--format",
+            "sarif",
+            "--policy",
+            "standard",
+        ],
     );
     assert_eq!(output.status.code(), Some(1));
     let report = String::from_utf8(output.stdout).unwrap();
@@ -3118,7 +3372,7 @@ fn sarif_disambiguates_a_leading_segment_that_reads_as_a_drive_letter() {
     );
     let stdout = String::from_utf8(annotated.stdout).unwrap();
     assert!(
-        stdout.contains("::notice file=c%3A/a.rs,"),
+        stdout.contains("::error file=c%3A/a.rs,"),
         "a GitHub annotation lost the path the repository spells:\n{stdout}"
     );
 }
@@ -3156,14 +3410,121 @@ fn github_annotations_report_repository_paths() {
     .unwrap();
     let output = run(
         directory.path(),
-        &["check", "sub/./doc.rs", "--format", "github"],
+        &[
+            "check",
+            "sub/./doc.rs",
+            "--format",
+            "github",
+            "--policy",
+            "standard",
+        ],
     );
     assert_eq!(output.status.code(), Some(1));
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert_eq!(
         stdout,
-        "::notice file=sub/doc.rs,line=1,col=1::removable doc-block comment\n"
+        "::error file=sub/doc.rs,line=1,col=1::removable doc-block comment\n"
     );
+}
+
+/// The `::` level a removable comment is annotated at is the one its run's
+/// exit status justifies.
+///
+/// `check` answers a finding with 1, and a gate that fails on that 1 was
+/// posting `::notice` about the comments it failed over -- which reads in the
+/// checks tab as though nothing had gone wrong, and which GitHub folds away
+/// where it surfaces an error. `scan` ends at 0 whatever it finds, so it is
+/// offering the same comments for information and says so.
+#[test]
+fn github_annotations_follow_the_exit_status() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(directory.path().join("a.rs"), b"fn main() {} // remove\n").unwrap();
+
+    let checked = run(directory.path(), &["check", "a.rs", "--format", "github"]);
+    assert_eq!(checked.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8(checked.stdout).unwrap(),
+        "::error file=a.rs,line=1,col=14::removable line comment\n"
+    );
+
+    let scanned = run(directory.path(), &["scan", "a.rs", "--format", "github"]);
+    assert_eq!(scanned.status.code(), Some(0));
+    assert_eq!(
+        String::from_utf8(scanned.stdout).unwrap(),
+        "::notice file=a.rs,line=1,col=14::removable line comment\n"
+    );
+
+    /* NOTE: A job that posts annotations without gating on them, or gates
+     * without wanting the red, says so and is believed. */
+    let overruled = run(
+        directory.path(),
+        &[
+            "check",
+            "a.rs",
+            "--format",
+            "github",
+            "--annotation-level",
+            "warning",
+        ],
+    );
+    assert_eq!(overruled.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8(overruled.stdout).unwrap(),
+        "::warning file=a.rs,line=1,col=14::removable line comment\n"
+    );
+}
+
+/// A machine format carries the position and the text the human report prints.
+///
+/// A byte span is what a patcher needs and not what a reporter needs: turning
+/// `13..22` into `1:14` means reopening the file and counting line breaks,
+/// which is work the run has already done. Until this held, `--format json`
+/// was less useful to a machine than the prose was to a person.
+#[test]
+fn json_carries_the_position_and_text_the_human_report_prints() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join("a.rs"),
+        b"fn main() {}\nlet s = \"ok\"; // hello\n",
+    )
+    .unwrap();
+
+    let human = run(directory.path(), &["check", "a.rs"]);
+    let reported = String::from_utf8(human.stdout).unwrap();
+    assert!(
+        reported.starts_with("a.rs:2:15: removable line comment: // hello"),
+        "the human report moved: {reported}"
+    );
+
+    let scanned = run(directory.path(), &["scan", "a.rs", "--format", "json"]);
+    assert_eq!(scanned.status.code(), Some(0));
+    let document: serde_json::Value = serde_json::from_slice(&scanned.stdout).unwrap();
+    let comment = &document["files"][0]["report"]["comments"][0];
+    assert_eq!(comment["line"], 2);
+    assert_eq!(comment["column"], 15);
+    assert_eq!(comment["text"], "// hello");
+    /* INVARIANT: The positions are derived from the span beside them, so the
+     * end is the half-open one the span already promises: one past the last
+     * byte of the comment. */
+    assert_eq!(comment["end_line"], 2);
+    assert_eq!(
+        comment["end_column"].as_u64().unwrap(),
+        comment["column"].as_u64().unwrap()
+            + (comment["span"]["end"].as_u64().unwrap()
+                - comment["span"]["start"].as_u64().unwrap())
+    );
+
+    /* NOTE: `--no-preview` is how a report over a large tree stays small, and
+     * it drops the comment text here for the reason it drops the preview from
+     * a human line. */
+    let terse = run(
+        directory.path(),
+        &["scan", "a.rs", "--format", "json", "--no-preview"],
+    );
+    let document: serde_json::Value = serde_json::from_slice(&terse.stdout).unwrap();
+    let comment = &document["files"][0]["report"]["comments"][0];
+    assert!(comment.get("text").is_none(), "{comment}");
+    assert_eq!(comment["line"], 2);
 }
 
 /// SARIF locations are URIs and GitHub `file=` values are workflow-command
@@ -3172,11 +3533,16 @@ fn github_annotations_report_repository_paths() {
 #[cfg(unix)]
 #[test]
 fn machine_reports_encode_raw_unix_paths_without_loss() {
-    use std::{ffi::OsString, os::unix::ffi::OsStringExt};
-
     let directory = tempfile::tempdir().unwrap();
-    let name = OsString::from_vec(b"odd \xff,\n.rs".to_vec());
-    fs::write(directory.path().join(&name), b"let value = 1; // remove\n").unwrap();
+    if write_non_utf8_file(
+        directory.path(),
+        b"odd \xff,\n.rs",
+        b"let value = 1; // remove\n",
+    )
+    .is_none()
+    {
+        return;
+    }
 
     let sarif = run(directory.path(), &["check", ".", "--format", "sarif"]);
     assert_eq!(sarif.status.code(), Some(1));
@@ -3197,7 +3563,7 @@ fn machine_reports_encode_raw_unix_paths_without_loss() {
     assert_eq!(github.status.code(), Some(1));
     let annotations = String::from_utf8(github.stdout).unwrap();
     assert!(
-        annotations.contains("::notice file=odd %FF%2C%0A.rs,"),
+        annotations.contains("::error file=odd %FF%2C%0A.rs,"),
         "GitHub output lost or mis-encoded the path:\n{annotations}"
     );
     assert!(!annotations.contains('\u{fffd}'));
@@ -3214,27 +3580,46 @@ fn json_and_jsonl_serde_names_are_frozen() {
 
     let jsonl = run(
         directory.path(),
-        &["scan", "sample.py", "--format", "jsonl"],
+        &["scan", "sample.py", "--format", "jsonl", "--source-map"],
     );
     assert_eq!(jsonl.status.code(), Some(0));
     assert_eq!(
         String::from_utf8(jsonl.stdout).unwrap(),
         concat!(
             r#"{"path":"sample.py","language":"python","changed":true,"report":{"language":"python","#,
-            r#""comments":[{"span":{"start":0,"end":22},"kind":"shebang","disposition":{"action":"keep","#,
-            r#""reason":"required source preamble"}},{"span":{"start":23,"end":53},"kind":"license","#,
-            r#""disposition":{"action":"remove"}},{"span":{"start":61,"end":69},"kind":"line","#,
-            r#""disposition":{"action":"remove"}}],"diagnostics":[],"valid":true},"#,
-            r#""edits":[{"span":{"start":23,"end":53},"replacement":""},"#,
-            r#"{"span":{"start":61,"end":69},"replacement":""}],"#,
-            r#""source_map":{"segments":[{"original":{"start":0,"end":23},"output":{"start":0,"end":23},"exact":true},"#,
-            r#"{"original":{"start":23,"end":53},"output":{"start":23,"end":23},"exact":false},"#,
-            r#"{"original":{"start":53,"end":61},"output":{"start":23,"end":31},"exact":true},"#,
-            r#"{"original":{"start":61,"end":69},"output":{"start":31,"end":31},"exact":false},"#,
-            r#"{"original":{"start":69,"end":70},"output":{"start":31,"end":32},"exact":true}]}}"#,
+            r##""comments":[{"span":{"start":0,"end":22},"line":1,"column":1,"end_line":1,"end_column":23,"##,
+            r##""kind":"shebang","text":"#!/usr/bin/env python3","disposition":{"action":"keep","##,
+            r##""reason":"required source preamble"}},{"span":{"start":23,"end":53},"##,
+            r##""line":2,"column":1,"end_line":2,"end_column":31,"kind":"license","##,
+            r##""text":"# SPDX-License-Identifier: MIT","##,
+            r##""disposition":{"action":"keep","reason":"conservative policy"}},"##,
+            r##"{"span":{"start":61,"end":69},"line":3,"column":8,"end_line":3,"end_column":16,"##,
+            r##""kind":"line","text":"# remove","##,
+            r##""disposition":{"action":"remove"}}],"diagnostics":[],"valid":true},"##,
+            r#""edits":[{"span":{"start":61,"end":69},"replacement":""}],"#,
+            r#""source_map":{"segments":[{"original":{"start":0,"end":61},"output":{"start":0,"end":61},"exact":true},"#,
+            r#"{"original":{"start":61,"end":69},"output":{"start":61,"end":61},"exact":false},"#,
+            r#"{"original":{"start":69,"end":70},"output":{"start":61,"end":62},"exact":true}]}}"#,
             "\n"
         ),
         "the JSONL protocol changed"
+    );
+
+    /* NOTE: And without it. The map is one segment per unchanged run of bytes,
+     * which is the largest thing a report carries and the thing a caller who
+     * only wanted the findings was paying for; `--source-map` is what asks. */
+    let without = run(
+        directory.path(),
+        &["scan", "sample.py", "--format", "jsonl"],
+    );
+    let line = String::from_utf8(without.stdout).unwrap();
+    assert!(
+        !line.contains("source_map"),
+        "the source map is written without being asked for:\n{line}"
+    );
+    assert!(
+        line.contains(r#""edits":[{"span":{"start":61,"end":69},"replacement":""}]}"#),
+        "the report after the edits changed:\n{line}"
     );
 
     let json = run(directory.path(), &["scan", "sample.py", "--format", "json"]);
@@ -3253,7 +3638,12 @@ fn json_and_jsonl_serde_names_are_frozen() {
         comments[0]["disposition"]["reason"],
         "required source preamble"
     );
-    assert_eq!(comments[1]["disposition"]["action"], "remove");
+    assert_eq!(comments[1]["disposition"]["action"], "keep");
+    assert_eq!(
+        comments[1]["disposition"]["reason"], "conservative policy",
+        "the default policy keeps a licence notice"
+    );
+    assert_eq!(comments[2]["disposition"]["action"], "remove");
     assert_eq!(value["files"][0]["language"], "python");
 }
 
@@ -3356,7 +3746,7 @@ fn fix_reports_every_changed_file_and_summarizes_on_stderr() {
     );
     assert_eq!(
         String::from_utf8(output.stderr).unwrap(),
-        "Removed 1 comment in 1 file (1 file scanned).\n"
+        "Removed 1 comment in 1 file (1 file scanned); each re-scanned clean and idempotent before writing.\n"
     );
 }
 
@@ -3390,7 +3780,7 @@ fn scan_summarizes_the_comment_counts() {
 }
 
 #[test]
-fn quiet_silences_a_check_that_still_exits_one() {
+fn quiet_drops_the_commentary_and_keeps_the_findings() {
     let directory = tempfile::tempdir().unwrap();
     fs::write(
         directory.path().join("sample.rs"),
@@ -3399,7 +3789,11 @@ fn quiet_silences_a_check_that_still_exits_one() {
     .unwrap();
     let output = run(directory.path(), &["check", "-q", "sample.rs"]);
     assert_eq!(output.status.code(), Some(1));
-    assert_eq!(String::from_utf8(output.stdout).unwrap(), "");
+    // NOTE: This asserted both streams were empty, which held the bug in place.
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        "sample.rs:1:12: removable line comment: // remove\n"
+    );
     assert_eq!(String::from_utf8(output.stderr).unwrap(), "");
 }
 
@@ -3643,8 +4037,12 @@ fn progress_always_draws_a_live_counter_and_keeps_the_summary() {
         stderr.contains("\r\x1b[2K"),
         "the counter line was never cleared:\n{stderr:?}"
     );
+    /* NOTE: Contained rather than final: a run this size now carries two lines
+     * after the verdict saying where the findings are and what would answer
+     * them. What this pins is that the counter was cleared before the summary
+     * and the summary survived it. */
     assert!(
-        stderr.ends_with(
+        stderr.contains(
             "Found 120 removable comments in 120 files (120 files scanned). \
              Run `ocomment fix` to remove them.\n"
         ),
@@ -3983,7 +4381,10 @@ fn github_annotations_fold_walked_skips_away_unless_asked() {
 
     let quiet = run(directory.path(), &["check", "--format", "github"]);
     let stdout = String::from_utf8(quiet.stdout).unwrap();
-    assert!(stdout.contains("::notice file=a.rs"), "{stdout}");
+    /* NOTE: A finding is annotated at the level its run's exit status
+     * justifies, and `check` answers a finding with 1; a skip is not a finding
+     * and stays a notice whatever the run returns. */
+    assert!(stdout.contains("::error file=a.rs"), "{stdout}");
     assert!(
         !stdout.contains("notes.unknownext"),
         "a walked skip was annotated without -v:\n{stdout}"
@@ -4050,7 +4451,7 @@ fn quiet_does_not_take_annotations_off_a_machine_format() {
 
     let walked = run(directory.path(), &["check", "--format", "github", "-q"]);
     let stdout = String::from_utf8(walked.stdout).unwrap();
-    assert!(stdout.contains("::notice file=a.rs"), "{stdout}");
+    assert!(stdout.contains("::error file=a.rs"), "{stdout}");
     assert!(
         !stdout.contains("notes.unknownext"),
         "a walked skip was annotated without -v:\n{stdout}"
@@ -5118,7 +5519,13 @@ fn a_missing_path_says_where_it_was_looked_for() {
 #[test]
 fn a_configuration_without_a_version_says_how_to_add_one() {
     let directory = tempfile::tempdir().unwrap();
-    let config = directory.path().join(".ocomment.toml");
+    /* NOTE: Resolved, because the error names the file OComment found and
+     * OComment resolves what it finds. On macOS the system temporary directory
+     * is reached through a symlink -- `/var` is `/private/var` -- so a test
+     * that compares against `TempDir::path` compares against a spelling the
+     * binary never prints. */
+    let root = directory.path().canonicalize().unwrap();
+    let config = root.join(".ocomment.toml");
     fs::write(&config, b"[policy]\nmode = \"all\"\n").unwrap();
     fs::write(
         directory.path().join("sample.rs"),
@@ -5837,7 +6244,7 @@ fn check_explain_names_the_override_and_the_pattern_that_kept_a_comment() {
          * rather than sent to a file that never mentions it. The pattern the
          * same file does set is named with the file, spelled the way the reader
          * typed their way into the directory. */
-        "removed: policy `safe` removes ordinary comments (built-in defaults)",
+        "removed: policy `conservative` removes ordinary comments (built-in defaults)",
         "a.rs:1:1: kept line comment: // API stays",
         "kept: matched keep_regex #0 `(?i)^// api` ([policy] in .ocomment.toml)",
     ] {
@@ -5941,7 +6348,7 @@ fn explain_names_the_command_line_when_a_flag_set_the_policy() {
 
     let output = run(
         directory.path(),
-        &["check", "--explain", "--policy", "legal"],
+        &["check", "--explain", "--policy", "conservative"],
     );
     assert_eq!(
         output.status.code(),
@@ -5952,25 +6359,43 @@ fn explain_names_the_command_line_when_a_flag_set_the_policy() {
     let report = String::from_utf8(output.stdout).unwrap();
     for needle in [
         "notice.rs:1:1: kept license comment: // Copyright 2026 Example",
-        "kept: policy legal protects license comments, and this one says `copyright` \
+        "kept: policy conservative protects license comments, and this one says `copyright` \
          (--policy on the command line)",
-        "removed: policy `legal` removes ordinary comments (--policy on the command line)",
+        "removed: policy `conservative` removes ordinary comments (--policy on the command line)",
     ] {
         assert!(
             report.contains(needle),
-            "`check --explain --policy legal` lacks {needle:?}:\n{report}"
+            "`check --explain --policy conservative` lacks {needle:?}:\n{report}"
         );
     }
 }
 
-/// The machine formats are schemas, not prose, and none of them has a place to
-/// put an explanation. Asking for one is a usage error rather than a flag that
-/// quietly does nothing.
+/// SARIF is a fixed schema and a GitHub workflow command is one line per
+/// annotation, so neither has anywhere to put a reason. Asking for one is a
+/// usage error rather than a flag that quietly does nothing. The JSON formats
+/// do have somewhere, and carry it.
 #[test]
-fn explain_is_refused_by_every_machine_format() {
+fn explain_is_refused_by_the_formats_with_nowhere_to_put_it() {
     let directory = tempfile::tempdir().unwrap();
     fs::write(directory.path().join("a.rs"), b"let x = 1; // TODO\n").unwrap();
-    for format in ["json", "jsonl", "sarif", "github"] {
+    for format in ["json", "jsonl"] {
+        let output = run(
+            directory.path(),
+            &["scan", "--explain", "--format", format, "a.rs"],
+        );
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "`--format {format} --explain`"
+        );
+        let report = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            report.contains(r#""rule":"removed-by-default""#)
+                || report.contains(r#""rule": "removed-by-default""#),
+            "`--format {format} --explain` carried no reason:\n{report}"
+        );
+    }
+    for format in ["sarif", "github"] {
         let output = run(
             directory.path(),
             &["check", "--explain", "--format", format],
@@ -5982,7 +6407,7 @@ fn explain_is_refused_by_every_machine_format() {
         );
         let error = String::from_utf8_lossy(&output.stderr);
         assert!(
-            error.contains("--explain is only available with --format human"),
+            error.contains("--explain is only available with --format human, json or jsonl"),
             "`--format {format} --explain` said:\n{error}"
         );
         assert!(
@@ -6095,9 +6520,10 @@ fn scan_explain_annotates_every_listed_comment() {
         "`scan --explain` changed the listing:\n{stdout}"
     );
     assert!(
-        lines.get(3).is_some_and(
-            |line| line.starts_with("    removed: policy `safe` removes ordinary comments")
-        ),
+        lines
+            .get(3)
+            .is_some_and(|line| line
+                .starts_with("    removed: policy `conservative` removes ordinary comments")),
         "`scan --explain` did not explain the removal:\n{stdout}"
     );
     assert_no_debug_leak("human scan --explain output", &stdout);
@@ -6296,7 +6722,7 @@ fn a_scala_file_keeps_its_directive_and_hides_xml_text() {
     let report = &document["files"][0]["report"];
     assert_eq!(report["language"], "scala");
     assert_eq!(report["comments"].as_array().unwrap().len(), 4);
-    assert_eq!(report["comments"][0]["kind"], "directive");
+    assert_eq!(report["comments"][0]["kind"], "load-bearing");
     assert_eq!(report["comments"][0]["disposition"]["action"], "keep");
     assert_eq!(report["comments"][0]["span"]["start"], 0);
     assert_eq!(report["comments"][0]["span"]["end"], 23);

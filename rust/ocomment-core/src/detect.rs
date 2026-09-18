@@ -374,7 +374,13 @@ pub fn detect_language(path: Option<&Path>, source: &[u8]) -> Option<Detection> 
             "zsh" => Some((Language::Shell, Dialect::Zsh)),
             "html" | "htm" | "xhtml" | "shtml" => Some((Language::Html, Dialect::Standard)),
             "css" => Some((Language::Css, Dialect::Standard)),
-            "jsonc" | "json5" => Some((Language::Jsonc, Dialect::Standard)),
+            /* NOTE: `.json` is here because a comment in one is common enough
+             * that this project already listed `tsconfig.json` and
+             * `jsconfig.json` as reserved names. Reading every `.json` as JSONC
+             * finds the comments the ones that carry them carry, and finds
+             * nothing in the ones that do not -- which is what a standard JSON
+             * file scans as. Leaving them out meant not looking. */
+            "jsonc" | "json5" | "json" => Some((Language::Jsonc, Dialect::Standard)),
             "sql" => Some((Language::Sql, Dialect::Standard)),
             "kt" | "kts" => Some((Language::Kotlin, Dialect::Standard)),
             "toml" => Some((Language::Toml, Dialect::Standard)),
@@ -432,24 +438,20 @@ pub fn detect_language(path: Option<&Path>, source: &[u8]) -> Option<Detection> 
              * and `.scala.sc` carries `.sc` as its last suffix and is detected
              * as that. */
             "scala" | "sc" => Some((Language::Scala, Dialect::Standard)),
-            /* NOTE: `.vue` and `.svelte` are the suffixes of single-file
-             * components, whose templates are HTML with code in them and whose
-             * script and style bodies are scanned as their own languages.
-             * `.scss` and `.sass` are the two Sass syntaxes. They share
-             * interpolation and silent comments, but the latter is
-             * indentation-based and therefore has its own dialect. */
-            /* NOTE: `.md` and `.markdown` are Markdown, and so is `.Rmd` —
-             * an R Markdown document, whose `{r}` chunk headers name R for
-             * the fenced-block scan — which is what the note that once kept
-             * it from the R entry is now the record of. */
+            /* NOTE: `.Rmd` is an R Markdown document, whose `{r}` chunk
+             * headers name R for the fenced-block scan. */
             "md" | "markdown" | "rmd" => Some((Language::Markdown, Dialect::Standard)),
             /* NOTE: `.pl`, `.pm` and `.t` are Perl — a program, a module and
              * a test — and so is a `perl` `#!` line. `.pod` is deliberately
              * absent: a POD document is documentation only, with no code to
              * scan. */
             "pl" | "pm" | "t" => Some((Language::Perl, Dialect::Standard)),
+            /* NOTE: Single-file components: an HTML template with code in
+             * it, whose script and style bodies scan as their own languages. */
             "vue" => Some((Language::Vue, Dialect::Standard)),
             "svelte" => Some((Language::Svelte, Dialect::Standard)),
+            /* NOTE: The two Sass syntaxes. They share interpolation and silent
+             * comments; the second is indentation-based, so it has a dialect. */
             "scss" => Some((Language::Css, Dialect::Scss)),
             "sass" => Some((Language::Css, Dialect::Sass)),
             _ => None,
@@ -462,7 +464,6 @@ pub fn detect_language(path: Option<&Path>, source: &[u8]) -> Option<Detection> 
                 Some((Language::Shell, Dialect::PosixSh))
             }
             "makefile" | "gnumakefile" => Some((Language::Shell, Dialect::PosixSh)),
-            "tsconfig.json" | "jsconfig.json" => Some((Language::Jsonc, Dialect::Standard)),
             /* NOTE: A lock file has no extension of its own to go on, and only some
              * of them are TOML: `Cargo.lock`, `Pipfile`, and the three Python
              * resolvers below are, while `Pipfile.lock` beside `Pipfile` is

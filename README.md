@@ -92,7 +92,7 @@ gen/api.rs:1:1: kept block comment: /* generated */
 src/app.js:1:1: kept directive comment: // eslint-disable-next-line
     kept: tool or language directive `eslint`; use --remove-kind directive or --policy all to remove it
 src/app.js:3:12: removable line comment: // TODO
-    removed: policy `safe` removes ordinary comments ([policy] in .ocomment.toml)
+    removed: policy `conservative` removes ordinary comments ([policy] in .ocomment.toml)
 ```
 
 A setting is named where it was written: the `[policy]` table of a file, a
@@ -112,10 +112,13 @@ operations exit 0. JSON, JSONL, SARIF, and GitHub annotation output are
 available through `--format`. Run `ocomment --help` for every option and
 `ocomment man` for the manual page.
 
-The default `safe` policy removes ordinary and documentation comments while
-keeping source preambles and tool/language directives. `legal` additionally
-keeps license and copyright comments. `all` removes every comment token, but
-still needs `--force-protected` before touching a shebang or encoding preamble.
+The default `conservative` policy removes ordinary comments and keeps the ones
+something else depends on: documentation, licence notices, tool and language
+directives, shebangs and encoding lines. `standard` removes documentation,
+licence and copyright comments as well.
+`all` removes every comment token, but still needs `--force-protected` before
+touching a shebang, an encoding line, or a directive the language itself
+reads. The three are named in the order of how much they take.
 HTML comments are kept unless `all` or `--remove-kind html-comment` is explicit.
 
 The `lines` layout keeps every line where it was, `columns` keeps every column
@@ -125,7 +128,7 @@ as well, and `compact` drops the lines a removed comment had to itself.
 version = 1
 
 [policy]
-mode = "legal"
+mode = "conservative"
 layout = "lines"
 
 [[overrides]]

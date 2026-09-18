@@ -1,0 +1,43 @@
+version = 1
+
+# NOTE: Declarative profiles OComment ships with, for formats whose comments a
+# NOTE: delimiter list describes completely. What they are for, why none of
+# NOTE: them is a built-in language, and what each one says: see "The profiles
+# NOTE: OComment ships with" in docs/configuration.md.
+
+[profiles.hash-line]
+name = "hash-line"
+filenames = [
+    "CODEOWNERS",
+    ".gitignore",
+    ".gitattributes",
+    ".dockerignore",
+    ".npmignore",
+    ".eslintignore",
+    ".prettierignore",
+    ".vscodeignore",
+    ".editorconfig",
+    ".gitmodules",
+    ".ocommentignore",
+    # NOTE: OComment's own ledger.
+    ".ocomment-ledger",
+]
+extensions = ["opam"]
+line_comments = [{ start = "#", kind = "line" }]
+
+# NOTE: Dune, a Lisp.
+[profiles.dune]
+name = "dune"
+filenames = ["dune", "dune-project", "dune-workspace"]
+line_comments = [{ start = ";", kind = "line" }]
+block_comments = [{ start = "#|", end = "|#", nested = true, kind = "block" }]
+strings = [{ start = '"', end = '"', escape = '\' }]
+
+# NOTE: WIT, the Component Model's interface language.
+[profiles.wit]
+name = "wit"
+extensions = ["wit"]
+# NOTE: `//` alone; `///` beside it would be an ambiguous prefix.
+line_comments = [{ start = "//", kind = "line" }]
+block_comments = [{ start = "/*", end = "*/", nested = true, kind = "block" }]
+strings = [{ start = '"', end = '"', escape = '\' }]

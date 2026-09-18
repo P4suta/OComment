@@ -16,12 +16,12 @@ _ocomment() {
     local context curcontext="$curcontext" state line
     _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove documentation, licence and copyright comments too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -75,31 +75,50 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
-'--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'--format=[Output encoding]:FORMAT:((human\:""
+json\:""
+jsonl\:""
+sarif\:""
+github\:""
+agent\:"The report as an instruction, for a reader that is going to act on it"))' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -120,13 +139,14 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
         case $line[2] in
             (check)
 _arguments "${_arguments_options[@]}" : \
+'(--staged)--base=[Check only the working-tree files that differ from this revision'\''s merge base with HEAD]:REV:_default' \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove documentation, licence and copyright comments too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -180,33 +200,52 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
-'--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'--format=[Output encoding]:FORMAT:((human\:""
+json\:""
+jsonl\:""
+sarif\:""
+github\:""
+agent\:"The report as an instruction, for a reader that is going to act on it"))' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -218,13 +257,14 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 ;;
 (fix)
 _arguments "${_arguments_options[@]}" : \
+'(--staged)--base=[Check only the working-tree files that differ from this revision'\''s merge base with HEAD]:REV:_default' \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove documentation, licence and copyright comments too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -278,36 +318,55 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
-'--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'--format=[Output encoding]:FORMAT:((human\:""
+json\:""
+jsonl\:""
+sarif\:""
+github\:""
+agent\:"The report as an instruction, for a reader that is going to act on it"))' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
 '--dry-run[Print the patch \`fix\` would apply and write nothing]' \
 '(--staged --dry-run -q --quiet)-i[Ask about each comment in turn and remove only the accepted ones]' \
 '(--staged --dry-run -q --quiet)--interactive[Ask about each comment in turn and remove only the accepted ones]' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -319,13 +378,14 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 ;;
 (diff)
 _arguments "${_arguments_options[@]}" : \
+'(--staged)--base=[Check only the working-tree files that differ from this revision'\''s merge base with HEAD]:REV:_default' \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove documentation, licence and copyright comments too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -379,33 +439,52 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
-'--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'--format=[Output encoding]:FORMAT:((human\:""
+json\:""
+jsonl\:""
+sarif\:""
+github\:""
+agent\:"The report as an instruction, for a reader that is going to act on it"))' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -417,13 +496,14 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 ;;
 (scan)
 _arguments "${_arguments_options[@]}" : \
+'(--staged)--base=[Check only the working-tree files that differ from this revision'\''s merge base with HEAD]:REV:_default' \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove documentation, licence and copyright comments too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -477,33 +557,52 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
-'--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'--format=[Output encoding]:FORMAT:((human\:""
+json\:""
+jsonl\:""
+sarif\:""
+github\:""
+agent\:"The report as an instruction, for a reader that is going to act on it"))' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -516,12 +615,12 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 (strip)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove documentation, licence and copyright comments too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -575,31 +674,50 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
-'--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'--format=[Output encoding]:FORMAT:((human\:""
+json\:""
+jsonl\:""
+sarif\:""
+github\:""
+agent\:"The report as an instruction, for a reader that is going to act on it"))' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -611,12 +729,12 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 (lsp)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove documentation, licence and copyright comments too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -670,31 +788,50 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
-'--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'--format=[Output encoding]:FORMAT:((human\:""
+json\:""
+jsonl\:""
+sarif\:""
+github\:""
+agent\:"The report as an instruction, for a reader that is going to act on it"))' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -706,12 +843,12 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 (init)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove documentation, licence and copyright comments too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -765,34 +902,53 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
-'--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'--format=[Output encoding]:FORMAT:((human\:""
+json\:""
+jsonl\:""
+sarif\:""
+github\:""
+agent\:"The report as an instruction, for a reader that is going to act on it"))' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
 '--fix[For the Lefthook hook, run \`fix\` instead of \`check\`]' \
 '(--stdout)--force[Replace the file if it already exists]' \
 '--stdout[Print the template to standard output and write no file]' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -805,12 +961,12 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 (config)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove documentation, licence and copyright comments too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -864,31 +1020,50 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
-'--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'--format=[Output encoding]:FORMAT:((human\:""
+json\:""
+jsonl\:""
+sarif\:""
+github\:""
+agent\:"The report as an instruction, for a reader that is going to act on it"))' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -901,12 +1076,12 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 (languages)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove documentation, licence and copyright comments too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -960,31 +1135,50 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
-'--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'--format=[Output encoding]:FORMAT:((human\:""
+json\:""
+jsonl\:""
+sarif\:""
+github\:""
+agent\:"The report as an instruction, for a reader that is going to act on it"))' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -996,12 +1190,12 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 (plugin)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove documentation, licence and copyright comments too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1055,31 +1249,50 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
-'--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'--format=[Output encoding]:FORMAT:((human\:""
+json\:""
+jsonl\:""
+sarif\:""
+github\:""
+agent\:"The report as an instruction, for a reader that is going to act on it"))' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -1102,12 +1315,12 @@ _arguments "${_arguments_options[@]}" : \
 '--sha256=[Expected SHA-256 digest of the component, verified before install]:HEX:_default' \
 '--identity=[Publisher identity recorded alongside the pinned digest]:IDENTITY:_default' \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove documentation, licence and copyright comments too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1161,31 +1374,50 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
-'--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'--format=[Output encoding]:FORMAT:((human\:""
+json\:""
+jsonl\:""
+sarif\:""
+github\:""
+agent\:"The report as an instruction, for a reader that is going to act on it"))' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -1198,12 +1430,12 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 (remove)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove documentation, licence and copyright comments too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1257,31 +1489,50 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
-'--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'--format=[Output encoding]:FORMAT:((human\:""
+json\:""
+jsonl\:""
+sarif\:""
+github\:""
+agent\:"The report as an instruction, for a reader that is going to act on it"))' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -1294,12 +1545,12 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 (list)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove documentation, licence and copyright comments too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1353,31 +1604,50 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
-'--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'--format=[Output encoding]:FORMAT:((human\:""
+json\:""
+jsonl\:""
+sarif\:""
+github\:""
+agent\:"The report as an instruction, for a reader that is going to act on it"))' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -1389,12 +1659,12 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 (update)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove documentation, licence and copyright comments too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1448,31 +1718,50 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
-'--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'--format=[Output encoding]:FORMAT:((human\:""
+json\:""
+jsonl\:""
+sarif\:""
+github\:""
+agent\:"The report as an instruction, for a reader that is going to act on it"))' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -1485,12 +1774,12 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 (verify)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove documentation, licence and copyright comments too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1544,31 +1833,50 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
-'--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'--format=[Output encoding]:FORMAT:((human\:""
+json\:""
+jsonl\:""
+sarif\:""
+github\:""
+agent\:"The report as an instruction, for a reader that is going to act on it"))' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -1581,12 +1889,12 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 (new)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove documentation, licence and copyright comments too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1640,31 +1948,50 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
-'--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'--format=[Output encoding]:FORMAT:((human\:""
+json\:""
+jsonl\:""
+sarif\:""
+github\:""
+agent\:"The report as an instruction, for a reader that is going to act on it"))' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -1725,12 +2052,12 @@ esac
 (completions)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove documentation, licence and copyright comments too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1784,31 +2111,50 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
-'--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'--format=[Output encoding]:FORMAT:((human\:""
+json\:""
+jsonl\:""
+sarif\:""
+github\:""
+agent\:"The report as an instruction, for a reader that is going to act on it"))' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -1818,15 +2164,16 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 ':shell -- Shell whose completion script is written to stdout:(bash elvish fish powershell zsh)' \
 && ret=0
 ;;
-(doctor)
+(coverage)
 _arguments "${_arguments_options[@]}" : \
+'(--staged)--base=[Check only the working-tree files that differ from this revision'\''s merge base with HEAD]:REV:_default' \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove documentation, licence and copyright comments too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1880,31 +2227,633 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
-'--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'--format=[Output encoding]:FORMAT:((human\:""
+json\:""
+jsonl\:""
+sarif\:""
+github\:""
+agent\:"The report as an instruction, for a reader that is going to act on it"))' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
+'--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
+'--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
+'(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'-v[Trace what is scanned and summarize every comment kind and skipped file]' \
+'--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+'*::paths -- Files or directories to process; `-` reads standard input (default\: current directory):_files' \
+&& ret=0
+;;
+(tags)
+_arguments "${_arguments_options[@]}" : \
+'(--staged)--base=[Check only the working-tree files that differ from this revision'\''s merge base with HEAD]:REV:_default' \
+'--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove documentation, licence and copyright comments too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
+'--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
+columns\:"Pad each removed comment so the following columns do not shift"
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+'--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
+ocaml\:"OCaml implementation and interface files"
+c\:"C source and header files"
+cpp\:"C++ source and header files"
+go\:"Go source files"
+java\:"Java source files, including Unicode escape translation"
+javascript\:"JavaScript modules and scripts, including JSX"
+typescript\:"TypeScript modules and scripts, including TSX"
+python\:"Python source and stub files"
+shell\:"POSIX sh, Bash, and zsh scripts"
+html\:"HTML documents, including nested script and style elements"
+css\:"CSS stylesheets"
+jsonc\:"JSON with comments, including JSON5"
+sql\:"SQL for every supported database dialect"
+kotlin\:"Kotlin source and script files"
+toml\:"TOML documents, including the lock files written in it"
+lua\:"Lua chunks and LuaRocks rockspecs"
+yaml\:"YAML documents, including the tool configurations written in it"
+php\:"PHP scripts and templates; the inline HTML around the tags is content"
+ruby\:"Ruby scripts, gem manifests, and the project files named after their tool"
+zig\:"Zig source files and Zig Object Notation data"
+r\:"R scripts and the \`.Rprofile\` an R session sources at start-up"
+dart\:"Dart source files, whose block comments nest"
+swift\:"Swift source files, whose block comments nest and whose \`#/../#\` is a regex"
+csharp\:"C# source and script files, whose \`#\` lines are preprocessor directives"
+scala\:"Scala source and script files, whose block comments nest and whose XML literals are opaque"
+vue\:"Vue single-file components, whose templates are HTML with \`{{ ... }}\` code"
+svelte\:"Svelte components, whose templates are HTML with \`{ ... }\` code"
+markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"
+perl\:"Perl scripts and modules, whose quote words and regexes hide a \`#\`"))' \
+'--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
+jsx\:"JavaScript with JSX elements"
+tsx\:"TypeScript with JSX elements"
+objective-c\:"Objective-C extensions to C"
+objective-cpp\:"Objective-C++ extensions to C++"
+gnu-c\:"GNU extensions to C"
+gnu-cpp\:"GNU extensions to C++"
+cuda\:"CUDA extensions to C++"
+posix-sh\:"The POSIX shell command language"
+bash53\:"Bash 5.3"
+zsh\:"The Z shell"
+postgresql\:"PostgreSQL, with dollar-quoted bodies"
+mysql\:"MySQL, including its executable versioned comments"
+sqlite\:"SQLite"
+t-sql\:"Microsoft Transact-SQL"
+oracle\:"Oracle SQL and PL/SQL"
+scss\:"SCSS"
+sass\:"The indentation-based Sass syntax"))' \
+'*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright notice"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright notice"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'--format=[Output encoding]:FORMAT:((human\:""
+json\:""
+jsonl\:""
+sarif\:""
+github\:""
+agent\:"The report as an instruction, for a reader that is going to act on it"))' \
+'--color=[When to colour terminal output]:WHEN:(auto always never)' \
+'--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
+'--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
+'--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
+'--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
+'--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
+'(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'-v[Trace what is scanned and summarize every comment kind and skipped file]' \
+'--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+'*::paths -- Files or directories to process; `-` reads standard input (default\: current directory):_files' \
+&& ret=0
+;;
+(ratchet)
+_arguments "${_arguments_options[@]}" : \
+'(--staged)--base=[Check only the working-tree files that differ from this revision'\''s merge base with HEAD]:REV:_default' \
+'--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove documentation, licence and copyright comments too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
+'--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
+columns\:"Pad each removed comment so the following columns do not shift"
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+'--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
+ocaml\:"OCaml implementation and interface files"
+c\:"C source and header files"
+cpp\:"C++ source and header files"
+go\:"Go source files"
+java\:"Java source files, including Unicode escape translation"
+javascript\:"JavaScript modules and scripts, including JSX"
+typescript\:"TypeScript modules and scripts, including TSX"
+python\:"Python source and stub files"
+shell\:"POSIX sh, Bash, and zsh scripts"
+html\:"HTML documents, including nested script and style elements"
+css\:"CSS stylesheets"
+jsonc\:"JSON with comments, including JSON5"
+sql\:"SQL for every supported database dialect"
+kotlin\:"Kotlin source and script files"
+toml\:"TOML documents, including the lock files written in it"
+lua\:"Lua chunks and LuaRocks rockspecs"
+yaml\:"YAML documents, including the tool configurations written in it"
+php\:"PHP scripts and templates; the inline HTML around the tags is content"
+ruby\:"Ruby scripts, gem manifests, and the project files named after their tool"
+zig\:"Zig source files and Zig Object Notation data"
+r\:"R scripts and the \`.Rprofile\` an R session sources at start-up"
+dart\:"Dart source files, whose block comments nest"
+swift\:"Swift source files, whose block comments nest and whose \`#/../#\` is a regex"
+csharp\:"C# source and script files, whose \`#\` lines are preprocessor directives"
+scala\:"Scala source and script files, whose block comments nest and whose XML literals are opaque"
+vue\:"Vue single-file components, whose templates are HTML with \`{{ ... }}\` code"
+svelte\:"Svelte components, whose templates are HTML with \`{ ... }\` code"
+markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"
+perl\:"Perl scripts and modules, whose quote words and regexes hide a \`#\`"))' \
+'--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
+jsx\:"JavaScript with JSX elements"
+tsx\:"TypeScript with JSX elements"
+objective-c\:"Objective-C extensions to C"
+objective-cpp\:"Objective-C++ extensions to C++"
+gnu-c\:"GNU extensions to C"
+gnu-cpp\:"GNU extensions to C++"
+cuda\:"CUDA extensions to C++"
+posix-sh\:"The POSIX shell command language"
+bash53\:"Bash 5.3"
+zsh\:"The Z shell"
+postgresql\:"PostgreSQL, with dollar-quoted bodies"
+mysql\:"MySQL, including its executable versioned comments"
+sqlite\:"SQLite"
+t-sql\:"Microsoft Transact-SQL"
+oracle\:"Oracle SQL and PL/SQL"
+scss\:"SCSS"
+sass\:"The indentation-based Sass syntax"))' \
+'*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright notice"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright notice"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'--format=[Output encoding]:FORMAT:((human\:""
+json\:""
+jsonl\:""
+sarif\:""
+github\:""
+agent\:"The report as an instruction, for a reader that is going to act on it"))' \
+'--color=[When to colour terminal output]:WHEN:(auto always never)' \
+'--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
+'--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
+'--update[Rewrite the ledger to match the tree, rather than checking against it]' \
+'--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
+'--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
+'--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
+'(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'-v[Trace what is scanned and summarize every comment kind and skipped file]' \
+'--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+'*::paths -- Files or directories to process; `-` reads standard input (default\: current directory):_files' \
+&& ret=0
+;;
+(hook)
+_arguments "${_arguments_options[@]}" : \
+'--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove documentation, licence and copyright comments too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
+'--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
+columns\:"Pad each removed comment so the following columns do not shift"
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+'--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
+ocaml\:"OCaml implementation and interface files"
+c\:"C source and header files"
+cpp\:"C++ source and header files"
+go\:"Go source files"
+java\:"Java source files, including Unicode escape translation"
+javascript\:"JavaScript modules and scripts, including JSX"
+typescript\:"TypeScript modules and scripts, including TSX"
+python\:"Python source and stub files"
+shell\:"POSIX sh, Bash, and zsh scripts"
+html\:"HTML documents, including nested script and style elements"
+css\:"CSS stylesheets"
+jsonc\:"JSON with comments, including JSON5"
+sql\:"SQL for every supported database dialect"
+kotlin\:"Kotlin source and script files"
+toml\:"TOML documents, including the lock files written in it"
+lua\:"Lua chunks and LuaRocks rockspecs"
+yaml\:"YAML documents, including the tool configurations written in it"
+php\:"PHP scripts and templates; the inline HTML around the tags is content"
+ruby\:"Ruby scripts, gem manifests, and the project files named after their tool"
+zig\:"Zig source files and Zig Object Notation data"
+r\:"R scripts and the \`.Rprofile\` an R session sources at start-up"
+dart\:"Dart source files, whose block comments nest"
+swift\:"Swift source files, whose block comments nest and whose \`#/../#\` is a regex"
+csharp\:"C# source and script files, whose \`#\` lines are preprocessor directives"
+scala\:"Scala source and script files, whose block comments nest and whose XML literals are opaque"
+vue\:"Vue single-file components, whose templates are HTML with \`{{ ... }}\` code"
+svelte\:"Svelte components, whose templates are HTML with \`{ ... }\` code"
+markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"
+perl\:"Perl scripts and modules, whose quote words and regexes hide a \`#\`"))' \
+'--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
+jsx\:"JavaScript with JSX elements"
+tsx\:"TypeScript with JSX elements"
+objective-c\:"Objective-C extensions to C"
+objective-cpp\:"Objective-C++ extensions to C++"
+gnu-c\:"GNU extensions to C"
+gnu-cpp\:"GNU extensions to C++"
+cuda\:"CUDA extensions to C++"
+posix-sh\:"The POSIX shell command language"
+bash53\:"Bash 5.3"
+zsh\:"The Z shell"
+postgresql\:"PostgreSQL, with dollar-quoted bodies"
+mysql\:"MySQL, including its executable versioned comments"
+sqlite\:"SQLite"
+t-sql\:"Microsoft Transact-SQL"
+oracle\:"Oracle SQL and PL/SQL"
+scss\:"SCSS"
+sass\:"The indentation-based Sass syntax"))' \
+'*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright notice"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright notice"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'--format=[Output encoding]:FORMAT:((human\:""
+json\:""
+jsonl\:""
+sarif\:""
+github\:""
+agent\:"The report as an instruction, for a reader that is going to act on it"))' \
+'--color=[When to colour terminal output]:WHEN:(auto always never)' \
+'--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
+'--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
+'--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
+'(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'-v[Trace what is scanned and summarize every comment kind and skipped file]' \
+'--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+':surface -- Which host'\''s hook protocol is spoken on standard input and output:((claude-code\:"Claude Code'\''s \`PreToolUse\` and \`PostToolUse\` hooks"))' \
+&& ret=0
+;;
+(selftest)
+_arguments "${_arguments_options[@]}" : \
+'--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove documentation, licence and copyright comments too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
+'--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
+columns\:"Pad each removed comment so the following columns do not shift"
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+'--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
+ocaml\:"OCaml implementation and interface files"
+c\:"C source and header files"
+cpp\:"C++ source and header files"
+go\:"Go source files"
+java\:"Java source files, including Unicode escape translation"
+javascript\:"JavaScript modules and scripts, including JSX"
+typescript\:"TypeScript modules and scripts, including TSX"
+python\:"Python source and stub files"
+shell\:"POSIX sh, Bash, and zsh scripts"
+html\:"HTML documents, including nested script and style elements"
+css\:"CSS stylesheets"
+jsonc\:"JSON with comments, including JSON5"
+sql\:"SQL for every supported database dialect"
+kotlin\:"Kotlin source and script files"
+toml\:"TOML documents, including the lock files written in it"
+lua\:"Lua chunks and LuaRocks rockspecs"
+yaml\:"YAML documents, including the tool configurations written in it"
+php\:"PHP scripts and templates; the inline HTML around the tags is content"
+ruby\:"Ruby scripts, gem manifests, and the project files named after their tool"
+zig\:"Zig source files and Zig Object Notation data"
+r\:"R scripts and the \`.Rprofile\` an R session sources at start-up"
+dart\:"Dart source files, whose block comments nest"
+swift\:"Swift source files, whose block comments nest and whose \`#/../#\` is a regex"
+csharp\:"C# source and script files, whose \`#\` lines are preprocessor directives"
+scala\:"Scala source and script files, whose block comments nest and whose XML literals are opaque"
+vue\:"Vue single-file components, whose templates are HTML with \`{{ ... }}\` code"
+svelte\:"Svelte components, whose templates are HTML with \`{ ... }\` code"
+markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"
+perl\:"Perl scripts and modules, whose quote words and regexes hide a \`#\`"))' \
+'--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
+jsx\:"JavaScript with JSX elements"
+tsx\:"TypeScript with JSX elements"
+objective-c\:"Objective-C extensions to C"
+objective-cpp\:"Objective-C++ extensions to C++"
+gnu-c\:"GNU extensions to C"
+gnu-cpp\:"GNU extensions to C++"
+cuda\:"CUDA extensions to C++"
+posix-sh\:"The POSIX shell command language"
+bash53\:"Bash 5.3"
+zsh\:"The Z shell"
+postgresql\:"PostgreSQL, with dollar-quoted bodies"
+mysql\:"MySQL, including its executable versioned comments"
+sqlite\:"SQLite"
+t-sql\:"Microsoft Transact-SQL"
+oracle\:"Oracle SQL and PL/SQL"
+scss\:"SCSS"
+sass\:"The indentation-based Sass syntax"))' \
+'*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright notice"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright notice"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'--format=[Output encoding]:FORMAT:((human\:""
+json\:""
+jsonl\:""
+sarif\:""
+github\:""
+agent\:"The report as an instruction, for a reader that is going to act on it"))' \
+'--color=[When to colour terminal output]:WHEN:(auto always never)' \
+'--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
+'--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
+'--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
+'(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'-v[Trace what is scanned and summarize every comment kind and skipped file]' \
+'--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+&& ret=0
+;;
+(doctor)
+_arguments "${_arguments_options[@]}" : \
+'--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove documentation, licence and copyright comments too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
+'--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
+columns\:"Pad each removed comment so the following columns do not shift"
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+'--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
+ocaml\:"OCaml implementation and interface files"
+c\:"C source and header files"
+cpp\:"C++ source and header files"
+go\:"Go source files"
+java\:"Java source files, including Unicode escape translation"
+javascript\:"JavaScript modules and scripts, including JSX"
+typescript\:"TypeScript modules and scripts, including TSX"
+python\:"Python source and stub files"
+shell\:"POSIX sh, Bash, and zsh scripts"
+html\:"HTML documents, including nested script and style elements"
+css\:"CSS stylesheets"
+jsonc\:"JSON with comments, including JSON5"
+sql\:"SQL for every supported database dialect"
+kotlin\:"Kotlin source and script files"
+toml\:"TOML documents, including the lock files written in it"
+lua\:"Lua chunks and LuaRocks rockspecs"
+yaml\:"YAML documents, including the tool configurations written in it"
+php\:"PHP scripts and templates; the inline HTML around the tags is content"
+ruby\:"Ruby scripts, gem manifests, and the project files named after their tool"
+zig\:"Zig source files and Zig Object Notation data"
+r\:"R scripts and the \`.Rprofile\` an R session sources at start-up"
+dart\:"Dart source files, whose block comments nest"
+swift\:"Swift source files, whose block comments nest and whose \`#/../#\` is a regex"
+csharp\:"C# source and script files, whose \`#\` lines are preprocessor directives"
+scala\:"Scala source and script files, whose block comments nest and whose XML literals are opaque"
+vue\:"Vue single-file components, whose templates are HTML with \`{{ ... }}\` code"
+svelte\:"Svelte components, whose templates are HTML with \`{ ... }\` code"
+markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"
+perl\:"Perl scripts and modules, whose quote words and regexes hide a \`#\`"))' \
+'--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
+jsx\:"JavaScript with JSX elements"
+tsx\:"TypeScript with JSX elements"
+objective-c\:"Objective-C extensions to C"
+objective-cpp\:"Objective-C++ extensions to C++"
+gnu-c\:"GNU extensions to C"
+gnu-cpp\:"GNU extensions to C++"
+cuda\:"CUDA extensions to C++"
+posix-sh\:"The POSIX shell command language"
+bash53\:"Bash 5.3"
+zsh\:"The Z shell"
+postgresql\:"PostgreSQL, with dollar-quoted bodies"
+mysql\:"MySQL, including its executable versioned comments"
+sqlite\:"SQLite"
+t-sql\:"Microsoft Transact-SQL"
+oracle\:"Oracle SQL and PL/SQL"
+scss\:"SCSS"
+sass\:"The indentation-based Sass syntax"))' \
+'*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright notice"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright notice"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'--format=[Output encoding]:FORMAT:((human\:""
+json\:""
+jsonl\:""
+sarif\:""
+github\:""
+agent\:"The report as an instruction, for a reader that is going to act on it"))' \
+'--color=[When to colour terminal output]:WHEN:(auto always never)' \
+'--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
+'--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
+'--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -1916,12 +2865,12 @@ version-comment\:"A MySQL versioned comment that the server executes"))' \
 (man)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
-'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((safe\:"Remove ordinary and doc comments; keep preambles and directives"
-legal\:"Like safe, and keep licence and copyright comments as well"
-all\:"Remove every comment that no keep override protects"))' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
+standard\:"Like conservative, and remove documentation, licence and copyright comments too"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
 '--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
 columns\:"Pad each removed comment so the following columns do not shift"
-compact\:"Drop lines that held only a removed comment, and the whitespace it left behind"))' \
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
 '--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
 ocaml\:"OCaml implementation and interface files"
 c\:"C source and header files"
@@ -1975,31 +2924,50 @@ block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
 block\:"An ordinary delimited comment"
 doc-line\:"A documentation comment running to the end of the line"
 doc-block\:"A delimited documentation comment"
 directive\:"A tool or language directive such as a pragma or lint control"
-license\:"A licence or copyright preamble"
+license\:"A licence or copyright notice"
 html-comment\:"A DOM-observable HTML comment"
 shebang\:"The interpreter line starting an executable script"
 encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
-version-comment\:"A MySQL versioned comment that the server executes"))' \
-'--format=[Output encoding]:FORMAT:(human json jsonl sarif github)' \
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'--format=[Output encoding]:FORMAT:((human\:""
+json\:""
+jsonl\:""
+sarif\:""
+github\:""
+agent\:"The report as an instruction, for a reader that is going to act on it"))' \
 '--color=[When to colour terminal output]:WHEN:(auto always never)' \
 '--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
-'--force-protected[Remove protected comments such as shebang and encoding preambles]' \
-'--no-preview[Omit the one-line comment text from human \`check\` and \`scan\` lines]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -2100,6 +3068,26 @@ esac
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
+(coverage)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(tags)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(ratchet)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(hook)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(selftest)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
 (doctor)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
@@ -2135,6 +3123,11 @@ _ocomment_commands() {
 'languages:List built-in languages, extensions, and dialects' \
 'plugin:Manage sandboxed WASM scanner plugins' \
 'completions:Generate shell completions' \
+'coverage:Report which files a walk scanned and which it passed over, and why' \
+'tags:Count the tags this tree'\''s comments open with, against the ones it allows' \
+'ratchet:Check the tree against its ledger, or record the tree in one' \
+'hook:Answer an agent editing hook in the host'\''s own protocol' \
+'selftest:Re-run the shared corpus against this binary and report any disagreement' \
 'doctor:Diagnose the environment (config, git, plugins, tools)' \
 'man:Render the roff manual page to stdout' \
 'help:Print this message or the help of the given subcommand(s)' \
@@ -2155,6 +3148,11 @@ _ocomment__subcmd__completions_commands() {
 _ocomment__subcmd__config_commands() {
     local commands; commands=()
     _describe -t commands 'ocomment config commands' commands "$@"
+}
+(( $+functions[_ocomment__subcmd__coverage_commands] )) ||
+_ocomment__subcmd__coverage_commands() {
+    local commands; commands=()
+    _describe -t commands 'ocomment coverage commands' commands "$@"
 }
 (( $+functions[_ocomment__subcmd__diff_commands] )) ||
 _ocomment__subcmd__diff_commands() {
@@ -2185,6 +3183,11 @@ _ocomment__subcmd__help_commands() {
 'languages:List built-in languages, extensions, and dialects' \
 'plugin:Manage sandboxed WASM scanner plugins' \
 'completions:Generate shell completions' \
+'coverage:Report which files a walk scanned and which it passed over, and why' \
+'tags:Count the tags this tree'\''s comments open with, against the ones it allows' \
+'ratchet:Check the tree against its ledger, or record the tree in one' \
+'hook:Answer an agent editing hook in the host'\''s own protocol' \
+'selftest:Re-run the shared corpus against this binary and report any disagreement' \
 'doctor:Diagnose the environment (config, git, plugins, tools)' \
 'man:Render the roff manual page to stdout' \
 'help:Print this message or the help of the given subcommand(s)' \
@@ -2206,6 +3209,11 @@ _ocomment__subcmd__help__subcmd__config_commands() {
     local commands; commands=()
     _describe -t commands 'ocomment help config commands' commands "$@"
 }
+(( $+functions[_ocomment__subcmd__help__subcmd__coverage_commands] )) ||
+_ocomment__subcmd__help__subcmd__coverage_commands() {
+    local commands; commands=()
+    _describe -t commands 'ocomment help coverage commands' commands "$@"
+}
 (( $+functions[_ocomment__subcmd__help__subcmd__diff_commands] )) ||
 _ocomment__subcmd__help__subcmd__diff_commands() {
     local commands; commands=()
@@ -2225,6 +3233,11 @@ _ocomment__subcmd__help__subcmd__fix_commands() {
 _ocomment__subcmd__help__subcmd__help_commands() {
     local commands; commands=()
     _describe -t commands 'ocomment help help commands' commands "$@"
+}
+(( $+functions[_ocomment__subcmd__help__subcmd__hook_commands] )) ||
+_ocomment__subcmd__help__subcmd__hook_commands() {
+    local commands; commands=()
+    _describe -t commands 'ocomment help hook commands' commands "$@"
 }
 (( $+functions[_ocomment__subcmd__help__subcmd__init_commands] )) ||
 _ocomment__subcmd__help__subcmd__init_commands() {
@@ -2288,15 +3301,35 @@ _ocomment__subcmd__help__subcmd__plugin__subcmd__verify_commands() {
     local commands; commands=()
     _describe -t commands 'ocomment help plugin verify commands' commands "$@"
 }
+(( $+functions[_ocomment__subcmd__help__subcmd__ratchet_commands] )) ||
+_ocomment__subcmd__help__subcmd__ratchet_commands() {
+    local commands; commands=()
+    _describe -t commands 'ocomment help ratchet commands' commands "$@"
+}
 (( $+functions[_ocomment__subcmd__help__subcmd__scan_commands] )) ||
 _ocomment__subcmd__help__subcmd__scan_commands() {
     local commands; commands=()
     _describe -t commands 'ocomment help scan commands' commands "$@"
 }
+(( $+functions[_ocomment__subcmd__help__subcmd__selftest_commands] )) ||
+_ocomment__subcmd__help__subcmd__selftest_commands() {
+    local commands; commands=()
+    _describe -t commands 'ocomment help selftest commands' commands "$@"
+}
 (( $+functions[_ocomment__subcmd__help__subcmd__strip_commands] )) ||
 _ocomment__subcmd__help__subcmd__strip_commands() {
     local commands; commands=()
     _describe -t commands 'ocomment help strip commands' commands "$@"
+}
+(( $+functions[_ocomment__subcmd__help__subcmd__tags_commands] )) ||
+_ocomment__subcmd__help__subcmd__tags_commands() {
+    local commands; commands=()
+    _describe -t commands 'ocomment help tags commands' commands "$@"
+}
+(( $+functions[_ocomment__subcmd__hook_commands] )) ||
+_ocomment__subcmd__hook_commands() {
+    local commands; commands=()
+    _describe -t commands 'ocomment hook commands' commands "$@"
 }
 (( $+functions[_ocomment__subcmd__init_commands] )) ||
 _ocomment__subcmd__init_commands() {
@@ -2409,15 +3442,30 @@ _ocomment__subcmd__plugin__subcmd__verify_commands() {
     local commands; commands=()
     _describe -t commands 'ocomment plugin verify commands' commands "$@"
 }
+(( $+functions[_ocomment__subcmd__ratchet_commands] )) ||
+_ocomment__subcmd__ratchet_commands() {
+    local commands; commands=()
+    _describe -t commands 'ocomment ratchet commands' commands "$@"
+}
 (( $+functions[_ocomment__subcmd__scan_commands] )) ||
 _ocomment__subcmd__scan_commands() {
     local commands; commands=()
     _describe -t commands 'ocomment scan commands' commands "$@"
 }
+(( $+functions[_ocomment__subcmd__selftest_commands] )) ||
+_ocomment__subcmd__selftest_commands() {
+    local commands; commands=()
+    _describe -t commands 'ocomment selftest commands' commands "$@"
+}
 (( $+functions[_ocomment__subcmd__strip_commands] )) ||
 _ocomment__subcmd__strip_commands() {
     local commands; commands=()
     _describe -t commands 'ocomment strip commands' commands "$@"
+}
+(( $+functions[_ocomment__subcmd__tags_commands] )) ||
+_ocomment__subcmd__tags_commands() {
+    local commands; commands=()
+    _describe -t commands 'ocomment tags commands' commands "$@"
 }
 
 if [ "$funcstack[1]" = "_ocomment" ]; then

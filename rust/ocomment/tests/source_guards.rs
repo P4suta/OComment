@@ -9,17 +9,25 @@ use std::{collections::BTreeSet, fs, path::PathBuf};
 /// Every first-party source file of the crate, embedded at compile time so the
 /// scan does not depend on the directory the test runs in. The internal runtime
 /// is upstream-derived code and cannot obtain the CLI's stdout handle.
-const SOURCES: [(&str, &str); 11] = [
+const SOURCES: [(&str, &str); 19] = [
     ("atomic.rs", include_str!("../src/atomic.rs")),
     ("cli.rs", include_str!("../src/cli.rs")),
     ("config.rs", include_str!("../src/config.rs")),
+    ("coverage.rs", include_str!("../src/coverage.rs")),
+    ("deadline.rs", include_str!("../src/deadline.rs")),
     ("files.rs", include_str!("../src/files.rs")),
+    ("generated.rs", include_str!("../src/generated.rs")),
     ("git.rs", include_str!("../src/git.rs")),
+    ("hook.rs", include_str!("../src/hook.rs")),
     ("interactive.rs", include_str!("../src/interactive.rs")),
     ("lsp.rs", include_str!("../src/lsp.rs")),
     ("main.rs", include_str!("../src/main.rs")),
     ("output.rs", include_str!("../src/output.rs")),
     ("plugin.rs", include_str!("../src/plugin.rs")),
+    ("ratchet.rs", include_str!("../src/ratchet.rs")),
+    ("selftest.rs", include_str!("../src/selftest.rs")),
+    ("tags.rs", include_str!("../src/tags.rs")),
+    ("trace.rs", include_str!("../src/trace.rs")),
     ("values.rs", include_str!("../src/values.rs")),
 ];
 
@@ -258,4 +266,82 @@ fn identifier_before(source: &str, at: usize) -> &str {
         .last()
         .map_or(at, |(index, _)| index);
     &source[start..at]
+}
+
+/// Suppression is not something a caller can decide, and this says so.
+///
+/// The convention in CONTRIBUTING.md is that standard output carries the
+/// command's product and standard error carries the summary and the notes, and
+/// that `-q` drops the second. It was a convention rather than a mechanism, so
+/// three separate tests of the quiet level grew on the product side — one of
+/// which left `ocomment check -q` exiting 1 having printed nothing at all,
+/// which is exactly the shape a pre-commit hook wants and the one thing it
+/// could not get.
+///
+/// The mechanism is now in the type: `Verbosity` wraps a private `Level` and
+/// derives no `PartialEq`, so `verbosity == Verbosity::Quiet` does not
+/// compile. The only question available is `shows(Detail)`, and the only
+/// writer that asks it is `note`.
+///
+/// This checks the mechanism is still there. A `PartialEq` derive or a public
+/// level would put the old failure back within reach, and neither would break
+/// anything else.
+#[test]
+fn a_caller_cannot_ask_whether_the_run_is_quiet() {
+    let output = SOURCES
+        .iter()
+        .find(|(name, _)| *name == "output.rs")
+        .map(|(_, source)| *source)
+        .expect("output.rs is in the source list");
+    let declaration = output
+        .lines()
+        .position(|line| line.starts_with("pub struct Verbosity("))
+        .expect("Verbosity is a newtype around a private level");
+    let derive = output
+        .lines()
+        .nth(declaration.saturating_sub(1))
+        .unwrap_or_default();
+    assert!(
+        !derive.contains("PartialEq"),
+        "`Verbosity` derives PartialEq, so a caller can compare one against \
+         another and decide for itself whether to speak. Suppression belongs \
+         to `note`: give it a `Detail` instead. The derive line is: {derive}"
+    );
+    assert!(
+        output.contains("enum Level {"),
+        "the levels are no longer private, so a caller can match on one"
+    );
+    assert!(
+        !output.contains("pub enum Level {"),
+        "the levels were made public, which puts the decision back in reach"
+    );
+}
+
+/// The list above is the whole crate, and this is what keeps it so.
+///
+/// Every guard in this file reads `SOURCES`, so a module missing from it is a
+/// module none of them covers — and nothing about adding a module makes anyone
+/// come here. The directory is the authority; the list only has to agree with
+/// it. `runtime/` is the one exclusion, for the reason the list's own doc
+/// comment gives, and it is named rather than inferred.
+#[test]
+fn the_embedded_list_is_every_source_file_in_the_crate() {
+    let directory = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
+    let on_disk: BTreeSet<String> = fs::read_dir(&directory)
+        .expect("the crate has a src directory")
+        .map(|entry| entry.expect("a readable directory entry").path())
+        .filter(|path| path.extension().is_some_and(|value| value == "rs"))
+        .map(|path| {
+            path.file_name()
+                .expect("a file with an extension has a name")
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    let listed: BTreeSet<String> = SOURCES.iter().map(|(name, _)| (*name).to_owned()).collect();
+    assert_eq!(
+        listed, on_disk,
+        "`SOURCES` and `src/` disagree, so some module is outside every guard \
+         in this file"
+    );
 }

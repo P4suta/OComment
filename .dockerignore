@@ -1,6 +1,6 @@
-# The image reads only the Rust workspace and the two licences, so deny
-# everything and re-admit exactly those. A narrow context also keeps
-# `rust/target` — gigabytes on a developer machine — out of the build.
+# NOTE: The image reads only the Rust workspace and the two licences, so deny
+# NOTE: everything and re-admit exactly those. A narrow context also keeps
+# NOTE: `rust/target` — gigabytes on a developer machine — out of the build.
 *
 
 !rust

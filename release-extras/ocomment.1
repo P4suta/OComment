@@ -4,9 +4,9 @@
 .SH NAME
 ocomment \- Check and remove source\-code comments safely
 .SH SYNOPSIS
-\fBocomment\fR [\fB\-\-config\fR] [\fB\-\-policy\fR] [\fB\-\-layout\fR] [\fB\-\-language\fR] [\fB\-\-dialect\fR] [\fB\-\-keep\-kind\fR] [\fB\-\-remove\-kind\fR] [\fB\-\-force\-invalid\fR] [\fB\-\-force\-protected\fR] [\fB\-\-format\fR] [\fB\-\-color\fR] [\fB\-\-hyperlinks\fR] [\fB\-\-no\-preview\fR] [\fB\-\-explain\fR] [\fB\-\-progress\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIPATH\fR] [\fIsubcommands\fR]
+\fBocomment\fR [\fB\-\-config\fR] [\fB\-\-policy\fR] [\fB\-\-layout\fR] [\fB\-\-language\fR] [\fB\-\-dialect\fR] [\fB\-\-keep\-kind\fR] [\fB\-\-remove\-kind\fR] [\fB\-\-include\-generated\fR] [\fB\-\-deny\-skipped\fR] [\fB\-\-force\-invalid\fR] [\fB\-\-force\-protected\fR] [\fB\-\-format\fR] [\fB\-\-color\fR] [\fB\-\-hyperlinks\fR] [\fB\-\-no\-preview\fR] [\fB\-\-annotation\-level\fR] [\fB\-\-explain\fR] [\fB\-\-source\-map\fR] [\fB\-\-trace\fR] [\fB\-\-progress\fR] [\fB\-j\fR|\fB\-\-jobs\fR] [\fB\-\-summary\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIPATH\fR] [\fIsubcommands\fR]
 .SH DESCRIPTION
-OComment scans source bytes without requiring UTF\-8 and reports or removes comment tokens. The default policy protects source preambles and tool or language directives. Rewrites are prepared and committed as one rollback\-backed transaction.
+OComment scans source bytes without requiring UTF\-8 and reports or removes comment tokens. The default policy removes ordinary comments and keeps the ones something else depends on: documentation, licence notices, tool and language directives, shebangs and encoding lines. Rewrites are prepared and committed as one rollback\-backed transaction.
 .SH OPTIONS
 .TP
 \fB\-\-config\fR \fI<FILE>\fR
@@ -30,11 +30,11 @@ Which classes of comment the run is allowed to remove
 \fIPossible values:\fR
 .RS 14
 .IP \(bu 2
-safe: Remove ordinary and doc comments; keep preambles and directives
+conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines
 .IP \(bu 2
-legal: Like safe, and keep licence and copyright comments as well
+standard: Like conservative, and remove documentation, licence and copyright comments too
 .IP \(bu 2
-all: Remove every comment that no keep override protects
+all: Remove every comment except shebangs, encoding lines and the directives the language itself reads
 .RE
 .TP
 \fB\-\-layout\fR \fI<LAYOUT>\fR
@@ -49,7 +49,7 @@ lines: Keep the line structure and separate tokens that would otherwise join
 .IP \(bu 2
 columns: Pad each removed comment so the following columns do not shift
 .IP \(bu 2
-compact: Drop lines that held only a removed comment, and the whitespace it left behind
+compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 .RE
 .TP
 \fB\-\-language\fR \fI<LANGUAGE>\fR
@@ -184,7 +184,7 @@ doc\-block: A delimited documentation comment
 .IP \(bu 2
 directive: A tool or language directive such as a pragma or lint control
 .IP \(bu 2
-license: A licence or copyright preamble
+license: A licence or copyright notice
 .IP \(bu 2
 html\-comment: A DOM\-observable HTML comment
 .IP \(bu 2
@@ -195,6 +195,8 @@ encoding: A source encoding declaration
 optimizer\-hint: A compiler or database optimizer hint
 .IP \(bu 2
 version\-comment: A MySQL versioned comment that the server executes
+.IP \(bu 2
+load\-bearing: A directive the language or its build reads as part of the program, such as `//go:build`
 .RE
 .TP
 \fB\-\-remove\-kind\fR \fI<KIND>\fR
@@ -215,7 +217,7 @@ doc\-block: A delimited documentation comment
 .IP \(bu 2
 directive: A tool or language directive such as a pragma or lint control
 .IP \(bu 2
-license: A licence or copyright preamble
+license: A licence or copyright notice
 .IP \(bu 2
 html\-comment: A DOM\-observable HTML comment
 .IP \(bu 2
@@ -226,13 +228,21 @@ encoding: A source encoding declaration
 optimizer\-hint: A compiler or database optimizer hint
 .IP \(bu 2
 version\-comment: A MySQL versioned comment that the server executes
+.IP \(bu 2
+load\-bearing: A directive the language or its build reads as part of the program, such as `//go:build`
 .RE
+.TP
+\fB\-\-include\-generated\fR
+Scan files another tool writes: lock files, recorded seeds, generated output
+.TP
+\fB\-\-deny\-skipped\fR [\fI<REASON>...\fR]
+Fail when a file was passed over for one of these reasons, rather than noting it
 .TP
 \fB\-\-force\-invalid\fR
 Apply the edits that are still provably safe when the source fails to scan
 .TP
 \fB\-\-force\-protected\fR
-Remove protected comments such as shebang and encoding preambles
+Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 .SH OUTPUT
 .TP
 \fB\-\-format\fR \fI<FORMAT>\fR [default: human]
@@ -252,6 +262,8 @@ jsonl
 sarif
 .IP \(bu 2
 github
+.IP \(bu 2
+agent: The report as an instruction, for a reader that is going to act on it
 .RE
 .TP
 \fB\-\-color\fR \fI<WHEN>\fR [default: auto]
@@ -285,10 +297,43 @@ never
 .RE
 .TP
 \fB\-\-no\-preview\fR
-Omit the one\-line comment text from human `check` and `scan` lines
+Omit the comment text from human `check` and `scan` lines and from the JSON formats
+.TP
+\fB\-\-annotation\-level\fR \fI<LEVEL>\fR
+The level `\-\-format github` annotates a removable comment at (default: the run\*(Aqs exit status)
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+error: Annotate as an error, which fails a job that checks annotations
+.IP \(bu 2
+warning: Annotate as a warning
+.IP \(bu 2
+notice: Annotate as a notice, which GitHub folds away beside an error
+.RE
 .TP
 \fB\-\-explain\fR
-List every comment human `check` and `scan` met and name the rule and setting behind each one
+List every comment `check` and `scan` met and name the rule and setting behind each one
+.TP
+\fB\-\-source\-map\fR
+Include the byte\-for\-byte map from the output back to the source in the JSON formats
+.TP
+\fB\-\-trace\fR \fI<WHEN>\fR [default: off]
+Record how the run reached its verdicts, on standard error
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+off: Record nothing, and collect nothing to record
+.IP \(bu 2
+human: One line per step, for a person reading a terminal
+.IP \(bu 2
+json: One JSON object per line, against `spec/trace.schema.json`
+.RE
 .TP
 \fB\-\-progress\fR \fI<WHEN>\fR [default: auto]
 When to draw the live scanning counter on standard error
@@ -304,6 +349,12 @@ always
 .IP \(bu 2
 never
 .RE
+.TP
+\fB\-j\fR, \fB\-\-jobs\fR \fI<N>\fR
+How many threads the run uses to walk, read and scan; 0 chooses one per core
+.TP
+\fB\-\-summary\fR \fI<FILE>\fR
+Also write the end\-of\-run counts to this file, as one JSON object
 .TP
 \fB\-q\fR, \fB\-\-quiet\fR
 Drop the run summary and notes; the command\*(Aqs product (findings, patch, listing) is still written
@@ -345,6 +396,21 @@ Manage sandboxed WASM scanner plugins
 ocomment\-completions(1)
 Generate shell completions
 .TP
+ocomment\-coverage(1)
+Report which files a walk scanned and which it passed over, and why
+.TP
+ocomment\-tags(1)
+Count the tags this tree\*(Aqs comments open with, against the ones it allows
+.TP
+ocomment\-ratchet(1)
+Check the tree against its ledger, or record the tree in one
+.TP
+ocomment\-hook(1)
+Answer an agent editing hook in the host\*(Aqs own protocol
+.TP
+ocomment\-selftest(1)
+Re\-run the shared corpus against this binary and report any disagreement
+.TP
 ocomment\-doctor(1)
 Diagnose the environment (config, git, plugins, tools)
 .TP
@@ -362,6 +428,9 @@ Read and update Git index blobs rather than treating the working tree as the sou
 \fB\-\-index\-only\fR
 With `\-\-staged`, do not attempt a uniquely mappable working\-tree update
 .TP
+\fB\-\-base\fR \fI<REV>\fR
+Check only the working\-tree files that differ from this revision\*(Aqs merge base with HEAD
+.TP
 [\fIPATH\fR]
 Files or directories to process; `\-` reads standard input (default: current directory)
 .SS ocomment fix
@@ -371,6 +440,9 @@ Read and update Git index blobs rather than treating the working tree as the sou
 .TP
 \fB\-\-index\-only\fR
 With `\-\-staged`, do not attempt a uniquely mappable working\-tree update
+.TP
+\fB\-\-base\fR \fI<REV>\fR
+Check only the working\-tree files that differ from this revision\*(Aqs merge base with HEAD
 .TP
 \fB\-\-dry\-run\fR
 Print the patch `fix` would apply and write nothing
@@ -390,6 +462,9 @@ Read and update Git index blobs rather than treating the working tree as the sou
 \fB\-\-index\-only\fR
 With `\-\-staged`, do not attempt a uniquely mappable working\-tree update
 .TP
+\fB\-\-base\fR \fI<REV>\fR
+Check only the working\-tree files that differ from this revision\*(Aqs merge base with HEAD
+.TP
 [\fIPATH\fR]
 Files or directories to process; `\-` reads standard input (default: current directory)
 .SS ocomment scan
@@ -399,6 +474,9 @@ Read and update Git index blobs rather than treating the working tree as the sou
 .TP
 \fB\-\-index\-only\fR
 With `\-\-staged`, do not attempt a uniquely mappable working\-tree update
+.TP
+\fB\-\-base\fR \fI<REV>\fR
+Check only the working\-tree files that differ from this revision\*(Aqs merge base with HEAD
 .TP
 [\fIPATH\fR]
 Files or directories to process; `\-` reads standard input (default: current directory)
@@ -491,6 +569,60 @@ fish
 powershell
 .IP \(bu 2
 zsh
+.RE
+.SS ocomment coverage
+.TP
+\fB\-\-staged\fR
+Read and update Git index blobs rather than treating the working tree as the source
+.TP
+\fB\-\-index\-only\fR
+With `\-\-staged`, do not attempt a uniquely mappable working\-tree update
+.TP
+\fB\-\-base\fR \fI<REV>\fR
+Check only the working\-tree files that differ from this revision\*(Aqs merge base with HEAD
+.TP
+[\fIPATH\fR]
+Files or directories to process; `\-` reads standard input (default: current directory)
+.SS ocomment tags
+.TP
+\fB\-\-staged\fR
+Read and update Git index blobs rather than treating the working tree as the source
+.TP
+\fB\-\-index\-only\fR
+With `\-\-staged`, do not attempt a uniquely mappable working\-tree update
+.TP
+\fB\-\-base\fR \fI<REV>\fR
+Check only the working\-tree files that differ from this revision\*(Aqs merge base with HEAD
+.TP
+[\fIPATH\fR]
+Files or directories to process; `\-` reads standard input (default: current directory)
+.SS ocomment ratchet
+.TP
+\fB\-\-update\fR
+Rewrite the ledger to match the tree, rather than checking against it
+.TP
+\fB\-\-staged\fR
+Read and update Git index blobs rather than treating the working tree as the source
+.TP
+\fB\-\-index\-only\fR
+With `\-\-staged`, do not attempt a uniquely mappable working\-tree update
+.TP
+\fB\-\-base\fR \fI<REV>\fR
+Check only the working\-tree files that differ from this revision\*(Aqs merge base with HEAD
+.TP
+[\fIPATH\fR]
+Files or directories to process; `\-` reads standard input (default: current directory)
+.SS ocomment hook
+.TP
+<\fISURFACE\fR>
+Which host\*(Aqs hook protocol is spoken on standard input and output
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+claude\-code: Claude Code\*(Aqs `PreToolUse` and `PostToolUse` hooks
 .RE
 .SH VERSION
 v0.1.0

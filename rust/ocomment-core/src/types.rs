@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{fmt, str::FromStr};
+use std::{collections::BTreeMap, fmt, str::FromStr};
 
 /// A half-open byte range `[start, end)`.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
@@ -485,7 +485,7 @@ pub enum CommentKind {
     /// the catalogue.
     Directive,
     /// A license or copyright notice, such as an SPDX identifier. Only
-    /// [`Policy::Legal`] keeps one.
+    /// [`Policy::Conservative`] keeps one.
     License,
     /// An HTML `<!-- ... -->` comment, which the DOM exposes to scripts.
     HtmlComment,
@@ -498,11 +498,48 @@ pub enum CommentKind {
     /// A SQL version-gated comment, `/*! ... */`, whose body the server
     /// executes.
     VersionComment,
+    /// A directive the language or its build reads as part of the program:
+    /// `//go:build`, `# frozen_string_literal:`, `// swift-tools-version:`.
+    /// Removing one changes what compiles or what the code does, rather than
+    /// what a tool reports about it, so a `remove` policy does not reach it
+    /// and only [`ScanOptions::force_protected`] gives it up.
+    LoadBearing,
+}
+
+/// How strongly a [`CommentKind`] is held back from every policy.
+///
+/// This is a property of the kind rather than a decision any run makes: a
+/// shebang is required by the file's own syntax whatever anyone configures,
+/// and a `//go:build` is read by the compiler whatever anyone configures. The
+/// only way past either is [`ScanOptions::force_protected`], which is a
+/// sentence someone types.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum Protection {
+    /// No protection. The policy has the last word.
+    None,
+    /// A line the source needs in order to be read at all.
+    Preamble,
+    /// Read by the language, its build, or the server that executes it.
+    LoadBearing,
+}
+
+impl Protection {
+    /// The reason a report gives for a comment held back at this tier.
+    ///
+    /// Two of the strings the differential protocol freezes, which is why they
+    /// live beside the tier rather than beside the code that prints them.
+    pub const fn reason(self) -> Option<&'static str> {
+        match self {
+            Self::None => None,
+            Self::Preamble => Some("required source preamble"),
+            Self::LoadBearing => Some("required by the language or its build"),
+        }
+    }
 }
 
 impl CommentKind {
     /// Every CLI-visible comment kind.
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::Line,
         Self::Block,
         Self::DocLine,
@@ -514,7 +551,32 @@ impl CommentKind {
         Self::Encoding,
         Self::OptimizerHint,
         Self::VersionComment,
+        Self::LoadBearing,
     ];
+
+    /// Which protection this kind carries, before any policy is consulted.
+    ///
+    /// Exhaustive on purpose: a new kind does not compile until somebody has
+    /// decided whether removing one changes what the toolchain produces. That
+    /// question is the whole of the distinction, and leaving it to be answered
+    /// later has meant, twice, that it was answered by accident.
+    pub const fn protection(self) -> Protection {
+        match self {
+            Self::Shebang | Self::Encoding => Protection::Preamble,
+            // NOTE: The SQL pair is here because the server reads them as part
+            // NOTE: of the statement: one is executed and one decides the plan.
+            Self::LoadBearing | Self::OptimizerHint | Self::VersionComment => {
+                Protection::LoadBearing
+            }
+            Self::Line
+            | Self::Block
+            | Self::DocLine
+            | Self::DocBlock
+            | Self::Directive
+            | Self::License
+            | Self::HtmlComment => Protection::None,
+        }
+    }
 
     /// The canonical name, identical to the serde representation.
     pub const fn as_str(self) -> &'static str {
@@ -530,6 +592,7 @@ impl CommentKind {
             Self::Encoding => "encoding",
             Self::OptimizerHint => "optimizer-hint",
             Self::VersionComment => "version-comment",
+            Self::LoadBearing => "load-bearing",
         }
     }
 
@@ -543,7 +606,8 @@ impl CommentKind {
             | Self::Shebang
             | Self::Encoding
             | Self::OptimizerHint
-            | Self::VersionComment => &[],
+            | Self::VersionComment
+            | Self::LoadBearing => &[],
             Self::DocLine => &["doc"],
             Self::Directive => &["pragma"],
             Self::License => &["legal"],
@@ -591,6 +655,90 @@ impl fmt::Display for Disposition {
         match self {
             Self::Remove => f.write_str("remove"),
             Self::Keep { reason } => write!(f, "keep ({reason})"),
+        }
+    }
+}
+
+/// A rule about a comment's *shape* rather than its kind, and the verdict it
+/// reached.
+///
+/// These are decided over the whole file — how many lines a run of adjacent
+/// comments covers, whether code sits before one on its line — so unlike every
+/// other rule they cannot be re-derived from a comment's own bytes. Recording
+/// the rule here is what lets an explanation state the one that actually
+/// applied instead of falling back to the policy and contradicting the
+/// verdict on the line above it.
+///
+/// [`ScanOptions::allow`] is the only thing that produces one.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "rule", rename_all = "kebab-case")]
+pub enum ShapeRule {
+    /// [`AllowRules::tags`]: kept for the tag its text opens with.
+    Tagged {
+        /// The configured tag it matched, in the configured spelling.
+        tag: String,
+    },
+    /// [`AllowRules::expiry`]: the tag allowed it, and its time is up.
+    ///
+    /// Produced by a caller that can read a repository, never by the scan —
+    /// see [`AllowRules::expiry`] for why the two are separate.
+    Expired {
+        /// The configured tag it matched.
+        tag: String,
+        /// How old the line carrying it is, in days.
+        age: Age,
+        /// How old the configuration lets it get.
+        limit: Age,
+    },
+    /// [`AllowRules::trailing`] is `false`: removed for sitting after code.
+    Trailing,
+    /// [`AllowRules::max_lines`]: removed with the run of comments it belongs
+    /// to, because that run is longer than the limit.
+    TooLong {
+        /// How many lines the run covers.
+        lines: usize,
+        /// How many [`AllowRules::max_lines`] permits.
+        limit: usize,
+    },
+}
+
+impl ShapeRule {
+    /// The verdict this rule reaches, which is fixed per rule.
+    ///
+    /// A [`Comment`] carrying a rule always carries the matching
+    /// [`Disposition`]: both are written from this one value, so the two
+    /// cannot drift apart.
+    pub const fn action(&self) -> Action {
+        match self {
+            Self::Tagged { .. } => Action::Keep,
+            Self::Trailing | Self::TooLong { .. } | Self::Expired { .. } => Action::Remove,
+        }
+    }
+
+    /// The disposition a comment this rule decided carries.
+    pub fn disposition(&self) -> Disposition {
+        match self {
+            Self::Tagged { tag } => Disposition::Keep {
+                reason: format!("tagged `{tag}`"),
+            },
+            Self::Trailing | Self::TooLong { .. } | Self::Expired { .. } => Disposition::Remove,
+        }
+    }
+
+    /// The explanation this rule writes for the comment it decided.
+    pub fn explanation(&self) -> DispositionExplanation {
+        match self {
+            Self::Tagged { tag } => DispositionExplanation::KeptByTag { tag: tag.clone() },
+            Self::Trailing => DispositionExplanation::RemovedAsTrailing,
+            Self::TooLong { lines, limit } => DispositionExplanation::RemovedByLength {
+                lines: *lines,
+                limit: *limit,
+            },
+            Self::Expired { tag, age, limit } => DispositionExplanation::RemovedAsExpired {
+                tag: tag.clone(),
+                age: *age,
+                limit: *limit,
+            },
         }
     }
 }
@@ -659,6 +807,14 @@ pub enum DispositionExplanation {
     ProtectedPreamble,
     /// An HTML comment, which the DOM exposes to scripts.
     KeptHtml,
+    /// A directive the language or its build reads as part of the program.
+    /// Removing it would change what compiles or what the code does, so no
+    /// `remove` policy reaches it and only [`ScanOptions::force_protected`]
+    /// gives it up.
+    KeptLoadBearing {
+        /// The directive's name, when the catalogue could name it.
+        name: Option<&'static str>,
+    },
     /// A directive addressed to a tool or to the compiler.
     KeptDirective {
         /// The kind that was classified as a directive.
@@ -666,7 +822,16 @@ pub enum DispositionExplanation {
         /// The directive's name, when the catalogue could name it.
         name: Option<&'static str>,
     },
-    /// A license or copyright notice under [`Policy::Legal`].
+    /// A documentation comment under [`Policy::Conservative`].
+    ///
+    /// It is the API documentation rather than a remark about the code, so
+    /// removing it takes something published: a page on docs.rs, an entry on
+    /// pkg.go.dev, a javadoc section.
+    KeptDocumentation {
+        /// Which of the two documentation kinds it is.
+        kind: CommentKind,
+    },
+    /// A license or copyright notice under [`Policy::Conservative`].
     KeptLicense {
         /// The marker that identified it, such as `spdx-license-identifier`.
         marker: Option<&'static str>,
@@ -681,9 +846,50 @@ pub enum DispositionExplanation {
         pattern: String,
     },
     /// The policy removes every comment it is offered.
-    RemovedByPolicy(Policy),
-    /// Nothing protected an ordinary comment, so the policy default removed it.
-    RemovedByDefault(Policy),
+    RemovedByPolicy {
+        /// The policy that removed it.
+        policy: Policy,
+        /// The kind it was removed as.
+        kind: CommentKind,
+    },
+    /// Nothing protected the comment, so the policy default removed it.
+    ///
+    /// A policy removes several kinds and removes them for different reasons,
+    /// so the kind is part of the answer: it is what tells a reader which
+    /// setting they would have to change to keep this one. Without it a
+    /// license notice and an ordinary line comment give the same explanation.
+    RemovedByDefault {
+        /// The policy whose default applied.
+        policy: Policy,
+        /// The kind it was removed as.
+        kind: CommentKind,
+    },
+    /// [`AllowRules::tags`] matched the tag the comment's text opens with.
+    KeptByTag {
+        /// The configured tag it matched.
+        tag: String,
+    },
+    /// [`AllowRules::trailing`] is `false` and code sits before this comment
+    /// on its line.
+    RemovedAsTrailing,
+    /// The tag allowed the comment, and [`AllowRules::expiry`] gave it a
+    /// deadline the line has now passed.
+    RemovedAsExpired {
+        /// The configured tag it matched.
+        tag: String,
+        /// How old the line carrying it is.
+        age: Age,
+        /// How old the configuration lets it get.
+        limit: Age,
+    },
+    /// The run of adjacent comments this one belongs to is longer than
+    /// [`AllowRules::max_lines`].
+    RemovedByLength {
+        /// How many lines the run covers.
+        lines: usize,
+        /// How many the configuration permits.
+        limit: usize,
+    },
     /// A comment every rule above would have removed, kept because a block
     /// scalar's body ends at it and a comment the run keeps sits below it,
     /// deep enough that the body would take that comment back.
@@ -706,15 +912,46 @@ impl DispositionExplanation {
             Self::KeptByKind(_)
             | Self::KeptByRegex { .. }
             | Self::ProtectedPreamble
+            | Self::KeptLoadBearing { .. }
             | Self::KeptHtml
             | Self::KeptDirective { .. }
+            | Self::KeptDocumentation { .. }
             | Self::KeptLicense { .. }
+            | Self::KeptByTag { .. }
             | Self::KeptStructural { .. } => Action::Keep,
             Self::RemovedByKind(_)
             | Self::RemovedByRegex { .. }
-            | Self::RemovedByPolicy(_)
-            | Self::RemovedByDefault(_) => Action::Remove,
+            | Self::RemovedByPolicy { .. }
+            | Self::RemovedAsTrailing
+            | Self::RemovedAsExpired { .. }
+            | Self::RemovedByLength { .. }
+            | Self::RemovedByDefault { .. } => Action::Remove,
         }
+    }
+}
+
+/// What a policy removed, named as the kind rather than as "comments".
+///
+/// A policy default removes more than one kind, and a reader who is told only
+/// that "the policy removes ordinary comments" cannot tell whether the comment
+/// in front of them was ordinary. Naming the kind is what makes the sentence
+/// checkable against the kind the same line already reports.
+///
+/// The kinds a policy default cannot reach — a shebang, a load-bearing
+/// directive — are spelled generically rather than omitted, so that adding a
+/// kind cannot silently produce a sentence with a hole in it.
+const fn removed_noun(kind: CommentKind) -> &'static str {
+    match kind {
+        CommentKind::Line | CommentKind::Block => "ordinary comments",
+        CommentKind::DocLine | CommentKind::DocBlock => "doc comments",
+        CommentKind::License => "license comments",
+        CommentKind::HtmlComment => "HTML comments",
+        CommentKind::Directive => "tool and language directives",
+        CommentKind::OptimizerHint => "optimizer hints",
+        CommentKind::VersionComment => "version-gated comments",
+        CommentKind::Shebang => "shebang lines",
+        CommentKind::Encoding => "encoding declarations",
+        CommentKind::LoadBearing => "comments the language or its build reads",
     }
 }
 
@@ -730,18 +967,38 @@ impl fmt::Display for DispositionExplanation {
             Self::ProtectedPreamble => {
                 f.write_str("kept: required source preamble, removable only with force_protected")
             }
+            Self::KeptLoadBearing { name } => match name {
+                Some(name) => write!(
+                    f,
+                    "kept: `{name}` is read by the language or its build, so removing it would change the code rather than a report about it"
+                ),
+                None => f.write_str(
+                    "kept: the language or its build reads this comment, so removing it would change the code rather than a report about it",
+                ),
+            },
             Self::KeptHtml => f.write_str("kept: HTML comments are DOM-observable"),
             Self::KeptDirective { kind, name } => match name {
                 Some(name) => write!(f, "kept: tool or language directive `{name}`"),
                 None => write!(f, "kept: `{kind}` is a tool or language directive"),
             },
-            Self::KeptLicense { marker } => match marker {
-                Some(marker) => write!(
-                    f,
-                    "kept: policy legal protects license comments, and this one says `{marker}`"
-                ),
-                None => f.write_str("kept: policy legal protects license comments"),
-            },
+            /* NOTE: The policy is spelled through `Policy` rather than written
+             * out, so that renaming one cannot leave this sentence naming a
+             * policy the binary no longer accepts. */
+            Self::KeptDocumentation { kind } => write!(
+                f,
+                "kept: policy {} protects documentation comments, and this is a `{kind}`",
+                Policy::Conservative
+            ),
+            Self::KeptLicense { marker } => {
+                let policy = Policy::Conservative;
+                match marker {
+                    Some(marker) => write!(
+                        f,
+                        "kept: policy {policy} protects license comments, and this one says `{marker}`"
+                    ),
+                    None => write!(f, "kept: policy {policy} protects license comments"),
+                }
+            }
             Self::RemovedByKind(kind) => {
                 write!(
                     f,
@@ -751,12 +1008,29 @@ impl fmt::Display for DispositionExplanation {
             Self::RemovedByRegex { index, pattern } => {
                 write!(f, "removed: matched remove_regex #{index} `{pattern}`")
             }
-            Self::RemovedByPolicy(policy) => {
-                write!(f, "removed: policy `{policy}` removes every comment")
+            Self::RemovedByPolicy { policy, kind } => {
+                write!(
+                    f,
+                    "removed: policy `{policy}` removes every comment, this one a `{kind}`"
+                )
             }
-            Self::RemovedByDefault(policy) => {
-                write!(f, "removed: policy `{policy}` removes ordinary comments")
+            Self::RemovedByDefault { policy, kind } => {
+                write!(f, "removed: policy `{policy}` removes {}", removed_noun(*kind))
             }
+            Self::KeptByTag { tag } => {
+                write!(f, "kept: its text opens with the allowed tag `{tag}`")
+            }
+            Self::RemovedAsTrailing => {
+                f.write_str("removed: code comes before it on its line, and trailing comments are not allowed")
+            }
+            Self::RemovedAsExpired { tag, age, limit } => write!(
+                f,
+                "removed: `{tag}` is a promise with {limit} to keep it, and this line is {age} old"
+            ),
+            Self::RemovedByLength { lines, limit } => write!(
+                f,
+                "removed: it belongs to a run of {lines} adjacent comment lines, and at most {limit} is allowed"
+            ),
             Self::KeptStructural { language } => write!(
                 f,
                 "kept: it separates a `{language}` block scalar from the kept comment below it"
@@ -774,6 +1048,13 @@ pub struct Comment {
     pub kind: CommentKind,
     /// Whether it is removed, and why if it is not.
     pub disposition: Disposition,
+    /// The shape rule that settled it, when one did.
+    ///
+    /// `None` is the ordinary case: the policy, the kind lists and the pattern
+    /// lists decided, and all three can be read back off the comment's own
+    /// bytes. A [`ShapeRule`] cannot, so it is carried rather than guessed at.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shape: Option<ShapeRule>,
 }
 
 /// How serious a [`Diagnostic`] is.
@@ -906,35 +1187,127 @@ pub enum ExternalSpanError {
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Policy {
-    /// The default. Removes ordinary, documentation, and license comments;
-    /// keeps directives, HTML comments, SQL hints and version comments, and
-    /// the shebang or encoding preamble.
+    /// The default. Removes ordinary and documentation comments; keeps
+    /// license notices, directives, HTML comments, SQL hints and version
+    /// comments, and the shebang or encoding preamble. A
+    /// [`CommentKind::LoadBearing`] directive is kept under every policy.
+    ///
+    /// Was spelled `legal`, which named the one kind it adds rather than
+    /// where it sits, and which left the weaker-sounding `safe` as the
+    /// default that removed licence notices.
     #[default]
-    Safe,
-    /// As [`Self::Safe`], but license and copyright notices are kept too.
-    Legal,
+    #[serde(alias = "legal")]
+    Conservative,
+    /// As [`Self::Conservative`], and license and copyright notices go too.
+    ///
+    /// Was spelled `safe` and was the default. It is neither the safest
+    /// policy nor a safe default for a repository that states its licence in
+    /// its sources: REUSE compliance does not survive it.
+    #[serde(alias = "safe")]
+    Standard,
     /// Removes every comment, directives and HTML comments included. The
-    /// shebang and encoding preamble still survive unless
+    /// shebang and encoding preamble survive, and so does a
+    /// [`CommentKind::LoadBearing`] directive the language or its build reads
+    /// as part of the program; all three go only when
     /// [`ScanOptions::force_protected`] is set.
     All,
 }
 
 impl Policy {
-    /// Every CLI-visible policy.
-    pub const ALL: [Self; 3] = [Self::Safe, Self::Legal, Self::All];
+    /// Every CLI-visible policy, weakest first.
+    ///
+    /// The order is the order of how much a policy takes, so that a list of
+    /// them reads as a scale. It is also the order help output uses, which is
+    /// where a reader forms the expectation that the names have an order at
+    /// all.
+    pub const ALL: [Self; 3] = [Self::Conservative, Self::Standard, Self::All];
 
     /// The canonical name, identical to the serde representation.
     pub const fn as_str(self) -> &'static str {
         match self {
-            Self::Safe => "safe",
-            Self::Legal => "legal",
+            Self::Conservative => "conservative",
+            Self::Standard => "standard",
             Self::All => "all",
         }
     }
 
     /// Accepted spellings besides [`Self::as_str`], already case-folded.
+    ///
+    /// The former names are kept so that an existing configuration and an
+    /// existing command line both still resolve. They resolve to the same
+    /// behaviour they always named; what changed is which one is the default.
     pub const fn aliases(self) -> &'static [&'static str] {
-        &[]
+        match self {
+            Self::Conservative => &["legal"],
+            Self::Standard => &["safe"],
+            Self::All => &[],
+        }
+    }
+
+    /// Whether this policy keeps a comment of `kind`, absent every other rule.
+    ///
+    /// This is the table in the crate documentation, as code. It was prose in
+    /// one place and a chain of `if`s in another, and a reader asking "would a
+    /// weaker policy have kept this?" had nothing to ask — so the CLI answered
+    /// with a hand-written guess about kinds, which was wrong in the only case
+    /// that occurs: a Rust crate with both documentation and a licence header.
+    ///
+    /// This is the policy's own answer and not the last word. A shebang, an
+    /// encoding line, a load-bearing directive and the two SQL forms a server
+    /// reads are held back from every policy by [`CommentKind::protection`],
+    /// which is tested before this — and given up by
+    /// [`ScanOptions::force_protected`], which is what lets `all` reach them.
+    /// Answering `true` here for those kinds would close that door, and the
+    /// first version of this did.
+    ///
+    /// The match is exhaustive, which is the point: a new [`CommentKind`] does
+    /// not compile until every policy has an answer for it.
+    pub const fn keeps(self, kind: CommentKind) -> bool {
+        match kind {
+            CommentKind::Line | CommentKind::Block => false,
+            CommentKind::DocLine | CommentKind::DocBlock | CommentKind::License => {
+                matches!(self, Self::Conservative)
+            }
+            CommentKind::Directive | CommentKind::HtmlComment => !matches!(self, Self::All),
+            /* NOTE: False, and not "true because every policy keeps them". The
+             * protection keeps them and is tested first; this is what the
+             * policy would do if the protection were lifted, which is exactly
+             * what `--force-protected` asks for. Answering `true` closed that
+             * door, and the test comparing this table against the explanation
+             * branch table is what said so. */
+            CommentKind::Shebang
+            | CommentKind::Encoding
+            | CommentKind::LoadBearing
+            | CommentKind::OptimizerHint
+            | CommentKind::VersionComment => false,
+        }
+    }
+
+    /// The policy that keeps every one of `kinds` while taking the most, if
+    /// any does.
+    ///
+    /// The strongest rather than the weakest, because the caller is someone
+    /// removing comments: of the policies that would make their run clean, the
+    /// one worth naming is the one that still takes everything else. Suggesting
+    /// the gentlest would answer "how do I stop seeing findings" instead of
+    /// "how do I keep the ones I meant to keep".
+    ///
+    /// `ALL` is ordered by how much each policy takes, weakest first, so this
+    /// walks it backwards.
+    pub fn strongest_keeping(kinds: &[CommentKind]) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .rev()
+            .find(|policy| kinds.iter().all(|kind| policy.keeps(*kind)))
+    }
+
+    /// The name this policy used to go by, for a deprecation notice.
+    pub const fn former_name(self) -> Option<&'static str> {
+        match self {
+            Self::Conservative => Some("legal"),
+            Self::Standard => Some("safe"),
+            Self::All => None,
+        }
     }
 }
 
@@ -1004,6 +1377,17 @@ pub enum Layout {
     /// Being alone on a line is judged from the original bytes, so a line
     /// holding two comments and nothing else keeps its terminator: neither
     /// comment was alone on it.
+    ///
+    /// A removal never leaves more consecutive blank lines than the longest
+    /// run it was already standing next to. A comment set off by a blank line
+    /// above and another below is three lines of file for one comment, and
+    /// taking only the middle one would leave the two blanks touching — a run
+    /// one line longer than the file ever had. So a removal with `before`
+    /// blanks above it and `after` below takes `min(before, after)` of the
+    /// ones below, leaving `max(before, after)` behind. Blank lines above a
+    /// removal are never touched and no more are taken than followed the
+    /// comment, so two lines of code that had a blank line between them still
+    /// do.
     Compact,
 }
 
@@ -1042,7 +1426,7 @@ impl FromStr for Layout {
 
 /// Everything that decides what a scan finds and what it does with it.
 ///
-/// [`Self::default`] is the [`Policy::Safe`] policy with no overrides.
+/// [`Self::default`] is the [`Policy::Standard`] policy with no overrides.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ScanOptions {
@@ -1064,12 +1448,211 @@ pub struct ScanOptions {
     pub keep_regex: Vec<String>,
     /// Byte-regexes that remove matching complete comment tokens.
     pub remove_regex: Vec<String>,
+    /// What a comment has to be to survive, beyond what its kind decides.
+    pub allow: AllowRules,
+    /// Markers this project's own tools read, and how strongly each is held.
+    ///
+    /// A directive is a comment addressed to a tool, and the catalogue of them
+    /// this crate ships knows the tools everybody uses. It cannot know yours.
+    /// A project whose mutation tester reads `// rust-mutants: skip` had only
+    /// `keep_regex` to protect it, and a pattern does not change what the
+    /// comment *is*: the comment stayed an ordinary line comment that
+    /// `--policy all` was entitled to remove, and the project's own build read
+    /// something the tool had decided was prose.
+    ///
+    /// A pattern here decides the comment's kind. The weaker tier records it
+    /// as [`CommentKind::Directive`], which every policy but
+    /// [`Policy::All`] keeps; the stronger one records it as
+    /// [`CommentKind::LoadBearing`], which no policy reaches and only
+    /// [`Self::force_protected`] gives up. This is the same field a
+    /// [`DeclarativeProfile`](crate::DeclarativeProfile) carries, applied to
+    /// every file rather than to one format — the question a profile answers
+    /// about its own syntax is the question a project answers about its own
+    /// tooling.
+    pub protected: Vec<crate::ProtectedPattern>,
+}
+
+/// What a comment has to be, beyond being of a kind the policy keeps.
+///
+/// The policy decides by kind, and a kind is a coarse thing to decide by: a
+/// one-line `// NOTE:` explaining a decision and a forty-line essay above a
+/// function are both `line`, and a project that wants the first and not the
+/// second cannot say so. These are the other axes, and they cut across the
+/// policy rather than under it — a comment that fails one of them is removed
+/// whatever kept it, short of the protections no policy reaches.
+///
+/// Empty or `None` everywhere means "no opinion", which is what every
+/// configuration written before these existed meant.
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct AllowRules {
+    /// The tags a surviving comment may open with, without punctuation:
+    /// `["NOTE", "SAFETY"]`.
+    ///
+    /// Matched against the comment's *text* — its delimiters removed, and the
+    /// common prefix of a block comment's lines removed with them — so the
+    /// same convention holds in every language. A `keep_regex` cannot do this:
+    /// it is matched against the whole raw token, so `^#\s*NOTE` protects a
+    /// Python comment and silently fails to protect the identical rule written
+    /// in Lua, where the token opens `--`.
+    ///
+    /// Empty means no tag rule at all. A non-empty list means a comment
+    /// carrying one of these tags is kept, and says nothing about the ones
+    /// that do not.
+    pub tags: Vec<String>,
+    /// How many lines a comment, or a run of comments with nothing between
+    /// them, may occupy.
+    ///
+    /// `Some(1)` is the strictest useful value: a comment may be one line and
+    /// no more. This is the axis a kind cannot express, and it is usually the
+    /// real complaint — not that a comment exists, but that it goes on.
+    ///
+    /// A run is measured rather than a single token because four consecutive
+    /// `//` lines are four comments to a scanner and one paragraph to a
+    /// reader, and the reader is right.
+    pub max_lines: Option<usize>,
+    /// Whether a comment may sit after code on the same line.
+    ///
+    /// `Some(false)` removes them. It closes the obvious way around a rule
+    /// about comments above code, which is to put the comment beside it
+    /// instead.
+    pub trailing: Option<bool>,
+    /// Tags that are a promise rather than a remark, and how long each has.
+    ///
+    /// A `TODO` is not the same kind of thing as a `SAFETY`. One records why
+    /// the code is the way it is and is true for as long as the code is; the
+    /// other says somebody will do something, and saying so is not doing it.
+    /// A rule that treats them alike either forbids writing a `TODO` at all —
+    /// which nobody obeys, and which loses the note along with the nagging —
+    /// or permits one forever, which is how a repository ends up with a `TODO`
+    /// from four years ago that everybody has learned to read past.
+    ///
+    /// A tag here is allowed exactly as one in [`Self::tags`] is, until the
+    /// line carrying it reaches this age; after that it is a finding. The age
+    /// is measured from the commit that introduced the line, so writing one
+    /// costs nothing and a deadline starts running only once the promise is
+    /// part of the repository. [`Age::ZERO`] therefore means "from the next
+    /// commit".
+    ///
+    /// Nothing in this crate produces the resulting verdict: measuring the age
+    /// means reading a repository, and this crate performs no I/O. It owns the
+    /// vocabulary — [`ShapeRule::Expired`] — so that a caller with a clock
+    /// reports through the same channel every other rule reports through.
+    pub expiry: BTreeMap<String, Age>,
+}
+
+impl AllowRules {
+    /// Every tag a comment may open with, whether or not it comes with a
+    /// deadline.
+    ///
+    /// A tag under [`Self::expiry`] does not have to be repeated in
+    /// [`Self::tags`]: it is allowed for as long as it is allowed, and a
+    /// configuration that had to list it twice would let the two lists
+    /// disagree.
+    pub fn every_tag(&self) -> Vec<&str> {
+        self.tags
+            .iter()
+            .map(String::as_str)
+            .chain(self.expiry.keys().map(String::as_str))
+            .collect()
+    }
+
+    /// Whether any rule here is set at all.
+    pub fn is_empty(&self) -> bool {
+        self.tags.is_empty()
+            && self.max_lines.is_none()
+            && self.trailing.is_none()
+            && self.expiry.is_empty()
+    }
+}
+
+/// How long a promise has, in days.
+///
+/// Written `"14d"` or `"2w"` in a configuration, and `"0d"` for a deadline
+/// that starts at the next commit. Days are the smallest unit because the
+/// clock this is measured against is a commit date, and nobody writes a
+/// `TODO` with an afternoon in mind.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct Age {
+    days: u32,
+}
+
+impl Age {
+    /// Due at the next commit: the line is over its deadline the moment it has
+    /// one.
+    pub const ZERO: Self = Self { days: 0 };
+
+    /// This many days.
+    pub const fn from_days(days: u32) -> Self {
+        Self { days }
+    }
+
+    /// How many days this is.
+    pub const fn days(self) -> u32 {
+        self.days
+    }
+}
+
+impl fmt::Display for Age {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}d", self.days)
+    }
+}
+
+impl FromStr for Age {
+    type Err = String;
+
+    /// `14d`, `2w`, or a bare number of days.
+    ///
+    /// The unit is required to be one a commit date can answer: an hour is not
+    /// a meaningful deadline for a line of source, and a month is not a fixed
+    /// number of days. Weeks are offered because that is how the deadline is
+    /// usually said out loud.
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let trimmed = value.trim();
+        let (digits, multiplier) = match trimmed.strip_suffix(['d', 'D']) {
+            Some(digits) => (digits, 1),
+            None => match trimmed.strip_suffix(['w', 'W']) {
+                Some(digits) => (digits, 7),
+                None => (trimmed, 1),
+            },
+        };
+        let days: u32 = digits.trim().parse().map_err(|_| {
+            format!("cannot read `{value}` as an age; write it as `14d`, `2w`, or a number of days")
+        })?;
+        days.checked_mul(multiplier)
+            .map(Self::from_days)
+            .ok_or_else(|| format!("`{value}` is too long an age to measure"))
+    }
+}
+
+impl Serialize for Age {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for Age {
+    /// Read from a string, and from a bare integer for the configuration that
+    /// writes `TODO = 14`.
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Written {
+            Text(String),
+            Days(u32),
+        }
+        match Written::deserialize(deserializer)? {
+            Written::Text(text) => text.parse().map_err(serde::de::Error::custom),
+            Written::Days(days) => Ok(Self::from_days(days)),
+        }
+    }
 }
 
 impl Default for ScanOptions {
     fn default() -> Self {
         Self {
-            policy: Policy::Safe,
+            policy: Policy::Standard,
             dialect: Dialect::Standard,
             force_invalid: false,
             force_protected: false,
@@ -1077,6 +1660,8 @@ impl Default for ScanOptions {
             remove_kinds: Vec::new(),
             keep_regex: Vec::new(),
             remove_regex: Vec::new(),
+            allow: AllowRules::default(),
+            protected: Vec::new(),
         }
     }
 }
