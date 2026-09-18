@@ -233,3 +233,59 @@ fn the_line_per_finding_stream_is_still_reachable() {
     );
     assert_eq!(stdout.lines().count(), 5, "one line per finding:\n{stdout}");
 }
+
+/// After a fix, the half worth reading is what is still there.
+///
+/// A run that says only what it removed is a run whose judgement nobody can
+/// audit: the reader is told five went and has no way to check that the sixth
+/// was right to stay. Asking for the decisions again would be worse -- they are
+/// answered, and the comments are not in the file any more.
+#[test]
+fn a_fix_says_what_it_left_behind() {
+    let directory = project();
+    let output = run(
+        directory.path(),
+        &[
+            "fix",
+            "--color",
+            "never",
+            "--hyperlinks",
+            "never",
+            "src/budget.rs",
+        ],
+    );
+    assert_eq!(output.status.code(), Some(0));
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "\n  OK  5 comments removed from 1 file · 1 file scanned\n\
+         \n  KEPT    1 comment, still in the files\n    \
+         src/budget.rs:13  /// A fresh budget.\n\n"
+    );
+    assert!(
+        !String::from_utf8_lossy(&output.stdout).contains("DECIDE"),
+        "a fix asked again for decisions it had already answered"
+    );
+}
+
+/// The commentary on standard error does not depend on the layout above it.
+///
+/// It lived inside the one-line renderer, so a second format arrived without
+/// it: the summary a CI job greps for went missing, and the job that strips
+/// this repository's own OCaml and rebuilds it is what noticed.
+#[test]
+fn the_summary_is_written_whichever_format_wrote_the_report() {
+    let directory = project();
+    for format in ["human", "review", "agent"] {
+        let output = run(
+            directory.path(),
+            &["check", "--format", format, "src/budget.rs"],
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let expected = format != "agent";
+        assert_eq!(
+            stderr.contains("Found 5 removable comments in 1 file"),
+            expected,
+            "`--format {format}` wrote the wrong commentary:\n{stderr}"
+        );
+    }
+}

@@ -625,10 +625,7 @@ pub fn run() -> Result<u8> {
              * combination is refused rather than one of the two flags being
              * quietly dropped. It is refused before the terminal is looked at,
              * because the pair is wrong however the run was started. */
-            if !matches!(
-                common.output.format,
-                OutputFormat::Human | OutputFormat::Review
-            ) {
+            if !common.output.format.for_a_person() {
                 bail!("--interactive is only available with --format human or review");
             }
             /* NOTE: Without somebody there to answer, the questions would be read out
@@ -717,7 +714,7 @@ fn run_target(
     let presentation = presentation(common);
     let verbosity = common.verbosity();
     // NOTE: A machine format keeps standard error empty however loud the run is.
-    if common.output.format == OutputFormat::Human {
+    if common.output.format.for_a_person() {
         trace_run(&resolved, &args.paths, verbosity)?;
     }
     let progress = progress_enabled(common);
@@ -785,11 +782,7 @@ fn run_target(
         explain || trace_mode.is_on() || common.output.format == OutputFormat::Agent;
     let materialize_output = operation == Operation::Fix
         || flags.interactive
-        || (operation == Operation::Diff
-            && matches!(
-                common.output.format,
-                OutputFormat::Human | OutputFormat::Review
-            ));
+        || (operation == Operation::Diff && common.output.format.for_a_person());
     /* NOTE: Built only for a run that will print it. It is one segment per
      * unchanged run of bytes, which is the largest thing a report carries. */
     let materialize_source_map = common.output.source_map
@@ -997,7 +990,7 @@ fn run_target(
      * somebody said they would do. Human runs only, like every other note --
      * a machine format keeps standard error empty, and the agent report
      * already carries the age on the finding's own line. */
-    if common.output.format == OutputFormat::Human
+    if common.output.format.for_a_person()
         && let Some(line) = overdue.note()
     {
         let stderr = io::stderr();
@@ -1286,10 +1279,7 @@ fn run_strip(common: &CommonArgs) -> Result<u8> {
     /* NOTE: `strip` writes bytes rather than a report, so the two formats that
      * differ only in how a report is laid out are the same thing here. */
     ensure!(
-        matches!(
-            common.output.format,
-            OutputFormat::Human | OutputFormat::Review
-        ),
+        common.output.format.for_a_person(),
         "`ocomment strip` is only available with --format human or review"
     );
     let mut source = Vec::new();
@@ -1630,8 +1620,8 @@ fn write_template(
 /// refused rather than accepted and ignored.
 fn run_config(args: ConfigArgs, common: &CommonArgs) -> Result<u8> {
     ensure!(
-        common.output.format == OutputFormat::Human,
-        "`ocomment config` is only available with --format human"
+        common.output.format.for_a_person(),
+        "`ocomment config` is only available with --format human or review"
     );
     let mut stdout = output::stdout();
     match args.action {
@@ -2250,7 +2240,7 @@ const PROGRESS_STEP: usize = 50;
 /// decoration: it never belongs in a machine format, and `-q` silences it.
 fn progress_enabled(common: &CommonArgs) -> bool {
     // NOTE: Decoration rather than a line of the report, so it asks directly.
-    common.output.format == OutputFormat::Human
+    common.output.format.for_a_person()
         && common.verbosity().shows(Detail::Normal)
         && match common.output.progress {
             AutoChoice::Auto => io::stderr().is_terminal(),
@@ -2348,7 +2338,7 @@ fn target_label(paths: &[PathBuf]) -> String {
 /// meant, and from the root itself the two are the same directory: either way
 /// the line would be noise.
 fn note_fix_scope(resolved: &config::ResolvedConfig, common: &CommonArgs) -> Result<()> {
-    if resolved.cwd == resolved.root || common.output.format != OutputFormat::Human {
+    if resolved.cwd == resolved.root || !common.output.format.for_a_person() {
         return Ok(());
     }
     let stderr = io::stderr();

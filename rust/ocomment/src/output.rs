@@ -48,6 +48,22 @@ pub enum OutputFormat {
     Agent,
 }
 
+impl OutputFormat {
+    /// Whether this is a report a person reads, as opposed to one a program
+    /// parses.
+    ///
+    /// The two differ in layout and in nothing else that decides anything here:
+    /// both carry their notes on standard error, both may show progress, and
+    /// both are what `config` and `strip` write. Asked as one question so that
+    /// a format added beside them is answered once -- which is how `review`
+    /// reached CI having been taught about seven of the nine places that spell
+    /// out `== Human` and not the other two.
+    #[must_use]
+    pub const fn for_a_person(self) -> bool {
+        matches!(self, Self::Human | Self::Review)
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Operation {
     Check,
@@ -1296,7 +1312,7 @@ pub fn render_explained(
     let mut output = stdout();
     match options.format {
         OutputFormat::Human => render_human(&mut output, files, skipped, options, explanations),
-        OutputFormat::Review => render_review(&mut output, files, skipped, options),
+        OutputFormat::Review => render_review(&mut output, files, skipped, options, explanations),
         OutputFormat::Json => render_json(&mut output, files, skipped, options.json, explanations),
         OutputFormat::Jsonl => {
             render_jsonl(&mut output, files, skipped, options.json, explanations)
@@ -1324,12 +1340,92 @@ pub fn render_explained(
 /// *keep* the comments as visible as the way to remove them. That last one is
 /// not symmetry for its own sake. A gate that can only say "delete it" is a
 /// gate somebody turns off the first time it is wrong about one comment.
-fn render_review(
+/// What a `fix` left behind, which is the half a reader has not seen.
+///
+/// The count of what went is on standard error with the rest of the commentary.
+/// Here is what is still in the files: every comment the run decided to keep,
+/// so that a reader can check the keeping rather than take it on trust. A run
+/// that says only what it removed is a run whose judgement nobody can audit.
+fn render_fixed(
     output: &mut impl Write,
     files: &[ProcessedFile],
     skipped: &[SkippedFile],
     options: &RenderOptions,
 ) -> Result<()> {
+    let paint = options.presentation.color;
+    let (dim, bold, reset) = (
+        color("\x1b[2m", paint),
+        color("\x1b[1m", paint),
+        color("\x1b[0m", paint),
+    );
+    let (green, blue) = (
+        color("\x1b[38;5;114m", paint),
+        color("\x1b[38;5;75m", paint),
+    );
+    let removed: usize = files.iter().map(removed_count).sum();
+    let changed = files.iter().filter(|file| file.result.changed()).count();
+    wrote(writeln!(output))?;
+    wrote(writeln!(
+        output,
+        "  {green}OK{reset}  {bold}{} removed{reset}{dim} from {} · {} scanned{reset}",
+        comments(removed, ""),
+        plural(changed, "file"),
+        plural(files.len() + skipped.len(), "file"),
+    ))?;
+    let kept: Vec<(&ProcessedFile, &Comment)> = files
+        .iter()
+        .flat_map(|file| {
+            file.result
+                .report
+                .comments
+                .iter()
+                .filter(|comment| !comment.disposition.is_remove())
+                .map(move |comment| (file, comment))
+        })
+        .collect();
+    if !kept.is_empty() {
+        wrote(writeln!(output))?;
+        wrote(writeln!(
+            output,
+            "  {bold}{green}KEPT{reset}    {}{dim}, still in the files{reset}",
+            comments(kept.len(), "")
+        ))?;
+        for (file, comment) in kept {
+            let index = LineIndex::new(&file.source);
+            let (line, _) = index.line_column(comment.span.start);
+            wrote(writeln!(
+                output,
+                "    {blue}{}:{line}{reset}  {dim}{}{reset}",
+                display_path(&file.path, options.presentation.hyperlinks),
+                preview(&file.source, comment.span, PREVIEW_COLUMNS)
+            ))?;
+        }
+    }
+    wrote(writeln!(output))?;
+    write_commentary(output, files, skipped, options)
+}
+
+fn render_review(
+    output: &mut impl Write,
+    files: &[ProcessedFile],
+    skipped: &[SkippedFile],
+    options: &RenderOptions,
+    explanations: &Explanations,
+) -> Result<()> {
+    /* NOTE: `diff` writes a patch, and a patch is the product rather than a
+     * report about one: a reader pipes it into `git apply`, and anything else
+     * on that stream is corruption. There is no decision view of a patch, so
+     * this is the one operation where the two person-facing formats are the
+     * same bytes. */
+    if options.operation == Operation::Diff {
+        return render_human(output, files, skipped, options, explanations);
+    }
+    if options.operation == Operation::Fix && options.applied {
+        /* NOTE: After a fix the decisions are answered and the comments are
+         * gone, so asking for them again would be a report about a file that no
+         * longer holds them. What a reader has not seen is the other half. */
+        return render_fixed(output, files, skipped, options);
+    }
     let paint = options.presentation.color;
     let (dim, bold, reset) = (
         color("\x1b[2m", paint),
@@ -1448,7 +1544,7 @@ fn render_review(
             comments(kept, "")
         ))?;
     }
-    if removable > 0 {
+    if removable > 0 && options.operation != Operation::Fix {
         wrote(writeln!(output))?;
         wrote(writeln!(output, "  {dim}{}{reset}", "─".repeat(70)))?;
         wrote(writeln!(
@@ -1457,7 +1553,7 @@ fn render_review(
         ))?;
     }
     wrote(writeln!(output))?;
-    Ok(())
+    write_commentary(output, files, skipped, options)
 }
 
 fn render_human(
@@ -1469,7 +1565,6 @@ fn render_human(
 ) -> Result<()> {
     let operation = options.operation;
     let presentation = options.presentation;
-    let verbose = options.verbosity.shows(Detail::Verbose);
     for file in files {
         if operation == Operation::Diff && file.result.changed() {
             /* NOTE: The patch is the product of `diff`, so `-q` keeps it and drops
@@ -1580,6 +1675,26 @@ fn render_human(
             }
         }
     }
+    write_commentary(output, files, skipped, options)
+}
+
+/// The commentary a run writes to standard error, whichever way it wrote its
+/// product.
+///
+/// The count, the skips, where the findings are concentrated, the settings that
+/// matched nothing. None of it depends on the layout of the report above it,
+/// and it went missing from `review` for exactly as long as it lived inside
+/// `render_human` -- a summary a CI job greps for, gone because a second format
+/// was added beside the one that owned it.
+fn write_commentary(
+    output: &mut impl Write,
+    files: &[ProcessedFile],
+    skipped: &[SkippedFile],
+    options: &RenderOptions,
+) -> Result<()> {
+    let operation = options.operation;
+    let presentation = options.presentation;
+    let verbose = options.verbosity.shows(Detail::Verbose);
     let skips = skip_lines(skipped, presentation, options.verbosity);
     /* NOTE: `diff` keeps standard output for the patch alone, so the skips it met
      * are left to standard error. `fix --dry-run` is that same `diff` speaking

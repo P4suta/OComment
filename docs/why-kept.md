@@ -62,6 +62,7 @@ $ ocomment check --explain
   ──────────────────────────────────────────────────────────────────────
    ocomment fix   removes all 2, including anything above you meant to keep
 
+Found 2 removable comments in 2 files (3 files scanned). Run `ocomment fix` to remove them.
 ```
 
 Read the second line of each pair as the answer. A `keep_regex` match kept the
