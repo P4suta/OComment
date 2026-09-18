@@ -116,6 +116,14 @@ All notable changes to OComment will be documented here. The project follows
   `rust_sources_do_not_suppress_lints` now carries that one path and compares
   the list exactly, so a second exception fails there.
 
+  `check_ci_contracts.py` fails when a workspace member does not inherit the
+  lints at all. `[workspace.lints]` does nothing on its own — a member has to
+  opt in — so a member that forgets is silently outside every rule the
+  workspace states, which is what had happened. Both that rule and the
+  shell-script one are watched refusing something on every run: a rule whose
+  subject has been removed reports `ok` for the same reason an empty room is
+  quiet, and that is not the gate working.
+
 - `--format json` and `--format jsonl` no longer carry the source map unless
   `--source-map` asks for it. It is one segment per unchanged run of bytes, so
   a file with twenty-five comments in it produced several hundred lines of a
