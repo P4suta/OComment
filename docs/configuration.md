@@ -137,6 +137,42 @@ language or its build reads stay however long they are, because the cost of
 losing one is a broken build and the cost of keeping a long one is a long
 comment.
 
+## Getting to a rule you cannot turn on today
+
+A repository with eleven thousand comments and a rule it wants to reach has two
+bad options: turn the rule on and fail every commit, or leave it off and never
+arrive. A ledger is the third.
+
+```toml
+[ratchet]
+ledger = ".ocomment-ledger"
+```
+
+`ocomment ratchet --update` records what each file holds today.
+`ocomment ratchet` checks the tree against that record and fails when a file
+holds **more** — and fails when it holds **fewer**, asking for the ledger to be
+updated.
+
+That second direction is what makes it different from a baseline file. A
+baseline forgives what it recorded and says nothing once the work is done; a
+ledger that only noticed growth would eventually describe a repository that no
+longer exists. Checked both ways, the number in the file is always the number
+in the tree, and the distance left to go is readable at a glance:
+
+```
+# 1674 comment(s) in 78 file(s) left to remove.
+3 .dockerignore
+54 .github/workflows/ci.yml
+```
+
+It is deliberately not a suppression mechanism. The entries carry no reasons,
+no expiry dates and no per-comment granularity — a ledger is a measurement, and
+the moment it starts explaining itself it has become a second configuration
+file arguing with the first.
+
+This repository runs one. It reached `max_lines = 1` with 1674 comments still
+above it, which is the situation the feature is for.
+
 ## Files another tool writes
 
 A lock file, a recorded seed list, a code generator's output: the comments in

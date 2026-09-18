@@ -25,7 +25,7 @@
 
 use crate::{
     files::{SkippedFile, SourceFile},
-    output::{Explanations, ProcessedFile, note},
+    output::{Detail, Explanations, ProcessedFile, Verbosity, note},
 };
 use anyhow::Result;
 use ocomment_core::{Comment, DispositionPatterns, explain_comment_with};
@@ -155,9 +155,10 @@ pub fn emit(writer: &mut impl Write, mode: TraceMode, event: &TraceEvent<'_>) ->
         TraceMode::Off => Ok(()),
         TraceMode::Json => {
             let line = serde_json::to_string(event).expect("a trace event serializes");
-            note(writer, &line)
+            // NOTE: Not the run's verbosity: `-q --trace` is how a caller gets only events.
+            note(writer, Verbosity::default(), Detail::Normal, &line)
         }
-        TraceMode::Human => note(writer, &human(event)),
+        TraceMode::Human => note(writer, Verbosity::default(), Detail::Normal, &human(event)),
     }
 }
 

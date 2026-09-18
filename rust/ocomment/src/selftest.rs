@@ -18,7 +18,7 @@
 //! Rust lifetime that looks like a character. A binary that still gets all of
 //! those right is a binary whose lexer arrived intact.
 
-use crate::output::{OutputFormat, note, stdout, wrote};
+use crate::output::{Detail, OutputFormat, Verbosity, note, stdout, wrote};
 use anyhow::{Context, Result};
 use ocomment_core::{
     DeclarativeProfile, Disposition, Language, Layout, ScanReport, TransformOptions, scan,
@@ -54,7 +54,7 @@ struct Outcome {
 }
 
 /// Run every embedded case and report whether this binary still agrees.
-pub fn run(format: OutputFormat, quiet: bool) -> Result<u8> {
+pub fn run(format: OutputFormat, verbosity: Verbosity) -> Result<u8> {
     let document = parse_corpus()?;
     let case_floor = floor(&document, "cases")?;
     let expectation_floor = floor(&document, "expectations")?;
@@ -122,7 +122,14 @@ pub fn run(format: OutputFormat, quiet: bool) -> Result<u8> {
         });
     }
 
-    report(format, quiet, cases.len(), checked, out_of_reach, &failures)?;
+    report(
+        format,
+        verbosity,
+        cases.len(),
+        checked,
+        out_of_reach,
+        &failures,
+    )?;
     Ok(u8::from(!failures.is_empty()) * 2)
 }
 
@@ -338,7 +345,7 @@ fn decode_base64(text: &str) -> Result<Vec<u8>> {
 /// Say what the run found, in the shape the format asks for.
 fn report(
     format: OutputFormat,
-    quiet: bool,
+    verbosity: Verbosity,
     total: usize,
     checked: usize,
     out_of_reach: usize,
@@ -371,7 +378,7 @@ fn report(
     }
     crate::output::finish(&mut out)?;
 
-    if !quiet && !matches!(format, OutputFormat::Json | OutputFormat::Jsonl) {
+    if !matches!(format, OutputFormat::Json | OutputFormat::Jsonl) {
         let stderr = std::io::stderr();
         let mut summary = stderr.lock();
         let aside = if out_of_reach == 0 {
@@ -391,7 +398,7 @@ fn report(
                 failures.len()
             )
         };
-        note(&mut summary, &line)?;
+        note(&mut summary, verbosity, Detail::Normal, &line)?;
     }
     Ok(())
 }

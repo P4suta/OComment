@@ -161,6 +161,11 @@ jobs:
       # NOTE: self-test that quietly stopped reaching the corpus.
       - name: The binary re-runs the shared corpus against itself
         run: ./rust/target/debug/ocomment selftest
+      # NOTE: Both directions; see docs/configuration.md for why.
+      - name: The comment count has not risen, and the ledger is current
+        run: ./rust/target/debug/ocomment ratchet
+      - name: Every file was read
+        run: ./rust/target/debug/ocomment check --deny-skipped --quiet
       # NOTE: A bare run is the gate: it walks the repository under the ordinary
       # NOTE: hidden-file and size limits and under `.ocomment.toml`, so a new
       # NOTE: explanatory comment that carries no tag fails the build.

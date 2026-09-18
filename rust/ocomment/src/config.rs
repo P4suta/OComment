@@ -20,6 +20,7 @@ pub struct Config {
     pub files: FilesConfig,
     pub policy: PolicyConfig,
     pub git: GitConfig,
+    pub ratchet: RatchetConfig,
     pub lsp: LspConfig,
     pub languages: BTreeMap<String, LanguageConfig>,
     pub profiles: BTreeMap<String, DeclarativeProfile>,
@@ -94,6 +95,17 @@ impl Default for PolicyConfig {
             allow: AllowRules::default(),
         }
     }
+}
+
+/// Where the ledger lives, and whether a run is held to it.
+///
+/// Empty means no ledger: a project that has not asked for one is not held to
+/// a file that does not exist.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct RatchetConfig {
+    /// The ledger's path, relative to the project root.
+    pub ledger: String,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

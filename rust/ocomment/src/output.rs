@@ -47,14 +47,79 @@ pub struct Presentation {
 }
 
 /// How much of the human report a run is allowed to write.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum Verbosity {
-    /// Only errors and diagnostics.
+///
+/// Deliberately opaque, and deliberately not comparable. The convention in
+/// CONTRIBUTING.md is that standard output carries the command's product and
+/// standard error carries the summary and the notes, and that `-q` drops the
+/// second — and that was a convention rather than a mechanism, so three
+/// separate tests of the quiet level grew on the product side. One of them
+/// left `ocomment check -q` exiting 1 having printed nothing at all, which is
+/// exactly the shape a pre-commit hook wants and the one thing it could not
+/// get.
+///
+/// Every one of those was written by somebody asking "is this run quiet?" and
+/// deciding for themselves. There is now no way to ask. [`Level`] is private
+/// and this type has no `PartialEq`, so `verbosity == Verbosity::Quiet` does
+/// not compile; the only question available is [`Self::shows`], which answers
+/// for a [`Detail`] rather than for a level, and the only writer that consults
+/// it is [`note`].
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Verbosity(Level);
+
+/// The levels, private so that nothing outside this module can match on one.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, PartialOrd, Ord)]
+enum Level {
+    /// Only the product, and the errors that decide an exit code.
     Quiet,
     #[default]
     Normal,
     /// Everything, including the per-kind breakdown and every skipped file.
     Verbose,
+}
+
+/// How much a line of commentary is worth saying.
+///
+/// A note is `Normal` unless it is the kind of thing only a `-v` run wants,
+/// and saying which is the whole of what a caller has to decide. Whether the
+/// run is quiet is not their business.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Detail {
+    /// Said unless the run asked for quiet.
+    Normal,
+    /// Said only when the run asked for detail.
+    Verbose,
+}
+
+impl Verbosity {
+    /// The verbosity the `-q` and `-v` flags describe.
+    pub const fn from_flags(quiet: bool, verbose: bool) -> Self {
+        Self(match (quiet, verbose) {
+            (true, _) => Level::Quiet,
+            (_, true) => Level::Verbose,
+            _ => Level::Normal,
+        })
+    }
+
+    /// Whether a note at this level of detail is written.
+    pub fn shows(self, detail: Detail) -> bool {
+        match detail {
+            Detail::Normal => self.0 >= Level::Normal,
+            Detail::Verbose => self.0 >= Level::Verbose,
+        }
+    }
+
+    /// This verbosity with quiet raised to normal.
+    ///
+    /// One caller: an editor asking for diagnostics is asking for the report
+    /// in a machine format, not for commentary about it, and a client told to
+    /// work quietly is still owed the notice for a path it named and the error
+    /// for a file it could not read.
+    pub const fn at_least_normal(self) -> Self {
+        match self.0 {
+            Level::Quiet => Self(Level::Normal),
+            loud => Self(loud),
+        }
+    }
 }
 
 /// Everything the renderer needs besides the results themselves.
@@ -216,6 +281,7 @@ pub fn report_unused_settings(
     files: &[ProcessedFile],
     options: &ScanOptions,
     trace: &PolicyTrace,
+    verbosity: Verbosity,
 ) -> Result<()> {
     if options.keep_regex.is_empty()
         && options.remove_regex.is_empty()
@@ -270,6 +336,8 @@ pub fn report_unused_settings(
             unmatched_pattern = true;
             note(
                 &mut report,
+                verbosity,
+                Detail::Normal,
                 &format!(
                     "{key} #{index} `{}` matched none of the {} this run scanned; {}",
                     sanitize_message(pattern),
@@ -289,6 +357,8 @@ pub fn report_unused_settings(
             }
             note(
                 &mut report,
+                verbosity,
+                Detail::Normal,
                 &format!(
                     "{key} `{kind}` met no comment of that kind among the {} this run scanned; {}",
                     comments(scanned, ""),
@@ -304,6 +374,8 @@ pub fn report_unused_settings(
     if unmatched_pattern {
         note(
             &mut report,
+            verbosity,
+            Detail::Normal,
             "A pattern is matched against the whole comment token, so `^` is the \
              comment's own first byte — the `//`, `#` or `/*` — and not the text after it.",
         )?;
@@ -1001,7 +1073,15 @@ fn output_failure(error: io::Error) -> anyhow::Error {
 /// a closed pipe is dropped and only a real write failure is raised. What must
 /// not happen is what `eprintln!` does, which is panic, and so abort under the
 /// release profile.
-pub fn note(writer: &mut impl Write, line: &str) -> Result<()> {
+pub fn note(
+    writer: &mut impl Write,
+    verbosity: Verbosity,
+    detail: Detail,
+    line: &str,
+) -> Result<()> {
+    if !verbosity.shows(detail) {
+        return Ok(());
+    }
     match writeln!(writer, "{line}") {
         Err(error) if error.kind() != io::ErrorKind::BrokenPipe => {
             Err(anyhow::Error::new(error).context("cannot write standard error"))
@@ -1056,8 +1136,7 @@ fn render_human(
 ) -> Result<()> {
     let operation = options.operation;
     let presentation = options.presentation;
-    let quiet = options.verbosity == Verbosity::Quiet;
-    let verbose = options.verbosity == Verbosity::Verbose;
+    let verbose = options.verbosity.shows(Detail::Verbose);
     for file in files {
         if operation == Operation::Diff && file.result.changed() {
             /* NOTE: The patch is the product of `diff`, so `-q` keeps it and drops
@@ -1072,7 +1151,7 @@ fn render_human(
         let reports_comments = match operation {
             Operation::Scan => !file.result.report.comments.is_empty(),
             Operation::Fix => false,
-            Operation::Check | Operation::Diff if quiet => false,
+            // NOTE: The findings are the product of `check`, as the patch is of `diff`.
             Operation::Check | Operation::Diff if options.explain => {
                 !file.result.report.comments.is_empty()
             }
@@ -1126,8 +1205,6 @@ fn render_human(
                 ))?;
                 write_explanation(output, file, comment, explainer, options)?;
             }
-        } else if quiet {
-            continue;
         } else if operation == Operation::Fix {
             if options.applied && file.result.changed() {
                 wrote(writeln!(
@@ -1191,22 +1268,24 @@ fn render_human(
     let mut report = stderr.lock();
     if operation == Operation::Diff && options.dry_run {
         for line in &skips {
-            note(&mut report, line)?;
+            note(&mut report, options.verbosity, Detail::Normal, line)?;
         }
-    }
-    if quiet {
-        return Ok(());
     }
     let summary = Summary::compute(files, skipped, operation);
     let folded = !verbose && skipped.iter().any(|item| !item.error && !item.explicit);
-    if verbose && let Some(line) = kind_breakdown(files, options) {
-        note(&mut report, &line)?;
+    if let Some(line) = kind_breakdown(files, options) {
+        note(&mut report, options.verbosity, Detail::Verbose, &line)?;
     }
-    note(&mut report, &summary_report(&summary, options, folded))?;
+    note(
+        &mut report,
+        options.verbosity,
+        Detail::Normal,
+        &summary_report(&summary, options, folded),
+    )?;
     /* NOTE: After the verdict, because it is about the verdict: the count comes
      * first and then where that count is and what would answer it. */
     for line in concentration(files, options) {
-        note(&mut report, &line)?;
+        note(&mut report, options.verbosity, Detail::Normal, &line)?;
     }
     /* NOTE: Under any other policy a kept preamble is one of many deliberate keeps
      * and saying so every run would be noise. `all` said it would take
@@ -1228,6 +1307,8 @@ fn render_human(
                 let pronoun = if protected == 1 { "it" } else { "them" };
                 note(
                     &mut report,
+                    options.verbosity,
+                    Detail::Normal,
                     &format!(
                         "{} kept; add --force-protected to remove {pronoun}.",
                         comments(protected, adjective)
@@ -1244,6 +1325,8 @@ fn render_human(
         };
         note(
             &mut report,
+            options.verbosity,
+            Detail::Normal,
             &format!(
                 "{} {verb} invalid syntax; nothing was written for {pronoun} \
                  (use --force-invalid to apply known-safe edits).",
@@ -1269,8 +1352,9 @@ fn render_human(
 /// the end-of-run summary counts those instead — `-v` is how a reader asks for
 /// the list. Both renderers share this so the two cannot drift apart.
 pub(crate) fn skip_is_visible(item: &SkippedFile, verbosity: Verbosity) -> bool {
+    // NOTE: An I/O error decides the exit code, so it is named however quiet the run.
     item.error
-        || (verbosity != Verbosity::Quiet && (item.explicit || verbosity == Verbosity::Verbose))
+        || (verbosity.shows(Detail::Normal) && (item.explicit || verbosity.shows(Detail::Verbose)))
 }
 
 pub(crate) fn skip_lines(
@@ -2363,10 +2447,7 @@ fn render_github(
      * still owed the notice for the path its caller named and the error for
      * the file it could not read. So the visibility rule below is asked at
      * `Normal` however quiet the run was, and only `-v` widens it. */
-    let visibility = match verbosity {
-        Verbosity::Quiet => Verbosity::Normal,
-        loud => loud,
-    };
+    let visibility = verbosity.at_least_normal();
     /* NOTE: An annotation costs the reader a line of the checks tab, so a walked
      * skip is folded away here exactly as it is in the human report: a run
      * over a repository with forty Markdown files in it must not post forty

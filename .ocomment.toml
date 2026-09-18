@@ -52,3 +52,9 @@ keep_regex = [
 # NOTE: read from the comment's text, so one line holds in every language.
 [policy.allow]
 tags = ["NOTE", "SAFETY", "INVARIANT", "PERF", "TODO", "FIXME", "HACK"]
+# NOTE: A tag is permission to leave a reason, not to write an essay.
+max_lines = 1
+
+# NOTE: The distance from here to that rule; see docs/configuration.md.
+[ratchet]
+ledger = ".ocomment-ledger"

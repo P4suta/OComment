@@ -369,3 +369,63 @@ fn fix_verifies_the_bytes_it_is_about_to_write() {
         "the rewrite was not a fixed point:\n{second}"
     );
 }
+
+/// A ledger only falls, and it is checked in both directions.
+///
+/// The second direction is what makes it different from a baseline file. A
+/// baseline forgives what it recorded and says nothing when the work is done;
+/// a ledger asks to be updated, so the number in the file is always the number
+/// in the tree and the distance left to go stays readable.
+#[test]
+fn a_ledger_fails_when_a_count_rises_and_when_it_falls() {
+    let directory = tempfile::tempdir().expect("a temporary directory");
+    std::fs::write(
+        directory.path().join(".ocomment.toml"),
+        b"version = 1\n\n[ratchet]\nledger = \".ledger\"\n",
+    )
+    .expect("the fixture is writable");
+    std::fs::write(
+        directory.path().join("a.rs"),
+        b"// one\n// two\nfn main() {}\n",
+    )
+    .expect("the fixture is writable");
+
+    let (_, recorded) = run(directory.path(), &["ratchet", "--update"]);
+    assert!(recorded.contains("Recorded 2 comment(s)"), "{recorded}");
+    let (_, agreed) = run(directory.path(), &["ratchet"]);
+    assert!(agreed.contains("matches its ledger"), "{agreed}");
+
+    std::fs::write(
+        directory.path().join("a.rs"),
+        b"// one\n// two\n// three\nfn main() {}\n",
+    )
+    .expect("the fixture is writable");
+    let grew = Command::new(binary())
+        .current_dir(directory.path())
+        .env("PATH", "/usr/bin:/bin")
+        .args(["ratchet"])
+        .output()
+        .expect("the binary runs");
+    assert_eq!(grew.status.code(), Some(1), "a risen count did not fail");
+    assert!(
+        String::from_utf8_lossy(&grew.stdout).contains("3 removable, and the ledger allows 2"),
+        "{}",
+        String::from_utf8_lossy(&grew.stdout)
+    );
+
+    // NOTE: The half a baseline does not have: finishing the work fails too.
+    std::fs::write(directory.path().join("a.rs"), b"fn main() {}\n")
+        .expect("the fixture is writable");
+    let shrank = Command::new(binary())
+        .current_dir(directory.path())
+        .env("PATH", "/usr/bin:/bin")
+        .args(["ratchet"])
+        .output()
+        .expect("the binary runs");
+    assert_eq!(shrank.status.code(), Some(1), "a fallen count did not fail");
+    assert!(
+        String::from_utf8_lossy(&shrank.stdout).contains("in the ledger, and not in the tree"),
+        "{}",
+        String::from_utf8_lossy(&shrank.stdout)
+    );
+}

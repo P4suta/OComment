@@ -2,10 +2,10 @@ use crate::{
     atomic::{WritePlan, apply_transaction},
     config, coverage, files, git, interactive, lsp,
     output::{
-        self, AnnotationLevel, Explanations, FileExplanation, Operation, OutputFormat,
+        self, AnnotationLevel, Detail, Explanations, FileExplanation, Operation, OutputFormat,
         Presentation, ProcessedFile, ProcessedResult, RenderOptions, Verbosity,
     },
-    plugin, selftest,
+    plugin, ratchet, selftest,
     trace::{TraceMode, trace_decisions, trace_discovery},
     values::{AnnotationLevelArg, CommentKindArg, DialectArg, LanguageArg, LayoutArg, PolicyArg},
 };
@@ -267,11 +267,7 @@ impl CommonArgs {
 
     /// How much of the human report this run may write.
     fn verbosity(&self) -> Verbosity {
-        match (self.output.quiet, self.output.verbose) {
-            (true, _) => Verbosity::Quiet,
-            (_, true) => Verbosity::Verbose,
-            _ => Verbosity::Normal,
-        }
+        Verbosity::from_flags(self.output.quiet, self.output.verbose)
     }
 }
 
@@ -346,6 +342,8 @@ enum Command {
     },
     /// Report which files a walk scanned and which it passed over, and why
     Coverage(TargetArgs),
+    /// Check the tree against its ledger, or record the tree in one
+    Ratchet(RatchetArgs),
     /// Re-run the shared corpus against this binary and report any disagreement
     Selftest,
     /// Diagnose the environment (config, git, plugins, tools)
@@ -588,13 +586,14 @@ pub fn run() -> Result<u8> {
         Some(Command::Scan(args)) => run_target(Operation::Scan, args, &common, RunFlags::NONE),
         Some(Command::Strip) => run_strip(&common),
         Some(Command::Lsp) => lsp::run(common.config.as_deref()),
-        Some(Command::Init(args)) => run_init(args),
+        Some(Command::Init(args)) => run_init(args, common.verbosity()),
         Some(Command::Config(args)) => run_config(args, &common),
         Some(Command::Languages) => print_languages(&common),
         Some(Command::Plugin(args)) => run_plugin(args, &common),
         Some(Command::Completions { shell }) => run_completions(shell),
         Some(Command::Coverage(target)) => run_coverage(&target, &common),
-        Some(Command::Selftest) => selftest::run(common.output.format, common.output.quiet),
+        Some(Command::Ratchet(args)) => run_ratchet(&args, &common),
+        Some(Command::Selftest) => selftest::run(common.output.format, common.verbosity()),
         Some(Command::Doctor) => run_doctor(&common),
         Some(Command::Man) => run_man(),
     }
@@ -611,10 +610,9 @@ fn run_target(
     let plugin_host = plugin::PluginHost::load(&resolved.root, &resolved.config.plugins)?;
     let presentation = presentation(common);
     let verbosity = common.verbosity();
-    /* NOTE: The trace is part of the human report; a machine format keeps standard
-     * error empty however loud the run was asked to be. */
-    if verbosity == Verbosity::Verbose && common.output.format == OutputFormat::Human {
-        trace_run(&resolved, &args.paths)?;
+    // NOTE: A machine format keeps standard error empty however loud the run is.
+    if common.output.format == OutputFormat::Human {
+        trace_run(&resolved, &args.paths, verbosity)?;
     }
     let progress = progress_enabled(common);
     let staged = args.git.staged || resolved.config.git.staged;
@@ -888,21 +886,15 @@ fn run_target(
         },
         &explanations,
     )?;
-    /* NOTE: A setting that matched nothing is worth saying only where "nothing"
-     * means something. A walk is the caller saying "everything under here", so
-     * a pattern that met no comment in it is a pattern that is doing no work;
-     * a run over named files is a caller asking about those files, and a
-     * pattern that has nothing to say about them has not thereby failed. So
-     * this is asked of a walk and not of a list, and never of `-q`, which
-     * drops every note. */
+    // NOTE: Asked of a walk and not of a list: only a walk means "everything under here".
     let walked = !stdin && (paths.is_empty() || paths.iter().any(|path| path.is_dir()));
-    if walked && verbosity != Verbosity::Quiet {
+    if walked {
         let (_, root_options, root_trace) = resolved.for_path_traced(
             &resolved.root.clone(),
             Language::Unknown,
             Dialect::Standard,
         )?;
-        output::report_unused_settings(&files, &root_options.scan, &root_trace)?;
+        output::report_unused_settings(&files, &root_options.scan, &root_trace, verbosity)?;
     }
     if invalid {
         return Ok(2);
@@ -914,7 +906,7 @@ fn run_target(
     let denied = deny_exit_code(
         &discovery.skipped,
         common.policy.deny_skipped.as_deref(),
-        verbosity == Verbosity::Quiet,
+        verbosity,
     )?;
     match operation {
         Operation::Check | Operation::Diff if output::changed(&files) => Ok(1),
@@ -1000,16 +992,26 @@ fn run_interactive(
     let stderr = io::stderr();
     let mut report = stderr.lock();
     if aborted {
-        output::note(&mut report, "Aborted; nothing was written.")?;
+        output::note(
+            &mut report,
+            verbosity,
+            Detail::Normal,
+            "Aborted; nothing was written.",
+        )?;
         return Ok(0);
     }
     /* NOTE: A skipped path can be the whole answer to a run that was never asked a
      * question, so the one command that writes no report of its own still says
      * why it passed a file over. */
     for line in output::skip_lines(skipped, presentation, verbosity) {
-        output::note(&mut report, &line)?;
+        output::note(&mut report, verbosity, Detail::Normal, &line)?;
     }
-    output::note(&mut report, &output::interactive_summary(outcome))?;
+    output::note(
+        &mut report,
+        verbosity,
+        Detail::Normal,
+        &output::interactive_summary(outcome),
+    )?;
     if invalid { Ok(2) } else { Ok(0) }
 }
 
@@ -1125,6 +1127,8 @@ fn run_strip(common: &CommonArgs) -> Result<u8> {
     for diagnostic in &result.report.diagnostics {
         output::note(
             &mut report,
+            common.verbosity(),
+            Detail::Normal,
             &format!(
                 "stdin:{}..{}: {}: {}",
                 diagnostic.span.start,
@@ -1319,7 +1323,7 @@ fn run_completions(shell: Shell) -> Result<u8> {
     Ok(0)
 }
 
-fn run_init(args: InitArgs) -> Result<u8> {
+fn run_init(args: InitArgs, verbosity: Verbosity) -> Result<u8> {
     /* NOTE: Writing the file is only the first half of the task, so each template
      * carries the step that finishes it. */
     let (path, contents, next_step) = match args.kind {
@@ -1356,7 +1360,7 @@ fn run_init(args: InitArgs) -> Result<u8> {
      * Standard output is flushed first so a terminal reading both streams sees
      * the creation before the note about it. */
     output::finish(&mut stdout)?;
-    note_inherited_config()?;
+    note_inherited_config(verbosity)?;
     Ok(0)
 }
 
@@ -1370,7 +1374,7 @@ fn run_init(args: InitArgs) -> Result<u8> {
 ///
 /// The search starts at the parent so that the file this very run is about to
 /// write — or the one `--force` is replacing — is never reported as inherited.
-fn note_inherited_config() -> Result<()> {
+fn note_inherited_config(verbosity: Verbosity) -> Result<()> {
     let Ok(directory) = std::env::current_dir() else {
         return Ok(());
     };
@@ -1381,6 +1385,8 @@ fn note_inherited_config() -> Result<()> {
     let mut report = stderr.lock();
     output::note(
         &mut report,
+        verbosity,
+        Detail::Normal,
         &format!(
             "note: {} already applies to this directory",
             output::sanitize_path(&inherited.display().to_string())
@@ -1782,6 +1788,94 @@ fn version_line(bytes: &[u8]) -> Option<String> {
 /// is about the run the reader is actually making: the same configuration, the
 /// same includes and excludes, the same size limit. A coverage report computed
 /// any other way would be about a different walk.
+/// `ratchet`, which checks a tree against its ledger or records one.
+#[derive(Clone, Debug, Args)]
+struct RatchetArgs {
+    /// Rewrite the ledger to match the tree, rather than checking against it.
+    #[arg(long)]
+    update: bool,
+    #[command(flatten)]
+    target: TargetArgs,
+}
+
+/// Hold a tree to the ledger recorded beside it, or record one.
+///
+/// The ledger only falls: a file holding more than it allows fails, and a file
+/// holding fewer fails too, asking to be recorded. A ledger that only noticed
+/// growth would eventually describe a repository that no longer exists, and
+/// the distance left to go would stop being readable from the file.
+fn run_ratchet(args: &RatchetArgs, common: &CommonArgs) -> Result<u8> {
+    let resolved = config::load(common.config.as_deref())?;
+    let configured = resolved.config.ratchet.ledger.clone();
+    ensure!(
+        !configured.is_empty(),
+        "no ledger is configured; set `[ratchet] ledger` in .ocomment.toml \
+         (for example `ledger = \".ocomment-ledger\"`)"
+    );
+    let ledger = ratchet::path(&resolved.root, &configured);
+    let (paths, stdin) = target_paths(&args.target.paths, false, args.target.git.staged)?;
+    ensure!(
+        !stdin,
+        "a ledger records a tree; standard input is one source with no tree around it"
+    );
+    let found = ratchet::count(&scan_for_counts(&paths, &resolved, common)?, &resolved.root);
+
+    if args.update {
+        ratchet::write(&ledger, &found, common.verbosity())?;
+        return Ok(0);
+    }
+    let recorded = ratchet::read(&ledger)?;
+    let drift = ratchet::compare(&recorded, &found);
+    ratchet::report(&drift, &ledger, common.output.format, common.verbosity())?;
+    Ok(u8::from(!drift.is_empty()))
+}
+
+/// Scan a walk and hand back the processed files, with no report written.
+///
+/// `ratchet` needs the counts and nothing else, so it takes the shortest path
+/// that still resolves the same configuration and the same policy every other
+/// command would have used.
+fn scan_for_counts(
+    paths: &[PathBuf],
+    resolved: &config::ResolvedConfig,
+    common: &CommonArgs,
+) -> Result<Vec<ProcessedFile>> {
+    let discovery = read_targets(paths, false, resolved, common)?;
+    let mut scanners: HashMap<ocomment_core::ScanOptions, Arc<PreparedScanner>> = HashMap::new();
+    let mut files = Vec::with_capacity(discovery.files.len());
+    for file in discovery.files {
+        let scanner = match scanners.get(&file.options.scan) {
+            Some(scanner) => Arc::clone(scanner),
+            None => {
+                let scanner = Arc::new(
+                    PreparedScanner::new(file.options.scan.clone())
+                        .context("cannot prepare comment policy")?,
+                );
+                scanners.insert(file.options.scan.clone(), Arc::clone(&scanner));
+                scanner
+            }
+        };
+        let report = if let Some(profile) = &file.profile {
+            scanner
+                .scan_profile(&file.source, profile)
+                .expect("profiles were validated while loading configuration")
+        } else {
+            scanner.scan(&file.source, file.language)
+        };
+        let changed = report
+            .comments
+            .iter()
+            .any(|comment| comment.disposition.is_remove());
+        files.push(ProcessedFile {
+            path: file.path,
+            source: file.source,
+            language: file.language,
+            result: ProcessedResult::report(report, changed),
+        });
+    }
+    Ok(files)
+}
+
 fn run_coverage(target: &TargetArgs, common: &CommonArgs) -> Result<u8> {
     let resolved = config::load(common.config.as_deref())?;
     let (paths, stdin) = target_paths(&target.paths, false, target.git.staged)?;
@@ -1798,7 +1892,7 @@ fn run_coverage(target: &TargetArgs, common: &CommonArgs) -> Result<u8> {
     deny_exit_code(
         &discovery.skipped,
         common.policy.deny_skipped.as_deref(),
-        common.output.quiet,
+        common.verbosity(),
     )
 }
 
@@ -1811,7 +1905,7 @@ fn run_coverage(target: &TargetArgs, common: &CommonArgs) -> Result<u8> {
 fn deny_exit_code(
     skipped: &[files::SkippedFile],
     reasons: Option<&[String]>,
-    quiet: bool,
+    verbosity: Verbosity,
 ) -> Result<u8> {
     let Some(reasons) = reasons else {
         return Ok(0);
@@ -1820,26 +1914,28 @@ fn deny_exit_code(
     if denied.is_empty() {
         return Ok(0);
     }
-    if !quiet {
-        let stderr = io::stderr();
-        let mut report = stderr.lock();
-        for path in &denied {
-            output::note(
-                &mut report,
-                &format!(
-                    "{}: passed over, and --deny-skipped refuses that",
-                    output::sanitize_path(&path.to_string_lossy())
-                ),
-            )?;
-        }
+    let stderr = io::stderr();
+    let mut report = stderr.lock();
+    for path in &denied {
         output::note(
             &mut report,
+            verbosity,
+            Detail::Normal,
             &format!(
-                "{} file(s) were not covered; teach the language, exclude the path, or drop the reason from --deny-skipped.",
-                denied.len()
+                "{}: passed over, and --deny-skipped refuses that",
+                output::sanitize_path(&path.to_string_lossy())
             ),
         )?;
     }
+    output::note(
+        &mut report,
+        verbosity,
+        Detail::Normal,
+        &format!(
+            "{} file(s) were not covered; teach the language, exclude the path, or drop the reason from --deny-skipped.",
+            denied.len()
+        ),
+    )?;
     Ok(1)
 }
 
@@ -1912,8 +2008,9 @@ const PROGRESS_STEP: usize = 50;
 /// Whether this run draws the live scanning counter. The counter is terminal
 /// decoration: it never belongs in a machine format, and `-q` silences it.
 fn progress_enabled(common: &CommonArgs) -> bool {
+    // NOTE: Decoration rather than a line of the report, so it asks directly.
     common.output.format == OutputFormat::Human
-        && common.verbosity() != Verbosity::Quiet
+        && common.verbosity().shows(Detail::Normal)
         && match common.output.progress {
             AutoChoice::Auto => io::stderr().is_terminal(),
             AutoChoice::Always => true,
@@ -2010,16 +2107,15 @@ fn target_label(paths: &[PathBuf]) -> String {
 /// meant, and from the root itself the two are the same directory: either way
 /// the line would be noise.
 fn note_fix_scope(resolved: &config::ResolvedConfig, common: &CommonArgs) -> Result<()> {
-    if resolved.cwd == resolved.root
-        || common.output.format != OutputFormat::Human
-        || common.verbosity() == Verbosity::Quiet
-    {
+    if resolved.cwd == resolved.root || common.output.format != OutputFormat::Human {
         return Ok(());
     }
     let stderr = io::stderr();
     let mut report = stderr.lock();
     output::note(
         &mut report,
+        common.verbosity(),
+        Detail::Normal,
         &format!(
             "note: fixing files under {} (project root: {})",
             files::DEFAULT_TARGET,
@@ -2030,13 +2126,32 @@ fn note_fix_scope(resolved: &config::ResolvedConfig, common: &CommonArgs) -> Res
 
 /// The `--verbose` header: where the run is rooted, what it was pointed at,
 /// and which configuration files it merged.
-fn trace_run(resolved: &config::ResolvedConfig, paths: &[PathBuf]) -> Result<()> {
+fn trace_run(
+    resolved: &config::ResolvedConfig,
+    paths: &[PathBuf],
+    verbosity: Verbosity,
+) -> Result<()> {
     let stderr = io::stderr();
     let mut report = stderr.lock();
-    output::note(&mut report, &format!("root: {}", root_row(resolved)))?;
-    output::note(&mut report, &format!("target: {}", target_label(paths)))?;
+    output::note(
+        &mut report,
+        verbosity,
+        Detail::Verbose,
+        &format!("root: {}", root_row(resolved)),
+    )?;
+    output::note(
+        &mut report,
+        verbosity,
+        Detail::Verbose,
+        &format!("target: {}", target_label(paths)),
+    )?;
     for source in config_trace(&resolved.trace) {
-        output::note(&mut report, &format!("config: {source}"))?;
+        output::note(
+            &mut report,
+            verbosity,
+            Detail::Verbose,
+            &format!("config: {source}"),
+        )?;
     }
     Ok(())
 }

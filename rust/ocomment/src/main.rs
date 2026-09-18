@@ -9,6 +9,7 @@ mod interactive;
 mod lsp;
 mod output;
 mod plugin;
+mod ratchet;
 pub mod runtime;
 mod selftest;
 mod trace;

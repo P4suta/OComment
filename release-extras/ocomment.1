@@ -388,6 +388,9 @@ Generate shell completions
 ocomment\-coverage(1)
 Report which files a walk scanned and which it passed over, and why
 .TP
+ocomment\-ratchet(1)
+Check the tree against its ledger, or record the tree in one
+.TP
 ocomment\-selftest(1)
 Re\-run the shared corpus against this binary and report any disagreement
 .TP
@@ -539,6 +542,19 @@ powershell
 zsh
 .RE
 .SS ocomment coverage
+.TP
+\fB\-\-staged\fR
+Read and update Git index blobs rather than treating the working tree as the source
+.TP
+\fB\-\-index\-only\fR
+With `\-\-staged`, do not attempt a uniquely mappable working\-tree update
+.TP
+[\fIPATH\fR]
+Files or directories to process; `\-` reads standard input (default: current directory)
+.SS ocomment ratchet
+.TP
+\fB\-\-update\fR
+Rewrite the ledger to match the tree, rather than checking against it
 .TP
 \fB\-\-staged\fR
 Read and update Git index blobs rather than treating the working tree as the source

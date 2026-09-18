@@ -37,6 +37,10 @@
       "type": "object", "additionalProperties": false,
       "properties": { "staged": { "type": "boolean" }, "index_only": { "type": "boolean" } }
     },
+    "ratchet": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "ledger": { "type": "string" } }
+    },
     "lsp": {
       "type": "object", "additionalProperties": false,
       "properties": {

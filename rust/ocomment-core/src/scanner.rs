@@ -276,11 +276,41 @@ pub(crate) fn apply_allow_rules(source: &[u8], comments: &mut [Comment], options
                 continue;
             }
             for comment in run {
-                if protected_reason(comment.kind).is_none() {
+                if measured_for_length(comment.kind) {
                     comment.disposition = Disposition::Remove;
                 }
             }
         }
+    }
+}
+
+/// Whether a length rule applies to a comment of this kind.
+///
+/// It applies to commentary and not to anything published. A documentation
+/// comment is the API documentation and a licence notice is a legal text: both
+/// are as long as their content requires, and neither is the thing a length
+/// rule is aimed at. What it is aimed at is the paragraph above a function
+/// explaining what the function already says — where going on is the failure,
+/// not a symptom of one.
+///
+/// The protections no policy reaches are out too, for the reason they are
+/// always out: the cost of losing a shebang is a broken file, and the cost of
+/// keeping a long one is a long comment.
+///
+/// Exhaustive, so a new kind has to be classified rather than inheriting an
+/// answer.
+const fn measured_for_length(kind: CommentKind) -> bool {
+    match kind {
+        CommentKind::Line | CommentKind::Block | CommentKind::HtmlComment => true,
+        CommentKind::DocLine
+        | CommentKind::DocBlock
+        | CommentKind::License
+        | CommentKind::Directive
+        | CommentKind::Shebang
+        | CommentKind::Encoding
+        | CommentKind::OptimizerHint
+        | CommentKind::VersionComment
+        | CommentKind::LoadBearing => false,
     }
 }
 

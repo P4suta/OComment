@@ -3762,7 +3762,7 @@ fn scan_summarizes_the_comment_counts() {
 }
 
 #[test]
-fn quiet_silences_a_check_that_still_exits_one() {
+fn quiet_drops_the_commentary_and_keeps_the_findings() {
     let directory = tempfile::tempdir().unwrap();
     fs::write(
         directory.path().join("sample.rs"),
@@ -3771,7 +3771,11 @@ fn quiet_silences_a_check_that_still_exits_one() {
     .unwrap();
     let output = run(directory.path(), &["check", "-q", "sample.rs"]);
     assert_eq!(output.status.code(), Some(1));
-    assert_eq!(String::from_utf8(output.stdout).unwrap(), "");
+    // NOTE: This asserted both streams were empty, which held the bug in place.
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        "sample.rs:1:12: removable line comment: // remove\n"
+    );
     assert_eq!(String::from_utf8(output.stderr).unwrap(), "");
 }
 

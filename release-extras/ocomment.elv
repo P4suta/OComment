@@ -57,6 +57,7 @@ set edit:completion:arg-completer[ocomment] = {|@words|
             cand plugin 'Manage sandboxed WASM scanner plugins'
             cand completions 'Generate shell completions'
             cand coverage 'Report which files a walk scanned and which it passed over, and why'
+            cand ratchet 'Check the tree against its ledger, or record the tree in one'
             cand selftest 'Re-run the shared corpus against this binary and report any disagreement'
             cand doctor 'Diagnose the environment (config, git, plugins, tools)'
             cand man 'Render the roff manual page to stdout'
@@ -597,6 +598,36 @@ set edit:completion:arg-completer[ocomment] = {|@words|
             cand -h 'Print help (see more with ''--help'')'
             cand --help 'Print help (see more with ''--help'')'
         }
+        &'ocomment;ratchet'= {
+            cand --config 'Read this configuration file instead of discovering `.ocomment.toml`'
+            cand --policy 'Which classes of comment the run is allowed to remove'
+            cand --layout 'How the bytes left behind by a removed comment are laid out'
+            cand --language 'Force this language instead of detecting it from path and contents'
+            cand --dialect 'Force this dialect of the selected language'
+            cand --keep-kind 'Comma-separated comment kinds to protect on top of the policy'
+            cand --remove-kind 'Comma-separated comment kinds to remove regardless of the policy'
+            cand --deny-skipped 'Fail when a file was passed over for one of these reasons, rather than noting it'
+            cand --format 'Output encoding'
+            cand --color 'When to colour terminal output'
+            cand --hyperlinks 'When to emit terminal hyperlinks for reported paths'
+            cand --annotation-level 'The level `--format github` annotates a removable comment at (default: the run''s exit status)'
+            cand --trace 'Record how the run reached its verdicts, on standard error'
+            cand --progress 'When to draw the live scanning counter on standard error'
+            cand --update 'Rewrite the ledger to match the tree, rather than checking against it'
+            cand --staged 'Read and update Git index blobs rather than treating the working tree as the source'
+            cand --index-only 'With `--staged`, do not attempt a uniquely mappable working-tree update'
+            cand --include-generated 'Scan files another tool writes: lock files, recorded seeds, generated output'
+            cand --force-invalid 'Apply the edits that are still provably safe when the source fails to scan'
+            cand --force-protected 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
+            cand --no-preview 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
+            cand --explain 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+            cand -q 'Drop the run summary and notes; the command''s product (findings, patch, listing) is still written'
+            cand --quiet 'Drop the run summary and notes; the command''s product (findings, patch, listing) is still written'
+            cand -v 'Trace what is scanned and summarize every comment kind and skipped file'
+            cand --verbose 'Trace what is scanned and summarize every comment kind and skipped file'
+            cand -h 'Print help (see more with ''--help'')'
+            cand --help 'Print help (see more with ''--help'')'
+        }
         &'ocomment;selftest'= {
             cand --config 'Read this configuration file instead of discovering `.ocomment.toml`'
             cand --policy 'Which classes of comment the run is allowed to remove'
@@ -691,6 +722,7 @@ set edit:completion:arg-completer[ocomment] = {|@words|
             cand plugin 'Manage sandboxed WASM scanner plugins'
             cand completions 'Generate shell completions'
             cand coverage 'Report which files a walk scanned and which it passed over, and why'
+            cand ratchet 'Check the tree against its ledger, or record the tree in one'
             cand selftest 'Re-run the shared corpus against this binary and report any disagreement'
             cand doctor 'Diagnose the environment (config, git, plugins, tools)'
             cand man 'Render the roff manual page to stdout'
@@ -737,6 +769,8 @@ set edit:completion:arg-completer[ocomment] = {|@words|
         &'ocomment;help;completions'= {
         }
         &'ocomment;help;coverage'= {
+        }
+        &'ocomment;help;ratchet'= {
         }
         &'ocomment;help;selftest'= {
         }
