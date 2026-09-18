@@ -1340,6 +1340,65 @@ pub fn render_explained(
 /// *keep* the comments as visible as the way to remove them. That last one is
 /// not symmetry for its own sake. A gate that can only say "delete it" is a
 /// gate somebody turns off the first time it is wrong about one comment.
+/// The file holding the most of what this run found, and how many.
+///
+/// The one thing a reader of a large report wants that no count gives them:
+/// somewhere to start. `None` when the findings are spread evenly enough that
+/// naming one file would be arbitrary -- under a twentieth of the total is not
+/// a place to start, it is a place that happens to be first.
+fn busiest(groups: &[crate::advice::Group]) -> Option<(String, usize)> {
+    let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+    let mut total = 0usize;
+    for group in groups {
+        for item in &group.items {
+            *counts
+                .entry(sanitize_path(&item.path.to_string_lossy()))
+                .or_default() += item.comments;
+            total += item.comments;
+        }
+    }
+    let (path, count) = counts
+        .into_iter()
+        .max_by(|left, right| left.1.cmp(&right.1).then(right.0.cmp(&left.0)))?;
+    (count * 20 >= total).then_some((path, count))
+}
+
+/// How many findings a report shows in full before it starts summarising.
+///
+/// Above this the report stops being something a reader reads and becomes
+/// something they scroll: this repository under `--policy all` produces 9,139
+/// findings and, printed in full, 17,902 lines. Nobody reads the ten thousandth
+/// one. At that size what is needed is the shape -- which decision, how many,
+/// where they are concentrated -- and a way to narrow.
+const FINDINGS_SHOWN_IN_FULL: usize = 20;
+
+/// How many findings a summarised group still shows, so that the shape has an
+/// example under it rather than only a number.
+const FINDINGS_PER_SUMMARISED_GROUP: usize = 2;
+
+/// How many files a summarised group names before it counts the rest.
+const FILES_PER_SUMMARISED_GROUP: usize = 5;
+
+/// Where a decision's comments are, most first.
+///
+/// The table a reader writes by hand the first time they meet a large report,
+/// which is the reason to write it for them: a count with no location cannot
+/// set an order, and "1,204 of these are in one file" is the difference between
+/// a project-wide problem and an afternoon.
+fn concentration_of(group: &crate::advice::Group) -> Vec<(String, usize)> {
+    let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+    for item in &group.items {
+        *counts
+            .entry(sanitize_path(&item.path.to_string_lossy()))
+            .or_default() += item.comments;
+    }
+    let mut rows: Vec<(String, usize)> = counts.into_iter().collect();
+    /* NOTE: Most first, then by path, so two runs over one tree print the same
+     * table. */
+    rows.sort_by(|left, right| right.1.cmp(&left.1).then(left.0.cmp(&right.0)));
+    rows
+}
+
 /// What a `fix` left behind, which is the half a reader has not seen.
 ///
 /// The count of what went is on standard error with the rest of the commentary.
@@ -1474,6 +1533,13 @@ fn render_review(
         options.policy,
     ))?;
 
+    /* NOTE: Decided once for the whole report rather than per group, so that a
+     * reader learns one layout: either every group shows its shape and then an
+     * example, or every group shows everything. A report where some groups are
+     * summarised and others are not reads as though the tool ran out of
+     * patience partway down. */
+    let findings: usize = groups.iter().map(|group| group.items.len()).sum();
+    let summarise = findings > FINDINGS_SHOWN_IN_FULL;
     for group in &groups {
         let instruction = group.decision.instruction();
         let count = comments(group.comments(), "");
@@ -1487,7 +1553,33 @@ fn render_review(
                     .max(2)
             )
         ))?;
-        for item in &group.items {
+        if summarise {
+            let rows = concentration_of(group);
+            for (path, count) in rows.iter().take(FILES_PER_SUMMARISED_GROUP) {
+                wrote(writeln!(
+                    output,
+                    "    {blue}{path}{reset}{dim}{}{count}{reset}",
+                    " ".repeat(
+                        60usize
+                            .saturating_sub(path.chars().count() + count.to_string().len())
+                            .max(2)
+                    )
+                ))?;
+            }
+            if rows.len() > FILES_PER_SUMMARISED_GROUP {
+                wrote(writeln!(
+                    output,
+                    "    {dim}… and {} more{reset}",
+                    plural(rows.len() - FILES_PER_SUMMARISED_GROUP, "file")
+                ))?;
+            }
+        }
+        let shown = if summarise {
+            FINDINGS_PER_SUMMARISED_GROUP
+        } else {
+            group.items.len()
+        };
+        for item in group.items.iter().take(shown) {
             let span = if item.first_line == item.last_line {
                 item.first_line.to_string()
             } else {
@@ -1498,7 +1590,6 @@ fn render_review(
                 "    {blue}{}:{span}{reset}",
                 display_path(&item.path, options.presentation.hyperlinks)
             ))?;
-            let _ = &item.path;
             for line in &item.old {
                 wrote(writeln!(
                     output,
@@ -1547,6 +1638,16 @@ fn render_review(
     if removable > 0 && options.operation != Operation::Fix {
         wrote(writeln!(output))?;
         wrote(writeln!(output, "  {dim}{}{reset}", "─".repeat(70)))?;
+        /* NOTE: Where to start, before what to run. A report this size is read
+         * by somebody deciding where an afternoon goes, and the answer to that
+         * is a path rather than a verb: the file holding the most of this is
+         * the one where the most of it stops. */
+        if summarise && let Some((path, count)) = busiest(&groups) {
+            wrote(writeln!(
+                output,
+                "   {bold}ocomment check {path}{reset}{dim}   the {count} in one file, in full{reset}"
+            ))?;
+        }
         wrote(writeln!(
             output,
             "   {bold}ocomment fix{reset}{dim}   removes all {removable}, including anything above you meant to keep{reset}"
@@ -1977,30 +2078,26 @@ fn concentration(files: &[ProcessedFile], options: &RenderOptions) -> Vec<String
 /// header produces exactly two kinds and never one, which is every crate on
 /// crates.io.
 ///
-/// The order is by how good the advice is. A named policy beats a list of
-/// kinds: it is shorter, it is the configuration the project should be keeping
-/// anyway, and it teaches the tool's own vocabulary rather than its escape
-/// hatches.
+/// Only a named policy, and only when one covers everything the run found.
+/// That is a statement about what the findings *are* -- they are all a kind
+/// some policy keeps -- rather than a way to make the run pass, and the
+/// difference matters at the moment a gate fires.
 fn advice_for(present: &[CommentKind], current: Policy) -> Option<String> {
     if let Some(policy) = Policy::strongest_keeping(present)
         && policy != current
     {
-        return Some(format!("`--policy {policy}` would make this run clean"));
+        return Some(format!(
+            "every one of these is a kind `--policy {policy}` keeps"
+        ));
     }
-    /* NOTE: Only when the kinds are ones a `keep_kind` can name. A protected
-     * kind reaching this list means the run passed `--force-protected`, and
-     * `--keep-kind shebang` is not the answer to that -- dropping the flag is. */
-    if present
-        .iter()
-        .any(|kind| kind.protection() != Protection::None)
-    {
-        return None;
-    }
-    let names: Vec<&str> = present.iter().map(|kind| kind.as_str()).collect();
-    Some(format!(
-        "`--keep-kind {}` would make this run clean",
-        names.join(",")
-    ))
+    /* NOTE: And nothing when no policy answers. `--keep-kind line` was offered
+     * here, and it is the shortest way to a green run and says nothing about
+     * whether the run should be green: a gate that names the flag which
+     * silences it, at the moment it fires, is arguing against its own finding.
+     * The kinds are still reported -- the line above this one says what they
+     * are and where -- and what to do about them is a decision rather than a
+     * flag. */
+    None
 }
 
 fn summary_report(summary: &Summary, options: &RenderOptions, folded: bool) -> String {

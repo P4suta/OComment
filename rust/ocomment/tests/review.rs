@@ -289,3 +289,68 @@ fn the_summary_is_written_whichever_format_wrote_the_report() {
         );
     }
 }
+
+/// A large report is a map, not a list.
+///
+/// This repository under `--policy all` finds over nine thousand comments.
+/// Printed one finding at a time that is nearly eighteen thousand lines, and
+/// nobody reads the ten thousandth. What a reader needs at that size is which
+/// decision, how many, where they are, and somewhere to start.
+#[test]
+fn a_report_too_large_to_read_becomes_one_to_navigate() {
+    let directory = tempfile::tempdir().expect("a temporary directory");
+    std::fs::write(directory.path().join(".ocomment.toml"), b"version = 1\n")
+        .expect("the fixture is writable");
+    let mut crowded = String::new();
+    for index in 0..40 {
+        crowded.push_str(&format!("let value{index} = {index}; // a note\n"));
+    }
+    std::fs::write(directory.path().join("crowded.rs"), crowded.as_bytes())
+        .expect("the fixture is writable");
+    std::fs::write(directory.path().join("quiet.rs"), b"let a = 1; // one\n")
+        .expect("the fixture is writable");
+
+    let output = run(
+        directory.path(),
+        &["check", "--color", "never", "--hyperlinks", "never", "."],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.lines().count() < 30,
+        "41 findings printed in full:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("crowded.rs") && stdout.contains("40"),
+        "the report does not say where they are:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("ocomment check crowded.rs"),
+        "the report does not say where to start:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("41 comments"),
+        "the headline lost the total:\n{stdout}"
+    );
+}
+
+/// A small report is still a list, because at that size the list is the answer.
+#[test]
+fn a_report_small_enough_to_read_stays_one_to_read() {
+    let directory = project();
+    let output = run(
+        directory.path(),
+        &[
+            "check",
+            "--color",
+            "never",
+            "--hyperlinks",
+            "never",
+            "src/budget.rs",
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        !stdout.contains("more file") && !stdout.contains("in full"),
+        "a five-finding report was summarised:\n{stdout}"
+    );
+}

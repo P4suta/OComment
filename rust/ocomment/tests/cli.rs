@@ -5207,11 +5207,18 @@ fn a_closed_pipe_ends_the_json_report_quietly() {
     assert_eq!(stderr, "");
 }
 
-/// The human report is written the same way, so it ends the same way.
+/// The one-line-per-finding stream is written the same way, so it ends the
+/// same way.
+///
+/// Named rather than defaulted, and that is the point of naming it: `review`
+/// summarises a report this size into something that fits in a pipe buffer, so
+/// a reader stopping after ten lines never closes anything. The stream that can
+/// still be cut off mid-write is `human`, which is the one this is about.
 #[test]
 fn a_closed_pipe_ends_the_human_report_quietly() {
     let directory = wide_tree(100, 50);
-    let (status, stderr) = run_closed_pipe(directory.path(), &["check", "."], 10);
+    let (status, stderr) =
+        run_closed_pipe(directory.path(), &["check", "--format", "human", "."], 10);
     assert!(
         status.success(),
         "expected a quiet exit, got {status:?} with stderr:\n{stderr}"

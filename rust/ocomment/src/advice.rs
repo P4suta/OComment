@@ -261,6 +261,13 @@ fn file_items(file: &ProcessedFile) -> Vec<(Decision, Item)> {
                     && open.last + 1 == placed.first
                     && open.tag.is_none()
                     && placed.tag.is_none()
+                    /* NOTE: A comment beside code is never part of a paragraph.
+                     * Forty trailing notes on forty consecutive assignments
+                     * share a column and are adjacent, and they are forty
+                     * decisions: each one is about the statement it sits on,
+                     * and the statement is different every time. */
+                    && !open.beside
+                    && !placed.beside
                     /* NOTE: Equal, not absent. A paragraph that ran over the
                      * line limit carries the same `TooLong` on every line it
                      * covers, and splitting it back into one finding per line
@@ -278,6 +285,7 @@ fn file_items(file: &ProcessedFile) -> Vec<(Decision, Item)> {
                 comments: 1,
                 tag: placed.tag,
                 shape: placed.shape,
+                beside: placed.beside,
             }),
         }
     }
@@ -295,6 +303,7 @@ struct Run {
     comments: usize,
     tag: Option<String>,
     shape: Option<ShapeRule>,
+    beside: bool,
 }
 
 impl Run {
@@ -307,6 +316,7 @@ impl Run {
         comments: 0,
         tag: None,
         shape: None,
+        beside: false,
     };
 }
 
@@ -382,6 +392,7 @@ struct Placed {
     column: usize,
     tag: Option<String>,
     shape: Option<ShapeRule>,
+    beside: bool,
 }
 
 fn place(lines: &[String], index: &crate::output::LineIndex, comment: &Comment) -> Option<Placed> {
@@ -396,12 +407,18 @@ fn place(lines: &[String], index: &crate::output::LineIndex, comment: &Comment) 
         return None;
     }
     let tag = promise_tag(&body_of(lines.get(first - 1)?, column));
+    let beside = !lines
+        .get(first - 1)?
+        .get(..column.saturating_sub(1))?
+        .trim()
+        .is_empty();
     Some(Placed {
         first,
         last,
         column,
         tag,
         shape: comment.shape.clone(),
+        beside,
     })
 }
 

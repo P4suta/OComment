@@ -210,13 +210,12 @@ fn selftest_checks_the_embedded_corpus_and_accounts_for_what_it_skips() {
     );
 }
 
-/// A wall of findings gets two lines saying what to do about it.
+/// A wall of findings gets a line saying where it is.
 ///
-/// The count alone is what the run found; it says nothing about what to do.
-/// Where the findings are, and whether one flag would answer all of them, are
-/// both things the run already knows.
+/// The count alone is what the run found; it says nothing about where to start.
+/// Where the findings are is something the run already knows.
 #[test]
-fn a_concentrated_report_says_where_the_findings_are_and_what_would_answer_them() {
+fn a_concentrated_report_says_where_the_findings_are() {
     let directory = tempfile::tempdir().expect("a temporary directory");
     for (name, count) in [("many.rs", 12), ("few.rs", 4)] {
         let mut source = String::new();
@@ -230,24 +229,17 @@ fn a_concentrated_report_says_where_the_findings_are_and_what_would_answer_them(
         stderr.contains("where they are: many.rs 12, few.rs 4"),
         "the summary did not rank the files:\n{stderr}"
     );
-    /* NOTE: A policy, not a flag. `conservative` keeps documentation, so it
-     * answers every finding on its own -- shorter than a list of kinds, and it
-     * is the configuration the project should be keeping anyway. */
-    assert!(
-        stderr.contains("`--policy conservative` would make this run clean"),
-        "the summary did not name the policy that answers every finding:\n{stderr}"
-    );
 }
 
-/// Two kinds is still one flag, and that was the bug.
+/// When one policy keeps every kind the run found, that is worth saying --
+/// because it is a statement about what the findings are.
 ///
-/// The rule was written as "only when one *kind* accounts for everything",
-/// which withheld the advice from the only case that occurs: a Rust crate with
-/// both documentation and a licence header produces exactly two kinds and
-/// never one. `--keep-kind` is variadic, so two kinds is one flag — and here a
-/// policy answers both, which is better still.
+/// A Rust crate with both documentation and a licence header produces exactly
+/// two kinds and never one, and `conservative` keeps both. The reader has
+/// picked a policy stricter than the one their code is written for, which is a
+/// different thing from having comments to answer for.
 #[test]
-fn two_kinds_are_still_one_change() {
+fn a_run_whose_findings_one_policy_keeps_is_told_so() {
     let directory = tempfile::tempdir().expect("a temporary directory");
     for index in 0..6 {
         std::fs::write(
@@ -258,14 +250,19 @@ fn two_kinds_are_still_one_change() {
     }
     let (_, stderr) = run(directory.path(), &["check", ".", "--policy", "standard"]);
     assert!(
-        stderr.contains("`--policy conservative` would make this run clean"),
-        "the summary withheld advice from a two-kind run:\n{stderr}"
+        stderr.contains("every one of these is a kind `--policy conservative` keeps"),
+        "the summary did not name the policy that keeps every kind found:\n{stderr}"
     );
 }
 
-/// When no policy answers, the advice is the one flag naming every kind.
+/// No policy answers, and the run does not offer a way to silence itself.
+///
+/// `--keep-kind line,block` was printed here. It is the shortest way to a green
+/// run and says nothing about whether the run should be green: a gate that
+/// names the flag which silences it, at the moment it fires, is arguing against
+/// its own finding. What the findings are and where they are is still said.
 #[test]
-fn a_run_no_policy_answers_gets_the_flag_that_names_every_kind() {
+fn a_run_no_policy_answers_is_not_offered_a_way_to_silence_it() {
     let directory = tempfile::tempdir().expect("a temporary directory");
     for index in 0..6 {
         std::fs::write(
@@ -276,36 +273,16 @@ fn a_run_no_policy_answers_gets_the_flag_that_names_every_kind() {
     }
     let (_, stderr) = run(directory.path(), &["check", "."]);
     assert!(
-        stderr.contains("`--keep-kind line,block` would make this run clean"),
-        "the summary did not name the one flag that answers every finding:\n{stderr}"
-    );
-}
-
-/// Mixed kinds still get advice, and it is the flag rather than a policy.
-///
-/// Documentation and ordinary comments together: no policy keeps both, so
-/// there is no policy to name, and the answer is the single `--keep-kind` that
-/// names every kind present. The old rule refused to say anything here, on the
-/// reading that two kinds need two flags. They do not.
-#[test]
-fn mixed_kinds_get_the_flag_when_no_policy_answers() {
-    let directory = tempfile::tempdir().expect("a temporary directory");
-    let mut source = String::new();
-    for index in 0..8 {
-        source.push_str(&format!("/// doc {index}\npub fn f{index}() {{}}\n"));
-    }
-    for index in 0..8 {
-        source.push_str(&format!("// ordinary {index}\n"));
-    }
-    std::fs::write(directory.path().join("mixed.rs"), source).expect("the fixture is writable");
-    let (_, stderr) = run(directory.path(), &["check", ".", "--policy", "standard"]);
-    assert!(
-        stderr.contains("where they are: mixed.rs 16"),
-        "the summary did not rank the files:\n{stderr}"
+        stderr.contains("where they are:"),
+        "the summary did not say where the findings are:\n{stderr}"
     );
     assert!(
-        stderr.contains("`--keep-kind line,doc-line` would make this run clean"),
-        "the summary did not name the flag that answers every finding:\n{stderr}"
+        !stderr.contains("--keep-kind"),
+        "the summary offered the flag that would silence it:\n{stderr}"
+    );
+    assert!(
+        !stderr.contains("would make this run clean"),
+        "the summary offered a way to a green run:\n{stderr}"
     );
 }
 
