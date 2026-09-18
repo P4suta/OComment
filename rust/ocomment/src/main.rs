@@ -3,6 +3,7 @@ mod cli;
 mod config;
 mod coverage;
 mod files;
+mod generated;
 mod git;
 mod interactive;
 mod lsp;

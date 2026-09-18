@@ -9,6 +9,8 @@ PAIRS = (
     (ROOT / "spec/default-config.toml", ROOT / "rust/ocomment/assets/default-config.toml"),
     (ROOT / "spec/languages.toml", ROOT / "rust/ocomment/assets/languages.toml"),
     (ROOT / "spec/ocomment-scanner.wit", ROOT / "rust/ocomment/assets/ocomment-scanner.wit"),
+    (ROOT / "spec/profiles.toml", ROOT / "rust/ocomment/assets/profiles.toml"),
+    (ROOT / "spec/generated.toml", ROOT / "rust/ocomment/assets/generated.toml"),
 )
 # NOTE: The corpus `ocomment selftest` carries is a derivation rather than a
 # NOTE: copy, so it is not a pair here: `tools/gen_selftest_corpus.py --check`

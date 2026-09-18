@@ -1,6 +1,6 @@
 # Print an optspec for argparse to handle cmd's options that are independent of any subcommand.
 function __fish_ocomment_global_optspecs
-    string join \n config= policy= layout= language= dialect= keep-kind= remove-kind= deny-skipped= force-invalid force-protected format= color= hyperlinks= no-preview annotation-level= explain trace= progress= q/quiet v/verbose h/help V/version
+    string join \n config= policy= layout= language= dialect= keep-kind= remove-kind= include-generated deny-skipped= force-invalid force-protected format= color= hyperlinks= no-preview annotation-level= explain trace= progress= q/quiet v/verbose h/help V/version
 end
 
 function __fish_ocomment_needs_command
@@ -124,6 +124,7 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_needs_command" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_needs_command" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_needs_command" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_needs_command" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_needs_command" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
@@ -250,6 +251,7 @@ always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l staged -d 'Read and update Git index blobs rather than treating the working tree as the source'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l index-only -d 'With `--staged`, do not attempt a uniquely mappable working-tree update'
+complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
@@ -361,6 +363,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l staged -d 'Rea
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l index-only -d 'With `--staged`, do not attempt a uniquely mappable working-tree update'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l dry-run -d 'Print the patch `fix` would apply and write nothing'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -s i -l interactive -d 'Ask about each comment in turn and remove only the accepted ones'
+complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
@@ -470,6 +473,7 @@ always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l staged -d 'Read and update Git index blobs rather than treating the working tree as the source'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l index-only -d 'With `--staged`, do not attempt a uniquely mappable working-tree update'
+complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
@@ -579,6 +583,7 @@ always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l staged -d 'Read and update Git index blobs rather than treating the working tree as the source'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l index-only -d 'With `--staged`, do not attempt a uniquely mappable working-tree update'
+complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
@@ -686,6 +691,7 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
@@ -793,6 +799,7 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
@@ -903,6 +910,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l fix -d 'For the Lefthook hook, run `fix` instead of `check`'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l force -d 'Replace the file if it already exists'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l stdout -d 'Print the template to standard output and write no file'
+complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
@@ -1010,6 +1018,7 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
@@ -1117,6 +1126,7 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
@@ -1224,6 +1234,7 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
@@ -1341,6 +1352,7 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
@@ -1448,6 +1460,7 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
@@ -1555,6 +1568,7 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
@@ -1662,6 +1676,7 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
@@ -1769,6 +1784,7 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
@@ -1876,6 +1892,7 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
@@ -1990,6 +2007,7 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
@@ -2099,6 +2117,7 @@ always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l staged -d 'Read and update Git index blobs rather than treating the working tree as the source'
 complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l index-only -d 'With `--staged`, do not attempt a uniquely mappable working-tree update'
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
@@ -2206,6 +2225,7 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
@@ -2313,6 +2333,7 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
@@ -2420,6 +2441,7 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'

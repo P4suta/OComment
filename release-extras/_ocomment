@@ -105,6 +105,7 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
@@ -221,6 +222,7 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
@@ -331,6 +333,7 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--dry-run[Print the patch \`fix\` would apply and write nothing]' \
 '(--staged --dry-run -q --quiet)-i[Ask about each comment in turn and remove only the accepted ones]' \
 '(--staged --dry-run -q --quiet)--interactive[Ask about each comment in turn and remove only the accepted ones]' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
@@ -438,6 +441,7 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
@@ -545,6 +549,7 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
@@ -650,6 +655,7 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
@@ -754,6 +760,7 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
@@ -861,6 +868,7 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--fix[For the Lefthook hook, run \`fix\` instead of \`check\`]' \
 '(--stdout)--force[Replace the file if it already exists]' \
 '--stdout[Print the template to standard output and write no file]' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
@@ -966,6 +974,7 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
@@ -1071,6 +1080,7 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
@@ -1175,6 +1185,7 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
@@ -1290,6 +1301,7 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
@@ -1395,6 +1407,7 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
@@ -1500,6 +1513,7 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
@@ -1604,6 +1618,7 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
@@ -1709,6 +1724,7 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
@@ -1814,6 +1830,7 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
@@ -1967,6 +1984,7 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
@@ -2074,6 +2092,7 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
@@ -2179,6 +2198,7 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
@@ -2283,6 +2303,7 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
@@ -2387,6 +2408,7 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \

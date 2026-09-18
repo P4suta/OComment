@@ -20,13 +20,6 @@ exclude = [
   # NOTE: removing their example comments would change the documented policy
   # NOTE: output rather than clean up generator prose.
   "docs/policies.md",
-  # NOTE: A lock file is written by its resolver rather than by hand, and the
-  # NOTE: header Cargo puts at the top of this one comes back on the next
-  # NOTE: `cargo update`.
-  "rust/Cargo.lock",
-  # NOTE: Written by proptest, which puts its own header back on the next
-  # NOTE: failure it records. The same reason as the lock file above.
-  "**/*.proptest-regressions",
   # NOTE: Licence texts and the rendered manual page carry no comments to find
   # NOTE: and are not ours to reformat, so they are excluded rather than left
   # NOTE: to be reported as an unknown language every run.

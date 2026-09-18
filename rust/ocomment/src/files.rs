@@ -203,12 +203,14 @@ fn discover_with_scope(
 ) -> Result<Discovery> {
     let include = compile_globs(&resolved.config.files.include)?;
     let exclude = compile_globs(&resolved.config.files.exclude)?;
+    let generated = crate::generated::Generated::load()?;
     let loader = LoadContext {
         resolved,
         forced_language,
         forced_dialect,
         include: &include,
         exclude: &exclude,
+        generated: &generated,
     };
     let mut discovery = Discovery::default();
     /* NOTE: Only an editor asking for its workspace arrives here without a target;
@@ -329,6 +331,8 @@ struct LoadContext<'a> {
     forced_dialect: Option<Dialect>,
     include: &'a GlobSet,
     exclude: &'a GlobSet,
+    /// The catalogue of files another tool writes, parsed once per walk.
+    generated: &'a crate::generated::Generated,
 }
 
 fn load_one(
@@ -344,6 +348,7 @@ fn load_one(
         forced_dialect,
         include,
         exclude,
+        generated,
     } = context;
     let path = &reported_path(path);
     /* NOTE: The globs are written relative to the root; the path was typed — or
@@ -403,6 +408,20 @@ fn load_one(
         discovery.skipped.push(SkippedFile {
             path: path.to_path_buf(),
             reason: "binary file (NUL byte)".into(),
+            error: false,
+            explicit: explicit_path,
+        });
+        return;
+    }
+    /* NOTE: Before the language is chosen, because this is not a question about
+     * what the file is written in. A lock file is perfectly readable TOML and a
+     * recorded seed list is perfectly readable prose; what makes them skippable
+     * is that the comments in them belong to the tool that will write them
+     * again. */
+    if !resolved.config.files.include_generated && generated.claims(path, &source) {
+        discovery.skipped.push(SkippedFile {
+            path: path.to_path_buf(),
+            reason: crate::generated::REASON.into(),
             error: false,
             explicit: explicit_path,
         });

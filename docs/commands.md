@@ -194,6 +194,9 @@ Policy:
           - version-comment: A MySQL versioned comment that the server executes
           - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
       --deny-skipped [<REASON>...]
           Fail when a file was passed over for one of these reasons, rather than noting it
 
@@ -416,6 +419,9 @@ Policy:
           - version-comment: A MySQL versioned comment that the server executes
           - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
       --deny-skipped [<REASON>...]
           Fail when a file was passed over for one of these reasons, rather than noting it
 
@@ -623,6 +629,9 @@ Policy:
           - version-comment: A MySQL versioned comment that the server executes
           - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
       --deny-skipped [<REASON>...]
           Fail when a file was passed over for one of these reasons, rather than noting it
 
@@ -821,6 +830,9 @@ Policy:
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
           - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
 
       --deny-skipped [<REASON>...]
           Fail when a file was passed over for one of these reasons, rather than noting it
@@ -1021,6 +1033,9 @@ Policy:
           - version-comment: A MySQL versioned comment that the server executes
           - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
       --deny-skipped [<REASON>...]
           Fail when a file was passed over for one of these reasons, rather than noting it
 
@@ -1210,6 +1225,9 @@ Policy:
           - version-comment: A MySQL versioned comment that the server executes
           - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
       --deny-skipped [<REASON>...]
           Fail when a file was passed over for one of these reasons, rather than noting it
 
@@ -1398,6 +1416,9 @@ Policy:
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
           - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
 
       --deny-skipped [<REASON>...]
           Fail when a file was passed over for one of these reasons, rather than noting it
@@ -1604,6 +1625,9 @@ Policy:
           - version-comment: A MySQL versioned comment that the server executes
           - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
       --deny-skipped [<REASON>...]
           Fail when a file was passed over for one of these reasons, rather than noting it
 
@@ -1800,6 +1824,9 @@ Policy:
           - version-comment: A MySQL versioned comment that the server executes
           - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
       --deny-skipped [<REASON>...]
           Fail when a file was passed over for one of these reasons, rather than noting it
 
@@ -1988,6 +2015,9 @@ Policy:
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
           - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
 
       --deny-skipped [<REASON>...]
           Fail when a file was passed over for one of these reasons, rather than noting it
@@ -2186,6 +2216,9 @@ Policy:
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
           - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
 
       --deny-skipped [<REASON>...]
           Fail when a file was passed over for one of these reasons, rather than noting it
@@ -2389,6 +2422,9 @@ Policy:
           - version-comment: A MySQL versioned comment that the server executes
           - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
       --deny-skipped [<REASON>...]
           Fail when a file was passed over for one of these reasons, rather than noting it
 
@@ -2582,6 +2618,9 @@ Policy:
           - version-comment: A MySQL versioned comment that the server executes
           - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
       --deny-skipped [<REASON>...]
           Fail when a file was passed over for one of these reasons, rather than noting it
 
@@ -2770,6 +2809,9 @@ Policy:
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
           - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
 
       --deny-skipped [<REASON>...]
           Fail when a file was passed over for one of these reasons, rather than noting it
@@ -2964,6 +3006,9 @@ Policy:
           - version-comment: A MySQL versioned comment that the server executes
           - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
       --deny-skipped [<REASON>...]
           Fail when a file was passed over for one of these reasons, rather than noting it
 
@@ -3157,6 +3202,9 @@ Policy:
           - version-comment: A MySQL versioned comment that the server executes
           - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
       --deny-skipped [<REASON>...]
           Fail when a file was passed over for one of these reasons, rather than noting it
 
@@ -3349,6 +3397,9 @@ Policy:
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
           - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
 
       --deny-skipped [<REASON>...]
           Fail when a file was passed over for one of these reasons, rather than noting it
@@ -3544,6 +3595,9 @@ Policy:
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
           - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
 
       --deny-skipped [<REASON>...]
           Fail when a file was passed over for one of these reasons, rather than noting it
@@ -3744,6 +3798,9 @@ Policy:
           - version-comment: A MySQL versioned comment that the server executes
           - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
       --deny-skipped [<REASON>...]
           Fail when a file was passed over for one of these reasons, rather than noting it
 
@@ -3932,6 +3989,9 @@ Policy:
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
           - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
 
       --deny-skipped [<REASON>...]
           Fail when a file was passed over for one of these reasons, rather than noting it
@@ -4122,6 +4182,9 @@ Policy:
           - version-comment: A MySQL versioned comment that the server executes
           - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
       --deny-skipped [<REASON>...]
           Fail when a file was passed over for one of these reasons, rather than noting it
 
@@ -4310,6 +4373,9 @@ Policy:
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
           - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
 
       --deny-skipped [<REASON>...]
           Fail when a file was passed over for one of these reasons, rather than noting it

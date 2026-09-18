@@ -5,6 +5,7 @@ max_size = 33554432
 hidden = false
 follow_symlinks = false
 ignore = true
+include_generated = false
 
 [policy]
 mode = "conservative"

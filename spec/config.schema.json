@@ -14,6 +14,7 @@
         "hidden": { "type": "boolean", "default": false },
         "follow_symlinks": { "type": "boolean", "default": false },
         "ignore": { "type": "boolean", "default": true },
+        "include_generated": { "type": "boolean", "default": false },
         "include": { "$ref": "#/$defs/strings" },
         "exclude": { "$ref": "#/$defs/strings" }
       }

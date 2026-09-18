@@ -4,7 +4,7 @@
 .SH NAME
 ocomment \- Check and remove source\-code comments safely
 .SH SYNOPSIS
-\fBocomment\fR [\fB\-\-config\fR] [\fB\-\-policy\fR] [\fB\-\-layout\fR] [\fB\-\-language\fR] [\fB\-\-dialect\fR] [\fB\-\-keep\-kind\fR] [\fB\-\-remove\-kind\fR] [\fB\-\-deny\-skipped\fR] [\fB\-\-force\-invalid\fR] [\fB\-\-force\-protected\fR] [\fB\-\-format\fR] [\fB\-\-color\fR] [\fB\-\-hyperlinks\fR] [\fB\-\-no\-preview\fR] [\fB\-\-annotation\-level\fR] [\fB\-\-explain\fR] [\fB\-\-trace\fR] [\fB\-\-progress\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIPATH\fR] [\fIsubcommands\fR]
+\fBocomment\fR [\fB\-\-config\fR] [\fB\-\-policy\fR] [\fB\-\-layout\fR] [\fB\-\-language\fR] [\fB\-\-dialect\fR] [\fB\-\-keep\-kind\fR] [\fB\-\-remove\-kind\fR] [\fB\-\-include\-generated\fR] [\fB\-\-deny\-skipped\fR] [\fB\-\-force\-invalid\fR] [\fB\-\-force\-protected\fR] [\fB\-\-format\fR] [\fB\-\-color\fR] [\fB\-\-hyperlinks\fR] [\fB\-\-no\-preview\fR] [\fB\-\-annotation\-level\fR] [\fB\-\-explain\fR] [\fB\-\-trace\fR] [\fB\-\-progress\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIPATH\fR] [\fIsubcommands\fR]
 .SH DESCRIPTION
 OComment scans source bytes without requiring UTF\-8 and reports or removes comment tokens. The default policy removes ordinary comments and keeps the ones something else depends on: documentation, licence notices, tool and language directives, shebangs and encoding lines. Rewrites are prepared and committed as one rollback\-backed transaction.
 .SH OPTIONS
@@ -231,6 +231,9 @@ version\-comment: A MySQL versioned comment that the server executes
 .IP \(bu 2
 load\-bearing: A directive the language or its build reads as part of the program, such as `//go:build`
 .RE
+.TP
+\fB\-\-include\-generated\fR
+Scan files another tool writes: lock files, recorded seeds, generated output
 .TP
 \fB\-\-deny\-skipped\fR [\fI<REASON>...\fR]
 Fail when a file was passed over for one of these reasons, rather than noting it

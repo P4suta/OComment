@@ -40,7 +40,7 @@ filenames = [
     ".gitmodules",
     ".ocommentignore",
 ]
-extensions = ["opam", "proptest-regressions"]
+extensions = ["opam"]
 line_comments = [{ start = "#", kind = "line" }]
 
 # NOTE: Dune's configuration language is a Lisp: `;` opens a line comment and

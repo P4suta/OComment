@@ -36,6 +36,14 @@ pub struct FilesConfig {
     pub ignore: bool,
     pub include: Vec<String>,
     pub exclude: Vec<String>,
+    /// Scan files another tool writes: lock files, recorded seed lists, the
+    /// output of a code generator.
+    ///
+    /// Off, because a comment in one of those belongs to the tool that wrote
+    /// it and will be written again on the next run. It is the class most
+    /// likely to be auto-fixed without being read, since nobody opens a
+    /// generated file before committing it.
+    pub include_generated: bool,
 }
 
 impl Default for FilesConfig {
@@ -47,6 +55,7 @@ impl Default for FilesConfig {
             ignore: true,
             include: Vec::new(),
             exclude: Vec::new(),
+            include_generated: false,
         }
     }
 }

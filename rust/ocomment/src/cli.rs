@@ -191,6 +191,9 @@ struct PolicyArgs {
         value_name = "KIND"
     )]
     remove_kind: Vec<CommentKindArg>,
+    /// Scan files another tool writes: lock files, recorded seeds, generated output.
+    #[arg(long, global = true)]
+    include_generated: bool,
     /// Fail when a file was passed over for one of these reasons, rather than noting it.
     #[arg(
         long,
@@ -1178,6 +1181,13 @@ fn apply_cli_overrides(resolved: &mut config::ResolvedConfig, common: &CommonArg
     }
     if policy.force_protected {
         config.policy.force_protected = true;
+    }
+    /* NOTE: A `[files]` key set from the policy flags, because that is where the
+     * flag lives on the command line. The setting itself belongs to discovery:
+     * it decides which files are read at all, not what is decided about the
+     * comments in them. */
+    if policy.include_generated {
+        config.files.include_generated = true;
     }
 }
 
