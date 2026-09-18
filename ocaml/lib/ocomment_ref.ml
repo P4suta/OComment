@@ -549,20 +549,39 @@ let is_directive language text raw =
     "stylelint";
     "noinspection"; "nolint"; "noqa"; "type: ignore"; "fmt:"; "rustfmt::";
     "clang-format"; "spotless:"; "ktlint-disable"; "ktlint-enable"; "detekt:";
-    "istanbul ignore"; "c8 ignore"; "coverage:";
+    "istanbul ignore"; "c8 ignore"; "coverage:"; "formatter:";
     "ocomment:"; "region"; "endregion"] in
   List.exists (fun prefix -> String.starts_with ~prefix compact) prefixes ||
   opens_with_keyword compact "shellcheck" ||
+  (* NOTE: "NOSONAR" is a whole word for the same reason as "shellcheck", and is
+     asked of every language because SonarQube analyses most of them and reads
+     the same word in each. *)
+  opens_with_keyword compact "nosonar" ||
   match language with
-  | Go -> String.starts_with ~prefix:"go:" compact || String.starts_with ~prefix:"+build" compact ||
-      String.starts_with ~prefix:"line " compact
+  (* NOTE: staticcheck's two are named in full rather than by the namespace in
+     front of them, because "lint:" alone is also how a person writes a note to
+     themselves about linting. *)
+  | Go -> List.exists (fun prefix -> String.starts_with ~prefix compact)
+      ["go:"; "+build"; "line "; "lint:ignore"; "lint:file-ignore"]
   | TypeScript ->
     (String.starts_with ~prefix:"///" raw && String.starts_with ~prefix:"<" compact)
     || bundler_directive compact
   | JavaScript -> bundler_directive compact
-  | C | Cpp -> String.starts_with ~prefix:"pragma" compact || String.starts_with ~prefix:"line " compact
+  | C | Cpp -> List.exists (fun prefix -> String.starts_with ~prefix compact)
+      ["pragma"; "line "; "cppcheck-suppress"]
   | Python -> List.exists (fun prefix -> String.starts_with ~prefix compact)
-      ["pyright:"; "mypy:"; "ruff:"; "fmt:"]
+      ["pyright:"; "mypy:"; "ruff:"; "fmt:"; "pylint:"; "pragma:"]
+  (* NOTE: Eclipse reads "$NON-NLS-n$" at the end of the line it is on and stops
+     reporting the string literal there as one that was never externalised;
+     Checkstyle's suppression filter reads "CHECKSTYLE:OFF" and ":ON" as the
+     ends of a region it says nothing about. *)
+  | Java -> List.exists (fun prefix -> String.starts_with ~prefix compact)
+      ["$non-nls"; "checkstyle:"]
+  (* NOTE: Perl::Critic is addressed as "## no critic" and released as
+     "## use critic", both followed by a policy list or by nothing, and both
+     matched to the end of the phrase so that prose opening "no criticism" is
+     not read as one. *)
+  | Perl -> List.exists (opens_with_keyword compact) ["no critic"; "use critic"]
   | Shell -> opens_with_keyword compact "hadolint" ||
       String.starts_with ~prefix:"syntax=" compact
   | Toml -> opens_with_keyword compact ":schema" ||
@@ -670,15 +689,15 @@ let is_directive language text raw =
         || String.starts_with ~prefix:"restore" verb)) ||
     raw = "// csharpier-ignore" || raw = "// csharpier-ignore-start"
     || raw = "// csharpier-ignore-end"
-  (* NOTE: scala-cli reads a directive line before it reads the manifest at
-     all, and the directive is "//>" followed by a space and a name, of which
-     "using" is the one that configures the build.  "compact" is the comment
-     with its markers stripped, so "//> using" is "> using", and the boundary
-     is what keeps a comment that only opens with the same letters --
-     "//> usingless", or "//>> using" with one ">" more -- from being kept as
-     one. *)
+  (* NOTE: scala-cli reads "//>" followed by a space and a name before it reads
+     the manifest at all, and "using" is the one that configures the build.
+     "compact" is the comment with its markers stripped, so "//> using" is
+     "> using", and the boundary keeps "//> usingless" and "//>> using" out.
+     scalafmt's pair is read by equality, so "// format: off for now" turns
+     nothing off. *)
   | Scala ->
-    compact = "> using" || String.starts_with ~prefix:"> using " compact
+    compact = "format: off" || compact = "format: on"
+    || compact = "> using" || String.starts_with ~prefix:"> using " compact
     || String.starts_with ~prefix:"> using\t" compact
   | _ -> false
 
