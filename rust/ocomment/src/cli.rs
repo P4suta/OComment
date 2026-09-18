@@ -2170,12 +2170,41 @@ fn deny_exit_code(
     Ok(1)
 }
 
+/// Which binary is answering, by path and by what it is made of.
+///
+/// A version string cannot tell two builds apart, and two that cannot be told
+/// apart is not a hypothetical: a release `ocomment 0.1.0` and a working-tree
+/// `ocomment 0.1.0` disagreed about the same file on one machine on one day,
+/// because `mise exec` and a bare `PATH` resolved to different ones. The
+/// session that hit it spent the afternoon reporting a gate as broken that was
+/// not, and the only thing that would have answered it in one command is this.
+///
+/// The digest is taken at run time from the file on disk rather than stamped in
+/// at build time. A commit hash baked into the binary would make every build
+/// differ from every other, which is the opposite of what the signed release
+/// archives are for; this asks the same question of the bytes that are actually
+/// running and costs a build nothing.
+fn running_binary() -> String {
+    let Ok(path) = std::env::current_exe() else {
+        return "unavailable".to_owned();
+    };
+    let shown = output::sanitize_path(&path.to_string_lossy());
+    match std::fs::read(&path) {
+        Ok(bytes) => {
+            let digest = <sha2::Sha256 as sha2::Digest>::digest(&bytes);
+            format!("{shown} (sha256:{digest:x})")
+        }
+        Err(error) => format!("{shown} (unreadable: {error})"),
+    }
+}
+
 fn run_doctor(common: &CommonArgs) -> Result<u8> {
     /* NOTE: Asked before standard output is locked for the report, so the answer is
      * about the same handle the report is written to. */
     let stdout_tty = io::stdout().is_terminal();
     let mut stdout = output::stdout();
     output::wrote(writeln!(stdout, "ocomment {}", env!("CARGO_PKG_VERSION")))?;
+    output::wrote(writeln!(stdout, "binary: {}", running_binary()))?;
     match std::env::current_dir() {
         Ok(directory) => output::wrote(writeln!(
             stdout,

@@ -7100,3 +7100,43 @@ fn a_run_steered_by_the_old_name_of_a_policy_says_so() {
         "a run under the current name was told it had moved:\n{stderr}"
     );
 }
+
+/// `doctor` says which binary answered, not just which version it claims.
+///
+/// Two builds can both say `ocomment 0.1.0` and disagree about the same file.
+/// That is not hypothetical: a release build and a working-tree build resolved
+/// from `mise exec` and from a bare `PATH` on one machine on one day, and the
+/// session that hit it spent an afternoon reporting a gate as broken that was
+/// not. A version string cannot tell them apart. The bytes can.
+#[test]
+fn doctor_names_the_binary_that_answered() {
+    let directory = tempfile::tempdir().unwrap();
+    let output = run(directory.path(), &["doctor"]);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let line = stdout
+        .lines()
+        .find(|line| line.starts_with("binary: "))
+        .unwrap_or_else(|| panic!("doctor did not say which binary it is:\n{stdout}"));
+    assert!(
+        line.contains("sha256:") && line.contains("ocomment"),
+        "the line does not identify the running binary: {line}"
+    );
+    /* NOTE: Sixty-four hexadecimal digits, so a truncated or placeholder digest
+     * is not mistaken for one. */
+    let digest = line.rsplit("sha256:").next().unwrap().trim_end_matches(')');
+    assert_eq!(digest.len(), 64, "not a whole digest: {digest:?}");
+    assert!(
+        digest
+            .chars()
+            .all(|character| character.is_ascii_hexdigit()),
+        "not a digest: {digest:?}"
+    );
+
+    /* NOTE: The same binary twice, because a digest that changed between two
+     * runs of one file would be measuring something other than the file. */
+    let again = run(directory.path(), &["doctor"]);
+    assert!(
+        String::from_utf8_lossy(&again.stdout).contains(line),
+        "two runs of one binary reported different bytes"
+    );
+}

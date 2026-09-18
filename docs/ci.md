@@ -378,6 +378,55 @@ would change: `[files] hidden`, `[files] include`/`exclude`, and
 — that is build output, and a percentage taken over a hundred thousand object
 files would mean nothing.
 
+## A cached gate is not a gate
+
+A test that runs `ocomment` is a test whose answer depends on a program the
+test runner did not build. Most runners cache on what a test *read*, and a
+process a test *started* is not a file it read — so the gate keeps returning
+its last answer after the tool underneath it has changed, or broken.
+
+The shape is worth stating on its own, because the tool is rarely the thing
+anyone suspects:
+
+> A gate that only execs an external program can go on passing after that
+> program starts giving wrong answers. Nothing in the gate's inputs changed, so
+> nothing invalidates its result — and a cached pass is printed in the same
+> words as a real one.
+
+The fix is to make the tool part of what the gate reads. Reading the binary is
+enough, because that is the thing that changed — Go invalidates a cached result
+on the files a test read, so opening the binary puts it in the key:
+
+```go
+binary, err := exec.LookPath("ocomment")
+if err != nil {
+	t.Fatalf("find the comment gate's tool: %v", err)
+}
+if _, err := os.ReadFile(binary); err != nil {
+	t.Fatalf("read the comment gate's own tool: %v", err)
+}
+```
+
+Read the binary rather than recording `ocomment --version`. Two builds can
+answer `ocomment 0.1.0` and disagree about the same file — one from a release,
+one from a working tree — and a version string cannot tell them apart.
+`ocomment doctor` says which one answered:
+
+```console
+$ ocomment doctor
+ocomment 0.1.0
+binary: /usr/local/bin/ocomment (sha256:19010bf16aa8983d95a7f6d83b8aae9854369961ecd8dc1edff12c8a40a7208b)
+``` This is
+not hypothetical: it is how the licence bug that `[policy] mode` fixed was
+reported as a failing gate in one shell and a passing one in another, on the
+same machine, on the same day, with `mise exec` and a bare `PATH` resolving to
+different `0.1.0`s.
+
+The same hole is not Go's. Any runner that caches on declared inputs has it: a
+Cargo build script needs `cargo:rerun-if-changed` for a tool it shells out to,
+and a CI cache keyed on a lockfile is keyed on a lockfile rather than on the
+toolchain the job installed.
+
 ## Gating a branch on what it changed
 
 ```console
