@@ -354,3 +354,83 @@ fn a_report_small_enough_to_read_stays_one_to_read() {
         "a five-finding report was summarised:\n{stdout}"
     );
 }
+
+/// `--explain` answers the question the report does not.
+///
+/// The report says what to do, which is read from where a comment sits.
+/// `--explain` says why it is being asked, which is the rule the engine applied
+/// and the setting behind it. They are different questions, and the flag was
+/// accepted and silently ignored -- the one shape this project refuses
+/// everywhere else.
+#[test]
+fn explain_names_the_rule_under_each_finding() {
+    let directory = project();
+    let output = run(
+        directory.path(),
+        &[
+            "check",
+            "--explain",
+            "--color",
+            "never",
+            "--hyperlinks",
+            "never",
+            "src/budget.rs",
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("removed: policy `conservative` removes ordinary comments"),
+        "the rule that decided a finding is not under it:\n{stdout}"
+    );
+    let plain = run(
+        directory.path(),
+        &[
+            "check",
+            "--color",
+            "never",
+            "--hyperlinks",
+            "never",
+            "src/budget.rs",
+        ],
+    );
+    assert_ne!(
+        stdout,
+        String::from_utf8_lossy(&plain.stdout),
+        "`--explain` was accepted and changed nothing"
+    );
+}
+
+/// The count of what was kept becomes the list of it.
+///
+/// `ALLOWED 1 comment this run did not report` is a promise that somebody
+/// checked. The list is what lets a reader check the checker, and a gate nobody
+/// can audit when it is green is a gate whose green means nothing.
+#[test]
+fn explain_turns_the_allowed_count_into_the_list() {
+    let directory = project();
+    let output = run(
+        directory.path(),
+        &[
+            "check",
+            "--explain",
+            "--color",
+            "never",
+            "--hyperlinks",
+            "never",
+            "src/budget.rs",
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("ALLOWED 1 comment this run did not report"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("src/budget.rs:13  /// A fresh budget."),
+        "the kept comment is not named:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("kept: policy conservative protects documentation comments"),
+        "the rule that kept it is not given:\n{stdout}"
+    );
+}
