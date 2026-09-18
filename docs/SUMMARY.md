@@ -5,6 +5,7 @@
 - [Getting started](getting-started.md)
 - [Installation](installation.md)
 - [Commands](commands.md)
+- [Reading a report](reports.md)
 - [Configuration](configuration.md)
 - [Policies and layouts](policies.md)
 - [Why was this comment kept?](why-kept.md)

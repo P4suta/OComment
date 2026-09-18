@@ -1363,6 +1363,25 @@ fn busiest(groups: &[crate::advice::Group]) -> Option<(String, usize)> {
     (count * 20 >= total).then_some((path, count))
 }
 
+/// The comment one finding was built from, so that the engine's verdict can be
+/// asked for again.
+///
+/// A finding is a run of adjacent comments and carries a path and a line rather
+/// than a span; the verdict belongs to the first comment of the run, which is
+/// the one whose rule decided the rest.
+fn found_at<'a>(
+    files: &'a [ProcessedFile],
+    item: &crate::advice::Item,
+) -> Option<(&'a ProcessedFile, &'a Comment)> {
+    let file = files.iter().find(|file| file.path == item.path)?;
+    let index = LineIndex::new(&file.source);
+    let comment = file.result.report.comments.iter().find(|comment| {
+        comment.disposition.is_remove()
+            && index.line_column(comment.span.start).0 == item.first_line
+    })?;
+    Some((file, comment))
+}
+
 /// How many findings a report shows in full before it starts summarising.
 ///
 /// Above this the report stops being something a reader reads and becomes
@@ -1611,6 +1630,20 @@ fn render_review(
                     subject.trim_end()
                 ))?;
             }
+            /* NOTE: The decision above is read from where the comment sits;
+             * this is the rule the engine actually applied and the setting it
+             * came from. They answer different questions -- what to do, and why
+             * it is being asked -- and `--explain` is the second one. */
+            if let Some((file, comment)) = found_at(files, item) {
+                let explainer = explanations.get(&file.path).map(Explainer::new);
+                if let Some(explainer) = explainer.as_ref() {
+                    wrote(writeln!(
+                        output,
+                        "        {dim}{}{reset}",
+                        explanation_line(file, comment, explainer, options).trim_start()
+                    ))?;
+                }
+            }
         }
         if let Some(route) = group.keep_route() {
             let mut rows = route.lines();
@@ -1628,12 +1661,49 @@ fn render_review(
 
     if kept > 0 {
         wrote(writeln!(output))?;
-        wrote(writeln!(
-            output,
-            "  {bold}{green}ALLOWED{reset} {dim}{} this run did not report; \
-             `--explain` names the rule that kept each{reset}",
-            comments(kept, "")
-        ))?;
+        if options.explain {
+            /* NOTE: The count is a promise that somebody checked; the list is
+             * what lets a reader check the checker. A gate nobody can audit
+             * when it is green is a gate whose green means nothing. */
+            wrote(writeln!(
+                output,
+                "  {bold}{green}ALLOWED{reset} {dim}{} this run did not report{reset}",
+                comments(kept, "")
+            ))?;
+            for file in files {
+                let explainer = explanations.get(&file.path).map(Explainer::new);
+                let index = LineIndex::new(&file.source);
+                for comment in file
+                    .result
+                    .report
+                    .comments
+                    .iter()
+                    .filter(|comment| !comment.disposition.is_remove())
+                {
+                    let (line, _) = index.line_column(comment.span.start);
+                    wrote(writeln!(
+                        output,
+                        "    {blue}{}:{line}{reset}  {dim}{}{reset}",
+                        display_path(&file.path, options.presentation.hyperlinks),
+                        preview(&file.source, comment.span, PREVIEW_COLUMNS)
+                    ))?;
+                    if let Some(explainer) = explainer.as_ref() {
+                        wrote(writeln!(
+                            output,
+                            "      {dim}{}{reset}",
+                            explanation_line(file, comment, explainer, options).trim_start()
+                        ))?;
+                    }
+                }
+            }
+        } else {
+            wrote(writeln!(
+                output,
+                "  {bold}{green}ALLOWED{reset} {dim}{} this run did not report; \
+                 `--explain` names the rule that kept each{reset}",
+                comments(kept, "")
+            ))?;
+        }
     }
     if removable > 0 && options.operation != Operation::Fix {
         wrote(writeln!(output))?;
