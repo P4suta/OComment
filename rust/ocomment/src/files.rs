@@ -699,3 +699,124 @@ fn skip(path: &Path, explicit: bool, error: impl std::fmt::Display) -> SkippedFi
         explicit,
     }
 }
+
+/// Why a file in the tree was never offered to the walk at all.
+///
+/// A skip is a file the walk reached and passed over, and it is reported. This
+/// is the other thing: a file the walk's own limits kept out, which nothing
+/// reported because nothing met it. `ocomment coverage` said `100.0%` over a
+/// repository whose every GitHub workflow was under `.github` and therefore
+/// hidden -- a true sentence about what was walked and a false assurance about
+/// what was checked.
+///
+/// A file a `.gitignore` excludes is deliberately not here. It is not a gap in
+/// the gate: it is build output, and a percentage taken over a hundred
+/// thousand object files would mean nothing at all.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum NotWalked {
+    /// `[files] hidden = false`, and a path component opens with a dot.
+    Hidden,
+    /// `[files] include` did not name it, or `[files] exclude` did.
+    Configured,
+    /// `[files] max_size`.
+    TooLarge,
+}
+
+impl NotWalked {
+    /// The setting a reader would change, phrased as the report prints it.
+    pub const fn reason(self) -> &'static str {
+        match self {
+            Self::Hidden => "hidden file or directory ([files] hidden = false)",
+            Self::Configured => "excluded by configuration ([files] include/exclude)",
+            Self::TooLarge => "larger than the size limit ([files] max_size)",
+        }
+    }
+}
+
+/// Every file under `paths` that this configuration's walk would not reach,
+/// and the setting that kept each one out.
+///
+/// Nothing is read. The walk here lifts only the hidden-file rule, so what it
+/// finds is the repository as its own ignore files describe it, and each path
+/// missing from `reached` is attributed to the first configured limit that
+/// would have stopped it -- in the order the walk applies them.
+pub fn not_walked(
+    paths: &[PathBuf],
+    resolved: &ResolvedConfig,
+    reached: &[PathBuf],
+) -> Result<Vec<(PathBuf, NotWalked)>> {
+    let include = compile_globs(&resolved.config.files.include)?;
+    let exclude = compile_globs(&resolved.config.files.exclude)?;
+    let implicit = [PathBuf::from(DEFAULT_TARGET)];
+    let targets = if paths.is_empty() {
+        &implicit[..]
+    } else {
+        paths
+    };
+    let reached: std::collections::HashSet<&Path> = reached.iter().map(PathBuf::as_path).collect();
+    let mut missed = Vec::new();
+    for target in targets {
+        if !target.is_dir() {
+            continue;
+        }
+        let ignore = resolved.config.files.ignore;
+        let mut builder = WalkBuilder::new(target);
+        builder
+            .standard_filters(ignore)
+            .hidden(false)
+            .follow_links(resolved.config.files.follow_symlinks);
+        if ignore {
+            builder.add_custom_ignore_filename(".ocommentignore");
+        }
+        builder.filter_entry(|entry| entry.file_name() != GIT_DIRECTORY);
+        for entry in builder.build().flatten() {
+            if !entry.file_type().is_some_and(|kind| kind.is_file()) {
+                continue;
+            }
+            let path = reported_path(entry.path());
+            if reached.contains(path.as_path()) {
+                continue;
+            }
+            if let Some(reason) = kept_out(&path, resolved, &include, &exclude) {
+                missed.push((path, reason));
+            }
+        }
+    }
+    missed.sort();
+    missed.dedup();
+    Ok(missed)
+}
+
+/// Which of the walk's limits would have stopped `path`, tested in the order
+/// the walk applies them.
+///
+/// `None` cannot happen for a path this function is asked about: the caller
+/// has already taken out everything the walk reached, and the walk that found
+/// this one lifted exactly one rule. It is returned rather than asserted
+/// because a filesystem that changed under the two walks is not a defect worth
+/// a panic.
+fn kept_out(
+    path: &Path,
+    resolved: &ResolvedConfig,
+    include: &GlobSet,
+    exclude: &GlobSet,
+) -> Option<NotWalked> {
+    if !resolved.config.files.hidden
+        && path
+            .components()
+            .any(|component| component.as_os_str().to_string_lossy().starts_with('.'))
+    {
+        return Some(NotWalked::Hidden);
+    }
+    let relative = resolved.relative_to_root(path);
+    if (!include.is_empty() && !include.is_match(&relative)) || exclude.is_match(&relative) {
+        return Some(NotWalked::Configured);
+    }
+    if path
+        .metadata()
+        .is_ok_and(|metadata| metadata.len() > resolved.config.files.max_size)
+    {
+        return Some(NotWalked::TooLarge);
+    }
+    None
+}

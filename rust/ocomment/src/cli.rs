@@ -2064,7 +2064,17 @@ fn run_coverage(target: &TargetArgs, common: &CommonArgs) -> Result<u8> {
         "coverage reports on a walk; standard input is one source with no walk around it"
     );
     let discovery = read_targets(&paths, stdin, &resolved, common)?;
-    let coverage = coverage::Coverage::compute(&discovery.files, &discovery.skipped);
+    /* NOTE: What the walk's own limits kept out, which nothing met and so
+     * nothing reported. Without it the percentage is of the walk rather than
+     * of the tree, and a run that read three of seven files says `100.0%`. */
+    let reached: Vec<PathBuf> = discovery
+        .files
+        .iter()
+        .map(|file| file.path.clone())
+        .chain(discovery.skipped.iter().map(|item| item.path.clone()))
+        .collect();
+    let not_walked = files::not_walked(&paths, &resolved, &reached)?;
+    let coverage = coverage::Coverage::compute(&discovery.files, &discovery.skipped, &not_walked);
     coverage::render(&coverage, common.output.format)?;
     /* NOTE: `--deny-skipped` turns the report into a gate here too, so that the
      * command that measures the hole and the command that refuses it agree

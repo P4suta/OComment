@@ -14,7 +14,7 @@
 //! nine are there.
 
 use crate::{
-    files::{SkippedFile, SourceFile},
+    files::{NotWalked, SkippedFile, SourceFile},
     output::{OutputFormat, skip_label, stdout, wrote},
 };
 use anyhow::Result;
@@ -40,6 +40,10 @@ pub struct Coverage {
     /// Reason label to how many files it accounts for, and for which
     /// extensions.
     skipped: BTreeMap<String, Group>,
+    /// The files the walk's own limits kept out, which nothing met and so
+    /// nothing reported. Counted in the total, because a percentage of what a
+    /// gate happened to walk is not a percentage of anything.
+    not_walked: BTreeMap<String, Group>,
     io_errors: usize,
 }
 
@@ -71,7 +75,11 @@ fn label_of(path: &Path) -> String {
 
 impl Coverage {
     /// Split one run's discovery into what it covered and what it did not.
-    pub fn compute(files: &[SourceFile], skipped: &[SkippedFile]) -> Self {
+    pub fn compute(
+        files: &[SourceFile],
+        skipped: &[SkippedFile],
+        not_walked: &[(PathBuf, NotWalked)],
+    ) -> Self {
         let mut coverage = Self {
             scanned: files.len(),
             ..Self::default()
@@ -88,16 +96,31 @@ impl Coverage {
             group.files += 1;
             *group.extensions.entry(label_of(&item.path)).or_default() += 1;
         }
+        for (path, reason) in not_walked {
+            let group = coverage
+                .not_walked
+                .entry(reason.reason().to_owned())
+                .or_default();
+            group.files += 1;
+            *group.extensions.entry(label_of(path)).or_default() += 1;
+        }
         coverage
     }
 
-    /// Every file the walk reached.
+    /// Every file in the tree: the ones the walk reached, and the ones its
+    /// own limits kept out.
+    ///
+    /// The second half is what makes the number mean something. Counting only
+    /// what the walk reached gives a percentage of the walk rather than of the
+    /// repository, and a run that walked three of seven files then reports
+    /// `100.0%` -- which is true and is a false assurance.
     fn total(&self) -> usize {
         self.scanned
             + self.io_errors
             + self
                 .skipped
                 .values()
+                .chain(self.not_walked.values())
                 .map(|group| group.files)
                 .sum::<usize>()
     }
@@ -134,6 +157,21 @@ pub fn render(coverage: &Coverage, format: OutputFormat) -> Result<()> {
                 "files": coverage.total(),
                 "scanned": coverage.scanned,
                 "io_errors": coverage.io_errors,
+                "not_walked": coverage
+                    .not_walked
+                    .iter()
+                    .map(|(reason, group)| {
+                        json!({
+                            "reason": reason,
+                            "files": group.files,
+                            "names": group
+                                .extensions
+                                .iter()
+                                .map(|(name, count)| json!({"name": name, "files": count}))
+                                .collect::<Vec<_>>(),
+                        })
+                    })
+                    .collect::<Vec<_>>(),
                 "skipped": coverage
                     .skipped
                     .iter()
@@ -166,7 +204,7 @@ pub fn render(coverage: &Coverage, format: OutputFormat) -> Result<()> {
                 tenths / 10,
                 tenths % 10
             ))?;
-            for (reason, group) in &coverage.skipped {
+            for (reason, group) in coverage.skipped.iter().chain(&coverage.not_walked) {
                 wrote(writeln!(out, "{}: {reason}", group.files))?;
                 let mut names: Vec<_> = group.extensions.iter().collect();
                 /* NOTE: Most files first, and the name as the tie-break so that

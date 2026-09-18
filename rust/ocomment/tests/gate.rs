@@ -280,3 +280,49 @@ fn the_tag_inventory_reports_both_kinds_of_drift() {
     assert_eq!(document["unused"][0], "SAFETY");
     assert_eq!(document["unconfigured"][0]["tag"], "XXX");
 }
+
+/// A percentage of what a walk happened to reach is a percentage of nothing.
+///
+/// `hidden = false` is the default, so a repository's `.github/` is not walked
+/// — and the walk never met those files, so nothing reported them and
+/// `coverage` said `100.0%`. Every workflow a project has is under there.
+#[test]
+fn coverage_counts_the_files_the_walk_never_reached() {
+    let directory = tempfile::tempdir().expect("a temporary directory");
+    let path = directory.path();
+    fs::create_dir_all(path.join(".github/workflows")).expect("writable");
+    fs::write(path.join("a.rs"), b"fn a() {}\n").expect("writable");
+    fs::write(
+        path.join(".github/workflows/ci.yml"),
+        b"on: [push]  # here\n",
+    )
+    .expect("writable");
+    fs::write(path.join(".hidden.toml"), b"# and here\n").expect("writable");
+
+    let output = run(path, &["coverage"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.starts_with("1 of 3 files scanned (33.3%)"),
+        "the percentage is of the walk rather than of the tree:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("2: hidden file or directory ([files] hidden = false)"),
+        "the reason does not name the setting a reader would change:\n{stdout}"
+    );
+
+    /* NOTE: And the other direction: with the rule lifted they are walked, so
+     * the same tree reports full coverage and the line disappears. A report
+     * that said `100.0%` either way would be saying nothing. */
+    fs::write(
+        path.join(".ocomment.toml"),
+        b"version = 1\n\n[files]\nhidden = true\n",
+    )
+    .expect("writable");
+    let walked = run(path, &["coverage"]);
+    let stdout = String::from_utf8_lossy(&walked.stdout);
+    assert!(
+        stdout.starts_with("4 of 4 files scanned (100.0%)"),
+        "lifting the rule did not walk them:\n{stdout}"
+    );
+    assert!(!stdout.contains("hidden file"), "{stdout}");
+}
