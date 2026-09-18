@@ -17,7 +17,7 @@
 //! it in OCaml would double the work and prove nothing.
 
 use crate::output::{ProcessedFile, sanitize_source_line};
-use ocomment_core::{Age, Comment, Language, ShapeRule};
+use ocomment_core::{Age, Comment, CommentKind, Language, Policy, ShapeRule};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
@@ -49,6 +49,12 @@ pub enum Decision {
     /// Longer than the configured paragraph. Also the engine's, and also
     /// answered by an edit to the comment rather than by deleting it.
     TooLong { limit: usize },
+    /// The policy is stricter than the kind of comment this is, and a gentler
+    /// one keeps it. Nothing about where it sits enters into that, and reading
+    /// the surrounding lines for advice would answer a question nobody asked:
+    /// a documentation comment taken out by `--policy all` is not a comment in
+    /// the wrong place, it is a run asking for more than the reader meant.
+    StricterThanTheKind { kind: CommentKind, keeps: Policy },
 }
 
 impl Decision {
@@ -69,6 +75,9 @@ impl Decision {
                 "shorten to {}, or move the rest into documentation",
                 crate::output::plural(*limit, "line")
             ),
+            Self::StricterThanTheKind { kind, keeps } => {
+                format!("keep `{kind}` comments with `{keeps}`, or mean to remove them")
+            }
         }
     }
 
@@ -84,6 +93,7 @@ impl Decision {
             Self::AmongStatements => "among-statements",
             Self::Expired { .. } => "expired",
             Self::TooLong { .. } => "too-long",
+            Self::StricterThanTheKind { .. } => "stricter-than-the-kind",
         }
     }
 
@@ -119,6 +129,13 @@ impl Decision {
             Self::TooLong { limit } => Some(format!(
                 "[policy.allow]\nmax_lines = {longest}  # {limit} now, {longest} is the longest above"
             )),
+            /* NOTE: The policy itself, because the policy is what decided it.
+             * Offering `[policy.allow] tags` here was the old answer and it was
+             * wrong twice over: a `///` carries no tag to allow, and allowing
+             * one would not reach a rule that is about kinds. */
+            Self::StricterThanTheKind { keeps, .. } => {
+                Some(format!("[policy]\nmode = \"{keeps}\""))
+            }
             /* NOTE: None on purpose. Commented-out code is the one situation
              * with nothing worth keeping, and offering a way to keep it would
              * be this file's own advice arguing against itself. */
@@ -209,10 +226,10 @@ const DOC_PREFIX: [(Language, &str); 8] = [
 /// Groups come out in the order the decisions are declared, so two runs over
 /// the same tree print the same report.
 #[must_use]
-pub fn plan(files: &[ProcessedFile]) -> Vec<Group> {
+pub fn plan(files: &[ProcessedFile], policy: Policy) -> Vec<Group> {
     let mut groups: Vec<Group> = Vec::new();
     for file in files {
-        for item in file_items(file) {
+        for item in file_items(file, policy) {
             let (decision, item) = item;
             match groups.iter_mut().find(|group| group.decision == decision) {
                 Some(group) => group.items.push(item),
@@ -234,7 +251,7 @@ pub fn plan(files: &[ProcessedFile]) -> Vec<Group> {
 /// deciding comment by comment asks the first line what the second line is,
 /// gets "another comment", and files four lines of prose about a struct under
 /// "it sits among statements".
-fn file_items(file: &ProcessedFile) -> Vec<(Decision, Item)> {
+fn file_items(file: &ProcessedFile, policy: Policy) -> Vec<(Decision, Item)> {
     let lines = source_lines(&file.source);
     /* NOTE: Once per file. Building it per comment turns a report over a large
      * file into a quadratic one, and a file with a thousand comments is exactly
@@ -273,7 +290,8 @@ fn file_items(file: &ProcessedFile) -> Vec<(Decision, Item)> {
                      * covers, and splitting it back into one finding per line
                      * would report a single paragraph as several. A deadline
                      * is the other way: each one is its own promise. */
-                    && open.shape == placed.shape =>
+                    && open.shape == placed.shape
+                    && open.kind == placed.kind =>
             {
                 open.last = placed.last;
                 open.comments += 1;
@@ -286,12 +304,13 @@ fn file_items(file: &ProcessedFile) -> Vec<(Decision, Item)> {
                 tag: placed.tag,
                 shape: placed.shape,
                 beside: placed.beside,
+                kind: placed.kind,
             }),
         }
     }
     runs.into_iter()
         .filter(|run| run.comments > 0)
-        .filter_map(|run| item_of(file, &lines, run))
+        .filter_map(|run| item_of(file, &lines, run, policy))
         .collect()
 }
 
@@ -304,6 +323,7 @@ struct Run {
     tag: Option<String>,
     shape: Option<ShapeRule>,
     beside: bool,
+    kind: CommentKind,
 }
 
 impl Run {
@@ -317,11 +337,17 @@ impl Run {
         tag: None,
         shape: None,
         beside: false,
+        kind: CommentKind::Line,
     };
 }
 
 /// One run, decided and rendered.
-fn item_of(file: &ProcessedFile, lines: &[String], run: Run) -> Option<(Decision, Item)> {
+fn item_of(
+    file: &ProcessedFile,
+    lines: &[String],
+    run: Run,
+    policy: Policy,
+) -> Option<(Decision, Item)> {
     let old: Vec<String> = lines.get(run.first - 1..run.last)?.to_vec();
     let below = lines
         .get(run.last..)?
@@ -345,6 +371,11 @@ fn item_of(file: &ProcessedFile, lines: &[String], run: Run) -> Option<(Decision
             ShapeRule::TooLong { limit, .. } => Decision::TooLong { limit: *limit },
             ShapeRule::Trailing => Decision::BesideCode,
             ShapeRule::Tagged { .. } => Decision::AmongStatements,
+        }
+    } else if let Some(keeps) = gentler_policy(run.kind, policy) {
+        Decision::StricterThanTheKind {
+            kind: run.kind,
+            keeps,
         }
     } else if run.tag.is_some() {
         Decision::Promise
@@ -393,6 +424,7 @@ struct Placed {
     tag: Option<String>,
     shape: Option<ShapeRule>,
     beside: bool,
+    kind: CommentKind,
 }
 
 fn place(lines: &[String], index: &crate::output::LineIndex, comment: &Comment) -> Option<Placed> {
@@ -419,7 +451,19 @@ fn place(lines: &[String], index: &crate::output::LineIndex, comment: &Comment) 
         tag,
         shape: comment.shape.clone(),
         beside,
+        kind: comment.kind,
     })
+}
+
+/// A policy gentler than this run's that would keep a comment of this kind.
+///
+/// `None` when no policy keeps it, which is every ordinary comment: the reader
+/// of one of those has a decision to make about the comment, and the reader of
+/// a documentation comment removed by `--policy all` has a decision to make
+/// about the run.
+fn gentler_policy(kind: CommentKind, policy: Policy) -> Option<Policy> {
+    let keeps = Policy::strongest_keeping(&[kind])?;
+    (keeps != policy && !policy.keeps(kind)).then_some(keeps)
 }
 
 /// The comment's own text, without the code that may share its line.

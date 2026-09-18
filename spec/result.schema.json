@@ -462,7 +462,8 @@
             "top-of-the-file",
             "among-statements",
             "expired",
-            "too-long"
+            "too-long",
+            "stricter-than-the-kind"
           ],
           "description": "A stable name to branch on, unlike the sentence beside it."
         },

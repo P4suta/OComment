@@ -1313,7 +1313,14 @@ pub fn render_explained(
     match options.format {
         OutputFormat::Human => render_human(&mut output, files, skipped, options, explanations),
         OutputFormat::Review => render_review(&mut output, files, skipped, options, explanations),
-        OutputFormat::Json => render_json(&mut output, files, skipped, options.json, explanations),
+        OutputFormat::Json => render_json(
+            &mut output,
+            files,
+            skipped,
+            options.json,
+            explanations,
+            options.policy,
+        ),
         OutputFormat::Jsonl => {
             render_jsonl(&mut output, files, skipped, options.json, explanations)
         }
@@ -1517,7 +1524,7 @@ fn render_review(
         color("\x1b[38;5;75m", paint),
         color("\x1b[38;5;80m", paint),
     );
-    let groups = crate::advice::plan(files);
+    let groups = crate::advice::plan(files, options.policy);
     let removable: usize = groups.iter().map(crate::advice::Group::comments).sum();
     let kept: usize = files
         .iter()
@@ -2407,6 +2414,7 @@ fn render_json(
     skipped: &[SkippedFile],
     json: JsonOptions,
     explanations: &Explanations,
+    policy: Policy,
 ) -> Result<()> {
     #[derive(Serialize)]
     struct Document<'a> {
@@ -2432,7 +2440,7 @@ fn render_json(
             version: 1,
             files: JsonFiles(files, json, explanations),
             skipped: JsonSkipped(skipped),
-            decisions: json_decisions(files),
+            decisions: json_decisions(files, policy),
         },
     )
     .map_err(write_error)?;
@@ -2477,8 +2485,8 @@ struct JsonKeep {
     add: String,
 }
 
-fn json_decisions(files: &[ProcessedFile]) -> Vec<JsonDecision> {
-    crate::advice::plan(files)
+fn json_decisions(files: &[ProcessedFile], policy: Policy) -> Vec<JsonDecision> {
+    crate::advice::plan(files, policy)
         .into_iter()
         .map(|group| JsonDecision {
             decision: group.decision.name(),
@@ -3947,7 +3955,7 @@ fn write_agent(
     explanations: &Explanations,
     subject: Subject,
 ) -> Result<()> {
-    let groups = crate::advice::plan(files);
+    let groups = crate::advice::plan(files, options.policy);
     let removable: usize = groups.iter().map(crate::advice::Group::comments).sum();
     let broken: Vec<String> = files
         .iter()

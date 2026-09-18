@@ -434,3 +434,54 @@ fn explain_turns_the_allowed_count_into_the_list() {
         "the rule that kept it is not given:\n{stdout}"
     );
 }
+
+/// When the policy is stricter than the kind, the decision is about the policy.
+///
+/// A `///` taken out by `--policy all` is not a comment in the wrong place. The
+/// advice read from the lines around it said "let the code say it, or tag it"
+/// and offered `[policy.allow] tags = ["NOTE"]`, and both halves were wrong: a
+/// doc comment carries no tag to allow, and allowing one would not reach a rule
+/// that is about kinds. Under the default policy this never fires, because no
+/// policy keeps an ordinary comment.
+#[test]
+fn a_policy_stricter_than_the_kind_is_a_decision_about_the_policy() {
+    let directory = project();
+    let output = run(
+        directory.path(),
+        &[
+            "check",
+            "--policy",
+            "all",
+            "--color",
+            "never",
+            "--hyperlinks",
+            "never",
+            "src/budget.rs",
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("keep `doc-line` comments with `conservative`"),
+        "a doc comment removed by `all` got advice about where it sits:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("[policy]") && stdout.contains("mode = \"conservative\""),
+        "the way to keep it is not the policy that keeps it:\n{stdout}"
+    );
+
+    let default = run(
+        directory.path(),
+        &[
+            "check",
+            "--color",
+            "never",
+            "--hyperlinks",
+            "never",
+            "src/budget.rs",
+        ],
+    );
+    assert!(
+        !String::from_utf8_lossy(&default.stdout).contains("mean to remove them"),
+        "the default policy reached a decision that is only about a stricter one"
+    );
+}
