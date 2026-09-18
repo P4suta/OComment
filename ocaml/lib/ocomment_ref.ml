@@ -21,11 +21,37 @@ type comment_kind =
   | Line | Block | DocLine | DocBlock | Directive | License | HtmlComment
   | Shebang | Encoding | OptimizerHint | VersionComment | LoadBearing
 
+(* NOTE: How strongly a kind is held back from every policy.  A property of the
+   kind rather than a decision any run makes: a shebang is required by the
+   file's own syntax whatever anyone configures.  The only way past it is
+   force_protected. *)
+type protection = NoProtection | Preamble | LoadBearingTier
+
+let protection_of = function
+  | Shebang | Encoding -> Preamble
+  | LoadBearing | OptimizerHint | VersionComment -> LoadBearingTier
+  | Line | Block | DocLine | DocBlock | Directive | License | HtmlComment -> NoProtection
+
+let protection_reason = function
+  | NoProtection -> None
+  | Preamble -> Some "required source preamble"
+  | LoadBearingTier -> Some "required by the language or its build"
+
 type disposition = Remove | Keep of string
 type severity = Error | Warning | Info | Hint
 type diagnostic = { code : string; message : string; severity : severity; span : byte_span }
 type comment = { span : byte_span; kind : comment_kind; disposition : disposition }
 type layout = Lines | Columns | Compact
+
+(* NOTE: What a comment has to be beyond being of a kind the policy keeps.  The
+   policy decides by kind, and a kind is a coarse thing to decide by: a one-line
+   rationale and a forty-line essay are both Line.  These are the other axes,
+   and they cut across the policy rather than under it. *)
+type allow_rules = {
+  tags : string list;
+  max_lines : int option;
+  trailing : bool option;
+}
 
 type scan_options = {
   policy : policy;
@@ -36,6 +62,7 @@ type scan_options = {
   remove_kinds : comment_kind list;
   keep_regex : string list;
   remove_regex : string list;
+  allow : allow_rules;
 }
 
 type transform_options = { scan : scan_options; layout : layout }
@@ -87,6 +114,7 @@ type declarative_profile = {
 let default_scan_options = {
   policy = Conservative; dialect = Standard; force_invalid = false; force_protected = false;
   keep_kinds = []; remove_kinds = []; keep_regex = []; remove_regex = [];
+  allow = { tags = []; max_lines = None; trailing = None };
 }
 
 let default_transform_options = { scan = default_scan_options; layout = Lines }
@@ -266,13 +294,13 @@ let regex_matches patterns raw =
 let disposition options kind raw =
   if mem_kind kind options.keep_kinds then Keep "kept by keep_kind"
   else if regex_matches options.keep_regex raw then Keep "kept by keep_regex"
-  else if (kind = Shebang || kind = Encoding) && not options.force_protected then Keep "required source preamble"
-  (* NOTE: The SQL pair sits with LoadBearing: `/*!...*/` is a statement the
-     server executes and `/*+ ... */` changes the plan it produces, so neither
-     is something `all` gets to take. *)
-  else if (kind = LoadBearing || kind = OptimizerHint || kind = VersionComment)
-          && not options.force_protected then
-    Keep "required by the language or its build"
+  (* NOTE: One table.  The tier is a property of the kind and this reads it,
+     rather than restating which kinds are in which tier -- which is how the two
+     sides of that question drifted apart on the Rust side twice. *)
+  else if protection_of kind <> NoProtection && not options.force_protected then
+    (match protection_reason (protection_of kind) with
+     | Some reason -> Keep reason
+     | None -> Remove)
   else if mem_kind kind options.remove_kinds || regex_matches options.remove_regex raw then Remove
   else if options.policy = All then Remove
   else if kind = HtmlComment then Keep "HTML comments are DOM-observable"
@@ -6260,6 +6288,126 @@ and scan_sfc_template vue source language options accumulator start finish =
     else loop (index + 1) in
   loop start
 
+(* NOTE: A comment's text: its delimiters removed, and the common prefix of a
+   block comment's continuation lines removed with them.  This is what a rule
+   about what a comment *says* has to be asked of -- a rule asked of the raw
+   token protects a Python comment and silently fails to protect the identical
+   rule written in Lua, where the token opens "--". *)
+let strip_comment_markers raw =
+  let openers = ["<!--"; "///"; "//!"; "//"; "/**"; "/*"; "(*"; ";;"; ";"; "--"; "%"; "#"] in
+  let closers = ["-->"; "*/"; "*)"] in
+  let start = match List.find_opt (fun marker -> String.starts_with ~prefix:marker raw) openers with
+    | Some marker -> String.length marker
+    | None -> 0 in
+  let finish = match List.find_opt (fun marker ->
+      String.length raw >= String.length marker &&
+      String.sub raw (String.length raw - String.length marker) (String.length marker) = marker)
+      closers with
+    | Some marker -> String.length raw - String.length marker
+    | None -> String.length raw in
+  let start = min start finish in
+  String.sub raw start (finish - start)
+
+(* NOTE: Whether anything but whitespace precedes `start` on its line.  That is
+   what makes a comment trailing: it shares a line with code. *)
+let has_code_before_it source start =
+  let limit = min start (Bytes.length source) in
+  let rec line_start index =
+    if index <= 0 then 0
+    else if Bytes.get source (index - 1) = '\n' then index
+    else line_start (index - 1)
+  in
+  let opening = line_start limit in
+  let rec loop index =
+    index < limit &&
+    (match Bytes.get source index with
+     | ' ' | '\t' | '\r' | '\n' -> loop (index + 1)
+     | _ -> true)
+  in loop opening
+
+(* NOTE: How many lines the bytes from `start` to `finish` occupy, both ends
+   counted. *)
+let line_span source start finish =
+  let limit = min finish (Bytes.length source) in
+  let rec loop index total =
+    if index >= limit then total
+    else loop (index + 1) (if Bytes.get source index = '\n' then total + 1 else total)
+  in loop (min start limit) 1
+
+(* NOTE: The tag a comment opens with, of the ones a configuration allows.  Read
+   from the text rather than the raw bytes, so the same rule holds in every
+   language: a rule written against the raw token protects a Python comment and
+   silently fails to protect the identical rule written in Lua. *)
+let matching_tag source (span : byte_span) tags =
+  let raw = Bytes.sub_string source span.start (span.finish - span.start) in
+  let text = strip_comment_markers raw in
+  let rec skip index =
+    if index >= String.length text then index
+    else match text.[index] with
+      | ' ' | '\t' | '\r' | '\n' | '*' | '!' | '-' | '/' | '#' -> skip (index + 1)
+      | _ -> index
+  in
+  let opening = skip 0 in
+  let body = String.uppercase_ascii
+      (String.sub text opening (String.length text - opening)) in
+  List.find_opt (fun tag ->
+    String.starts_with ~prefix:(String.uppercase_ascii tag) body) tags
+
+(* NOTE: Runs of comments with nothing but whitespace between them.  Four
+   consecutive line comments are four comments to a scanner and one paragraph to
+   a reader, and a length rule is about what the reader sees. *)
+let comment_runs source (comments : comment list) : comment list list =
+  let rec build (acc : comment list list) (current : comment list) = function
+    | [] -> List.rev (if current = [] then acc else List.rev current :: acc)
+    | (comment : comment) :: rest ->
+      (match current with
+       | [] -> build acc [comment] rest
+       | (previous : comment) :: _ ->
+         let gap = comment.span.start - previous.span.finish in
+         let between = if gap <= 0 then ""
+           else Bytes.sub_string source previous.span.finish gap in
+         let only_space = String.for_all
+             (function ' ' | '\t' | '\r' | '\n' -> true | _ -> false) between in
+         if only_space && not (has_code_before_it source comment.span.start)
+         then build acc (comment :: current) rest
+         else build (List.rev current :: acc) [comment] rest)
+  in build [] [] comments
+
+let apply_allow_rules source options (comments : comment list) : comment list =
+  let rules = options.allow in
+  if rules.tags = [] && rules.max_lines = None && rules.trailing = None then comments
+  else
+    let tagged comment =
+      if comment.disposition <> Remove then comment
+      else match matching_tag source comment.span rules.tags with
+        | Some tag -> { comment with disposition = Keep (Printf.sprintf "tagged `%s`" tag) }
+        | None -> comment
+    in
+    let comments = if rules.tags = [] then comments else List.map tagged comments in
+    let untrailing comment =
+      if rules.trailing = Some false
+         && comment.disposition <> Remove
+         && protection_of comment.kind = NoProtection
+         && has_code_before_it source comment.span.start
+      then { comment with disposition = Remove }
+      else comment
+    in
+    let comments = List.map untrailing comments in
+    match rules.max_lines with
+    | None -> comments
+    | Some limit ->
+      comment_runs source comments
+      |> List.concat_map (fun (run : comment list) ->
+        match run with
+        | [] -> []
+        | (first : comment) :: _ ->
+          let last : comment = List.nth run (List.length run - 1) in
+          if line_span source first.span.start last.span.finish <= limit then run
+          else List.map (fun (comment : comment) ->
+            if protection_of comment.kind = NoProtection
+            then { comment with disposition = Remove }
+            else comment) run)
+
 let rec scan_html source language options accumulator =
   let tag_boundary = function None -> true | Some character ->
     ascii_whitespace character || character = '>' || character = '/' in
@@ -6367,6 +6515,10 @@ and scan source language options =
     { start; finish = max start (min span.finish length) } in
   let comments = List.rev accumulator.comments_rev
     |> List.map (fun (comment : comment) -> { comment with span = clamp comment.span }) in
+  (* NOTE: Applied here rather than in `disposition` because two of the three
+     rules are about where a comment sits rather than what it says, and a
+     decision made one comment at a time cannot see that. *)
+  let comments = apply_allow_rules source options comments in
   let diagnostics = List.rev accumulator.diagnostics_rev
     |> List.map (fun (diagnostic : diagnostic) -> { diagnostic with span = clamp diagnostic.span }) in
   { language; comments; diagnostics; valid = not (List.exists (fun diagnostic -> diagnostic.severity = Error) diagnostics) }
@@ -6498,6 +6650,10 @@ let scan_profile source profile options =
     in
     loop 0;
     let comments = List.rev accumulator.comments_rev and diagnostics = List.rev accumulator.diagnostics_rev in
+    (* NOTE: The same rules the built-in scanners apply.  A profile describes a
+       file format rather than a policy, so a project's tag convention and
+       length limit have to reach a ".gitignore" exactly as they reach a ".rs". *)
+    let comments = apply_allow_rules source options comments in
     Result.Ok { language = Unknown; comments; diagnostics;
       valid = not (List.exists (fun diagnostic -> diagnostic.severity = Error) diagnostics) }
 

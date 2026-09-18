@@ -12099,6 +12099,92 @@
         "diagnostics": [],
         "output_utf8": "\npub const A: &str = \"//\";\n\npub fn hazards() -> usize {\n    let raw_deep = r##\"a \"# inside // and /* here\"##;\n    let raw_star = r#\"closing */ inside a raw string\"#;\n    let byte = b\"// not a comment\";\n    let byte_raw = br#\"// nor this\"#;\n    let slash = '/';\n    let quote = '\\'';\n    let backslash = '\\\\';\n    let nul = '\\u{0}';\n    let solidus = \"\\u{2F}\\u{2F} escaped slashes\";\n    let ends_in_escape = \"trailing \\\\\";\n    let lifetime: &'static str = \"//\";\n    let nested = 1  + 2;\n    let empty = 3  + 4;\n    let stars = 5  + 6;\n    let joined = 7 + 8;\n    let negate = - -9_i32;\n    let cast = 10_i32 as i32;\n    let generic: Vec<Vec <u8>> = Vec::new();\n    let attr = ATTRIBUTED;\n    raw_deep.len() + raw_star.len() + byte.len() + byte_raw.len() + solidus.len()\n        + ends_in_escape.len() + lifetime.len() + generic.len() + attr.len()\n        + usize::try_from(nested + empty + stars + joined + negate.abs() + cast).unwrap_or(0)\n        + usize::from(slash == quote || backslash == nul)\n}\n\n#[doc = \"// not a comment either\"]\npub const ATTRIBUTED: &str = \"/* nor this */\";\n\nmacro_rules! holding {\n    () => {\n        \"// inside a macro body\"\n    };\n}\n\npub fn expanded() -> &'static str {\n    holding!()\n}\n"
       }
+    },
+    {
+      "id": "allow-rules-tag-length-and-trailing",
+      "language": "rust",
+      "operation": "scan",
+      "options": {
+        "policy": "conservative",
+        "allow": {
+          "tags": [
+            "NOTE"
+          ],
+          "max_lines": 1,
+          "trailing": false
+        }
+      },
+      "source_utf8": "// NOTE: one line.\npub fn a() {}\n\n// NOTE: goes on\n// NOTE: and on.\npub fn b() {}\n\npub fn c() {} // NOTE: beside code\n\n// plain\npub fn d() {}\n",
+      "note": "The three axes a kind cannot express, together. A tagged one-line comment is kept; the same tag over three lines is not, because the complaint was never that a comment exists but that it goes on; the same tag beside code is not, because putting the comment there is the obvious way around a rule about comments above code; and an untagged one-liner was never kept in the first place. A run of adjacent comments is measured as one paragraph, which is what a reader sees.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 18,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 34,
+            "end": 50,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 51,
+            "end": 67,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 97,
+            "end": 117,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 119,
+            "end": 127,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "allow-rules-tag-crosses-languages",
+      "language": "lua",
+      "operation": "scan",
+      "options": {
+        "policy": "conservative",
+        "allow": {
+          "tags": [
+            "NOTE"
+          ]
+        }
+      },
+      "source_utf8": "-- NOTE: a Lua rationale.\nlocal x = 1\n-- plain\n",
+      "note": "The same tag rule in a language whose comments open `--`. This is what `keep_regex` cannot do: it is matched against the whole raw token, so a pattern written for `//` or `#` protects some languages and silently fails in the rest. A tag is read from the comment's text, so one rule holds everywhere.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 25,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 38,
+            "end": 46,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
     }
   ]
 }

@@ -210,6 +210,11 @@ fn finish_scan(mut scanner: Scanner<'_>) -> (ScanReport, Vec<usize>, bool) {
         .diagnostics
         .iter()
         .any(|diagnostic| diagnostic.severity == Severity::Error);
+    /* NOTE: Applied here rather than in `disposition` because two of the three
+     * rules are about where a comment sits rather than what it says, and a
+     * decision made one comment at a time cannot see that. A run of four `//`
+     * lines is four comments to the scanner and one paragraph to a reader. */
+    apply_allow_rules(scanner.source, &mut scanner.comments, &scanner.options);
     (
         ScanReport {
             language,
@@ -220,6 +225,133 @@ fn finish_scan(mut scanner: Scanner<'_>) -> (ScanReport, Vec<usize>, bool) {
         scanner.safe_checkpoints,
         scanner.stopped,
     )
+}
+
+/// Apply the rules that are about a comment's shape rather than its kind.
+///
+/// These cut across the policy rather than under it: a comment that fails one
+/// is removed whatever kept it, short of the protections no policy reaches — a
+/// shebang, an encoding line, a directive the language or its build reads.
+/// Those stay, because the cost of losing one is a broken build and the cost
+/// of keeping a long one is a long comment.
+///
+/// `tags` is the opposite direction: it keeps a comment the policy would have
+/// removed. It is applied first, so that a tagged comment still has to be
+/// short enough and still may not sit beside code.
+pub(crate) fn apply_allow_rules(source: &[u8], comments: &mut [Comment], options: &ScanOptions) {
+    let rules = &options.allow;
+    if rules.tags.is_empty() && rules.max_lines.is_none() && rules.trailing.is_none() {
+        return;
+    }
+
+    if !rules.tags.is_empty() {
+        for comment in comments.iter_mut() {
+            if comment.disposition.is_remove()
+                && let Some(tag) = matching_tag(source, comment, &rules.tags)
+            {
+                comment.disposition = Disposition::Keep {
+                    reason: format!("tagged `{tag}`"),
+                };
+            }
+        }
+    }
+
+    if rules.trailing == Some(false) {
+        for comment in comments.iter_mut() {
+            if !comment.disposition.is_remove()
+                && protected_reason(comment.kind).is_none()
+                && has_code_before_it(source, comment.span.start)
+            {
+                comment.disposition = Disposition::Remove;
+            }
+        }
+    }
+
+    if let Some(limit) = rules.max_lines {
+        for (start, end) in comment_runs(source, comments) {
+            let run = &mut comments[start..end];
+            let first = run[0].span.start;
+            let last = run[run.len() - 1].span.end;
+            if line_span(source, first, last) <= limit {
+                continue;
+            }
+            for comment in run {
+                if protected_reason(comment.kind).is_none() {
+                    comment.disposition = Disposition::Remove;
+                }
+            }
+        }
+    }
+}
+
+/// The tag a comment opens with, of the ones a configuration allows.
+///
+/// Read from the comment's text rather than its raw bytes, so the same rule
+/// holds in every language: the delimiters come off first, and with them the
+/// `*` a block comment's continuation lines are written with. Matched
+/// case-insensitively at the start, so `NOTE:`, `note:` and `Note -` all
+/// count and a sentence merely mentioning the word does not.
+fn matching_tag<'a>(source: &[u8], comment: &Comment, tags: &'a [String]) -> Option<&'a str> {
+    let raw = source.get(comment.span.start..comment.span.end)?;
+    let text = String::from_utf8_lossy(strip_comment_markers(raw));
+    let body = text
+        .trim_start_matches(|character: char| {
+            character.is_whitespace() || matches!(character, '*' | '!' | '-' | '/' | '#')
+        })
+        .to_ascii_uppercase();
+    tags.iter()
+        .find(|tag| body.starts_with(&tag.to_ascii_uppercase()))
+        .map(String::as_str)
+}
+
+/// Whether anything but whitespace precedes `start` on its line.
+///
+/// This is what makes a comment trailing: it shares a line with code. A
+/// comment on a line of its own, however deeply indented, is not.
+fn has_code_before_it(source: &[u8], start: usize) -> bool {
+    let line_start = source[..start.min(source.len())]
+        .iter()
+        .rposition(|byte| *byte == b'\n')
+        .map_or(0, |index| index + 1);
+    source[line_start..start.min(source.len())]
+        .iter()
+        .any(|byte| !byte.is_ascii_whitespace())
+}
+
+/// How many lines the bytes from `start` to `end` occupy, counting both ends.
+fn line_span(source: &[u8], start: usize, end: usize) -> usize {
+    let end = end.min(source.len());
+    source[start.min(end)..end]
+        .iter()
+        .filter(|byte| **byte == b'\n')
+        .count()
+        + 1
+}
+
+/// Runs of comments with nothing but whitespace between them, as index ranges.
+///
+/// Four consecutive `//` lines are four comments to a scanner and one
+/// paragraph to a reader, and a length rule is about what the reader sees. A
+/// comment sharing its line with code opens a run of its own: it belongs to
+/// that line rather than to the paragraph above it.
+fn comment_runs(source: &[u8], comments: &[Comment]) -> Vec<(usize, usize)> {
+    let mut runs = Vec::new();
+    let mut index = 0;
+    while index < comments.len() {
+        let mut end = index + 1;
+        while end < comments.len() {
+            let between = &source[comments[end - 1].span.end..comments[end].span.start];
+            if !between.iter().all(u8::is_ascii_whitespace)
+                || has_code_before_it(source, comments[end].span.start)
+            {
+                break;
+            }
+            end += 1;
+        }
+        runs.push((index, end));
+        index = end;
+    }
+    runs
 }
 
 /// One past the furthest byte a lookahead read, in the coordinates of the
@@ -6108,23 +6240,16 @@ impl DispositionPatterns {
  * instructions wearing a comment's syntax. `force_protected` is the one way
  * out, and it is spelled out rather than implied so that a run which gives up
  * a build constraint had to say so. */
+/// The reason a comment is held back from every policy, if it is.
+///
+/// Derived from the kind's own tier rather than restated here. It was a second
+/// `match` over the same kinds, which is one of the two places the "does
+/// removing it change what the toolchain produces?" question was answered --
+/// and the two drifted apart twice: once when SQL's executed comments were
+/// filed with the linter suppressions, and once when `Policy::keeps` was
+/// written as though this tier were the policy's business.
 const fn protected_reason(kind: CommentKind) -> Option<&'static str> {
-    match kind {
-        CommentKind::Shebang | CommentKind::Encoding => Some("required source preamble"),
-        /* NOTE: A SQL optimizer hint and a version-gated comment are here for
-         * the reason the load-bearing tier exists at all. `/*!40101 SET ... */`
-         * is a statement the server executes -- this crate's own `CommentKind`
-         * documentation says so -- and `/*+ ... */` changes the plan the server
-         * produces. Both answer "what does removing it change?" with "what the
-         * toolchain produces", which is the line `spec/directives.toml` draws,
-         * and `--policy all` was taking both: a mysqldump run through it came
-         * out missing statements that still restored, quietly, into a different
-         * database than the one dumped. */
-        CommentKind::LoadBearing | CommentKind::OptimizerHint | CommentKind::VersionComment => {
-            Some("required by the language or its build")
-        }
-        _ => None,
-    }
+    kind.protection().reason()
 }
 
 /* NOTE: Which directives are load-bearing, told from the far larger set that
@@ -6242,35 +6367,27 @@ pub(crate) fn disposition(
     {
         return Disposition::Remove;
     }
-    if options.policy == Policy::All {
+    /* NOTE: The table is `Policy::keeps` and nowhere else. It used to be here as
+     * a chain of `if`s and in the crate documentation as prose, and the CLI
+     * grew a third hand-written copy to answer "would a weaker policy have
+     * kept this?" -- which was wrong. One table, and the match inside it is
+     * exhaustive, so a new kind does not compile until every policy answers
+     * for it. */
+    if !options.policy.keeps(kind) {
         return Disposition::Remove;
     }
-    if kind == CommentKind::HtmlComment {
-        return Disposition::Keep {
-            reason: "HTML comments are DOM-observable".into(),
-        };
+    Disposition::Keep {
+        reason: match kind {
+            CommentKind::HtmlComment => "HTML comments are DOM-observable",
+            CommentKind::Directive => "tool or language directive",
+            /* NOTE: A documentation comment is not commentary about the code: it
+             * is the API documentation, and it ships. Removing one empties a
+             * page on docs.rs, pkg.go.dev or a javadoc site, which is a public
+             * loss of the same kind as removing a licence notice. */
+            _ => "conservative policy",
+        }
+        .into(),
     }
-    if kind == CommentKind::Directive {
-        return Disposition::Keep {
-            reason: "tool or language directive".into(),
-        };
-    }
-    /* NOTE: A documentation comment is not commentary about the code: it is the
-     * API documentation, and it ships. Removing one empties a page on docs.rs,
-     * pkg.go.dev or a javadoc site, which is a public loss of the same kind as
-     * removing a licence notice -- and this policy already decided that kind
-     * does not go by default. A project that wants them gone asks for
-     * `standard`, which is a sentence someone types on purpose. */
-    if matches!(
-        kind,
-        CommentKind::License | CommentKind::DocLine | CommentKind::DocBlock
-    ) && options.policy == Policy::Conservative
-    {
-        return Disposition::Keep {
-            reason: "conservative policy".into(),
-        };
-    }
-    Disposition::Remove
 }
 
 /// The index and text of the first pattern in `set` that matches `raw`.
@@ -6825,7 +6942,7 @@ fn is_encoding_declaration(source: &[u8], start: usize, raw: &[u8]) -> bool {
         .is_some_and(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
 }
 
-fn strip_comment_markers(raw: &[u8]) -> &[u8] {
+pub(crate) fn strip_comment_markers(raw: &[u8]) -> &[u8] {
     let mut start = 0;
     let mut end = raw.len();
     for marker in [
@@ -6836,7 +6953,15 @@ fn strip_comment_markers(raw: &[u8]) -> &[u8] {
         b"/**",
         b"/*",
         b"(*",
+        /* NOTE: Lisp's and SQL's and Lua's. They were absent, which is how a
+         * rule written against the text of a comment came to work in some
+         * languages and not others: a `keep_regex` matching `^#\s*NOTE` is
+         * asked of the raw token, and the raw token in a Lua file opens with
+         * `--`. */
+        b";;",
+        b";",
         b"--",
+        b"%",
         b"#",
     ] {
         if raw.starts_with(marker) {

@@ -8,8 +8,8 @@ use clap::ValueEnum;
 use ocomment_core::TransformResult;
 use ocomment_core::{
     ByteSpan, Comment, CommentKind, Diagnostic, Disposition, DispositionExplanation,
-    DispositionPatterns, Edit, Language, Policy, ScanOptions, ScanReport, Severity, SourceMap,
-    TransformPlan, explain_comment_with,
+    DispositionPatterns, Edit, Language, Policy, Protection, ScanOptions, ScanReport, Severity,
+    SourceMap, TransformPlan, explain_comment_with,
 };
 use serde::{Serialize, Serializer, ser::SerializeSeq};
 use serde_json::{Value, json};
@@ -1416,22 +1416,57 @@ fn concentration(files: &[ProcessedFile], options: &RenderOptions) -> Vec<String
         }
     ));
 
-    /* NOTE: The flag is offered only when one kind accounts for everything. A
-     * suggestion that would leave findings behind is not an answer to "how do
-     * I make this clean", and one that names three flags is the wall again. */
-    let mut present = CommentKind::ALL
+    /* NOTE: One suggestion, and the best one available. The rule used to be
+     * "only when one kind accounts for everything", which read `--keep-kind`
+     * as taking one kind -- it is variadic, so two kinds is still one flag.
+     * The case that got it wrong is not an edge: a Rust crate with both
+     * documentation and a licence header produces exactly two kinds and never
+     * one, which is every crate on crates.io.
+     *
+     * The order below is by how good the advice is. A named policy beats a
+     * list of kinds -- it is shorter, it is the configuration the project
+     * should be keeping anyway, and it teaches the tool's own vocabulary
+     * rather than its escape hatches. */
+    let present: Vec<CommentKind> = CommentKind::ALL
         .into_iter()
         .enumerate()
-        .filter(|(slot, _)| kinds[*slot] > 0);
-    if let Some((_, kind)) = present.next()
-        && present.next().is_none()
-        && options.operation != Operation::Fix
+        .filter(|(slot, _)| kinds[*slot] > 0)
+        .map(|(_, kind)| kind)
+        .collect();
+    if options.operation != Operation::Fix
+        && let Some(advice) = advice_for(&present, options.policy)
     {
-        lines.push(format!(
-            "all {total} are `{kind}`; `--keep-kind {kind}` would make this run clean"
-        ));
+        lines.push(advice);
     }
     lines
+}
+
+/// The shortest change that would make a run clean, if one exists.
+///
+/// A policy if a policy answers; otherwise the one `--keep-kind` that names
+/// every kind present. Both are computed from `Policy::keeps`, which is the
+/// table the scanner itself decides by — an earlier version guessed at that
+/// table here and guessed wrong.
+fn advice_for(present: &[CommentKind], current: Policy) -> Option<String> {
+    if let Some(policy) = Policy::strongest_keeping(present)
+        && policy != current
+    {
+        return Some(format!("`--policy {policy}` would make this run clean"));
+    }
+    /* NOTE: Only when the kinds are ones a `keep_kind` can name. A protected
+     * kind reaching this list means the run passed `--force-protected`, and
+     * `--keep-kind shebang` is not the answer to that -- dropping the flag is. */
+    if present
+        .iter()
+        .any(|kind| kind.protection() != Protection::None)
+    {
+        return None;
+    }
+    let names: Vec<&str> = present.iter().map(|kind| kind.as_str()).collect();
+    Some(format!(
+        "`--keep-kind {}` would make this run clean",
+        names.join(",")
+    ))
 }
 
 fn summary_report(summary: &Summary, options: &RenderOptions, folded: bool) -> String {

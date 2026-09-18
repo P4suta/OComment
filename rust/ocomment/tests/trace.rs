@@ -220,19 +220,65 @@ fn a_concentrated_report_says_where_the_findings_are_and_what_would_answer_them(
         stderr.contains("where they are: many.rs 12, few.rs 4"),
         "the summary did not rank the files:\n{stderr}"
     );
+    /* NOTE: A policy, not a flag. `conservative` keeps documentation, so it
+     * answers every finding on its own -- shorter than a list of kinds, and it
+     * is the configuration the project should be keeping anyway. */
     assert!(
-        stderr.contains("all 16 are `doc-line`; `--keep-kind doc-line` would make this run clean"),
-        "the summary did not name the flag that answers every finding:\n{stderr}"
+        stderr.contains("`--policy conservative` would make this run clean"),
+        "the summary did not name the policy that answers every finding:\n{stderr}"
     );
 }
 
-/// The flag is offered only when one flag would answer everything.
+/// Two kinds is still one flag, and that was the bug.
 ///
-/// A suggestion that leaves findings behind is not an answer to "how do I make
-/// this clean", so a run whose findings are of two kinds gets the ranking and
-/// no advice.
+/// The rule was written as "only when one *kind* accounts for everything",
+/// which withheld the advice from the only case that occurs: a Rust crate with
+/// both documentation and a licence header produces exactly two kinds and
+/// never one. `--keep-kind` is variadic, so two kinds is one flag — and here a
+/// policy answers both, which is better still.
 #[test]
-fn mixed_kinds_are_ranked_but_not_advised() {
+fn two_kinds_are_still_one_change() {
+    let directory = tempfile::tempdir().expect("a temporary directory");
+    for index in 0..6 {
+        std::fs::write(
+            directory.path().join(format!("f{index}.rs")),
+            format!("// SPDX-License-Identifier: MIT\n/// doc {index}\npub fn f{index}() {{}}\n"),
+        )
+        .expect("the fixture is writable");
+    }
+    let (_, stderr) = run(directory.path(), &["check", ".", "--policy", "standard"]);
+    assert!(
+        stderr.contains("`--policy conservative` would make this run clean"),
+        "the summary withheld advice from a two-kind run:\n{stderr}"
+    );
+}
+
+/// When no policy answers, the advice is the one flag naming every kind.
+#[test]
+fn a_run_no_policy_answers_gets_the_flag_that_names_every_kind() {
+    let directory = tempfile::tempdir().expect("a temporary directory");
+    for index in 0..6 {
+        std::fs::write(
+            directory.path().join(format!("f{index}.rs")),
+            format!("// ordinary {index}\n/* block {index} */\npub fn f{index}() {{}}\n"),
+        )
+        .expect("the fixture is writable");
+    }
+    let (_, stderr) = run(directory.path(), &["check", "."]);
+    assert!(
+        stderr.contains("`--keep-kind line,block` would make this run clean"),
+        "the summary did not name the one flag that answers every finding:\n{stderr}"
+    );
+}
+
+/// Mixed kinds still get advice, and it is the flag rather than a policy.
+///
+/// Documentation and ordinary comments together: no policy keeps both, so
+/// there is no policy to name, and the answer is the single `--keep-kind` that
+/// names every kind present. The old rule refused to say anything here, on the
+/// reading that two kinds need two flags. They do not.
+#[test]
+fn mixed_kinds_get_the_flag_when_no_policy_answers() {
     let directory = tempfile::tempdir().expect("a temporary directory");
     let mut source = String::new();
     for index in 0..8 {
@@ -248,8 +294,8 @@ fn mixed_kinds_are_ranked_but_not_advised() {
         "the summary did not rank the files:\n{stderr}"
     );
     assert!(
-        !stderr.contains("would make this run clean"),
-        "the summary advised a flag that would not answer every finding:\n{stderr}"
+        stderr.contains("`--keep-kind line,doc-line` would make this run clean"),
+        "the summary did not name the flag that answers every finding:\n{stderr}"
     );
 }
 

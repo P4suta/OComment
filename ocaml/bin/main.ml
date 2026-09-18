@@ -152,7 +152,19 @@ let options json =
   let keep_regex = strings "keep_regex" json in
   let remove_regex = strings "remove_regex" json in
   ({ scan = { policy; dialect; force_invalid; force_protected; keep_kinds;
-      remove_kinds; keep_regex; remove_regex }; layout } : transform_options)
+      remove_kinds; keep_regex; remove_regex;
+      (* NOTE: Read from the same JSON the Rust driver reads, so a fixture can
+         ask for these and both sides are held to the same answer. *)
+      allow = (match Yojson.Safe.Util.member "allow" json with
+        | `Assoc _ as allow ->
+          { tags = (match Yojson.Safe.Util.member "tags" allow with
+              | `List items -> List.filter_map (function `String s -> Some s | _ -> None) items
+              | _ -> []);
+            max_lines = (match Yojson.Safe.Util.member "max_lines" allow with
+              | `Int value -> Some value | _ -> None);
+            trailing = (match Yojson.Safe.Util.member "trailing" allow with
+              | `Bool value -> Some value | _ -> None) }
+        | _ -> { tags = []; max_lines = None; trailing = None }) }; layout } : transform_options)
 
 let handle json =
   let id = Yojson.Safe.Util.member "id" json in

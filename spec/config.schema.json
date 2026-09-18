@@ -29,7 +29,8 @@
         "keep_regex": { "$ref": "#/$defs/strings" },
         "remove_regex": { "$ref": "#/$defs/strings" },
         "force_invalid": { "type": "boolean", "default": false },
-        "force_protected": { "type": "boolean", "default": false }
+        "force_protected": { "type": "boolean", "default": false },
+        "allow": { "$ref": "#/$defs/allowRules" }
       }
     },
     "git": {
@@ -142,6 +143,14 @@
         "end": { "type": "string", "minLength": 1 },
         "escape": { "type": "string", "minLength": 1 },
         "multiline": { "type": "boolean", "default": false }
+      }
+    },
+    "allowRules": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "tags": { "$ref": "#/$defs/strings" },
+        "max_lines": { "type": "integer", "minimum": 1 },
+        "trailing": { "type": "boolean" }
       }
     },
     "protectedPattern": {

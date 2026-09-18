@@ -18,11 +18,23 @@ type comment_kind =
   | Line | Block | DocLine | DocBlock | Directive | License | HtmlComment
   | Shebang | Encoding | OptimizerHint | VersionComment | LoadBearing
 
+type protection = NoProtection | Preamble | LoadBearingTier
+
 type disposition = Remove | Keep of string
 type severity = Error | Warning | Info | Hint
 type diagnostic = { code : string; message : string; severity : severity; span : byte_span }
 type comment = { span : byte_span; kind : comment_kind; disposition : disposition }
 type layout = Lines | Columns | Compact
+
+(* NOTE: What a comment has to be beyond being of a kind the policy keeps.  The
+   policy decides by kind, and a kind is a coarse thing to decide by: a one-line
+   rationale and a forty-line essay are both Line.  These are the other axes,
+   and they cut across the policy rather than under it. *)
+type allow_rules = {
+  tags : string list;
+  max_lines : int option;
+  trailing : bool option;
+}
 
 type scan_options = {
   policy : policy;
@@ -33,6 +45,7 @@ type scan_options = {
   remove_kinds : comment_kind list;
   keep_regex : string list;
   remove_regex : string list;
+  allow : allow_rules;
 }
 
 type transform_options = { scan : scan_options; layout : layout }

@@ -488,6 +488,12 @@ fn scan_profile_with(
         index += 1;
     }
     let valid = diagnostics.is_empty();
+    /* NOTE: The same rules the built-in scanners apply, for the same reason. A
+     * profile describes a file format rather than a policy, so a project's tag
+     * convention and length limit have to reach a `.gitignore` exactly as they
+     * reach a `.rs` -- and they did not, which showed up as this repository's
+     * own tagged comments surviving in Rust and vanishing in a profile file. */
+    crate::scanner::apply_allow_rules(source, &mut comments, options);
     Ok(ScanReport {
         language: Language::Unknown,
         comments,

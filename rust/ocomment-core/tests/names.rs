@@ -519,3 +519,111 @@ fn keep_reasons_are_observable_through_scan() {
         "the fixtures no longer exercise every frozen keep reason"
     );
 }
+
+/// The policy table and the scanner agree, kind by kind and policy by policy.
+///
+/// `Policy::keeps` is the table the crate documentation prints and the
+/// scanner decides by. It was prose in one place and a chain of `if`s in
+/// another, and the CLI grew a third copy to answer "would a weaker policy
+/// have kept this?" — which was wrong in the only case that occurs. One table
+/// now, and this is what holds it to what a scan actually does.
+#[test]
+fn the_policy_table_is_what_a_scan_does() {
+    for policy in Policy::ALL {
+        for kind in CommentKind::ALL {
+            /* NOTE: A protected kind is held back before the policy is asked,
+             * so what `keeps` answers for it is what the policy would do with
+             * the protection lifted -- which is what `force_protected` asks
+             * for, and is the arrangement this compares against. */
+            let options = ScanOptions {
+                policy,
+                force_protected: true,
+                ..Default::default()
+            };
+            let (source, language) = match kind {
+                CommentKind::Line => ("let x = 1; // plain\n", Language::Rust),
+                CommentKind::Block => ("let x = 1; /* block */\n", Language::Rust),
+                CommentKind::DocLine => ("/// doc\nfn f() {}\n", Language::Rust),
+                CommentKind::DocBlock => ("/** doc */\nfn f() {}\n", Language::Rust),
+                CommentKind::Directive => ("// rustfmt::skip\n", Language::Rust),
+                CommentKind::License => ("// SPDX-License-Identifier: MIT\n", Language::Rust),
+                CommentKind::HtmlComment => ("<!-- note -->\n", Language::Html),
+                CommentKind::Shebang => ("#!/bin/sh\n", Language::Shell),
+                CommentKind::Encoding => ("# -*- coding: utf-8 -*-\n", Language::Python),
+                CommentKind::OptimizerHint => {
+                    ("select /*+ index(t) */ 1 from dual;\n", Language::Sql)
+                }
+                CommentKind::VersionComment => ("/*!40101 SET NAMES utf8 */\n", Language::Sql),
+                CommentKind::LoadBearing => ("//go:build linux\n", Language::Go),
+            };
+            let report = scan(source.as_bytes(), language, options);
+            let Some(comment) = report.comments.iter().find(|comment| comment.kind == kind) else {
+                panic!("no `{kind}` in the fixture for it: {source:?}");
+            };
+            assert_eq!(
+                !comment.disposition.is_remove(),
+                policy.keeps(kind),
+                "policy {policy} and kind {kind}: the table and the scan disagree"
+            );
+        }
+    }
+}
+
+/// Every kind states a protection, and the two tiers name themselves.
+#[test]
+fn every_kind_states_its_protection() {
+    use ocomment_core::Protection;
+    assert_eq!(Protection::None.reason(), None);
+    assert_eq!(
+        Protection::Preamble.reason(),
+        Some("required source preamble")
+    );
+    assert_eq!(
+        Protection::LoadBearing.reason(),
+        Some("required by the language or its build")
+    );
+    /* NOTE: Spelled out rather than derived, because deriving it from the same
+     * match it is checking would check nothing. A kind that changes tier has to
+     * change here too, and that is meant to be an act. */
+    for (kind, expected) in [
+        (CommentKind::Line, Protection::None),
+        (CommentKind::Block, Protection::None),
+        (CommentKind::DocLine, Protection::None),
+        (CommentKind::DocBlock, Protection::None),
+        (CommentKind::Directive, Protection::None),
+        (CommentKind::License, Protection::None),
+        (CommentKind::HtmlComment, Protection::None),
+        (CommentKind::Shebang, Protection::Preamble),
+        (CommentKind::Encoding, Protection::Preamble),
+        (CommentKind::OptimizerHint, Protection::LoadBearing),
+        (CommentKind::VersionComment, Protection::LoadBearing),
+        (CommentKind::LoadBearing, Protection::LoadBearing),
+    ] {
+        assert_eq!(kind.protection(), expected, "{kind}");
+    }
+}
+
+/// Of the policies that would make a run clean, the one that still takes the
+/// most is the one worth suggesting.
+#[test]
+fn the_policy_that_keeps_a_set_while_taking_the_most_is_found() {
+    assert_eq!(
+        Policy::strongest_keeping(&[CommentKind::DocLine, CommentKind::License]),
+        Some(Policy::Conservative),
+        "only `conservative` keeps documentation, so it is the only answer"
+    );
+    /* NOTE: Both `conservative` and `standard` keep a directive, and the answer
+     * is `standard`: the caller is removing comments, so of the two the one
+     * worth naming is the one that still takes the documentation and the
+     * licence header. Naming the gentlest would answer a question nobody
+     * asked. */
+    assert_eq!(
+        Policy::strongest_keeping(&[CommentKind::Directive]),
+        Some(Policy::Standard)
+    );
+    assert_eq!(
+        Policy::strongest_keeping(&[CommentKind::Line]),
+        None,
+        "no policy keeps an ordinary comment, and saying one does would be advice that fails"
+    );
+}

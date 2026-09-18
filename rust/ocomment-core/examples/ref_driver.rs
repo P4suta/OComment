@@ -91,6 +91,9 @@ fn handle(request: &Value) -> Result<Value, String> {
         remove_kinds,
         keep_regex,
         remove_regex,
+        /* NOTE: Read through the type's own deserializer, so a fixture can ask
+         * for these and the OCaml reference is held to the same answer. */
+        allow: option_enum(options_value, "allow")?.unwrap_or_default(),
     };
     match operation {
         "apply_edits" => {

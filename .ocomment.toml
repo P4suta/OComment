@@ -37,7 +37,6 @@ exclude = [
 mode = "conservative"
 layout = "lines"
 keep_regex = [
-  '^(//|\(\*|/\*|#)\s*(NOTE|SAFETY|INVARIANT|PERF|TODO|FIXME|HACK)\b',
   # NOTE: The version beside a SHA-pinned action, now that YAML is scanned.
   # NOTE: CONTRIBUTING.md requires every `uses:` to carry one and Dependabot
   # NOTE: rewrites it when it moves the pin, so it is read by a machine rather
@@ -45,3 +44,11 @@ keep_regex = [
   # NOTE: comment, so prose that merely opens with a version is still prose.
   '^#\s*v[0-9]+(\.[0-9]+)*$',
 ]
+
+# NOTE: The tag convention, as a tag rule rather than as a pattern. It was
+# NOTE: written against the raw comment token, which meant naming four comment
+# NOTE: openers and protecting only the languages that use them: the identical
+# NOTE: rule written in a Lua or SQL file was not protected at all. A tag is
+# NOTE: read from the comment's text, so one line holds in every language.
+[policy.allow]
+tags = ["NOTE", "SAFETY", "INVARIANT", "PERF", "TODO", "FIXME", "HACK"]

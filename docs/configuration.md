@@ -100,6 +100,43 @@ up the value. [Languages](languages.md#anything-else) states the rule in full.
 
 [Policies and layouts](policies.md) shows all three on one sample.
 
+## What a comment has to be, beyond its kind
+
+A policy decides by kind, and a kind is a coarse thing to decide by. A one-line
+`// NOTE:` explaining a decision and a forty-line essay above a function are
+both `line`, and a project that wants the first and not the second cannot say
+so with a policy. `[policy.allow]` is the other axes.
+
+```toml
+[policy.allow]
+tags = ["NOTE", "SAFETY", "INVARIANT"]
+max_lines = 1
+trailing = false
+```
+
+- **`tags`** keeps a comment the policy would have removed, when its text opens
+  with one of these. Matched against the comment's *text* — delimiters removed,
+  and the `*` a block comment's continuation lines carry removed with them — so
+  one rule holds in every language. This is what `keep_regex` cannot do: a
+  pattern is matched against the whole raw token, so `^//\s*NOTE` protects a
+  Rust comment and silently fails to protect the identical rule written in Lua,
+  where the token opens `--`.
+- **`max_lines`** removes a comment, or a run of comments with nothing between
+  them, that occupies more lines than this. A run is measured rather than a
+  single token because four consecutive `//` lines are four comments to a
+  scanner and one paragraph to a reader, and the reader is right.
+- **`trailing = false`** removes a comment sitting after code on the same line.
+  It closes the obvious way around a rule about comments above code, which is
+  to put the comment beside it instead.
+
+These cut across the policy rather than under it: a comment failing one is
+removed whatever kept it — including a tag. A tagged comment still has to be
+short enough and still may not sit beside code. The protections no policy
+reaches are the exception: a shebang, an encoding line, and a directive the
+language or its build reads stay however long they are, because the cost of
+losing one is a broken build and the cost of keeping a long one is a long
+comment.
+
 ## Files another tool writes
 
 A lock file, a recorded seed list, a code generator's output: the comments in

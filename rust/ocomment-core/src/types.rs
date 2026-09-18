@@ -506,6 +506,37 @@ pub enum CommentKind {
     LoadBearing,
 }
 
+/// How strongly a [`CommentKind`] is held back from every policy.
+///
+/// This is a property of the kind rather than a decision any run makes: a
+/// shebang is required by the file's own syntax whatever anyone configures,
+/// and a `//go:build` is read by the compiler whatever anyone configures. The
+/// only way past either is [`ScanOptions::force_protected`], which is a
+/// sentence someone types.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum Protection {
+    /// No protection. The policy has the last word.
+    None,
+    /// A line the source needs in order to be read at all.
+    Preamble,
+    /// Read by the language, its build, or the server that executes it.
+    LoadBearing,
+}
+
+impl Protection {
+    /// The reason a report gives for a comment held back at this tier.
+    ///
+    /// Two of the strings the differential protocol freezes, which is why they
+    /// live beside the tier rather than beside the code that prints them.
+    pub const fn reason(self) -> Option<&'static str> {
+        match self {
+            Self::None => None,
+            Self::Preamble => Some("required source preamble"),
+            Self::LoadBearing => Some("required by the language or its build"),
+        }
+    }
+}
+
 impl CommentKind {
     /// Every CLI-visible comment kind.
     pub const ALL: [Self; 12] = [
@@ -522,6 +553,30 @@ impl CommentKind {
         Self::VersionComment,
         Self::LoadBearing,
     ];
+
+    /// Which protection this kind carries, before any policy is consulted.
+    ///
+    /// Exhaustive on purpose: a new kind does not compile until somebody has
+    /// decided whether removing one changes what the toolchain produces. That
+    /// question is the whole of the distinction, and leaving it to be answered
+    /// later has meant, twice, that it was answered by accident.
+    pub const fn protection(self) -> Protection {
+        match self {
+            Self::Shebang | Self::Encoding => Protection::Preamble,
+            // NOTE: The SQL pair is here because the server reads them as part
+            // NOTE: of the statement: one is executed and one decides the plan.
+            Self::LoadBearing | Self::OptimizerHint | Self::VersionComment => {
+                Protection::LoadBearing
+            }
+            Self::Line
+            | Self::Block
+            | Self::DocLine
+            | Self::DocBlock
+            | Self::Directive
+            | Self::License
+            | Self::HtmlComment => Protection::None,
+        }
+    }
 
     /// The canonical name, identical to the serde representation.
     pub const fn as_str(self) -> &'static str {
@@ -1054,6 +1109,63 @@ impl Policy {
         }
     }
 
+    /// Whether this policy keeps a comment of `kind`, absent every other rule.
+    ///
+    /// This is the table in the crate documentation, as code. It was prose in
+    /// one place and a chain of `if`s in another, and a reader asking "would a
+    /// weaker policy have kept this?" had nothing to ask — so the CLI answered
+    /// with a hand-written guess about kinds, which was wrong in the only case
+    /// that occurs: a Rust crate with both documentation and a licence header.
+    ///
+    /// This is the policy's own answer and not the last word. A shebang, an
+    /// encoding line, a load-bearing directive and the two SQL forms a server
+    /// reads are held back from every policy by [`CommentKind::protection`],
+    /// which is tested before this — and given up by
+    /// [`ScanOptions::force_protected`], which is what lets `all` reach them.
+    /// Answering `true` here for those kinds would close that door, and the
+    /// first version of this did.
+    ///
+    /// The match is exhaustive, which is the point: a new [`CommentKind`] does
+    /// not compile until every policy has an answer for it.
+    pub const fn keeps(self, kind: CommentKind) -> bool {
+        match kind {
+            CommentKind::Line | CommentKind::Block => false,
+            CommentKind::DocLine | CommentKind::DocBlock | CommentKind::License => {
+                matches!(self, Self::Conservative)
+            }
+            CommentKind::Directive | CommentKind::HtmlComment => !matches!(self, Self::All),
+            /* NOTE: False, and not "true because every policy keeps them". The
+             * protection keeps them and is tested first; this is what the
+             * policy would do if the protection were lifted, which is exactly
+             * what `--force-protected` asks for. Answering `true` closed that
+             * door, and the test comparing this table against the explanation
+             * branch table is what said so. */
+            CommentKind::Shebang
+            | CommentKind::Encoding
+            | CommentKind::LoadBearing
+            | CommentKind::OptimizerHint
+            | CommentKind::VersionComment => false,
+        }
+    }
+
+    /// The policy that keeps every one of `kinds` while taking the most, if
+    /// any does.
+    ///
+    /// The strongest rather than the weakest, because the caller is someone
+    /// removing comments: of the policies that would make their run clean, the
+    /// one worth naming is the one that still takes everything else. Suggesting
+    /// the gentlest would answer "how do I stop seeing findings" instead of
+    /// "how do I keep the ones I meant to keep".
+    ///
+    /// `ALL` is ordered by how much each policy takes, weakest first, so this
+    /// walks it backwards.
+    pub fn strongest_keeping(kinds: &[CommentKind]) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .rev()
+            .find(|policy| kinds.iter().all(|kind| policy.keeps(*kind)))
+    }
+
     /// The name this policy used to go by, for a deprecation notice.
     pub const fn former_name(self) -> Option<&'static str> {
         match self {
@@ -1201,6 +1313,55 @@ pub struct ScanOptions {
     pub keep_regex: Vec<String>,
     /// Byte-regexes that remove matching complete comment tokens.
     pub remove_regex: Vec<String>,
+    /// What a comment has to be to survive, beyond what its kind decides.
+    pub allow: AllowRules,
+}
+
+/// What a comment has to be, beyond being of a kind the policy keeps.
+///
+/// The policy decides by kind, and a kind is a coarse thing to decide by: a
+/// one-line `// NOTE:` explaining a decision and a forty-line essay above a
+/// function are both `line`, and a project that wants the first and not the
+/// second cannot say so. These are the other axes, and they cut across the
+/// policy rather than under it — a comment that fails one of them is removed
+/// whatever kept it, short of the protections no policy reaches.
+///
+/// Empty or `None` everywhere means "no opinion", which is what every
+/// configuration written before these existed meant.
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct AllowRules {
+    /// The tags a surviving comment may open with, without punctuation:
+    /// `["NOTE", "SAFETY"]`.
+    ///
+    /// Matched against the comment's *text* — its delimiters removed, and the
+    /// common prefix of a block comment's lines removed with them — so the
+    /// same convention holds in every language. A `keep_regex` cannot do this:
+    /// it is matched against the whole raw token, so `^#\s*NOTE` protects a
+    /// Python comment and silently fails to protect the identical rule written
+    /// in Lua, where the token opens `--`.
+    ///
+    /// Empty means no tag rule at all. A non-empty list means a comment
+    /// carrying one of these tags is kept, and says nothing about the ones
+    /// that do not.
+    pub tags: Vec<String>,
+    /// How many lines a comment, or a run of comments with nothing between
+    /// them, may occupy.
+    ///
+    /// `Some(1)` is the strictest useful value: a comment may be one line and
+    /// no more. This is the axis a kind cannot express, and it is usually the
+    /// real complaint — not that a comment exists, but that it goes on.
+    ///
+    /// A run is measured rather than a single token because four consecutive
+    /// `//` lines are four comments to a scanner and one paragraph to a
+    /// reader, and the reader is right.
+    pub max_lines: Option<usize>,
+    /// Whether a comment may sit after code on the same line.
+    ///
+    /// `Some(false)` removes them. It closes the obvious way around a rule
+    /// about comments above code, which is to put the comment beside it
+    /// instead.
+    pub trailing: Option<bool>,
 }
 
 impl Default for ScanOptions {
@@ -1214,6 +1375,7 @@ impl Default for ScanOptions {
             remove_kinds: Vec::new(),
             keep_regex: Vec::new(),
             remove_regex: Vec::new(),
+            allow: AllowRules::default(),
         }
     }
 }

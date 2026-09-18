@@ -1,8 +1,8 @@
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use globset::{Glob, GlobMatcher};
 use ocomment_core::{
-    CommentKind, DeclarativeProfile, Dialect, DispositionExplanation, Language, Layout, Policy,
-    ScanOptions, TransformOptions, validate_profile,
+    AllowRules, CommentKind, DeclarativeProfile, Dialect, DispositionExplanation, Language, Layout,
+    Policy, ScanOptions, TransformOptions, validate_profile,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -71,6 +71,9 @@ pub struct PolicyConfig {
     pub remove_regex: Vec<String>,
     pub force_invalid: bool,
     pub force_protected: bool,
+    /// What a comment has to be to survive, beyond what its kind decides.
+    #[serde(default)]
+    pub allow: AllowRules,
 }
 
 impl Default for PolicyConfig {
@@ -88,6 +91,7 @@ impl Default for PolicyConfig {
             remove_regex: Vec::new(),
             force_invalid: false,
             force_protected: false,
+            allow: AllowRules::default(),
         }
     }
 }
@@ -526,6 +530,7 @@ impl ResolvedConfig {
             remove_kinds: remove,
             keep_regex,
             remove_regex,
+            allow: self.config.policy.allow.clone(),
         };
         Ok((chosen_language, TransformOptions { scan, layout }))
     }
