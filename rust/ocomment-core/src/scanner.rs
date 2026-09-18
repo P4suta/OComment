@@ -209,7 +209,7 @@ fn finish_scan(mut scanner: Scanner<'_>) -> (ScanReport, Vec<usize>, bool) {
     let valid = !scanner
         .diagnostics
         .iter()
-        .any(|diagnostic| diagnostic.severity == Severity::Error);
+        .any(|diagnostic| diagnostic.severity.is_failure());
     /* NOTE: Applied here rather than in `disposition` because two of the three
      * rules are about where a comment sits rather than what it says, and a
      * decision made one comment at a time cannot see that. A run of four `//`

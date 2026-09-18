@@ -1062,7 +1062,15 @@ pub struct Comment {
 /// Only [`Self::Error`] changes what a transformation writes: it makes
 /// [`ScanReport::valid`] false, and nothing is edited unless
 /// [`ScanOptions::force_invalid`] is set.
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
+///
+/// The variants are declared from most to least severe and the ordering is
+/// derived from that, so `severity <= Severity::Error` reads as "at least as
+/// severe as an error" rather than "exactly an error". [`Self::ALL`] states the
+/// same order, and `the_severities_are_declared_most_severe_first` holds the
+/// two to each other.
+#[derive(
+    Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, Deserialize,
+)]
 #[serde(rename_all = "kebab-case")]
 pub enum Severity {
     /// The source could not be lexed: an unterminated comment or string.
@@ -1079,6 +1087,18 @@ pub enum Severity {
 impl Severity {
     /// Every severity, ordered from most to least severe.
     pub const ALL: [Self; 4] = [Self::Error, Self::Warning, Self::Info, Self::Hint];
+
+    /// Whether a diagnostic of this severity means the scan did not succeed.
+    ///
+    /// Not `== Error`, and the difference is the one this repository keeps
+    /// finding: a comparison that names one variant while meaning a category
+    /// answers wrongly the day the category gains a member. A severity added
+    /// above `Error` would make a source fail to lex and leave every
+    /// `== Error` saying it had not.
+    #[must_use]
+    pub fn is_failure(self) -> bool {
+        self <= Self::Error
+    }
 
     /// The canonical name, identical to the serde representation.
     pub const fn as_str(self) -> &'static str {
@@ -1190,7 +1210,7 @@ impl Diagnostic {
     /// is something the caller should look at in a source that lexed.
     #[must_use]
     pub fn damage(&self) -> Option<Damage> {
-        if self.severity != Severity::Error {
+        if !self.severity.is_failure() {
             return None;
         }
         Some(
