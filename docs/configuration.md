@@ -121,21 +121,93 @@ trailing = false
   pattern is matched against the whole raw token, so `^//\s*NOTE` protects a
   Rust comment and silently fails to protect the identical rule written in Lua,
   where the token opens `--`.
-- **`max_lines`** removes a comment, or a run of comments with nothing between
-  them, that occupies more lines than this. A run is measured rather than a
-  single token because four consecutive `//` lines are four comments to a
-  scanner and one paragraph to a reader, and the reader is right.
+
+  A tag is a word rather than a prefix: `NOTE` allows a note and does not allow
+  `NOTEBOOK`. What may follow it is punctuation or space — `NOTE:`,
+  `TODO(alice)`, `FIXME -` — or nothing at all.
+- **`max_lines`** removes a comment, or a run of comments on consecutive lines,
+  that occupies more lines than this. A run is measured rather than a single
+  token because four consecutive `//` lines are four comments to a scanner and
+  one paragraph to a reader, and the reader is right.
+
+  A blank line ends a run: that is how a writer says the next remark is a
+  separate remark. A limit that counted across one would be measuring the gap
+  as well as the prose.
 - **`trailing = false`** removes a comment sitting after code on the same line.
   It closes the obvious way around a rule about comments above code, which is
   to put the comment beside it instead.
 
-These cut across the policy rather than under it: a comment failing one is
-removed whatever kept it — including a tag. A tagged comment still has to be
-short enough and still may not sit beside code. The protections no policy
-reaches are the exception: a shebang, an encoding line, and a directive the
-language or its build reads stay however long they are, because the cost of
-losing one is a broken build and the cost of keeping a long one is a long
-comment.
+### What these rules reach, and what they do not
+
+They cut across the policy rather than under it: a comment failing one is
+removed whatever the *policy* said about its kind, a tag included. A tagged
+comment still has to be short enough and still may not sit beside code.
+
+Two things are out of their reach, and both for the same reason — the rules are
+about commentary, and neither of these is commentary.
+
+**A comment somebody named outright.** `keep_kind` names a kind and
+`keep_regex` names the bytes; both are a project saying *keep exactly this*,
+and a shape rule is a project saying *keep things like this*. The specific
+wins. This repository pins every GitHub Action to a SHA and writes the version
+beside it as a comment that Dependabot rewrites — a `keep_regex` names it, and
+it has to sit beside the line it annotates.
+
+**A comment that is not prose.** Documentation comments and licence notices are
+as long as their content requires. A directive is *addressed* to a tool, and a
+tool reads it where it sits: `x = 1  # noqa` silences a warning about that line
+and silences nothing a line above it. The protections no policy reaches — a
+shebang, an encoding line, a directive the language or its build reads — are
+out for the reason they are always out.
+
+### Tags that are promises
+
+A `TODO` is not the same kind of thing as a `SAFETY`. One records why the code
+is the way it is and is true for as long as the code is; the other says
+somebody will do something, and saying so is not doing it.
+
+A rule that treats them alike has to pick a bad answer. Forbid the `TODO`, and
+nobody obeys it — the note is lost along with the nagging. Permit it, and the
+repository ends up carrying one from four years ago that everybody has learned
+to read past.
+
+```toml
+[policy.allow.expiry]
+TODO = "30d"
+FIXME = "14d"
+```
+
+A tag here is allowed exactly as one in `tags` is, until the line carrying it
+reaches that age — and is a finding after that, every run, until somebody
+either does it or deletes it:
+
+```console
+$ ocomment check --explain src/pool.rs
+src/pool.rs:44:1: removable line comment: // TODO: retry on timeout
+    removed: `TODO` is a promise with 30d to keep it, and this line is 61d old ([policy.allow] in .ocomment.toml); do it, or delete the comment
+...
+1 comment past its deadline: 1 TODO. Do it or delete it.
+```
+
+The age is the age of the commit that introduced the line, read from
+`git blame`. Writing one therefore costs nothing: a `TODO` you typed a minute
+ago belongs to no commit and has not started counting, and `"0d"` means the
+deadline starts at the next commit. Ages are written `"14d"`, `"2w"`, or as a
+bare number of days; an hour is not a meaningful deadline for a line of source
+and a month is not a fixed number of days, so neither is accepted.
+
+Three consequences worth knowing:
+
+- **`ocomment fix` deletes an overdue promise**, because the rule is the same
+  rule and `fix` applies the rules. That is the half of "do it or delete it" a
+  machine can do.
+- **`ocomment check --staged` never reports one.** A staged run judges the
+  lines the commit adds, and a line the commit adds is new. The pre-commit gate
+  is about what you are writing; the deadline is about what the repository has
+  been carrying.
+- **No repository, no clock.** Outside a Git repository, or on a file Git does
+  not track, the age cannot be read and the comment is left alone. A deadline
+  nobody can measure has not passed.
 
 ## Getting to a rule you cannot turn on today
 
@@ -162,7 +234,7 @@ in the tree, and the distance left to go is readable at a glance:
 ```
 # 1674 comment(s) in 78 file(s) left to remove.
 3 .dockerignore
-54 .github/workflows/ci.yml
+54 src/legacy/session.c
 ```
 
 It is deliberately not a suppression mechanism. The entries carry no reasons,
@@ -170,10 +242,36 @@ no expiry dates and no per-comment granularity — a ledger is a measurement, an
 the moment it starts explaining itself it has become a second configuration
 file arguing with the first.
 
-This repository runs one. It reached `max_lines = 1` with 1674 comments still
-above it, which is the situation the feature is for.
+This repository does **not** run one, and that is deliberate. It reached its
+own rules by fixing every comment that broke them rather than by recording how
+many did: `ocomment` over this tree exits 0, and the CI job that runs it is a
+gate rather than a report. A ledger is for a repository that cannot get there
+today; a tool's own repository does not get to be that repository.
 
 ## Files another tool writes
+
+A lock file, a recorded seed list, a code generator's output: something else
+wrote the comments in these and will write them again. Removing one is editing
+a tool's file, and it is the class most likely to be auto-fixed without being
+read, because nobody opens a generated file before committing it. Coverage of a
+file you should not touch is worse than skipping it — a skip is visible in the
+summary, and a removal in a generated file is a diff somebody waves through —
+so `--deny-skipped` does not refuse these, and `--include-generated` scans them
+anyway for the run that means it.
+
+`spec/generated.toml` is the catalogue. It lists whole file names, because a
+lock file's name is a convention of the tool that writes it; suffixes, matched
+without the dot and case-insensitively; and the headers a generated file
+announces itself with, searched case-insensitively in the first `header_lines`
+lines only.
+
+That bound is what makes the header search usable at all. A file that *lists*
+these markers would otherwise claim itself, and two in this repository do —
+`spec/directives.toml` names C#'s `<auto-generated`, and the catalogue names
+all of them. A generated file declares itself in its first few lines, because
+that is where the reader it is warning will look, so the bound costs nothing
+real and rules out every catalogue, changelog and piece of documentation that
+merely mentions one.
 
 A lock file, a recorded seed list, a code generator's output: the comments in
 these belong to the tool that wrote them and come back on its next run.
@@ -250,3 +348,40 @@ one, which is what every profile written before this field meant.
 
 Complex lexical grammars should use a WASM scanner plugin instead. A plugin
 returns the comment kind itself, so it can return `load-bearing` directly.
+
+### The profiles OComment ships with
+
+`spec/profiles.toml` carries a few, and `ocomment languages` lists them beside
+the built-in languages. They are not built-in languages and are not meant to
+become one: a built-in language is a hand-written scanner, and a format earns
+that when its lexical form has something a delimiter list cannot say — a string
+that hides a comment token, a nesting rule, an embedded language. The formats
+here have none of that, so a profile says everything there is to say, and says
+it in data rather than in a `match` arm that would then have to be written
+twice, once in Rust and once in OCaml.
+
+They exist because of what `ocomment coverage` reported without them. A gate
+that says "no removable comments in 143 files" while 25 files were never opened
+is a gate over 85% of a repository, and the files it was missing here were
+`.gitignore`, `CODEOWNERS`, `dune` and OComment's own `.wit` interface — every
+one of which holds comments.
+
+- **`hash-line`** is the `#`-to-end-of-line family: `CODEOWNERS`, the `ignore`
+  files, `.editorconfig`, `.gitmodules`, `.opam`, and OComment's own ledger.
+  Each of these formats has exactly that rule and no string form that could
+  hide the `#`, which is why they share one profile rather than having one
+  each.
+- **`dune`** is a Lisp: `;` opens a line comment, `"..."` is a string with
+  backslash escapes so a `;` inside one is text, and `#|...|#` nests.
+- **`wit`** is the Component Model's interface language, which OComment's own
+  plugin contract is written in. It is listed with `//` alone and not `///`
+  beside it: a profile is read in one pass, so a delimiter that is a prefix of
+  another is ambiguous and `validate_profile` refuses the pair rather than
+  guessing. The cost is that WIT's `///` documentation comments are reported as
+  ordinary line comments, which is not worth a hand-written scanner — they are
+  still found, and a project that wants the distinction can name it with
+  `keep_regex`.
+
+A `[profiles.<name>]` entry in your configuration wins over the shipped profile
+of the same name, so a project that disagrees with one can replace it rather
+than work around it.

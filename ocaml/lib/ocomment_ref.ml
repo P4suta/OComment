@@ -40,7 +40,26 @@ let protection_reason = function
 type disposition = Remove | Keep of string
 type severity = Error | Warning | Info | Hint
 type diagnostic = { code : string; message : string; severity : severity; span : byte_span }
-type comment = { span : byte_span; kind : comment_kind; disposition : disposition }
+
+(* NOTE: A rule about a comment's shape rather than its kind, and the verdict it
+   reached.  Decided over the whole file -- how many lines a run covers, whether
+   code sits before one -- so unlike every other rule it cannot be re-derived
+   from a comment's own bytes, and is recorded rather than guessed at. *)
+type shape_rule = Tagged of string | Trailing | TooLong of int * int
+
+type comment =
+  { span : byte_span; kind : comment_kind; disposition : disposition;
+    shape : shape_rule option }
+
+(* NOTE: The verdict a shape rule reaches, which is fixed per rule.  Both fields
+   of a comment a rule settled are written from this one value, so they cannot
+   drift apart. *)
+let shape_disposition = function
+  | Tagged tag -> Keep (Printf.sprintf "tagged `%s`" tag)
+  | Trailing | TooLong _ -> Remove
+
+let decide (comment : comment) rule =
+  { comment with disposition = shape_disposition rule; shape = Some rule }
 type layout = Lines | Columns | Compact
 
 (* NOTE: What a comment has to be beyond being of a kind the policy keeps.  The
@@ -51,6 +70,13 @@ type allow_rules = {
   tags : string list;
   max_lines : int option;
   trailing : bool option;
+  (* NOTE: Tags that carry a deadline.  Allowed here exactly as `tags` are:
+     measuring the age of a line means reading a repository, and neither this
+     implementation nor the Rust scanner does any I/O, so the verdict that
+     takes one back is reached by a caller with a clock.  The names are still
+     needed, because until the deadline passes these are ordinary allowed
+     tags and the two implementations have to agree about that. *)
+  expiring_tags : string list;
 }
 
 type scan_options = {
@@ -114,7 +140,7 @@ type declarative_profile = {
 let default_scan_options = {
   policy = Conservative; dialect = Standard; force_invalid = false; force_protected = false;
   keep_kinds = []; remove_kinds = []; keep_regex = []; remove_regex = [];
-  allow = { tags = []; max_lines = None; trailing = None };
+  allow = { tags = []; max_lines = None; trailing = None; expiring_tags = [] };
 }
 
 let default_transform_options = { scan = default_scan_options; layout = Lines }
@@ -379,7 +405,7 @@ let is_legal text =
   List.exists (contains text) ["spdx-license-identifier"; "copyright"; "licensed under";
     "permission is hereby granted"; "all rights reserved"]
 
-(* NOTE: A directive named after the tool that reads it is followed by the
+(** A directive named after the tool that reads it is followed by the
    argument that tool takes, and whitespace of the writer's choosing separates
    the two, so the keyword ends at a boundary rather than at one particular
    byte. Matching the bare prefix would read prose that merely opens with those
@@ -413,7 +439,7 @@ let trim_ascii_end text =
     if finish > 0 && ascii_whitespace text.[finish - 1] then loop (finish - 1) else finish in
   String.sub text 0 (loop (String.length text))
 
-(* NOTE: Dart's language version comment, which the scanner itself reads rather
+(** Dart's language version comment, which the scanner itself reads rather
    than a tool: "tokenizeLanguageVersionOrSingleLineComment" accepts exactly two
    slashes -- a third sends it to tokenizeSingleLineComment instead -- then
    spaces, "@dart" in lower case, spaces, "=", spaces, a run of digits, ".", a
@@ -535,27 +561,18 @@ let is_directive language text raw =
       List.exists (opens_with_keyword compact) ["yamllint"; "nosec"; "kics-scan"] ||
       List.exists (fun prefix -> String.starts_with ~prefix compact)
         ["yaml-language-server:"; "renovate:"; "checkov:skip"; "trivy:ignore"]
-  (* NOTE: Three of the four are asked of the trimmed text rather than of
-     "compact", because "compact" is what takes the "@" off, and the "@" is what
-     tells the annotation from prose about it.  "@psalm-suppress" is followed by
-     the issue it silences after whitespace, so it ends at a boundary;
-     "@phpstan-ignore" and "@codeCoverageIgnore" are namespaces whose members
-     differ only in what runs on past them, so a prefix is the whole rule there.
-     "phpcs:" carries its own boundary in the colon and covers "ignore",
-     "disable", "enable" and "ignoreFile" alike. *)
+  (* NOTE: Three are asked of the trimmed text, because "compact" takes off
+     the "@" that tells the annotation from prose about it.  "@phpstan-ignore"
+     and "@codeCoverageIgnore" are namespaces, so a prefix is the rule;
+     "phpcs:" carries its boundary in the colon. *)
   | Php -> opens_with_keyword text "@psalm-suppress" ||
       String.starts_with ~prefix:"@phpstan-ignore" text ||
       String.starts_with ~prefix:"@codecoverageignore" text ||
       String.starts_with ~prefix:"phpcs:" compact
-  (* NOTE: Three of these six are Ruby's own magic comments, which the
-     interpreter reads out of the head of a file: "frozen_string_literal"
-     decides whether every literal string in it is frozen,
-     "shareable_constant_value" what Ractor may share, and "warn_indent" whether
-     the parser complains about the indentation.  The other three are the tools
-     every Ruby project runs -- RuboCop, StandardRB, and Sorbet's "# typed:"
-     sigil.  Each carries its own boundary in the colon and covers the whole
-     namespace behind it.  The encoding declaration is deliberately absent: it
-     is a kind of its own, classified before this runs. *)
+  (* NOTE: Three are Ruby's magic comments, which the interpreter reads out of
+     the head of a file; three are the tools a project runs.  Each carries its
+     boundary in the colon and covers the namespace behind it.  The encoding
+     declaration is a kind of its own, classified before this runs. *)
   | Ruby -> List.exists (fun prefix -> String.starts_with ~prefix compact)
       ["frozen_string_literal:"; "warn_indent:"; "shareable_constant_value:";
        "rubocop:"; "standard:"; "typed:"]
@@ -568,53 +585,30 @@ let is_directive language text raw =
      already and is deliberately absent here. *)
   | R -> opens_with_keyword compact "nocov" ||
       String.starts_with ~prefix:"styler:" compact
-  (* NOTE: "zig fmt" reads its one instruction by equality rather than by prefix:
-     Render.zig takes two bytes off the trimmed comment, trims the white space
-     that follows, and compares the remainder with "zig fmt: off" and
-     "zig fmt: on".  So "// zig fmt: off please" turns nothing off, and neither
-     does "/// zig fmt: off" or "//// zig fmt: off" -- the first leaves one "/"
-     in front of the phrase and the second two.  "raw" is what tells those
-     apart, because trim_markers takes a "///" off whole; the comparison itself
-     is against the trimmed text, which is folded to lower case here where
-     "zig fmt" is case-sensitive, and folding can only keep a comment a removal
-     would otherwise take. *)
+  (* NOTE: "zig fmt" matches by equality, not prefix (Render.zig), so
+     "// zig fmt: off please" and "/// zig fmt: off" turn nothing off.  Asked of
+     "raw" because trim_markers takes a "///" off whole, and folded to lower
+     case where "zig fmt" is not -- folding can only keep a comment. *)
   | Zig ->
     String.starts_with ~prefix:"//" raw &&
     not (String.length raw > 2 && (raw.[2] = '/' || raw.[2] = '!')) &&
     (text = "zig fmt: off" || text = "zig fmt: on")
-  (* NOTE: Four instructions, and only one of them is addressed to a tool.
-     "// @dart = 2.12" is read by the Dart scanner itself and decides which
-     version of the language the file is written in, so a removal that took it
-     would change what the remaining code means.  "dart format" is matched by
-     equality on the whole comment rather than by prefix, because that is how
-     dart_style matches it: piece_writer.dart switches on comment.text against
-     "// dart format off" and "// dart format on", so "//   dart format off"
-     with a second space and "/// dart format off" with a third slash turn
-     nothing off -- measured on dart format from SDK 3.13.2, which reformatted
-     both.  comment.text is trimmed at the end and not at the front, and this is
-     asked of "raw" for the reason Zig's is: trim_markers takes a "///" off
-     whole and would leave the two spellings indistinguishable.  The analyzer's
-     two ignore comments each carry their own boundary in the colon
-     (ignore_comments/ignore_info.dart). *)
+  (* NOTE: "// @dart = 2.12" is read by the Dart scanner itself and decides
+     which language version the file is written in, so a removal would change
+     what the rest means.  "dart format" is matched by equality
+     (piece_writer.dart, measured on SDK 3.13.2), asked of "raw" for the reason
+     Zig's is.  The analyzer's two carry their boundary in the colon. *)
   | Dart ->
     dart_language_version raw ||
     (let phrase = trim_ascii_end raw in
      phrase = "// dart format off" || phrase = "// dart format on") ||
     List.exists (fun prefix -> String.starts_with ~prefix compact)
       ["ignore:"; "ignore_for_file:"]
-  (* NOTE: Four instructions, and only one of them is addressed to a formatter.
-     "// swift-tools-version:" is the first line of a Package.swift, and SwiftPM
-     reads it before it reads any of the manifest: it decides which version of
-     the package description the file is written against, so a removal that took
-     it would leave a package that no longer builds.  The other three name the
-     tool that reads them and carry their own boundary -- a colon for
-     "swiftlint:" and "swiftformat:", and for "swift-format-ignore" the end of
-     the comment, a colon, or the "-file" that widens it to the whole file.
-     Measured on swift-format 6.3.3: "// swift-format-ignore" and
-     "// swift-format-ignore-file" both leave "let    a     = 1" alone, and
-     "// swift-format-ignoreish note" reformats it.  "// MARK:" is deliberately
-     absent: Xcode reads it to build a jump bar, so it is addressed to a reader
-     rather than to a build. *)
+  (* NOTE: "// swift-tools-version:" is read by SwiftPM before the manifest, so
+     a removal leaves a package that no longer builds.  The other three carry
+     their own boundary -- a colon, or for "swift-format-ignore" the comment's
+     end or "-file" (measured on swift-format 6.3.3).  "// MARK:" is absent:
+     Xcode reads it for a jump bar, so it is addressed to a reader. *)
   | Swift ->
     List.exists (fun prefix -> String.starts_with ~prefix compact)
       ["swift-tools-version:"; "swiftlint:"; "swiftformat:"] ||
@@ -627,27 +621,14 @@ let is_directive language text raw =
          then String.sub rest 5 (String.length rest - 5) else rest in
        tail = "" || tail.[0] = ':' || tail.[0] = ' ' || tail.[0] = '\t'
        || tail.[0] = '\n' || tail.[0] = '\r' || tail.[0] = '\x0b' || tail.[0] = '\x0c')
-  (* NOTE: Three instructions, and the first is the one a compiler reads.
-     Roslyn's GeneratedCodeUtilities.BeginsWithAutoGeneratedComment searches the
-     "//" and block comments in front of a file's first token for
-     "<auto-generated" -- the legacy "<autogenerated" with it -- and a file it
-     finds one in is exempt from every analyzer that opts out of generated code,
-     so a removal that took it would light up the diagnostics the file was
-     written to escape.  That search is a containment rather than a prefix, and
-     it is followed here: the "<" is the marker's own boundary, and prose about
-     generated code carries none.  Roslyn asks for it in the leading trivia alone
-     and asks case-sensitively; both are widened here, because a comment that
-     merely reads like the marker is a comment a reader meant as one.
-
-     "// ReSharper disable" and "// ReSharper restore" bound the region an
-     inspection is turned off over, and only those two verbs are instructions --
-     the white space between the tool and its verb is what tells them from prose
-     that opens with the same letters.  "// csharpier-ignore" is matched on the
-     whole comment rather than by prefix, because that is how CSharpier matches
-     it: measured on csharpier 1.3.0, the bare marker and its "-start" and "-end"
-     spellings each left "int    a     =    1;" unformatted, while the same
-     marker with a second space after the slashes, with text run on past it, in a
-     block comment and behind three slashes all reformatted it. *)
+  (* NOTE: "<auto-generated" exempts a file from every analyzer that opts out
+     of generated code, so a removal lights up the diagnostics it was written to
+     escape.  Roslyn searches by containment, in leading trivia and
+     case-sensitively; both of the last two are widened here, because a comment
+     that merely reads like the marker is one a reader meant as one.
+     ReSharper's two verbs are told from prose by the white space after the tool
+     name, and "csharpier-ignore" is matched on the whole comment (measured on
+     csharpier 1.3.0). *)
   | CSharp ->
     contains text "<auto-generated" || contains text "<autogenerated" ||
     (match String.starts_with ~prefix:"resharper" compact with
@@ -676,23 +657,7 @@ let is_directive language text raw =
     || String.starts_with ~prefix:"> using\t" compact
   | _ -> false
 
-(* NOTE: Which of the directives above the language or its build reads as part
-   of the program, as against the far larger set a tool merely reads to decide
-   what to report.  The question each one answers is whether removing it changes
-   what the toolchain *produces*: a dropped "swiftlint:disable" makes a linter
-   noisier and the program is the same program, while a dropped "//go:build"
-   compiles a file that was never meant for this platform and the build is green
-   either way.  The second failure is the one nothing downstream catches, so
-   these are held back from every "remove" policy and force_protected is the
-   only way out.
-
-   This is asked only of comments is_directive has already claimed, so it is a
-   filter over that set rather than a second catalogue: "line " is Go's and is
-   deliberately absent, because it moves the positions the compiler reports and
-   not the program it builds.  "go:" is otherwise taken whole -- the namespace
-   is the compiler's, and a marker protected in error is one comment left behind
-   where a marker missed in error is a silent change to the build. *)
-(* NOTE: Which of the bundler instructions decide what the build emits.  All of
+(** Which of the bundler instructions decide what the build emits.  All of
    them do: "webpackChunkName" names the file a dynamic import becomes,
    "@vite-ignore" keeps an import expression out of the graph, and "#__PURE__"
    is what lets a call be dropped as dead, so removing it leaves the call and
@@ -743,7 +708,7 @@ let within_first_two_lines source finish =
    them. *)
 let byte_order_mark_width source = if starts source 0 "\xef\xbb\xbf" then 3 else 0
 
-(* NOTE: Python and Ruby share the phrase, down to the spelling: PEP 263 asks
+(** Python and Ruby share the phrase, down to the spelling: PEP 263 asks
    for "coding[:=]\s*([-\w.]+)" in one of the first two lines, and Ruby's
    magic_comment reads the same phrase out of the same two lines.  The Emacs
    form "# -*- coding: utf-8 -*-" satisfies both, which is why both languages
@@ -807,7 +772,7 @@ let classify source language lexical start finish =
     (if is_load_bearing language text raw then LoadBearing else Directive)
   else lexical
 
-(* NOTE: One YAML block scalar, as the two things the lines below it depend on:
+(** One YAML block scalar, as the two things the lines below it depend on:
    where its body stopped, and whether its header asked to keep the empty lines
    trailing it.  Where a body ends is decided by the column of the node the
    header hangs off, which is not written on the header's own line -- "key:" on
@@ -833,7 +798,7 @@ let add_comment accumulator source language options lexical start finish =
   let finish = max start (min finish (Bytes.length source)) in
   let kind = classify source language lexical start finish in
   let raw = Bytes.sub_string source start (finish - start) in
-  accumulator.comments_rev <- { span = { start; finish }; kind; disposition = disposition options kind raw } :: accumulator.comments_rev
+  accumulator.comments_rev <- { span = { start; finish }; kind; disposition = disposition options kind raw; shape = None } :: accumulator.comments_rev
 
 let add_error accumulator code message start finish =
   accumulator.diagnostics_rev <- { code; message; severity = Error; span = { start; finish } } :: accumulator.diagnostics_rev
@@ -1022,7 +987,7 @@ let rust_raw_start_at_quote source quote =
    and it promises that nothing decided before it depends on bytes after it. *)
 let is_line_terminator character = character = '\r' || character = '\n'
 
-(* NOTE: Rust Reference, Lifetimes and loop labels: an apostrophe followed by an
+(** Rust Reference, Lifetimes and loop labels: an apostrophe followed by an
    identifier that no second apostrophe closes is a lifetime, so it opens no
    literal at all and a `//` behind it on the same line is a comment.  What
    tells the two apart is the shape after the quote: an escape closed four bytes
@@ -1349,16 +1314,11 @@ let scan_slash_unmapped source language options accumulator =
         | None -> loop (quoted_or_error source accumulator index true "string"))
       | Rust when character = '\'' && rust_char_start source index ->
         loop (quoted_or_error source accumulator index false "character literal")
-      (* NOTE: What is left is an apostrophe the window read as no literal, and
-         nothing on its line says whether it opens one.  A Rust identifier is
-         `XID_Start XID_Continue*` (Rust Reference, Identifiers) and has been
-         since 1.53, so `'ä` is as good a lifetime or loop label as `'a` --
-         `fn f<'ä>() {}` and `'ä: loop {}` both compile -- and an unterminated
-         non-ASCII character literal is spelled the same way within one line.
-         `rustc` tells the two apart in the parser, which is where E0762 is
-         raised; this scanner is a lexer with a line-bounded window and cannot.
-         So it reports neither: over-keeping a comment is the safe direction,
-         calling a valid file invalid is not. *)
+      (* NOTE: An apostrophe the window read as no literal, and nothing on its
+         line says whether it opens one: a Rust identifier is XID, so `'ä` is as
+         good a lifetime as `'a` and an unterminated non-ASCII literal is
+         spelled the same way.  `rustc` separates them in the parser where E0762
+         is raised; a line-bounded lexer cannot, so it reports neither. *)
       | Rust when character = '\'' -> loop (index + 1)
       (* NOTE: A raw string prefix is only a prefix where no identifier runs
          into it and the delimiter is made of d-chars, so both questions are
@@ -1756,14 +1716,11 @@ let ocaml_quoted_end source index =
     | None -> Some (Bytes.length source, false))
   | _ -> None
 
-(* NOTE: A character literal is an apostrophe, one character or one escape
+(** A character literal is an apostrophe, one character or one escape
    sequence, and a closing apostrophe (OCaml manual, Lexical conventions).  The
-   shape is what decides it: the second apostrophe two bytes on, or a backslash
-   and an apostrophe close enough behind it to close the longest escape there
-   is.  Anything else leaves the apostrophe an ordinary byte -- of a type
-   variable outside a comment, and of the comment's own text inside one, where
-   the string that follows it still has to terminate. *)
-(* INVARIANT: The rule `rust_char_start` states, for OCaml's two windows.  `'\`
+   shape decides it; anything else leaves the apostrophe an ordinary byte.
+
+   The rule `rust_char_start` states, for OCaml's two windows.  `'\`
    before a line terminator is an illegal backslash escape (`ocamlc` 5.5.0
    rejects it), so the escaped window gives up nothing valid by stopping there.
    The bare window costs the one shape OCaml does accept -- an apostrophe, a
@@ -2146,7 +2103,7 @@ let scan_zig_quoted source accumulator start =
     end else loop (index + 1)
   in loop (start + 1)
 
-(* NOTE: Zig has no block comment at all -- "/*" is the division operator and
+(** Zig has no block comment at all -- "/*" is the division operator and
    then multiplication, which std.zig.Tokenizer reports as slash and asterisk --
    so this is its own small lexer rather than scan_slash with one delimiter
    taken away.  Everything it has to know ends at a line break: a comment runs
@@ -2197,7 +2154,7 @@ let is_r_name_byte character =
   (character >= '0' && character <= '9') || character = '.' || character = '_' ||
   Char.code character >= 0x80
 
-(* NOTE: The end of the R raw string whose quote is at the given index, and
+(** The end of the R raw string whose quote is at the given index, and
    whether it closed -- or None when no raw string opens there at all.  The
    literal is "r" or "R", the quote, a run of dashes, and one of "(", "[" or
    "{"; it closes on the matching bracket, the same run of dashes, and the same
@@ -2249,7 +2206,7 @@ let r_delimited_end source start close =
       | _ -> loop (index + 1)
   in loop start
 
-(* NOTE: One R script (R Language Definition, 10 Parser; ?Quotes).  "#" opens a
+(** One R script (R Language Definition, 10 Parser; ?Quotes).  "#" opens a
    comment that runs to the end of the line and that is the whole comment
    grammar -- there is no block form and no nesting.  What makes this more than
    a search for "#" is the four literals that carry one as content: a quoted
@@ -2342,7 +2299,7 @@ let dart_identifier_continue = function
   | 'a'..'z' | 'A'..'Z' | '0'..'9' | '_' | '$' -> true
   | _ -> false
 
-(* NOTE: "tokenizeRawStringKeywordOrIdentifier" is reached from the scanner's
+(** "tokenizeRawStringKeywordOrIdentifier" is reached from the scanner's
    main switch, so the "r" has to begin a token: an "r" that continues an
    identifier is a letter of that identifier, and the quote behind it opens an
    ordinary string.  Only a lower-case "r" does it -- "R'x'" is the identifier
@@ -2364,7 +2321,7 @@ let dart_raw_string_prefix source quote =
   let start = loop (quote - 1) in
   start = quote - 1 || (match Bytes.get source start with '0'..'9' -> true | _ -> false)
 
-(* NOTE: One Dart string beginning at its opening quote (Dart Language
+(** One Dart string beginning at its opening quote (Dart Language
    Specification, 17.6 Strings).  The six forms are one rule with two switches:
    "triple" is three of the same quote, which makes a line break content instead
    of the end of the literal, and "raw" is the "r" in front of it, which takes
@@ -2449,7 +2406,7 @@ and scan_dart_interpolation source language options accumulator index depth =
       | _ -> loop (index + 1) braces
   in loop index 1
 
-(* NOTE: One Dart compilation unit (Dart Language Specification, 17.1 Comments).
+(** One Dart compilation unit (Dart Language Specification, 17.1 Comments).
    Dart is a C-family syntax with three departures that decide the shape of this
    scanner rather than of scan_slash: its block comment nests, so "/* /* */ */"
    is one comment; "//!" and "/*!" document nothing while "////" still does; and
@@ -2526,7 +2483,7 @@ let swift_hashes_at source index count =
     (index + offset < length && Bytes.get source (index + offset) = '#' && loop (offset + 1))
   in loop 0
 
-(* NOTE: The end of a string with "hashes" hashes if its delimiter closes at
+(** The end of a string with "hashes" hashes if its delimiter closes at
    "index".  A raw delimiter takes one "#" more than it needs when one is there:
    Lexer.Cursor.advanceIfStringDelimiter counts pounds with the advance in the
    loop condition and the count test in its body, so it consumes a hashes+1-th
@@ -2579,7 +2536,7 @@ let swift_multiline_string source quote hashes =
     in loop (quote + 2)
   end
 
-(* NOTE: Whether the "/" at "index" stands where a binary operator does, and can
+(** Whether the "/" at "index" stands where a binary operator does, and can
    therefore open no regular expression literal.  The Swift book (Lexical
    Structure, Operators) decides this from the white space around an operator:
    one with white space on both sides or on neither is binary, and one with
@@ -2598,7 +2555,7 @@ let swift_is_left_bound source index =
     | '\xa0' -> not (index >= 2 && Bytes.get source (index - 2) = '\xc2')
     | _ -> true
 
-(* NOTE: The end of the bare regular expression literal "/ ... /" opening at
+(** The end of the bare regular expression literal "/ ... /" opening at
    "index", or None when those bytes open none.  The Swift book (Lexical
    Structure, Regular Expression Literals) states the rule this follows: a
    literal cannot begin with an unescaped tab or space, and it cannot contain an
@@ -2674,19 +2631,14 @@ let rec scan_swift_lexeme source language options accumulator index depth =
            so if that byte is neither a quote nor a slash then no suffix of the
            run opens a literal either. *)
         Some opener
-    (* NOTE: "'" is no delimiter in the language -- the Swift book's Lexical
-       Structure has no single-quoted literal and no character literal at all --
-       but it is one in the compiler, which lexes "'...'" as a singleQuote string
-       so that it can offer the fix-it that turns it into a "\"...\"" one
-       (Lexer.Cursor.lexStringQuote).  Following the lexer rather than the
-       grammar keeps a "//" inside such a literal from being read as a comment
-       and removed out of a file that is already broken; no "'" can stand in
-       Swift code outside a string, a comment or a regular expression literal,
-       so it costs a valid file nothing. *)
+    (* NOTE: "'" is no delimiter in the language and is one in the compiler,
+       which lexes "'...'" as a singleQuote string to offer a fix-it
+       (Lexer.Cursor.lexStringQuote).  Following the lexer keeps a "//" inside
+       one from being removed out of an already broken file. *)
     | '"' | '\'' -> Some (scan_swift_string source language options accumulator index 0 depth)
     | _ -> None
 
-(* NOTE: One extended regular expression literal "#/ ... /#", beginning at its
+(** One extended regular expression literal "#/ ... /#", beginning at its
    first "#".  This is the form that may carry an unescaped "/" -- "#/https://x/#"
    is a regular expression with a "//" in the middle of it -- and the only one
    that may span lines, and only when it opens one: RegexLiteralLexer enters
@@ -2729,7 +2681,7 @@ and scan_swift_extended_regex source accumulator start hashes =
     finish
   end
 
-(* NOTE: One Swift string literal, beginning at the first "#" of a raw one and at
+(** One Swift string literal, beginning at the first "#" of a raw one and at
    the quote of any other.  The four forms are one rule with two switches:
    "multiline" is three quotes, which makes a line break content instead of the
    end of the literal, and "hashes" is the run of "#" in front of the quote,
@@ -2809,7 +2761,7 @@ and scan_swift_interpolation source language options accumulator index depth =
     in loop index 1
   end
 
-(* NOTE: One Swift source file (The Swift Programming Language, Lexical
+(** One Swift source file (The Swift Programming Language, Lexical
    Structure: Comments, String Literals, Regular Expression Literals).  Swift is
    a C-family syntax with four departures that decide the shape of this scanner
    rather than of scan_slash: its block comment nests; "//!" and "/*!" document
@@ -3224,7 +3176,7 @@ and scan_csharp_format source accumulator index braces =
     else loop (index + 1)
   in loop index
 
-(* NOTE: One pre-processing directive line, beginning at its "#".  ECMA-334 6.5.1
+(** One pre-processing directive line, beginning at its "#".  ECMA-334 6.5.1
    ends every directive with PP_New_Line : PP_Whitespace? SINGLE_LINE_COMMENT?
    New_Line, so a "//" is the one comment a directive line can carry: "/*" opens
    nothing there and neither does an apostrophe.  A quote still opens a string --
@@ -3273,7 +3225,7 @@ let scan_csharp_directive source language options accumulator index line_initial
     end
   end
 
-(* NOTE: One C# source file (ECMA-334 6.3 Lexical analysis: comments, literals;
+(** One C# source file (ECMA-334 6.3 Lexical analysis: comments, literals;
    6.5 Pre-processing directives).  C# is a C-family syntax with three departures
    that decide the shape of this scanner rather than of scan_slash: a line whose
    first non-blank byte is "#" is a pre-processing directive and the rest of it
@@ -3341,7 +3293,7 @@ let yaml_flow_opener source index =
    blank line under such a body change its value. *)
 type chomping = Chomp_strip | Chomp_clip | Chomp_keep
 
-(* NOTE: A block scalar header is its "|" or ">", then its indicators, then
+(** A block scalar header is its "|" or ">", then its indicators, then
    white space, then at most a comment, and then the end of the line (YAML
    1.2.2, 8.1.1).  Anything else leaves the indicator a byte of a plain scalar,
    which is the whole of what tells "key: >" from "key: a > b".  The comment
@@ -3418,7 +3370,7 @@ let yaml_document_marker source line_start =
    | ' ' | '\t' | '\r' | '\n' -> true
    | _ -> false)
 
-(* NOTE: A line belongs to the body of a block scalar while it is empty -- an
+(** A line belongs to the body of a block scalar while it is empty -- an
    empty line is content of the scalar whatever its indentation (YAML 1.2.2,
    8.1.2) -- or indented to at least the content indentation.  The first line
    that is neither ends it, and so does a document marker in column zero, which
@@ -3478,7 +3430,7 @@ let past_terminator source line_finish =
    protocol compares this string byte for byte. *)
 let yaml_structural_trail = "structural in a YAML block scalar trail"
 
-(* NOTE: Which comments in the trails of `blocks` no removal may take, as indices
+(** Which comments in the trails of `blocks` no removal may take, as indices
    into `comments`.
 
    A block scalar body ends at the first line under it that is shallower than its
@@ -3559,7 +3511,7 @@ let scan_yaml_quoted source accumulator start =
     else index + 1
   in loop (start + 1)
 
-(* NOTE: One YAML stream (YAML 1.2.2).  The scanner is line-local: everything it
+(** One YAML stream (YAML 1.2.2).  The scanner is line-local: everything it
    needs to decide what a byte is comes from the line that byte sits on.  "#"
    opens a comment only where white space separates it from the token in front
    of it (6.6), the two quoted styles may run over a line break and carry every
@@ -3616,35 +3568,19 @@ let scan_yaml source language options accumulator =
           | Some start -> add_comment accumulator source language options Line start header_end
           | None -> ());
           (* NOTE: The body is indented past the node the scalar hangs off
-             (8.1.1.1).  For "key: |" that node is the mapping, whose indentation
-             is the column of the key; for "- |" it is the sequence, whose
-             indentation is the column of the "-".  The header itself may sit
-             anywhere past that owner -- on a line of its own, or behind an
-             anchor or a tag -- so its own column says nothing about how deep a
-             body line has to be, and reading it as the floor would take a body
-             indented less than the header for the end of the scalar and its "#"
-             lines for comments.  With no owner at all the scalar is the whole
-             document, whose indentation is one short of column zero, which
-             leaves every line under it body.  An explicit indentation indicator
-             counts from that same owner, which is why it replaces the detected
-             depth rather than adding to it.  Detection proper reads the first
-             non-empty line instead, and a line shallower than that but still
-             past the owner is content of neither reading; taking it for body is
-             the one that leaves bytes alone. *)
+             (8.1.1.1) -- the mapping for "key: |", the sequence for "- |" --
+             and not past the header, which may sit anywhere after that owner.
+             Reading the header as the floor would end the scalar early.  With
+             no owner the scalar is the document, one short of column zero. *)
           let base = match owner_column with Some column -> column + 1 | None -> 0 in
           let floor = base + (match indicator with Some value -> value | None -> 1) - 1 in
           let finish, detected = yaml_block_body_end source header_end floor in
-          (* NOTE: Where this body stopped, on what terms it keeps its trailing
-             empty lines, and how deep its content is are the whole of what
-             `lines_a_removal_must_swallow` and `yaml_structural_trail_keeps`
-             need from a scan: the lines under a body are the only place in YAML
-             where the hole a removal leaves carries meaning.  Recorded here
-             rather than re-derived, because only the scan knows the column of
-             the node the header hangs off.  An explicit indicator is the content
-             depth (8.1.1.1); without one the depth is detected from the first
-             non-empty line, and a body with no non-empty line at all has none to
-             detect, so the floor stands in for it -- which is the depth the next
-             line the scalar could take would set. *)
+          (* NOTE: The lines under a body are the only place in YAML where the
+             hole a removal leaves carries meaning, so this is recorded rather
+             than re-derived: only the scan knows the column of the node the
+             header hangs off.  Without an explicit indicator the depth comes
+             from the first non-empty line, and the floor stands in for a body
+             that has none. *)
           accumulator.yaml_blocks_rev <-
             { body_end = finish;
               content_indent = (match indicator with Some _ -> floor | None -> detected);
@@ -3842,7 +3778,7 @@ let xml_name_char byte =
   xml_name_start byte || (byte >= '0' && byte <= '9')
   || byte = '-' || byte = '.'
 
-(* NOTE: Whether the "<" at "index" opens an XML literal, which is exactly
+(** Whether the "<" at "index" opens an XML literal, which is exactly
    where the compiler's lexer emits XMLSTART: the byte before it is space, tab,
    line feed, "{", "(" or ">" -- a token boundary, and not the "x" of "x<a>" --
    and the byte after it is an XML name start, "!" or "?".  The name start is
@@ -3915,7 +3851,7 @@ let rec scan_scala_expression source language options accumulator index depth =
     in loop index 1
   end
 
-(* NOTE: One Scala string literal, beginning at its opening quote.  A string is
+(** One Scala string literal, beginning at its opening quote.  A string is
    interpolated exactly when an identifier stands directly before its quote --
    the compiler's lexer turns that identifier into INTERPOLATIONID -- so
    "s\"...\"", "raw\"...\"", a custom interpolator such as "xml\"...\"", and
@@ -4016,7 +3952,7 @@ and scala_xml_tag source language options accumulator start depth =
     | None -> None
   end
 
-(* NOTE: One XML literal, beginning at the "<" that opened it.  The compiler's
+(** One XML literal, beginning at the "<" that opened it.  The compiler's
    *lexer* emits an XMLSTART token for the "<" and then hands the literal to
    the parser, which re-reads it with an XML scanner: element text, CDATA and
    processing instructions are *not* code, and a "//" in them is a byte the
@@ -4732,7 +4668,7 @@ let scan_php_code source language options accumulator start =
       | _ -> loop (index + 1)
   in loop start
 
-(* NOTE: One PHP file (PHP manual, Basic syntax, Comments, Strings, Heredoc
+(** One PHP file (PHP manual, Basic syntax, Comments, Strings, Heredoc
    text).  A file opens in inline-HTML mode, where every byte is output verbatim
    and nothing is a comment; an opening tag enters PHP mode and "?>" returns.
    Inline HTML is opaque in v1, so an HTML comment in a PHP file is not
@@ -4763,15 +4699,12 @@ let scan_php source language options accumulator =
     html finish
   end else html 0
 
-(* NOTE: Where a Ruby token may begin, which is what decides whether "/", "%",
-   "?" and "<<" open a literal or are the operator spelled with the same byte.
-   This is Ruby's own lex_state folded onto the three answers those four
-   questions read out of it: IS_BEG(), IS_END(), and the IS_ARG() in between,
-   where a bare word may be a method about to take a command argument and only
-   the spacing around the byte says which.  Ruby's lexer tells a local variable
-   from a method name by the symbol table it is building, which a scanner has
-   not got, so every bare word lands in RubyArgument. *)
-(* NOTE: RubyFname is EXPR_FNAME|EXPR_FITEM, where "alias" and "undef" leave
+(** Where a Ruby token may begin, which decides whether "/", "%", "?" and "<<"
+   open a literal or are the operator spelled with the same byte: Ruby's own
+   lex_state folded onto IS_BEG(), IS_END() and the IS_ARG() between them.  A
+   scanner has no symbol table, so every bare word lands in RubyArgument.
+
+   RubyFname is EXPR_FNAME|EXPR_FITEM, where "alias" and "undef" leave
    Ruby.  It answers every question RubyEnd answers, and one differently:
    parse_percent opens a symbol literal on "%s" there, spacing or none. *)
 type ruby_state = RubyBegin | RubyArgument | RubyEnd | RubyFname
@@ -4838,7 +4771,7 @@ let ruby_number_end source index =
     then loop (finish + 1) else finish
   in loop index
 
-(* NOTE: Ruby's keyword table folded onto ruby_state.  "def", "alias" and
+(** Ruby's keyword table folded onto ruby_state.  "def", "alias" and
    "undef" refuse a literal because the name that follows one may be spelled "/"
    or "%" -- "def /(other)" defines division; "class" and "module" are in the
    first list for the mirror-image reason, that "class <<self" is a singleton
@@ -5111,7 +5044,7 @@ let ruby_percent_header source start =
              percent_content = content;
              percent_interpolates = String.contains "QWIrx" form }
 
-(* NOTE: Ruby's heredoc_identifier: an optional "-" or "~", then a quoted
+(** Ruby's heredoc_identifier: an optional "-" or "~", then a quoted
    terminator or a bare word.  The bare word is a run of is_identchar bytes from
    its very first one, which is a wider set than a name may start with: a digit
    is an identchar, so "<<2" is a here document terminated by a line reading "2"
@@ -5175,15 +5108,11 @@ let rec ruby_take count items =
 
 let scan_ruby source language options accumulator =
   let length = Bytes.length source in
-  (* NOTE: The here documents opened on the physical line being read and not yet
-     given a body, in the order Ruby will consume them.  It is one queue for the
-     whole line rather than one per nested scan because a header may stand
-     inside an interpolation -- "puts \"#{ <<EOS }\"" opens a here document whose
-     body is the line under that one -- and because Ruby takes the bodies in
-     header order across the whole line, so an opener written before an
-     interpolation and one written inside it queue together.  The queue is
-     drained by whichever scan reaches the line break first, which is why it has
-     to outlive the "}" a nested scan returns from. *)
+  (* NOTE: The here documents opened on this physical line and not yet given a
+     body, in the order Ruby will consume them.  One queue for the whole line,
+     because a header may stand inside an interpolation and Ruby takes the
+     bodies in header order across the line; it is drained by whichever scan
+     reaches the break first, so it outlives a nested scan. *)
   let pending = ref [] in
   let pending_push heredoc = pending := !pending @ [heredoc] in
   let pending_take () = let opened = !pending in pending := []; opened in
@@ -5456,30 +5385,22 @@ let vue_style_language lang =
   | Some "sass" -> Some (Css, Sass)
   | Some _ -> None
 
-(* NOTE: One Vue or Svelte single-file component.  The top level holds the
-   "<script>" and "<style>" blocks and -- for Vue -- the "<template>" block,
-   and the body of each is scanned as its own language, the "lang" attribute
-   choosing which.  For Svelte the text between the blocks is the template
-   itself, whose every "{ ... }" opens an expression; for Vue the template is
-   the body of its "<template>" element.  A "lang" this scanner has no rules
-   for makes the whole block opaque, and a top-level "<!-- ... -->" is an HTML
-   comment. *)
-(* NOTE: One Markdown document.  An HTML comment is a comment, a fenced code
-   block is scanned as the language its info string names -- an unknown or
-   absent language leaves the block opaque -- and an inline code span or an
-   indented code block is opaque: a "//" or a "/*" in one is code text, not a
-   comment.  Every construct is recognised at its own start and read forward,
-   so no decision depends on a byte behind a restart. *)
-(* NOTE: One Perl document.  Perl's lexical surface is almost all quote
-   words: the single and double quotes and backticks, the "q", "qq", "qw" and
-   "qx" forms, the "m", "s", "tr" and "y" operators with delimiters of their
-   own, and the here-documents, all hide a "#" written inside them, and a POD
-   block is opaque.  The one place the bytes do not settle the reading is a
-   "/" directly after a closing parenthesis, bracket or brace: perl reads
-   "f() /a#b/" as a regular expression and "(2) / 2" as a division, and only
-   the parse context tells which, so this scanner reports that "/" as
-   lexically ambiguous and refuses to edit the file, keeping the "#" that
-   would decide the other way out of reach. *)
+(** One Vue or Svelte single-file component.  The top level holds the
+   "<script>", "<style>" and -- for Vue -- "<template>" blocks, each scanned as
+   the language its "lang" attribute names; an unknown "lang" makes the block
+   opaque.  For Svelte the text between the blocks is the template, whose every
+   "{ ... }" opens an expression. *)
+
+(** One Markdown document.  An HTML comment is a comment, a fenced code block is
+   scanned as the language its info string names, and a code span or indented
+   block is opaque.  Every construct is recognised at its own start and read
+   forward, so no decision depends on a byte behind a restart. *)
+
+(** One Perl document.  Quote words -- the quotes and backticks, "q", "qq",
+   "qw", "qx", the "m", "s", "tr" and "y" operators, the here-documents -- all
+   hide a "#", and POD is opaque.  A "/" directly after a closing bracket is the
+   one reading the bytes do not settle, so it is reported as lexically ambiguous
+   and the file is left alone. *)
 
 type perl_heredoc_declaration = { perl_terminator : string; perl_indented : bool }
 
@@ -6350,12 +6271,23 @@ let matching_tag source (span : byte_span) tags =
   let opening = skip 0 in
   let body = String.uppercase_ascii
       (String.sub text opening (String.length text - opening)) in
-  List.find_opt (fun tag ->
-    String.starts_with ~prefix:(String.uppercase_ascii tag) body) tags
+  (* NOTE: A word rather than a prefix: NOTE allows a note and not NOTEBOOK. *)
+  let opens_with tag =
+    let tag = String.uppercase_ascii tag in
+    String.starts_with ~prefix:tag body
+    && (String.length body = String.length tag
+        || match body.[String.length tag] with
+           | 'A' .. 'Z' | '0' .. '9' -> false
+           | _ -> true)
+  in
+  List.find_opt opens_with tags
 
-(* NOTE: Runs of comments with nothing but whitespace between them.  Four
-   consecutive line comments are four comments to a scanner and one paragraph to
-   a reader, and a length rule is about what the reader sees. *)
+(* NOTE: Runs of comments on consecutive lines.  Four consecutive line comments
+   are four comments to a scanner and one paragraph to a reader, and a length
+   rule is about what the reader sees.  Code between them ends a run, a comment
+   beside code ends one, and so does a blank line: that is how a writer says
+   the next remark is a separate remark, and a limit that counted across one
+   would measure the gap as well as the prose. *)
 let comment_runs source (comments : comment list) : comment list list =
   let rec build (acc : comment list list) (current : comment list) = function
     | [] -> List.rev (if current = [] then acc else List.rev current :: acc)
@@ -6368,28 +6300,58 @@ let comment_runs source (comments : comment list) : comment list list =
            else Bytes.sub_string source previous.span.finish gap in
          let only_space = String.for_all
              (function ' ' | '\t' | '\r' | '\n' -> true | _ -> false) between in
-         if only_space && not (has_code_before_it source comment.span.start)
+         let newlines = String.fold_left
+             (fun total character -> if character = '\n' then total + 1 else total)
+             0 between in
+         if only_space && newlines <= 1
+            && not (has_code_before_it source comment.span.start)
          then build acc (comment :: current) rest
          else build (List.rev current :: acc) [comment] rest)
   in build [] [] comments
 
+(* NOTE: Whether the shape rules apply to a comment of this kind at all.  They
+   apply to commentary and to nothing else: a doc comment is the API
+   documentation and a licence notice is a legal text, and both are as long as
+   their content requires.  The same list answers for position, and for a
+   sharper reason -- a directive is addressed to a tool and a tool reads it
+   where it sits, so `x = 1  # noqa` silences a warning about that line and
+   silences nothing a line above it.  Written as a total match so a new kind has
+   to be classified rather than inheriting an answer. *)
+let subject_to_shape = function
+  | Line | Block | HtmlComment -> true
+  | DocLine | DocBlock | License | Directive | Shebang | Encoding
+  | OptimizerHint | VersionComment | LoadBearing -> false
+
+(* NOTE: Whether somebody named this comment outright.  `keep_kind` names a kind
+   and `keep_regex` names the bytes; both are a project saying "keep exactly
+   this", and a rule about shape is a project saying "keep things like this".
+   The specific wins. *)
+let named_outright options kind raw =
+  mem_kind kind options.keep_kinds || regex_matches options.keep_regex raw
+
+let reachable source options (comment : comment) =
+  let raw = Bytes.sub_string source comment.span.start
+      (max 0 (comment.span.finish - comment.span.start)) in
+  subject_to_shape comment.kind && not (named_outright options comment.kind raw)
+
 let apply_allow_rules source options (comments : comment list) : comment list =
   let rules = options.allow in
-  if rules.tags = [] && rules.max_lines = None && rules.trailing = None then comments
+  let tags = rules.tags @ rules.expiring_tags in
+  if tags = [] && rules.max_lines = None && rules.trailing = None then comments
   else
     let tagged comment =
       if comment.disposition <> Remove then comment
-      else match matching_tag source comment.span rules.tags with
-        | Some tag -> { comment with disposition = Keep (Printf.sprintf "tagged `%s`" tag) }
+      else match matching_tag source comment.span tags with
+        | Some tag -> decide comment (Tagged tag)
         | None -> comment
     in
-    let comments = if rules.tags = [] then comments else List.map tagged comments in
+    let comments = if tags = [] then comments else List.map tagged comments in
     let untrailing comment =
       if rules.trailing = Some false
          && comment.disposition <> Remove
-         && protection_of comment.kind = NoProtection
+         && reachable source options comment
          && has_code_before_it source comment.span.start
-      then { comment with disposition = Remove }
+      then decide comment Trailing
       else comment
     in
     let comments = List.map untrailing comments in
@@ -6402,10 +6364,11 @@ let apply_allow_rules source options (comments : comment list) : comment list =
         | [] -> []
         | (first : comment) :: _ ->
           let last : comment = List.nth run (List.length run - 1) in
-          if line_span source first.span.start last.span.finish <= limit then run
+          let lines = line_span source first.span.start last.span.finish in
+          if lines <= limit then run
           else List.map (fun (comment : comment) ->
-            if protection_of comment.kind = NoProtection
-            then { comment with disposition = Remove }
+            if reachable source options comment
+            then decide comment (TooLong (lines, limit))
             else comment) run)
 
 let rec scan_html source language options accumulator =
@@ -6583,14 +6546,14 @@ let validate_profile profile =
 let profile_comment source profile options start finish kind =
   let raw = Bytes.sub_string source start (finish - start) in
   match List.find_opt (fun item -> contains raw item.pattern) profile.protected_patterns with
-  | None -> { span = { start; finish }; kind; disposition = disposition options kind raw }
+  | None -> { span = { start; finish }; kind; disposition = disposition options kind raw; shape = None }
   | Some protected ->
     let kind = match protected.tier with
       | Tool -> Directive
       | ProfileLoadBearing -> LoadBearing in
     let selected = disposition options kind raw in
     let disposition = match selected with Keep _ -> Keep protected.reason | Remove -> Remove in
-    { span = { start; finish }; kind; disposition }
+    { span = { start; finish }; kind; disposition; shape = None }
 
 let scan_profile source profile options =
   match validate_profile profile with
@@ -6854,22 +6817,18 @@ let compact_edit source (comment : comment) line_start floor ceiling =
     | _ -> Bytes.empty in
   { span = { start; finish = min finish ceiling }; replacement }
 
-(* NOTE: The edits layout `compact` makes: layout `lines`, plus the promise
-   that a line which held nothing but a removed comment goes away instead of
-   staying behind as a blank one.
+(** The edits layout `compact` makes: layout `lines`, plus the promise that a
+   line which held nothing but a removed comment goes away instead of staying
+   behind as a blank one.
 
-   Whether a comment was alone on its line is judged from the bytes of the
-   original source, so a line holding two comments and nothing else keeps its
-   terminator: neither of them was alone on it.
+   Whether a comment was alone on its line is judged from the original bytes, so
+   a line holding two comments keeps its terminator.  The start of the current
+   line is tracked forward through the whole source, comment bodies included.
 
-   The start of the current line is tracked forward through the whole source,
-   comment bodies included, so a comment beginning on a line that an earlier
-   comment ended is still measured from that line's real beginning. *)
-(* NOTE: `swallowed` names the lines whose hole would carry meaning, and it
-   reaches further than a line: under a "|+" body it takes the empty lines the
-   comment was sheltering too (see `lines_a_removal_must_swallow`).  Taking the
-   line is what `compact` does anyway, so this only ever widens what it takes,
-   and it is what keeps all three layouts writing the same bytes there. *)
+   `swallowed` names the lines whose hole would carry meaning, and reaches
+   further than a line: under a "|+" body it takes the empty lines the comment
+   was sheltering too.  Taking the line is what `compact` does anyway, so this
+   only widens what it takes. *)
 
 (* NOTE: Where every line of the source begins, in order, starting at 0.  A
    source ending with a terminator gets a final entry at its length: the empty
@@ -6915,7 +6874,7 @@ let line_is_blank source starts line =
             | _ -> false in
       loop start
 
-(* NOTE: Take back the blank lines a removal *created*.  Dropping the line a
+(** Take back the blank lines a removal *created*.  Dropping the line a
    comment held is what `compact` is for, and it is not the whole of what the
    comment occupied: a comment set off by a blank line above and another below
    is three lines of file for one comment, and taking only the middle one
@@ -7094,7 +7053,7 @@ let holds_a_block_indicator source =
     (match Bytes.get source index with '|' | '>' -> true | _ -> loop (index + 1))
   in loop 0
 
-(* NOTE: For each comment, the line a removal has to take whole -- its
+(** For each comment, the line a removal has to take whole -- its
    terminator included -- instead of leaving the ordinary hole on it, or None
    where the ordinary hole is right.  An empty answer stands for all-None, which
    is every language but YAML and nearly every YAML file.
@@ -7263,7 +7222,7 @@ let transform_spans source language spans options =
       else if index > 0 && span.start < cursor then
         Result.Error (Printf.sprintf "external comment #%d is out of order or overlaps its predecessor" index)
       else let raw = Bytes.sub_string source span.start (span.finish - span.start) in
-        let comment = { span; kind; disposition = disposition options.scan kind raw } in
+        let comment = { span; kind; disposition = disposition options.scan kind raw; shape = None } in
         validate span.finish (index + 1) (comment :: comments) tail
   in
   match validate 0 0 [] spans with

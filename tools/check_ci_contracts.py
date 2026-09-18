@@ -68,7 +68,8 @@ def main() -> int:
     seen = set()
     for path in AUTOMATION:
         text = path.read_text(encoding="utf-8")
-        for line_number, line in enumerate(text.splitlines(), start=1):
+        lines = text.splitlines()
+        for line_number, line in enumerate(lines, start=1):
             if "uses:" not in line or line.lstrip().startswith("#"):
                 continue
             if re.search(r"\buses:\s*\./", line):
@@ -91,7 +92,13 @@ def main() -> int:
                 failures.append(
                     f"{path.relative_to(ROOT)}:{line_number}: {action} is {revision}, expected {expected[0]}"
                 )
-            if comment is None or expected[1] not in comment:
+            # NOTE: Beside the line or on the line above it. This repository's
+            # NOTE: own `[policy.allow] trailing = false` forbids the first
+            # NOTE: spelling, so the annotation moved; what has to hold is that
+            # NOTE: the pin carries the note, not where the note sits.
+            above = lines[line_number - 2].strip() if line_number >= 2 else ""
+            annotation = comment or (above[1:].strip() if above.startswith("#") else "")
+            if expected[1] not in annotation:
                 failures.append(
                     f"{path.relative_to(ROOT)}:{line_number}: {action} needs version comment {expected[1]!r}"
                 )
@@ -224,7 +231,7 @@ def main() -> int:
         "gh workflow run docs.yml",
         "gh workflow run codeql.yml",
         "dispatch-checks:",
-        "actions: write # NOTE: Dispatch only",
+        "actions: write",
     ):
         if required not in release_pr:
             failures.append(f"Release PR automation is missing {required!r}")

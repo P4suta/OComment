@@ -108,7 +108,8 @@ complete -c ocomment -n "__fish_ocomment_needs_command" -l format -d 'Output enc
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_needs_command" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -146,6 +147,7 @@ complete -c ocomment -n "__fish_ocomment_needs_command" -a "plugin" -d 'Manage s
 complete -c ocomment -n "__fish_ocomment_needs_command" -a "completions" -d 'Generate shell completions'
 complete -c ocomment -n "__fish_ocomment_needs_command" -a "coverage" -d 'Report which files a walk scanned and which it passed over, and why'
 complete -c ocomment -n "__fish_ocomment_needs_command" -a "ratchet" -d 'Check the tree against its ledger, or record the tree in one'
+complete -c ocomment -n "__fish_ocomment_needs_command" -a "hook" -d 'Answer an agent editing hook in the host\'s own protocol'
 complete -c ocomment -n "__fish_ocomment_needs_command" -a "selftest" -d 'Re-run the shared corpus against this binary and report any disagreement'
 complete -c ocomment -n "__fish_ocomment_needs_command" -a "doctor" -d 'Diagnose the environment (config, git, plugins, tools)'
 complete -c ocomment -n "__fish_ocomment_needs_command" -a "man" -d 'Render the roff manual page to stdout'
@@ -234,7 +236,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l format -d 'O
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -344,7 +347,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l format -d 'Out
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -456,7 +460,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l format -d 'Ou
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -566,7 +571,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l format -d 'Ou
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -676,7 +682,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l format -d 'O
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -784,7 +791,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l format -d 'Out
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -892,7 +900,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l format -d 'Ou
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -1003,7 +1012,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l format -d '
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -1111,7 +1121,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l format -
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -1219,7 +1230,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -1337,7 +1349,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_see
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -1445,7 +1458,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_see
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -1553,7 +1567,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_see
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -1661,7 +1676,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_see
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -1769,7 +1785,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_see
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -1877,7 +1894,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_see
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -1992,7 +2010,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l format
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -2100,7 +2119,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l format -d
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -2210,7 +2230,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l format -d 
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -2237,6 +2258,115 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l explain -d
 complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -s h -l help -d 'Print help (see more with \'--help\')'
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too'
+all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
+columns\t'Pad each removed comment so the following columns do not shift'
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
+ocaml\t'OCaml implementation and interface files'
+c\t'C source and header files'
+cpp\t'C++ source and header files'
+go\t'Go source files'
+java\t'Java source files, including Unicode escape translation'
+javascript\t'JavaScript modules and scripts, including JSX'
+typescript\t'TypeScript modules and scripts, including TSX'
+python\t'Python source and stub files'
+shell\t'POSIX sh, Bash, and zsh scripts'
+html\t'HTML documents, including nested script and style elements'
+css\t'CSS stylesheets'
+jsonc\t'JSON with comments, including JSON5'
+sql\t'SQL for every supported database dialect'
+kotlin\t'Kotlin source and script files'
+toml\t'TOML documents, including the lock files written in it'
+lua\t'Lua chunks and LuaRocks rockspecs'
+yaml\t'YAML documents, including the tool configurations written in it'
+php\t'PHP scripts and templates; the inline HTML around the tags is content'
+ruby\t'Ruby scripts, gem manifests, and the project files named after their tool'
+zig\t'Zig source files and Zig Object Notation data'
+r\t'R scripts and the `.Rprofile` an R session sources at start-up'
+dart\t'Dart source files, whose block comments nest'
+swift\t'Swift source files, whose block comments nest and whose `#/../#` is a regex'
+csharp\t'C# source and script files, whose `#` lines are preprocessor directives'
+scala\t'Scala source and script files, whose block comments nest and whose XML literals are opaque'
+vue\t'Vue single-file components, whose templates are HTML with `{{ ... }}` code'
+svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'
+markdown\t'Markdown documents, whose fenced code blocks are scanned as their named languages'
+perl\t'Perl scripts and modules, whose quote words and regexes hide a `#`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
+jsx\t'JavaScript with JSX elements'
+tsx\t'TypeScript with JSX elements'
+objective-c\t'Objective-C extensions to C'
+objective-cpp\t'Objective-C++ extensions to C++'
+gnu-c\t'GNU extensions to C'
+gnu-cpp\t'GNU extensions to C++'
+cuda\t'CUDA extensions to C++'
+posix-sh\t'The POSIX shell command language'
+bash53\t'Bash 5.3'
+zsh\t'The Z shell'
+postgresql\t'PostgreSQL, with dollar-quoted bodies'
+mysql\t'MySQL, including its executable versioned comments'
+sqlite\t'SQLite'
+t-sql\t'Microsoft Transact-SQL'
+oracle\t'Oracle SQL and PL/SQL'
+scss\t'SCSS'
+sass\t'The indentation-based Sass syntax'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l keep-kind -d 'Comma-separated comment kinds to protect on top of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
+block\t'An ordinary delimited comment'
+doc-line\t'A documentation comment running to the end of the line'
+doc-block\t'A delimited documentation comment'
+directive\t'A tool or language directive such as a pragma or lint control'
+license\t'A licence or copyright notice'
+html-comment\t'A DOM-observable HTML comment'
+shebang\t'The interpreter line starting an executable script'
+encoding\t'A source encoding declaration'
+optimizer-hint\t'A compiler or database optimizer hint'
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
+block\t'An ordinary delimited comment'
+doc-line\t'A documentation comment running to the end of the line'
+doc-block\t'A delimited documentation comment'
+directive\t'A tool or language directive such as a pragma or lint control'
+license\t'A licence or copyright notice'
+html-comment\t'A DOM-observable HTML comment'
+shebang\t'The interpreter line starting an executable script'
+encoding\t'A source encoding declaration'
+optimizer-hint\t'A compiler or database optimizer hint'
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l format -d 'Output encoding' -r -f -a "human\t''
+json\t''
+jsonl\t''
+sarif\t''
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
+always\t''
+never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
+always\t''
+never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
+always\t''
+never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines'
 standard\t'Like conservative, and remove documentation, licence and copyright comments too'
@@ -2321,7 +2451,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l format -d
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -2429,7 +2560,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l format -d '
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -2537,7 +2669,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l format -d 'Out
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
@@ -2561,23 +2694,24 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l explain -d 'Li
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -s h -l help -d 'Print help (see more with \'--help\')'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet selftest doctor man help" -f -a "check" -d 'Report removable comments (default command)'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet selftest doctor man help" -f -a "fix" -d 'Remove comments in place through an atomic, rollback-backed transaction'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet selftest doctor man help" -f -a "diff" -d 'Print a unified diff of the changes fix would make'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet selftest doctor man help" -f -a "scan" -d 'List every comment with its kind, disposition and byte span'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet selftest doctor man help" -f -a "strip" -d 'Read source on stdin and write the stripped result to stdout'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet selftest doctor man help" -f -a "lsp" -d 'Run the LSP 3.18 server over stdio'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet selftest doctor man help" -f -a "init" -d 'Write a starter .ocomment.toml or Lefthook configuration'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet selftest doctor man help" -f -a "config" -d 'Show, locate, explain, or export the resolved configuration'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet selftest doctor man help" -f -a "languages" -d 'List built-in languages, extensions, and dialects'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet selftest doctor man help" -f -a "plugin" -d 'Manage sandboxed WASM scanner plugins'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet selftest doctor man help" -f -a "completions" -d 'Generate shell completions'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet selftest doctor man help" -f -a "coverage" -d 'Report which files a walk scanned and which it passed over, and why'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet selftest doctor man help" -f -a "ratchet" -d 'Check the tree against its ledger, or record the tree in one'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet selftest doctor man help" -f -a "selftest" -d 'Re-run the shared corpus against this binary and report any disagreement'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet selftest doctor man help" -f -a "doctor" -d 'Diagnose the environment (config, git, plugins, tools)'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet selftest doctor man help" -f -a "man" -d 'Render the roff manual page to stdout'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet selftest doctor man help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet hook selftest doctor man help" -f -a "check" -d 'Report removable comments (default command)'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet hook selftest doctor man help" -f -a "fix" -d 'Remove comments in place through an atomic, rollback-backed transaction'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet hook selftest doctor man help" -f -a "diff" -d 'Print a unified diff of the changes fix would make'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet hook selftest doctor man help" -f -a "scan" -d 'List every comment with its kind, disposition and byte span'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet hook selftest doctor man help" -f -a "strip" -d 'Read source on stdin and write the stripped result to stdout'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet hook selftest doctor man help" -f -a "lsp" -d 'Run the LSP 3.18 server over stdio'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet hook selftest doctor man help" -f -a "init" -d 'Write a starter .ocomment.toml or Lefthook configuration'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet hook selftest doctor man help" -f -a "config" -d 'Show, locate, explain, or export the resolved configuration'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet hook selftest doctor man help" -f -a "languages" -d 'List built-in languages, extensions, and dialects'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet hook selftest doctor man help" -f -a "plugin" -d 'Manage sandboxed WASM scanner plugins'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet hook selftest doctor man help" -f -a "completions" -d 'Generate shell completions'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet hook selftest doctor man help" -f -a "coverage" -d 'Report which files a walk scanned and which it passed over, and why'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet hook selftest doctor man help" -f -a "ratchet" -d 'Check the tree against its ledger, or record the tree in one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet hook selftest doctor man help" -f -a "hook" -d 'Answer an agent editing hook in the host\'s own protocol'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet hook selftest doctor man help" -f -a "selftest" -d 'Re-run the shared corpus against this binary and report any disagreement'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet hook selftest doctor man help" -f -a "doctor" -d 'Diagnose the environment (config, git, plugins, tools)'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet hook selftest doctor man help" -f -a "man" -d 'Render the roff manual page to stdout'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions coverage ratchet hook selftest doctor man help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c ocomment -n "__fish_ocomment_using_subcommand help; and __fish_seen_subcommand_from plugin" -f -a "add" -d 'Install a plugin and pin its digest in .ocomment.lock'
 complete -c ocomment -n "__fish_ocomment_using_subcommand help; and __fish_seen_subcommand_from plugin" -f -a "remove" -d 'Uninstall a plugin and drop its lock entry'
 complete -c ocomment -n "__fish_ocomment_using_subcommand help; and __fish_seen_subcommand_from plugin" -f -a "list" -d 'List the installed plugins and their pinned digests'

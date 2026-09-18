@@ -493,7 +493,7 @@ fn scan_profile_with(
      * convention and length limit have to reach a `.gitignore` exactly as they
      * reach a `.rs` -- and they did not, which showed up as this repository's
      * own tagged comments surviving in Rust and vanishing in a profile file. */
-    crate::scanner::apply_allow_rules(source, &mut comments, options);
+    crate::scanner::apply_allow_rules(source, &mut comments, options, patterns);
     Ok(ScanReport {
         language: Language::Unknown,
         comments,
@@ -548,6 +548,7 @@ fn profile_comment(
         span: ByteSpan::new(start, end),
         kind,
         disposition,
+        shape: None,
     }
 }
 

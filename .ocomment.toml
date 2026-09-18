@@ -51,10 +51,31 @@ keep_regex = [
 # NOTE: rule written in a Lua or SQL file was not protected at all. A tag is
 # NOTE: read from the comment's text, so one line holds in every language.
 [policy.allow]
-tags = ["NOTE", "SAFETY", "INVARIANT", "PERF", "TODO", "FIXME", "HACK"]
-# NOTE: A tag is permission to leave a reason, not to write an essay.
-max_lines = 1
+tags = ["NOTE", "SAFETY", "INVARIANT", "PERF"]
+# NOTE: A comment is at most a paragraph. Reasoning that needs more than that
+# NOTE: is documentation, and documentation is exempt from this rule because it
+# NOTE: is documentation: a `///`, a `(**`, a module docstring, a page under
+# NOTE: docs/. The rule is not "explain less", it is "explain where a reader
+# NOTE: will find it". This repository holds zero comments above the line.
+max_lines = 8
+# NOTE: Beside the code is the obvious way around a rule about comments above it.
+trailing = false
 
-# NOTE: The distance from here to that rule; see docs/configuration.md.
-[ratchet]
-ledger = ".ocomment-ledger"
+# NOTE: The tags that are promises rather than remarks, and what each one has.
+# NOTE: Counted from the commit that adds the line, so writing one costs
+# NOTE: nothing and the clock starts when the repository takes it on.
+[policy.allow.expiry]
+TODO = "30d"
+FIXME = "14d"
+HACK = "14d"
+
+# NOTE: A comment in a documentation sample is the sample. These files quote
+# NOTE: shell sessions and configuration files, and the annotations in them
+# NOTE: belong to the quoted material rather than to this repository, so the
+# NOTE: rules about where this project puts its own comments do not reach them.
+# NOTE: The tag rule still does: a sample is still read by somebody.
+[[overrides]]
+paths = ["**/*.md"]
+[overrides.allow]
+tags = ["NOTE", "SAFETY", "INVARIANT", "PERF"]
+max_lines = 8

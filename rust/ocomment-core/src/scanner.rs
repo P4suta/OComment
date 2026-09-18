@@ -1,6 +1,6 @@
 use crate::{
     ByteSpan, Comment, CommentKind, Diagnostic, Dialect, Disposition, DispositionExplanation,
-    Language, Policy, ScanOptions, ScanReport, Severity,
+    Language, Policy, ScanOptions, ScanReport, Severity, ShapeRule,
 };
 use memchr::{memchr, memchr2, memchr3, memmem};
 use regex::bytes::RegexSet;
@@ -214,7 +214,12 @@ fn finish_scan(mut scanner: Scanner<'_>) -> (ScanReport, Vec<usize>, bool) {
      * rules are about where a comment sits rather than what it says, and a
      * decision made one comment at a time cannot see that. A run of four `//`
      * lines is four comments to the scanner and one paragraph to a reader. */
-    apply_allow_rules(scanner.source, &mut scanner.comments, &scanner.options);
+    apply_allow_rules(
+        scanner.source,
+        &mut scanner.comments,
+        &scanner.options,
+        &scanner.patterns,
+    );
     (
         ScanReport {
             language,
@@ -230,28 +235,40 @@ fn finish_scan(mut scanner: Scanner<'_>) -> (ScanReport, Vec<usize>, bool) {
 /// Apply the rules that are about a comment's shape rather than its kind.
 ///
 /// These cut across the policy rather than under it: a comment that fails one
-/// is removed whatever kept it, short of the protections no policy reaches — a
-/// shebang, an encoding line, a directive the language or its build reads.
-/// Those stay, because the cost of losing one is a broken build and the cost
-/// of keeping a long one is a long comment.
+/// is removed whatever the *policy* said about its kind. What they do not
+/// reach is a comment somebody named — see [`named_outright`] — or one of the
+/// kinds [`subject_to_shape`] leaves out.
 ///
 /// `tags` is the opposite direction: it keeps a comment the policy would have
 /// removed. It is applied first, so that a tagged comment still has to be
 /// short enough and still may not sit beside code.
-pub(crate) fn apply_allow_rules(source: &[u8], comments: &mut [Comment], options: &ScanOptions) {
+pub(crate) fn apply_allow_rules(
+    source: &[u8],
+    comments: &mut [Comment],
+    options: &ScanOptions,
+    patterns: &DispositionPatterns,
+) {
     let rules = &options.allow;
-    if rules.tags.is_empty() && rules.max_lines.is_none() && rules.trailing.is_none() {
+    if rules.is_empty() {
         return;
     }
 
-    if !rules.tags.is_empty() {
+    /* NOTE: A tag with a deadline is an allowed tag until the deadline passes,
+     * and nothing here can tell whether it has: that takes a repository, and
+     * this crate reads none. The keep is recorded, and a caller with a clock
+     * overrules it. */
+    let tags = rules.every_tag();
+    if !tags.is_empty() {
         for comment in comments.iter_mut() {
             if comment.disposition.is_remove()
-                && let Some(tag) = matching_tag(source, comment, &rules.tags)
+                && let Some(tag) = matching_tag(source, comment, &tags)
             {
-                comment.disposition = Disposition::Keep {
-                    reason: format!("tagged `{tag}`"),
-                };
+                decide(
+                    comment,
+                    ShapeRule::Tagged {
+                        tag: tag.to_owned(),
+                    },
+                );
             }
         }
     }
@@ -259,10 +276,10 @@ pub(crate) fn apply_allow_rules(source: &[u8], comments: &mut [Comment], options
     if rules.trailing == Some(false) {
         for comment in comments.iter_mut() {
             if !comment.disposition.is_remove()
-                && protected_reason(comment.kind).is_none()
+                && reachable(source, comment, options, patterns)
                 && has_code_before_it(source, comment.span.start)
             {
-                comment.disposition = Disposition::Remove;
+                decide(comment, ShapeRule::Trailing);
             }
         }
     }
@@ -272,34 +289,91 @@ pub(crate) fn apply_allow_rules(source: &[u8], comments: &mut [Comment], options
             let run = &mut comments[start..end];
             let first = run[0].span.start;
             let last = run[run.len() - 1].span.end;
-            if line_span(source, first, last) <= limit {
+            let lines = line_span(source, first, last);
+            if lines <= limit {
                 continue;
             }
             for comment in run {
-                if measured_for_length(comment.kind) {
-                    comment.disposition = Disposition::Remove;
+                if reachable(source, comment, options, patterns) {
+                    decide(comment, ShapeRule::TooLong { lines, limit });
                 }
             }
         }
     }
 }
 
-/// Whether a length rule applies to a comment of this kind.
+/// Whether a shape rule may take this comment.
+fn reachable(
+    source: &[u8],
+    comment: &Comment,
+    options: &ScanOptions,
+    patterns: &DispositionPatterns,
+) -> bool {
+    subject_to_shape(comment.kind)
+        && !named_outright(
+            source
+                .get(comment.span.start..comment.span.end)
+                .unwrap_or_default(),
+            comment.kind,
+            options,
+            patterns,
+        )
+}
+
+/// Whether somebody named this comment outright.
 ///
-/// It applies to commentary and not to anything published. A documentation
-/// comment is the API documentation and a licence notice is a legal text: both
-/// are as long as their content requires, and neither is the thing a length
-/// rule is aimed at. What it is aimed at is the paragraph above a function
-/// explaining what the function already says — where going on is the failure,
-/// not a symptom of one.
+/// `keep_kind` names a kind and `keep_regex` names the bytes; both are a
+/// project saying "keep exactly this", and a rule about shape is a project
+/// saying "keep things like this". The specific wins.
 ///
-/// The protections no policy reaches are out too, for the reason they are
-/// always out: the cost of losing a shebang is a broken file, and the cost of
-/// keeping a long one is a long comment.
+/// Not a nicety. This repository pins every GitHub Action to a SHA and writes
+/// the version beside it as a comment, which Dependabot rewrites when it moves
+/// the pin — so a `keep_regex` names it, and it *has* to sit beside the code
+/// it annotates. Under the older rule `trailing = false` took all of them, and
+/// there was no way to have both settings mean what they say.
+fn named_outright(
+    raw: &[u8],
+    kind: CommentKind,
+    options: &ScanOptions,
+    patterns: &DispositionPatterns,
+) -> bool {
+    options.keep_kinds.contains(&kind) || (patterns.keep_active && patterns.keep.is_match(raw))
+}
+
+/// Record a shape rule on a comment, verdict and all.
+///
+/// The only way [`apply_allow_rules`] settles anything, and the reason it is
+/// the only way: a rule that wrote the disposition by hand could write one the
+/// rule it recorded disagrees with, and then `--explain` would say "removed"
+/// under a line reading "kept". Both fields come from the one value here, so
+/// a rule added later cannot reintroduce that.
+fn decide(comment: &mut Comment, rule: ShapeRule) {
+    comment.disposition = rule.disposition();
+    comment.shape = Some(rule);
+}
+
+/// Whether the shape rules apply to a comment of this kind at all.
+///
+/// They apply to commentary and to nothing else. A documentation comment is
+/// the API documentation and a licence notice is a legal text: both are as
+/// long as their content requires, and a length rule is not aimed at either.
+/// What it is aimed at is the paragraph above a function explaining what the
+/// function already says — where going on is the failure, not a symptom of
+/// one.
+///
+/// The same list answers for position, and for a sharper reason: a directive
+/// is *addressed* to a tool, and a tool reads it where it sits. `x = 1  #
+/// noqa` silences a warning about that line; above the line it silences
+/// nothing. Removing one because it is trailing would change what the build
+/// does, which is the thing this program promises never to do.
+///
+/// The protections no policy reaches are out for the reason they are always
+/// out: the cost of losing a shebang is a broken file, and the cost of keeping
+/// a long one is a long comment.
 ///
 /// Exhaustive, so a new kind has to be classified rather than inheriting an
 /// answer.
-const fn measured_for_length(kind: CommentKind) -> bool {
+const fn subject_to_shape(kind: CommentKind) -> bool {
     match kind {
         CommentKind::Line | CommentKind::Block | CommentKind::HtmlComment => true,
         CommentKind::DocLine
@@ -321,7 +395,7 @@ const fn measured_for_length(kind: CommentKind) -> bool {
 /// `*` a block comment's continuation lines are written with. Matched
 /// case-insensitively at the start, so `NOTE:`, `note:` and `Note -` all
 /// count and a sentence merely mentioning the word does not.
-fn matching_tag<'a>(source: &[u8], comment: &Comment, tags: &'a [String]) -> Option<&'a str> {
+fn matching_tag<'a>(source: &[u8], comment: &Comment, tags: &[&'a str]) -> Option<&'a str> {
     let raw = source.get(comment.span.start..comment.span.end)?;
     let text = String::from_utf8_lossy(strip_comment_markers(raw));
     let body = text
@@ -330,8 +404,22 @@ fn matching_tag<'a>(source: &[u8], comment: &Comment, tags: &'a [String]) -> Opt
         })
         .to_ascii_uppercase();
     tags.iter()
-        .find(|tag| body.starts_with(&tag.to_ascii_uppercase()))
-        .map(String::as_str)
+        .copied()
+        .find(|tag| opens_with_tag(&body, &tag.to_ascii_uppercase()))
+}
+
+/// Whether `body` opens with `tag` as a word rather than as a prefix.
+///
+/// `NOTE` allows a note; it does not allow `// NOTEBOOK`, and a tag rule that
+/// accepted the second would hand a project a way through its own convention
+/// that reads like a typo. What may follow is punctuation or space — `NOTE:`,
+/// `TODO(alice)`, `FIXME -` — or nothing at all, for a tag written on its own.
+fn opens_with_tag(body: &str, tag: &str) -> bool {
+    body.strip_prefix(tag).is_some_and(|rest| {
+        rest.chars()
+            .next()
+            .is_none_or(|next| !next.is_alphanumeric())
+    })
 }
 
 /// Whether anything but whitespace precedes `start` on its line.
@@ -358,12 +446,18 @@ fn line_span(source: &[u8], start: usize, end: usize) -> usize {
         + 1
 }
 
-/// Runs of comments with nothing but whitespace between them, as index ranges.
+/// Runs of comments on consecutive lines, as index ranges.
 ///
 /// Four consecutive `//` lines are four comments to a scanner and one
-/// paragraph to a reader, and a length rule is about what the reader sees. A
-/// comment sharing its line with code opens a run of its own: it belongs to
-/// that line rather than to the paragraph above it.
+/// paragraph to a reader, and a length rule is about what the reader sees.
+///
+/// Three things end a run, and all three are things a reader sees end one:
+/// code between the comments, a comment that shares its line with code — it
+/// belongs to that line rather than to the paragraph above it — and a blank
+/// line, which is how a writer says the next remark is a separate remark. A
+/// limit that counted across blank lines would measure the gap as well as the
+/// prose, so `// a`, five blank lines and `// b` would come to seven lines of
+/// commentary without anybody having written a long comment.
 fn comment_runs(source: &[u8], comments: &[Comment]) -> Vec<(usize, usize)> {
     let mut runs = Vec::new();
     let mut index = 0;
@@ -371,7 +465,9 @@ fn comment_runs(source: &[u8], comments: &[Comment]) -> Vec<(usize, usize)> {
         let mut end = index + 1;
         while end < comments.len() {
             let between = &source[comments[end - 1].span.end..comments[end].span.start];
+            let newlines = between.iter().filter(|byte| **byte == b'\n').count();
             if !between.iter().all(u8::is_ascii_whitespace)
+                || newlines > 1
                 || has_code_before_it(source, comments[end].span.start)
             {
                 break;
@@ -663,6 +759,7 @@ impl<'a> Scanner<'a> {
             span: ByteSpan::new(start + self.offset, end + self.offset),
             kind,
             disposition,
+            shape: None,
         });
     }
 
@@ -1082,19 +1179,13 @@ impl<'a> Scanner<'a> {
                     if literal {
                         return Some(self.quoted_or_error(index, false, "character literal"));
                     }
-                    /* NOTE: What is left is an apostrophe this window read as
-                     * no literal, and nothing on its line says whether it
-                     * opens one. A Rust identifier is `XID_Start
-                     * XID_Continue*` (Rust Reference, Identifiers) and has
-                     * been since 1.53, so `'ä` is as good a lifetime or loop
-                     * label as `'a` -- `fn f<'ä>() {}` and `'ä: loop {}` both
-                     * compile -- and an unterminated non-ASCII character
-                     * literal is spelled the same way within one line. `rustc`
-                     * tells the two apart in the parser, which is where E0762
-                     * is raised; this scanner is a lexer with a line-bounded
-                     * window and cannot. So it reports neither: over-keeping a
-                     * comment is the safe direction, calling a valid file
-                     * invalid is not. */
+                    /* NOTE: An apostrophe this window read as no literal,
+                     * and nothing on its line says whether it opens one: a
+                     * Rust identifier is XID, so `'ä` is as good a lifetime as
+                     * `'a` and an unterminated non-ASCII literal is spelled
+                     * the same way. `rustc` separates them in the parser,
+                     * where E0762 is raised; a line-bounded lexer cannot, so
+                     * it reports neither. */
                 }
             }
             Language::C | Language::Cpp => {
@@ -1917,16 +2008,13 @@ impl<'a> Scanner<'a> {
         let bytes = self.source;
         let mut index = 0;
         let mut line_start = 0;
-        /* INVARIANT: `separated` is whether a `#` at `index` would be separated from
-         * what precedes it, which is the whole of the comment rule; `node_start`
-         * is whether a node may begin here, which is what tells the block scalar
-         * indicator `key: >` from the `>` inside the plain scalar `key: a > b`;
-         * `token_column` is where the token being read began, so that a `: `
-         * behind it can name the column the value hangs off; and `owner_column`
-         * is that column once one is known. The first three are reset by the
-         * line break; `owner_column` survives it while the node it names is
-         * still owed one, which is the only state a restart at a line start
-         * cannot reproduce — so no checkpoint is offered while it is set. */
+        /* INVARIANT: `separated` is the whole of the comment rule, `node_start`
+         * tells `key: >` from the `>` in `key: a > b`, `token_column` is where
+         * the current token began, and `owner_column` is the column a value
+         * hangs off once one is known. The first three reset at the line
+         * break; `owner_column` survives it while its node is still owed a
+         * body, which is the one state a restart cannot reproduce -- so no
+         * checkpoint is offered while it is set. */
         let mut separated = true;
         let mut node_start = true;
         let mut token_column = None;
@@ -1970,41 +2058,24 @@ impl<'a> Scanner<'a> {
                     if let Some(start) = comment {
                         self.add_comment(start, header_end, CommentKind::Line);
                     }
-                    /* NOTE: The body is indented past the node the scalar hangs off
-                     * (8.1.1.1). For `key: |` that node is the mapping, whose
-                     * indentation is the column of the key; for `- |` it is the
-                     * sequence, whose indentation is the column of the `-`. The
-                     * header itself may sit anywhere past that owner — on a
-                     * line of its own, or behind an anchor or a tag — so its
-                     * own column says nothing about how deep a body line has to
-                     * be, and reading it as the floor would take a body
-                     * indented less than the header for the end of the scalar
-                     * and its `#` lines for comments. With no owner at all the
-                     * scalar is the whole document, whose indentation is one
-                     * short of column zero, which leaves every line under it
-                     * body. An explicit indentation indicator counts from that
-                     * same owner, which is why it replaces the detected depth
-                     * rather than adding to it. Detection proper reads the
-                     * first non-empty line instead, and a line shallower than
-                     * that but still past the owner is content of neither
-                     * reading; taking it for body is the one that leaves bytes
-                     * alone. */
+                    /* NOTE: The body is indented past the node the scalar
+                     * hangs off (8.1.1.1) -- the mapping for `key: |`, the
+                     * sequence for `- |` -- and not past the header, which may
+                     * sit anywhere after that owner. Reading the header as the
+                     * floor would end the scalar early and read its `#` lines
+                     * as comments. With no owner the scalar is the document,
+                     * whose indentation is one short of column zero. */
                     let base = owner_column.map_or(0, |column| column + 1);
                     let floor = base + indicator.unwrap_or(1) - 1;
                     let (end, boundary, detected) = yaml_block_body_end(bytes, header_end, floor);
-                    /* NOTE: Where this body stopped, on what terms it keeps its
-                     * trailing empty lines, and how deep its content is are the
-                     * whole of what `lines_a_removal_must_swallow` and
-                     * `yaml_structural_trail_keeps` need from a scan: the lines
-                     * under a body are the only place in YAML where the hole a
-                     * removal leaves carries meaning. Recorded here rather than
-                     * re-derived, because only the scan knows the column of the
-                     * node the header hangs off. An explicit indicator *is* the
-                     * content depth (8.1.1.1); without one the depth is
-                     * detected from the first non-empty line, and a body with
-                     * no non-empty line at all has none to detect, so the floor
-                     * stands in for it — which is the depth the next line the
-                     * scalar could take would set. */
+                    /* NOTE: The lines under a body are the only place in
+                     * YAML where the hole a removal leaves carries meaning, so
+                     * where this one stopped and how deep its content is are
+                     * recorded rather than re-derived: only the scan knows the
+                     * column of the node the header hangs off. Without an
+                     * explicit indicator the depth comes from the first
+                     * non-empty line, and the floor stands in when there is
+                     * none. */
                     self.yaml_blocks.push(YamlBlockScalar {
                         body_end: end + self.offset,
                         content_indent: indicator.map_or(detected, |_| floor),
@@ -2165,15 +2236,11 @@ impl<'a> Scanner<'a> {
     fn scan_php(&mut self) {
         let bytes = self.source;
         let mut index = 0;
-        /* NOTE: The CLI strips a `#!` line from the first line of a script before
-         * the engine sees it (`php_cli.c`, which tests the first two bytes), so
-         * that line is a preamble rather than the inline HTML the rest of the
-         * file opens as. Unlike CPython and Lua, PHP skips no byte order mark
-         * first, and neither does the kernel, so a mark in front of the `#!`
-         * leaves it ordinary inline HTML — the same reason a shell script has.
-         * The `self.offset` test is what keeps a suffix scan out of the rule,
-         * and no checkpoint of a full scan falls inside the first line, so the
-         * two answers cannot disagree. */
+        /* NOTE: The CLI strips a `#!` first line before the engine sees it
+         * (`php_cli.c`, testing the first two bytes), so it is a preamble
+         * rather than the inline HTML the file otherwise opens as. PHP skips
+         * no byte order mark first and neither does the kernel, so a mark in
+         * front of the `#!` leaves it ordinary inline HTML. */
         if self.offset == 0 && starts(bytes, 0, b"#!") {
             let end = line_end(bytes, 2);
             self.add_comment(0, end, CommentKind::Line);
@@ -2601,15 +2668,11 @@ impl<'a> Scanner<'a> {
                 }
             }
         }
-        /* NOTE: A here document opened on a last line that has no break of its
-         * own never reaches [`Self::scan_ruby_heredoc_bodies`], because that is
-         * driven from the break. It is unterminated all the same, and is
-         * reported from its own `<<` with the span that call would have given
-         * it. Only this call's own openers are reported here — the ones from
-         * `base` on — because an enclosing scan reports its own, and the list is
-         * cut back to `base` so that it reports them once. Nothing is left to
-         * report whenever the loop stopped at a checkpoint instead, because a
-         * break empties the list before one is offered. */
+        /* NOTE: A here document opened on a last line with no break of its
+         * own never reaches the body scan, which is driven from the break. It
+         * is unterminated all the same, and is reported from its own `<<`.
+         * Only the openers from `base` on are reported, and the list is cut
+         * back so they are reported once. */
         if let Some(operator) = pending.get(base).map(|heredoc| heredoc.operator) {
             self.error(
                 "unterminated-heredoc",
@@ -2876,15 +2939,11 @@ impl<'a> Scanner<'a> {
                 index = end;
                 continue;
             }
-            /* NOTE: `\\` is the whole opener of a multiline string literal line,
-             * and the tokenizer takes it wherever a token may begin rather
-             * than only as the first thing on a line: `const b = \\text` is
-             * one `multiline_string_literal_line` to `std.zig.Tokenizer` just
-             * as an indented `\\` is. Everything to the end of the line is
-             * content, and the next line starts in code again, so consecutive
-             * lines are separate tokens that the parser joins. A single `\` is
-             * an invalid token to Zig and an ordinary byte here: nothing it
-             * could open is a state a comment can hide in. */
+            /* NOTE: `\\` opens a multiline string literal line wherever a
+             * token may begin, not only at the start of a line, and runs to
+             * the end of that line; the next line starts in code again. A
+             * single `\` is an invalid token to Zig and an ordinary byte
+             * here. */
             if starts(bytes, index, b"\\\\") {
                 index = line_end(bytes, index + 2);
                 continue;
@@ -3375,17 +3434,11 @@ impl<'a> Scanner<'a> {
              * keeps a line of `#` from being re-read once per byte. */
             return Some(opener);
         }
-        /* NOTE: `'` is no delimiter in the language — the Swift book's Lexical
-         * Structure has no single-quoted literal and no character literal at
-         * all — but it is one in the compiler, which lexes `'...'` as a
-         * `singleQuote` string so that it can offer the fix-it that turns it
-         * into a `"..."` one (`Lexer.Cursor.lexStringQuote`). A file holding
-         * one is rejected by `swiftc` either way, and following the lexer
-         * rather than the grammar is what keeps a `//` inside such a literal
-         * from being read as a comment and removed out of a file that is
-         * already broken. No `'` can stand in Swift code outside a string, a
-         * comment or a regular expression literal, all three of which are
-         * settled above, so this costs a valid file nothing. */
+        /* NOTE: `'` is no delimiter in the language and is one in the
+         * compiler, which lexes `'...'` as a `singleQuote` string to offer a
+         * fix-it (`Lexer.Cursor.lexStringQuote`). Following the lexer keeps a
+         * `//` inside one from being removed out of an already broken file,
+         * and costs a valid file nothing. */
         if matches!(bytes[index], b'"' | b'\'') {
             return Some(self.scan_swift_string(index, 0, depth));
         }
@@ -6259,18 +6312,19 @@ impl DispositionPatterns {
     }
 }
 
-/* NOTE: The two tiers of protection, and the sentence each one gives the
- * report. A shebang and an encoding declaration are held back by the file's
- * own syntax: take one away and the bytes below it are read as something else.
- * A load-bearing directive is held back by what reads it — the compiler, the
- * package manager, the container builder — and taking one away leaves a file
- * that still parses and no longer means what it meant. Neither is a choice a
- * policy gets to make, because no run that removed one of them meant to: the
- * question `--policy all` answers is which *comments* go, and these are
- * instructions wearing a comment's syntax. `force_protected` is the one way
- * out, and it is spelled out rather than implied so that a run which gives up
- * a build constraint had to say so. */
 /// The reason a comment is held back from every policy, if it is.
+///
+/// Two tiers. A shebang and an encoding declaration are held back by the
+/// file's own syntax: take one away and the bytes below it are read as
+/// something else. A load-bearing directive is held back by what reads it —
+/// the compiler, the package manager, the container builder — and taking one
+/// away leaves a file that still parses and no longer means what it meant.
+///
+/// Neither is a choice a policy gets to make, because no run that removed one
+/// of them meant to: the question `--policy all` answers is which *comments*
+/// go, and these are instructions wearing a comment's syntax.
+/// `force_protected` is the one way out, spelled out rather than implied so
+/// that a run which gives up a build constraint had to say so.
 ///
 /// Derived from the kind's own tier rather than restated here. It was a second
 /// `match` over the same kinds, which is one of the two places the "does
@@ -6282,20 +6336,21 @@ const fn protected_reason(kind: CommentKind) -> Option<&'static str> {
     kind.protection().reason()
 }
 
-/* NOTE: Which directives are load-bearing, told from the far larger set that
- * is not by one question: does removing it change what the toolchain
- * *produces*, or only what a tool *says*? A dropped `swiftlint:disable` makes
- * a linter noisier and the program is the same program; a dropped
- * `//go:build` compiles a file that was never meant for this platform, and the
- * build is green either way. The second failure is the one nothing downstream
- * catches, so the line is drawn there.
- *
- * `go:` is taken whole rather than split at `go:build` and `go:embed`. The
- * namespace is the compiler's, `//go:generate` is the only member of it a
- * project could argue is bookkeeping, and the argument is not worth the
- * asymmetry: a marker protected in error is one comment left behind that
- * `--force-protected` takes away, while a marker missed in error is a silent
- * change to the build. Protect generously, and say why. */
+/// Which directives are load-bearing.
+///
+/// Told from the far larger set that is not by one question: does removing it
+/// change what the toolchain *produces*, or only what a tool *says*? A dropped
+/// `swiftlint:disable` makes a linter noisier and the program is the same
+/// program; a dropped `//go:build` compiles a file that was never meant for
+/// this platform, and the build is green either way. The second failure is the
+/// one nothing downstream catches, so the line is drawn there.
+///
+/// `go:` is taken whole rather than split at `go:build` and `go:embed`. The
+/// namespace is the compiler's, `//go:generate` is the only member of it a
+/// project could argue is bookkeeping, and the argument is not worth the
+/// asymmetry: a marker protected in error is one comment left behind that
+/// `--force-protected` takes away, while a marker missed in error is a silent
+/// change to the build. Protect generously, and say why.
 fn is_load_bearing(name: &str, language: Language) -> bool {
     match language {
         /* NOTE: `//go:build` and its retired `// +build` twin decide whether
@@ -6615,6 +6670,11 @@ pub fn explain_comment_with(
     language: Language,
     options: &ScanOptions,
 ) -> DispositionExplanation {
+    /* NOTE: A recorded rule is the answer, because it is the one the scanner
+     * actually reached and the only one nothing here can re-derive. */
+    if let Some(rule) = &comment.shape {
+        return rule.explanation();
+    }
     if is_yaml_structural_trail(&comment.disposition) {
         return DispositionExplanation::KeptStructural { language };
     }
@@ -7191,31 +7251,13 @@ fn directive_name(text: &str, language: Language, raw: &[u8]) -> Option<&'static
             .into_iter()
             .find(|prefix| compact.starts_with(prefix))
         }
-        /* NOTE: Three of the four are asked of `text` rather than of `compact`,
-         * because `compact` is what takes the `@` off, and the `@` is what
-         * tells the annotation from prose about it. `@psalm-suppress` is
-         * followed by the issue it silences after whitespace, so it ends at a
-         * boundary; `@phpstan-ignore` and `@codeCoverageIgnore` are namespaces
-         * whose members differ only in what runs on past them —
-         * `-next-line`, `Start`, `End` — so a prefix is the whole rule there.
-         * `phpcs:` carries its own boundary in the colon and covers `ignore`,
-         * `disable`, `enable`, and `ignoreFile` alike. */
-        /* NOTE: Three of these six are Ruby's own magic comments, which the
-         * interpreter reads out of the head of a file: `frozen_string_literal`
-         * decides whether every literal string in it is frozen,
-         * `shareable_constant_value` what Ractor may share, and `warn_indent`
-         * whether the parser complains about the indentation. The other three
-         * are the tools every Ruby project runs — RuboCop, StandardRB, and
-         * Sorbet's `# typed:` sigil. Each carries its own boundary in the
-         * colon and covers the whole namespace behind it: `rubocop:disable`,
-         * `:enable` and `:todo` alike. The encoding declaration is deliberately
-         * absent: it is a kind of its own, classified before this runs.
-         *
-         * A magic comment is honoured only at the head of a file, and this is
-         * asked of every comment in it. Reading one further down as an
-         * instruction keeps a comment a removal would otherwise take, which is
-         * the direction to be wrong in, and it is what keeps the answer
-         * independent of where in the document the scan began. */
+        /* NOTE: Three are Ruby's magic comments, which the interpreter reads
+         * out of the head of a file; three are the tools a project runs. Each
+         * carries its boundary in the colon and covers the namespace behind
+         * it. Asked of every comment rather than of the head alone: reading
+         * one further down keeps a comment a removal would take, which is the
+         * direction to be wrong in, and it keeps the answer independent of
+         * where the scan began. */
         Language::Ruby => [
             "frozen_string_literal:",
             "warn_indent:",
@@ -7226,6 +7268,10 @@ fn directive_name(text: &str, language: Language, raw: &[u8]) -> Option<&'static
         ]
         .into_iter()
         .find(|prefix| compact.starts_with(prefix)),
+        /* NOTE: Three are asked of `text`, because `compact` takes off the
+         * `@` that tells the annotation from prose about it. `@phpstan-ignore`
+         * and `@codeCoverageIgnore` are namespaces, so a prefix is the rule;
+         * `phpcs:` carries its boundary in the colon. */
         Language::Php => {
             if opens_with_keyword(text, "@psalm-suppress") {
                 return Some("@psalm-suppress");
@@ -7238,55 +7284,33 @@ fn directive_name(text: &str, language: Language, raw: &[u8]) -> Option<&'static
             }
             compact.starts_with("phpcs:").then_some("phpcs:")
         }
-        /* NOTE: `zig fmt` reads one instruction out of a comment, and it reads it
-         * by equality rather than by prefix: `Render.zig` takes `"//".len()`
-         * bytes off the trimmed comment, trims the white space that follows,
-         * and compares the remainder with `zig fmt: off` and `zig fmt: on`.
-         * So `// zig fmt: off please` turns nothing off, and neither does
-         * `/// zig fmt: off` or `//// zig fmt: off` — the first leaves a `/`
-         * in front of the phrase and the second two. `raw` is what tells those
-         * apart, because `strip_comment_markers` takes a `///` off whole; the
-         * comparison itself is against the trimmed text, which is folded to
-         * lower case here where `zig fmt` is case-sensitive. Folding can only
-         * keep a comment a removal would otherwise take, which is the
-         * direction to be wrong in. */
-        /* NOTE: The two comments an R tool reads rather than a reader. styler
-         * turns its formatter off between `# styler: off` and `# styler: on`,
-         * and the colon carries the marker's own boundary; covr excludes the
-         * lines between `# nocov start` and `# nocov end`, and `nocov` is the
-         * whole word it looks for — `start`, `end` and nothing at all all
-         * follow it — so that one ends at a boundary instead. lintr's
-         * `# nolint` is protected for every language already and is deliberately
-         * absent here. */
+        /* NOTE: The two an R tool reads: styler's colon carries its own
+         * boundary, and covr's `nocov` is a whole word because `start`, `end`
+         * and nothing at all all follow it. lintr's `# nolint` is protected
+         * for every language already. */
         Language::R => {
             if opens_with_keyword(compact, "nocov") {
                 return Some("nocov");
             }
             compact.starts_with("styler:").then_some("styler:")
         }
+        /* NOTE: `zig fmt` matches by equality, not prefix (`Render.zig`), so
+         * `// zig fmt: off please` and `/// zig fmt: off` turn nothing off.
+         * Asked of `raw` because `strip_comment_markers` takes a `///` off
+         * whole, and folded to lower case where `zig fmt` is not -- folding
+         * can only keep a comment a removal would take. */
         Language::Zig => {
             let opens_a_plain_comment =
                 raw.starts_with(b"//") && !matches!(raw.get(2), Some(b'/' | b'!'));
             (opens_a_plain_comment && matches!(text, "zig fmt: off" | "zig fmt: on"))
                 .then_some("zig fmt:")
         }
-        /* NOTE: Four instructions, and only one of them is addressed to a tool.
-         * `// @dart = 2.12` is read by the Dart scanner itself, and it decides
-         * which version of the language the file is written in, so a removal
-         * that took it would change what the remaining code means
-         * ([`dart_language_version`] follows that grammar). `dart format` is
-         * matched by equality on the whole comment rather than by prefix,
-         * because that is how `dart_style` matches it: `piece_writer.dart`
-         * switches on `comment.text` against `// dart format off` and
-         * `// dart format on`, so `//   dart format off` with a second space
-         * and `/// dart format off` with a third slash turn nothing off —
-         * measured on `dart format` from SDK 3.13.2, which reformatted both.
-         * `comment.text` is trimmed at the end and not at the front, and this
-         * is asked of `raw` for the reason Zig's is: `strip_comment_markers`
-         * takes a `///` off whole and would leave the two spellings
-         * indistinguishable. The analyzer's two ignore comments each carry
-         * their own boundary in the colon and cover the whole namespace behind
-         * it (`ignore_info.dart`). */
+        /* NOTE: `// @dart = 2.12` is read by the Dart scanner itself and
+         * decides which language version the file is written in, so a removal
+         * would change what the rest means. `dart format` is matched by
+         * equality (`piece_writer.dart`, measured on SDK 3.13.2), asked of
+         * `raw` for the reason Zig's is. The analyzer's two carry their
+         * boundary in the colon (`ignore_info.dart`). */
         Language::Dart => {
             if dart_language_version(raw) {
                 return Some("@dart");
@@ -7299,21 +7323,12 @@ fn directive_name(text: &str, language: Language, raw: &[u8]) -> Option<&'static
                 .into_iter()
                 .find(|prefix| compact.starts_with(prefix))
         }
-        /* NOTE: Four instructions, and only one of them is addressed to a
-         * formatter. `// swift-tools-version:` is the first line of a
-         * `Package.swift`, and SwiftPM reads it before it reads any of the
-         * manifest: it decides which version of the package description the
-         * file is written against, so a removal that took it would leave a
-         * package that no longer builds. The other three name the tool that
-         * reads them and carry their own boundary — a colon for `swiftlint:`
-         * and `swiftformat:`, and for `swift-format-ignore` the end of the
-         * comment, a colon, or the `-file` that widens it to the whole file.
-         * Measured on `swift-format` 6.3.3: `// swift-format-ignore` and
-         * `// swift-format-ignore-file` both leave `let    a     = 1` alone,
-         * and `// swift-format-ignoreish note` reformats it. `// MARK:` is
-         * deliberately absent: Xcode reads it to build a jump bar, so it is
-         * addressed to a reader rather than to a build, and a project that
-         * wants it kept says so with a `keep_regex`. */
+        /* NOTE: `// swift-tools-version:` is read by SwiftPM before the
+         * manifest, so a removal leaves a package that no longer builds. The
+         * other three carry their own boundary -- a colon, or for
+         * `swift-format-ignore` the comment's end or `-file` (measured on
+         * swift-format 6.3.3). `// MARK:` is absent: Xcode reads it for a jump
+         * bar, so it is addressed to a reader. */
         Language::Swift => {
             if let Some(name) = ["swift-tools-version:", "swiftlint:", "swiftformat:"]
                 .into_iter()
@@ -7330,31 +7345,14 @@ fn directive_name(text: &str, language: Language, raw: &[u8]) -> Option<&'static
                 }))
             .then_some("swift-format-ignore")
         }
-        /* NOTE: Three instructions, and the first is the one a *compiler* reads.
-         * Roslyn's `GeneratedCodeUtilities.BeginsWithAutoGeneratedComment`
-         * searches the `//` and `/* */` comments in front of a file's first
-         * token for `<auto-generated` — the legacy `<autogenerated` with it —
-         * and a file it finds one in is exempt from every analyzer that opts
-         * out of generated code, so a removal that took it would turn a
-         * generated file into a hand-written one and light up the diagnostics
-         * it was written to escape. That search is `contains` rather than a
-         * prefix, and it is followed here: the `<` is the marker's own
-         * boundary, and prose about generated code carries none. Roslyn asks
-         * for it in the leading trivia alone and asks case-sensitively; both
-         * are widened here, because a comment that merely *reads* like the
-         * marker is a comment a reader meant as one.
-         *
-         * `// ReSharper disable` and `// ReSharper restore` bound the region an
-         * inspection is turned off over, and only those two verbs are
-         * instructions — the whitespace between the tool and its verb is what
-         * tells them from prose that opens with the same letters.
-         * `// csharpier-ignore` is matched on the whole comment rather than by
-         * prefix, because that is how CSharpier matches it: measured on
-         * `csharpier` 1.3.0, `// csharpier-ignore`, `// csharpier-ignore-start`
-         * and `// csharpier-ignore-end` each left `int    a     =    1;`
-         * unformatted, while `//  csharpier-ignore` with a second space,
-         * `// csharpier-ignore some text`, `/* csharpier-ignore */` and
-         * `/// csharpier-ignore` all reformatted it. */
+        /* NOTE: `<auto-generated` exempts a file from every analyzer that
+         * opts out of generated code, so a removal lights up the diagnostics
+         * it was written to escape. Roslyn searches by `contains`, in leading
+         * trivia and case-sensitively; both of the last two are widened here,
+         * because a comment that merely reads like the marker is one a reader
+         * meant as one. ReSharper's two verbs are told from prose by the
+         * whitespace after the tool name, and `csharpier-ignore` is matched on
+         * the whole comment (measured on csharpier 1.3.0). */
         Language::CSharp => {
             if text.contains("<auto-generated") || text.contains("<autogenerated") {
                 return Some("<auto-generated");

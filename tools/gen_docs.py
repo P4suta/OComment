@@ -17,6 +17,21 @@ Every example comes out of the built binary or out of `spec/`, never out of
 prose, so nothing on the generated pages can claim behaviour the binary does not
 have. Only the standard library is used, because this runs in a job that
 installs nothing beyond the toolchain.
+
+PROTECTED_SAMPLES
+-----------------
+
+One sample for every name in the `protected` list of `spec/directives.toml`,
+written the way a project really writes it and holding exactly one comment.
+`protected_table` fails when the spec names a marker that has no sample there,
+so a marker added to the shared spec cannot reach a release undocumented, and
+it fails again when the binary does not in fact keep one, so the table can
+never promise a protection that is not there.
+
+`tools/check_directives.py` proves the same names are protected, with negative
+controls this page has no use for. The two lists are kept apart on purpose:
+each is checked against the shared spec, and a docs generator that imported a
+checker would fail for two different reasons at once.
 """
 
 from __future__ import annotations
@@ -43,18 +58,7 @@ DEFAULT_BINARIES = (
     ROOT / "rust/target/release/ocomment",
 )
 
-# INVARIANT: One sample for every name in the `protected` list of
-# INVARIANT: `spec/directives.toml`, written the way a project really writes it
-# INVARIANT: and holding exactly one comment. `protected_table` fails when the
-# INVARIANT: spec names a marker that has no sample here, so a marker added to
-# INVARIANT: the shared spec cannot reach a release undocumented, and it fails
-# INVARIANT: again when the binary does not in fact keep one, so the table can
-# INVARIANT: never promise a protection that is not there.
-# NOTE: `tools/check_directives.py` proves the same names are protected, with
-# NOTE: negative controls this page has no use for. The two lists are kept
-# NOTE: apart on purpose: each is checked against the shared spec, and a docs
-# NOTE: generator that imported a checker would fail for two different reasons
-# NOTE: at once.
+# INVARIANT: See "PROTECTED_SAMPLES" in this file's docstring.
 PROTECTED_SAMPLES: dict[str, tuple[str, str | None, bytes]] = {
     "shebang": ("shell", None, b"#!/bin/sh\n"),
     "encoding": ("python", None, b"# -*- coding: utf-8 -*-\n"),

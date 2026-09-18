@@ -262,6 +262,8 @@ jsonl
 sarif
 .IP \(bu 2
 github
+.IP \(bu 2
+agent: The report as an instruction, for a reader that is going to act on it
 .RE
 .TP
 \fB\-\-color\fR \fI<WHEN>\fR [default: auto]
@@ -390,6 +392,9 @@ Report which files a walk scanned and which it passed over, and why
 .TP
 ocomment\-ratchet(1)
 Check the tree against its ledger, or record the tree in one
+.TP
+ocomment\-hook(1)
+Answer an agent editing hook in the host\*(Aqs own protocol
 .TP
 ocomment\-selftest(1)
 Re\-run the shared corpus against this binary and report any disagreement
@@ -564,6 +569,18 @@ With `\-\-staged`, do not attempt a uniquely mappable working\-tree update
 .TP
 [\fIPATH\fR]
 Files or directories to process; `\-` reads standard input (default: current directory)
+.SS ocomment hook
+.TP
+<\fISURFACE\fR>
+Which host\*(Aqs hook protocol is spoken on standard input and output
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+claude\-code: Claude Code\*(Aqs `PreToolUse` and `PostToolUse` hooks
+.RE
 .SH VERSION
 v0.1.0
 .SH EXIT STATUS

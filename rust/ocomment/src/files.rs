@@ -194,6 +194,48 @@ pub fn discover_workspace(paths: &[PathBuf], resolved: &ResolvedConfig) -> Resul
     discover_with_scope(paths, resolved, None, None, false)
 }
 
+/// One file's worth of bytes, judged as though they were the contents of
+/// `path`.
+///
+/// The path decides everything about the judgement — the language, the
+/// `[[overrides]]` that apply, whether the file is excluded at all — and the
+/// bytes are the ones the caller is proposing to put there. That pair is what
+/// a pre-write hook has and what nothing else in this module accepts: a walk
+/// reads the bytes off the disk, and `-` has bytes with no name.
+///
+/// The returned [`Discovery`] holds the one file, or the one skip that says
+/// why there is nothing to judge. `path` is never opened.
+pub fn proposed_source(
+    path: &Path,
+    bytes: Vec<u8>,
+    resolved: &ResolvedConfig,
+    forced_language: Option<Language>,
+    forced_dialect: Option<Dialect>,
+) -> Result<Discovery> {
+    let include = compile_globs(&resolved.config.files.include)?;
+    let exclude = compile_globs(&resolved.config.files.exclude)?;
+    let generated = crate::generated::Generated::load()?;
+    let context = LoadContext {
+        resolved,
+        forced_language,
+        forced_dialect,
+        include: &include,
+        exclude: &exclude,
+        generated: &generated,
+    };
+    let mut discovery = Discovery::default();
+    let path = reported_path(path);
+    let relative = resolved.relative_to_root(&path);
+    if (!include.is_empty() && !include.is_match(&relative)) || exclude.is_match(&relative) {
+        return Ok(discovery);
+    }
+    classify(&path, bytes, true, &context, &mut discovery);
+    match discovery.fatal.take() {
+        Some(error) => Err(error),
+        None => Ok(discovery),
+    }
+}
+
 fn discover_with_scope(
     paths: &[PathBuf],
     resolved: &ResolvedConfig,
@@ -344,11 +386,9 @@ fn load_one(
 ) {
     let LoadContext {
         resolved,
-        forced_language,
-        forced_dialect,
         include,
         exclude,
-        generated,
+        ..
     } = context;
     let path = &reported_path(path);
     /* NOTE: The globs are written relative to the root; the path was typed — or
@@ -404,6 +444,31 @@ fn load_one(
             return;
         }
     };
+    classify(path, source, explicit_path, context, discovery);
+}
+
+/// Everything deciding one file's fate that does not depend on reading it.
+///
+/// Split out from [`load_one`] because the bytes and the path are separable
+/// questions: [`proposed_source`] has a path that exists and contents that do
+/// not, and every rule below — the binary test, the generated catalogue, the
+/// language, the overrides, the profile and plugin routing — has to reach the
+/// same answer for it that a walk would reach for the file once it is written.
+/// Two copies of this would be two answers.
+fn classify(
+    path: &Path,
+    source: Vec<u8>,
+    explicit_path: bool,
+    context: &LoadContext<'_>,
+    discovery: &mut Discovery,
+) {
+    let LoadContext {
+        resolved,
+        forced_language,
+        forced_dialect,
+        generated,
+        ..
+    } = context;
     if source.iter().take(8192).any(|byte| *byte == 0) {
         discovery.skipped.push(SkippedFile {
             path: path.to_path_buf(),

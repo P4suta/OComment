@@ -30,6 +30,8 @@ pub enum OutputFormat {
     Jsonl,
     Sarif,
     Github,
+    /// The report as an instruction, for a reader that is going to act on it.
+    Agent,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -806,6 +808,18 @@ fn next_step(verdict: &DispositionExplanation) -> String {
         DispositionExplanation::KeptDirective { kind, .. } => {
             format!("; use --remove-kind {kind} or --policy all to remove it")
         }
+        /* NOTE: The two shape rules, and the only removals whose way out is an
+         * edit to the comment rather than a flag: both are satisfied by
+         * rewriting it, and neither has a flag that would keep it as it is. */
+        DispositionExplanation::RemovedAsTrailing => {
+            "; move it onto a line of its own above the code".to_owned()
+        }
+        DispositionExplanation::RemovedAsExpired { .. } => {
+            "; do it, or delete the comment".to_owned()
+        }
+        DispositionExplanation::RemovedByLength { limit, .. } => {
+            format!("; cut the run to {}", plural(*limit, "line"))
+        }
         /* NOTE: The one keep with no flag behind it. `--policy all` does not
          * reach it either: what holds the body open is whatever comment is
          * still standing under this one, so that is the line to take first. */
@@ -1123,6 +1137,7 @@ pub fn render_explained(
         OutputFormat::Jsonl => render_jsonl(&mut output, files, skipped, options.preview),
         OutputFormat::Sarif => render_sarif(&mut output, files, skipped),
         OutputFormat::Github => render_github(&mut output, files, skipped, options),
+        OutputFormat::Agent => render_agent(&mut output, files, skipped, options, explanations),
     }?;
     finish(&mut output)
 }
@@ -1500,17 +1515,7 @@ fn concentration(files: &[ProcessedFile], options: &RenderOptions) -> Vec<String
         }
     ));
 
-    /* NOTE: One suggestion, and the best one available. The rule used to be
-     * "only when one kind accounts for everything", which read `--keep-kind`
-     * as taking one kind -- it is variadic, so two kinds is still one flag.
-     * The case that got it wrong is not an edge: a Rust crate with both
-     * documentation and a licence header produces exactly two kinds and never
-     * one, which is every crate on crates.io.
-     *
-     * The order below is by how good the advice is. A named policy beats a
-     * list of kinds -- it is shorter, it is the configuration the project
-     * should be keeping anyway, and it teaches the tool's own vocabulary
-     * rather than its escape hatches. */
+    // NOTE: One suggestion, and the best one available; see `advice_for`.
     let present: Vec<CommentKind> = CommentKind::ALL
         .into_iter()
         .enumerate()
@@ -1531,6 +1536,18 @@ fn concentration(files: &[ProcessedFile], options: &RenderOptions) -> Vec<String
 /// every kind present. Both are computed from `Policy::keeps`, which is the
 /// table the scanner itself decides by — an earlier version guessed at that
 /// table here and guessed wrong.
+///
+/// One suggestion, and the best one available. The rule used to be "only when
+/// one kind accounts for everything", which read `--keep-kind` as taking one
+/// kind — it is variadic, so two kinds is still one flag. The case that got it
+/// wrong is not an edge: a Rust crate with both documentation and a licence
+/// header produces exactly two kinds and never one, which is every crate on
+/// crates.io.
+///
+/// The order is by how good the advice is. A named policy beats a list of
+/// kinds: it is shorter, it is the configuration the project should be keeping
+/// anyway, and it teaches the tool's own vocabulary rather than its escape
+/// hatches.
 fn advice_for(present: &[CommentKind], current: Policy) -> Option<String> {
     if let Some(policy) = Policy::strongest_keeping(present)
         && policy != current
@@ -3063,4 +3080,309 @@ mod tests {
         let source = b"let x = 1; // TODO remove\n";
         assert_eq!(preview(source, ByteSpan::new(11, 25), 72), "// TODO remove");
     }
+}
+
+/// How many display columns an agent-facing preview may occupy.
+///
+/// Wider than the human one: a terminal has a right-hand edge and the reader of
+/// this format does not, and a comment cut off at its first clause is a comment
+/// the reader has to open the file to see.
+const AGENT_PREVIEW_COLUMNS: usize = 160;
+
+/// What a run wants the reader to do about one comment, in the imperative.
+///
+/// The verb *is* the reason. `RemovedByLength` and `RemovedAsTrailing` are the
+/// two removals whose way out is an edit to the comment rather than a flag —
+/// shortening it, moving it — and telling a reader to delete a comment that
+/// only had to move is wrong advice however correct the verdict was.
+fn instruction(verdict: &DispositionExplanation) -> String {
+    match verdict {
+        DispositionExplanation::RemovedByLength { limit, .. } => {
+            format!("shorten to {}", plural(*limit, "line"))
+        }
+        DispositionExplanation::RemovedAsTrailing => "move above the code".to_owned(),
+        /* NOTE: Two things to do, and the report must not pick. Deleting the
+         * line satisfies the rule and loses the promise; doing the work
+         * satisfies both. Only whoever reads it knows which. */
+        DispositionExplanation::RemovedAsExpired { age, limit, .. } => {
+            format!("do it or drop it ({age} old, {limit} allowed)")
+        }
+        _ => "remove".to_owned(),
+    }
+}
+
+/// The one sentence that says what this project accepts, when every file with a
+/// finding was judged by the same rules.
+///
+/// A report that lists what has to change and never says what would have been
+/// acceptable teaches nothing: the reader fixes these three comments and writes
+/// the fourth the same way. When the files disagree — a `[[overrides]]` table
+/// covering part of the tree — there is no one sentence to write, and none is
+/// written rather than one that is true of some of the findings.
+fn accepted_here(files: &[ProcessedFile], explanations: &Explanations) -> Option<String> {
+    let mut rules: Option<&ScanOptions> = None;
+    for file in files {
+        if removable_count(file) == 0 {
+            continue;
+        }
+        let options = &explanations.get(&file.path)?.options;
+        match rules {
+            Some(first) if first.allow != options.allow || first.policy != options.policy => {
+                return None;
+            }
+            Some(_) => {}
+            None => rules = Some(options),
+        }
+    }
+    let options = rules?;
+    let mut sentence = format!(
+        "rule: policy `{}` removes {} comments",
+        options.policy,
+        join_with_and(&removed_kinds(options.policy))
+    );
+    let mut allowances = Vec::new();
+    if !options.allow.tags.is_empty() {
+        allowances.push(format!(
+            "a comment tagged {}",
+            join_with_or(&options.allow.tags)
+        ));
+    }
+    if let Some(limit) = options.allow.max_lines {
+        allowances.push(format!(
+            "at most {} of adjacent comments",
+            plural(limit, "line")
+        ));
+    }
+    if options.allow.trailing == Some(false) {
+        allowances.push("never beside code".to_owned());
+    }
+    for (tag, limit) in &options.allow.expiry {
+        allowances.push(if *limit == ocomment_core::Age::ZERO {
+            format!("a comment tagged {tag} until it is committed")
+        } else {
+            format!("a comment tagged {tag} for {limit} after the commit that adds it")
+        });
+    }
+    if !allowances.is_empty() {
+        sentence.push_str(&format!(". Allowed: {}", allowances.join(", ")));
+    }
+    sentence.push('.');
+    Some(sentence)
+}
+
+/// The kinds a policy takes out, named rather than counted.
+///
+/// What a report of removals owes its reader is the set it is drawn from. The
+/// kinds no policy reaches are left out: they are not what this run is about,
+/// and naming them would suggest the reader could have to deal with one.
+fn removed_kinds(policy: Policy) -> Vec<String> {
+    CommentKind::ALL
+        .into_iter()
+        .filter(|kind| kind.protection() == Protection::None && !policy.keeps(*kind))
+        .map(|kind| kind.as_str().to_owned())
+        .collect()
+}
+
+/// `a, b and c`, for a list a reader is being told the whole of.
+fn join_with_and(items: &[String]) -> String {
+    join_with(items, "and")
+}
+
+/// `a, b or c`, for a list a reader is choosing one item from.
+fn join_with_or(items: &[String]) -> String {
+    join_with(items, "or")
+}
+
+fn join_with(items: &[String], conjunction: &str) -> String {
+    match items {
+        [] => String::new(),
+        [only] => only.clone(),
+        [first, second] => format!("{first} {conjunction} {second}"),
+        [rest @ .., last] => format!("{}, {conjunction} {last}", rest.join(", ")),
+    }
+}
+
+/// Whether the bytes under judgement are the ones on the disk.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Subject {
+    /// They are, so `ocomment fix` is a way to do what the report asks.
+    OnDisk,
+    /// They are not: a hook judged an edit before it was written. There is no
+    /// file to fix, and telling a reader to run `fix` on one would send them
+    /// to bytes that do not exist yet.
+    Proposed,
+}
+
+/// The whole agent report as one string, or `None` when there is nothing to
+/// say.
+///
+/// Silence is the pass. A caller embedding this in a hook decision needs to
+/// know whether there is a decision to make, and a report that says "nothing
+/// to do" is a report the caller has to parse to find that out.
+pub fn agent_report(
+    files: &[ProcessedFile],
+    skipped: &[SkippedFile],
+    options: &RenderOptions,
+    explanations: &Explanations,
+    subject: Subject,
+) -> Option<String> {
+    let mut report = Vec::new();
+    write_agent(&mut report, files, skipped, options, explanations, subject).ok()?;
+    (!report.is_empty()).then(|| String::from_utf8_lossy(&report).into_owned())
+}
+
+/// The report for a reader that is going to act on it rather than read it.
+///
+/// Three parts, in the order they are needed: what has to change, one line per
+/// comment and the verb first; the rule that decided them, so the next comment
+/// is written differently; and the command that would do it instead. A clean
+/// run writes nothing at all, which is what makes this format usable as the
+/// body of a hook decision.
+fn render_agent(
+    output: &mut impl Write,
+    files: &[ProcessedFile],
+    skipped: &[SkippedFile],
+    options: &RenderOptions,
+    explanations: &Explanations,
+) -> Result<()> {
+    write_agent(
+        output,
+        files,
+        skipped,
+        options,
+        explanations,
+        Subject::OnDisk,
+    )
+}
+
+fn write_agent(
+    output: &mut impl Write,
+    files: &[ProcessedFile],
+    skipped: &[SkippedFile],
+    options: &RenderOptions,
+    explanations: &Explanations,
+    subject: Subject,
+) -> Result<()> {
+    let mut lines = Vec::new();
+    let mut paths: Vec<String> = Vec::new();
+    let mut invalid = 0usize;
+    for file in files {
+        let has_findings = removable_count(file) > 0;
+        if !has_findings && file.result.report.diagnostics.is_empty() {
+            continue;
+        }
+        let display = sanitize_path(&file.path.to_string_lossy());
+        if has_findings {
+            paths.push(display.clone());
+        }
+        let index = LineIndex::new(&file.source);
+        let explainer = explanations.get(&file.path).map(Explainer::new);
+        for diagnostic in &file.result.report.diagnostics {
+            invalid += 1;
+            let (line, column) = index.line_column(diagnostic.span.start);
+            lines.push(format!(
+                "{display}:{line}:{column} fix the syntax: {} [{}]",
+                sanitize_message(&diagnostic.message),
+                sanitize_message(&diagnostic.code)
+            ));
+        }
+        for comment in file
+            .result
+            .report
+            .comments
+            .iter()
+            .filter(|comment| comment.disposition.is_remove())
+        {
+            let (line, column) = index.line_column(comment.span.start);
+            let start = comment.span.start.min(file.source.len());
+            let end = comment.span.end.clamp(start, file.source.len());
+            let verdict = explainer.as_ref().map(|explainer| {
+                explain_comment_with(
+                    &explainer.patterns,
+                    comment,
+                    &file.source[start..end],
+                    file.language,
+                    &explainer.material.options,
+                )
+            });
+            let action = verdict.as_ref().map_or_else(
+                || "remove".to_owned(),
+                |verdict: &DispositionExplanation| instruction(verdict),
+            );
+            lines.push(format!(
+                "{display}:{line}:{column} {action}: {}",
+                preview(&file.source, comment.span, AGENT_PREVIEW_COLUMNS)
+            ));
+        }
+    }
+    /* NOTE: A file the run could not read is a hole in the answer rather than a
+     * finding, and is reported whatever it would have contained. A file passed
+     * over for a reason — an unknown language, a size limit — is not: this
+     * report is a list of things to change, and a caller who wants the passing
+     * over to be a finding says so with `--deny-skipped`, which decides the
+     * exit code. Twenty "not checked" lines in front of an agent asked to fix
+     * one file are twenty instructions it cannot carry out. */
+    let unreadable: Vec<&SkippedFile> = skipped.iter().filter(|item| item.error).collect();
+    for item in &unreadable {
+        lines.push(format!(
+            "{}: could not be read: {}",
+            sanitize_path(&item.path.to_string_lossy()),
+            sanitize_message(&item.reason)
+        ));
+    }
+    if lines.is_empty() {
+        return Ok(());
+    }
+
+    paths.sort_unstable();
+    paths.dedup();
+    let removable = lines.len() - invalid - unreadable.len();
+    let mut headline = Vec::new();
+    if removable > 0 {
+        headline.push(format!(
+            "{} to {} in {}",
+            comments(removable, ""),
+            match options.operation {
+                Operation::Fix => "have gone",
+                _ => "go",
+            },
+            plural(paths.len(), "file")
+        ));
+    }
+    if invalid > 0 {
+        headline.push(format!("{} that will not parse", plural(invalid, "file")));
+    }
+    if !unreadable.is_empty() {
+        headline.push(format!("{} unreadable", plural(unreadable.len(), "file")));
+    }
+    wrote(writeln!(output, "ocomment: {}.", headline.join(", ")))?;
+    wrote(writeln!(output))?;
+    for line in &lines {
+        wrote(writeln!(output, "{line}"))?;
+    }
+    let mut tail = Vec::new();
+    if let Some(rule) = accepted_here(files, explanations) {
+        tail.push(rule);
+    }
+    if removable > 0 && options.operation != Operation::Fix {
+        /* NOTE: `fix` is offered only for files it could open. Standard input
+         * has no name to hand it, and a proposal has no file yet. */
+        let fixable =
+            subject == Subject::OnDisk && paths.iter().all(|path| path != crate::files::STDIN_PATH);
+        tail.push(if fixable {
+            format!(
+                "next: edit them, or run `ocomment fix {}`.",
+                paths.join(" ")
+            )
+        } else {
+            "next: write it without them.".to_owned()
+        });
+    }
+    if !tail.is_empty() {
+        wrote(writeln!(output))?;
+        for line in &tail {
+            wrote(writeln!(output, "{}", fold(line)))?;
+        }
+    }
+    Ok(())
 }

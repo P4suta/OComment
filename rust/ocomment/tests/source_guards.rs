@@ -9,14 +9,16 @@ use std::{collections::BTreeSet, fs, path::PathBuf};
 /// Every first-party source file of the crate, embedded at compile time so the
 /// scan does not depend on the directory the test runs in. The internal runtime
 /// is upstream-derived code and cannot obtain the CLI's stdout handle.
-const SOURCES: [(&str, &str); 16] = [
+const SOURCES: [(&str, &str); 18] = [
     ("atomic.rs", include_str!("../src/atomic.rs")),
     ("cli.rs", include_str!("../src/cli.rs")),
     ("config.rs", include_str!("../src/config.rs")),
     ("coverage.rs", include_str!("../src/coverage.rs")),
+    ("deadline.rs", include_str!("../src/deadline.rs")),
     ("files.rs", include_str!("../src/files.rs")),
     ("generated.rs", include_str!("../src/generated.rs")),
     ("git.rs", include_str!("../src/git.rs")),
+    ("hook.rs", include_str!("../src/hook.rs")),
     ("interactive.rs", include_str!("../src/interactive.rs")),
     ("lsp.rs", include_str!("../src/lsp.rs")),
     ("main.rs", include_str!("../src/main.rs")),
@@ -311,5 +313,34 @@ fn a_caller_cannot_ask_whether_the_run_is_quiet() {
     assert!(
         !output.contains("pub enum Level {"),
         "the levels were made public, which puts the decision back in reach"
+    );
+}
+
+/// The list above is the whole crate, and this is what keeps it so.
+///
+/// Every guard in this file reads `SOURCES`, so a module missing from it is a
+/// module none of them covers — and nothing about adding a module makes anyone
+/// come here. The directory is the authority; the list only has to agree with
+/// it. `runtime/` is the one exclusion, for the reason the list's own doc
+/// comment gives, and it is named rather than inferred.
+#[test]
+fn the_embedded_list_is_every_source_file_in_the_crate() {
+    let directory = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
+    let on_disk: BTreeSet<String> = fs::read_dir(&directory)
+        .expect("the crate has a src directory")
+        .map(|entry| entry.expect("a readable directory entry").path())
+        .filter(|path| path.extension().is_some_and(|value| value == "rs"))
+        .map(|path| {
+            path.file_name()
+                .expect("a file with an extension has a name")
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    let listed: BTreeSet<String> = SOURCES.iter().map(|(name, _)| (*name).to_owned()).collect();
+    assert_eq!(
+        listed, on_disk,
+        "`SOURCES` and `src/` disagree, so some module is outside every guard \
+         in this file"
     );
 }

@@ -178,5 +178,5 @@ pub use scanner::{
     DispositionPatterns, PreparedScanner, explain_comment, explain_comment_with,
     explain_disposition, explain_disposition_with, scan,
 };
-pub use transform::{apply_edits, transform, transform_plan, transform_spans};
+pub use transform::{apply_edits, plan_report, transform, transform_plan, transform_spans};
 pub use types::*;

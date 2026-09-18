@@ -1,6 +1,6 @@
 use crate::{
     atomic::{WritePlan, apply_transaction},
-    config, coverage, files, git, interactive, lsp,
+    config, coverage, deadline, files, git, hook, interactive, lsp,
     output::{
         self, AnnotationLevel, Detail, Explanations, FileExplanation, Operation, OutputFormat,
         Presentation, ProcessedFile, ProcessedResult, RenderOptions, Verbosity,
@@ -120,7 +120,7 @@ struct Cli {
 }
 
 #[derive(Clone, Debug, Args)]
-struct CommonArgs {
+pub(crate) struct CommonArgs {
     /// Read this configuration file instead of discovering `.ocomment.toml`.
     #[arg(long, global = true, value_name = "FILE")]
     config: Option<PathBuf>,
@@ -256,13 +256,23 @@ struct OutputArgs {
 
 impl CommonArgs {
     /// The language forced on the command line, if any.
-    fn language(&self) -> Option<Language> {
+    pub(crate) fn language(&self) -> Option<Language> {
         self.policy.language.map(Language::from)
     }
 
     /// The dialect forced on the command line, if any.
-    fn dialect(&self) -> Option<Dialect> {
+    pub(crate) fn dialect(&self) -> Option<Dialect> {
         self.policy.dialect.map(Dialect::from)
+    }
+
+    /// The configuration file named on the command line, if any.
+    pub(crate) fn config(&self) -> Option<&std::path::Path> {
+        self.config.as_deref()
+    }
+
+    /// Whether a reported comment carries a rendering of its text.
+    pub(crate) fn preview(&self) -> bool {
+        !self.output.no_preview
     }
 
     /// How much of the human report this run may write.
@@ -344,6 +354,8 @@ enum Command {
     Coverage(TargetArgs),
     /// Check the tree against its ledger, or record the tree in one
     Ratchet(RatchetArgs),
+    /// Answer an agent editing hook in the host's own protocol
+    Hook(HookArgs),
     /// Re-run the shared corpus against this binary and report any disagreement
     Selftest,
     /// Diagnose the environment (config, git, plugins, tools)
@@ -404,6 +416,13 @@ impl FixArgs {
             git: self.git,
         }
     }
+}
+
+#[derive(Args)]
+struct HookArgs {
+    /// Which host's hook protocol is spoken on standard input and output.
+    #[arg(value_enum)]
+    surface: hook::Surface,
 }
 
 #[derive(Args)]
@@ -593,10 +612,50 @@ pub fn run() -> Result<u8> {
         Some(Command::Completions { shell }) => run_completions(shell),
         Some(Command::Coverage(target)) => run_coverage(&target, &common),
         Some(Command::Ratchet(args)) => run_ratchet(&args, &common),
+        Some(Command::Hook(args)) => hook::run(args.surface, &common),
         Some(Command::Selftest) => selftest::run(common.output.format, common.verbosity()),
         Some(Command::Doctor) => run_doctor(&common),
         Some(Command::Man) => run_man(),
     }
+}
+
+/// Scan `bytes` the way `file` would be scanned: through its plugin, through
+/// its declarative profile, or through the built-in scanner for its language.
+///
+/// The three-way dispatch is here once. It was written out at each of the
+/// places that needed it, and the bytes are not always the file's own — a
+/// rewrite is verified by rescanning what it produced, and a hook judges bytes
+/// that are not on the disk at all — so each copy had to remember to route the
+/// same way. One that forgot would check a plugin's file with the wrong
+/// scanner and report on a language nobody selected.
+pub(crate) fn scan_bytes(
+    bytes: &[u8],
+    file: &files::SourceFile,
+    scanner: &PreparedScanner,
+    plugin_host: &plugin::PluginHost,
+) -> Result<ocomment_core::ScanReport> {
+    if let Some(name) = &file.plugin {
+        let extension = file
+            .path
+            .extension()
+            .and_then(|value| value.to_str())
+            .unwrap_or("unknown")
+            .to_ascii_lowercase();
+        return plugin_host.scan_report(
+            name,
+            bytes,
+            &extension,
+            &file.path,
+            &file.options,
+            scanner,
+        );
+    }
+    Ok(match &file.profile {
+        Some(profile) => scanner
+            .scan_profile(bytes, profile)
+            .expect("profiles were validated while loading configuration"),
+        None => scanner.scan(bytes, file.language),
+    })
 }
 
 fn run_target(
@@ -656,6 +715,9 @@ fn run_target(
         });
     }
     let discovery = read_targets(&paths, stdin, &resolved, common)?;
+    /* NOTE: One reading of the clock for the whole run, so that two files
+     * judged a second apart cannot disagree about what day it is. */
+    let now = std::time::SystemTime::now();
     let total = discovery.files.len();
     let counter = Progress::default();
     let trace_mode = TraceMode::from(common.output.trace);
@@ -665,7 +727,11 @@ fn run_target(
      * asks for it to name the rule in each recorded decision on standard
      * error. Either one needs it collected, and neither pays for it alone, but
      * asking for a trace must not start annotating the product. */
-    let needs_explanations = explain || trace_mode.is_on();
+    /* NOTE: And the agent format, whose per-finding verb is the rule that
+     * decided the comment: telling a reader to delete one that only had to
+     * move is wrong advice however correct the verdict was. */
+    let needs_explanations =
+        explain || trace_mode.is_on() || common.output.format == OutputFormat::Agent;
     let materialize_output = operation == Operation::Fix
         || flags.interactive
         || (operation == Operation::Diff && common.output.format == OutputFormat::Human);
@@ -716,7 +782,7 @@ fn run_target(
                 None
             };
             let language = file.language;
-            let options = file.options;
+            let options = file.options.clone();
             let scanner = scanners
                 .get(&options.scan)
                 .expect("every discovered policy was prepared");
@@ -727,30 +793,26 @@ fn run_target(
                 options: options.scan.clone(),
                 trace,
             });
-            let language_name = || {
-                file.path
-                    .extension()
-                    .and_then(|value| value.to_str())
-                    .unwrap_or("unknown")
-                    .to_ascii_lowercase()
-            };
+            /* NOTE: Scanned once and planned from what the scan decided, rather
+             * than planned by a call that scans again inside itself: a
+             * deadline is settled here, between the two, and a plan built from
+             * a fresh scan would not have heard about it. */
+            let mut report = scan_bytes(&file.source, &file, scanner, &plugin_host)?;
+            let overdue = deadline::apply(
+                &resolved.root,
+                &file.path,
+                &file.source,
+                &mut report,
+                &options.scan.allow,
+                now,
+            )?;
             let result = if needs_plan {
-                let plan = if let Some(name) = &file.plugin {
-                    plugin_host.transform_plan(
-                        name,
-                        &file.source,
-                        &language_name(),
-                        &file.path,
-                        &options,
-                        scanner,
-                    )?
-                } else if let Some(profile) = &file.profile {
-                    scanner
-                        .transform_profile_plan(&file.source, profile, options.layout)
-                        .expect("profiles were validated while loading configuration")
-                } else {
-                    scanner.transform_plan(&file.source, language, options.layout)
-                };
+                let plan = ocomment_core::plan_report(
+                    &file.source,
+                    report,
+                    options.layout,
+                    options.scan.force_invalid,
+                );
                 let result = ProcessedResult::plan(
                     &file.source,
                     plan,
@@ -766,42 +828,11 @@ fn run_target(
                  * the result scan cleanly would refuse every run of the flag
                  * that is working exactly as asked. */
                 if operation == Operation::Fix && result.changed() && !options.scan.force_invalid {
-                    let rescan = if let Some(name) = &file.plugin {
-                        plugin_host.scan_report(
-                            name,
-                            result.output(),
-                            &language_name(),
-                            &file.path,
-                            &options,
-                            scanner,
-                        )?
-                    } else if let Some(profile) = &file.profile {
-                        scanner
-                            .scan_profile(result.output(), profile)
-                            .expect("profiles were validated while loading configuration")
-                    } else {
-                        scanner.scan(result.output(), language)
-                    };
+                    let rescan = scan_bytes(result.output(), &file, scanner, &plugin_host)?;
                     verify_rewrite(&file.path, &rescan)?;
                 }
                 result
             } else {
-                let report = if let Some(name) = &file.plugin {
-                    plugin_host.scan_report(
-                        name,
-                        &file.source,
-                        &language_name(),
-                        &file.path,
-                        &options,
-                        scanner,
-                    )?
-                } else if let Some(profile) = &file.profile {
-                    scanner
-                        .scan_profile(&file.source, profile)
-                        .expect("profiles were validated while loading configuration")
-                } else {
-                    scanner.scan(&file.source, language)
-                };
                 let changed = (report.valid || scanner.options().force_invalid)
                     && report
                         .comments
@@ -820,6 +851,7 @@ fn run_target(
                     result,
                 },
                 material,
+                overdue,
             ))
         })
         .collect::<Result<Vec<_>>>();
@@ -832,10 +864,12 @@ fn run_target(
     let processed = processed?;
     let mut explanations = Explanations::new();
     let mut files = Vec::with_capacity(processed.len());
-    for (file, material) in processed {
+    let mut overdue = deadline::Overdue::default();
+    for (file, material, file_overdue) in processed {
         if let Some(material) = material {
             explanations.insert(file.path.clone(), material);
         }
+        overdue.absorb(&file_overdue);
         files.push(file);
     }
 
@@ -886,6 +920,18 @@ fn run_target(
         },
         &explanations,
     )?;
+    /* NOTE: Said on its own line rather than folded into the summary: a
+     * deadline that passed is not a statistic about the run, it is a thing
+     * somebody said they would do. Human runs only, like every other note --
+     * a machine format keeps standard error empty, and the agent report
+     * already carries the age on the finding's own line. */
+    if common.output.format == OutputFormat::Human
+        && let Some(line) = overdue.note()
+    {
+        let stderr = io::stderr();
+        let mut sink = stderr.lock();
+        output::note(&mut sink, verbosity, Detail::Normal, &line)?;
+    }
     // NOTE: Asked of a walk and not of a list: only a walk means "everything under here".
     let walked = !stdin && (paths.is_empty() || paths.iter().any(|path| path.is_dir()));
     if walked {
@@ -1150,7 +1196,7 @@ fn run_strip(common: &CommonArgs) -> Result<u8> {
 /// Layer the command line over the merged configuration, noting what it
 /// overrode so `--explain` can name the flag rather than a file that never
 /// mentioned the setting.
-fn apply_cli_overrides(resolved: &mut config::ResolvedConfig, common: &CommonArgs) {
+pub(crate) fn apply_cli_overrides(resolved: &mut config::ResolvedConfig, common: &CommonArgs) {
     let policy = &common.policy;
     let config = &mut resolved.config;
     let overrides = &mut resolved.cli_overrides;

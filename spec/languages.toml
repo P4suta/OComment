@@ -1,24 +1,8 @@
 version = 1
 
 # NOTE: The canonical list of the languages OComment has a built-in scanner
-# NOTE: for.
-# NOTE:
-# NOTE: `extensions` holds every suffix that selects the language, without the
-# NOTE: dot, `editor_ids` the identifiers editor clients send to the LSP, and
-# NOTE: `dialects` every dialect it accepts, in the order the binary
-# NOTE: lists them when it refuses one. An extension that selects a dialect
-# NOTE: other than `standard` says so in `extension_dialects`; `reserved_names`
-# NOTE: and `shebangs` are the whole file names and interpreter names that
-# NOTE: select the language when the extension does not decide it. `notes` is a
-# NOTE: remark for the human listing.
-# NOTE:
-# NOTE: Published pre-commit hooks pass every text file to the detector;
-# NOTE: tools/check_hooks.py rejects a manifest-level extension filter.
-# NOTE: docs/languages.md is generated from the whole table
-# NOTE: (tools/gen_docs.py), and `ocomment languages` prints the copy the
-# NOTE: binary embeds.
-# NOTE: rust/ocomment/tests/spec_languages.rs checks every claim below against
-# NOTE: the detector and the binary.
+# NOTE: for, and the only copy of it. What each field means, and what checks
+# NOTE: it: see "Where the table lives" in docs/languages.md.
 
 [[languages]]
 name = "rust"

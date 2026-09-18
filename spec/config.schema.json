@@ -99,7 +99,8 @@
         "keep_kind": { "$ref": "#/$defs/kinds" },
         "remove_kind": { "$ref": "#/$defs/kinds" },
         "keep_regex": { "$ref": "#/$defs/strings" },
-        "remove_regex": { "$ref": "#/$defs/strings" }
+        "remove_regex": { "$ref": "#/$defs/strings" },
+        "allow": { "$ref": "#/$defs/allowRules" }
       }
     },
     "dialect": {
@@ -154,7 +155,16 @@
       "properties": {
         "tags": { "$ref": "#/$defs/strings" },
         "max_lines": { "type": "integer", "minimum": 1 },
-        "trailing": { "type": "boolean" }
+        "trailing": { "type": "boolean" },
+        "expiry": {
+          "type": "object",
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "string", "pattern": "^[0-9]+ *[dDwW]?$" },
+              { "type": "integer", "minimum": 0 }
+            ]
+          }
+        }
       }
     },
     "protectedPattern": {

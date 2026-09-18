@@ -14,11 +14,11 @@
 //! is what states.
 
 use ocomment_core::{
-    Action, CommentKind, DispositionExplanation, DispositionPatterns, Language, Policy,
-    ScanOptions, explain_comment, explain_comment_with, explain_disposition,
+    Action, Age, AllowRules, CommentKind, DispositionExplanation, DispositionPatterns, Language,
+    Policy, ScanOptions, explain_comment, explain_comment_with, explain_disposition,
     explain_disposition_with, scan,
 };
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Fixtures chosen so that between them the classifier emits every
 /// [`CommentKind`]; `every_kind_is_covered` keeps that promise honest.
@@ -26,7 +26,9 @@ fn fixtures() -> Vec<(Language, &'static [u8])> {
     vec![
         (
             Language::Rust,
-            b"// plain\n/* block */\n/// doc line\n/** doc block */\n// Copyright 2024 Example\n// rustfmt::skip\n"
+            /* NOTE: The last line is a comment beside code, which is the one
+             * shape rule no other fixture reaches. */
+            b"// plain\n/* block */\n/// doc line\n/** doc block */\n// Copyright 2024 Example\n// rustfmt::skip\nlet n = 1; // ordinary, and beside code\n"
                 .as_slice(),
         ),
         (
@@ -60,9 +62,58 @@ fn fixtures() -> Vec<(Language, &'static [u8])> {
     ]
 }
 
+/// Every field of [`ScanOptions`], classified as either steered by the sweep
+/// below or out of its reach — by destructuring rather than by a list, so a
+/// field added later fails to compile here until somebody says which it is.
+///
+/// This is not decoration. `allow` was added without this, the sweep went on
+/// covering the fields it already knew, and `--explain` spent a release
+/// printing "removed: policy `conservative` removes ordinary comments" under
+/// a line reading `kept line comment`. The sweep was passing the whole time,
+/// because nothing made it look.
+fn every_option_is_classified(options: ScanOptions) {
+    let ScanOptions {
+        // NOTE: Steered below, each by at least one variant.
+        policy: _,
+        force_protected: _,
+        keep_kinds: _,
+        remove_kinds: _,
+        keep_regex: _,
+        remove_regex: _,
+        allow: _,
+        /* NOTE: Out of reach, and for the same reason in both cases: neither
+         * changes any verdict. `dialect` chooses which bytes lex as a comment
+         * and `force_invalid` chooses whether an edit is applied to a file
+         * that would not lex; the disposition of a comment that was found is
+         * the same either way. */
+        dialect: _,
+        force_invalid: _,
+    } = options;
+}
+
+/// The same classification one level down, for the same reason.
+///
+/// `allow` is a table rather than a value, so covering "the `allow` field" is
+/// not covering the rules in it.
+fn every_allow_rule_is_classified(rules: AllowRules) {
+    let AllowRules {
+        // NOTE: Steered by `allow_variants`.
+        tags: _,
+        max_lines: _,
+        trailing: _,
+        /* NOTE: Out of reach here, and out of reach of this crate: the verdict
+         * a deadline reaches needs the age of a line, which means reading a
+         * repository. `a_deadline_is_not_this_crates_to_reach` is what states
+         * that. The tag names still steer the tag rule, which is why the
+         * variants below set one. */
+        expiry: _,
+    } = rules;
+}
+
 /// Each variant steers at least one branch of the table: the policies, the
-/// preamble override, both kind lists and both regex lists, plus the overlap
-/// where a keep and a remove pattern match the same bytes.
+/// preamble override, both kind lists and both regex lists, the overlap where
+/// a keep and a remove pattern match the same bytes, and each of the three
+/// shape rules on its own plus all three at once.
 fn option_variants() -> Vec<ScanOptions> {
     let mut variants = Vec::new();
     for policy in Policy::ALL {
@@ -97,11 +148,52 @@ fn option_variants() -> Vec<ScanOptions> {
             variants.push(ScanOptions {
                 keep_regex: vec!["(?i)coding".into()],
                 remove_regex: vec!["(?i)coding".into()],
-                ..base
+                ..base.clone()
             });
+            for allow in allow_variants() {
+                variants.push(ScanOptions {
+                    allow,
+                    ..base.clone()
+                });
+            }
         }
     }
+    for options in &variants {
+        every_option_is_classified(options.clone());
+        every_allow_rule_is_classified(options.allow.clone());
+    }
     variants
+}
+
+/// One variant per shape rule, and one with all three, so that a fixture meets
+/// each rule alone and meets the order they are applied in.
+fn allow_variants() -> Vec<AllowRules> {
+    vec![
+        AllowRules {
+            tags: vec!["ordinary".into(), "plain".into()],
+            ..Default::default()
+        },
+        AllowRules {
+            max_lines: Some(1),
+            ..Default::default()
+        },
+        AllowRules {
+            trailing: Some(false),
+            ..Default::default()
+        },
+        AllowRules {
+            tags: vec!["ordinary".into(), "copyright".into()],
+            max_lines: Some(2),
+            trailing: Some(false),
+            ..Default::default()
+        },
+        /* NOTE: A tag with a deadline is an allowed tag until something with a
+         * clock says otherwise, and nothing in this crate has one. */
+        AllowRules {
+            expiry: BTreeMap::from([("plain".to_owned(), Age::from_days(14))]),
+            ..Default::default()
+        },
+    ]
 }
 
 fn explain(
@@ -202,11 +294,19 @@ fn explanations_agree_with_the_scanner_over_the_whole_branch_table() {
     }
 }
 
-/// The bytes-only entry point is the whole answer for every comment but the one
-/// the file around it decided, and this is what says which comments those are.
+/// The bytes-only entry point is the whole answer for every comment but the
+/// ones the file around them decided, and this is what says which those are.
+///
+/// The match is exhaustive and the arms are the classification: a verdict a
+/// comment's own bytes can reach has to equal what the bytes alone reached,
+/// and a verdict that needs the file has to be one of the four named here and
+/// has to be counted. A rule added later lands in neither list and the test
+/// stops compiling, which is the point of writing it this way — this test
+/// previously claimed there was exactly one such rule, and went on claiming it
+/// while three more were added.
 #[test]
 fn the_two_entry_points_agree_away_from_the_one_rule() {
-    let mut structural = 0;
+    let mut from_the_file = BTreeSet::new();
     for options in option_variants() {
         for (language, source) in fixtures() {
             let report = scan(source, language, options.clone());
@@ -216,7 +316,7 @@ fn the_two_entry_points_agree_away_from_the_one_rule() {
                 let bytes_alone = explain_disposition(comment.kind, raw, language, &options);
                 match scanned {
                     DispositionExplanation::KeptStructural { language: named } => {
-                        structural += 1;
+                        from_the_file.insert("structural");
                         assert_eq!(named, language);
                         assert_eq!(language, Language::Yaml);
                         assert!(
@@ -224,7 +324,45 @@ fn the_two_entry_points_agree_away_from_the_one_rule() {
                             "the bytes alone would have removed it: {bytes_alone}"
                         );
                     }
-                    other => assert_eq!(
+                    /* NOTE: The three shape rules. Each needs something outside
+                     * the comment -- the tag list, the line the comment sits
+                     * on, the run it belongs to -- so the bytes alone reaching
+                     * a different verdict is the expected outcome rather than
+                     * a disagreement. What is checked is that the scanner and
+                     * the comment agree, which `..._over_the_whole_branch_table`
+                     * states for every verdict and this one repeats for these. */
+                    DispositionExplanation::KeptByTag { .. } => {
+                        from_the_file.insert("tag");
+                        assert!(!comment.disposition.is_remove());
+                    }
+                    DispositionExplanation::RemovedAsTrailing => {
+                        from_the_file.insert("trailing");
+                        assert!(comment.disposition.is_remove());
+                    }
+                    DispositionExplanation::RemovedByLength { lines, limit } => {
+                        from_the_file.insert("length");
+                        assert!(comment.disposition.is_remove());
+                        assert!(lines > limit, "{lines} lines is not over {limit}");
+                    }
+                    /* NOTE: Unreachable by construction rather than by
+                     * omission: the scan cannot measure the age of a line, so
+                     * it never reaches this verdict, and an arm saying so is
+                     * what keeps that true as the enum grows. */
+                    DispositionExplanation::RemovedAsExpired { .. } => {
+                        panic!("a scan reached a verdict that needs a repository to reach")
+                    }
+                    other @ (DispositionExplanation::KeptByKind(_)
+                    | DispositionExplanation::KeptByRegex { .. }
+                    | DispositionExplanation::ProtectedPreamble
+                    | DispositionExplanation::KeptHtml
+                    | DispositionExplanation::KeptLoadBearing { .. }
+                    | DispositionExplanation::KeptDirective { .. }
+                    | DispositionExplanation::KeptDocumentation { .. }
+                    | DispositionExplanation::KeptLicense { .. }
+                    | DispositionExplanation::RemovedByKind(_)
+                    | DispositionExplanation::RemovedByRegex { .. }
+                    | DispositionExplanation::RemovedByPolicy { .. }
+                    | DispositionExplanation::RemovedByDefault { .. }) => assert_eq!(
                         other,
                         bytes_alone,
                         "{language} {} `{}` under {options:?}",
@@ -235,9 +373,10 @@ fn the_two_entry_points_agree_away_from_the_one_rule() {
             }
         }
     }
-    assert!(
-        structural > 0,
-        "the fixtures no longer reach the positional rule"
+    assert_eq!(
+        from_the_file,
+        BTreeSet::from(["length", "structural", "tag", "trailing"]),
+        "the fixtures no longer reach every rule the file decides"
     );
 }
 
@@ -771,4 +910,53 @@ fn explaining_a_report_leaves_the_report_alone() {
         let after = scan(source, language, options.clone());
         assert_eq!(before, after, "{language} scan output must be untouched");
     }
+}
+
+/// The one verdict this crate owns the words for and never reaches.
+///
+/// `[policy.allow.expiry]` gives a tag a deadline, and how old a line is takes
+/// a repository to answer. The scan therefore keeps such a comment exactly as
+/// it keeps any other tagged one, and a caller with a clock takes it back. The
+/// vocabulary lives here so both halves say the same thing.
+#[test]
+fn a_deadline_is_not_this_crates_to_reach() {
+    let options = ScanOptions {
+        policy: Policy::Conservative,
+        allow: AllowRules {
+            expiry: BTreeMap::from([("TODO".to_owned(), Age::from_days(14))]),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let source = b"// TODO: a promise\nfn a() {}\n";
+    let report = scan(source, Language::Rust, options.clone());
+    let comment = &report.comments[0];
+    assert!(!comment.disposition.is_remove(), "the scan took it back");
+    let explanation = explain_comment(
+        comment,
+        &source[comment.span.start..comment.span.end],
+        Language::Rust,
+        &options,
+    );
+    assert_eq!(
+        explanation,
+        DispositionExplanation::KeptByTag {
+            tag: "TODO".to_owned()
+        }
+    );
+}
+
+/// `"14d"`, `"2w"`, a bare number of days, and nothing that would be a guess.
+#[test]
+fn an_age_reads_the_units_a_commit_date_can_answer() {
+    assert_eq!("14d".parse::<Age>(), Ok(Age::from_days(14)));
+    assert_eq!("2w".parse::<Age>(), Ok(Age::from_days(14)));
+    assert_eq!("0d".parse::<Age>(), Ok(Age::ZERO));
+    assert_eq!("30".parse::<Age>(), Ok(Age::from_days(30)));
+    assert_eq!(Age::from_days(14).to_string(), "14d");
+    /* NOTE: An hour is not a meaningful deadline for a line of source and a
+     * month is not a fixed number of days, so neither is guessed at. */
+    assert!("12h".parse::<Age>().is_err());
+    assert!("1m".parse::<Age>().is_err());
+    assert!("soon".parse::<Age>().is_err());
 }

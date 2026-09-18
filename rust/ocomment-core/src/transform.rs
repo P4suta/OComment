@@ -192,6 +192,7 @@ fn external_report(
                 &source[span.start..span.end],
                 &prepared.patterns,
             ),
+            shape: None,
         });
     }
     /* NOTE: The one verdict a comment's own bytes cannot reach, so it is
@@ -216,7 +217,14 @@ pub(crate) fn transform_report(
     plan_report(source, report, options.layout, options.scan.force_invalid).finish(source)
 }
 
-pub(crate) fn plan_report(
+/// Plan the edits a report calls for, without scanning again.
+///
+/// [`transform_plan`] is this with the scan in front of it. They are separate
+/// because a report is not always the one a scan produced untouched: a caller
+/// may hold a rule the scanner cannot decide — one that needs a clock, a
+/// repository, anything outside the bytes — and a plan built from a fresh scan
+/// would quietly ignore it.
+pub fn plan_report(
     source: &[u8],
     report: crate::ScanReport,
     layout: Layout,

@@ -2352,15 +2352,12 @@ fn a_character_literal_never_reaches_across_a_line_terminator() {
         ByteSpan::new(8, unterminated.len() - 1)
     );
 
-    /* NOTE: The non-ASCII window stops at the terminator like the others, and
-     * the apostrophe it then read as no literal is left unreported. Within one
-     * line `\u{e4}` behind an apostrophe is a Unicode lifetime or loop label as
-     * readily as an unterminated character literal -- Rust identifiers are XID
-     * -- and `rustc` separates them in the parser, which is where E0762 comes
-     * from. A lexer with a line-bounded window cannot, so it keeps the file
-     * valid: over-keeping a comment is the safe direction. The reading of line
-     * 2 is unchanged either way: its apostrophe opens nothing and the `//`
-     * behind it is the comment it looks like. */
+    /* NOTE: The non-ASCII window stops at the terminator like the others, so
+     * the apostrophe it read as no literal goes unreported: within one line a
+     * `\u{e4}` behind an apostrophe is a Unicode lifetime as readily as an
+     * unterminated literal, `rustc` separates them in the parser where E0762
+     * comes from, and a line-bounded lexer cannot. It keeps the file valid
+     * instead, which is the safe direction. */
     let across = "let a = '\u{e4}\n'; // remove\n".as_bytes();
     let report = scan(across, Language::Rust, ScanOptions::default());
     assert!(report.valid, "{:?}", report.diagnostics);

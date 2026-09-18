@@ -316,3 +316,31 @@ python3 tools/check_directives.py --binary rust/target/release/ocomment
 The `rust` CI job runs it next to `tools/check_hooks.py` and
 `tools/check_embedded_specs.py`, and `tools/release-check.sh` runs it again
 against the release binary before a tag is pushed.
+
+## The published pre-commit hooks
+
+`.pre-commit-hooks.yaml` is what pre-commit reads when this repository is used
+as a `repo:` entry. Both hooks deliberately receive every text file pre-commit
+selects: OComment's detector, not a second extension list, decides which files
+are supported, and that is what lets reserved names and extensionless shebang
+scripts reach the same detector an ordinary CLI run uses.
+`tools/check_hooks.py` rejects a manifest-level filter that would undo it.
+
+`language: system` requires `ocomment` to already be on `PATH`. pre-commit's
+`language: rust` runs `cargo install --path .` at the checkout root, and this
+repository's manifest lives in `rust/`, so it cannot build these hooks.
+
+## The YAML round trip
+
+The one invariant no byte-level fixture can state: a YAML block scalar reads
+the lines below it, so the hole a removal leaves on a comment's line can be
+read back as part of a value. `tools/yaml_roundtrip.py` strips thousands of
+generated documents under every layout and every policy and asks a real YAML
+parser whether they still mean the same thing.
+
+The corpus and both enumerated sweeps run in full in CI: they are where the
+hazard lives, and they are the same documents on every run. Only the
+pseudo-random set is cut there, because its cost is linear and its value is
+not — `python3 tools/yaml_roundtrip.py` runs the whole 2400 on demand, and
+`--seed` moves it. Every pass is one `fsync` per rewritten file, so the tool
+overlaps them rather than waiting on them in turn.

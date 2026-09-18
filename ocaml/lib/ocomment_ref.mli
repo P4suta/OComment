@@ -23,7 +23,13 @@ type protection = NoProtection | Preamble | LoadBearingTier
 type disposition = Remove | Keep of string
 type severity = Error | Warning | Info | Hint
 type diagnostic = { code : string; message : string; severity : severity; span : byte_span }
-type comment = { span : byte_span; kind : comment_kind; disposition : disposition }
+(* NOTE: A rule about a comment's shape rather than its kind, recorded because
+   nothing can re-derive it from the comment's own bytes. *)
+type shape_rule = Tagged of string | Trailing | TooLong of int * int
+
+type comment =
+  { span : byte_span; kind : comment_kind; disposition : disposition;
+    shape : shape_rule option }
 type layout = Lines | Columns | Compact
 
 (* NOTE: What a comment has to be beyond being of a kind the policy keeps.  The
@@ -34,6 +40,13 @@ type allow_rules = {
   tags : string list;
   max_lines : int option;
   trailing : bool option;
+  (* NOTE: Tags that carry a deadline.  Allowed here exactly as `tags` are:
+     measuring the age of a line means reading a repository, and neither this
+     implementation nor the Rust scanner does any I/O, so the verdict that
+     takes one back is reached by a caller with a clock.  The names are still
+     needed, because until the deadline passes these are ordinary allowed
+     tags and the two implementations have to agree about that. *)
+  expiring_tags : string list;
 }
 
 type scan_options = {

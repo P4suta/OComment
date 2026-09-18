@@ -169,6 +169,13 @@ pub struct PathOverride {
     pub remove_kind: Vec<CommentKind>,
     pub keep_regex: Vec<String>,
     pub remove_regex: Vec<String>,
+    /// A different `[policy.allow]` for this part of the tree, replacing the
+    /// global one whole rather than merging into it.
+    ///
+    /// Whole, because these rules are a convention and half a convention is
+    /// not one: a table that merged would let a subtree inherit a length limit
+    /// it never asked for and could not turn off.
+    pub allow: Option<AllowRules>,
 }
 
 /// Where one effective setting came from.
@@ -190,16 +197,17 @@ pub enum Source {
 }
 
 impl Source {
-    /// How an explanation names this source, given the file a `Global` value
-    /// was written in.
+    /// How an explanation names this source, given the `[policy]` key it
+    /// decided and the file a `Global` value was written in.
     ///
     /// `#N` counts an `[[overrides]]` table from zero, the way the regex
     /// indices printed beside it count the patterns they address.
-    fn describe(&self, origin: Option<&Path>) -> String {
+    fn describe(&self, key: &str, origin: Option<&Path>) -> String {
         match self {
             Self::Global => match origin {
                 Some(path) => format!(
-                    "[policy] in {}",
+                    "{} in {}",
+                    policy_table(key),
                     crate::output::sanitize_path(&path.display().to_string())
                 ),
                 None => "built-in defaults".to_owned(),
@@ -215,14 +223,25 @@ impl Source {
 
 /// The `[policy]` keys a trace can attribute to a file, spelled as the file
 /// spells them.
-const POLICY_KEYS: [&str; 6] = [
+const POLICY_KEYS: [&str; 7] = [
     "mode",
     "layout",
     "keep_kind",
     "remove_kind",
     "keep_regex",
     "remove_regex",
+    "allow",
 ];
+
+/// The table a `[policy]` key is written in, which is the table an explanation
+/// sends a reader to. Every key but one is written in `[policy]` itself.
+fn policy_table(key: &str) -> &'static str {
+    if key == "allow" {
+        "[policy.allow]"
+    } else {
+        "[policy]"
+    }
+}
 
 /// Which configuration file last set each `[policy]` key. A key no file sets
 /// keeps no entry, and an explanation calls it a built-in default rather than
@@ -258,6 +277,9 @@ pub struct PolicyTrace {
     pub remove_kind: Vec<Source>,
     pub keep_regex: Vec<Source>,
     pub remove_regex: Vec<Source>,
+    /// Which layer last set `[policy.allow]`. The table is replaced whole
+    /// rather than merged entry by entry, so one source covers all of it.
+    pub allow: Source,
     origins: PolicyOrigins,
 }
 
@@ -299,6 +321,12 @@ impl PolicyTrace {
             | DispositionExplanation::RemovedByDefault { .. }
             | DispositionExplanation::KeptDocumentation { .. }
             | DispositionExplanation::KeptLicense { .. } => (&self.policy, "mode"),
+            /* NOTE: The three rules that are about a comment's shape rather
+             * than its kind, and the one table that sets all three. */
+            DispositionExplanation::KeptByTag { .. }
+            | DispositionExplanation::RemovedAsTrailing
+            | DispositionExplanation::RemovedAsExpired { .. }
+            | DispositionExplanation::RemovedByLength { .. } => (&self.allow, "allow"),
             // NOTE: A built-in rule, decided by no setting at all.
             DispositionExplanation::ProtectedPreamble
             | DispositionExplanation::KeptLoadBearing { .. }
@@ -306,7 +334,7 @@ impl PolicyTrace {
             | DispositionExplanation::KeptDirective { .. }
             | DispositionExplanation::KeptStructural { .. } => return None,
         };
-        Some(source.describe(self.origins.get(key).map(PathBuf::as_path)))
+        Some(source.describe(key, self.origins.get(key).map(PathBuf::as_path)))
     }
 
     /// Where the `key` entry at `index` was written, worded exactly as
@@ -323,7 +351,7 @@ impl PolicyTrace {
             "remove_regex" => self.remove_regex.get(index),
             _ => None,
         }?;
-        Some(source.describe(self.origins.get(key).map(PathBuf::as_path)))
+        Some(source.describe(key, self.origins.get(key).map(PathBuf::as_path)))
     }
 }
 
@@ -485,6 +513,7 @@ impl ResolvedConfig {
         let mut remove = self.config.policy.remove_kind.clone();
         let mut keep_regex = self.config.policy.keep_regex.clone();
         let mut remove_regex = self.config.policy.remove_regex.clone();
+        let mut allow = self.config.policy.allow.clone();
 
         if let Some(language_config) = self.config.languages.get(chosen_language.as_str()) {
             if let Some(value) = language_config.dialect {
@@ -520,6 +549,9 @@ impl ResolvedConfig {
                 extend_unique(&mut remove, &override_.value.remove_kind);
                 extend_unique(&mut keep_regex, &override_.value.keep_regex);
                 extend_unique(&mut remove_regex, &override_.value.remove_regex);
+                if let Some(value) = &override_.value.allow {
+                    allow = value.clone();
+                }
             }
         }
         if self.cli_overrides.policy {
@@ -542,7 +574,7 @@ impl ResolvedConfig {
             remove_kinds: remove,
             keep_regex,
             remove_regex,
-            allow: self.config.policy.allow.clone(),
+            allow,
         };
         Ok((chosen_language, TransformOptions { scan, layout }))
     }
@@ -630,6 +662,9 @@ impl ResolvedConfig {
              * come from the command line. */
             keep_regex: attribute(&self.config.policy.keep_regex, None, "", &keep_patterns),
             remove_regex: attribute(&self.config.policy.remove_regex, None, "", &remove_patterns),
+            /* NOTE: No flag sets an allow rule, so the command line never wins
+             * this one and the file the merge left standing is the answer. */
+            allow: Source::Global,
             origins: self.origins.clone(),
         };
         /* NOTE: A single-valued setting is not merged but replaced, so the last layer

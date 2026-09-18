@@ -5,7 +5,68 @@ All notable changes to OComment will be documented here. The project follows
 
 ## Unreleased
 
+### Changed
+
+- This repository passes its own gate at zero. It previously ran a ledger
+  against `max_lines = 1` with 1674 comments above the line, which is the
+  feature working as designed and the wrong use of it here: a tool whose own
+  repository cannot pass its own rules is arguing that the rules are
+  unreasonable. The rules are now a tag on every comment, `max_lines = 8`,
+  `trailing = false`, and deadlines on `TODO`, `FIXME` and `HACK` — and every
+  comment that broke one was fixed rather than recorded.
+
+  What made that reachable is that documentation is exempt from the length
+  rule, because it is documentation. The long rationale that used to sit in
+  `# NOTE:` blocks at the head of `spec/*.toml` is in `docs/` now, where a
+  reader finds it; the long `// NOTE:` blocks in front of a Rust item are `///`
+  doc comments, the OCaml ones are `(**`, and the Python ones are module
+  docstrings. The rest was compressed. The rule is not "explain less", it is
+  "explain where a reader will look".
+
+  The ledger itself is unchanged and still documented: it is for a repository
+  that cannot get there today.
+
+- `[[overrides]]` may carry its own `[policy.allow]`, replacing the global one
+  whole for the paths it matches. A subtree with a different convention could
+  set a policy and a pattern list and not the rules about a comment's shape,
+  which is the half a tag convention actually lives in.
+
 ### Fixed
+
+- `--explain` no longer contradicts the line above it. A comment kept by
+  `[policy.allow] tags` was reported as `kept line comment` with
+  `removed: policy \`conservative\` removes ordinary comments` underneath, and
+  one taken by `max_lines` was explained as an ordinary policy removal with no
+  mention of length. The cause was structural: the three shape rules are
+  decided over the whole file — how long a run is, whether code sits before a
+  comment — and the explanation was re-derived from the comment's own bytes,
+  which cannot see any of that. The scanner now records the rule it reached
+  (`ShapeRule`) and the explanation reads it, so the two cannot disagree. Both
+  fields are written from one value, and the option sweep that was supposed to
+  catch this now destructures `ScanOptions` exhaustively, so a rule added later
+  fails to compile until it is covered.
+
+- A blank line ends a run of comments. `max_lines` measures a run of adjacent
+  comments as one paragraph, and it was counting across blank lines: `// a`,
+  five blank lines and `// b` came to seven lines of commentary with nobody
+  having written a long comment. A blank line is how a writer says the next
+  remark is a separate remark.
+
+- A tag is a word rather than a prefix. `tags = ["NOTE"]` allowed `NOTE` and
+  also allowed `NOTEBOOK`, which is a way through a project's own convention
+  that reads like a typo. What may follow a tag is punctuation, space, or the
+  end of the text.
+
+- The shape rules no longer reach a comment somebody named outright or one that
+  is not prose. `keep_kind` and `keep_regex` are a project saying *keep exactly
+  this* and a shape rule is a project saying *keep things like this*; the
+  specific wins. This repository pins every GitHub Action to a SHA and writes
+  the version beside it as a comment Dependabot rewrites, and `trailing = false`
+  was taking all of them with no way to have both settings mean what they say.
+  Directives are out for a sharper reason: `x = 1  # noqa` silences a warning
+  about the line it is on and silences nothing a line above it, so removing one
+  for being trailing would change what the build does.
+
 
 - A `keep_regex`, `remove_regex`, `keep_kind` or `remove_kind` that matched
   nothing is reported instead of being left silent. This is the failure that
@@ -97,6 +158,42 @@ All notable changes to OComment will be documented here. The project follows
 ## 0.1.0
 
 ### Added
+
+- `--format agent`, a report for a reader that is going to act on it. One line
+  per comment, location first and the verb second, where the verb is the rule
+  that decided it: a comment that is only too long says `shorten to 1 line` and
+  one that only sits in the wrong place says `move above the code`. Then the
+  rule the project judges by, once, so the next comment is written differently;
+  then the way through. A clean run writes nothing at all on either stream,
+  which is what makes the format usable as the body of a hook decision.
+
+- `ocomment hook claude-code` answers an agent host's editing hook in that
+  host's protocol. `PreToolUse` is asked before the edit lands: the hook works
+  out what the file would become — `Write` carries the whole file, `Edit` and
+  `MultiEdit` carry replacements it applies in memory — judges it with the same
+  machinery `check` uses, and denies the edit with the agent report as the
+  reason. Nothing is written and the file is untouched. `PostToolUse` reports
+  back on what already landed. Every event that is not an edit gets no answer,
+  and a clean edit gets no answer either: the hook never says `allow`, because
+  waving an edit past its user's permission rules is not what it was asked
+  about. One file holds every line specific to a host.
+
+- `[policy.allow.expiry]` gives a tag a deadline. A `TODO` is not the same kind
+  of thing as a `SAFETY`: one records why the code is the way it is and is true
+  for as long as the code is, and the other says somebody will do something.
+  Treating them alike forces a bad answer — forbid the `TODO` and nobody obeys
+  it, permit it and the repository carries one from four years ago that
+  everybody reads past. A tag under `expiry` is allowed exactly as any other
+  until the line carrying it reaches the configured age, and is a finding after
+  that, every run, until somebody does it or deletes it.
+
+  The clock is the repository's: the age of a line is the age of the commit
+  that introduced it. Writing one therefore costs nothing, `"0d"` means the
+  deadline starts at the next commit, and `check --staged` never reports one —
+  the pre-commit gate is about what you are adding, and what you are adding is
+  new. Outside a repository the age cannot be read and nothing is removed on a
+  guess.
+
 
 - Byte-oriented scanners and transformations for 30 built-in languages and the
   documented dialects.

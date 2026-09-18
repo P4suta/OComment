@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{fmt, str::FromStr};
+use std::{collections::BTreeMap, fmt, str::FromStr};
 
 /// A half-open byte range `[start, end)`.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
@@ -659,6 +659,90 @@ impl fmt::Display for Disposition {
     }
 }
 
+/// A rule about a comment's *shape* rather than its kind, and the verdict it
+/// reached.
+///
+/// These are decided over the whole file — how many lines a run of adjacent
+/// comments covers, whether code sits before one on its line — so unlike every
+/// other rule they cannot be re-derived from a comment's own bytes. Recording
+/// the rule here is what lets an explanation state the one that actually
+/// applied instead of falling back to the policy and contradicting the
+/// verdict on the line above it.
+///
+/// [`ScanOptions::allow`] is the only thing that produces one.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "rule", rename_all = "kebab-case")]
+pub enum ShapeRule {
+    /// [`AllowRules::tags`]: kept for the tag its text opens with.
+    Tagged {
+        /// The configured tag it matched, in the configured spelling.
+        tag: String,
+    },
+    /// [`AllowRules::expiry`]: the tag allowed it, and its time is up.
+    ///
+    /// Produced by a caller that can read a repository, never by the scan —
+    /// see [`AllowRules::expiry`] for why the two are separate.
+    Expired {
+        /// The configured tag it matched.
+        tag: String,
+        /// How old the line carrying it is, in days.
+        age: Age,
+        /// How old the configuration lets it get.
+        limit: Age,
+    },
+    /// [`AllowRules::trailing`] is `false`: removed for sitting after code.
+    Trailing,
+    /// [`AllowRules::max_lines`]: removed with the run of comments it belongs
+    /// to, because that run is longer than the limit.
+    TooLong {
+        /// How many lines the run covers.
+        lines: usize,
+        /// How many [`AllowRules::max_lines`] permits.
+        limit: usize,
+    },
+}
+
+impl ShapeRule {
+    /// The verdict this rule reaches, which is fixed per rule.
+    ///
+    /// A [`Comment`] carrying a rule always carries the matching
+    /// [`Disposition`]: both are written from this one value, so the two
+    /// cannot drift apart.
+    pub const fn action(&self) -> Action {
+        match self {
+            Self::Tagged { .. } => Action::Keep,
+            Self::Trailing | Self::TooLong { .. } | Self::Expired { .. } => Action::Remove,
+        }
+    }
+
+    /// The disposition a comment this rule decided carries.
+    pub fn disposition(&self) -> Disposition {
+        match self {
+            Self::Tagged { tag } => Disposition::Keep {
+                reason: format!("tagged `{tag}`"),
+            },
+            Self::Trailing | Self::TooLong { .. } | Self::Expired { .. } => Disposition::Remove,
+        }
+    }
+
+    /// The explanation this rule writes for the comment it decided.
+    pub fn explanation(&self) -> DispositionExplanation {
+        match self {
+            Self::Tagged { tag } => DispositionExplanation::KeptByTag { tag: tag.clone() },
+            Self::Trailing => DispositionExplanation::RemovedAsTrailing,
+            Self::TooLong { lines, limit } => DispositionExplanation::RemovedByLength {
+                lines: *lines,
+                limit: *limit,
+            },
+            Self::Expired { tag, age, limit } => DispositionExplanation::RemovedAsExpired {
+                tag: tag.clone(),
+                age: *age,
+                limit: *limit,
+            },
+        }
+    }
+}
+
 /// A [`DispositionExplanation`] with the reasoning taken away: the
 /// keep-or-remove verdict on its own.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -780,6 +864,32 @@ pub enum DispositionExplanation {
         /// The kind it was removed as.
         kind: CommentKind,
     },
+    /// [`AllowRules::tags`] matched the tag the comment's text opens with.
+    KeptByTag {
+        /// The configured tag it matched.
+        tag: String,
+    },
+    /// [`AllowRules::trailing`] is `false` and code sits before this comment
+    /// on its line.
+    RemovedAsTrailing,
+    /// The tag allowed the comment, and [`AllowRules::expiry`] gave it a
+    /// deadline the line has now passed.
+    RemovedAsExpired {
+        /// The configured tag it matched.
+        tag: String,
+        /// How old the line carrying it is.
+        age: Age,
+        /// How old the configuration lets it get.
+        limit: Age,
+    },
+    /// The run of adjacent comments this one belongs to is longer than
+    /// [`AllowRules::max_lines`].
+    RemovedByLength {
+        /// How many lines the run covers.
+        lines: usize,
+        /// How many the configuration permits.
+        limit: usize,
+    },
     /// A comment every rule above would have removed, kept because a block
     /// scalar's body ends at it and a comment the run keeps sits below it,
     /// deep enough that the body would take that comment back.
@@ -807,10 +917,14 @@ impl DispositionExplanation {
             | Self::KeptDirective { .. }
             | Self::KeptDocumentation { .. }
             | Self::KeptLicense { .. }
+            | Self::KeptByTag { .. }
             | Self::KeptStructural { .. } => Action::Keep,
             Self::RemovedByKind(_)
             | Self::RemovedByRegex { .. }
             | Self::RemovedByPolicy { .. }
+            | Self::RemovedAsTrailing
+            | Self::RemovedAsExpired { .. }
+            | Self::RemovedByLength { .. }
             | Self::RemovedByDefault { .. } => Action::Remove,
         }
     }
@@ -903,6 +1017,20 @@ impl fmt::Display for DispositionExplanation {
             Self::RemovedByDefault { policy, kind } => {
                 write!(f, "removed: policy `{policy}` removes {}", removed_noun(*kind))
             }
+            Self::KeptByTag { tag } => {
+                write!(f, "kept: its text opens with the allowed tag `{tag}`")
+            }
+            Self::RemovedAsTrailing => {
+                f.write_str("removed: code comes before it on its line, and trailing comments are not allowed")
+            }
+            Self::RemovedAsExpired { tag, age, limit } => write!(
+                f,
+                "removed: `{tag}` is a promise with {limit} to keep it, and this line is {age} old"
+            ),
+            Self::RemovedByLength { lines, limit } => write!(
+                f,
+                "removed: it belongs to a run of {lines} adjacent comment lines, and at most {limit} is allowed"
+            ),
             Self::KeptStructural { language } => write!(
                 f,
                 "kept: it separates a `{language}` block scalar from the kept comment below it"
@@ -920,6 +1048,13 @@ pub struct Comment {
     pub kind: CommentKind,
     /// Whether it is removed, and why if it is not.
     pub disposition: Disposition,
+    /// The shape rule that settled it, when one did.
+    ///
+    /// `None` is the ordinary case: the policy, the kind lists and the pattern
+    /// lists decided, and all three can be read back off the comment's own
+    /// bytes. A [`ShapeRule`] cannot, so it is carried rather than guessed at.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shape: Option<ShapeRule>,
 }
 
 /// How serious a [`Diagnostic`] is.
@@ -1362,6 +1497,136 @@ pub struct AllowRules {
     /// about comments above code, which is to put the comment beside it
     /// instead.
     pub trailing: Option<bool>,
+    /// Tags that are a promise rather than a remark, and how long each has.
+    ///
+    /// A `TODO` is not the same kind of thing as a `SAFETY`. One records why
+    /// the code is the way it is and is true for as long as the code is; the
+    /// other says somebody will do something, and saying so is not doing it.
+    /// A rule that treats them alike either forbids writing a `TODO` at all —
+    /// which nobody obeys, and which loses the note along with the nagging —
+    /// or permits one forever, which is how a repository ends up with a `TODO`
+    /// from four years ago that everybody has learned to read past.
+    ///
+    /// A tag here is allowed exactly as one in [`Self::tags`] is, until the
+    /// line carrying it reaches this age; after that it is a finding. The age
+    /// is measured from the commit that introduced the line, so writing one
+    /// costs nothing and a deadline starts running only once the promise is
+    /// part of the repository. [`Age::ZERO`] therefore means "from the next
+    /// commit".
+    ///
+    /// Nothing in this crate produces the resulting verdict: measuring the age
+    /// means reading a repository, and this crate performs no I/O. It owns the
+    /// vocabulary — [`ShapeRule::Expired`] — so that a caller with a clock
+    /// reports through the same channel every other rule reports through.
+    pub expiry: BTreeMap<String, Age>,
+}
+
+impl AllowRules {
+    /// Every tag a comment may open with, whether or not it comes with a
+    /// deadline.
+    ///
+    /// A tag under [`Self::expiry`] does not have to be repeated in
+    /// [`Self::tags`]: it is allowed for as long as it is allowed, and a
+    /// configuration that had to list it twice would let the two lists
+    /// disagree.
+    pub fn every_tag(&self) -> Vec<&str> {
+        self.tags
+            .iter()
+            .map(String::as_str)
+            .chain(self.expiry.keys().map(String::as_str))
+            .collect()
+    }
+
+    /// Whether any rule here is set at all.
+    pub fn is_empty(&self) -> bool {
+        self.tags.is_empty()
+            && self.max_lines.is_none()
+            && self.trailing.is_none()
+            && self.expiry.is_empty()
+    }
+}
+
+/// How long a promise has, in days.
+///
+/// Written `"14d"` or `"2w"` in a configuration, and `"0d"` for a deadline
+/// that starts at the next commit. Days are the smallest unit because the
+/// clock this is measured against is a commit date, and nobody writes a
+/// `TODO` with an afternoon in mind.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct Age {
+    days: u32,
+}
+
+impl Age {
+    /// Due at the next commit: the line is over its deadline the moment it has
+    /// one.
+    pub const ZERO: Self = Self { days: 0 };
+
+    /// This many days.
+    pub const fn from_days(days: u32) -> Self {
+        Self { days }
+    }
+
+    /// How many days this is.
+    pub const fn days(self) -> u32 {
+        self.days
+    }
+}
+
+impl fmt::Display for Age {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}d", self.days)
+    }
+}
+
+impl FromStr for Age {
+    type Err = String;
+
+    /// `14d`, `2w`, or a bare number of days.
+    ///
+    /// The unit is required to be one a commit date can answer: an hour is not
+    /// a meaningful deadline for a line of source, and a month is not a fixed
+    /// number of days. Weeks are offered because that is how the deadline is
+    /// usually said out loud.
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let trimmed = value.trim();
+        let (digits, multiplier) = match trimmed.strip_suffix(['d', 'D']) {
+            Some(digits) => (digits, 1),
+            None => match trimmed.strip_suffix(['w', 'W']) {
+                Some(digits) => (digits, 7),
+                None => (trimmed, 1),
+            },
+        };
+        let days: u32 = digits.trim().parse().map_err(|_| {
+            format!("cannot read `{value}` as an age; write it as `14d`, `2w`, or a number of days")
+        })?;
+        days.checked_mul(multiplier)
+            .map(Self::from_days)
+            .ok_or_else(|| format!("`{value}` is too long an age to measure"))
+    }
+}
+
+impl Serialize for Age {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for Age {
+    /// Read from a string, and from a bare integer for the configuration that
+    /// writes `TODO = 14`.
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Written {
+            Text(String),
+            Days(u32),
+        }
+        match Written::deserialize(deserializer)? {
+            Written::Text(text) => text.parse().map_err(serde::de::Error::custom),
+            Written::Days(days) => Ok(Self::from_days(days)),
+        }
+    }
 }
 
 impl Default for ScanOptions {

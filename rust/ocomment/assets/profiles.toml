@@ -1,30 +1,10 @@
 version = 1
 
-# NOTE: Declarative profiles OComment ships with, for file formats whose
-# NOTE: comments are simple enough that delimiters describe them completely.
-# NOTE:
-# NOTE: These are not built-in languages and are not meant to become them. A
-# NOTE: built-in language is a hand-written scanner, and it earns that when the
-# NOTE: lexical form has something a delimiter list cannot say: a string that
-# NOTE: hides a comment token, a nesting rule, an embedded language. None of
-# NOTE: the formats here has any of that -- a `#` runs to the end of the line
-# NOTE: and that is the whole grammar -- so a profile says everything there is
-# NOTE: to say, and says it in data rather than in a `match` arm that would
-# NOTE: then have to be written twice, once in Rust and once in OCaml.
-# NOTE:
-# NOTE: They are here because of what `ocomment coverage` reports without them.
-# NOTE: A gate that says "no removable comments in 143 files" while 25 files
-# NOTE: were never opened is a gate over 85% of a repository, and the files it
-# NOTE: was missing in this one were `.gitignore`, `CODEOWNERS`, `dune` and
-# NOTE: OComment's own `.wit` interface -- every one of which holds comments.
-# NOTE:
-# NOTE: A `[profiles.<name>]` entry in a configuration wins over the profile of
-# NOTE: the same name here, so a project that disagrees with one of these can
-# NOTE: replace it rather than work around it.
+# NOTE: Declarative profiles OComment ships with, for formats whose comments a
+# NOTE: delimiter list describes completely. What they are for, why none of
+# NOTE: them is a built-in language, and what each one says: see "The profiles
+# NOTE: OComment ships with" in docs/configuration.md.
 
-# NOTE: The `#`-to-end-of-line family. Each of these formats has exactly that
-# NOTE: rule and no string form that could hide the `#`, which is why they
-# NOTE: share one profile rather than having one each.
 [profiles.hash-line]
 name = "hash-line"
 filenames = [
@@ -39,14 +19,13 @@ filenames = [
     ".editorconfig",
     ".gitmodules",
     ".ocommentignore",
+    # NOTE: OComment's own ledger.
+    ".ocomment-ledger",
 ]
 extensions = ["opam"]
 line_comments = [{ start = "#", kind = "line" }]
 
-# NOTE: Dune's configuration language is a Lisp: `;` opens a line comment and
-# NOTE: `"..."` is a string with backslash escapes, so a `;` inside one is
-# NOTE: text. `#|...|#` is block comment syntax the S-expression reader
-# NOTE: accepts, and it nests.
+# NOTE: Dune, a Lisp.
 [profiles.dune]
 name = "dune"
 filenames = ["dune", "dune-project", "dune-workspace"]
@@ -54,19 +33,11 @@ line_comments = [{ start = ";", kind = "line" }]
 block_comments = [{ start = "#|", end = "|#", nested = true, kind = "block" }]
 strings = [{ start = '"', end = '"', escape = '\' }]
 
-# NOTE: The WIT interface language of the Component Model, which OComment's own
-# NOTE: plugin contract is written in. `//` opens a line comment, `///` is a
-# NOTE: documentation comment, and `/* */` nests.
+# NOTE: WIT, the Component Model's interface language.
 [profiles.wit]
 name = "wit"
 extensions = ["wit"]
-# NOTE: `//` alone, not `///` beside it. A profile is read in one pass, so a
-# NOTE: delimiter that is a prefix of another is ambiguous and `validate_profile`
-# NOTE: refuses the pair rather than guessing -- which is the right refusal.
-# NOTE: The cost is that WIT's `///` documentation comments are reported as
-# NOTE: ordinary line comments. Telling them apart is what a built-in scanner is
-# NOTE: for, and it is not worth one for this: the comments are still found, and
-# NOTE: a project that wants the distinction can keep them with `keep_regex`.
+# NOTE: `//` alone; `///` beside it would be an ambiguous prefix.
 line_comments = [{ start = "//", kind = "line" }]
 block_comments = [{ start = "/*", end = "*/", nested = true, kind = "block" }]
 strings = [{ start = '"', end = '"', escape = '\' }]

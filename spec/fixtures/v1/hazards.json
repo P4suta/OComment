@@ -12185,6 +12185,174 @@
         ],
         "diagnostics": []
       }
+    },
+    {
+      "id": "allow-rules-a-blank-line-ends-a-run",
+      "language": "rust",
+      "operation": "scan",
+      "options": {
+        "policy": "conservative",
+        "allow": {
+          "tags": [
+            "NOTE"
+          ],
+          "max_lines": 1
+        }
+      },
+      "source_utf8": "// NOTE: first remark.\n\n// NOTE: second remark.\nfn a() {}\n\n// NOTE: third\n// NOTE: and fourth.\nfn b() {}\n",
+      "note": "A length limit measures a run of adjacent comments, and a blank line ends one: the writer put the next remark somewhere else. Two one-line remarks separated by a blank line are two one-line remarks, not a two-line paragraph with a hole in it -- counting across the gap would measure the gap, so `// a`, five blank lines and `// b` would come to seven lines of commentary with nobody having written a long comment. The pair on consecutive lines is the paragraph the rule is aimed at, and goes.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 22,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 24,
+            "end": 47,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 59,
+            "end": 73,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 74,
+            "end": 94,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "allow-rules-a-tag-is-a-word-not-a-prefix",
+      "language": "rust",
+      "operation": "scan",
+      "options": {
+        "policy": "conservative",
+        "allow": {
+          "tags": [
+            "NOTE"
+          ]
+        }
+      },
+      "source_utf8": "// NOTE: a rationale.\nfn a() {}\n// NOTEBOOK entry\nfn b() {}\n// NOTE\nfn c() {}\n",
+      "note": "`NOTE` allows a note. It does not allow `NOTEBOOK`: a tag rule that matched a bare prefix would hand a project a way through its own convention that reads like a typo, so what follows the tag has to be punctuation, space, or the end of the text. A tag written on its own line with nothing after it is still the tag.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 21,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 32,
+            "end": 49,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 60,
+            "end": 67,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "allow-rules-a-tag-with-a-deadline-is-an-allowed-tag",
+      "language": "rust",
+      "operation": "scan",
+      "options": {
+        "policy": "conservative",
+        "allow": {
+          "tags": [
+            "NOTE"
+          ],
+          "expiry": {
+            "TODO": "14d"
+          }
+        }
+      },
+      "source_utf8": "// NOTE: a rationale.\nfn a() {}\n// TODO: a promise.\nfn b() {}\n// plain\n",
+      "note": "A tag under `expiry` is an allowed tag, and both implementations have to agree that it is. Whether the deadline has passed is a different question and neither of them can answer it: the age of a line is the age of the commit that added it, and reading a repository is I/O that neither the Rust core nor this reference performs. A caller with a clock takes the comment back afterwards, through the same `ShapeRule` channel.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 21,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 32,
+            "end": 51,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 62,
+            "end": 70,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "allow-rules-shape-rules-do-not-reach-a-directive-or-a-named-comment",
+      "language": "python",
+      "operation": "scan",
+      "options": {
+        "policy": "conservative",
+        "keep_regex": [
+          "^# pinned "
+        ],
+        "allow": {
+          "max_lines": 1,
+          "trailing": false
+        }
+      },
+      "source_utf8": "x = 1  # noqa: E501\ny = 2  # pinned by the updater\nz = 3  # an aside\n",
+      "note": "`trailing = false` is a rule about commentary, and neither of the first two lines carries any. A directive is addressed to a tool and a tool reads it where it sits: `# noqa` silences a warning about the line it is on and silences nothing a line above it, so removing one for being trailing would change what the build does. The second is named by a `keep_regex`, which is a project saying keep exactly this; a shape rule is a project saying keep things like this, and the specific wins. The third is the comment the rule is aimed at.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 7,
+            "end": 19,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 27,
+            "end": 50,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 58,
+            "end": 68,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
     }
   ]
 }
