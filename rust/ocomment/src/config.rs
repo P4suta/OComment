@@ -2,7 +2,7 @@ use anyhow::{Context, Result, anyhow, bail, ensure};
 use globset::{Glob, GlobMatcher};
 use ocomment_core::{
     AllowRules, CommentKind, DeclarativeProfile, Dialect, DispositionExplanation, Language, Layout,
-    Policy, ScanOptions, TransformOptions, validate_profile,
+    Policy, ProtectedPattern, ScanOptions, TransformOptions, validate_profile,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -75,6 +75,9 @@ pub struct PolicyConfig {
     /// What a comment has to be to survive, beyond what its kind decides.
     #[serde(default)]
     pub allow: AllowRules,
+    /// Markers this project's own tools read; see [`ScanOptions::protected`].
+    #[serde(default)]
+    pub protected: Vec<ProtectedPattern>,
 }
 
 impl Default for PolicyConfig {
@@ -93,6 +96,7 @@ impl Default for PolicyConfig {
             force_invalid: false,
             force_protected: false,
             allow: AllowRules::default(),
+            protected: Vec::new(),
         }
     }
 }
@@ -575,6 +579,7 @@ impl ResolvedConfig {
             keep_regex,
             remove_regex,
             allow,
+            protected: self.config.policy.protected.clone(),
         };
         Ok((chosen_language, TransformOptions { scan, layout }))
     }

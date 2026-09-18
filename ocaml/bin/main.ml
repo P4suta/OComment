@@ -177,7 +177,14 @@ let options json =
             expiring_tags = (match Yojson.Safe.Util.member "expiry" allow with
               | `Assoc entries -> List.map fst entries
               | _ -> []) }
-        | _ -> { tags = []; max_lines = None; trailing = None; expiring_tags = [] }) }; layout } : transform_options)
+        | _ -> { tags = []; max_lines = None; trailing = None; expiring_tags = [] });
+      (* NOTE: Read from the same JSON the Rust driver reads; `contains` is the
+         field name the shared schema uses. *)
+      protected = list_or_empty "protected" json |> List.map (fun item ->
+        ({ pattern = member_string "contains" item; reason = member_string "reason" item;
+           tier = (match Yojson.Safe.Util.member "tier" item with
+             | `String "load-bearing" -> ProfileLoadBearing
+             | _ -> Tool) } : protected_pattern)) }; layout } : transform_options)
 
 let handle json =
   let id = Yojson.Safe.Util.member "id" json in

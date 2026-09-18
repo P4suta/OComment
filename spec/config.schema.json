@@ -30,7 +30,8 @@
         "remove_regex": { "$ref": "#/$defs/strings" },
         "force_invalid": { "type": "boolean", "default": false },
         "force_protected": { "type": "boolean", "default": false },
-        "allow": { "$ref": "#/$defs/allowRules" }
+        "allow": { "$ref": "#/$defs/allowRules" },
+        "protected": { "type": "array", "items": { "$ref": "#/$defs/protectedPattern" } }
       }
     },
     "git": {

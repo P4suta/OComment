@@ -49,6 +49,14 @@ type allow_rules = {
   expiring_tags : string list;
 }
 
+(* NOTE: How strongly a protected pattern asks for its comment.  The weaker
+   tier records it as a directive that every policy but `all` keeps; the
+   stronger one records it as a comment no policy reaches. *)
+type protection_tier = Tool | ProfileLoadBearing
+
+type protected_pattern =
+  { pattern : string; reason : string; tier : protection_tier }
+
 type scan_options = {
   policy : policy;
   dialect : dialect;
@@ -59,6 +67,11 @@ type scan_options = {
   keep_regex : string list;
   remove_regex : string list;
   allow : allow_rules;
+  (* NOTE: Markers this project's own tools read.  The catalogue this
+     implementation ships knows the tools everybody uses and cannot know yours,
+     and a `keep_regex` leaves the comment ordinary -- which `all` is entitled
+     to remove.  A pattern here decides what the comment is. *)
+  protected : protected_pattern list;
 }
 
 type transform_options = { scan : scan_options; layout : layout }
@@ -76,10 +89,6 @@ type string_delimiter = { string_start : string; string_end : string; escape : s
    the policy cannot: a marker their toolchain reads is not a marker their
    linter reads.  Without it every profile protection was the weaker one and
    `all` took a marker a build depended on. *)
-type protection_tier = Tool | ProfileLoadBearing
-
-type protected_pattern =
-  { pattern : string; reason : string; tier : protection_tier }
 type declarative_profile = {
   name : string; extensions : string list; line_comments : line_delimiter list;
   block_comments : block_delimiter list; strings : string_delimiter list;

@@ -64,6 +64,17 @@ All notable changes to OComment will be documented here. The project follows
   witnesses that their generators reach the case each property is about, and a
   negative control for the one property whose claim is that nothing was found.
 
+- `[policy] protected` names the markers your own tools read, and decides what
+  those comments *are*. The catalogue knows the tools everybody uses and cannot
+  know yours, and `keep_regex` cannot stand in for one: a pattern holds a
+  comment back and leaves it an ordinary line comment, so `--policy all` —
+  having said it would take every comment — takes it, and a build that read the
+  marker stops reading it. An entry records it under a kind instead:
+  `tier = "tool"` makes it a `directive`, which every policy but `all` keeps,
+  and `tier = "load-bearing"` makes it one no policy reaches. `reason` is what
+  the report prints, in your words. The same field a declarative profile
+  carries, applied to every file rather than to one format.
+
 ### Changed
 
 - `--format json` and `--format jsonl` no longer carry the source map unless

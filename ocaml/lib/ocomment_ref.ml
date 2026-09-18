@@ -79,6 +79,14 @@ type allow_rules = {
   expiring_tags : string list;
 }
 
+(* NOTE: How strongly a protected pattern asks for its comment.  The weaker
+   tier records it as a directive that every policy but `all` keeps; the
+   stronger one records it as a comment no policy reaches. *)
+type protection_tier = Tool | ProfileLoadBearing
+
+type protected_pattern =
+  { pattern : string; reason : string; tier : protection_tier }
+
 type scan_options = {
   policy : policy;
   dialect : dialect;
@@ -89,6 +97,10 @@ type scan_options = {
   keep_regex : string list;
   remove_regex : string list;
   allow : allow_rules;
+  (* NOTE: Markers this project's own tools read.  A `keep_regex` leaves the
+     comment ordinary, which `all` is entitled to remove; a pattern here
+     decides what the comment is. *)
+  protected : protected_pattern list;
 }
 
 type transform_options = { scan : scan_options; layout : layout }
@@ -123,10 +135,6 @@ type string_delimiter = {
    the policy cannot: a marker their toolchain reads is not a marker their
    linter reads.  Without it every profile protection was the weaker one and
    `all` took a marker a build depended on. *)
-type protection_tier = Tool | ProfileLoadBearing
-
-type protected_pattern =
-  { pattern : string; reason : string; tier : protection_tier }
 
 type declarative_profile = {
   name : string;
@@ -141,6 +149,7 @@ let default_scan_options = {
   policy = Conservative; dialect = Standard; force_invalid = false; force_protected = false;
   keep_kinds = []; remove_kinds = []; keep_regex = []; remove_regex = [];
   allow = { tags = []; max_lines = None; trailing = None; expiring_tags = [] };
+  protected = [];
 }
 
 let default_transform_options = { scan = default_scan_options; layout = Lines }
@@ -344,6 +353,22 @@ let contains text needle =
     index + needle_length <= text_length &&
     (String.sub text index needle_length = needle || loop (index + 1))
   in needle_length = 0 || loop 0
+
+(* NOTE: The kind and the verdict, with `options.protected` given the first
+   word: a configured marker decides what the comment *is* and not merely what
+   happens to it.  The reason on the keep is the project's own words, as a
+   declarative profile's is. *)
+let claim options kind raw =
+  match List.find_opt (fun item -> contains raw item.pattern) options.protected with
+  | None -> (kind, disposition options kind raw)
+  | Some protected ->
+    let kind = match protected.tier with
+      | Tool -> Directive
+      | ProfileLoadBearing -> LoadBearing in
+    let decided = match disposition options kind raw with
+      | Keep _ -> Keep protected.reason
+      | Remove -> Remove in
+    (kind, decided)
 
 (* NOTE: The scalars Unicode gives the White_Space property.  Rust's
    `str::trim` removes every one of them and OCaml's `String.trim` removes five
@@ -798,7 +823,8 @@ let add_comment accumulator source language options lexical start finish =
   let finish = max start (min finish (Bytes.length source)) in
   let kind = classify source language lexical start finish in
   let raw = Bytes.sub_string source start (finish - start) in
-  accumulator.comments_rev <- { span = { start; finish }; kind; disposition = disposition options kind raw; shape = None } :: accumulator.comments_rev
+  let kind, decided = claim options kind raw in
+  accumulator.comments_rev <- { span = { start; finish }; kind; disposition = decided; shape = None } :: accumulator.comments_rev
 
 let add_error accumulator code message start finish =
   accumulator.diagnostics_rev <- { code; message; severity = Error; span = { start; finish } } :: accumulator.diagnostics_rev

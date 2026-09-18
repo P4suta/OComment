@@ -150,7 +150,7 @@ pub struct StringDelimiter {
 /// A comment whose text contains it is recorded under the kind its
 /// [`ProtectionTier`] names, and `reason` becomes the reason on its
 /// [`Disposition::Keep`](crate::Disposition::Keep).
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProtectedPattern {
     /// The substring to look for, compared against the comment's text as

@@ -1450,6 +1450,26 @@ pub struct ScanOptions {
     pub remove_regex: Vec<String>,
     /// What a comment has to be to survive, beyond what its kind decides.
     pub allow: AllowRules,
+    /// Markers this project's own tools read, and how strongly each is held.
+    ///
+    /// A directive is a comment addressed to a tool, and the catalogue of them
+    /// this crate ships knows the tools everybody uses. It cannot know yours.
+    /// A project whose mutation tester reads `// rust-mutants: skip` had only
+    /// `keep_regex` to protect it, and a pattern does not change what the
+    /// comment *is*: the comment stayed an ordinary line comment that
+    /// `--policy all` was entitled to remove, and the project's own build read
+    /// something the tool had decided was prose.
+    ///
+    /// A pattern here decides the comment's kind. The weaker tier records it
+    /// as [`CommentKind::Directive`], which every policy but
+    /// [`Policy::All`] keeps; the stronger one records it as
+    /// [`CommentKind::LoadBearing`], which no policy reaches and only
+    /// [`Self::force_protected`] gives up. This is the same field a
+    /// [`DeclarativeProfile`](crate::DeclarativeProfile) carries, applied to
+    /// every file rather than to one format — the question a profile answers
+    /// about its own syntax is the question a project answers about its own
+    /// tooling.
+    pub protected: Vec<crate::ProtectedPattern>,
 }
 
 /// What a comment has to be, beyond being of a kind the policy keeps.
@@ -1641,6 +1661,7 @@ impl Default for ScanOptions {
             keep_regex: Vec::new(),
             remove_regex: Vec::new(),
             allow: AllowRules::default(),
+            protected: Vec::new(),
         }
     }
 }

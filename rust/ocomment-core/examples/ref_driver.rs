@@ -94,6 +94,7 @@ fn handle(request: &Value) -> Result<Value, String> {
         /* NOTE: Read through the type's own deserializer, so a fixture can ask
          * for these and the OCaml reference is held to the same answer. */
         allow: option_enum(options_value, "allow")?.unwrap_or_default(),
+        protected: option_enum(options_value, "protected")?.unwrap_or_default(),
     };
     match operation {
         "apply_edits" => {

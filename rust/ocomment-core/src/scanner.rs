@@ -754,7 +754,7 @@ impl<'a> Scanner<'a> {
             self.offset,
         );
         let raw = &self.source[start..end];
-        let disposition = disposition(kind, &self.options, raw, &self.patterns);
+        let (kind, disposition) = claim(kind, &self.options, raw, &self.patterns);
         self.comments.push(Comment {
             span: ByteSpan::new(start + self.offset, end + self.offset),
             kind,
@@ -6417,6 +6417,40 @@ fn bundler_is_load_bearing(name: &str) -> bool {
             | "#__no_side_effects__"
             | "__no_side_effects__"
     )
+}
+
+/// The kind and the verdict, with [`ScanOptions::protected`] given the first
+/// word.
+///
+/// A configured marker decides what the comment *is* and not merely what
+/// happens to it, which is the whole point: a project whose build reads
+/// `// my-tool: keep` needs that comment to be a directive, because a
+/// `keep_regex` leaves it an ordinary line comment that `--policy all` is
+/// entitled to remove. The reason on the keep is the project's own words, as
+/// a declarative profile's is.
+pub(crate) fn claim(
+    kind: CommentKind,
+    options: &ScanOptions,
+    raw: &[u8],
+    patterns: &DispositionPatterns,
+) -> (CommentKind, Disposition) {
+    if options.protected.is_empty() {
+        return (kind, disposition(kind, options, raw, patterns));
+    }
+    let text = String::from_utf8_lossy(raw);
+    let claimed = options
+        .protected
+        .iter()
+        .find(|pattern| text.contains(&pattern.contains));
+    let Some(pattern) = claimed else {
+        return (kind, disposition(kind, options, raw, patterns));
+    };
+    let kind = pattern.tier.kind();
+    let mut decided = disposition(kind, options, raw, patterns);
+    if let Disposition::Keep { reason } = &mut decided {
+        *reason = pattern.reason.clone();
+    }
+    (kind, decided)
 }
 
 pub(crate) fn disposition(

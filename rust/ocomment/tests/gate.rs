@@ -190,3 +190,52 @@ fn only_a_fix_reports_comments_removed() {
     assert_eq!(fixed["comments_removed"], 1);
     assert_eq!(fixed["files_changed"], 1);
 }
+
+/// A project's own tools are in nobody's catalogue, and `keep_regex` cannot
+/// stand in for one: a pattern leaves the comment ordinary, and `--policy all`
+/// is entitled to an ordinary comment.
+#[test]
+fn a_project_can_name_the_markers_its_own_tools_read() {
+    let directory = tempfile::tempdir().expect("a temporary directory");
+    let path = directory.path();
+    fs::write(
+        path.join(".ocomment.toml"),
+        br#"version = 1
+
+[policy]
+mode = "all"
+keep_regex = ['^// pattern-only']
+protected = [
+  { contains = "rust-mutants:", reason = "read by the mutation tester", tier = "load-bearing" },
+  { contains = "my-linter:", reason = "read by our linter" },
+]
+"#,
+    )
+    .expect("writable");
+    fs::write(
+        path.join("a.rs"),
+        b"// rust-mutants: skip\nfn a() {}\n// my-linter: allow\nfn b() {}\n// pattern-only\nfn c() {}\n",
+    )
+    .expect("writable");
+
+    let output = run(path, &["scan", "a.rs"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("load-bearing keep (read by the mutation tester)"),
+        "the stronger tier did not survive `--policy all`, and the project's own \
+         words are not on the line:\n{stdout}"
+    );
+    /* NOTE: The weaker tier is a directive, and `all` -- having said it would
+     * take every comment -- takes it. That is the difference the two tiers are
+     * for, and it is why declaring the stronger one has to be an act. */
+    assert!(
+        stdout.contains("directive remove"),
+        "the weaker tier was not reached:\n{stdout}"
+    );
+    /* NOTE: What a `keep_regex` can do, for contrast: it holds the comment
+     * back but leaves it an ordinary line comment. */
+    assert!(
+        stdout.contains("line keep"),
+        "a keep_regex no longer holds a comment back:\n{stdout}"
+    );
+}

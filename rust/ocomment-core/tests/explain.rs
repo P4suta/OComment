@@ -15,8 +15,8 @@
 
 use ocomment_core::{
     Action, Age, AllowRules, CommentKind, DispositionExplanation, DispositionPatterns, Language,
-    Policy, ScanOptions, explain_comment, explain_comment_with, explain_disposition,
-    explain_disposition_with, scan,
+    Policy, ProtectedPattern, ProtectionTier, ScanOptions, explain_comment, explain_comment_with,
+    explain_disposition, explain_disposition_with, scan,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -81,6 +81,7 @@ fn every_option_is_classified(options: ScanOptions) {
         keep_regex: _,
         remove_regex: _,
         allow: _,
+        protected: _,
         /* NOTE: Out of reach, and for the same reason in both cases: neither
          * changes any verdict. `dialect` chooses which bytes lex as a comment
          * and `force_invalid` chooses whether an edit is applied to a file
@@ -156,6 +157,24 @@ fn option_variants() -> Vec<ScanOptions> {
                     ..base.clone()
                 });
             }
+            /* NOTE: A project's own markers, one per tier. The fixtures carry
+             * `ordinary` and `Copyright`, so both arms are reached and the
+             * stronger tier is reached under every policy including `all`. */
+            variants.push(ScanOptions {
+                protected: vec![
+                    ProtectedPattern {
+                        contains: "ordinary".into(),
+                        reason: "read by our linter".into(),
+                        tier: ProtectionTier::Tool,
+                    },
+                    ProtectedPattern {
+                        contains: "Copyright".into(),
+                        reason: "read by our build".into(),
+                        tier: ProtectionTier::LoadBearing,
+                    },
+                ],
+                ..base
+            });
         }
     }
     for options in &variants {

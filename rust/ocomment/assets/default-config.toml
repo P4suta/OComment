@@ -40,6 +40,17 @@ force_protected = false
 # TODO = "14d"
 # FIXME = "7d"
 
+# Markers your own tools read. A pattern here decides what the comment *is*:
+# `tier = "tool"` records it as a directive, which every policy but `all`
+# keeps, and `tier = "load-bearing"` records it as one no policy reaches. A
+# `keep_regex` cannot do this -- it leaves the comment ordinary, and `--policy
+# all` is entitled to an ordinary comment.
+#
+# protected = [
+#   { contains = "rust-mutants:", reason = "read by the mutation tester", tier = "load-bearing" },
+#   { contains = "my-linter:", reason = "read by our linter" },
+# ]
+
 # A different decision for one part of the tree. Every entry whose `paths`
 # match is applied in order, over `[policy]` above, and each may set any of
 # `policy`, `layout`, `language`, `dialect`, `keep_kind`, `remove_kind`,
