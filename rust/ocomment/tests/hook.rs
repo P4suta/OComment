@@ -66,7 +66,7 @@ fn the_verb_on_each_line_is_the_rule_that_decided_the_comment() {
     );
     assert_eq!(code, 1, "findings exit 1: {stdout}{stderr}");
     assert!(
-        stdout.contains("sample.rs:1:1 shorten to 1 line: // a paragraph"),
+        stdout.contains("FINDING sample.rs:1-2") && stdout.contains("shorten to 1 line"),
         "a comment that only had to be shorter was not reported that way:\n{stdout}"
     );
     /* NOTE: Tagged, so the tag rule kept it and the trailing rule took it back.
@@ -74,11 +74,12 @@ fn the_verb_on_each_line_is_the_rule_that_decided_the_comment() {
      * removed by the policy and would still be removed a line higher up, so
      * telling a reader to move that one would be wrong advice. */
     assert!(
-        stdout.contains("sample.rs:4:11 move above the code: // NOTE: beside code"),
+        stdout.contains("move it above the code, or drop it")
+            && stdout.contains("FINDING sample.rs:4"),
         "a comment that only had to move was not reported that way:\n{stdout}"
     );
     assert!(
-        stdout.contains("sample.rs:6:1 remove: // plain"),
+        stdout.contains("FINDING sample.rs:6") && stdout.contains("- // plain"),
         "a comment the policy removed was not reported that way:\n{stdout}"
     );
     assert!(
@@ -158,7 +159,7 @@ fn a_write_that_would_add_a_comment_is_refused_before_it_happens() {
     /* NOTE: The file does not hold these bytes and may not exist, so `fix`
      * would be sent at something that is not there. */
     assert!(
-        reason.contains("next: write it without them."),
+        reason.contains("not on disk yet: write it without them"),
         "the refusal sent the reader to a file that does not hold these bytes:\n{reason}"
     );
     assert!(
@@ -213,7 +214,7 @@ fn an_edit_is_judged_by_what_the_file_would_become() {
      * replacement: the hook judges the whole file, so the position it reports
      * is the one the reader will find. */
     assert!(
-        reason.contains("sample.rs:2:1 shorten to 1 line: // explains b"),
+        reason.contains("sample.rs:2-3"),
         "the report is not in the coordinates of the file:\n{reason}"
     );
     assert_eq!(
@@ -248,7 +249,7 @@ fn a_comment_that_lands_is_reported_back_after_the_fact() {
         "the correction does not say what to do:\n{stderr}"
     );
     assert!(
-        stderr.contains("next: edit them, or run `ocomment fix"),
+        stderr.contains("REMOVE-ALL [\"ocomment\",\"fix\"]"),
         "the file is on the disk, so `fix` is a way to do it:\n{stderr}"
     );
 }

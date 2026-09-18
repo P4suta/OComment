@@ -245,7 +245,7 @@ Edit a file that failed to scan, outside the bytes the failure covers. What the 
 Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 .SH OUTPUT
 .TP
-\fB\-\-format\fR \fI<FORMAT>\fR [default: human]
+\fB\-\-format\fR \fI<FORMAT>\fR [default: review]
 Output encoding
 .br
 
@@ -253,7 +253,9 @@ Output encoding
 \fIPossible values:\fR
 .RS 14
 .IP \(bu 2
-human
+human: Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+.IP \(bu 2
+review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
 .IP \(bu 2
 json
 .IP \(bu 2

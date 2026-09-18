@@ -217,14 +217,15 @@ Output:
           Output encoding
 
           Possible values:
-          - human
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
           - json
           - jsonl
           - sarif
           - github
           - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -461,14 +462,15 @@ Output:
           Output encoding
 
           Possible values:
-          - human
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
           - json
           - jsonl
           - sarif
           - github
           - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -690,14 +692,15 @@ Output:
           Output encoding
 
           Possible values:
-          - human
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
           - json
           - jsonl
           - sarif
           - github
           - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -911,14 +914,15 @@ Output:
           Output encoding
 
           Possible values:
-          - human
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
           - json
           - jsonl
           - sarif
           - github
           - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -1132,14 +1136,15 @@ Output:
           Output encoding
 
           Possible values:
-          - human
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
           - json
           - jsonl
           - sarif
           - github
           - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -1340,14 +1345,15 @@ Output:
           Output encoding
 
           Possible values:
-          - human
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
           - json
           - jsonl
           - sarif
           - github
           - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -1548,14 +1554,15 @@ Output:
           Output encoding
 
           Possible values:
-          - human
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
           - json
           - jsonl
           - sarif
           - github
           - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -1772,14 +1779,15 @@ Output:
           Output encoding
 
           Possible values:
-          - human
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
           - json
           - jsonl
           - sarif
           - github
           - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -1987,14 +1995,15 @@ Output:
           Output encoding
 
           Possible values:
-          - human
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
           - json
           - jsonl
           - sarif
           - github
           - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -2195,14 +2204,15 @@ Output:
           Output encoding
 
           Possible values:
-          - human
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
           - json
           - jsonl
           - sarif
           - github
           - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -2412,14 +2422,15 @@ Output:
           Output encoding
 
           Possible values:
-          - human
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
           - json
           - jsonl
           - sarif
           - github
           - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -2633,14 +2644,15 @@ Output:
           Output encoding
 
           Possible values:
-          - human
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
           - json
           - jsonl
           - sarif
           - github
           - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -2845,14 +2857,15 @@ Output:
           Output encoding
 
           Possible values:
-          - human
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
           - json
           - jsonl
           - sarif
           - github
           - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -3053,14 +3066,15 @@ Output:
           Output encoding
 
           Possible values:
-          - human
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
           - json
           - jsonl
           - sarif
           - github
           - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -3265,14 +3279,15 @@ Output:
           Output encoding
 
           Possible values:
-          - human
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
           - json
           - jsonl
           - sarif
           - github
           - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -3477,14 +3492,15 @@ Output:
           Output encoding
 
           Possible values:
-          - human
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
           - json
           - jsonl
           - sarif
           - github
           - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -3689,14 +3705,15 @@ Output:
           Output encoding
 
           Possible values:
-          - human
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
           - json
           - jsonl
           - sarif
           - github
           - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -3903,14 +3920,15 @@ Output:
           Output encoding
 
           Possible values:
-          - human
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
           - json
           - jsonl
           - sarif
           - github
           - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -4124,14 +4142,15 @@ Output:
           Output encoding
 
           Possible values:
-          - human
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
           - json
           - jsonl
           - sarif
           - github
           - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -4345,14 +4364,15 @@ Output:
           Output encoding
 
           Possible values:
-          - human
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
           - json
           - jsonl
           - sarif
           - github
           - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -4569,14 +4589,15 @@ Output:
           Output encoding
 
           Possible values:
-          - human
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
           - json
           - jsonl
           - sarif
           - github
           - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -4784,14 +4805,15 @@ Output:
           Output encoding
 
           Possible values:
-          - human
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
           - json
           - jsonl
           - sarif
           - github
           - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -4992,14 +5014,15 @@ Output:
           Output encoding
 
           Possible values:
-          - human
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
           - json
           - jsonl
           - sarif
           - github
           - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -5200,14 +5223,15 @@ Output:
           Output encoding
 
           Possible values:
-          - human
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
           - json
           - jsonl
           - sarif
           - github
           - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -5408,14 +5432,15 @@ Output:
           Output encoding
 
           Possible values:
-          - human
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
           - json
           - jsonl
           - sarif
           - github
           - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output

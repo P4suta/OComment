@@ -4,6 +4,7 @@
 //! The engine that decides what a comment is has none and lives in
 //! `ocomment-core`.
 
+mod advice;
 mod atomic;
 mod cli;
 mod config;

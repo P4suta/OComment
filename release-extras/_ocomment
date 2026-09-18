@@ -95,7 +95,8 @@ optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
-'--format=[Output encoding]:FORMAT:((human\:""
+'--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
+review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
 jsonl\:""
 sarif\:""
@@ -220,7 +221,8 @@ optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
-'--format=[Output encoding]:FORMAT:((human\:""
+'--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
+review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
 jsonl\:""
 sarif\:""
@@ -338,7 +340,8 @@ optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
-'--format=[Output encoding]:FORMAT:((human\:""
+'--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
+review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
 jsonl\:""
 sarif\:""
@@ -459,7 +462,8 @@ optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
-'--format=[Output encoding]:FORMAT:((human\:""
+'--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
+review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
 jsonl\:""
 sarif\:""
@@ -577,7 +581,8 @@ optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
-'--format=[Output encoding]:FORMAT:((human\:""
+'--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
+review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
 jsonl\:""
 sarif\:""
@@ -694,7 +699,8 @@ optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
-'--format=[Output encoding]:FORMAT:((human\:""
+'--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
+review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
 jsonl\:""
 sarif\:""
@@ -808,7 +814,8 @@ optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
-'--format=[Output encoding]:FORMAT:((human\:""
+'--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
+review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
 jsonl\:""
 sarif\:""
@@ -922,7 +929,8 @@ optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
-'--format=[Output encoding]:FORMAT:((human\:""
+'--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
+review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
 jsonl\:""
 sarif\:""
@@ -1040,7 +1048,8 @@ optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
-'--format=[Output encoding]:FORMAT:((human\:""
+'--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
+review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
 jsonl\:""
 sarif\:""
@@ -1155,7 +1164,8 @@ optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
-'--format=[Output encoding]:FORMAT:((human\:""
+'--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
+review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
 jsonl\:""
 sarif\:""
@@ -1269,7 +1279,8 @@ optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
-'--format=[Output encoding]:FORMAT:((human\:""
+'--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
+review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
 jsonl\:""
 sarif\:""
@@ -1394,7 +1405,8 @@ optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
-'--format=[Output encoding]:FORMAT:((human\:""
+'--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
+review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
 jsonl\:""
 sarif\:""
@@ -1509,7 +1521,8 @@ optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
-'--format=[Output encoding]:FORMAT:((human\:""
+'--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
+review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
 jsonl\:""
 sarif\:""
@@ -1624,7 +1637,8 @@ optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
-'--format=[Output encoding]:FORMAT:((human\:""
+'--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
+review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
 jsonl\:""
 sarif\:""
@@ -1738,7 +1752,8 @@ optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
-'--format=[Output encoding]:FORMAT:((human\:""
+'--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
+review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
 jsonl\:""
 sarif\:""
@@ -1853,7 +1868,8 @@ optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
-'--format=[Output encoding]:FORMAT:((human\:""
+'--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
+review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
 jsonl\:""
 sarif\:""
@@ -1968,7 +1984,8 @@ optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
-'--format=[Output encoding]:FORMAT:((human\:""
+'--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
+review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
 jsonl\:""
 sarif\:""
@@ -2131,7 +2148,8 @@ optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
-'--format=[Output encoding]:FORMAT:((human\:""
+'--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
+review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
 jsonl\:""
 sarif\:""
@@ -2247,7 +2265,8 @@ optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
-'--format=[Output encoding]:FORMAT:((human\:""
+'--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
+review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
 jsonl\:""
 sarif\:""
@@ -2365,7 +2384,8 @@ optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
-'--format=[Output encoding]:FORMAT:((human\:""
+'--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
+review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
 jsonl\:""
 sarif\:""
@@ -2483,7 +2503,8 @@ optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
-'--format=[Output encoding]:FORMAT:((human\:""
+'--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
+review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
 jsonl\:""
 sarif\:""
@@ -2601,7 +2622,8 @@ optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
-'--format=[Output encoding]:FORMAT:((human\:""
+'--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
+review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
 jsonl\:""
 sarif\:""
@@ -2716,7 +2738,8 @@ optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
-'--format=[Output encoding]:FORMAT:((human\:""
+'--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
+review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
 jsonl\:""
 sarif\:""
@@ -2830,7 +2853,8 @@ optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
-'--format=[Output encoding]:FORMAT:((human\:""
+'--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
+review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
 jsonl\:""
 sarif\:""
@@ -2944,7 +2968,8 @@ optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
 '*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
-'--format=[Output encoding]:FORMAT:((human\:""
+'--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
+review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
 jsonl\:""
 sarif\:""

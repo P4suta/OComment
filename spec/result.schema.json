@@ -3,174 +3,546 @@
   "$id": "https://ocomment.dev/schema/result-v1.json",
   "title": "OComment JSON output v1",
   "oneOf": [
-    { "$ref": "#/$defs/envelope" },
-    { "$ref": "#/$defs/file" },
-    { "$ref": "#/$defs/skip" }
+    {
+      "$ref": "#/$defs/envelope"
+    },
+    {
+      "$ref": "#/$defs/file"
+    },
+    {
+      "$ref": "#/$defs/skip"
+    }
   ],
   "$defs": {
     "envelope": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["version", "files", "skipped"],
+      "required": [
+        "version",
+        "files",
+        "skipped"
+      ],
       "properties": {
-        "version": { "const": 1 },
-        "files": { "type": "array", "items": { "$ref": "#/$defs/file" } },
-        "skipped": { "type": "array", "items": { "$ref": "#/$defs/skipBody" } }
+        "version": {
+          "const": 1
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/file"
+          }
+        },
+        "skipped": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/skipBody"
+          }
+        },
+        "decisions": {
+          "type": "array",
+          "description": "The findings grouped by the question each one asks of its author. `files` says where every comment is and what was decided about it; this says what to do about it. The unit is the decision rather than the finding, because four comments under one question are one edit made four times, and a caller reading them one at a time has to rebuild that before it can start. Absent when there is nothing to answer for.",
+          "items": {
+            "$ref": "#/$defs/decision"
+          }
+        }
       }
     },
     "file": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["path", "language", "changed", "report", "edits"],
+      "required": [
+        "path",
+        "language",
+        "changed",
+        "report",
+        "edits"
+      ],
       "properties": {
-        "path": { "type": "string" },
-        "language": { "$ref": "#/$defs/language" },
-        "changed": { "type": "boolean" },
-        "report": { "$ref": "#/$defs/report" },
-        "edits": { "type": "array", "items": { "$ref": "#/$defs/edit" } },
-        "source_map": { "$ref": "#/$defs/sourceMap" }
+        "path": {
+          "type": "string"
+        },
+        "language": {
+          "$ref": "#/$defs/language"
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "report": {
+          "$ref": "#/$defs/report"
+        },
+        "edits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/edit"
+          }
+        },
+        "source_map": {
+          "$ref": "#/$defs/sourceMap"
+        }
       }
     },
     "skip": {
       "allOf": [
-        { "$ref": "#/$defs/skipBody" },
-        { "type": "object", "required": ["type"], "properties": { "type": { "const": "skip" } } }
+        {
+          "$ref": "#/$defs/skipBody"
+        },
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "skip"
+            }
+          }
+        }
       ]
     },
     "skipBody": {
       "type": "object",
-      "required": ["path", "reason", "error"],
+      "required": [
+        "path",
+        "reason",
+        "error"
+      ],
       "properties": {
-        "type": { "const": "skip" },
-        "path": { "type": "string" },
-        "reason": { "type": "string" },
-        "error": { "type": "boolean" }
+        "type": {
+          "const": "skip"
+        },
+        "path": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "error": {
+          "type": "boolean"
+        }
       }
     },
     "report": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["language", "comments", "diagnostics", "valid"],
+      "required": [
+        "language",
+        "comments",
+        "diagnostics",
+        "valid"
+      ],
       "properties": {
-        "language": { "$ref": "#/$defs/language" },
-        "comments": { "type": "array", "items": { "$ref": "#/$defs/comment" } },
-        "diagnostics": { "type": "array", "items": { "$ref": "#/$defs/diagnostic" } },
-        "valid": { "type": "boolean" }
+        "language": {
+          "$ref": "#/$defs/language"
+        },
+        "comments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/comment"
+          }
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/diagnostic"
+          }
+        },
+        "valid": {
+          "type": "boolean"
+        }
       }
     },
     "span": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["start", "end"],
+      "required": [
+        "start",
+        "end"
+      ],
       "properties": {
-        "start": { "type": "integer", "minimum": 0 },
-        "end": { "type": "integer", "minimum": 0 }
+        "start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 0
+        }
       }
     },
     "comment": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["span", "line", "column", "end_line", "end_column", "kind", "disposition"],
+      "required": [
+        "span",
+        "line",
+        "column",
+        "end_line",
+        "end_column",
+        "kind",
+        "disposition"
+      ],
       "properties": {
         "established": {
           "const": false,
           "description": "Present, and only ever false, on a comment the scan did not establish. `valid` says whether the lex failed; it cannot say where, and a caller acting on a verdict needs that. A scanner that cannot find the end of a token does not know where the next one starts, so an unterminated block opener is reported as a comment running to the end of the file, and the code under it is not a comment. The verdict is in the report because it is what the scanner concluded; this field is here because acting on it would delete code. `fix --force-invalid` skips exactly these comments."
         },
-        "span": { "$ref": "#/$defs/span" },
-        "line": { "type": "integer", "minimum": 1 },
-        "column": { "type": "integer", "minimum": 1 },
-        "end_line": { "type": "integer", "minimum": 1 },
-        "end_column": { "type": "integer", "minimum": 1 },
-        "kind": { "$ref": "#/$defs/kind" },
-        "text": { "type": "string" },
-        "explanation": { "$ref": "#/$defs/explanation" },
-        "disposition": { "$ref": "#/$defs/disposition" }
+        "span": {
+          "$ref": "#/$defs/span"
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "end_line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "end_column": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "kind": {
+          "$ref": "#/$defs/kind"
+        },
+        "text": {
+          "type": "string"
+        },
+        "explanation": {
+          "$ref": "#/$defs/explanation"
+        },
+        "disposition": {
+          "$ref": "#/$defs/disposition"
+        }
       }
     },
     "explanation": {
       "description": "Which rule decided the comment, written by --explain. `rule` is the rule's own name and is the field to match on; `detail` is the same rule as the human report words it and is prose. `setting` names the table and file the setting was written in, and is absent when a built-in rule decided. `next_step` is the flag that would overrule the verdict, when one would.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["rule", "detail"],
+      "required": [
+        "rule",
+        "detail"
+      ],
       "properties": {
         "rule": {
           "enum": [
-            "kept-by-kind", "kept-by-regex", "kept-by-tag", "kept-directive",
-            "kept-documentation", "kept-html", "kept-license",
-            "kept-load-bearing", "kept-structural", "protected-preamble",
-            "removed-as-expired", "removed-as-trailing", "removed-by-default",
-            "removed-by-kind", "removed-by-length", "removed-by-policy",
+            "kept-by-kind",
+            "kept-by-regex",
+            "kept-by-tag",
+            "kept-directive",
+            "kept-documentation",
+            "kept-html",
+            "kept-license",
+            "kept-load-bearing",
+            "kept-structural",
+            "protected-preamble",
+            "removed-as-expired",
+            "removed-as-trailing",
+            "removed-by-default",
+            "removed-by-kind",
+            "removed-by-length",
+            "removed-by-policy",
             "removed-by-regex"
           ]
         },
-        "detail": { "type": "string" },
-        "setting": { "type": "string" },
-        "next_step": { "type": "string" }
+        "detail": {
+          "type": "string"
+        },
+        "setting": {
+          "type": "string"
+        },
+        "next_step": {
+          "type": "string"
+        }
       }
     },
     "disposition": {
       "oneOf": [
         {
-          "type": "object", "additionalProperties": false,
-          "required": ["action"], "properties": { "action": { "const": "remove" } }
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "action"
+          ],
+          "properties": {
+            "action": {
+              "const": "remove"
+            }
+          }
         },
         {
-          "type": "object", "additionalProperties": false,
-          "required": ["action", "reason"],
-          "properties": { "action": { "const": "keep" }, "reason": { "type": "string" } }
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "action",
+            "reason"
+          ],
+          "properties": {
+            "action": {
+              "const": "keep"
+            },
+            "reason": {
+              "type": "string"
+            }
+          }
         }
       ]
     },
     "diagnostic": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["code", "message", "severity", "span", "line", "column", "end_line", "end_column"],
+      "required": [
+        "code",
+        "message",
+        "severity",
+        "span",
+        "line",
+        "column",
+        "end_line",
+        "end_column"
+      ],
       "properties": {
-        "code": { "type": "string" },
-        "message": { "type": "string" },
-        "severity": { "enum": ["error", "warning", "info", "hint"] },
-        "span": { "$ref": "#/$defs/span" },
-        "line": { "type": "integer", "minimum": 1 },
-        "column": { "type": "integer", "minimum": 1 },
-        "end_line": { "type": "integer", "minimum": 1 },
-        "end_column": { "type": "integer", "minimum": 1 }
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "hint"
+          ]
+        },
+        "span": {
+          "$ref": "#/$defs/span"
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "end_line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "end_column": {
+          "type": "integer",
+          "minimum": 1
+        }
       }
     },
     "edit": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["span", "replacement"],
+      "required": [
+        "span",
+        "replacement"
+      ],
       "properties": {
-        "span": { "$ref": "#/$defs/span" },
-        "replacement": { "type": "string" }
+        "span": {
+          "$ref": "#/$defs/span"
+        },
+        "replacement": {
+          "type": "string"
+        }
       }
     },
     "sourceMap": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["segments"],
+      "required": [
+        "segments"
+      ],
       "properties": {
         "segments": {
           "type": "array",
-          "items": { "$ref": "#/$defs/sourceMapSegment" }
+          "items": {
+            "$ref": "#/$defs/sourceMapSegment"
+          }
         }
       }
     },
     "sourceMapSegment": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["original", "output", "exact"],
+      "required": [
+        "original",
+        "output",
+        "exact"
+      ],
       "properties": {
-        "original": { "$ref": "#/$defs/span" },
-        "output": { "$ref": "#/$defs/span" },
-        "exact": { "type": "boolean" }
+        "original": {
+          "$ref": "#/$defs/span"
+        },
+        "output": {
+          "$ref": "#/$defs/span"
+        },
+        "exact": {
+          "type": "boolean"
+        }
       }
     },
     "language": {
-      "enum": ["rust", "ocaml", "c", "cpp", "go", "java", "javascript", "typescript", "python", "shell", "html", "css", "jsonc", "sql", "kotlin", "toml", "lua", "yaml", "php", "ruby", "zig", "r", "dart", "swift", "csharp", "scala", "vue", "svelte", "markdown", "perl", "unknown"]
+      "enum": [
+        "rust",
+        "ocaml",
+        "c",
+        "cpp",
+        "go",
+        "java",
+        "javascript",
+        "typescript",
+        "python",
+        "shell",
+        "html",
+        "css",
+        "jsonc",
+        "sql",
+        "kotlin",
+        "toml",
+        "lua",
+        "yaml",
+        "php",
+        "ruby",
+        "zig",
+        "r",
+        "dart",
+        "swift",
+        "csharp",
+        "scala",
+        "vue",
+        "svelte",
+        "markdown",
+        "perl",
+        "unknown"
+      ]
     },
     "kind": {
-      "enum": ["line", "block", "doc-line", "doc-block", "directive", "license", "html-comment", "shebang", "encoding", "optimizer-hint", "version-comment", "load-bearing"]
+      "enum": [
+        "line",
+        "block",
+        "doc-line",
+        "doc-block",
+        "directive",
+        "license",
+        "html-comment",
+        "shebang",
+        "encoding",
+        "optimizer-hint",
+        "version-comment",
+        "load-bearing"
+      ]
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision",
+        "instruction",
+        "comments",
+        "findings"
+      ],
+      "properties": {
+        "decision": {
+          "enum": [
+            "promise",
+            "beside-code",
+            "commented-out-code",
+            "explains-the-item-below",
+            "top-of-the-file",
+            "among-statements",
+            "expired",
+            "too-long"
+          ],
+          "description": "A stable name to branch on, unlike the sentence beside it."
+        },
+        "instruction": {
+          "type": "string",
+          "description": "The sentence the human and agent formats print."
+        },
+        "comments": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/finding"
+          }
+        },
+        "keep_instead": {
+          "$ref": "#/$defs/keepInstead",
+          "description": "The setting that would stop the question being asked. Absent for the one decision with nothing worth keeping."
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "line",
+        "end_line",
+        "old"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "end_line": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Inclusive, unlike the `end_line` on a comment: a finding is a run of adjacent comment lines and these are the lines it covers."
+        },
+        "old": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The lines as they are."
+        },
+        "new": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "What would replace them. Absent when the answer is to delete rather than to rewrite, which is not replacing them with nothing."
+        },
+        "subject": {
+          "type": "string",
+          "description": "The code the comment is about, when the decision turns on it."
+        }
+      }
+    },
+    "keepInstead": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "add"
+      ],
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "add": {
+          "type": "string"
+        }
+      }
     }
   }
 }
