@@ -2364,7 +2364,14 @@ fn note_fix_scope(resolved: &config::ResolvedConfig, common: &CommonArgs) -> Res
 /// Read from the raw arguments because clap resolves an alias to its variant
 /// and keeps no record of which spelling arrived.
 fn renamed_policy() -> Option<(String, &'static str)> {
-    let arguments: Vec<String> = std::env::args().collect();
+    /* NOTE: `args_os`, not `args`. The second panics on an argument that is not
+     * UTF-8, and the argument this tool is most often given is a path -- which
+     * on a Unix filesystem is bytes and is not obliged to be text. A spelling
+     * that cannot be read as text is simply not one of the two being looked
+     * for. */
+    let arguments: Vec<String> = std::env::args_os()
+        .map(|argument| argument.to_string_lossy().into_owned())
+        .collect();
     let mut spellings = arguments
         .iter()
         .enumerate()
