@@ -64,7 +64,54 @@ PINS = {
 USES = re.compile(r"^\s*-?\s*uses:\s*([^@\s]+)@([^\s#]+)(?:\s+#\s*(.*))?$", re.MULTILINE)
 
 
+SHELL_KEPT = frozenset({"tools/publish-crates.sh"})
+
+
+def refuse_shell_scripts(found: set[str]) -> list[str]:
+    """Complain about any of `found` that is not the release workflow's script.
+
+    A task runner is code, and the code that decides what a gate does should be
+    read and typed by the same toolchain as what it gates -- and a shell step is
+    the one thing here that would not survive the Windows job it stands in for.
+    `cargo xtask` is where a new one goes.
+
+    Takes the set rather than looking it up, so the negative control below can
+    hand it any tree at all. A rule that can only be asked about the tree it is
+    standing in is a rule that can only be watched agreeing.
+    """
+    return [
+        f"{shell} is a shell script; add a `cargo xtask` task instead"
+        for shell in sorted(found - SHELL_KEPT)
+    ]
+
+
+def shell_scripts_here() -> set[str]:
+    """Every `tools/*.sh` the repository actually holds."""
+    return {str(path.relative_to(ROOT)) for path in ROOT.glob("tools/*.sh")}
+
+
+def self_test_shell_rule() -> int:
+    """Watch the shell rule refuse something, which the tree never makes it do.
+
+    A rule whose subject has been removed reports `ok` for the same reason an
+    empty room is quiet, and that is not the gate working. Both directions are
+    asked here, of a tree made up for the purpose.
+    """
+    if not refuse_shell_scripts({"tools/reintroduced.sh"}):
+        print("the shell rule did not object to a new shell script", file=sys.stderr)
+        return 1
+    if refuse_shell_scripts(set(SHELL_KEPT)):
+        print("the shell rule objects to the release script it exempts", file=sys.stderr)
+        return 1
+    return 0
+
+
 def main() -> int:
+    # NOTE: Asked of every run rather than behind a flag. A negative control
+    # NOTE: nobody remembers to ask for is a negative control that stops
+    # NOTE: happening, and this one costs nothing.
+    if self_test_shell_rule() != 0:
+        return 1
     failures = []
     seen = set()
     for path in AUTOMATION:
@@ -155,15 +202,7 @@ def main() -> int:
     # NOTE: should be read and typed by the same toolchain as what it gates --
     # NOTE: and a shell step is the one thing here that does not survive the
     # NOTE: Windows job it stands in for. `cargo xtask` is where a new one goes.
-    SHELL_KEPT = frozenset({"tools/publish-crates.sh"})
-    shells = {
-        str(path.relative_to(ROOT))
-        for path in ROOT.glob("tools/*.sh")
-    } - SHELL_KEPT
-    for shell in sorted(shells):
-        failures.append(
-            f"{shell} is a shell script; add a `cargo xtask` task instead"
-        )
+    failures.extend(refuse_shell_scripts(shell_scripts_here()))
 
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     if not re.search(r"^FROM rust:1\.88-alpine@sha256:[0-9a-f]{64} AS builder$", dockerfile, re.MULTILINE):
@@ -343,7 +382,10 @@ def main() -> int:
     if failures:
         print("\n".join(failures), file=sys.stderr)
         return 1
-    print(f"{len(PINS)} reviewed action pins and CI/release contracts match")
+    print(
+        f"{len(PINS)} reviewed action pins and CI/release contracts match"
+        " (and the shell rule was watched refusing one)"
+    )
     return 0
 
 

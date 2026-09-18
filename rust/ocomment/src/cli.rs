@@ -1023,7 +1023,7 @@ fn run_target(
     )?;
     match operation {
         Operation::Check | Operation::Diff if output::changed(&files) => Ok(1),
-        _ => Ok(denied),
+        Operation::Check | Operation::Scan | Operation::Diff | Operation::Fix => Ok(denied),
     }
 }
 
@@ -1627,7 +1627,9 @@ fn run_config(args: ConfigArgs, common: &CommonArgs) -> Result<u8> {
                 include_str!("../assets/config.schema.json")
             ))?;
         }
-        action => {
+        action @ ConfigAction::Show
+        | action @ ConfigAction::Locate
+        | action @ ConfigAction::Explain => {
             let mut resolved = config::load(common.config.as_deref())?;
             apply_cli_overrides(&mut resolved, common);
             match action {
@@ -1845,7 +1847,9 @@ fn print_languages(common: &CommonArgs) -> Result<u8> {
                 .context("cannot render the language table as JSON")?;
             output::wrote(writeln!(stdout, "{json}"))?;
         }
-        _ => bail!("`ocomment languages` is only available with --format human or --format json"),
+        OutputFormat::Jsonl | OutputFormat::Sarif | OutputFormat::Github | OutputFormat::Agent => {
+            bail!("`ocomment languages` is only available with --format human or --format json")
+        }
     }
     output::finish(&mut stdout)?;
     Ok(0)
