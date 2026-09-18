@@ -216,6 +216,44 @@ def refuse_pipes_without_pipefail(blocks: list[tuple[int, str]], where: str) -> 
     return failures
 
 
+def refuse_a_shell_that_is_not_bash(text: str, where: str) -> list[str]:
+    """Complain about a `shell:` that is neither `bash` nor `pwsh`.
+
+    `shell: sh` is not a smaller `bash`, it is a different program: on Ubuntu it
+    is dash, and dash has no `$'...'`. `action.yml` rejects an input holding a
+    line break with `case "$2" in *$'\n'*)`, which is what stops a value from
+    writing extra lines into `GITHUB_OUTPUT`. Under dash that pattern matches
+    nothing and the check accepts the value instead of rejecting it -- measured,
+    with no error and no message.
+
+    So the shell named in a composite step is load-bearing for a security check,
+    and a change from `bash` to `sh` would look like tidying. `pwsh` is allowed
+    because the two Windows steps that use it run no shell fragment of ours.
+    """
+    failures = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        match = re.match(r"\s*shell:\s*(\S+)\s*$", line)
+        if match is None or match.group(1) in ("bash", "pwsh"):
+            continue
+        failures.append(
+            f"{where}:{number}: `shell: {match.group(1)}` -- only `bash` and `pwsh`"
+            " are reviewed here, and `sh` is dash on Ubuntu, where the line-break"
+            " check in `action.yml` silently accepts what it exists to reject"
+        )
+    return failures
+
+
+def self_test_shell_name_rule() -> int:
+    """Watch the shell-name rule refuse something the automation never says."""
+    if not refuse_a_shell_that_is_not_bash("      shell: sh\n", "made-up.yml"):
+        print("the shell-name rule did not object to `shell: sh`", file=sys.stderr)
+        return 1
+    if refuse_a_shell_that_is_not_bash("      shell: bash\n", "made-up.yml"):
+        print("the shell-name rule objects to `shell: bash`", file=sys.stderr)
+        return 1
+    return 0
+
+
 def self_test_pipefail_rule() -> int:
     """Watch the pipefail rule refuse something; the workflows never make it."""
     bad = [(1, '          set -eu\n          cargo test | tee log\n')]
@@ -233,11 +271,13 @@ def main() -> int:
     # NOTE: Asked of every run rather than behind a flag. A negative control
     # NOTE: nobody remembers to ask for is a negative control that stops
     # NOTE: happening, and this one costs nothing.
-    if (
-        self_test_shell_rule() != 0
-        or self_test_lint_rule() != 0
-        or self_test_pipefail_rule() != 0
-    ):
+    self_tests = (
+        self_test_shell_rule,
+        self_test_lint_rule,
+        self_test_pipefail_rule,
+        self_test_shell_name_rule,
+    )
+    if any(self_test() != 0 for self_test in self_tests):
         return 1
     failures = []
     seen = set()
@@ -332,12 +372,10 @@ def main() -> int:
     failures.extend(refuse_shell_scripts(shell_scripts_here()))
     failures.extend(members_missing_workspace_lints(member_manifests()))
     for workflow_path in sorted(ROOT.glob(".github/workflows/*.yml")) + [ROOT / "action.yml"]:
-        failures.extend(
-            refuse_pipes_without_pipefail(
-                run_blocks(workflow_path.read_text(encoding="utf-8")),
-                str(workflow_path.relative_to(ROOT)),
-            )
-        )
+        body = workflow_path.read_text(encoding="utf-8")
+        where = str(workflow_path.relative_to(ROOT))
+        failures.extend(refuse_pipes_without_pipefail(run_blocks(body), where))
+        failures.extend(refuse_a_shell_that_is_not_bash(body, where))
 
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     if not re.search(r"^FROM rust:1\.88-alpine@sha256:[0-9a-f]{64} AS builder$", dockerfile, re.MULTILINE):
@@ -520,7 +558,7 @@ def main() -> int:
     print(
         f"{len(PINS)} reviewed action pins and CI/release contracts match"
         f" ({len(member_manifests())} workspace members inherit the lints, and"
-        " all three self-checking rules were watched refusing one)"
+        f" all {len(self_tests)} self-checking rules were watched refusing one)"
     )
     return 0
 

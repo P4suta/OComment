@@ -105,6 +105,11 @@ runs:
       run: |
         set -euo pipefail
 
+        # NOTE: This needs `shell: bash`. `$'\n'` is a bash quoting form, and
+        # NOTE: dash -- which is `sh` on Ubuntu -- matches nothing with it, so
+        # NOTE: the check would accept a line break instead of rejecting it,
+        # NOTE: with no error. `tools/check_ci_contracts.py` refuses any other
+        # NOTE: shell here for that reason.
         reject_line_breaks() {
           case "$2" in
             *$'\n'*|*$'\r'*)
@@ -301,6 +306,11 @@ runs:
       run: |
         set -euo pipefail
 
+        # NOTE: This needs `shell: bash`. `$'\n'` is a bash quoting form, and
+        # NOTE: dash -- which is `sh` on Ubuntu -- matches nothing with it, so
+        # NOTE: the check would accept a line break instead of rejecting it,
+        # NOTE: with no error. `tools/check_ci_contracts.py` refuses any other
+        # NOTE: shell here for that reason.
         reject_line_breaks() {
           case "$2" in
             *$'\n'*|*$'\r'*)
