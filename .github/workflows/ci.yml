@@ -62,6 +62,7 @@ jobs:
           RUSTDOCFLAGS: -D warnings
         run: cargo doc --manifest-path rust/Cargo.toml --no-deps -p ocomment-core -p ocomment-plugin-sdk -p ocomment --locked
       - run: python3 tools/check_embedded_specs.py
+      - run: python3 tools/gen_selftest_corpus.py --check
       - run: python3 tools/check_hooks.py
       - run: python3 tools/check_editor_ids.py
       - run: python3 tools/check_ci_contracts.py
@@ -152,6 +153,14 @@ jobs:
           set -euo pipefail
           ./rust/target/debug/ocomment doctor
           ./rust/target/debug/ocomment config explain
+      # NOTE: The same corpus the library test and the differential run use,
+      # NOTE: asked of the executable instead. It is not a third copy of that
+      # NOTE: check: it is the one that runs where `spec/` is not on disk, which
+      # NOTE: is every machine an artefact is installed on. Running it here is
+      # NOTE: what keeps it working, because a self-test nobody runs is a
+      # NOTE: self-test that quietly stopped reaching the corpus.
+      - name: The binary re-runs the shared corpus against itself
+        run: ./rust/target/debug/ocomment selftest
       # NOTE: A bare run is the gate: it walks the repository under the ordinary
       # NOTE: hidden-file and size limits and under `.ocomment.toml`, so a new
       # NOTE: explanatory comment that carries no tag fails the build.

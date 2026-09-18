@@ -54,6 +54,7 @@ set edit:completion:arg-completer[ocomment] = {|@words|
             cand languages 'List built-in languages, extensions, and dialects'
             cand plugin 'Manage sandboxed WASM scanner plugins'
             cand completions 'Generate shell completions'
+            cand selftest 'Re-run the shared corpus against this binary and report any disagreement'
             cand doctor 'Diagnose the environment (config, git, plugins, tools)'
             cand man 'Render the roff manual page to stdout'
             cand help 'Print this message or the help of the given subcommand(s)'
@@ -530,6 +531,31 @@ set edit:completion:arg-completer[ocomment] = {|@words|
             cand -h 'Print help (see more with ''--help'')'
             cand --help 'Print help (see more with ''--help'')'
         }
+        &'ocomment;selftest'= {
+            cand --config 'Read this configuration file instead of discovering `.ocomment.toml`'
+            cand --policy 'Which classes of comment the run is allowed to remove'
+            cand --layout 'How the bytes left behind by a removed comment are laid out'
+            cand --language 'Force this language instead of detecting it from path and contents'
+            cand --dialect 'Force this dialect of the selected language'
+            cand --keep-kind 'Comma-separated comment kinds to protect on top of the policy'
+            cand --remove-kind 'Comma-separated comment kinds to remove regardless of the policy'
+            cand --format 'Output encoding'
+            cand --color 'When to colour terminal output'
+            cand --hyperlinks 'When to emit terminal hyperlinks for reported paths'
+            cand --annotation-level 'The level `--format github` annotates a removable comment at (default: the run''s exit status)'
+            cand --trace 'Record how the run reached its verdicts, on standard error'
+            cand --progress 'When to draw the live scanning counter on standard error'
+            cand --force-invalid 'Apply the edits that are still provably safe when the source fails to scan'
+            cand --force-protected 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
+            cand --no-preview 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
+            cand --explain 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+            cand -q 'Drop the run summary and notes; the command''s product (findings, patch, listing) is still written'
+            cand --quiet 'Drop the run summary and notes; the command''s product (findings, patch, listing) is still written'
+            cand -v 'Trace what is scanned and summarize every comment kind and skipped file'
+            cand --verbose 'Trace what is scanned and summarize every comment kind and skipped file'
+            cand -h 'Print help (see more with ''--help'')'
+            cand --help 'Print help (see more with ''--help'')'
+        }
         &'ocomment;doctor'= {
             cand --config 'Read this configuration file instead of discovering `.ocomment.toml`'
             cand --policy 'Which classes of comment the run is allowed to remove'
@@ -592,6 +618,7 @@ set edit:completion:arg-completer[ocomment] = {|@words|
             cand languages 'List built-in languages, extensions, and dialects'
             cand plugin 'Manage sandboxed WASM scanner plugins'
             cand completions 'Generate shell completions'
+            cand selftest 'Re-run the shared corpus against this binary and report any disagreement'
             cand doctor 'Diagnose the environment (config, git, plugins, tools)'
             cand man 'Render the roff manual page to stdout'
             cand help 'Print this message or the help of the given subcommand(s)'
@@ -635,6 +662,8 @@ set edit:completion:arg-completer[ocomment] = {|@words|
         &'ocomment;help;plugin;new'= {
         }
         &'ocomment;help;completions'= {
+        }
+        &'ocomment;help;selftest'= {
         }
         &'ocomment;help;doctor'= {
         }

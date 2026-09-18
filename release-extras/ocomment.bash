@@ -55,6 +55,9 @@ _ocomment() {
             ocomment,scan)
                 cmd="ocomment__subcmd__scan"
                 ;;
+            ocomment,selftest)
+                cmd="ocomment__subcmd__selftest"
+                ;;
             ocomment,strip)
                 cmd="ocomment__subcmd__strip"
                 ;;
@@ -96,6 +99,9 @@ _ocomment() {
                 ;;
             ocomment__subcmd__help,scan)
                 cmd="ocomment__subcmd__help__subcmd__scan"
+                ;;
+            ocomment__subcmd__help,selftest)
+                cmd="ocomment__subcmd__help__subcmd__selftest"
                 ;;
             ocomment__subcmd__help,strip)
                 cmd="ocomment__subcmd__help__subcmd__strip"
@@ -167,7 +173,7 @@ _ocomment() {
 
     case "${cmd}" in
         ocomment)
-            opts="-q -v -h -V --config --policy --layout --language --dialect --keep-kind --remove-kind --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --trace --progress --quiet --verbose --help --version check fix diff scan strip lsp init config languages plugin completions doctor man help"
+            opts="-q -v -h -V --config --policy --layout --language --dialect --keep-kind --remove-kind --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --trace --progress --quiet --verbose --help --version check fix diff scan strip lsp init config languages plugin completions selftest doctor man help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -629,7 +635,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__help)
-            opts="check fix diff scan strip lsp init config languages plugin completions doctor man help"
+            opts="check fix diff scan strip lsp init config languages plugin completions selftest doctor man help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -895,6 +901,20 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__help__subcmd__scan)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ocomment__subcmd__help__subcmd__selftest)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
@@ -1774,6 +1794,72 @@ _ocomment() {
             ;;
         ocomment__subcmd__scan)
             opts="-q -v -h --staged --index-only --config --policy --layout --language --dialect --keep-kind --remove-kind --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --trace --progress --quiet --verbose --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --policy)
+                    COMPREPLY=($(compgen -W "conservative standard all" -- "${cur}"))
+                    return 0
+                    ;;
+                --layout)
+                    COMPREPLY=($(compgen -W "lines columns compact" -- "${cur}"))
+                    return 0
+                    ;;
+                --language)
+                    COMPREPLY=($(compgen -W "rust ocaml c cpp go java javascript typescript python shell html css jsonc sql kotlin toml lua yaml php ruby zig r dart swift csharp scala vue svelte markdown perl" -- "${cur}"))
+                    return 0
+                    ;;
+                --dialect)
+                    COMPREPLY=($(compgen -W "standard jsx tsx objective-c objective-cpp gnu-c gnu-cpp cuda posix-sh bash53 zsh postgresql mysql sqlite t-sql oracle scss sass" -- "${cur}"))
+                    return 0
+                    ;;
+                --keep-kind)
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --remove-kind)
+                    COMPREPLY=($(compgen -W "line block doc-line doc-block directive license html-comment shebang encoding optimizer-hint version-comment load-bearing" -- "${cur}"))
+                    return 0
+                    ;;
+                --format)
+                    COMPREPLY=($(compgen -W "human json jsonl sarif github" -- "${cur}"))
+                    return 0
+                    ;;
+                --color)
+                    COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --hyperlinks)
+                    COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --annotation-level)
+                    COMPREPLY=($(compgen -W "error warning notice" -- "${cur}"))
+                    return 0
+                    ;;
+                --trace)
+                    COMPREPLY=($(compgen -W "off human json" -- "${cur}"))
+                    return 0
+                    ;;
+                --progress)
+                    COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ocomment__subcmd__selftest)
+            opts="-q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --trace --progress --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0

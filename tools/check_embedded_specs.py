@@ -10,6 +10,9 @@ PAIRS = (
     (ROOT / "spec/languages.toml", ROOT / "rust/ocomment/assets/languages.toml"),
     (ROOT / "spec/ocomment-scanner.wit", ROOT / "rust/ocomment/assets/ocomment-scanner.wit"),
 )
+# NOTE: The corpus `ocomment selftest` carries is a derivation rather than a
+# NOTE: copy, so it is not a pair here: `tools/gen_selftest_corpus.py --check`
+# NOTE: is what holds it to `spec/fixtures/v1`.
 
 
 def main() -> int:

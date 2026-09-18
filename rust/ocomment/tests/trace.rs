@@ -158,3 +158,44 @@ fn the_human_trace_names_the_evidence_for_a_language() {
         "the trace did not say how the language was chosen:\n{stderr}"
     );
 }
+
+/// `selftest` re-runs the embedded corpus and says what it could not reach.
+///
+/// The count matters as much as the verdict: "agrees with everything" is a
+/// weaker claim when the corpus it agreed with has quietly shrunk, which is
+/// what the floors recorded beside the corpus are for.
+#[test]
+fn selftest_checks_the_embedded_corpus_and_accounts_for_what_it_skips() {
+    let directory = tempfile::tempdir().expect("a temporary directory");
+    let output = Command::new(binary())
+        .current_dir(directory.path())
+        .env("PATH", "/usr/bin:/bin")
+        .args(["selftest", "--format", "json"])
+        .output()
+        .expect("the binary runs");
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "selftest failed:\n{}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    let report: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("the report is one JSON document");
+    assert_eq!(report["failures"].as_array().expect("failures").len(), 0);
+    let cases = report["cases"].as_u64().expect("a case count");
+    let checked = report["checked"].as_u64().expect("a checked count");
+    let out_of_reach = report["out_of_reach"].as_u64().expect("a skipped count");
+    assert_eq!(
+        checked + out_of_reach,
+        cases,
+        "every case is either checked or accounted for as out of reach"
+    );
+    /* NOTE: A floor of its own, so that a corpus emptied by accident cannot
+     * make this test pass by having nothing to disagree with. It is well under
+     * the recorded floor, which is what actually guards the size; this only
+     * guards against the corpus vanishing entirely. */
+    assert!(
+        checked > 100,
+        "selftest checked only {checked} cases, so the corpus did not reach the binary"
+    );
+}

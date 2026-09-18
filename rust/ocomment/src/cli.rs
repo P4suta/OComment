@@ -5,7 +5,7 @@ use crate::{
         self, AnnotationLevel, Explanations, FileExplanation, Operation, OutputFormat,
         Presentation, ProcessedFile, ProcessedResult, RenderOptions, Verbosity,
     },
-    plugin,
+    plugin, selftest,
     trace::{TraceMode, trace_decisions, trace_discovery},
     values::{AnnotationLevelArg, CommentKindArg, DialectArg, LanguageArg, LayoutArg, PolicyArg},
 };
@@ -331,6 +331,8 @@ enum Command {
         /// Shell whose completion script is written to stdout.
         shell: Shell,
     },
+    /// Re-run the shared corpus against this binary and report any disagreement
+    Selftest,
     /// Diagnose the environment (config, git, plugins, tools)
     Doctor,
     /// Render the roff manual page to stdout
@@ -576,6 +578,7 @@ pub fn run() -> Result<u8> {
         Some(Command::Languages) => print_languages(&common),
         Some(Command::Plugin(args)) => run_plugin(args, &common),
         Some(Command::Completions { shell }) => run_completions(shell),
+        Some(Command::Selftest) => selftest::run(common.output.format, common.output.quiet),
         Some(Command::Doctor) => run_doctor(&common),
         Some(Command::Man) => run_man(),
     }

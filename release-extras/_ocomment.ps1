@@ -57,6 +57,7 @@ Register-ArgumentCompleter -Native -CommandName 'ocomment' -ScriptBlock {
             [CompletionResult]::new('languages', 'languages', [CompletionResultType]::ParameterValue, 'List built-in languages, extensions, and dialects')
             [CompletionResult]::new('plugin', 'plugin', [CompletionResultType]::ParameterValue, 'Manage sandboxed WASM scanner plugins')
             [CompletionResult]::new('completions', 'completions', [CompletionResultType]::ParameterValue, 'Generate shell completions')
+            [CompletionResult]::new('selftest', 'selftest', [CompletionResultType]::ParameterValue, 'Re-run the shared corpus against this binary and report any disagreement')
             [CompletionResult]::new('doctor', 'doctor', [CompletionResultType]::ParameterValue, 'Diagnose the environment (config, git, plugins, tools)')
             [CompletionResult]::new('man', 'man', [CompletionResultType]::ParameterValue, 'Render the roff manual page to stdout')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
@@ -559,6 +560,32 @@ Register-ArgumentCompleter -Native -CommandName 'ocomment' -ScriptBlock {
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             break
         }
+        'ocomment;selftest' {
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'Read this configuration file instead of discovering `.ocomment.toml`')
+            [CompletionResult]::new('--policy', '--policy', [CompletionResultType]::ParameterName, 'Which classes of comment the run is allowed to remove')
+            [CompletionResult]::new('--layout', '--layout', [CompletionResultType]::ParameterName, 'How the bytes left behind by a removed comment are laid out')
+            [CompletionResult]::new('--language', '--language', [CompletionResultType]::ParameterName, 'Force this language instead of detecting it from path and contents')
+            [CompletionResult]::new('--dialect', '--dialect', [CompletionResultType]::ParameterName, 'Force this dialect of the selected language')
+            [CompletionResult]::new('--keep-kind', '--keep-kind', [CompletionResultType]::ParameterName, 'Comma-separated comment kinds to protect on top of the policy')
+            [CompletionResult]::new('--remove-kind', '--remove-kind', [CompletionResultType]::ParameterName, 'Comma-separated comment kinds to remove regardless of the policy')
+            [CompletionResult]::new('--format', '--format', [CompletionResultType]::ParameterName, 'Output encoding')
+            [CompletionResult]::new('--color', '--color', [CompletionResultType]::ParameterName, 'When to colour terminal output')
+            [CompletionResult]::new('--hyperlinks', '--hyperlinks', [CompletionResultType]::ParameterName, 'When to emit terminal hyperlinks for reported paths')
+            [CompletionResult]::new('--annotation-level', '--annotation-level', [CompletionResultType]::ParameterName, 'The level `--format github` annotates a removable comment at (default: the run''s exit status)')
+            [CompletionResult]::new('--trace', '--trace', [CompletionResultType]::ParameterName, 'Record how the run reached its verdicts, on standard error')
+            [CompletionResult]::new('--progress', '--progress', [CompletionResultType]::ParameterName, 'When to draw the live scanning counter on standard error')
+            [CompletionResult]::new('--force-invalid', '--force-invalid', [CompletionResultType]::ParameterName, 'Apply the edits that are still provably safe when the source fails to scan')
+            [CompletionResult]::new('--force-protected', '--force-protected', [CompletionResultType]::ParameterName, 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads')
+            [CompletionResult]::new('--no-preview', '--no-preview', [CompletionResultType]::ParameterName, 'Omit the comment text from human `check` and `scan` lines and from the JSON formats')
+            [CompletionResult]::new('--explain', '--explain', [CompletionResultType]::ParameterName, 'List every comment human `check` and `scan` met and name the rule and setting behind each one')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Drop the run summary and notes; the command''s product (findings, patch, listing) is still written')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Drop the run summary and notes; the command''s product (findings, patch, listing) is still written')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Trace what is scanned and summarize every comment kind and skipped file')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Trace what is scanned and summarize every comment kind and skipped file')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            break
+        }
         'ocomment;doctor' {
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'Read this configuration file instead of discovering `.ocomment.toml`')
             [CompletionResult]::new('--policy', '--policy', [CompletionResultType]::ParameterName, 'Which classes of comment the run is allowed to remove')
@@ -623,6 +650,7 @@ Register-ArgumentCompleter -Native -CommandName 'ocomment' -ScriptBlock {
             [CompletionResult]::new('languages', 'languages', [CompletionResultType]::ParameterValue, 'List built-in languages, extensions, and dialects')
             [CompletionResult]::new('plugin', 'plugin', [CompletionResultType]::ParameterValue, 'Manage sandboxed WASM scanner plugins')
             [CompletionResult]::new('completions', 'completions', [CompletionResultType]::ParameterValue, 'Generate shell completions')
+            [CompletionResult]::new('selftest', 'selftest', [CompletionResultType]::ParameterValue, 'Re-run the shared corpus against this binary and report any disagreement')
             [CompletionResult]::new('doctor', 'doctor', [CompletionResultType]::ParameterValue, 'Diagnose the environment (config, git, plugins, tools)')
             [CompletionResult]::new('man', 'man', [CompletionResultType]::ParameterValue, 'Render the roff manual page to stdout')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
@@ -683,6 +711,9 @@ Register-ArgumentCompleter -Native -CommandName 'ocomment' -ScriptBlock {
             break
         }
         'ocomment;help;completions' {
+            break
+        }
+        'ocomment;help;selftest' {
             break
         }
         'ocomment;help;doctor' {

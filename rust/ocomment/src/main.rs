@@ -8,6 +8,7 @@ mod lsp;
 mod output;
 mod plugin;
 pub mod runtime;
+mod selftest;
 mod trace;
 mod values;
 
