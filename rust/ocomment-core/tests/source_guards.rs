@@ -432,3 +432,47 @@ fn error_codes_are_all_classified() {
         "`ERROR_CODES` classifies errors no scanner raises: {unraised:?}"
     );
 }
+
+/// The declared order of the severities is the order they claim to be in.
+///
+/// `ALL` says "most to least severe" and the derived ordering says the same
+/// thing from the declaration, and `is_failure` reads both as one question.
+/// Two statements of one fact can part; this is what stops them.
+#[test]
+fn the_severities_are_declared_most_severe_first() {
+    use ocomment_core::Severity;
+    let mut sorted = Severity::ALL;
+    sorted.sort_unstable();
+    assert_eq!(
+        sorted,
+        Severity::ALL,
+        "`ALL` and the derived ordering disagree about which severity is worse"
+    );
+    assert!(Severity::Error.is_failure());
+    for severity in Severity::ALL.into_iter().filter(|s| *s != Severity::Error) {
+        assert!(
+            !severity.is_failure(),
+            "{severity} is not an error and was read as one"
+        );
+    }
+}
+
+/// A severity is compared as a category, not as a name.
+///
+/// `severity == Severity::Error` means "did the scan fail", and that is a
+/// question about a category with one member today. The same shape -- a
+/// comparison naming one variant while meaning a group -- has been wrong twice
+/// in this repository already, once in `OutputFormat` where it reached CI.
+#[test]
+fn a_severity_is_asked_about_rather_than_named() {
+    let offenders: Vec<&str> = ERROR_SOURCES
+        .iter()
+        .filter(|(_, text)| text.contains("== Severity::") || text.contains("!= Severity::"))
+        .map(|(name, _)| *name)
+        .collect();
+    assert!(
+        offenders.is_empty(),
+        "these compare a severity by name; `is_failure()` asks the question \
+         they mean, in one place: {offenders:?}"
+    );
+}

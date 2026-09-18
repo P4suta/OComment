@@ -1,6 +1,6 @@
 use crate::{
-    ByteSpan, Language, Layout, PreparedScanner, ScanOptions, ScanReport, Severity,
-    TransformOptions, TransformResult,
+    ByteSpan, Language, Layout, PreparedScanner, ScanOptions, ScanReport, TransformOptions,
+    TransformResult,
     scanner::{
         RestartRules, preamble_is_settled, scan_until_checkpoint_prepared,
         scan_with_checkpoints_prepared,
@@ -396,7 +396,7 @@ impl IncrementalDocument {
             language: self.language,
             valid: !diagnostics
                 .iter()
-                .any(|diagnostic| diagnostic.severity == Severity::Error),
+                .any(|diagnostic| diagnostic.severity.is_failure()),
             comments,
             diagnostics,
         };
