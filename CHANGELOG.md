@@ -64,6 +64,13 @@ All notable changes to OComment will be documented here. The project follows
   witnesses that their generators reach the case each property is about, and a
   negative control for the one property whose claim is that nothing was found.
 
+- `ocomment tags` counts what this tree's comments actually open with and says
+  which way the convention has drifted: a tag the configuration allows that
+  nothing writes, and a tag people write that nothing allows — the second being
+  comments the run removes today, which is usually the first anybody hears of
+  it. It reports rather than gates, as `coverage` does. `ocomment_core::comment_text`
+  is published so a caller reads a comment's text the way the tag rule does.
+
 - `[policy] protected` names the markers your own tools read, and decides what
   those comments *are*. The catalogue knows the tools everybody uses and cannot
   know yours, and `keep_regex` cannot stand in for one: a pattern holds a
