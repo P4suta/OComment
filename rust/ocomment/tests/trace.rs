@@ -31,11 +31,21 @@ fn fixture() -> tempfile::TempDir {
     directory
 }
 
+/// Run the binary, naming `--format human` unless the test names a format.
+///
+/// These read the summary and the trace, both of which are the same whichever
+/// report format the run wrote; `human` is named so that the product on
+/// standard output stays the stream they were written against.
 fn run(directory: &Path, arguments: &[&str]) -> (String, String) {
+    let mut arguments: Vec<&str> = arguments.to_vec();
+    if !arguments.contains(&"--format") {
+        arguments.push("--format");
+        arguments.push("human");
+    }
     let output = Command::new(binary())
         .current_dir(directory)
         .env("PATH", "/usr/bin:/bin")
-        .args(arguments)
+        .args(&arguments)
         .output()
         .expect("the binary runs");
     (

@@ -9,7 +9,8 @@ use std::{collections::BTreeSet, fs, path::PathBuf};
 /// Every first-party source file of the crate, embedded at compile time so the
 /// scan does not depend on the directory the test runs in. The internal runtime
 /// is upstream-derived code and cannot obtain the CLI's stdout handle.
-const SOURCES: [(&str, &str); 19] = [
+const SOURCES: [(&str, &str); 20] = [
+    ("advice.rs", include_str!("../src/advice.rs")),
     ("atomic.rs", include_str!("../src/atomic.rs")),
     ("cli.rs", include_str!("../src/cli.rs")),
     ("config.rs", include_str!("../src/config.rs")),
@@ -374,5 +375,30 @@ fn the_embedded_list_is_every_source_file_in_the_crate() {
         listed, on_disk,
         "`SOURCES` and `src/` disagree, so some module is outside every guard \
          in this file"
+    );
+}
+
+/// `std::env::args` panics on an argument that is not UTF-8, and this program
+/// is given paths.
+///
+/// A path on a Unix filesystem is bytes. `args()` decides that bytes which are
+/// not text are a reason to abort the process, which is the wrong answer for a
+/// tool whose arguments are mostly filenames -- and the failure is invisible to
+/// anyone developing on macOS, where such a name cannot be created at all. The
+/// Linux job caught it once. This is so that fixing it once is enough: the next
+/// reader reaching for the command line finds `args_os` because the other one
+/// does not build.
+#[test]
+fn the_command_line_is_read_as_bytes() {
+    let offenders: Vec<&str> = SOURCES
+        .iter()
+        .filter(|(_, text)| text.contains("env::args()"))
+        .map(|(name, _)| *name)
+        .collect();
+    assert!(
+        offenders.is_empty(),
+        "these read the command line with `env::args()`, which panics on an \
+         argument that is not UTF-8; `env::args_os()` and a lossy read answer \
+         the same question without it: {offenders:?}"
     );
 }

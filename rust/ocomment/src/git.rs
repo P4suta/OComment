@@ -88,8 +88,8 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
              a run without --staged.",
         )?;
     }
-    let materialize_output = operation == Operation::Fix
-        || (operation == Operation::Diff && format == OutputFormat::Human);
+    let materialize_output =
+        operation == Operation::Fix || (operation == Operation::Diff && format.for_a_person());
     let materialize_source_map =
         json.source_map && matches!(format, OutputFormat::Json | OutputFormat::Jsonl);
     let mut scanners = HashMap::new();

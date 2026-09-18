@@ -68,21 +68,45 @@ fn write_non_utf8_file(
     None
 }
 
+/// Run the binary, naming `--format human` unless the test names a format.
+///
+/// Almost everything below is about the one-line-per-finding stream: which path
+/// it prints, how it sanitises one, what it says about a skip. That stream is
+/// `human`, and it stopped being the default when `review` became it, so the
+/// tests that are about it say so. The ones that are about `review` name it,
+/// and `the_default_format_is_the_one_a_reader_decides_from` is what stops this
+/// convenience from hiding a change of default.
 fn run(directory: &Path, arguments: &[&str]) -> Output {
+    let mut arguments: Vec<&str> = arguments.to_vec();
+    if !arguments
+        .iter()
+        .any(|argument| *argument == "--format" || argument.starts_with("--format="))
+    {
+        arguments.push("--format");
+        arguments.push("human");
+    }
     Command::new(binary())
         .current_dir(directory)
         .env("PATH", "/usr/bin:/bin")
-        .args(arguments)
+        .args(&arguments)
         .output()
         .unwrap()
 }
 
 /// Run the binary with `input` piped to its standard input.
 fn run_stdin(directory: &Path, arguments: &[&str], input: &[u8]) -> Output {
+    let mut arguments: Vec<&str> = arguments.to_vec();
+    if !arguments
+        .iter()
+        .any(|argument| *argument == "--format" || argument.starts_with("--format="))
+    {
+        arguments.push("--format");
+        arguments.push("human");
+    }
     let mut child = Command::new(binary())
         .current_dir(directory)
         .env("PATH", "/usr/bin:/bin")
-        .args(arguments)
+        .args(&arguments)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -857,6 +881,8 @@ fn explicit_config_replaces_discovery_and_roots_its_own_globs() {
             "--config",
             "configuration/only.toml",
             "configuration/source.odd",
+            "--format",
+            "human",
         ])
         .output()
         .unwrap();
@@ -6414,7 +6440,8 @@ fn explain_is_refused_by_the_formats_with_nowhere_to_put_it() {
         );
         let error = String::from_utf8_lossy(&output.stderr);
         assert!(
-            error.contains("--explain is only available with --format human, json or jsonl"),
+            error
+                .contains("--explain is only available with --format human, review, json or jsonl"),
             "`--format {format} --explain` said:\n{error}"
         );
         assert!(
@@ -6610,7 +6637,7 @@ fn fix_interactive_refuses_a_machine_format() {
     assert_eq!(fs::read(&path).unwrap(), before);
     assert_eq!(
         String::from_utf8(output.stderr).unwrap(),
-        "ocomment: --interactive is only available with --format human\n"
+        "ocomment: --interactive is only available with --format human or review\n"
     );
 }
 

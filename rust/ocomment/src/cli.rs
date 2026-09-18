@@ -583,10 +583,10 @@ pub fn run() -> Result<u8> {
     if common.output.explain
         && !matches!(
             common.output.format,
-            OutputFormat::Human | OutputFormat::Json | OutputFormat::Jsonl
+            OutputFormat::Human | OutputFormat::Review | OutputFormat::Json | OutputFormat::Jsonl
         )
     {
-        bail!("--explain is only available with --format human, json or jsonl");
+        bail!("--explain is only available with --format human, review, json or jsonl");
     }
     /* NOTE: The flag annotates a report of comments, and only `check`, `scan` and
      * the implicit command write one: `fix` reports the files it rewrote,
@@ -625,8 +625,8 @@ pub fn run() -> Result<u8> {
              * combination is refused rather than one of the two flags being
              * quietly dropped. It is refused before the terminal is looked at,
              * because the pair is wrong however the run was started. */
-            if common.output.format != OutputFormat::Human {
-                bail!("--interactive is only available with --format human");
+            if !common.output.format.for_a_person() {
+                bail!("--interactive is only available with --format human or review");
             }
             /* NOTE: Without somebody there to answer, the questions would be read out
              * of whatever the pipe happened to carry and files would be
@@ -714,7 +714,7 @@ fn run_target(
     let presentation = presentation(common);
     let verbosity = common.verbosity();
     // NOTE: A machine format keeps standard error empty however loud the run is.
-    if common.output.format == OutputFormat::Human {
+    if common.output.format.for_a_person() {
         trace_run(&resolved, &args.paths, verbosity)?;
     }
     let progress = progress_enabled(common);
@@ -782,7 +782,7 @@ fn run_target(
         explain || trace_mode.is_on() || common.output.format == OutputFormat::Agent;
     let materialize_output = operation == Operation::Fix
         || flags.interactive
-        || (operation == Operation::Diff && common.output.format == OutputFormat::Human);
+        || (operation == Operation::Diff && common.output.format.for_a_person());
     /* NOTE: Built only for a run that will print it. It is one segment per
      * unchanged run of bytes, which is the largest thing a report carries. */
     let materialize_source_map = common.output.source_map
@@ -990,7 +990,7 @@ fn run_target(
      * somebody said they would do. Human runs only, like every other note --
      * a machine format keeps standard error empty, and the agent report
      * already carries the age on the finding's own line. */
-    if common.output.format == OutputFormat::Human
+    if common.output.format.for_a_person()
         && let Some(line) = overdue.note()
     {
         let stderr = io::stderr();
@@ -1276,9 +1276,11 @@ fn read_targets(
 /// something that is not the file, so the flag is refused the way
 /// `ocomment languages` refuses the formats that carry no language table.
 fn run_strip(common: &CommonArgs) -> Result<u8> {
+    /* NOTE: `strip` writes bytes rather than a report, so the two formats that
+     * differ only in how a report is laid out are the same thing here. */
     ensure!(
-        common.output.format == OutputFormat::Human,
-        "`ocomment strip` is only available with --format human"
+        common.output.format.for_a_person(),
+        "`ocomment strip` is only available with --format human or review"
     );
     let mut source = Vec::new();
     io::stdin()
@@ -1618,8 +1620,8 @@ fn write_template(
 /// refused rather than accepted and ignored.
 fn run_config(args: ConfigArgs, common: &CommonArgs) -> Result<u8> {
     ensure!(
-        common.output.format == OutputFormat::Human,
-        "`ocomment config` is only available with --format human"
+        common.output.format.for_a_person(),
+        "`ocomment config` is only available with --format human or review"
     );
     let mut stdout = output::stdout();
     match args.action {
@@ -1830,7 +1832,9 @@ fn print_languages(common: &CommonArgs) -> Result<u8> {
     let rows = language_table()?;
     let mut stdout = output::stdout();
     match common.output.format {
-        OutputFormat::Human => {
+        /* NOTE: A language table has no findings to group, so the terminal
+         * format and the pipe format are the same table. */
+        OutputFormat::Human | OutputFormat::Review => {
             output::wrote(writeln!(stdout, "language\textensions\tdialects\tnotes"))?;
             for row in &rows {
                 let extensions = row.extensions.join(",");
@@ -2236,7 +2240,7 @@ const PROGRESS_STEP: usize = 50;
 /// decoration: it never belongs in a machine format, and `-q` silences it.
 fn progress_enabled(common: &CommonArgs) -> bool {
     // NOTE: Decoration rather than a line of the report, so it asks directly.
-    common.output.format == OutputFormat::Human
+    common.output.format.for_a_person()
         && common.verbosity().shows(Detail::Normal)
         && match common.output.progress {
             AutoChoice::Auto => io::stderr().is_terminal(),
@@ -2334,7 +2338,7 @@ fn target_label(paths: &[PathBuf]) -> String {
 /// meant, and from the root itself the two are the same directory: either way
 /// the line would be noise.
 fn note_fix_scope(resolved: &config::ResolvedConfig, common: &CommonArgs) -> Result<()> {
-    if resolved.cwd == resolved.root || common.output.format != OutputFormat::Human {
+    if resolved.cwd == resolved.root || !common.output.format.for_a_person() {
         return Ok(());
     }
     let stderr = io::stderr();
@@ -2352,6 +2356,32 @@ fn note_fix_scope(resolved: &config::ResolvedConfig, common: &CommonArgs) -> Res
 }
 
 /// The `--verbose` header: where the run is rooted, what it was pointed at,
+/// The value a flag was given on the command line, or `None` when the flag was
+/// not named at all.
+///
+/// Clap resolves a default and an alias into the same parsed value and keeps no
+/// record of which arrived, so the two questions that need the difference are
+/// answered from the arguments themselves: whether a format was chosen or
+/// defaulted, and whether a policy was named under a spelling that has moved.
+fn named_flag(flag: &str) -> Option<String> {
+    /* NOTE: `args_os`, not `args`. The second panics on an argument that is not
+     * UTF-8, and this tool is given paths -- which on a Unix filesystem are
+     * bytes and are not obliged to be text. A flag's value is a flag's value in
+     * any encoding, and a path that cannot be read as one is simply not the
+     * spelling being looked for. */
+    let arguments: Vec<String> = std::env::args_os()
+        .map(|argument| argument.to_string_lossy().into_owned())
+        .collect();
+    let long = format!("--{flag}");
+    let assigned = format!("--{flag}=");
+    arguments.iter().enumerate().find_map(|(index, argument)| {
+        argument
+            .strip_prefix(&assigned)
+            .map(ToOwned::to_owned)
+            .or_else(|| (*argument == long).then(|| arguments.get(index + 1).cloned())?)
+    })
+}
+
 /// The policy named on the command line under a name that has moved, and the
 /// name it moved to.
 ///
@@ -2360,33 +2390,12 @@ fn note_fix_scope(resolved: &config::ResolvedConfig, common: &CommonArgs) -> Res
 /// bargain has two halves and only one of them was kept: a name that goes on
 /// working while nobody is told it changed is a bridge the reader does not know
 /// they are standing on, and the day it is taken away is the day they find out.
-///
-/// Read from the raw arguments because clap resolves an alias to its variant
-/// and keeps no record of which spelling arrived.
 fn renamed_policy() -> Option<(String, &'static str)> {
-    /* NOTE: `args_os`, not `args`. The second panics on an argument that is not
-     * UTF-8, and the argument this tool is most often given is a path -- which
-     * on a Unix filesystem is bytes and is not obliged to be text. A spelling
-     * that cannot be read as text is simply not one of the two being looked
-     * for. */
-    let arguments: Vec<String> = std::env::args_os()
-        .map(|argument| argument.to_string_lossy().into_owned())
-        .collect();
-    let mut spellings = arguments
-        .iter()
-        .enumerate()
-        .filter_map(|(index, argument)| {
-            argument
-                .strip_prefix("--policy=")
-                .map(ToOwned::to_owned)
-                .or_else(|| (argument == "--policy").then(|| arguments.get(index + 1).cloned())?)
-        });
-    spellings.find_map(|spelling| {
-        ocomment_core::Policy::ALL
-            .into_iter()
-            .find(|policy| policy.aliases().contains(&spelling.as_str()))
-            .map(|policy| (spelling, policy.as_str()))
-    })
+    let spelling = named_flag("policy")?;
+    ocomment_core::Policy::ALL
+        .into_iter()
+        .find(|policy| policy.aliases().contains(&spelling.as_str()))
+        .map(|policy| (spelling, policy.as_str()))
 }
 
 /// and which configuration files it merged.

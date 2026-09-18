@@ -24,14 +24,44 @@ use unicode_width::UnicodeWidthChar;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
 pub enum OutputFormat {
-    #[default]
+    /// Every finding on one line, in the `path:line:column:` stream a pipeline
+    /// greps. Kept because a pipeline written against it should not have to be
+    /// rewritten, and because one line per finding is the right shape for
+    /// counting even when it is the wrong shape for deciding.
     Human,
+    /// The findings grouped by the decision each one asks for, with the edit
+    /// beside it. The default everywhere, terminal or pipe.
+    ///
+    /// Not switched on by a terminal, which is what every neighbouring tool
+    /// does and is wrong here. An agent reads this through a pipe and a person
+    /// reads it on a screen, and the two are in the same conversation about the
+    /// same run: a format that changes shape between them leaves each arguing
+    /// from something the other cannot see. Colour still follows the terminal,
+    /// because colour is the one thing that carries no meaning of its own.
+    #[default]
+    Review,
     Json,
     Jsonl,
     Sarif,
     Github,
     /// The report as an instruction, for a reader that is going to act on it.
     Agent,
+}
+
+impl OutputFormat {
+    /// Whether this is a report a person reads, as opposed to one a program
+    /// parses.
+    ///
+    /// The two differ in layout and in nothing else that decides anything here:
+    /// both carry their notes on standard error, both may show progress, and
+    /// both are what `config` and `strip` write. Asked as one question so that
+    /// a format added beside them is answered once -- which is how `review`
+    /// reached CI having been taught about seven of the nine places that spell
+    /// out `== Human` and not the other two.
+    #[must_use]
+    pub const fn for_a_person(self) -> bool {
+        matches!(self, Self::Human | Self::Review)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -476,7 +506,7 @@ fn kept_for(files: &[ProcessedFile], protection: &str) -> usize {
 
 /// `1 file` / `2 files`: the count and its noun, pluralized by the regular
 /// rule. Every noun the summary counts goes through this.
-fn plural(count: usize, noun: &str) -> String {
+pub(crate) fn plural(count: usize, noun: &str) -> String {
     format!("{count} {noun}{}", if count == 1 { "" } else { "s" })
 }
 
@@ -1282,6 +1312,7 @@ pub fn render_explained(
     let mut output = stdout();
     match options.format {
         OutputFormat::Human => render_human(&mut output, files, skipped, options, explanations),
+        OutputFormat::Review => render_review(&mut output, files, skipped, options, explanations),
         OutputFormat::Json => render_json(&mut output, files, skipped, options.json, explanations),
         OutputFormat::Jsonl => {
             render_jsonl(&mut output, files, skipped, options.json, explanations)
@@ -1293,6 +1324,238 @@ pub fn render_explained(
     finish(&mut output)
 }
 
+/// The report as the decisions it asks for, which is what a person reading it
+/// on a terminal is there to make.
+///
+/// `human` answers "where are they", one grep-able line at a time, and that is
+/// the right answer for a pipe. It is the wrong shape for the question its
+/// reader actually has, which is "and then what": nine findings under one rule
+/// are not nine questions, they are one question asked nine times, and the
+/// answer to each is decided by the code the comment sits on -- which `human`
+/// does not show, so the reader opens the file.
+///
+/// So: grouped by the decision rather than by the rule or the file, the edit
+/// shown beside each rather than its neighbourhood, the count on every group
+/// because a classification without counts cannot set an order, and the way to
+/// *keep* the comments as visible as the way to remove them. That last one is
+/// not symmetry for its own sake. A gate that can only say "delete it" is a
+/// gate somebody turns off the first time it is wrong about one comment.
+/// What a `fix` left behind, which is the half a reader has not seen.
+///
+/// The count of what went is on standard error with the rest of the commentary.
+/// Here is what is still in the files: every comment the run decided to keep,
+/// so that a reader can check the keeping rather than take it on trust. A run
+/// that says only what it removed is a run whose judgement nobody can audit.
+fn render_fixed(
+    output: &mut impl Write,
+    files: &[ProcessedFile],
+    skipped: &[SkippedFile],
+    options: &RenderOptions,
+) -> Result<()> {
+    let paint = options.presentation.color;
+    let (dim, bold, reset) = (
+        color("\x1b[2m", paint),
+        color("\x1b[1m", paint),
+        color("\x1b[0m", paint),
+    );
+    let (green, blue) = (
+        color("\x1b[38;5;114m", paint),
+        color("\x1b[38;5;75m", paint),
+    );
+    let removed: usize = files.iter().map(removed_count).sum();
+    let changed = files.iter().filter(|file| file.result.changed()).count();
+    wrote(writeln!(output))?;
+    wrote(writeln!(
+        output,
+        "  {green}OK{reset}  {bold}{} removed{reset}{dim} from {} · {} scanned{reset}",
+        comments(removed, ""),
+        plural(changed, "file"),
+        plural(files.len() + skipped.len(), "file"),
+    ))?;
+    let kept: Vec<(&ProcessedFile, &Comment)> = files
+        .iter()
+        .flat_map(|file| {
+            file.result
+                .report
+                .comments
+                .iter()
+                .filter(|comment| !comment.disposition.is_remove())
+                .map(move |comment| (file, comment))
+        })
+        .collect();
+    if !kept.is_empty() {
+        wrote(writeln!(output))?;
+        wrote(writeln!(
+            output,
+            "  {bold}{green}KEPT{reset}    {}{dim}, still in the files{reset}",
+            comments(kept.len(), "")
+        ))?;
+        for (file, comment) in kept {
+            let index = LineIndex::new(&file.source);
+            let (line, _) = index.line_column(comment.span.start);
+            wrote(writeln!(
+                output,
+                "    {blue}{}:{line}{reset}  {dim}{}{reset}",
+                display_path(&file.path, options.presentation.hyperlinks),
+                preview(&file.source, comment.span, PREVIEW_COLUMNS)
+            ))?;
+        }
+    }
+    wrote(writeln!(output))?;
+    write_commentary(output, files, skipped, options)
+}
+
+fn render_review(
+    output: &mut impl Write,
+    files: &[ProcessedFile],
+    skipped: &[SkippedFile],
+    options: &RenderOptions,
+    explanations: &Explanations,
+) -> Result<()> {
+    /* NOTE: `diff` writes a patch, and a patch is the product rather than a
+     * report about one: a reader pipes it into `git apply`, and anything else
+     * on that stream is corruption. There is no decision view of a patch, so
+     * this is the one operation where the two person-facing formats are the
+     * same bytes. */
+    if options.operation == Operation::Diff {
+        return render_human(output, files, skipped, options, explanations);
+    }
+    if options.operation == Operation::Fix && options.applied {
+        /* NOTE: After a fix the decisions are answered and the comments are
+         * gone, so asking for them again would be a report about a file that no
+         * longer holds them. What a reader has not seen is the other half. */
+        return render_fixed(output, files, skipped, options);
+    }
+    let paint = options.presentation.color;
+    let (dim, bold, reset) = (
+        color("\x1b[2m", paint),
+        color("\x1b[1m", paint),
+        color("\x1b[0m", paint),
+    );
+    let (red, green, yellow, blue, cyan) = (
+        color("\x1b[38;5;203m", paint),
+        color("\x1b[38;5;114m", paint),
+        color("\x1b[38;5;179m", paint),
+        color("\x1b[38;5;75m", paint),
+        color("\x1b[38;5;80m", paint),
+    );
+    let groups = crate::advice::plan(files);
+    let removable: usize = groups.iter().map(crate::advice::Group::comments).sum();
+    let kept: usize = files
+        .iter()
+        .map(|file| {
+            file.result
+                .report
+                .comments
+                .iter()
+                .filter(|comment| !comment.disposition.is_remove())
+                .count()
+        })
+        .sum();
+    let touched = groups
+        .iter()
+        .flat_map(|group| &group.items)
+        .map(|item| item.path.clone())
+        .collect::<std::collections::BTreeSet<_>>()
+        .len();
+
+    let mark = if removable == 0 {
+        format!("{green}OK{reset}")
+    } else {
+        format!("{red}NO{reset}")
+    };
+    wrote(writeln!(output))?;
+    wrote(writeln!(
+        output,
+        "  {mark}  {bold}{}{reset}{dim} in {} · {} scanned · policy {}{reset}",
+        comments(removable, ""),
+        plural(touched, "file"),
+        files.len() + skipped.len(),
+        options.policy,
+    ))?;
+
+    for group in &groups {
+        let instruction = group.decision.instruction();
+        let count = comments(group.comments(), "");
+        wrote(writeln!(output))?;
+        wrote(writeln!(
+            output,
+            "  {bold}{yellow}DECIDE{reset}  {bold}{instruction}{reset}{dim}{}{count}{reset}",
+            " ".repeat(
+                58usize
+                    .saturating_sub(instruction.chars().count() + count.chars().count())
+                    .max(2)
+            )
+        ))?;
+        for item in &group.items {
+            let span = if item.first_line == item.last_line {
+                item.first_line.to_string()
+            } else {
+                format!("{}-{}", item.first_line, item.last_line)
+            };
+            wrote(writeln!(
+                output,
+                "    {blue}{}:{span}{reset}",
+                display_path(&item.path, options.presentation.hyperlinks)
+            ))?;
+            let _ = &item.path;
+            for line in &item.old {
+                wrote(writeln!(
+                    output,
+                    "      {red}-{reset} {dim}{}{reset}",
+                    line.trim_end()
+                ))?;
+            }
+            for line in &item.new {
+                wrote(writeln!(
+                    output,
+                    "      {green}+{reset} {}",
+                    line.trim_end()
+                ))?;
+            }
+            if let Some(subject) = &item.subject {
+                wrote(writeln!(
+                    output,
+                    "        {dim}{}{reset}",
+                    subject.trim_end()
+                ))?;
+            }
+        }
+        if let Some(route) = group.keep_route() {
+            let mut rows = route.lines();
+            if let Some(first) = rows.next() {
+                wrote(writeln!(
+                    output,
+                    "    {dim}or keep them{reset}  {cyan}{first}{reset}"
+                ))?;
+            }
+            for row in rows {
+                wrote(writeln!(output, "                  {cyan}{row}{reset}"))?;
+            }
+        }
+    }
+
+    if kept > 0 {
+        wrote(writeln!(output))?;
+        wrote(writeln!(
+            output,
+            "  {bold}{green}ALLOWED{reset} {dim}{} this run did not report; \
+             `--explain` names the rule that kept each{reset}",
+            comments(kept, "")
+        ))?;
+    }
+    if removable > 0 && options.operation != Operation::Fix {
+        wrote(writeln!(output))?;
+        wrote(writeln!(output, "  {dim}{}{reset}", "─".repeat(70)))?;
+        wrote(writeln!(
+            output,
+            "   {bold}ocomment fix{reset}{dim}   removes all {removable}, including anything above you meant to keep{reset}"
+        ))?;
+    }
+    wrote(writeln!(output))?;
+    write_commentary(output, files, skipped, options)
+}
+
 fn render_human(
     output: &mut impl Write,
     files: &[ProcessedFile],
@@ -1302,7 +1565,6 @@ fn render_human(
 ) -> Result<()> {
     let operation = options.operation;
     let presentation = options.presentation;
-    let verbose = options.verbosity.shows(Detail::Verbose);
     for file in files {
         if operation == Operation::Diff && file.result.changed() {
             /* NOTE: The patch is the product of `diff`, so `-q` keeps it and drops
@@ -1413,6 +1675,26 @@ fn render_human(
             }
         }
     }
+    write_commentary(output, files, skipped, options)
+}
+
+/// The commentary a run writes to standard error, whichever way it wrote its
+/// product.
+///
+/// The count, the skips, where the findings are concentrated, the settings that
+/// matched nothing. None of it depends on the layout of the report above it,
+/// and it went missing from `review` for exactly as long as it lived inside
+/// `render_human` -- a summary a CI job greps for, gone because a second format
+/// was added beside the one that owned it.
+fn write_commentary(
+    output: &mut impl Write,
+    files: &[ProcessedFile],
+    skipped: &[SkippedFile],
+    options: &RenderOptions,
+) -> Result<()> {
+    let operation = options.operation;
+    let presentation = options.presentation;
+    let verbose = options.verbosity.shows(Detail::Verbose);
     let skips = skip_lines(skipped, presentation, options.verbosity);
     /* NOTE: `diff` keeps standard output for the patch alone, so the skips it met
      * are left to standard error. `fix --dry-run` is that same `diff` speaking
@@ -1964,6 +2246,18 @@ fn render_json(
         version: u8,
         files: JsonFiles<'a>,
         skipped: JsonSkipped<'a>,
+        /// The same grouping the other two formats show, for a caller that
+        /// parses rather than reads.
+        ///
+        /// `files` says where every comment is and what was decided about it,
+        /// which is the report. This says what its author is being asked to do
+        /// about it, which is the part a caller acts on -- and it is here
+        /// rather than beside each comment because the unit of the answer is
+        /// the decision, not the finding: four comments under one question are
+        /// one edit to make four times, and a caller that reads them one at a
+        /// time has to rebuild that before it can start.
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        decisions: Vec<JsonDecision>,
     }
     serde_json::to_writer_pretty(
         &mut *output,
@@ -1971,11 +2265,76 @@ fn render_json(
             version: 1,
             files: JsonFiles(files, json, explanations),
             skipped: JsonSkipped(skipped),
+            decisions: json_decisions(files),
         },
     )
     .map_err(write_error)?;
     wrote(writeln!(output))?;
     Ok(())
+}
+
+/// One question and every comment that asks it.
+#[derive(Serialize)]
+struct JsonDecision {
+    /// A stable name a caller can branch on, unlike the sentence beside it.
+    decision: &'static str,
+    /// The sentence the other formats print.
+    instruction: String,
+    comments: usize,
+    findings: Vec<JsonFinding>,
+    /// The setting that would stop this being asked, as the lines to add and
+    /// the file to add them to.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    keep_instead: Option<JsonKeep>,
+}
+
+#[derive(Serialize)]
+struct JsonFinding {
+    path: String,
+    line: usize,
+    end_line: usize,
+    /// The lines as they are.
+    old: Vec<String>,
+    /// What would replace them. Absent when the answer is to delete rather
+    /// than to rewrite, which is not the same as replacing them with nothing.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    new: Vec<String>,
+    /// The code the comment is about, when the decision turns on it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    subject: Option<String>,
+}
+
+#[derive(Serialize)]
+struct JsonKeep {
+    file: &'static str,
+    add: String,
+}
+
+fn json_decisions(files: &[ProcessedFile]) -> Vec<JsonDecision> {
+    crate::advice::plan(files)
+        .into_iter()
+        .map(|group| JsonDecision {
+            decision: group.decision.name(),
+            instruction: group.decision.instruction(),
+            comments: group.comments(),
+            keep_instead: group.keep_route().map(|add| JsonKeep {
+                file: ".ocomment.toml",
+                add,
+            }),
+            findings: group
+                .items
+                .into_iter()
+                .map(|item| JsonFinding {
+                    path: sanitize_path(&item.path.to_string_lossy()),
+                    line: item.first_line,
+                    end_line: item.last_line,
+                    old: item.old,
+                    new: item.new,
+                    subject: item.subject,
+                })
+                .collect(),
+        })
+        .collect()
 }
 
 struct JsonFiles<'a>(&'a [ProcessedFile], JsonOptions, &'a Explanations);
@@ -3269,48 +3628,6 @@ mod tests {
     }
 }
 
-/// How many display columns an agent-facing preview may occupy.
-///
-/// Wider than the human one: a terminal has a right-hand edge and the reader of
-/// this format does not, and a comment cut off at its first clause is a comment
-/// the reader has to open the file to see.
-const AGENT_PREVIEW_COLUMNS: usize = 160;
-
-/// What a run wants the reader to do about one comment, in the imperative.
-///
-/// The verb *is* the reason. `RemovedByLength` and `RemovedAsTrailing` are the
-/// two removals whose way out is an edit to the comment rather than a flag —
-/// shortening it, moving it — and telling a reader to delete a comment that
-/// only had to move is wrong advice however correct the verdict was.
-fn instruction(verdict: &DispositionExplanation) -> String {
-    match verdict {
-        DispositionExplanation::RemovedByLength { limit, .. } => {
-            format!("shorten to {}", plural(*limit, "line"))
-        }
-        DispositionExplanation::RemovedAsTrailing => "move above the code".to_owned(),
-        /* NOTE: Two things to do, and the report must not pick. Deleting the
-         * line satisfies the rule and loses the promise; doing the work
-         * satisfies both. Only whoever reads it knows which. */
-        DispositionExplanation::RemovedAsExpired { age, limit, .. } => {
-            format!("do it or drop it ({age} old, {limit} allowed)")
-        }
-        DispositionExplanation::KeptByKind(_)
-        | DispositionExplanation::KeptByRegex { .. }
-        | DispositionExplanation::ProtectedPreamble
-        | DispositionExplanation::KeptHtml
-        | DispositionExplanation::KeptLoadBearing { .. }
-        | DispositionExplanation::KeptDirective { .. }
-        | DispositionExplanation::KeptDocumentation { .. }
-        | DispositionExplanation::KeptLicense { .. }
-        | DispositionExplanation::RemovedByKind(_)
-        | DispositionExplanation::RemovedByRegex { .. }
-        | DispositionExplanation::RemovedByPolicy { .. }
-        | DispositionExplanation::RemovedByDefault { .. }
-        | DispositionExplanation::KeptByTag { .. }
-        | DispositionExplanation::KeptStructural { .. } => "remove".to_owned(),
-    }
-}
-
 /// The one sentence that says what this project accepts, when every file with a
 /// finding was judged by the same rules.
 ///
@@ -3463,128 +3780,151 @@ fn write_agent(
     explanations: &Explanations,
     subject: Subject,
 ) -> Result<()> {
-    let mut lines = Vec::new();
-    let mut paths: Vec<String> = Vec::new();
-    let mut invalid = 0usize;
-    for file in files {
-        let has_findings = removable_count(file) > 0;
-        if !has_findings && file.result.report.diagnostics.is_empty() {
-            continue;
-        }
-        let display = sanitize_path(&file.path.to_string_lossy());
-        if has_findings {
-            paths.push(display.clone());
-        }
-        let index = LineIndex::new(&file.source);
-        let explainer = explanations.get(&file.path).map(Explainer::new);
-        for diagnostic in &file.result.report.diagnostics {
-            invalid += 1;
-            let (line, column) = index.line_column(diagnostic.span.start);
-            lines.push(format!(
-                "{display}:{line}:{column} fix the syntax: {} [{}]",
-                sanitize_message(&diagnostic.message),
-                sanitize_message(&diagnostic.code)
-            ));
-        }
-        for comment in file
-            .result
-            .report
-            .comments
-            .iter()
-            .filter(|comment| comment.disposition.is_remove())
-        {
-            let (line, column) = index.line_column(comment.span.start);
-            let start = comment.span.start.min(file.source.len());
-            let end = comment.span.end.clamp(start, file.source.len());
-            let verdict = explainer.as_ref().map(|explainer| {
-                explain_comment_with(
-                    &explainer.patterns,
-                    comment,
-                    &file.source[start..end],
-                    file.language,
-                    &explainer.material.options,
-                )
-            });
-            let action = verdict.as_ref().map_or_else(
-                || "remove".to_owned(),
-                |verdict: &DispositionExplanation| instruction(verdict),
-            );
-            lines.push(format!(
-                "{display}:{line}:{column} {action}: {}",
-                preview(&file.source, comment.span, AGENT_PREVIEW_COLUMNS)
-            ));
-        }
-    }
-    /* NOTE: A file the run could not read is a hole in the answer rather than a
-     * finding, and is reported whatever it would have contained. A file passed
-     * over for a reason — an unknown language, a size limit — is not: this
-     * report is a list of things to change, and a caller who wants the passing
-     * over to be a finding says so with `--deny-skipped`, which decides the
-     * exit code. Twenty "not checked" lines in front of an agent asked to fix
-     * one file are twenty instructions it cannot carry out. */
+    let groups = crate::advice::plan(files);
+    let removable: usize = groups.iter().map(crate::advice::Group::comments).sum();
+    let broken: Vec<String> = files
+        .iter()
+        .flat_map(|file| {
+            let index = LineIndex::new(&file.source);
+            let display = sanitize_path(&file.path.to_string_lossy());
+            file.result
+                .report
+                .diagnostics
+                .iter()
+                .map(move |diagnostic| {
+                    let (line, _) = index.line_column(diagnostic.span.start);
+                    format!(
+                        "BROKEN {display} {line} {} [{}]",
+                        sanitize_message(&diagnostic.message),
+                        sanitize_message(&diagnostic.code)
+                    )
+                })
+        })
+        .collect();
     let unreadable: Vec<&SkippedFile> = skipped.iter().filter(|item| item.error).collect();
-    for item in &unreadable {
-        lines.push(format!(
-            "{}: could not be read: {}",
-            sanitize_path(&item.path.to_string_lossy()),
-            sanitize_message(&item.reason)
-        ));
-    }
-    if lines.is_empty() {
+    if removable == 0 && broken.is_empty() && unreadable.is_empty() {
+        /* NOTE: Silence is the pass, and a caller embedding this in a hook
+         * decision reads emptiness rather than parsing a sentence to find out
+         * there was nothing to say. */
         return Ok(());
     }
 
-    paths.sort_unstable();
-    paths.dedup();
-    let removable = lines.len() - invalid - unreadable.len();
-    let mut headline = Vec::new();
-    if removable > 0 {
-        headline.push(format!(
-            "{} to {} in {}",
-            comments(removable, ""),
-            match options.operation {
-                Operation::Fix => "have gone",
-                Operation::Check | Operation::Scan | Operation::Diff => "go",
-            },
-            plural(paths.len(), "file")
-        ));
+    let touched: std::collections::BTreeSet<&Path> = groups
+        .iter()
+        .flat_map(|group| &group.items)
+        .map(|item| item.path.as_path())
+        .collect();
+    wrote(writeln!(
+        output,
+        "# ocomment: {} to answer for in {} of {} scanned, policy {}.",
+        comments(removable, ""),
+        touched.len(),
+        plural(files.len() + skipped.len(), "file"),
+        options.policy
+    ))?;
+    for line in AGENT_SCHEMA {
+        wrote(writeln!(output, "# {line}"))?;
     }
-    if invalid > 0 {
-        headline.push(format!("{} that will not parse", plural(invalid, "file")));
-    }
-    if !unreadable.is_empty() {
-        headline.push(format!("{} unreadable", plural(unreadable.len(), "file")));
-    }
-    wrote(writeln!(output, "ocomment: {}.", headline.join(", ")))?;
-    wrote(writeln!(output))?;
-    for line in &lines {
-        wrote(writeln!(output, "{line}"))?;
-    }
-    let mut tail = Vec::new();
-    if let Some(rule) = accepted_here(files, explanations) {
-        tail.push(rule);
-    }
-    if removable > 0 && options.operation != Operation::Fix {
-        /* NOTE: `fix` is offered only for files it could open. Standard input
-         * has no name to hand it, and a proposal has no file yet. */
-        let fixable =
-            subject == Subject::OnDisk && paths.iter().all(|path| path != crate::files::STDIN_PATH);
-        tail.push(if fixable {
-            format!(
-                "next: edit them, or run `ocomment fix {}`.",
-                paths.join(" ")
-            )
-        } else {
-            "next: write it without them.".to_owned()
-        });
-    }
-    if !tail.is_empty() {
+
+    for group in &groups {
         wrote(writeln!(output))?;
-        for line in &tail {
-            wrote(writeln!(output, "{}", fold(line)))?;
+        wrote(writeln!(
+            output,
+            "DECIDE {} | {}",
+            group.decision.instruction(),
+            comments(group.comments(), "")
+        ))?;
+        for item in &group.items {
+            wrote(writeln!(output, "FINDING {}", item.where_it_is()))?;
+            for line in &item.old {
+                wrote(writeln!(output, "- {}", line.trim_end()))?;
+            }
+            for line in &item.new {
+                wrote(writeln!(output, "+ {}", line.trim_end()))?;
+            }
+            if let Some(code) = &item.subject {
+                wrote(writeln!(output, "= {}", code.trim_end()))?;
+            }
+        }
+        if let Some(route) = group.keep_route() {
+            wrote(writeln!(output, "KEEP .ocomment.toml"))?;
+            for row in route.lines() {
+                wrote(writeln!(output, "| {row}"))?;
+            }
         }
     }
+
+    if !broken.is_empty() || !unreadable.is_empty() {
+        wrote(writeln!(output))?;
+        for line in &broken {
+            wrote(writeln!(output, "{line}"))?;
+        }
+        for item in &unreadable {
+            wrote(writeln!(
+                output,
+                "UNREADABLE {}",
+                sanitize_path(&item.path.to_string_lossy())
+            ))?;
+        }
+    }
+
+    wrote(writeln!(output))?;
+    if let Some(rule) = accepted_here(files, explanations) {
+        wrote(writeln!(output, "# {}", fold(&rule)))?;
+    }
+    /* NOTE: `fix` is offered only for files it could open. Standard input has
+     * no name to hand it, and a proposal has no file yet, so the argv would
+     * name bytes that are not there. */
+    let on_disk = subject == Subject::OnDisk
+        && touched
+            .iter()
+            .all(|path| path.to_string_lossy() != crate::files::STDIN_PATH);
+    if !on_disk && removable > 0 {
+        /* NOTE: A proposal has no file to point an argv at, and naming one
+         * would send the reader at bytes that are not there yet. */
+        wrote(writeln!(
+            output,
+            "# these bytes are not on disk yet: write it without them."
+        ))?;
+    }
+    if on_disk && options.operation != Operation::Fix {
+        wrote(writeln!(output, "RECHECK {}", argv(&["ocomment", "check"])))?;
+        wrote(writeln!(
+            output,
+            "REMOVE-ALL {} removes {}, including any above that were worth keeping",
+            argv(&["ocomment", "fix"]),
+            comments(removable, "")
+        ))?;
+    }
     Ok(())
+}
+
+/// What the markers in the agent report mean, carried in the report.
+///
+/// A machine format that needs its schema fetched from somewhere else is a
+/// format its reader has to go and learn before it can act, and the reader this
+/// is for is one that would rather spend that round trip on the work. Six lines
+/// of preamble buy every one of them back.
+const AGENT_SCHEMA: [&str; 6] = [
+    "Every line starts with a marker. DECIDE opens one question, asked of each",
+    "FINDING under it. A FINDING names a path and the first and last line of one",
+    "comment, which may span several. `-` is what is there now, `+` what would",
+    "replace it, `=` the code the comment is about. KEEP names a file and `|` the",
+    "setting that would stop the question being asked. BROKEN is a file that did",
+    "not parse. The argv lines are commands, ready to run.",
+];
+
+/// A command as the argv a caller can run without retyping it.
+///
+/// Prose loses to a copied array. A path with a space in it, a digest, a flag
+/// whose spelling matters -- each is a chance to get one character wrong, and
+/// the reader most likely to get it wrong is the one reading fastest.
+fn argv(words: &[&str]) -> String {
+    let quoted: Vec<String> = words
+        .iter()
+        .map(|word| format!("\"{}\"", sanitize_message(word)))
+        .collect();
+    format!("[{}]", quoted.join(","))
 }
 
 /// The end-of-run summary as one JSON object, whatever `--format` the run

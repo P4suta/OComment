@@ -370,7 +370,11 @@ fn report(
                 serde_json::to_string_pretty(&document).expect("the report serializes")
             ))?;
         }
-        OutputFormat::Human | OutputFormat::Sarif | OutputFormat::Github | OutputFormat::Agent => {
+        OutputFormat::Human
+        | OutputFormat::Review
+        | OutputFormat::Sarif
+        | OutputFormat::Github
+        | OutputFormat::Agent => {
             for failure in failures {
                 wrote(writeln!(out, "{}: {}", failure.id, failure.detail))?;
             }

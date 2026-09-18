@@ -33,10 +33,19 @@ fn git(directory: &Path, arguments: &[&str], date: Option<&str>) {
     );
 }
 
+/// Run the binary, naming `--format human` unless the test names a format.
+///
+/// These assert on the one-line-per-finding stream, which is `human`; `review`
+/// became the default while they were written against the other one.
 fn run(directory: &Path, arguments: &[&str]) -> Output {
+    let mut arguments: Vec<&str> = arguments.to_vec();
+    if !arguments.contains(&"--format") {
+        arguments.push("--format");
+        arguments.push("human");
+    }
     Command::new(binary())
         .current_dir(directory)
-        .args(arguments)
+        .args(&arguments)
         .output()
         .expect("the binary runs")
 }

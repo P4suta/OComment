@@ -236,7 +236,7 @@ _ocomment() {
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human review json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -322,7 +322,7 @@ _ocomment() {
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human review json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -404,7 +404,7 @@ _ocomment() {
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human review json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -486,7 +486,7 @@ _ocomment() {
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human review json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -572,7 +572,7 @@ _ocomment() {
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human review json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -658,7 +658,7 @@ _ocomment() {
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human review json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -740,7 +740,7 @@ _ocomment() {
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human review json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -826,7 +826,7 @@ _ocomment() {
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human review json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -1272,7 +1272,7 @@ _ocomment() {
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human review json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -1354,7 +1354,7 @@ _ocomment() {
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human review json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -1436,7 +1436,7 @@ _ocomment() {
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human review json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -1518,7 +1518,7 @@ _ocomment() {
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human review json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -1600,7 +1600,7 @@ _ocomment() {
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human review json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -1682,7 +1682,7 @@ _ocomment() {
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human review json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -1776,7 +1776,7 @@ _ocomment() {
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human review json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -1970,7 +1970,7 @@ _ocomment() {
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human review json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -2052,7 +2052,7 @@ _ocomment() {
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human review json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -2134,7 +2134,7 @@ _ocomment() {
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human review json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -2216,7 +2216,7 @@ _ocomment() {
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human review json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -2298,7 +2298,7 @@ _ocomment() {
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human review json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -2384,7 +2384,7 @@ _ocomment() {
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human review json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -2470,7 +2470,7 @@ _ocomment() {
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human review json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -2552,7 +2552,7 @@ _ocomment() {
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human review json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -2634,7 +2634,7 @@ _ocomment() {
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human review json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
@@ -2720,7 +2720,7 @@ _ocomment() {
                     return 0
                     ;;
                 --format)
-                    COMPREPLY=($(compgen -W "human json jsonl sarif github agent" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "human review json jsonl sarif github agent" -- "${cur}"))
                     return 0
                     ;;
                 --color)
