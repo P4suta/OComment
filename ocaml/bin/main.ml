@@ -35,7 +35,8 @@ let base64_encode bytes =
 
 let span_json (span : byte_span) = `Assoc ["start", `Int span.start; "end", `Int span.finish]
 let disposition_json = function Remove -> `Assoc ["action", `String "remove"] | Keep reason -> `Assoc ["action", `String "keep"; "reason", `String reason]
-(* NOTE: Absent when no shape rule settled the comment, exactly as the Rust
+
+(** Absent when no shape rule settled the comment, exactly as the Rust
    field is skipped when it is None, so the two encodings stay byte-comparable. *)
 let shape_json = function
   | Tagged tag -> `Assoc ["rule", `String "tagged"; "tag", `String tag]

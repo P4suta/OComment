@@ -43,6 +43,23 @@ The repository is intentionally split into independent implementations:
 Do not share scanner code between Rust and OCaml. Matching normalized outputs
 are the cross-check.
 
+## Before you push
+
+```sh
+sh tools/preflight.sh            # NOTE: everything CI checks that a laptop can
+sh tools/preflight.sh --quick    # NOTE: everything but the slowest three
+```
+
+Waiting eight minutes to be told about a stale manual page is not a review
+cycle. Every gate below that a laptop can run, runs there, in the order that
+fails soonest for the least money — and `tools/check_ci_contracts.py` holds the
+script against `.github/workflows/ci.yml`, so a gate added to CI cannot quietly
+stop running locally.
+
+`lefthook install` wires it into `pre-push`. What is deliberately left to CI:
+the three-operating-system matrices, the Docker image, CodeQL, and the VS Code
+extension's npm build. Each needs something a laptop is not.
+
 ## Required checks
 
 Run the checks relevant to your change; scanner or policy changes should run all

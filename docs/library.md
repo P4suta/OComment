@@ -116,7 +116,13 @@ use ocomment_core::{
 let mut options = ScanOptions::default();
 let why = explain_disposition(CommentKind::Line, b"// note", Language::Rust, &options);
 assert_eq!(why.action(), Action::Remove);
-assert!(matches!(why, DispositionExplanation::RemovedByDefault(Policy::Safe)));
+assert!(matches!(
+    why,
+    DispositionExplanation::RemovedByDefault {
+        policy: Policy::Standard,
+        kind: CommentKind::Line,
+    }
+));
 
 options.keep_regex.push(r"^//\s*NOTE\b".into());
 let kept = explain_disposition(CommentKind::Line, b"// NOTE: why", Language::Rust, &options);

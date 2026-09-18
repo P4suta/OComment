@@ -3,7 +3,7 @@ type language =
   | Shell | Html | Css | Jsonc | Sql | Kotlin | Toml | Lua | Yaml | Php | Ruby
   | Zig | R | Dart | Swift | CSharp | Scala | Vue | Svelte | Markdown | Perl | Unknown
 
-(* NOTE: Declared before `dialect` for the reason the implementation gives: both
+(** Declared before `dialect` for the reason the implementation gives: both
    carry a `Standard`, and the dialect's is the one worth leaving unannotated. *)
 type policy = Conservative | Standard | All
 
@@ -23,7 +23,8 @@ type protection = NoProtection | Preamble | LoadBearingTier
 type disposition = Remove | Keep of string
 type severity = Error | Warning | Info | Hint
 type diagnostic = { code : string; message : string; severity : severity; span : byte_span }
-(* NOTE: A rule about a comment's shape rather than its kind, recorded because
+
+(** A rule about a comment's shape rather than its kind, recorded because
    nothing can re-derive it from the comment's own bytes. *)
 type shape_rule = Tagged of string | Trailing | TooLong of int * int
 
@@ -32,7 +33,7 @@ type comment =
     shape : shape_rule option }
 type layout = Lines | Columns | Compact
 
-(* NOTE: What a comment has to be beyond being of a kind the policy keeps.  The
+(** What a comment has to be beyond being of a kind the policy keeps.  The
    policy decides by kind, and a kind is a coarse thing to decide by: a one-line
    rationale and a forty-line essay are both Line.  These are the other axes,
    and they cut across the policy rather than under it. *)
@@ -49,7 +50,7 @@ type allow_rules = {
   expiring_tags : string list;
 }
 
-(* NOTE: How strongly a protected pattern asks for its comment.  The weaker
+(** How strongly a protected pattern asks for its comment.  The weaker
    tier records it as a directive that every policy but `all` keeps; the
    stronger one records it as a comment no policy reaches. *)
 type protection_tier = Tool | ProfileLoadBearing
@@ -84,7 +85,8 @@ type transform_result = { output : bytes; edits : edit list; report : scan_repor
 type line_delimiter = { line_start : string; requires_boundary : bool; line_kind : comment_kind }
 type block_delimiter = { block_start : string; block_end_token : string; nested : bool; block_kind : comment_kind }
 type string_delimiter = { string_start : string; string_end : string; escape : string option; multiline : bool }
-(* NOTE: `tier` is how strongly the pattern asks for the comment.  A profile
+
+(** `tier` is how strongly the pattern asks for the comment.  A profile
    describes a syntax with no built-in scanner, and its author knows something
    the policy cannot: a marker their toolchain reads is not a marker their
    linter reads.  Without it every profile protection was the weaker one and

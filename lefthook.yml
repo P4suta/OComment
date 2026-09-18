@@ -25,3 +25,15 @@ pre-commit:
   skip:
     - merge
     - rebase
+
+# NOTE: Everything CI checks that a laptop can check; see "Before you push" in
+# NOTE: CONTRIBUTING.md. `--quick` is not used here on purpose: a push is the
+# NOTE: last moment the answer is still cheap.
+pre-push:
+  commands:
+    preflight:
+      run: sh tools/preflight.sh
+
+  skip:
+    - merge
+    - rebase

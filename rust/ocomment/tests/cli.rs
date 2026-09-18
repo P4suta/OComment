@@ -237,9 +237,9 @@ fn diff_is_byte_preserving_and_git_applies_quoted_non_utf8_paths() {
     assert_eq!(fs::read(path).unwrap(), b"let raw = b\"\xff\"; \n");
 }
 
-/* NOTE: A lock file carries no extension the detector can use, so the whole
- * name has to reach it through the binary for the run to scan the file at all.
- * `Cargo.lock` is the one every Rust checkout has. */
+/// A lock file carries no extension the detector can use, so the whole
+/// name has to reach it through the binary for the run to scan the file at all.
+/// `Cargo.lock` is the one every Rust checkout has.
 #[test]
 fn a_toml_lock_file_is_scanned_under_its_reserved_name() {
     let directory = tempfile::tempdir().unwrap();
@@ -283,10 +283,10 @@ fn a_toml_lock_file_is_scanned_under_its_reserved_name() {
     assert_eq!(fs::read(&path).unwrap(), b"\nname = \"# opaque\" \n");
 }
 
-/* NOTE: A `.clang-format` file is YAML with no extension for the detector to go
- * on and a hidden name besides, so naming it is what gets it scanned at all:
- * the whole name reaches the detector, and an explicitly named path lifts the
- * hidden-file rule the walk applies on its own. */
+/// A `.clang-format` file is YAML with no extension for the detector to go
+/// on and a hidden name besides, so naming it is what gets it scanned at all:
+/// the whole name reaches the detector, and an explicitly named path lifts the
+/// hidden-file rule the walk applies on its own.
 #[test]
 fn a_yaml_configuration_is_scanned_under_its_reserved_name() {
     let directory = tempfile::tempdir().unwrap();
@@ -325,9 +325,9 @@ fn a_yaml_configuration_is_scanned_under_its_reserved_name() {
     );
 }
 
-/* NOTE: A Lua script installed as a command carries no extension at all, so the
- * `#!` line is the only evidence the run has; this is the path from the file
- * name through the detector and out the other side as a Lua scan. */
+/// A Lua script installed as a command carries no extension at all, so the
+/// `#!` line is the only evidence the run has; this is the path from the file
+/// name through the detector and out the other side as a Lua scan.
 #[test]
 fn a_lua_script_is_scanned_from_its_shebang_alone() {
     let directory = tempfile::tempdir().unwrap();
@@ -363,9 +363,9 @@ fn a_lua_script_is_scanned_from_its_shebang_alone() {
     );
 }
 
-/* NOTE: A PHP template is two languages in one file and only the code half is
- * scanned: the inline HTML around the tags is content, so the `<!-- -->` comment
- * in it survives a run that removes the `//` comment inside them. */
+/// A PHP template is two languages in one file and only the code half is
+/// scanned: the inline HTML around the tags is content, so the `<!-- -->` comment
+/// in it survives a run that removes the `//` comment inside them.
 #[test]
 fn a_php_template_is_scanned_only_inside_its_tags() {
     let directory = tempfile::tempdir().unwrap();
@@ -404,12 +404,12 @@ fn a_php_template_is_scanned_only_inside_its_tags() {
     );
 }
 
-/* NOTE: Zig is the one built-in language with no block comment, and this is what
- * that costs a run end to end: `// zig fmt: off` is the only instruction the
- * formatter reads out of a comment and is kept, the `//` written on a
- * multiline string literal line is content the way one inside a quoted string
- * is, and only the ordinary comment beside them is removed. `zig ast-check`
- * (0.16.0) accepts the file below. */
+/// Zig is the one built-in language with no block comment, and this is what
+/// that costs a run end to end: `// zig fmt: off` is the only instruction the
+/// formatter reads out of a comment and is kept, the `//` written on a
+/// multiline string literal line is content the way one inside a quoted string
+/// is, and only the ordinary comment beside them is removed. `zig ast-check`
+/// (0.16.0) accepts the file below.
 #[test]
 fn a_zig_file_keeps_its_fmt_directive_and_its_multiline_string() {
     let directory = tempfile::tempdir().unwrap();
@@ -659,14 +659,14 @@ fn a_csharp_file_keeps_its_generated_marker_and_its_directive_lines() {
     );
 }
 
-/* NOTE: R is the one built-in language whose extension is written in upper case
- * as often as in lower — `analysis.R` and `analysis.r` are the same kind of
- * file — so this is the run that proves the suffix is folded before it is
- * looked up. It is also what a roxygen comment costs end to end: `#'` is
- * documentation and the default policy takes it, `# nolint` is lintr's
- * instruction and is kept, and the `#` inside the raw string is content. R
- * 4.3.3 `getParseData` reads the file below as `COMMENT` at [0,19), [20,30),
- * [60,68) and [116,124), with `STR_CONST` covering [80,104). */
+/// R is the one built-in language whose extension is written in upper case
+/// as often as in lower — `analysis.R` and `analysis.r` are the same kind of
+/// file — so this is the run that proves the suffix is folded before it is
+/// looked up. It is also what a roxygen comment costs end to end: `#'` is
+/// documentation and the default policy takes it, `# nolint` is lintr's
+/// instruction and is kept, and the `#` inside the raw string is content. R
+/// 4.3.3 `getParseData` reads the file below as `COMMENT` at [0,19), [20,30),
+/// [60,68) and [116,124), with `STR_CONST` covering [80,104).
 #[test]
 fn an_r_file_keeps_its_lint_directive_and_its_raw_string() {
     let directory = tempfile::tempdir().unwrap();
@@ -714,10 +714,10 @@ fn an_r_file_keeps_its_lint_directive_and_its_raw_string() {
     );
 }
 
-/* NOTE: A `Gemfile` carries no extension, so it reaches the Ruby scanner by its
- * whole name alone — and once there, the magic comment at the head of it is a
- * directive the default policy keeps, where the embedded document below it is
- * an ordinary comment the same run removes. */
+/// A `Gemfile` carries no extension, so it reaches the Ruby scanner by its
+/// whole name alone — and once there, the magic comment at the head of it is a
+/// directive the default policy keeps, where the embedded document below it is
+/// an ordinary comment the same run removes.
 #[test]
 fn a_gemfile_is_scanned_as_ruby_by_its_name_alone() {
     let directory = tempfile::tempdir().unwrap();
