@@ -712,7 +712,7 @@
         "force_invalid": true
       },
       "source_utf8": "<script>const x = 1; // known\n",
-      "note": "The `invalid-html-embedded` source with `force_invalid`: the error diagnostic stands, and edits are produced anyway.",
+      "note": "The `invalid-html-embedded` source with `force_invalid`: the error diagnostic stands, the verdicts stand, and no edit is produced. The diagnostic covers the whole document, so nothing in it was established -- an unclosed `<script>` means the scanner guessed that the rest is JavaScript, and if it is not then `// known` is not a comment. `force_invalid` asks for the edits a broken file still supports, and this file supports none.",
       "expect": {
         "valid": false,
         "comments": [
@@ -730,7 +730,44 @@
             "end": 30
           }
         ],
-        "output_utf8": "<script>const x = 1; \n"
+        "output_utf8": "<script>const x = 1; // known\n"
+      }
+    },
+    {
+      "id": "forced-invalid-keeps-the-code-under-an-unterminated-comment",
+      "language": "c",
+      "operation": "transform",
+      "options": {
+        "policy": "standard",
+        "layout": "lines",
+        "force_invalid": true
+      },
+      "source_utf8": "int x = 1; // a real comment\nint y = 2; /* never closed\nint z = 3;\n",
+      "note": "The case `force_invalid` exists for, and the one it must not get wrong. The line comment is closed before the failure and goes; the unterminated block opener is reported as a comment running to the end of the file, and the two lines of code under it are not a comment. Removing them would be removing bytes nobody established. The verdict on the second comment stands -- it is removable, and it is still there, which is what a file that does not lex earns.",
+      "expect": {
+        "valid": false,
+        "comments": [
+          {
+            "start": 11,
+            "end": 28,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 40,
+            "end": 67,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [
+          {
+            "code": "unterminated-comment",
+            "start": 40,
+            "end": 67
+          }
+        ],
+        "output_utf8": "int x = 1; \nint y = 2; /* never closed\nint z = 3;\n"
       }
     },
     {

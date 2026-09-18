@@ -207,7 +207,7 @@ Policy:
           Fail when a file was passed over for one of these reasons, rather than noting it
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
           Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
@@ -451,7 +451,7 @@ Policy:
           Fail when a file was passed over for one of these reasons, rather than noting it
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
           Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
@@ -680,7 +680,7 @@ Policy:
           Fail when a file was passed over for one of these reasons, rather than noting it
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
           Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
@@ -901,7 +901,7 @@ Policy:
           Fail when a file was passed over for one of these reasons, rather than noting it
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
           Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
@@ -1122,7 +1122,7 @@ Policy:
           Fail when a file was passed over for one of these reasons, rather than noting it
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
           Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
@@ -1330,7 +1330,7 @@ Policy:
           Fail when a file was passed over for one of these reasons, rather than noting it
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
           Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
@@ -1538,7 +1538,7 @@ Policy:
           Fail when a file was passed over for one of these reasons, rather than noting it
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
           Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
@@ -1762,7 +1762,7 @@ Policy:
           Fail when a file was passed over for one of these reasons, rather than noting it
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
           Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
@@ -1977,7 +1977,7 @@ Policy:
           Fail when a file was passed over for one of these reasons, rather than noting it
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
           Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
@@ -2185,7 +2185,7 @@ Policy:
           Fail when a file was passed over for one of these reasons, rather than noting it
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
           Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
@@ -2402,7 +2402,7 @@ Policy:
           Fail when a file was passed over for one of these reasons, rather than noting it
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
           Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
@@ -2623,7 +2623,7 @@ Policy:
           Fail when a file was passed over for one of these reasons, rather than noting it
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
           Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
@@ -2835,7 +2835,7 @@ Policy:
           Fail when a file was passed over for one of these reasons, rather than noting it
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
           Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
@@ -3043,7 +3043,7 @@ Policy:
           Fail when a file was passed over for one of these reasons, rather than noting it
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
           Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
@@ -3255,7 +3255,7 @@ Policy:
           Fail when a file was passed over for one of these reasons, rather than noting it
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
           Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
@@ -3467,7 +3467,7 @@ Policy:
           Fail when a file was passed over for one of these reasons, rather than noting it
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
           Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
@@ -3679,7 +3679,7 @@ Policy:
           Fail when a file was passed over for one of these reasons, rather than noting it
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
           Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
@@ -3893,7 +3893,7 @@ Policy:
           Fail when a file was passed over for one of these reasons, rather than noting it
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
           Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
@@ -4114,7 +4114,7 @@ Policy:
           Fail when a file was passed over for one of these reasons, rather than noting it
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
           Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
@@ -4335,7 +4335,7 @@ Policy:
           Fail when a file was passed over for one of these reasons, rather than noting it
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
           Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
@@ -4559,7 +4559,7 @@ Policy:
           Fail when a file was passed over for one of these reasons, rather than noting it
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
           Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
@@ -4774,7 +4774,7 @@ Policy:
           Fail when a file was passed over for one of these reasons, rather than noting it
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
           Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
@@ -4982,7 +4982,7 @@ Policy:
           Fail when a file was passed over for one of these reasons, rather than noting it
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
           Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
@@ -5190,7 +5190,7 @@ Policy:
           Fail when a file was passed over for one of these reasons, rather than noting it
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
           Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
@@ -5398,7 +5398,7 @@ Policy:
           Fail when a file was passed over for one of these reasons, rather than noting it
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
           Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads

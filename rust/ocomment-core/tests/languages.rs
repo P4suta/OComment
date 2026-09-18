@@ -621,7 +621,14 @@ fn html_comments_are_explicit_only_and_embedded_languages_recurse() {
             ..Default::default()
         },
     );
-    assert_eq!(forced.edits.len(), 1);
+    /* NOTE: `unterminated-embedded-language` names the whole document, and a
+     * forced run does not edit inside the bytes an error names. The verdict
+     * stands and the comment stays: an element that never closes is one the
+     * scanner could not place, and a comment it reports inside a region it
+     * could not place is a comment it cannot promise is one. */
+    assert!(forced.edits.is_empty());
+    assert_eq!(forced.report.comments.len(), 1);
+    assert!(forced.report.comments[0].disposition.is_remove());
 }
 
 #[test]

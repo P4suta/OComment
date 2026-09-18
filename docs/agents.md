@@ -163,6 +163,34 @@ embedded in the binary — `ocomment config schema` writes the configuration one
 `--format jsonl` is the same content one object per line, for a stream you do
 not want to buffer.
 
+### A report can tell you it was guessing
+
+`valid` is false when the source failed to lex, and a report like that still
+carries a verdict for every comment it found — because those are what the
+scanner concluded, not because you should act on all of them. The ones it could
+not establish are marked, and only those:
+
+```python
+for comment in report["comments"]:
+    if comment.get("established", True):
+        act_on(comment)
+```
+
+A comment without the field is one the scan established, and its verdict is
+worth what any verdict in a clean report is worth.
+
+A scanner that cannot find the end of a token does not know where the next one
+starts, so an unterminated block opener is reported as a comment running to the
+end of the file — and the code under it is not a comment. Acting on that verdict
+deletes code. `fix --force-invalid` skips exactly these comments for the same
+reason, so if you are shelling out rather than reading the report you already
+have this for free.
+
+The mark is narrow on purpose. A C# string that never closes ends at the
+newline, and the comment on the line below it is delimited by a scanner that
+knows exactly where it is — that comment is not marked, and a forced run still
+removes it.
+
 ## Finding out why
 
 `--explain` names, under each reported comment, the rule that decided it and

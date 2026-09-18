@@ -64,8 +64,21 @@ edits, is read, reported on, and rewritten with those bytes untouched. Only the
 spans it actually removes are changed.
 
 A file that fails to *lex* — an unterminated block comment, say — is reported as
-invalid and left alone, unless `--force-invalid` tells the run to apply the edits
-that are still provably safe.
+invalid and left alone, unless `--force-invalid` tells the run to edit the part
+that scanned.
+
+That part ends where the lex failed. A scanner that cannot find the end of a
+token does not know where the next one starts, so an unterminated `/*` is
+reported as a comment running to the end of the file — and the code under it is
+not a comment. `--force-invalid` removes the comments the scanner closed before
+the failure and leaves everything from there on alone. The verdicts on the rest
+still stand in the report: they are removable, and they are still in the file,
+which is what a file that does not lex earns.
+
+The one exception is an error that cost the lexer nothing. A malformed Java
+`\uXXXX` escape is found in a pass over the whole source before a token is read,
+so it makes the file invalid without putting a single comment in doubt, and a
+forced run over it edits everything.
 
 ## Why is this comment still here after `fix`?
 

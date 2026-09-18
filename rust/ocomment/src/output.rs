@@ -142,7 +142,7 @@ pub struct RenderOptions {
     /// vocabulary of the `fix` it is standing in for.
     pub dry_run: bool,
     /// `--force-invalid` was in effect, so a file that fails to scan still had
-    /// its provably safe edits applied.
+    /// the edits of the part that scanned applied.
     pub force_invalid: bool,
     /// The run reached the disk. A `fix` blocked by invalid syntax or an I/O
     /// error leaves this false and must not claim any removal.
@@ -200,6 +200,13 @@ pub struct Summary {
     pub files_changed: usize,
     pub comments_removed: usize,
     pub invalid_files: usize,
+    /// Files written from a scan that had failed, which only `--force-invalid`
+    /// can reach. These are the writes no re-scan covered: the result of
+    /// editing a file that does not lex does not lex either, so the check every
+    /// other write passes has nothing to say about them. The summary has to
+    /// name them, because the sentence it prints otherwise is a claim about
+    /// evidence that was never collected.
+    pub forced_files: usize,
     /// Non-error skips met while walking, counted under a short stable label
     /// rather than the raw reason, which can carry a configured byte limit.
     /// A path named on the command line is deliberately absent: it already has
@@ -228,8 +235,11 @@ impl Summary {
             }
             if file.result.changed() {
                 summary.files_changed += 1;
+                if !file.result.report.valid {
+                    summary.forced_files += 1;
+                }
                 if operation == Operation::Fix {
-                    summary.comments_removed += removable;
+                    summary.comments_removed += removed_count(file);
                 }
             }
         }
@@ -259,6 +269,23 @@ fn removable_count(file: &ProcessedFile) -> usize {
         .comments
         .iter()
         .filter(|comment| comment.disposition.is_remove())
+        .count()
+}
+
+/// How many comments a `fix` over this file actually took out.
+///
+/// The same as [`removable_count`] whenever the scan succeeded, and smaller
+/// when it did not: a failed scan establishes only the part before the failure,
+/// `plan_report` edits only that part, and the removable comments past it are
+/// still removable and still in the file. Reporting what was removable would
+/// report removals that did not happen, which is the one number a deletion tool
+/// must not get wrong in the reassuring direction.
+fn removed_count(file: &ProcessedFile) -> usize {
+    let report = &file.result.report;
+    report
+        .comments
+        .iter()
+        .filter(|comment| comment.disposition.is_remove() && report.established(comment.span))
         .count()
 }
 
@@ -613,6 +640,20 @@ struct JsonComment<'a> {
     #[serde(flatten)]
     position: JsonPosition,
     kind: CommentKind,
+    /// `false` on a comment the scan did not establish, and absent otherwise.
+    ///
+    /// `valid` says whether the lex failed; it cannot say where, and a caller
+    /// acting on a verdict needs that. A scanner that cannot find the end of a
+    /// token does not know where the next one starts, so an unterminated block
+    /// opener is reported as a comment running to the end of the file — and the
+    /// code under it is not a comment. The verdict is here because it is what
+    /// the scanner concluded; this field is here because acting on it would
+    /// delete code. `fix --force-invalid` skips exactly these.
+    ///
+    /// Written only when it is `false`, so a report from a source that lexed is
+    /// the same bytes it has always been.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    established: Option<bool>,
     /// Which rule decided it, and where that rule was written.
     ///
     /// Present when `--explain` asked for it. The human report has printed
@@ -666,6 +707,7 @@ fn json_report<'a>(
     explainer: Option<&Explainer<'_>>,
 ) -> JsonReport<'a> {
     let lines = LineIndex::new(source);
+    let whole = report.established_everything();
     JsonReport {
         language: report.language,
         comments: report
@@ -675,6 +717,7 @@ fn json_report<'a>(
                 span: comment.span,
                 position: JsonPosition::of(&lines, comment.span),
                 kind: comment.kind,
+                established: (!whole && !report.established(comment.span)).then_some(false),
                 explanation: explainer
                     .map(|explainer| json_explanation(explainer, comment, source, language)),
                 text: preview.then(|| slice_text(source, comment.span)),
@@ -1334,7 +1377,7 @@ fn render_human(
                     output,
                     "fixed {}: removed {}",
                     display_path(&file.path, presentation.hyperlinks),
-                    comments(removable_count(file), "")
+                    comments(removed_count(file), "")
                 ))?;
             }
         } else {
@@ -1749,16 +1792,26 @@ fn summary_line(summary: &Summary, options: &RenderOptions) -> String {
         }
         Operation::Fix => {
             if options.applied && summary.files_changed > 0 {
-                /* NOTE: The evidence, not just the count. What makes a tool safe
-                 * to wire into a hook is not an accuracy claim, it is being able
-                 * to say what was checked: every file written here was re-scanned
-                 * first and had to lex cleanly and hold nothing removable, or
-                 * nothing would have been written at all. */
-                format!(
-                    "Removed {} in {} ({scanned} scanned); each re-scanned clean and idempotent before writing.",
+                /* NOTE: The evidence, not just the count -- what makes a tool
+                 * safe to wire into a hook is being able to say what was
+                 * checked. Which is why it cannot be printed unconditionally: a
+                 * file that did not scan produces a result that does not scan,
+                 * so a forced write skips that check, and claiming it anyway
+                 * would put the strongest sentence here prints on the one run
+                 * that did not earn it. */
+                let head = format!(
+                    "Removed {} in {} ({scanned} scanned)",
                     comments(summary.comments_removed, ""),
                     plural(summary.files_changed, "file")
-                )
+                );
+                if summary.forced_files > 0 {
+                    format!(
+                        "{head}; {} written from a scan that failed, edited only outside what the failure covers and re-scanned by nothing.",
+                        plural(summary.forced_files, "file")
+                    )
+                } else {
+                    format!("{head}; each re-scanned clean and idempotent before writing.")
+                }
             } else if summary.removable_comments == 0 {
                 format!("Nothing to fix in {scanned}.")
             } else {

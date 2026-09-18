@@ -72,6 +72,10 @@
       "additionalProperties": false,
       "required": ["span", "line", "column", "end_line", "end_column", "kind", "disposition"],
       "properties": {
+        "established": {
+          "const": false,
+          "description": "Present, and only ever false, on a comment the scan did not establish. `valid` says whether the lex failed; it cannot say where, and a caller acting on a verdict needs that. A scanner that cannot find the end of a token does not know where the next one starts, so an unterminated block opener is reported as a comment running to the end of the file, and the code under it is not a comment. The verdict is in the report because it is what the scanner concluded; this field is here because acting on it would delete code. `fix --force-invalid` skips exactly these comments."
+        },
         "span": { "$ref": "#/$defs/span" },
         "line": { "type": "integer", "minimum": 1 },
         "column": { "type": "integer", "minimum": 1 },
