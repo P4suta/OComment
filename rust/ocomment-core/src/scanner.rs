@@ -6851,7 +6851,7 @@ fn byte_order_mark_width(source: &[u8]) -> usize {
     }
 }
 
-fn classify_comment(
+pub(crate) fn classify_comment(
     source: &[u8],
     language: Language,
     lexical: CommentKind,

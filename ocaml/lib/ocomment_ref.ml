@@ -417,12 +417,24 @@ let unicode_trim text =
       back (index + width) (if unicode_whitespace scalar then finish else index + width) in
   String.sub text start (back start start - start)
 
+(** What opens and closes a comment, in one place.
+
+   Two lists said this and they drifted: the one [classify] reads had no ";;",
+   ";" or "%", so a rule written against the text of a comment worked in some
+   languages and not in others -- a licence header in a file a declarative
+   profile reads with ";;" was an ordinary comment, and the same bytes in a
+   Python file were a licence.  Lisp's, SQL's and Lua's openers were added to
+   the other list when that was found and not to this one.  One definition is
+   the only arrangement in which they cannot part again. *)
+let comment_openers =
+  ["<!--"; "///"; "//!"; "//"; "/**"; "/*"; "(*"; ";;"; ";"; "--"; "%"; "#"]
+
+let comment_closers = ["-->"; "*/"; "*)"]
+
 let trim_markers raw =
-  let markers = ["<!--"; "///"; "//!"; "//"; "/**"; "/*"; "(*"; "--"; "#"] in
-  let endings = ["-->"; "*/"; "*)"] in
-  let start = match List.find_opt (fun marker -> String.starts_with ~prefix:marker raw) markers with
+  let start = match List.find_opt (fun marker -> String.starts_with ~prefix:marker raw) comment_openers with
     | Some marker -> String.length marker | None -> 0 in
-  let finish = match List.find_opt (fun marker -> String.ends_with ~suffix:marker raw) endings with
+  let finish = match List.find_opt (fun marker -> String.ends_with ~suffix:marker raw) comment_closers with
     | Some marker -> String.length raw - String.length marker | None -> String.length raw in
   String.sub raw start (max 0 (finish - start)) |> unicode_trim |> lowercase
 
@@ -6309,8 +6321,8 @@ and scan_sfc_template vue source language options accumulator start finish =
    token protects a Python comment and silently fails to protect the identical
    rule written in Lua, where the token opens "--". *)
 let strip_comment_markers raw =
-  let openers = ["<!--"; "///"; "//!"; "//"; "/**"; "/*"; "(*"; ";;"; ";"; "--"; "%"; "#"] in
-  let closers = ["-->"; "*/"; "*)"] in
+  let openers = comment_openers in
+  let closers = comment_closers in
   let start = match List.find_opt (fun marker -> String.starts_with ~prefix:marker raw) openers with
     | Some marker -> String.length marker
     | None -> 0 in
@@ -6650,7 +6662,17 @@ let validate_profile profile =
           then Result.Error "protected patterns need non-empty `contains` and `reason` values"
           else Result.Ok ())
 
+(** One comment a declarative profile found.
+
+   The classification the built-in scanners run is run here too, so that a
+   licence header or a cross-language tool directive is the kind it is whichever
+   reader found it.  Without it a "# SPDX-License-Identifier:" was a licence in
+   a Python file and an ordinary comment in a ".gitignore" -- the same bytes,
+   kept by one reader and removed by the other.  [Unknown] is the truth about a
+   profile: it is not one of the built-in languages, so the language-specific
+   directives do not apply and the profile declares its own. *)
 let profile_comment source profile options start finish kind =
+  let kind = classify source Unknown kind start finish in
   let raw = Bytes.sub_string source start (finish - start) in
   match List.find_opt (fun item -> contains raw item.pattern) profile.protected_patterns with
   | None -> { span = { start; finish }; kind; disposition = disposition options kind raw; shape = None }

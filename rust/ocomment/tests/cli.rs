@@ -6985,3 +6985,84 @@ fn an_error_the_lexer_recovered_from_does_not_hold_back_a_forced_run() {
         "a complaint about four bytes stopped a removal it says nothing about"
     );
 }
+
+/// A licence header is a licence header whichever reader found it.
+///
+/// A `.gitignore` is read by a bundled declarative profile rather than by a
+/// built-in language scanner, and that reader used to stop at the lexical kind:
+/// the same `# SPDX-License-Identifier:` was a licence in a Python file and an
+/// ordinary comment here, so a default `fix` took it out of one and left it in
+/// the other. A repository that requires the header on every file and runs this
+/// as a gate had the two pointed at each other.
+#[test]
+fn a_profile_reader_classifies_a_licence_the_way_every_other_reader_does() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path();
+    fs::write(
+        path.join(".gitignore"),
+        b"# SPDX-License-Identifier: MIT\n# shellcheck disable=SC2012\n# ordinary\ntarget/\n",
+    )
+    .unwrap();
+    fs::write(path.join("same.py"), b"# SPDX-License-Identifier: MIT\n").unwrap();
+
+    let output = run(path, &["scan", "--format", "json", ".gitignore", "same.py"]);
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let kinds: Vec<(&str, &str)> = value["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|file| file["report"]["comments"].as_array().unwrap())
+        .map(|comment| {
+            (
+                comment["kind"].as_str().unwrap(),
+                comment["disposition"]["action"].as_str().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        kinds,
+        vec![
+            ("license", "keep"),
+            ("directive", "keep"),
+            ("line", "remove"),
+            ("license", "keep"),
+        ],
+        "a profile's reader reached a different verdict from every other reader"
+    );
+}
+
+/// A name that still works has to say that it has moved.
+///
+/// `legal` and `safe` resolve to `conservative` and `standard` so that a
+/// repository which pinned one does not break on an upgrade. Saying nothing is
+/// the other half of that bargain going unkept: the run is steered by a name
+/// the help no longer lists, and the reader finds out on the day it is removed.
+#[test]
+fn a_run_steered_by_the_old_name_of_a_policy_says_so() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(directory.path().join("sample.c"), b"int x = 1;\n").unwrap();
+
+    for (spelling, name) in [("legal", "conservative"), ("safe", "standard")] {
+        let output = run(
+            directory.path(),
+            &["check", "--policy", spelling, "sample.c"],
+        );
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        assert!(
+            stderr.contains(&format!(
+                "`--policy {spelling}` is the old name for `{name}`"
+            )),
+            "a run under the old name said nothing about it:\n{stderr}"
+        );
+    }
+
+    let output = run(
+        directory.path(),
+        &["check", "--policy", "conservative", "sample.c"],
+    );
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        !stderr.contains("is the old name for"),
+        "a run under the current name was told it had moved:\n{stderr}"
+    );
+}

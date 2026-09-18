@@ -2362,6 +2362,55 @@
       }
     },
     {
+      "id": "declarative-profile-runs-the-shared-classification",
+      "language": "c",
+      "operation": "scan-profile",
+      "options": {
+        "policy": "conservative"
+      },
+      "profile": {
+        "name": "demo",
+        "extensions": [
+          "demo"
+        ],
+        "line_comments": [
+          {
+            "start": ";;",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [],
+        "strings": [],
+        "protected_patterns": []
+      },
+      "source_utf8": ";; SPDX-License-Identifier: MIT\n;; shellcheck disable=SC2012\n;; ordinary\n",
+      "note": "A profile's reader has to reach the same verdict the built-in readers do. The licence header and the cross-language tool directive are not the profile's to know about, and were ordinary comments here while the same bytes in a Python file were kept: the same marker, removed by one reader and kept by the other. Only the third is the profile's own business, and only the third goes.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 31,
+            "kind": "license",
+            "action": "keep"
+          },
+          {
+            "start": 32,
+            "end": 60,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 61,
+            "end": 72,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
       "id": "declarative-profile-safe",
       "language": "c",
       "operation": "transform-profile",

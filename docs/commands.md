@@ -96,8 +96,8 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines
-          - standard:     Like conservative, and remove documentation, licence and copyright comments too
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
@@ -340,8 +340,8 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines
-          - standard:     Like conservative, and remove documentation, licence and copyright comments too
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
@@ -569,8 +569,8 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines
-          - standard:     Like conservative, and remove documentation, licence and copyright comments too
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
@@ -790,8 +790,8 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines
-          - standard:     Like conservative, and remove documentation, licence and copyright comments too
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
@@ -1011,8 +1011,8 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines
-          - standard:     Like conservative, and remove documentation, licence and copyright comments too
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
@@ -1219,8 +1219,8 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines
-          - standard:     Like conservative, and remove documentation, licence and copyright comments too
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
@@ -1427,8 +1427,8 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines
-          - standard:     Like conservative, and remove documentation, licence and copyright comments too
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
@@ -1651,8 +1651,8 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines
-          - standard:     Like conservative, and remove documentation, licence and copyright comments too
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
@@ -1866,8 +1866,8 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines
-          - standard:     Like conservative, and remove documentation, licence and copyright comments too
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
@@ -2074,8 +2074,8 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines
-          - standard:     Like conservative, and remove documentation, licence and copyright comments too
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
@@ -2291,8 +2291,8 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines
-          - standard:     Like conservative, and remove documentation, licence and copyright comments too
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
@@ -2512,8 +2512,8 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines
-          - standard:     Like conservative, and remove documentation, licence and copyright comments too
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
@@ -2724,8 +2724,8 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines
-          - standard:     Like conservative, and remove documentation, licence and copyright comments too
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
@@ -2932,8 +2932,8 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines
-          - standard:     Like conservative, and remove documentation, licence and copyright comments too
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
@@ -3144,8 +3144,8 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines
-          - standard:     Like conservative, and remove documentation, licence and copyright comments too
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
@@ -3356,8 +3356,8 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines
-          - standard:     Like conservative, and remove documentation, licence and copyright comments too
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
@@ -3568,8 +3568,8 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines
-          - standard:     Like conservative, and remove documentation, licence and copyright comments too
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
@@ -3782,8 +3782,8 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines
-          - standard:     Like conservative, and remove documentation, licence and copyright comments too
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
@@ -4003,8 +4003,8 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines
-          - standard:     Like conservative, and remove documentation, licence and copyright comments too
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
@@ -4224,8 +4224,8 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines
-          - standard:     Like conservative, and remove documentation, licence and copyright comments too
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
@@ -4448,8 +4448,8 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines
-          - standard:     Like conservative, and remove documentation, licence and copyright comments too
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
@@ -4663,8 +4663,8 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines
-          - standard:     Like conservative, and remove documentation, licence and copyright comments too
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
@@ -4871,8 +4871,8 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines
-          - standard:     Like conservative, and remove documentation, licence and copyright comments too
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
@@ -5079,8 +5079,8 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines
-          - standard:     Like conservative, and remove documentation, licence and copyright comments too
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
@@ -5287,8 +5287,8 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines
-          - standard:     Like conservative, and remove documentation, licence and copyright comments too
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
