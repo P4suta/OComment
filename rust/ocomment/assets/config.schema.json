@@ -110,6 +110,7 @@
       ],
       "properties": {
         "name": { "type": "string", "minLength": 1 }, "extensions": { "$ref": "#/$defs/strings" },
+        "filenames": { "$ref": "#/$defs/strings" },
         "line_comments": { "type": "array", "items": { "$ref": "#/$defs/lineDelimiter" } },
         "block_comments": { "type": "array", "items": { "$ref": "#/$defs/blockDelimiter" } },
         "strings": { "type": "array", "items": { "$ref": "#/$defs/stringDelimiter" } },

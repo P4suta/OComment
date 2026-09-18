@@ -1,6 +1,6 @@
 use crate::{
     atomic::{WritePlan, apply_transaction},
-    config, files, git, interactive, lsp,
+    config, coverage, files, git, interactive, lsp,
     output::{
         self, AnnotationLevel, Explanations, FileExplanation, Operation, OutputFormat,
         Presentation, ProcessedFile, ProcessedResult, RenderOptions, Verbosity,
@@ -191,6 +191,16 @@ struct PolicyArgs {
         value_name = "KIND"
     )]
     remove_kind: Vec<CommentKindArg>,
+    /// Fail when a file was passed over for one of these reasons, rather than noting it.
+    #[arg(
+        long,
+        global = true,
+        value_name = "REASON",
+        value_delimiter = ',',
+        num_args = 0..,
+        default_missing_value = "unknown language,unreadable"
+    )]
+    deny_skipped: Option<Vec<String>>,
     /// Apply the edits that are still provably safe when the source fails to scan.
     #[arg(long, global = true)]
     force_invalid: bool,
@@ -331,6 +341,8 @@ enum Command {
         /// Shell whose completion script is written to stdout.
         shell: Shell,
     },
+    /// Report which files a walk scanned and which it passed over, and why
+    Coverage(TargetArgs),
     /// Re-run the shared corpus against this binary and report any disagreement
     Selftest,
     /// Diagnose the environment (config, git, plugins, tools)
@@ -578,6 +590,7 @@ pub fn run() -> Result<u8> {
         Some(Command::Languages) => print_languages(&common),
         Some(Command::Plugin(args)) => run_plugin(args, &common),
         Some(Command::Completions { shell }) => run_completions(shell),
+        Some(Command::Coverage(target)) => run_coverage(&target, &common),
         Some(Command::Selftest) => selftest::run(common.output.format, common.output.quiet),
         Some(Command::Doctor) => run_doctor(&common),
         Some(Command::Man) => run_man(),
@@ -863,9 +876,18 @@ fn run_target(
     if invalid {
         return Ok(2);
     }
+    /* NOTE: A skip the caller refuses ranks with a finding rather than with a
+     * failure: the run worked, and what it found is a file the gate was meant
+     * to cover and did not. Exit 2 stays reserved for a run that could not do
+     * its job at all. */
+    let denied = deny_exit_code(
+        &discovery.skipped,
+        common.policy.deny_skipped.as_deref(),
+        verbosity == Verbosity::Quiet,
+    )?;
     match operation {
         Operation::Check | Operation::Diff if output::changed(&files) => Ok(1),
-        _ => Ok(0),
+        _ => Ok(denied),
     }
 }
 
@@ -1675,6 +1697,73 @@ fn version_line(bytes: &[u8]) -> Option<String> {
         fallback.get_or_insert_with(|| output::sanitize_line(line));
     }
     fallback
+}
+
+/// Report what a walk over `target` would and would not look at.
+///
+/// It reads the same discovery every other command starts from, so the answer
+/// is about the run the reader is actually making: the same configuration, the
+/// same includes and excludes, the same size limit. A coverage report computed
+/// any other way would be about a different walk.
+fn run_coverage(target: &TargetArgs, common: &CommonArgs) -> Result<u8> {
+    let resolved = config::load(common.config.as_deref())?;
+    let (paths, stdin) = target_paths(&target.paths, false, target.git.staged)?;
+    ensure!(
+        !stdin,
+        "coverage reports on a walk; standard input is one source with no walk around it"
+    );
+    let discovery = read_targets(&paths, stdin, &resolved, common)?;
+    let coverage = coverage::Coverage::compute(&discovery.files, &discovery.skipped);
+    coverage::render(&coverage, common.output.format)?;
+    /* NOTE: `--deny-skipped` turns the report into a gate here too, so that the
+     * command that measures the hole and the command that refuses it agree
+     * about which skips count. */
+    deny_exit_code(
+        &discovery.skipped,
+        common.policy.deny_skipped.as_deref(),
+        common.output.quiet,
+    )
+}
+
+/// `1` when a skip the run refuses to pass over happened, `0` otherwise.
+///
+/// The refused paths are named on standard error rather than counted, because
+/// the answer to this failure is a decision about particular files -- teach
+/// the language, exclude the path, or accept the gap -- and a count does not
+/// say which files to decide about.
+fn deny_exit_code(
+    skipped: &[files::SkippedFile],
+    reasons: Option<&[String]>,
+    quiet: bool,
+) -> Result<u8> {
+    let Some(reasons) = reasons else {
+        return Ok(0);
+    };
+    let denied = coverage::denied(skipped, reasons);
+    if denied.is_empty() {
+        return Ok(0);
+    }
+    if !quiet {
+        let stderr = io::stderr();
+        let mut report = stderr.lock();
+        for path in &denied {
+            output::note(
+                &mut report,
+                &format!(
+                    "{}: passed over, and --deny-skipped refuses that",
+                    output::sanitize_path(&path.to_string_lossy())
+                ),
+            )?;
+        }
+        output::note(
+            &mut report,
+            &format!(
+                "{} file(s) were not covered; teach the language, exclude the path, or drop the reason from --deny-skipped.",
+                denied.len()
+            ),
+        )?;
+    }
+    Ok(1)
 }
 
 fn run_doctor(common: &CommonArgs) -> Result<u8> {

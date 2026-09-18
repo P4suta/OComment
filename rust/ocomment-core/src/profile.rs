@@ -68,6 +68,18 @@ pub struct DeclarativeProfile {
     /// is for whoever picks a profile for a path.
     #[serde(default)]
     pub extensions: Vec<String>,
+    /// Whole file names this profile claims, matched case-sensitively.
+    ///
+    /// Some of the files most worth reaching have no extension at all --
+    /// `dune`, `CODEOWNERS`, `Doxyfile` -- and a profile that could only be
+    /// selected by suffix could not describe them. Case-sensitive because
+    /// these names are conventions of the tools that read them, and those
+    /// tools are case-sensitive about them.
+    ///
+    /// Like [`Self::extensions`], the scanner never reads this; it is for
+    /// whoever picks a profile for a path.
+    #[serde(default)]
+    pub filenames: Vec<String>,
     /// Tokens that open a comment running to the end of the line.
     #[serde(default)]
     pub line_comments: Vec<LineDelimiter>,

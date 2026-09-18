@@ -703,6 +703,15 @@ pub fn load_from(cwd: &Path, explicit: Option<&Path>) -> Result<ResolvedConfig> 
     let mut config: Config = merged
         .try_into()
         .context("cannot resolve merged configuration")?;
+    /* NOTE: Under the configuration's own, never over it: a project that
+     * disagrees with a shipped profile replaces it by declaring one of the
+     * same name, which is the ordinary way every other setting is overridden.
+     * They are added after the merge because they are not a configuration
+     * layer -- no `[profiles]` table in any file should be able to delete one
+     * by being silent about it. */
+    for (name, profile) in bundled_profiles()? {
+        config.profiles.entry(name).or_insert(profile);
+    }
     for (name, profile) in &mut config.profiles {
         if profile.name.is_empty() {
             profile.name = name.clone();
@@ -721,6 +730,23 @@ pub fn load_from(cwd: &Path, explicit: Option<&Path>) -> Result<ResolvedConfig> 
         overrides,
         origins,
     })
+}
+
+/// The declarative profiles OComment ships with.
+///
+/// `spec/profiles.toml` is the canonical copy and this is the one the binary
+/// embeds; `tools/check_embedded_specs.py` holds them to each other. They
+/// describe file formats whose comments delimiters describe completely --
+/// `.gitignore`, `dune`, `.wit` -- and exist because the alternative was not
+/// reading those files at all.
+fn bundled_profiles() -> Result<Vec<(String, DeclarativeProfile)>> {
+    #[derive(Deserialize)]
+    struct Bundled {
+        profiles: BTreeMap<String, DeclarativeProfile>,
+    }
+    let bundled: Bundled = toml::from_str(include_str!("../assets/profiles.toml"))
+        .context("the embedded profile set is not valid TOML")?;
+    Ok(bundled.profiles.into_iter().collect())
 }
 
 /// Layer one configuration file over the merged document, noting every

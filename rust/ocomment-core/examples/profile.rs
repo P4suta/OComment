@@ -39,6 +39,7 @@ fn ini_like() -> DeclarativeProfile {
             escape: Some("\\".into()),
             multiline: true,
         }],
+        filenames: Vec::new(),
         protected_patterns: vec![ProtectedPattern {
             contains: "keep:".into(),
             reason: "marked to keep".into(),

@@ -484,17 +484,24 @@ pub fn plugin_for_path(path: &Path, resolved: &ResolvedConfig) -> Option<String>
 }
 
 pub fn profile_for_path(path: &Path, resolved: &ResolvedConfig) -> Option<DeclarativeProfile> {
-    let extension = path.extension()?.to_str()?.trim_start_matches('.');
+    let name = path.file_name().and_then(|value| value.to_str());
+    let extension = path.extension().and_then(|value| value.to_str());
     resolved
         .config
         .profiles
         .values()
         .find(|profile| {
-            profile.extensions.iter().any(|candidate| {
-                candidate
-                    .trim_start_matches('.')
-                    .eq_ignore_ascii_case(extension)
-            })
+            /* NOTE: The whole name is tried first, so that a profile claiming
+             * `dune-project` wins over one claiming `.project`. A name is the
+             * more specific claim of the two. */
+            name.is_some_and(|name| profile.filenames.iter().any(|candidate| candidate == name))
+                || extension.is_some_and(|extension| {
+                    profile.extensions.iter().any(|candidate| {
+                        candidate
+                            .trim_start_matches('.')
+                            .eq_ignore_ascii_case(extension)
+                    })
+                })
         })
         .cloned()
 }

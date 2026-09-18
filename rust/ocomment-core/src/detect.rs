@@ -374,7 +374,13 @@ pub fn detect_language(path: Option<&Path>, source: &[u8]) -> Option<Detection> 
             "zsh" => Some((Language::Shell, Dialect::Zsh)),
             "html" | "htm" | "xhtml" | "shtml" => Some((Language::Html, Dialect::Standard)),
             "css" => Some((Language::Css, Dialect::Standard)),
-            "jsonc" | "json5" => Some((Language::Jsonc, Dialect::Standard)),
+            /* NOTE: `.json` is here because a comment in one is common enough
+             * that this project already listed `tsconfig.json` and
+             * `jsconfig.json` as reserved names. Reading every `.json` as JSONC
+             * finds the comments the ones that carry them carry, and finds
+             * nothing in the ones that do not -- which is what a standard JSON
+             * file scans as. Leaving them out meant not looking. */
+            "jsonc" | "json5" | "json" => Some((Language::Jsonc, Dialect::Standard)),
             "sql" => Some((Language::Sql, Dialect::Standard)),
             "kt" | "kts" => Some((Language::Kotlin, Dialect::Standard)),
             "toml" => Some((Language::Toml, Dialect::Standard)),
@@ -462,7 +468,6 @@ pub fn detect_language(path: Option<&Path>, source: &[u8]) -> Option<Detection> 
                 Some((Language::Shell, Dialect::PosixSh))
             }
             "makefile" | "gnumakefile" => Some((Language::Shell, Dialect::PosixSh)),
-            "tsconfig.json" | "jsconfig.json" => Some((Language::Jsonc, Dialect::Standard)),
             /* NOTE: A lock file has no extension of its own to go on, and only some
              * of them are TOML: `Cargo.lock`, `Pipfile`, and the three Python
              * resolvers below are, while `Pipfile.lock` beside `Pipfile` is

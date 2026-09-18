@@ -1,6 +1,7 @@
 mod atomic;
 mod cli;
 mod config;
+mod coverage;
 mod files;
 mod git;
 mod interactive;

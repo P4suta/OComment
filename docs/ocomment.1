@@ -4,7 +4,7 @@
 .SH NAME
 ocomment \- Check and remove source\-code comments safely
 .SH SYNOPSIS
-\fBocomment\fR [\fB\-\-config\fR] [\fB\-\-policy\fR] [\fB\-\-layout\fR] [\fB\-\-language\fR] [\fB\-\-dialect\fR] [\fB\-\-keep\-kind\fR] [\fB\-\-remove\-kind\fR] [\fB\-\-force\-invalid\fR] [\fB\-\-force\-protected\fR] [\fB\-\-format\fR] [\fB\-\-color\fR] [\fB\-\-hyperlinks\fR] [\fB\-\-no\-preview\fR] [\fB\-\-annotation\-level\fR] [\fB\-\-explain\fR] [\fB\-\-trace\fR] [\fB\-\-progress\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIPATH\fR] [\fIsubcommands\fR]
+\fBocomment\fR [\fB\-\-config\fR] [\fB\-\-policy\fR] [\fB\-\-layout\fR] [\fB\-\-language\fR] [\fB\-\-dialect\fR] [\fB\-\-keep\-kind\fR] [\fB\-\-remove\-kind\fR] [\fB\-\-deny\-skipped\fR] [\fB\-\-force\-invalid\fR] [\fB\-\-force\-protected\fR] [\fB\-\-format\fR] [\fB\-\-color\fR] [\fB\-\-hyperlinks\fR] [\fB\-\-no\-preview\fR] [\fB\-\-annotation\-level\fR] [\fB\-\-explain\fR] [\fB\-\-trace\fR] [\fB\-\-progress\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIPATH\fR] [\fIsubcommands\fR]
 .SH DESCRIPTION
 OComment scans source bytes without requiring UTF\-8 and reports or removes comment tokens. The default policy keeps licence notices, tool and language directives, shebangs and encoding lines, and removes ordinary and doc comments. Rewrites are prepared and committed as one rollback\-backed transaction.
 .SH OPTIONS
@@ -232,6 +232,9 @@ version\-comment: A MySQL versioned comment that the server executes
 load\-bearing: A directive the language or its build reads as part of the program, such as `//go:build`
 .RE
 .TP
+\fB\-\-deny\-skipped\fR [\fI<REASON>...\fR]
+Fail when a file was passed over for one of these reasons, rather than noting it
+.TP
 \fB\-\-force\-invalid\fR
 Apply the edits that are still provably safe when the source fails to scan
 .TP
@@ -378,6 +381,9 @@ Manage sandboxed WASM scanner plugins
 .TP
 ocomment\-completions(1)
 Generate shell completions
+.TP
+ocomment\-coverage(1)
+Report which files a walk scanned and which it passed over, and why
 .TP
 ocomment\-selftest(1)
 Re\-run the shared corpus against this binary and report any disagreement
@@ -529,6 +535,16 @@ powershell
 .IP \(bu 2
 zsh
 .RE
+.SS ocomment coverage
+.TP
+\fB\-\-staged\fR
+Read and update Git index blobs rather than treating the working tree as the source
+.TP
+\fB\-\-index\-only\fR
+With `\-\-staged`, do not attempt a uniquely mappable working\-tree update
+.TP
+[\fIPATH\fR]
+Files or directories to process; `\-` reads standard input (default: current directory)
 .SH VERSION
 v0.1.0
 .SH EXIT STATUS

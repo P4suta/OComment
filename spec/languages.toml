@@ -116,9 +116,8 @@ extension_dialects = { scss = "scss", sass = "sass" }
 [[languages]]
 name = "jsonc"
 editor_ids = ["jsonc"]
-extensions = ["jsonc", "json5"]
+extensions = ["jsonc", "json5", "json"]
 dialects = ["standard"]
-reserved_names = ["tsconfig.json", "jsconfig.json"]
 
 [[languages]]
 name = "sql"
