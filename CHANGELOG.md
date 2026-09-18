@@ -113,8 +113,11 @@ All notable changes to OComment will be documented here. The project follows
   judgement: it is upstream-derived, so a rule about the decisions *this*
   program makes does not reach it, and rewriting its match arms would put a
   patch between us and every version we take next.
-  `rust_sources_do_not_suppress_lints` now carries that one path and compares
-  the list exactly, so a second exception fails there.
+  `rust_sources_do_not_suppress_lints` now carries that one path, compares the
+  list exactly, and requires the suppression to be an `expect` rather than an
+  `allow`: a suppression that has outlived its subject is indistinguishable
+  from one that is still working, and `expect` fails the build the day the lint
+  stops firing.
 
   `check_ci_contracts.py` fails when a workspace member does not inherit the
   lints at all. `[workspace.lints]` does nothing on its own — a member has to

@@ -172,6 +172,23 @@ fn rust_sources_do_not_suppress_lints() {
      * would put a patch between us and every version we take next. The list is
      * compared exactly below, so a second exception fails here. */
     const SUPPRESSION_ALLOWED: [&str; 1] = ["src/runtime/mod.rs"];
+    /* NOTE: And it has to be an `expect`. An `allow` that has outlived its
+     * subject is indistinguishable from one that is still working; an `expect`
+     * fails the build the day the lint stops firing, which is the only way a
+     * suppression tells anybody it is no longer needed. */
+    let excused_file = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(SUPPRESSION_ALLOWED[0]);
+    let excused_source = fs::read_to_string(&excused_file).unwrap();
+    assert!(
+        excused_source.contains(concat!("#![", "expect(")),
+        "{} is excused from the suppression rule but does not use `expect`, \
+         so nothing will say when the suppression stops being needed",
+        SUPPRESSION_ALLOWED[0]
+    );
+    assert!(
+        !excused_source.contains(concat!("#![", "allow(")),
+        "{} uses `allow` where the exception requires `expect`",
+        SUPPRESSION_ALLOWED[0]
+    );
     let markers = [
         concat!("#[", "allow("),
         concat!("#![", "allow("),
