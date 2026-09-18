@@ -1123,6 +1123,85 @@ pub struct Diagnostic {
     pub span: ByteSpan,
 }
 
+/// How far the damage from a diagnostic reaches.
+///
+/// A scanner that reports an error has already decided how to carry on, and the
+/// two ways it can do that are not the same for anyone acting on what it found.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Damage {
+    /// Confined to the bytes the diagnostic names. A C# string that never
+    /// closes ends at the newline, and line two is lexed by a scanner that
+    /// knows exactly where it is.
+    Span,
+    /// Everything from where the diagnostic starts. The scan stopped there, or
+    /// carried on from a position it guessed, and what it reports past that
+    /// point is a reading it cannot defend.
+    Rest,
+}
+
+/// Every error a scan can report, and how far each one reaches.
+///
+/// Two lists in one, so that the check worth making is that no code is in
+/// neither: `error_codes_are_all_classified` reads the scanners' own source and
+/// fails on a code this does not name, which is the only way a rule about
+/// errors survives the next error being added. A code that reaches
+/// [`Diagnostic::damage`] without appearing here is treated as [`Damage::Rest`]
+/// -- the direction that declines to edit rather than the one that edits on a
+/// guess.
+///
+/// Most errors are [`Damage::Span`], because most of them are a token that did
+/// not end: the scanner consumed as far as it was willing to, said so, and
+/// resumed after it. An unterminated block comment names bytes running to the
+/// end of the file and so covers all of them; an unterminated single-line
+/// string names bytes running to the newline and covers only those. Both fall
+/// out of the same rule, which is why neither needs an entry of its own.
+///
+/// The three exceptions are the scans that cannot say where they stopped being
+/// right. `lexical-ambiguity` is a `/` the scanner could not tell from a
+/// division and read as a regex; if that was the wrong reading, every token
+/// after it is wrong too. `nesting-limit` abandons the rest of the source and
+/// names no bytes at all. `unknown-language` scans nothing.
+pub const ERROR_CODES: [(&str, Damage); 19] = [
+    ("invalid-unicode-escape", Damage::Span),
+    ("lexical-ambiguity", Damage::Rest),
+    ("nesting-limit", Damage::Rest),
+    ("unknown-language", Damage::Rest),
+    ("unterminated-comment", Damage::Span),
+    ("unterminated-embedded-language", Damage::Span),
+    ("unterminated-fstring-expression", Damage::Span),
+    ("unterminated-heredoc", Damage::Span),
+    ("unterminated-html-tag", Damage::Span),
+    ("unterminated-identifier", Damage::Span),
+    ("unterminated-interpolation", Damage::Span),
+    ("unterminated-jsx-element", Damage::Span),
+    ("unterminated-jsx-tag", Damage::Span),
+    ("unterminated-operator", Damage::Span),
+    ("unterminated-profile-comment", Damage::Span),
+    ("unterminated-profile-string", Damage::Span),
+    ("unterminated-regex", Damage::Span),
+    ("unterminated-string", Damage::Span),
+    ("unterminated-template-expression", Damage::Span),
+];
+
+impl Diagnostic {
+    /// How far this reaches, for a caller deciding what it may still act on.
+    ///
+    /// Anything milder than an error damages nothing by construction: a warning
+    /// is something the caller should look at in a source that lexed.
+    #[must_use]
+    pub fn damage(&self) -> Option<Damage> {
+        if self.severity != Severity::Error {
+            return None;
+        }
+        Some(
+            ERROR_CODES
+                .iter()
+                .find(|(code, _)| *code == self.code)
+                .map_or(Damage::Rest, |&(_, damage)| damage),
+        )
+    }
+}
+
 /// Everything a scan found.
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ScanReport {
@@ -1134,6 +1213,44 @@ pub struct ScanReport {
     pub diagnostics: Vec<Diagnostic>,
     /// False when any diagnostic is a [`Severity::Error`].
     pub valid: bool,
+}
+
+impl ScanReport {
+    /// Whether this scan established what it reported about `span`.
+    ///
+    /// [`valid`](Self::valid) says whether the lex failed. It cannot say where,
+    /// and anyone acting on a verdict needs that: a comment the scanner
+    /// delimited away from the failure is worth exactly what a comment in a
+    /// clean file is worth, while one inside it rests on a guess about where
+    /// the token ends. An unterminated block opener is reported as a comment
+    /// running to the end of the file, and the code under it is not a comment.
+    ///
+    /// Removing the first is removing a comment. Removing the second is
+    /// removing bytes nobody established were one.
+    #[must_use]
+    pub fn established(&self, span: ByteSpan) -> bool {
+        self.diagnostics
+            .iter()
+            .all(|diagnostic| match diagnostic.damage() {
+                None => true,
+                Some(Damage::Span) => {
+                    span.end <= diagnostic.span.start || span.start >= diagnostic.span.end
+                }
+                Some(Damage::Rest) => span.end <= diagnostic.span.start,
+            })
+    }
+
+    /// Whether every comment in this report is one the scan established.
+    ///
+    /// The cheap answer for a caller that only wants to know whether the
+    /// distinction applies at all, so that a clean report costs nothing to ask
+    /// about and carries nothing extra when it is written out.
+    #[must_use]
+    pub fn established_everything(&self) -> bool {
+        self.diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.damage().is_none())
+    }
 }
 
 /// One replacement of a byte range.

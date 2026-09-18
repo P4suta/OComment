@@ -6876,3 +6876,112 @@ fn a_perl_file_hides_quote_words_and_keeps_pod_opaque() {
         b"=head1 NAME\n# not a comment\n=cut\nmy $x = 'a#b';\nmy $y = $x / 2; \n"
     );
 }
+
+/// The removal tool's worst possible failure, pinned so it cannot come back.
+///
+/// `--force-invalid` exists to edit a file that does not lex, and the file it
+/// is asked about is one where the scanner has lost its place. An unterminated
+/// block opener is reported as a comment running to the end of the file, so the
+/// verdict "removable" covers every line under it. Acting on that verdict
+/// deletes code, and the run that did it would still exit 2 and look like a
+/// refusal.
+#[test]
+fn force_invalid_leaves_the_code_under_an_unterminated_comment_alone() {
+    let directory = tempfile::tempdir().unwrap();
+    let file = directory.path().join("sample.c");
+    let source = "int x = 1; // a real comment\nint y = 2; /* never closed\nint z = 3;\n";
+    fs::write(&file, source).unwrap();
+
+    let output = run(directory.path(), &["fix", "--force-invalid", "sample.c"]);
+    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(
+        fs::read_to_string(&file).unwrap(),
+        "int x = 1; \nint y = 2; /* never closed\nint z = 3;\n",
+        "a forced run acted on a verdict the failed scan could not support"
+    );
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("removed 1 comment"),
+        "the count reports removals that did not happen:\n{stdout}"
+    );
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        stderr.contains("written from a scan that failed"),
+        "the summary does not say which writes nothing checked:\n{stderr}"
+    );
+    assert!(
+        !stderr.contains("re-scanned clean and idempotent"),
+        "the summary claims a check that `--force-invalid` skips:\n{stderr}"
+    );
+}
+
+/// The same run in the machine format: the verdicts stand, and the report says
+/// which of them rest on a lex that had already failed.
+#[test]
+fn json_marks_the_verdicts_a_failed_scan_did_not_establish() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join("sample.c"),
+        b"int x = 1; // a real comment\nint y = 2; /* never closed\nint z = 3;\n",
+    )
+    .unwrap();
+    let output = run(directory.path(), &["scan", "sample.c", "--format", "json"]);
+    assert_eq!(output.status.code(), Some(2));
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let report = &value["files"][0]["report"];
+    assert_eq!(report["valid"], false);
+    let comments = report["comments"].as_array().unwrap();
+    assert_eq!(comments[0]["span"]["end"], 28);
+    assert_eq!(comments[0]["disposition"]["action"], "remove");
+    assert!(
+        comments[0].get("established").is_none(),
+        "a comment away from the failure was marked as a guess: {}",
+        comments[0]
+    );
+    assert_eq!(comments[1]["span"]["start"], 40);
+    assert_eq!(
+        comments[1]["disposition"]["action"], "remove",
+        "the verdict is what the scanner concluded and belongs in the report"
+    );
+    assert_eq!(
+        comments[1]["established"], false,
+        "the report does not say that this verdict rests on a failed lex: {}",
+        comments[1]
+    );
+}
+
+/// A file that lexes carries no mark, so nothing a caller already parses
+/// changes shape.
+#[test]
+fn a_report_that_established_everything_marks_nothing() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(directory.path().join("sample.c"), b"int a = 1; // gone\n").unwrap();
+    let output = run(directory.path(), &["scan", "sample.c", "--format", "json"]);
+    assert_eq!(output.status.code(), Some(0));
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let comment = &value["files"][0]["report"]["comments"][0];
+    assert!(
+        comment.get("established").is_none(),
+        "a clean scan carries a field it has no use for: {comment}"
+    );
+}
+
+/// An error that cost the lexer nothing does not cost the run anything either.
+///
+/// Java's `\uXXXX` escapes are decoded before a token is read, so a malformed
+/// one makes the file invalid without putting a single comment in doubt, and a
+/// forced run over it still edits.
+#[test]
+fn an_error_the_lexer_recovered_from_does_not_hold_back_a_forced_run() {
+    let directory = tempfile::tempdir().unwrap();
+    let file = directory.path().join("Sample.java");
+    fs::write(&file, "int x = 1; \\u00G0 // known\n").unwrap();
+    let output = run(directory.path(), &["fix", "--force-invalid", "Sample.java"]);
+    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(
+        fs::read_to_string(&file).unwrap(),
+        "int x = 1; \\u00G0 \n",
+        "a complaint about four bytes stopped a removal it says nothing about"
+    );
+}

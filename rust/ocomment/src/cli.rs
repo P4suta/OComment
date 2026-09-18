@@ -204,7 +204,10 @@ struct PolicyArgs {
         default_missing_value = "unknown language,unreadable"
     )]
     deny_skipped: Option<Vec<String>>,
-    /// Apply the edits that are still provably safe when the source fails to scan.
+    /// Edit a file that failed to scan, outside the bytes the failure covers.
+    /// What the scanner calls a comment inside them is a guess: the code under
+    /// an unterminated block opener is reported as part of it and is not a
+    /// comment.
     #[arg(long, global = true)]
     force_invalid: bool,
     /// Remove protected comments: shebangs, encoding lines, and the
@@ -874,15 +877,15 @@ fn run_target(
                     materialize_output,
                     materialize_source_map,
                 );
-                /* NOTE: Only a run that is going to write checks what it would
-                 * write. `diff` and `check` produce the same bytes and show
-                 * them to a person, who is the check.
-                 *
-                 * `--force-invalid` is exempt, and has to be: it exists to edit
-                 * a file the scanner already reported broken, so demanding that
-                 * the result scan cleanly would refuse every run of the flag
-                 * that is working exactly as asked. */
-                if operation == Operation::Fix && result.changed() && !options.scan.force_invalid {
+                /* NOTE: Only a run that is going to write checks what it
+                 * would write; `diff` and `check` show a person the same bytes.
+                 * A file already reported broken is exempt and has to be, since
+                 * its result cannot scan cleanly either. The flag is not the
+                 * exemption: a valid file in a forced run is still checked. */
+                if operation == Operation::Fix
+                    && result.changed()
+                    && (result.report.valid || !options.scan.force_invalid)
+                {
                     let rescan = scan_bytes(result.output(), &file, scanner, &plugin_host)?;
                     verify_rewrite(&file.path, &rescan)?;
                 }

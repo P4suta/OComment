@@ -7183,14 +7183,67 @@ let keep_yaml_structural_trails source language comments =
       (yaml_structural_trail_keeps source (yaml_block_scalars source) comments);
     Array.to_list comments
 
+(** Every error a scan can report whose damage is confined to the bytes it names,
+   and so the whole of the classification: a code not listed here damages
+   everything from where it starts.  The Rust engine holds the same ledger under
+   the name [ERROR_CODES] and reads its own scanners' source to prove nothing is
+   missing from it; here the corpus is the proof, since a code classified
+   differently on the two sides produces different edits for the same forced
+   fixture.
+
+   Most errors are a token that did not end: the scanner consumed as far as it
+   was willing to, said so, and resumed after it.  An unterminated block comment
+   names bytes running to the end of the file and so covers all of them; an
+   unterminated single-line string names bytes running to the newline and covers
+   only those.  The three that are not listed are the scans that cannot say
+   where they stopped being right: [lexical-ambiguity] read a [/] as a regex
+   when it could not tell it from a division, [nesting-limit] abandons the rest
+   of the source and names no bytes at all, and [unknown-language] scans
+   nothing.  An unknown code joins them, which declines to edit rather than
+   editing on a guess. *)
+let span_damage_error_codes =
+  [ "invalid-unicode-escape"; "unterminated-comment"; "unterminated-embedded-language";
+    "unterminated-fstring-expression"; "unterminated-heredoc"; "unterminated-html-tag";
+    "unterminated-identifier"; "unterminated-interpolation"; "unterminated-jsx-element";
+    "unterminated-jsx-tag"; "unterminated-operator"; "unterminated-profile-comment";
+    "unterminated-profile-string"; "unterminated-regex"; "unterminated-string";
+    "unterminated-template-expression" ]
+
+(** Whether a scan established what it reported about [span].
+
+   [valid] says whether the lex failed.  It cannot say where, and anyone acting
+   on a verdict needs that: a comment delimited away from the failure is worth
+   what any comment in a clean file is worth, while one inside it rests on a
+   guess about where the token ends -- an unterminated block opener is reported
+   as a comment running to the end of the file, and the code under it is not a
+   comment. *)
+let established report span =
+  List.for_all (fun (diagnostic : diagnostic) ->
+    if diagnostic.severity <> Error then true
+    else if List.mem diagnostic.code span_damage_error_codes then
+      span.finish <= diagnostic.span.start || span.start >= diagnostic.span.finish
+    else span.finish <= diagnostic.span.start)
+    report.diagnostics
+
+let established_everything report =
+  List.for_all (fun (diagnostic : diagnostic) -> diagnostic.severity <> Error)
+    report.diagnostics
+
 let transform_report source report options =
+  (* NOTE: [force_invalid] asks for the edits a broken file still supports, not
+     for every edit a broken report happens to name.  The report keeps all of
+     them: what the scanner saw is not changed by what the planner does. *)
+  let planned =
+    if established_everything report then report.comments
+    else List.filter (fun (comment : comment) -> established report comment.span) report.comments
+  in
   let edits =
     if not report.valid && not options.scan.force_invalid then []
     else
     (* NOTE: The one hole whose own bytes carry meaning, so the layouts that
        leave a line behind have to be told where not to.  `compact` takes the
        line already. *)
-    let swallow = lines_a_removal_must_swallow source report.language report.comments in
+    let swallow = lines_a_removal_must_swallow source report.language planned in
     let swallowed index = if index < Array.length swallow then swallow.(index) else None in
     match options.layout with
     | Columns ->
@@ -7208,7 +7261,7 @@ let transform_report source report options =
             | None ->
               let edit, column = column_edit source cursor column comment in
               loop (index + 1) comment.span.finish column (edit :: edits) tail)
-      in loop 0 0 0 [] report.comments
+      in loop 0 0 0 [] planned
     | Lines ->
       let rec loop index floor edits = function
         | [] -> List.rev edits
@@ -7223,8 +7276,8 @@ let transform_report source report options =
                 { span = comment.span;
                   replacement = line_replacement source comment.kind comment.span } in
             loop (index + 1) edit.span.finish (edit :: edits) tail)
-      in loop 0 0 [] report.comments
-    | Compact -> compact_edits source report.comments swallowed
+      in loop 0 0 [] planned
+    | Compact -> compact_edits source planned swallowed
   in
   { output = apply_edits source edits; edits; report; source_map = source_map (Bytes.length source) edits }
 

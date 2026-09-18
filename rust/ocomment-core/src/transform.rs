@@ -6,6 +6,7 @@ use crate::{
         unicode_line_terminator_width,
     },
 };
+use std::borrow::Cow;
 use unicode_width::UnicodeWidthChar;
 
 /// Scan `source` and produce the bytes a removal would write.
@@ -231,15 +232,31 @@ pub fn plan_report(
     force_invalid: bool,
 ) -> TransformPlan {
     let edits = if report.valid || force_invalid {
+        /* NOTE: A forced run is a run over a file the scanner could not finish,
+         * so the comments it reported are not all worth the same. It asks for
+         * the edits a broken file still supports, not for every edit a broken
+         * report happens to name. */
+        let considered: Cow<'_, [Comment]> = if report.established_everything() {
+            Cow::Borrowed(report.comments.as_slice())
+        } else {
+            Cow::Owned(
+                report
+                    .comments
+                    .iter()
+                    .filter(|comment| report.established(comment.span))
+                    .cloned()
+                    .collect(),
+            )
+        };
         /* NOTE: The one hole whose own bytes carry meaning, so every layout has
          * to be told where not to leave one. `compact` takes the line already;
          * what it does not know on its own is how far past the line to go
          * under a `|+` body. */
-        let swallow = lines_a_removal_must_swallow(source, report.language, &report.comments);
+        let swallow = lines_a_removal_must_swallow(source, report.language, &considered);
         match layout {
-            Layout::Lines => line_edits(source, &report.comments, &swallow),
-            Layout::Columns => column_edits(source, &report.comments, &swallow),
-            Layout::Compact => compact_edits(source, &report.comments, &swallow),
+            Layout::Lines => line_edits(source, &considered, &swallow),
+            Layout::Columns => column_edits(source, &considered, &swallow),
+            Layout::Compact => compact_edits(source, &considered, &swallow),
         }
     } else {
         Vec::new()

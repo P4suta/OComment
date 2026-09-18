@@ -239,7 +239,7 @@ Scan files another tool writes: lock files, recorded seeds, generated output
 Fail when a file was passed over for one of these reasons, rather than noting it
 .TP
 \fB\-\-force\-invalid\fR
-Apply the edits that are still provably safe when the source fails to scan
+Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 .TP
 \fB\-\-force\-protected\fR
 Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads

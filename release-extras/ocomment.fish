@@ -128,7 +128,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_needs_command" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
 complete -c ocomment -n "__fish_ocomment_needs_command" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_needs_command" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
-complete -c ocomment -n "__fish_ocomment_needs_command" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
+complete -c ocomment -n "__fish_ocomment_needs_command" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
 complete -c ocomment -n "__fish_ocomment_needs_command" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_needs_command" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_needs_command" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
@@ -263,7 +263,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l summary -d '
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l staged -d 'Read and update Git index blobs rather than treating the working tree as the source'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l index-only -d 'With `--staged`, do not attempt a uniquely mappable working-tree update'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
-complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
+complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
@@ -380,7 +380,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l index-only -d 
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l dry-run -d 'Print the patch `fix` would apply and write nothing'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -s i -l interactive -d 'Ask about each comment in turn and remove only the accepted ones'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
-complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
+complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
@@ -495,7 +495,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l summary -d 'A
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l staged -d 'Read and update Git index blobs rather than treating the working tree as the source'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l index-only -d 'With `--staged`, do not attempt a uniquely mappable working-tree update'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
-complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
+complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
@@ -610,7 +610,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l summary -d 'A
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l staged -d 'Read and update Git index blobs rather than treating the working tree as the source'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l index-only -d 'With `--staged`, do not attempt a uniquely mappable working-tree update'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
-complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
+complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
@@ -722,7 +722,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
-complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
+complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
@@ -834,7 +834,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
-complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
+complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
@@ -949,7 +949,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l fix -d 'For t
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l force -d 'Replace the file if it already exists'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l stdout -d 'Print the template to standard output and write no file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
-complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
+complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
@@ -1061,7 +1061,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
-complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
+complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
@@ -1173,7 +1173,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
-complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
+complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
@@ -1285,7 +1285,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
@@ -1407,7 +1407,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
@@ -1519,7 +1519,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
@@ -1631,7 +1631,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
@@ -1743,7 +1743,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
@@ -1855,7 +1855,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
@@ -1967,7 +1967,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
@@ -2086,7 +2086,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
-complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
+complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
@@ -2201,7 +2201,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l summary -
 complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l staged -d 'Read and update Git index blobs rather than treating the working tree as the source'
 complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l index-only -d 'With `--staged`, do not attempt a uniquely mappable working-tree update'
 complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
-complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
 complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
@@ -2316,7 +2316,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l summary -d 'A
 complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l staged -d 'Read and update Git index blobs rather than treating the working tree as the source'
 complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l index-only -d 'With `--staged`, do not attempt a uniquely mappable working-tree update'
 complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
-complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
+complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
 complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
@@ -2432,7 +2432,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l update -d 
 complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l staged -d 'Read and update Git index blobs rather than treating the working tree as the source'
 complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l index-only -d 'With `--staged`, do not attempt a uniquely mappable working-tree update'
 complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
-complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
 complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
@@ -2544,7 +2544,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
-complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
 complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
@@ -2656,7 +2656,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
-complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
 complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
@@ -2768,7 +2768,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
-complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
+complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
@@ -2880,7 +2880,7 @@ never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
-complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
+complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
