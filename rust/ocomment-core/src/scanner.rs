@@ -5391,22 +5391,34 @@ impl<'a> Scanner<'a> {
                         );
                         return;
                     };
+                    /* NOTE: `<script>` says what it holds and a raw-text element
+                     * that holds something else is skipped whole, the way an
+                     * unknown `lang` on a single-file component is. `<style>`
+                     * has no such attribute and is always CSS. */
+                    let attrs = &bytes[index + 1 + name.len()..content_start.saturating_sub(1)];
+                    let language = if name == b"script" {
+                        html_script_language(tag_attr_value(attrs, b"type"))
+                    } else {
+                        Some(language)
+                    };
                     let close = find_html_close(bytes, content_start, name);
                     let content_end = close.unwrap_or(bytes.len());
-                    let slice = &bytes[content_start..content_end];
-                    let mut child = Scanner::child(
-                        slice,
-                        language,
-                        self.options.clone(),
-                        self.patterns.clone(),
-                        self.offset + content_start,
-                    );
-                    if language == Language::JavaScript {
-                        child.scan_javascript();
-                    } else {
-                        child.scan_c_family();
+                    if let Some(language) = language {
+                        let slice = &bytes[content_start..content_end];
+                        let mut child = Scanner::child(
+                            slice,
+                            language,
+                            self.options.clone(),
+                            self.patterns.clone(),
+                            self.offset + content_start,
+                        );
+                        if language == Language::JavaScript {
+                            child.scan_javascript();
+                        } else {
+                            child.scan_c_family();
+                        }
+                        self.merge_child(child);
                     }
-                    self.merge_child(child);
                     let Some(close) = close else {
                         self.error(
                             "unterminated-embedded-language",
@@ -10438,6 +10450,64 @@ fn vue_style_language(lang: Option<&[u8]>) -> Option<(Language, Dialect)> {
         Some(b"sass") => Some((Language::Css, Dialect::Sass)),
         Some(_) => None,
     }
+}
+
+/// The MIME types an HTML `<script>` element may carry and still hold
+/// JavaScript.
+///
+/// HTML decides this, not this scanner: a `type` outside this list makes the
+/// element a data block, which the browser does not execute and this tool does
+/// not read. The list is a citation rather than a guess, which is what lets the
+/// default for a `type` not on it be "look at nothing" instead of "assume the
+/// common case".
+const JAVASCRIPT_MIME_TYPES: [&[u8]; 16] = [
+    b"application/ecmascript",
+    b"application/javascript",
+    b"application/x-ecmascript",
+    b"application/x-javascript",
+    b"text/ecmascript",
+    b"text/javascript",
+    b"text/javascript1.0",
+    b"text/javascript1.1",
+    b"text/javascript1.2",
+    b"text/javascript1.3",
+    b"text/javascript1.4",
+    b"text/javascript1.5",
+    b"text/jscript",
+    b"text/livescript",
+    b"text/x-ecmascript",
+    b"text/x-javascript",
+];
+
+/// The language an HTML `<script>` body is written in, from its `type`
+/// attribute; `None` for a type that is not JavaScript, which makes the block
+/// opaque.
+///
+/// A `text/x-template` or `text/x-handlebars-template` element holds markup,
+/// and reading it as JavaScript turns an unquoted `href=//host/path` into a
+/// line comment and a `fix` into a deletion of the markup. Vue's `lang` has
+/// been read this way since it was written; this is the same rule for the
+/// attribute HTML spells it with.
+///
+/// An absent or empty `type` is classic JavaScript, and `module` is a keyword
+/// rather than a MIME type.
+fn html_script_language(kind: Option<&[u8]>) -> Option<Language> {
+    let Some(kind) = kind else {
+        return Some(Language::JavaScript);
+    };
+    /* NOTE: A parameter such as `; charset=utf-8` is no part of what HTML calls
+     * the essence, and the essence is what decides. */
+    let essence = kind.split(|byte| *byte == b';').next().unwrap_or(kind);
+    let Some(first) = essence.iter().position(|byte| !byte.is_ascii_whitespace()) else {
+        return Some(Language::JavaScript);
+    };
+    let last = essence
+        .iter()
+        .rposition(|byte| !byte.is_ascii_whitespace())
+        .unwrap_or(first);
+    let lower = essence[first..=last].to_ascii_lowercase();
+    (lower == b"module" || JAVASCRIPT_MIME_TYPES.contains(&lower.as_slice()))
+        .then_some(Language::JavaScript)
 }
 
 fn html_embedded_start(bytes: &[u8], start: usize) -> Option<(&'static [u8], Language)> {
