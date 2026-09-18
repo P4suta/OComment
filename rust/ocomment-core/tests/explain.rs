@@ -979,3 +979,175 @@ fn an_age_reads_the_units_a_commit_date_can_answer() {
     assert!("1m".parse::<Age>().is_err());
     assert!("soon".parse::<Age>().is_err());
 }
+
+/// Every field of every verdict, classified as either shown to a reader or
+/// deliberately not — by destructuring without `..`, so a field added later
+/// fails to compile here until somebody says which it is.
+///
+/// `every_option_is_classified` does this for the inputs and the match in
+/// `explanation_rule` does it for the variants, and between them a new *reason*
+/// cannot slip through. A new *field on an existing reason* still can: every
+/// renderer in the CLI takes what it wants with `{ .. }`, so a reason that
+/// gained something to say would go on printing yesterday's sentence and
+/// nothing would fail. This is the one place that has to name the field.
+///
+/// The returned strings are what the rendering has to contain. A field that is
+/// deliberately silent contributes none, which is a decision written down
+/// rather than an omission nobody made.
+fn shown_by(verdict: &DispositionExplanation) -> Vec<String> {
+    match verdict {
+        DispositionExplanation::KeptByKind(kind) => vec![kind.to_string()],
+        DispositionExplanation::RemovedByKind(kind) => vec![kind.to_string()],
+        DispositionExplanation::KeptByRegex { index, pattern } => {
+            vec![index.to_string(), pattern.clone()]
+        }
+        DispositionExplanation::RemovedByRegex { index, pattern } => {
+            vec![index.to_string(), pattern.clone()]
+        }
+        /* NOTE: Nothing to name: the reason is the whole of what happened. */
+        DispositionExplanation::ProtectedPreamble
+        | DispositionExplanation::KeptHtml
+        | DispositionExplanation::RemovedAsTrailing => Vec::new(),
+        /* NOTE: `name` and `marker` are `None` when the scanner kept the
+         * comment without a marker to point at, and a sentence cannot quote
+         * what is not there. When there is one, it is the whole point. */
+        DispositionExplanation::KeptLoadBearing { name } => {
+            name.map(str::to_owned).into_iter().collect()
+        }
+        DispositionExplanation::KeptLicense { marker } => {
+            marker.map(str::to_owned).into_iter().collect()
+        }
+        /* NOTE: The sentence names the directive and not the kind. The kind is
+         * not idle -- it is what the CLI's next-step clause turns into
+         * `--remove-kind <kind>` -- but that clause is a different rendering,
+         * and this one has nothing to say about whether a `rubocop:` arrived
+         * on a line or in a block. */
+        DispositionExplanation::KeptDirective { kind: _, name } => {
+            name.map(str::to_owned).into_iter().collect()
+        }
+        DispositionExplanation::KeptDocumentation { kind } => vec![kind.to_string()],
+        /* NOTE: The kind reaches the reader as the category it belongs to --
+         * "ordinary comments", "doc comments", "license comments" -- so it is
+         * not in the sentence as its own token and cannot be looked for here.
+         * `a_policy_removal_does_not_say_the_same_thing_about_every_kind` is
+         * what holds it: the sentence has to depend on the field. That is the
+         * property that was missing when every kind, license included, was
+         * reported as "removes ordinary comments". */
+        DispositionExplanation::RemovedByPolicy { policy, kind: _ } => {
+            vec![policy.to_string()]
+        }
+        DispositionExplanation::RemovedByDefault { policy, kind: _ } => {
+            vec![policy.to_string()]
+        }
+        DispositionExplanation::KeptByTag { tag } => vec![tag.clone()],
+        DispositionExplanation::RemovedAsExpired { tag, age, limit } => {
+            vec![tag.clone(), age.to_string(), limit.to_string()]
+        }
+        DispositionExplanation::RemovedByLength { lines, limit } => {
+            vec![lines.to_string(), limit.to_string()]
+        }
+        DispositionExplanation::KeptStructural { language } => vec![language.to_string()],
+    }
+}
+
+/// One of every verdict, so the guard above is asked about all of them.
+fn every_verdict() -> Vec<DispositionExplanation> {
+    vec![
+        DispositionExplanation::KeptByKind(CommentKind::Block),
+        DispositionExplanation::RemovedByKind(CommentKind::Line),
+        DispositionExplanation::KeptByRegex {
+            index: 3,
+            pattern: "^keep-me".to_owned(),
+        },
+        DispositionExplanation::RemovedByRegex {
+            index: 4,
+            pattern: "^drop-me".to_owned(),
+        },
+        DispositionExplanation::ProtectedPreamble,
+        DispositionExplanation::KeptHtml,
+        DispositionExplanation::RemovedAsTrailing,
+        DispositionExplanation::KeptLoadBearing { name: Some("go:") },
+        DispositionExplanation::KeptLoadBearing { name: None },
+        DispositionExplanation::KeptLicense {
+            marker: Some("SPDX-License-Identifier"),
+        },
+        DispositionExplanation::KeptLicense { marker: None },
+        DispositionExplanation::KeptDirective {
+            kind: CommentKind::Line,
+            name: Some("rubocop:"),
+        },
+        DispositionExplanation::KeptDocumentation {
+            kind: CommentKind::DocBlock,
+        },
+        DispositionExplanation::RemovedByPolicy {
+            policy: Policy::All,
+            kind: CommentKind::License,
+        },
+        DispositionExplanation::RemovedByDefault {
+            policy: Policy::Conservative,
+            kind: CommentKind::Line,
+        },
+        DispositionExplanation::KeptByTag {
+            tag: "SAFETY".to_owned(),
+        },
+        DispositionExplanation::RemovedAsExpired {
+            tag: "TODO".to_owned(),
+            age: Age::from_days(40),
+            limit: Age::from_days(30),
+        },
+        DispositionExplanation::RemovedByLength { lines: 9, limit: 8 },
+        DispositionExplanation::KeptStructural {
+            language: Language::Yaml,
+        },
+    ]
+}
+
+/// What a verdict names, it says.
+#[test]
+fn every_field_a_verdict_carries_reaches_the_reader() {
+    for verdict in every_verdict() {
+        let sentence = verdict.to_string();
+        for expected in shown_by(&verdict) {
+            assert!(
+                sentence.contains(&expected),
+                "`{verdict:?}` carries {expected:?} and its sentence does not say it: {sentence}"
+            );
+        }
+    }
+}
+
+/// A policy removal names the kind it took, in the words a reader uses for it.
+///
+/// The exact-substring guard above cannot ask this, because the sentence says
+/// "license comments" rather than `license`. What it can ask is that the
+/// sentence is not constant in the field -- which is exactly what failed
+/// before, when `RemovedByDefault` carried only the policy and every kind came
+/// out as "removes ordinary comments" under a line that said `kept license
+/// comment`.
+#[test]
+fn a_policy_removal_does_not_say_the_same_thing_about_every_kind() {
+    for build in [
+        (|kind| DispositionExplanation::RemovedByDefault {
+            policy: Policy::Standard,
+            kind,
+        }) as fn(CommentKind) -> DispositionExplanation,
+        |kind| DispositionExplanation::RemovedByPolicy {
+            policy: Policy::All,
+            kind,
+        },
+    ] {
+        let sentences: BTreeSet<String> = CommentKind::ALL
+            .into_iter()
+            .map(|kind| build(kind).to_string())
+            .collect();
+        assert!(
+            sentences.len() > 1,
+            "a policy removal says the same thing about every kind: {sentences:?}"
+        );
+        assert_ne!(
+            build(CommentKind::License).to_string(),
+            build(CommentKind::Line).to_string(),
+            "a licence removed by policy is reported the way an ordinary comment is"
+        );
+    }
+}
