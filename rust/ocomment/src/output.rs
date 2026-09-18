@@ -1203,6 +1203,11 @@ fn render_human(
         note(&mut report, &line)?;
     }
     note(&mut report, &summary_report(&summary, options, folded))?;
+    /* NOTE: After the verdict, because it is about the verdict: the count comes
+     * first and then where that count is and what would answer it. */
+    for line in concentration(files, options) {
+        note(&mut report, &line)?;
+    }
     /* NOTE: Under any other policy a kept preamble is one of many deliberate keeps
      * and saying so every run would be noise. `all` said it would take
      * everything, so what it left behind is the surprise worth a line. */
@@ -1340,6 +1345,95 @@ pub(crate) fn interactive_summary(outcome: InteractiveOutcome) -> String {
 
 /// The whole end-of-run summary: the verdict for the run, the folded skips,
 /// and the I/O errors that were listed one by one above it.
+/// How many files a concentrated report names before it stops.
+///
+/// Enough to see where the work is and short enough to read without
+/// scrolling. A caller who wants the whole distribution has `--format json`.
+const TOP_FILES: usize = 5;
+
+/// How many findings a run has to have before it is worth summarising.
+///
+/// Under this a reader has already read every line by the time they reach the
+/// summary, and telling them where the findings are would be telling them what
+/// they just saw.
+const CONCENTRATION_THRESHOLD: usize = 10;
+
+/// The lines that turn a wall of findings into something to act on.
+///
+/// A run reporting twenty-one removable comments has told the reader what it
+/// found and nothing about what to do. Two things it already knows would
+/// answer that: which files hold the findings, and whether they are all of one
+/// kind -- because if they are, one flag makes the run clean, and the reader
+/// should not have to work that out from the list.
+///
+/// Both are held back below [`CONCENTRATION_THRESHOLD`] findings, where the
+/// list is short enough to have been read already.
+fn concentration(files: &[ProcessedFile], options: &RenderOptions) -> Vec<String> {
+    let mut per_file: Vec<(&Path, usize)> = Vec::new();
+    /* NOTE: Counted into a slot per kind rather than a map, as `kind_breakdown`
+     * does, because `CommentKind` is an enum with a canonical order and
+     * `CommentKind::ALL` is that order. */
+    let mut kinds = [0usize; CommentKind::ALL.len()];
+    let mut total = 0usize;
+    for file in files {
+        let mut count = 0usize;
+        for comment in &file.result.report.comments {
+            if comment.disposition.is_remove() {
+                count += 1;
+                let slot = CommentKind::ALL
+                    .iter()
+                    .position(|kind| *kind == comment.kind)
+                    .expect("CommentKind::ALL lists every kind");
+                kinds[slot] += 1;
+            }
+        }
+        if count > 0 {
+            per_file.push((file.path.as_path(), count));
+            total += count;
+        }
+    }
+    if total < CONCENTRATION_THRESHOLD {
+        return Vec::new();
+    }
+
+    let mut lines = Vec::new();
+    /* NOTE: Most findings first, then by path, so two runs over the same tree
+     * print the same ranking. */
+    per_file.sort_by(|left, right| right.1.cmp(&left.1).then(left.0.cmp(right.0)));
+    let named = per_file.len().min(TOP_FILES);
+    lines.push(format!(
+        "where they are: {}{}",
+        per_file
+            .iter()
+            .take(named)
+            .map(|(path, count)| format!("{} {count}", sanitize_path(&path.to_string_lossy())))
+            .collect::<Vec<_>>()
+            .join(", "),
+        if per_file.len() > named {
+            format!(", and {} more files", per_file.len() - named)
+        } else {
+            String::new()
+        }
+    ));
+
+    /* NOTE: The flag is offered only when one kind accounts for everything. A
+     * suggestion that would leave findings behind is not an answer to "how do
+     * I make this clean", and one that names three flags is the wall again. */
+    let mut present = CommentKind::ALL
+        .into_iter()
+        .enumerate()
+        .filter(|(slot, _)| kinds[*slot] > 0);
+    if let Some((_, kind)) = present.next()
+        && present.next().is_none()
+        && options.operation != Operation::Fix
+    {
+        lines.push(format!(
+            "all {total} are `{kind}`; `--keep-kind {kind}` would make this run clean"
+        ));
+    }
+    lines
+}
+
 fn summary_report(summary: &Summary, options: &RenderOptions, folded: bool) -> String {
     let skips = skip_clause(summary, folded);
     let nothing = nothing_to(options);
@@ -1411,8 +1505,13 @@ fn summary_line(summary: &Summary, options: &RenderOptions) -> String {
         }
         Operation::Fix => {
             if options.applied && summary.files_changed > 0 {
+                /* NOTE: The evidence, not just the count. What makes a tool safe
+                 * to wire into a hook is not an accuracy claim, it is being able
+                 * to say what was checked: every file written here was re-scanned
+                 * first and had to lex cleanly and hold nothing removable, or
+                 * nothing would have been written at all. */
                 format!(
-                    "Removed {} in {} ({scanned} scanned).",
+                    "Removed {} in {} ({scanned} scanned); each re-scanned clean and idempotent before writing.",
                     comments(summary.comments_removed, ""),
                     plural(summary.files_changed, "file")
                 )

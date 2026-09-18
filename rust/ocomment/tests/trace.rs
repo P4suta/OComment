@@ -199,3 +199,127 @@ fn selftest_checks_the_embedded_corpus_and_accounts_for_what_it_skips() {
         "selftest checked only {checked} cases, so the corpus did not reach the binary"
     );
 }
+
+/// A wall of findings gets two lines saying what to do about it.
+///
+/// The count alone is what the run found; it says nothing about what to do.
+/// Where the findings are, and whether one flag would answer all of them, are
+/// both things the run already knows.
+#[test]
+fn a_concentrated_report_says_where_the_findings_are_and_what_would_answer_them() {
+    let directory = tempfile::tempdir().expect("a temporary directory");
+    for (name, count) in [("many.rs", 12), ("few.rs", 4)] {
+        let mut source = String::new();
+        for index in 0..count {
+            source.push_str(&format!("/// doc {index}\npub fn f{index}() {{}}\n"));
+        }
+        std::fs::write(directory.path().join(name), source).expect("the fixture is writable");
+    }
+    let (_, stderr) = run(directory.path(), &["check", ".", "--policy", "standard"]);
+    assert!(
+        stderr.contains("where they are: many.rs 12, few.rs 4"),
+        "the summary did not rank the files:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("all 16 are `doc-line`; `--keep-kind doc-line` would make this run clean"),
+        "the summary did not name the flag that answers every finding:\n{stderr}"
+    );
+}
+
+/// The flag is offered only when one flag would answer everything.
+///
+/// A suggestion that leaves findings behind is not an answer to "how do I make
+/// this clean", so a run whose findings are of two kinds gets the ranking and
+/// no advice.
+#[test]
+fn mixed_kinds_are_ranked_but_not_advised() {
+    let directory = tempfile::tempdir().expect("a temporary directory");
+    let mut source = String::new();
+    for index in 0..8 {
+        source.push_str(&format!("/// doc {index}\npub fn f{index}() {{}}\n"));
+    }
+    for index in 0..8 {
+        source.push_str(&format!("// ordinary {index}\n"));
+    }
+    std::fs::write(directory.path().join("mixed.rs"), source).expect("the fixture is writable");
+    let (_, stderr) = run(directory.path(), &["check", ".", "--policy", "standard"]);
+    assert!(
+        stderr.contains("where they are: mixed.rs 16"),
+        "the summary did not rank the files:\n{stderr}"
+    );
+    assert!(
+        !stderr.contains("would make this run clean"),
+        "the summary advised a flag that would not answer every finding:\n{stderr}"
+    );
+}
+
+/// A short report is left alone.
+///
+/// Under the threshold a reader has already read every line by the time they
+/// reach the summary, and telling them where the findings are would be telling
+/// them what they just saw.
+#[test]
+fn a_short_report_gets_no_summary_of_itself() {
+    let directory = tempfile::tempdir().expect("a temporary directory");
+    std::fs::write(
+        directory.path().join("small.rs"),
+        b"// one\n// two\nfn main() {}\n",
+    )
+    .expect("the fixture is writable");
+    let (_, stderr) = run(directory.path(), &["check", "."]);
+    assert!(
+        !stderr.contains("where they are"),
+        "a two-finding run summarised itself:\n{stderr}"
+    );
+}
+
+/// `fix` checks what it is about to write before it writes it.
+///
+/// The check is that the result still lexes and holds nothing removable. A
+/// scanner that produced a span opening a string would fail the first; one
+/// that made a new comment token out of the bytes around a hole would fail the
+/// second. Neither is reachable today, which is the point — this pins that the
+/// check runs and passes on every rewrite, so a regression that made one
+/// reachable stops at the gate instead of reaching a file.
+#[test]
+fn fix_verifies_the_bytes_it_is_about_to_write() {
+    let directory = tempfile::tempdir().expect("a temporary directory");
+    /* NOTE: A file whose comments sit in the places a removal is most likely to
+     * get wrong: beside a string holding a comment token, between two operators
+     * that must not join, and at the end of a line. */
+    std::fs::write(
+        directory.path().join("edge.rs"),
+        br#"fn main() {
+    let s = "// not a comment";
+    let joined = 7/*x*/+ 8;
+    let negate = -/*x*/-9_i32;
+    let _ = (s, joined, negate); // trailing
+}
+"#,
+    )
+    .expect("the fixture is writable");
+    let (stdout, stderr) = run(directory.path(), &["fix", "."]);
+    assert!(
+        !stderr.contains("defect in OComment"),
+        "the rewrite failed its own check:\n{stderr}"
+    );
+    assert!(stdout.contains("fixed edge.rs"), "{stdout}");
+    let rewritten =
+        std::fs::read_to_string(directory.path().join("edge.rs")).expect("the file was written");
+    assert!(
+        rewritten.contains(r#""// not a comment""#),
+        "the string lost its contents:\n{rewritten}"
+    );
+    assert!(
+        rewritten.contains("- -9_i32"),
+        "the two minus signs joined:\n{rewritten}"
+    );
+    /* NOTE: And the check's own claim, made again from outside: a second run
+     * finds nothing, which is what "idempotent" means and what the verifier
+     * asserted before writing. */
+    let (_, second) = run(directory.path(), &["check", "."]);
+    assert!(
+        second.contains("No removable comments"),
+        "the rewrite was not a fixed point:\n{second}"
+    );
+}

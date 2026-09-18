@@ -3703,7 +3703,7 @@ fn fix_reports_every_changed_file_and_summarizes_on_stderr() {
     );
     assert_eq!(
         String::from_utf8(output.stderr).unwrap(),
-        "Removed 1 comment in 1 file (1 file scanned).\n"
+        "Removed 1 comment in 1 file (1 file scanned); each re-scanned clean and idempotent before writing.\n"
     );
 }
 
@@ -3990,8 +3990,12 @@ fn progress_always_draws_a_live_counter_and_keeps_the_summary() {
         stderr.contains("\r\x1b[2K"),
         "the counter line was never cleared:\n{stderr:?}"
     );
+    /* NOTE: Contained rather than final: a run this size now carries two lines
+     * after the verdict saying where the findings are and what would answer
+     * them. What this pins is that the counter was cleared before the summary
+     * and the summary survived it. */
     assert!(
-        stderr.ends_with(
+        stderr.contains(
             "Found 120 removable comments in 120 files (120 files scanned). \
              Run `ocomment fix` to remove them.\n"
         ),

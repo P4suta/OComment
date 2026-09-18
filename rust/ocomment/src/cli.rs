@@ -750,12 +750,40 @@ fn run_target(
                 } else {
                     scanner.transform_plan(&file.source, language, options.layout)
                 };
-                ProcessedResult::plan(
+                let result = ProcessedResult::plan(
                     &file.source,
                     plan,
                     materialize_output,
                     materialize_source_map,
-                )
+                );
+                /* NOTE: Only a run that is going to write checks what it would
+                 * write. `diff` and `check` produce the same bytes and show
+                 * them to a person, who is the check.
+                 *
+                 * `--force-invalid` is exempt, and has to be: it exists to edit
+                 * a file the scanner already reported broken, so demanding that
+                 * the result scan cleanly would refuse every run of the flag
+                 * that is working exactly as asked. */
+                if operation == Operation::Fix && result.changed() && !options.scan.force_invalid {
+                    let rescan = if let Some(name) = &file.plugin {
+                        plugin_host.scan_report(
+                            name,
+                            result.output(),
+                            &language_name(),
+                            &file.path,
+                            &options,
+                            scanner,
+                        )?
+                    } else if let Some(profile) = &file.profile {
+                        scanner
+                            .scan_profile(result.output(), profile)
+                            .expect("profiles were validated while loading configuration")
+                    } else {
+                        scanner.scan(result.output(), language)
+                    };
+                    verify_rewrite(&file.path, &rescan)?;
+                }
+                result
             } else {
                 let report = if let Some(name) = &file.plugin {
                     plugin_host.scan_report(
@@ -889,6 +917,45 @@ fn run_target(
         Operation::Check | Operation::Diff if output::changed(&files) => Ok(1),
         _ => Ok(denied),
     }
+}
+
+/// Re-scan what a rewrite produced, and refuse it if it is wrong.
+///
+/// The tool's central claim is that a removal changes what a file says and not
+/// what it does, and until now that claim was asserted. It cannot be proved
+/// without a parser for every language -- which would cost the property that
+/// makes this one binary that runs anywhere -- but the failures that are
+/// actually reachable can be caught by asking the scanner about its own
+/// output:
+///
+/// - the result still lexes, so a removal did not open or close a string;
+/// - nothing removable is left, so the rewrite reached a fixed point.
+///
+/// Idempotence is the sharper of the two: it is what catches a removal that
+/// made a new comment token out of the bytes around the hole.
+///
+/// This runs before anything reaches the disk, so a failure costs nothing.
+/// The transaction is still there for an I/O failure part-way through; this is
+/// for the failure a transaction cannot help with, which is having computed
+/// the wrong bytes in the first place.
+fn verify_rewrite(path: &std::path::Path, rewritten: &ocomment_core::ScanReport) -> Result<()> {
+    let path = output::sanitize_path(&path.to_string_lossy());
+    ensure!(
+        rewritten.valid,
+        "{path}: the rewrite does not scan cleanly, so nothing was written. \
+         This is a defect in OComment; the file is unchanged."
+    );
+    let left = rewritten
+        .comments
+        .iter()
+        .filter(|comment| comment.disposition.is_remove())
+        .count();
+    ensure!(
+        left == 0,
+        "{path}: the rewrite still holds {left} removable comment(s), so nothing \
+         was written. This is a defect in OComment; the file is unchanged."
+    );
+    Ok(())
 }
 
 /// Ask about each comment this run would remove, write the accepted removals
