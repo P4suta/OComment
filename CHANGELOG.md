@@ -64,6 +64,15 @@ All notable changes to OComment will be documented here. The project follows
   witnesses that their generators reach the case each property is about, and a
   negative control for the one property whose claim is that nothing was found.
 
+- `sh tools/preflight.sh` runs everything CI checks that a laptop can, in the
+  order that fails soonest, and `lefthook install` wires it into `pre-push`.
+  Waiting eight minutes to be told about a stale manual page is not a review
+  cycle. `tools/check_ci_contracts.py` holds the script against
+  `.github/workflows/ci.yml`, so a gate added to CI cannot quietly stop running
+  locally — and it now also fails when `docs/SUMMARY.md` lists a chapter Git
+  does not track, which is how `docs/agents.md` reached CI unpushed, hidden by
+  a global ignore that most repositories want.
+
 - `ocomment tags` counts what this tree's comments actually open with and says
   which way the convention has drifted: a tag the configuration allows that
   nothing writes, and a tag people write that nothing allows — the second being
