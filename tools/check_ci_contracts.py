@@ -156,11 +156,88 @@ def self_test_lint_rule() -> int:
     return 0
 
 
+def run_blocks(text: str) -> list[tuple[int, str]]:
+    """Every `run:` block in a workflow, as (line number, body).
+
+    Read by indentation rather than by a YAML parser, because this file has no
+    third-party dependency and a `run:` block is the one shape that does not
+    need one: the key names the column, and the body is every line past it.
+    """
+    lines = text.splitlines()
+    blocks = []
+    index = 0
+    while index < len(lines):
+        match = re.match(r"^(\s*)(?:- )?run: [|>]", lines[index])
+        if match is None:
+            index += 1
+            continue
+        column = len(match.group(1))
+        start = index
+        index += 1
+        body = []
+        while index < len(lines):
+            line = lines[index]
+            if line.strip() and len(line) - len(line.lstrip()) <= column:
+                break
+            body.append(line)
+            index += 1
+        blocks.append((start + 1, "\n".join(body)))
+    return blocks
+
+
+def refuse_pipes_without_pipefail(blocks: list[tuple[int, str]], where: str) -> list[str]:
+    """Complain about a `run:` block that pipes without `set -o pipefail`.
+
+    A workflow's default shell is `bash -e {0}`, which is not `pipefail`, so
+    `a | tee log` reports whatever `tee` did and the failure of `a` is lost.
+    This repository pipes `ocomment fix` into `tee` in the step that strips
+    every comment from a copy of the workspace: without `pipefail` that step
+    would carry on after a failed rewrite and build whatever was left.
+
+    Takes the blocks rather than reading them, so the negative control can hand
+    it a workflow that is wrong.
+    """
+    failures = []
+    for number, body in blocks:
+        piped = [
+            line
+            for line in body.splitlines()
+            if re.search(r"[^|]\|[^|]", line)
+            and not line.strip().startswith(("#", "*", '"', "true|", "check|"))
+            and "=>" not in line
+            and "| ---" not in line
+            and "| |" not in line
+        ]
+        if piped and "pipefail" not in body:
+            failures.append(
+                f"{where}:{number}: a `run:` block pipes without `set -o pipefail`,"
+                f" so a failure on the left of the pipe is lost: {piped[0].strip()[:60]}"
+            )
+    return failures
+
+
+def self_test_pipefail_rule() -> int:
+    """Watch the pipefail rule refuse something; the workflows never make it."""
+    bad = [(1, '          set -eu\n          cargo test | tee log\n')]
+    if not refuse_pipes_without_pipefail(bad, "made-up.yml"):
+        print("the pipefail rule did not object to an unguarded pipe", file=sys.stderr)
+        return 1
+    good = [(1, '          set -euo pipefail\n          cargo test | tee log\n')]
+    if refuse_pipes_without_pipefail(good, "made-up.yml"):
+        print("the pipefail rule objects to a guarded pipe", file=sys.stderr)
+        return 1
+    return 0
+
+
 def main() -> int:
     # NOTE: Asked of every run rather than behind a flag. A negative control
     # NOTE: nobody remembers to ask for is a negative control that stops
     # NOTE: happening, and this one costs nothing.
-    if self_test_shell_rule() != 0 or self_test_lint_rule() != 0:
+    if (
+        self_test_shell_rule() != 0
+        or self_test_lint_rule() != 0
+        or self_test_pipefail_rule() != 0
+    ):
         return 1
     failures = []
     seen = set()
@@ -254,6 +331,13 @@ def main() -> int:
     # NOTE: Windows job it stands in for. `cargo xtask` is where a new one goes.
     failures.extend(refuse_shell_scripts(shell_scripts_here()))
     failures.extend(members_missing_workspace_lints(member_manifests()))
+    for workflow_path in sorted(ROOT.glob(".github/workflows/*.yml")) + [ROOT / "action.yml"]:
+        failures.extend(
+            refuse_pipes_without_pipefail(
+                run_blocks(workflow_path.read_text(encoding="utf-8")),
+                str(workflow_path.relative_to(ROOT)),
+            )
+        )
 
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     if not re.search(r"^FROM rust:1\.88-alpine@sha256:[0-9a-f]{64} AS builder$", dockerfile, re.MULTILINE):
@@ -436,7 +520,7 @@ def main() -> int:
     print(
         f"{len(PINS)} reviewed action pins and CI/release contracts match"
         f" ({len(member_manifests())} workspace members inherit the lints, and"
-        " both self-checking rules were watched refusing one)"
+        " all three self-checking rules were watched refusing one)"
     )
     return 0
 
