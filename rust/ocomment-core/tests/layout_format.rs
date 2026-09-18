@@ -32,6 +32,15 @@ struct Formatter {
     program: &'static str,
     arguments: &'static [&'static str],
     language: Language,
+    /// Sources the formatter already accepts, chosen so that a removal leaves
+    /// a hole in every position one can be left in: above an item, beside
+    /// code, between two items, inside a block, over a run, and in a block
+    /// comment.
+    ///
+    /// Carried on the formatter rather than looked up by language, so that a
+    /// formatter added later comes with its own and there is no arm for one to
+    /// fall into without.
+    fixtures: &'static [(&'static str, &'static str)],
 }
 
 const FORMATTERS: [Formatter; 2] = [
@@ -40,24 +49,7 @@ const FORMATTERS: [Formatter; 2] = [
         program: "gofmt",
         arguments: &[],
         language: Language::Go,
-    },
-    /* NOTE: `--emit stdout` writes the formatted source; the edition is named
-     * because rustfmt's default differs between toolchains and a fixture that
-     * lexes under one and not another would fail for the wrong reason. */
-    Formatter {
-        name: "rustfmt",
-        program: "rustfmt",
-        arguments: &["--emit", "stdout", "--edition", "2021", "--quiet"],
-        language: Language::Rust,
-    },
-];
-
-/// Sources that the formatter already accepts, chosen so that a removal leaves
-/// a hole in every position one can be left in: above an item, beside code, at
-/// the top of the file, between two items, and inside a block.
-fn fixtures(language: Language) -> Vec<(&'static str, &'static str)> {
-    match language {
-        Language::Go => vec![
+        fixtures: &[
             (
                 "above an item",
                 "package main\n\n// a remark\nfunc a() {}\n",
@@ -83,7 +75,16 @@ fn fixtures(language: Language) -> Vec<(&'static str, &'static str)> {
                 "package main\n\n/*\nA remark that runs on.\n*/\nfunc a() {}\n",
             ),
         ],
-        Language::Rust => vec![
+    },
+    /* NOTE: `--emit stdout` writes the formatted source; the edition is named
+     * because rustfmt's default differs between toolchains and a fixture that
+     * lexes under one and not another would fail for the wrong reason. */
+    Formatter {
+        name: "rustfmt",
+        program: "rustfmt",
+        arguments: &["--emit", "stdout", "--edition", "2021", "--quiet"],
+        language: Language::Rust,
+        fixtures: &[
             ("above an item", "// a remark\nfn a() {}\n"),
             (
                 "beside code",
@@ -100,9 +101,8 @@ fn fixtures(language: Language) -> Vec<(&'static str, &'static str)> {
                 "/*\nA remark that runs on.\n*/\nfn a() {}\n",
             ),
         ],
-        other => panic!("no fixtures for {other}"),
-    }
-}
+    },
+];
 
 /// The formatter's normal form for `source`, or `None` when it refused the
 /// bytes.
@@ -164,7 +164,7 @@ fn only_compact_leaves_a_formatter_nothing_to_do() {
             );
             continue;
         }
-        for (position, source) in fixtures(formatter.language) {
+        for (position, source) in formatter.fixtures.iter().copied() {
             let normal = formatted(formatter, source).unwrap_or_else(|| {
                 panic!(
                     "{}: the fixture `{position}` is not valid input",

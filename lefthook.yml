@@ -32,7 +32,7 @@ pre-commit:
 pre-push:
   commands:
     preflight:
-      run: sh tools/preflight.sh
+      run: cargo xtask preflight
 
   skip:
     - merge

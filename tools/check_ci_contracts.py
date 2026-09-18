@@ -64,7 +64,104 @@ PINS = {
 USES = re.compile(r"^\s*-?\s*uses:\s*([^@\s]+)@([^\s#]+)(?:\s+#\s*(.*))?$", re.MULTILINE)
 
 
+SHELL_KEPT = frozenset({"tools/publish-crates.sh"})
+
+
+def refuse_shell_scripts(found: set[str]) -> list[str]:
+    """Complain about any of `found` that is not the release workflow's script.
+
+    A task runner is code, and the code that decides what a gate does should be
+    read and typed by the same toolchain as what it gates -- and a shell step is
+    the one thing here that would not survive the Windows job it stands in for.
+    `cargo xtask` is where a new one goes.
+
+    Takes the set rather than looking it up, so the negative control below can
+    hand it any tree at all. A rule that can only be asked about the tree it is
+    standing in is a rule that can only be watched agreeing.
+    """
+    return [
+        f"{shell} is a shell script; add a `cargo xtask` task instead"
+        for shell in sorted(found - SHELL_KEPT)
+    ]
+
+
+def shell_scripts_here() -> set[str]:
+    """Every `tools/*.sh` the repository actually holds."""
+    return {str(path.relative_to(ROOT)) for path in ROOT.glob("tools/*.sh")}
+
+
+def self_test_shell_rule() -> int:
+    """Watch the shell rule refuse something, which the tree never makes it do.
+
+    A rule whose subject has been removed reports `ok` for the same reason an
+    empty room is quiet, and that is not the gate working. Both directions are
+    asked here, of a tree made up for the purpose.
+    """
+    if not refuse_shell_scripts({"tools/reintroduced.sh"}):
+        print("the shell rule did not object to a new shell script", file=sys.stderr)
+        return 1
+    if refuse_shell_scripts(set(SHELL_KEPT)):
+        print("the shell rule objects to the release script it exempts", file=sys.stderr)
+        return 1
+    return 0
+
+
+def members_missing_workspace_lints(manifests: dict[str, str]) -> list[str]:
+    """Complain about a workspace member that does not inherit the lints.
+
+    `[workspace.lints]` does nothing on its own: a member has to opt in with
+    `[lints] workspace = true`, and a member that forgets is silently outside
+    every rule the workspace states. Three of this repository's four crates had
+    opted in and the fourth had not, so neither `missing_docs` nor the
+    exhaustive-match rule had ever applied to the CLI.
+
+    Takes the manifests rather than reading them, so the negative control can
+    hand it a workspace that is wrong.
+    """
+    return [
+        f"{name} does not inherit the workspace lints;"
+        " add `[lints]\nworkspace = true` to its Cargo.toml"
+        for name, text in sorted(manifests.items())
+        if not re.search(r"^\[lints\]\s*\nworkspace\s*=\s*true", text, re.MULTILINE)
+    ]
+
+
+def member_manifests() -> dict[str, str]:
+    """Every workspace member's manifest, by the directory it sits in.
+
+    The member list comes from the workspace manifest rather than from a glob,
+    so a directory that is not a member is not asked about and a member that is
+    not a directory fails loudly.
+    """
+    workspace = tomllib.loads((ROOT / "rust/Cargo.toml").read_text(encoding="utf-8"))
+    manifests = {}
+    for member in workspace["workspace"]["members"]:
+        path = ROOT / "rust" / member / "Cargo.toml"
+        manifests[member] = path.read_text(encoding="utf-8")
+    return manifests
+
+
+def self_test_lint_rule() -> int:
+    """Watch the lint-inheritance rule refuse something.
+
+    Every member inherits today, so the rule reports nothing for the same
+    reason an empty room is quiet.
+    """
+    if not members_missing_workspace_lints({"forgetful": "[package]\nname = 'x'\n"}):
+        print("the lint rule did not object to a member that opts out", file=sys.stderr)
+        return 1
+    if members_missing_workspace_lints({"careful": "[lints]\nworkspace = true\n"}):
+        print("the lint rule objects to a member that opts in", file=sys.stderr)
+        return 1
+    return 0
+
+
 def main() -> int:
+    # NOTE: Asked of every run rather than behind a flag. A negative control
+    # NOTE: nobody remembers to ask for is a negative control that stops
+    # NOTE: happening, and this one costs nothing.
+    if self_test_shell_rule() != 0 or self_test_lint_rule() != 0:
+        return 1
     failures = []
     seen = set()
     for path in AUTOMATION:
@@ -132,7 +229,7 @@ def main() -> int:
                 f" ({'it is not on disk either' if not (ROOT / path).is_file() else 'it is ignored or unstaged'})"
             )
 
-    # NOTE: Every `tools/*.py` gate CI runs also runs in `tools/preflight.sh`.
+    # NOTE: Every `tools/*.py` gate CI runs also runs in `cargo xtask preflight`.
     # NOTE: A push that has to wait eight minutes to hear about a stale manual
     # NOTE: page is not a review cycle, and the only way the local sweep stays
     # NOTE: worth trusting is if adding a gate to CI and not to it fails here.
@@ -140,15 +237,23 @@ def main() -> int:
     # NOTE: is named in `LOCALLY_UNREACHABLE` rather than silently skipped.
     LOCALLY_UNREACHABLE = frozenset({"tools/package_artifacts.py"})
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-    preflight = (ROOT / "tools/preflight.sh").read_text(encoding="utf-8")
+    preflight = (ROOT / "rust/xtask/src/main.rs").read_text(encoding="utf-8")
     for tool in sorted(set(re.findall(r"tools/[a-z_]+\.py", workflow))):
         if tool in LOCALLY_UNREACHABLE:
             continue
         if tool not in preflight:
             failures.append(
-                f"{tool} runs in CI and not in tools/preflight.sh, so a push"
+                f"{tool} runs in CI and not in `cargo xtask preflight`, so a push"
                 " cannot be trusted to pass"
             )
+
+    # NOTE: No standalone shell script but the one the release workflow runs.
+    # NOTE: A task runner is code, and the code that decides what a gate does
+    # NOTE: should be read and typed by the same toolchain as what it gates --
+    # NOTE: and a shell step is the one thing here that does not survive the
+    # NOTE: Windows job it stands in for. `cargo xtask` is where a new one goes.
+    failures.extend(refuse_shell_scripts(shell_scripts_here()))
+    failures.extend(members_missing_workspace_lints(member_manifests()))
 
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     if not re.search(r"^FROM rust:1\.88-alpine@sha256:[0-9a-f]{64} AS builder$", dockerfile, re.MULTILINE):
@@ -328,7 +433,11 @@ def main() -> int:
     if failures:
         print("\n".join(failures), file=sys.stderr)
         return 1
-    print(f"{len(PINS)} reviewed action pins and CI/release contracts match")
+    print(
+        f"{len(PINS)} reviewed action pins and CI/release contracts match"
+        f" ({len(member_manifests())} workspace members inherit the lints, and"
+        " both self-checking rules were watched refusing one)"
+    )
     return 0
 
 

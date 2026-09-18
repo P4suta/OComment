@@ -1,3 +1,10 @@
+//! The command line, exercised through the built binary.
+//!
+//! Every case here starts a process. What a test can see is what a caller can
+//! see -- the two streams, the exit status, and the bytes on the disk
+//! afterwards -- which is the point: a promise the binary makes is a promise
+//! about those and not about a function somewhere inside it.
+
 use std::{
     collections::BTreeSet,
     fs,

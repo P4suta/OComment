@@ -1,0 +1,3 @@
+# NOTE: `cargo xtask` from the repository root; the workspace lives in rust/.
+[alias]
+xtask = "run --quiet --manifest-path rust/Cargo.toml --package xtask --"

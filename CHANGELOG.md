@@ -64,7 +64,7 @@ All notable changes to OComment will be documented here. The project follows
   witnesses that their generators reach the case each property is about, and a
   negative control for the one property whose claim is that nothing was found.
 
-- `sh tools/preflight.sh` runs everything CI checks that a laptop can, in the
+- `cargo xtask preflight` runs everything CI checks that a laptop can, in the
   order that fails soonest, and `lefthook install` wires it into `pre-push`.
   Waiting eight minutes to be told about a stale manual page is not a review
   cycle. `tools/check_ci_contracts.py` holds the script against
@@ -72,6 +72,13 @@ All notable changes to OComment will be documented here. The project follows
   locally — and it now also fails when `docs/SUMMARY.md` lists a chapter Git
   does not track, which is how `docs/agents.md` reached CI unpushed, hidden by
   a global ignore that most repositories want.
+
+  `differential`, `release-check` and `package-list` are tasks too, so the only
+  shell script left in `tools/` is the one the release workflow runs, and
+  `check_ci_contracts.py` fails on a new one. A task runner is code: the code
+  that decides what a gate does should be read and typed by the same toolchain
+  as what it gates, and a shell step is the one thing here that would not
+  survive the Windows job it stands in for.
 
 - `ocomment tags` counts what this tree's comments actually open with and says
   which way the convention has drifted: a tag the configuration allows that
@@ -92,6 +99,33 @@ All notable changes to OComment will be documented here. The project follows
   carries, applied to every file rather than to one format.
 
 ### Changed
+
+- `clippy::wildcard_enum_match_arm` is denied across the workspace, and the
+  `ocomment` crate inherits the workspace lints at all — it never had, so
+  `missing_docs` had not applied to it either. Twenty-one arms went; five of
+  them were latent wrong answers rather than noise, including a `_ =>` that
+  explained any comment kind added later as *load-bearing* and another that
+  gave one the keep reason of a policy that had not decided it. Two `_ =>`
+  arms over `Language` became lookup tables instead, which is better code than
+  the twenty-nine-variant arm the lint asks for.
+
+  The internal runtime is the one exception and it is a path rather than a
+  judgement: it is upstream-derived, so a rule about the decisions *this*
+  program makes does not reach it, and rewriting its match arms would put a
+  patch between us and every version we take next.
+  `rust_sources_do_not_suppress_lints` now carries that one path, compares the
+  list exactly, and requires the suppression to be an `expect` rather than an
+  `allow`: a suppression that has outlived its subject is indistinguishable
+  from one that is still working, and `expect` fails the build the day the lint
+  stops firing.
+
+  `check_ci_contracts.py` fails when a workspace member does not inherit the
+  lints at all. `[workspace.lints]` does nothing on its own — a member has to
+  opt in — so a member that forgets is silently outside every rule the
+  workspace states, which is what had happened. Both that rule and the
+  shell-script one are watched refusing something on every run: a rule whose
+  subject has been removed reports `ok` for the same reason an empty room is
+  quiet, and that is not the gate working.
 
 - `--format json` and `--format jsonl` no longer carry the source map unless
   `--source-map` asks for it. It is one segment per unchanged run of bytes, so

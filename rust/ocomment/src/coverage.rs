@@ -156,7 +156,7 @@ pub fn render(coverage: &Coverage, format: OutputFormat) -> Result<()> {
                 serde_json::to_string_pretty(&document).expect("the report serializes")
             ))?;
         }
-        _ => {
+        OutputFormat::Human | OutputFormat::Sarif | OutputFormat::Github | OutputFormat::Agent => {
             let tenths = coverage.tenths_of_a_percent();
             wrote(writeln!(
                 out,

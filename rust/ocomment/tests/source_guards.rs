@@ -166,6 +166,29 @@ fn rust_sources_do_not_suppress_lints() {
         .to_path_buf();
     let mut pending = vec![root.clone()];
     let mut offenders = Vec::new();
+    /* NOTE: The one exception, and it is a path rather than a judgement: the
+     * internal runtime is upstream-derived, so a lint rule about the decisions
+     * *this* program makes does not reach it, and rewriting its match arms
+     * would put a patch between us and every version we take next. The list is
+     * compared exactly below, so a second exception fails here. */
+    const SUPPRESSION_ALLOWED: [&str; 1] = ["src/runtime/mod.rs"];
+    /* NOTE: And it has to be an `expect`. An `allow` that has outlived its
+     * subject is indistinguishable from one that is still working; an `expect`
+     * fails the build the day the lint stops firing, which is the only way a
+     * suppression tells anybody it is no longer needed. */
+    let excused_file = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(SUPPRESSION_ALLOWED[0]);
+    let excused_source = fs::read_to_string(&excused_file).unwrap();
+    assert!(
+        excused_source.contains(concat!("#![", "expect(")),
+        "{} is excused from the suppression rule but does not use `expect`, \
+         so nothing will say when the suppression stops being needed",
+        SUPPRESSION_ALLOWED[0]
+    );
+    assert!(
+        !excused_source.contains(concat!("#![", "allow(")),
+        "{} uses `allow` where the exception requires `expect`",
+        SUPPRESSION_ALLOWED[0]
+    );
     let markers = [
         concat!("#[", "allow("),
         concat!("#![", "allow("),
@@ -187,7 +210,15 @@ fn rust_sources_do_not_suppress_lints() {
                         .chars()
                         .filter(|character| !character.is_whitespace())
                         .collect();
-                    if markers.iter().any(|marker| compact.contains(marker)) {
+                    let relative = path
+                        .strip_prefix(&root)
+                        .unwrap_or(&path)
+                        .to_string_lossy()
+                        .replace('\\', "/");
+                    let excused = SUPPRESSION_ALLOWED
+                        .iter()
+                        .any(|allowed| relative.ends_with(allowed));
+                    if !excused && markers.iter().any(|marker| compact.contains(marker)) {
                         offenders.push(format!(
                             "{}:{}",
                             path.strip_prefix(&root).unwrap().display(),
