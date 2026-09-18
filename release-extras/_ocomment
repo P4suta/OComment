@@ -110,11 +110,15 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
 '--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -135,6 +139,7 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
         case $line[2] in
             (check)
 _arguments "${_arguments_options[@]}" : \
+'(--staged)--base=[Check only the working-tree files that differ from this revision'\''s merge base with HEAD]:REV:_default' \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
 '--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too"
@@ -230,13 +235,17 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
 '--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -248,6 +257,7 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 ;;
 (fix)
 _arguments "${_arguments_options[@]}" : \
+'(--staged)--base=[Check only the working-tree files that differ from this revision'\''s merge base with HEAD]:REV:_default' \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
 '--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too"
@@ -343,6 +353,9 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
 '--dry-run[Print the patch \`fix\` would apply and write nothing]' \
@@ -352,7 +365,8 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -364,6 +378,7 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 ;;
 (diff)
 _arguments "${_arguments_options[@]}" : \
+'(--staged)--base=[Check only the working-tree files that differ from this revision'\''s merge base with HEAD]:REV:_default' \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
 '--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too"
@@ -459,13 +474,17 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
 '--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -477,6 +496,7 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 ;;
 (scan)
 _arguments "${_arguments_options[@]}" : \
+'(--staged)--base=[Check only the working-tree files that differ from this revision'\''s merge base with HEAD]:REV:_default' \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
 '--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too"
@@ -572,13 +592,17 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
 '--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -685,11 +709,15 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
 '--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -795,11 +823,15 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
 '--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -905,6 +937,9 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
 '--fix[For the Lefthook hook, run \`fix\` instead of \`check\`]' \
 '(--stdout)--force[Replace the file if it already exists]' \
 '--stdout[Print the template to standard output and write no file]' \
@@ -912,7 +947,8 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -1019,11 +1055,15 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
 '--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -1130,11 +1170,15 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
 '--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -1240,11 +1284,15 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
 '--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -1361,11 +1409,15 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
 '--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -1472,11 +1524,15 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
 '--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -1583,11 +1639,15 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
 '--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -1693,11 +1753,15 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
 '--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -1804,11 +1868,15 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
 '--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -1915,11 +1983,15 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
 '--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -2074,11 +2146,15 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
 '--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -2090,6 +2166,7 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 ;;
 (coverage)
 _arguments "${_arguments_options[@]}" : \
+'(--staged)--base=[Check only the working-tree files that differ from this revision'\''s merge base with HEAD]:REV:_default' \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
 '--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too"
@@ -2185,13 +2262,17 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
 '--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -2203,6 +2284,7 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 ;;
 (ratchet)
 _arguments "${_arguments_options[@]}" : \
+'(--staged)--base=[Check only the working-tree files that differ from this revision'\''s merge base with HEAD]:REV:_default' \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
 '--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines"
 standard\:"Like conservative, and remove documentation, licence and copyright comments too"
@@ -2298,6 +2380,9 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
 '--update[Rewrite the ledger to match the tree, rather than checking against it]' \
 '--staged[Read and update Git index blobs rather than treating the working tree as the source]' \
 '--index-only[With \`--staged\`, do not attempt a uniquely mappable working-tree update]' \
@@ -2305,7 +2390,8 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -2412,11 +2498,15 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
 '--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -2523,11 +2613,15 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
 '--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -2633,11 +2727,15 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
 '--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \
@@ -2743,11 +2841,15 @@ notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
 human\:"One line per step, for a person reading a terminal"
 json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
 '--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
 '--force-invalid[Apply the edits that are still provably safe when the source fails to scan]' \
 '--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
 '--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
-'--explain[List every comment human \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
 '(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
 '-v[Trace what is scanned and summarize every comment kind and skipped file]' \

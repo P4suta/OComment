@@ -1,6 +1,6 @@
 # Print an optspec for argparse to handle cmd's options that are independent of any subcommand.
 function __fish_ocomment_global_optspecs
-    string join \n config= policy= layout= language= dialect= keep-kind= remove-kind= include-generated deny-skipped= force-invalid force-protected format= color= hyperlinks= no-preview annotation-level= explain trace= progress= q/quiet v/verbose h/help V/version
+    string join \n config= policy= layout= language= dialect= keep-kind= remove-kind= include-generated deny-skipped= force-invalid force-protected format= color= hyperlinks= no-preview annotation-level= explain source-map trace= progress= j/jobs= summary= q/quiet v/verbose h/help V/version
 end
 
 function __fish_ocomment_needs_command
@@ -125,11 +125,14 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_needs_command" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_needs_command" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_needs_command" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_needs_command" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_needs_command" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_needs_command" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_needs_command" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
-complete -c ocomment -n "__fish_ocomment_needs_command" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_needs_command" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_needs_command" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_needs_command" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_needs_command" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_needs_command" -s h -l help -d 'Print help (see more with \'--help\')'
@@ -152,6 +155,7 @@ complete -c ocomment -n "__fish_ocomment_needs_command" -a "selftest" -d 'Re-run
 complete -c ocomment -n "__fish_ocomment_needs_command" -a "doctor" -d 'Diagnose the environment (config, git, plugins, tools)'
 complete -c ocomment -n "__fish_ocomment_needs_command" -a "man" -d 'Render the roff manual page to stdout'
 complete -c ocomment -n "__fish_ocomment_needs_command" -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l base -d 'Check only the working-tree files that differ from this revision\'s merge base with HEAD' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines'
 standard\t'Like conservative, and remove documentation, licence and copyright comments too'
@@ -253,16 +257,20 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand check" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l staged -d 'Read and update Git index blobs rather than treating the working tree as the source'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l index-only -d 'With `--staged`, do not attempt a uniquely mappable working-tree update'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
-complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -s h -l help -d 'Print help (see more with \'--help\')'
+complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l base -d 'Check only the working-tree files that differ from this revision\'s merge base with HEAD' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines'
 standard\t'Like conservative, and remove documentation, licence and copyright comments too'
@@ -364,6 +372,8 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l staged -d 'Read and update Git index blobs rather than treating the working tree as the source'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l index-only -d 'With `--staged`, do not attempt a uniquely mappable working-tree update'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l dry-run -d 'Print the patch `fix` would apply and write nothing'
@@ -372,10 +382,12 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l include-genera
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
-complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -s h -l help -d 'Print help (see more with \'--help\')'
+complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l base -d 'Check only the working-tree files that differ from this revision\'s merge base with HEAD' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines'
 standard\t'Like conservative, and remove documentation, licence and copyright comments too'
@@ -477,16 +489,20 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l staged -d 'Read and update Git index blobs rather than treating the working tree as the source'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l index-only -d 'With `--staged`, do not attempt a uniquely mappable working-tree update'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
-complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -s h -l help -d 'Print help (see more with \'--help\')'
+complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l base -d 'Check only the working-tree files that differ from this revision\'s merge base with HEAD' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines'
 standard\t'Like conservative, and remove documentation, licence and copyright comments too'
@@ -588,13 +604,16 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l staged -d 'Read and update Git index blobs rather than treating the working tree as the source'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l index-only -d 'With `--staged`, do not attempt a uniquely mappable working-tree update'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
-complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -s h -l help -d 'Print help (see more with \'--help\')'
@@ -699,11 +718,14 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
-complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -s h -l help -d 'Print help (see more with \'--help\')'
@@ -808,11 +830,14 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
-complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -s h -l help -d 'Print help (see more with \'--help\')'
@@ -917,6 +942,8 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand init" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l fix -d 'For the Lefthook hook, run `fix` instead of `check`'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l force -d 'Replace the file if it already exists'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l stdout -d 'Print the template to standard output and write no file'
@@ -924,7 +951,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l include-gener
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
-complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -s h -l help -d 'Print help (see more with \'--help\')'
@@ -1029,11 +1057,14 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand config" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
-complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -s h -l help -d 'Print help (see more with \'--help\')'
@@ -1138,11 +1169,14 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
-complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -s h -l help -d 'Print help (see more with \'--help\')'
@@ -1247,11 +1281,14 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -s h -l help -d 'Print help (see more with \'--help\')'
@@ -1366,11 +1403,14 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -s h -l help -d 'Print help (see more with \'--help\')'
@@ -1475,11 +1515,14 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -s h -l help -d 'Print help (see more with \'--help\')'
@@ -1584,11 +1627,14 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -s h -l help -d 'Print help (see more with \'--help\')'
@@ -1693,11 +1739,14 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -s h -l help -d 'Print help (see more with \'--help\')'
@@ -1802,11 +1851,14 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -s h -l help -d 'Print help (see more with \'--help\')'
@@ -1911,11 +1963,14 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -s h -l help -d 'Print help (see more with \'--help\')'
@@ -2027,14 +2082,18 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
-complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -s h -l help -d 'Print help (see more with \'--help\')'
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l base -d 'Check only the working-tree files that differ from this revision\'s merge base with HEAD' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines'
 standard\t'Like conservative, and remove documentation, licence and copyright comments too'
@@ -2136,16 +2195,20 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l staged -d 'Read and update Git index blobs rather than treating the working tree as the source'
 complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l index-only -d 'With `--staged`, do not attempt a uniquely mappable working-tree update'
 complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
-complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -s h -l help -d 'Print help (see more with \'--help\')'
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l base -d 'Check only the working-tree files that differ from this revision\'s merge base with HEAD' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines'
 standard\t'Like conservative, and remove documentation, licence and copyright comments too'
@@ -2247,6 +2310,8 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l update -d 'Rewrite the ledger to match the tree, rather than checking against it'
 complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l staged -d 'Read and update Git index blobs rather than treating the working tree as the source'
 complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l index-only -d 'With `--staged`, do not attempt a uniquely mappable working-tree update'
@@ -2254,7 +2319,8 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l include-ge
 complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
-complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -s h -l help -d 'Print help (see more with \'--help\')'
@@ -2359,11 +2425,14 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
-complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -s h -l help -d 'Print help (see more with \'--help\')'
@@ -2468,11 +2537,14 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
-complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -s h -l help -d 'Print help (see more with \'--help\')'
@@ -2577,11 +2649,14 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
-complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -s h -l help -d 'Print help (see more with \'--help\')'
@@ -2686,11 +2761,14 @@ json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand man" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
-complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -s h -l help -d 'Print help (see more with \'--help\')'

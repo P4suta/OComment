@@ -65,6 +65,10 @@ proptest! {
         let source = format!("left/*{body}*/right").into_bytes();
         let result = transform(&source, Language::C, TransformOptions::default());
         prop_assert!(result.report.valid);
+        /* NOTE: The witness. A property about what a removal preserves is
+         * vacuously true of a run that removed nothing, so a scanner that
+         * stopped finding this comment would pass this test forever. */
+        prop_assert_eq!(result.report.comments.len(), 1);
         prop_assert_eq!(newlines(&source), newlines(&result.output));
     }
 
@@ -74,6 +78,8 @@ proptest! {
     {
         let source = format!("x/*{first}*/y//{second}\nz/*{third}*/w").into_bytes();
         let result = transform(&source, Language::Rust, TransformOptions::default());
+        // NOTE: The witness; see `lines_layout_keeps_the_exact_newline_sequence`.
+        prop_assert_eq!(result.edits.len(), 3);
         prop_assert!(result.edits.windows(2).all(|pair| pair[0].span.end <= pair[1].span.start));
         for edit in &result.edits {
             prop_assert!(result.report.comments.iter().any(|comment| comment.span == edit.span));
@@ -95,6 +101,19 @@ proptest! {
         let source = format!("const char *s = \"{escaped}\";").into_bytes();
         let report = scan(&source, Language::C, ScanOptions::default());
         prop_assert!(report.comments.is_empty());
+        /* NOTE: The negative control, and this property needs one more than
+         * most: "nothing was found" is what a scanner that found nothing
+         * anywhere would also say. The same bytes outside the string have to
+         * be found whenever they spell a comment, so the silence above is the
+         * string doing its job rather than the scanner having stopped. */
+        if content.contains("//") || content.contains("/*") {
+            let bare = format!("int x = 1; {content}\n").into_bytes();
+            let outside = scan(&bare, Language::C, ScanOptions::default());
+            prop_assert!(
+                !outside.comments.is_empty() || !outside.valid,
+                "the same bytes outside a string were not a comment either: {content}"
+            );
+        }
     }
 
     #[test]

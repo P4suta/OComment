@@ -1,0 +1,192 @@
+//! The three things a gate needs besides a verdict: a way to narrow itself to
+//! what a branch changed, a refusal to be silently green, and numbers a later
+//! step can read.
+
+use std::{
+    fs,
+    path::Path,
+    process::{Command, Output},
+};
+use tempfile::TempDir;
+
+fn binary() -> &'static str {
+    env!("CARGO_BIN_EXE_ocomment")
+}
+
+fn git(directory: &Path, arguments: &[&str]) {
+    let output = Command::new("git")
+        .current_dir(directory)
+        .args(arguments)
+        .output()
+        .expect("git runs");
+    assert!(
+        output.status.success(),
+        "git {arguments:?}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn run(directory: &Path, arguments: &[&str]) -> Output {
+    Command::new(binary())
+        .current_dir(directory)
+        .args(arguments)
+        .output()
+        .expect("the binary runs")
+}
+
+fn repository() -> TempDir {
+    let directory = tempfile::tempdir().expect("a temporary directory");
+    let path = directory.path();
+    git(path, &["init", "-q", "-b", "main"]);
+    git(path, &["config", "user.email", "test@example.test"]);
+    git(path, &["config", "user.name", "OComment Test"]);
+    git(path, &["config", "commit.gpgsign", "false"]);
+    directory
+}
+
+/// A branch answers for what it changed and not for what it inherited.
+#[test]
+fn base_reports_the_files_this_branch_changed_and_no_others() {
+    let directory = repository();
+    let path = directory.path();
+    fs::write(path.join("old.rs"), b"fn a() {} // an old comment\n").expect("writable");
+    git(path, &["add", "-A"]);
+    git(path, &["commit", "-qm", "first"]);
+    git(path, &["checkout", "-q", "-b", "work"]);
+    fs::write(path.join("new.rs"), b"fn b() {} // a new comment\n").expect("writable");
+    git(path, &["add", "-A"]);
+    git(path, &["commit", "-qm", "second"]);
+
+    let whole = run(path, &["check", "--quiet"]);
+    assert_eq!(whole.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8_lossy(&whole.stdout).lines().count(),
+        2,
+        "the whole tree holds two findings"
+    );
+
+    let narrowed = run(path, &["check", "--quiet", "--base", "main"]);
+    let stdout = String::from_utf8_lossy(&narrowed.stdout);
+    assert_eq!(narrowed.status.code(), Some(1));
+    assert!(
+        stdout.contains("new.rs") && !stdout.contains("old.rs"),
+        "--base reported a file the branch never touched:\n{stdout}"
+    );
+}
+
+/// A path named beside `--base` narrows it further rather than replacing it.
+#[test]
+fn base_and_a_path_are_an_intersection() {
+    let directory = repository();
+    let path = directory.path();
+    fs::create_dir(path.join("src")).expect("writable");
+    fs::write(path.join("root.rs"), b"fn a() {}\n").expect("writable");
+    fs::write(path.join("src/inner.rs"), b"fn b() {}\n").expect("writable");
+    git(path, &["add", "-A"]);
+    git(path, &["commit", "-qm", "first"]);
+    fs::write(path.join("root.rs"), b"fn a() {} // outside\n").expect("writable");
+    fs::write(path.join("src/inner.rs"), b"fn b() {} // inside\n").expect("writable");
+
+    let output = run(path, &["check", "--quiet", "--base", "HEAD", "src"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("inner.rs") && !stdout.contains("root.rs"),
+        "the path did not narrow the diff:\n{stdout}"
+    );
+}
+
+/// A branch with nothing to check exits 0, which reads exactly like a clean
+/// one. The run is right and the silence is the trap, so the silence goes.
+#[test]
+fn a_gate_that_examined_nothing_says_so() {
+    let directory = repository();
+    let path = directory.path();
+    fs::write(path.join("a.rs"), b"fn a() {} // a comment\n").expect("writable");
+    git(path, &["add", "-A"]);
+    git(path, &["commit", "-qm", "first"]);
+
+    let base = run(path, &["check", "--base", "HEAD"]);
+    assert_eq!(base.status.code(), Some(0));
+    assert!(
+        String::from_utf8_lossy(&base.stderr).contains("no changed files to check"),
+        "an empty --base run said nothing:\n{}",
+        String::from_utf8_lossy(&base.stderr)
+    );
+
+    let staged = run(path, &["check", "--staged"]);
+    assert_eq!(staged.status.code(), Some(0));
+    let stderr = String::from_utf8_lossy(&staged.stderr);
+    assert!(
+        stderr.contains("nothing is staged") && stderr.contains("--all-files"),
+        "an empty --staged run said nothing, which is how it becomes a gate that \
+         is green forever:\n{stderr}"
+    );
+}
+
+/// The counts are the run's own, so they are the same numbers whatever the
+/// product was written in.
+#[test]
+fn the_summary_is_the_same_whatever_format_the_product_took() {
+    let directory = tempfile::tempdir().expect("a temporary directory");
+    let path = directory.path();
+    fs::write(path.join("a.rs"), b"fn a() {}\n// one\n// two\n").expect("writable");
+    fs::write(path.join("b.rs"), b"fn b() {} // three\n").expect("writable");
+
+    /* NOTE: Written outside the tree under test. A summary left beside the
+     * sources would be the next run's third file. */
+    let elsewhere = tempfile::tempdir().expect("a temporary directory");
+    let mut written = Vec::new();
+    for format in ["human", "json", "jsonl", "sarif", "github", "agent"] {
+        let file = elsewhere.path().join(format!("{format}.json"));
+        let output = run(
+            path,
+            &[
+                "check",
+                "--quiet",
+                "--format",
+                format,
+                "--summary",
+                file.to_str().expect("a UTF-8 temporary path"),
+            ],
+        );
+        assert_eq!(output.status.code(), Some(1), "{format}");
+        written.push(fs::read_to_string(&file).expect("the summary was written"));
+    }
+    for other in &written[1..] {
+        assert_eq!(&written[0], other, "two formats reported different counts");
+    }
+    let summary: serde_json::Value =
+        serde_json::from_str(&written[0]).expect("the summary parses as JSON");
+    assert_eq!(summary["version"], 1);
+    assert_eq!(summary["operation"], "check");
+    assert_eq!(summary["files_scanned"], 2);
+    assert_eq!(summary["files_with_findings"], 2);
+    assert_eq!(summary["removable_comments"], 3);
+    assert_eq!(summary["comments_removed"], 0);
+    assert_eq!(summary["removable_by_kind"]["line"], 3);
+    assert_eq!(summary["top_files"][0]["path"], "a.rs");
+    assert_eq!(summary["top_files"][0]["removable"], 2);
+}
+
+/// Only a run that reached the disk may claim a removal.
+#[test]
+fn only_a_fix_reports_comments_removed() {
+    let directory = tempfile::tempdir().expect("a temporary directory");
+    let path = directory.path();
+    fs::write(path.join("a.rs"), b"fn a() {}\n// one\n").expect("writable");
+    let elsewhere = tempfile::tempdir().expect("a temporary directory");
+    let file = elsewhere.path().join("summary.json");
+    let argument = file.to_str().expect("a UTF-8 temporary path");
+
+    run(path, &["check", "--quiet", "--summary", argument]);
+    let checked: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&file).expect("written")).expect("parses");
+    assert_eq!(checked["comments_removed"], 0);
+
+    run(path, &["fix", "--quiet", "--summary", argument]);
+    let fixed: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&file).expect("written")).expect("parses");
+    assert_eq!(fixed["operation"], "fix");
+    assert_eq!(fixed["comments_removed"], 1);
+    assert_eq!(fixed["files_changed"], 1);
+}

@@ -5,6 +5,7 @@ use ignore::WalkBuilder;
 use ocomment_core::{
     DeclarativeProfile, Detection, Dialect, Language, TransformOptions, detect_language,
 };
+use rayon::prelude::*;
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -49,6 +50,24 @@ pub struct Discovery {
     /// one unreadable path. It is carried out of the walk and returned after
     /// traversal unwinds, instead of being reported as an I/O skip.
     fatal: Option<anyhow::Error>,
+}
+
+impl Discovery {
+    /// Fold one answer in. The first configuration failure is the one reported:
+    /// they are all the same failure, and a run that listed it once per file
+    /// would bury it.
+    fn absorb(&mut self, looked: Looked) {
+        match looked {
+            Looked::Nothing => {}
+            Looked::Found(file) => self.files.push(*file),
+            Looked::Passed(skipped) => self.skipped.push(skipped),
+            Looked::Fatal(error) => {
+                if self.fatal.is_none() {
+                    self.fatal = Some(error);
+                }
+            }
+        }
+    }
 }
 
 /// The path standard input is reported under. It is not a real file name: the
@@ -194,6 +213,20 @@ pub fn discover_workspace(paths: &[PathBuf], resolved: &ResolvedConfig) -> Resul
     discover_with_scope(paths, resolved, None, None, false)
 }
 
+/// The same, with a language and dialect the caller forced.
+///
+/// `--base` uses this: the paths come from Git rather than from the caller, so
+/// they are walked under the ordinary limits, but a `--language` on the same
+/// command line still has to reach them.
+pub fn discover_workspace_with(
+    paths: &[PathBuf],
+    resolved: &ResolvedConfig,
+    forced_language: Option<Language>,
+    forced_dialect: Option<Dialect>,
+) -> Result<Discovery> {
+    discover_with_scope(paths, resolved, forced_language, forced_dialect, false)
+}
+
 /// One file's worth of bytes, judged as though they were the contents of
 /// `path`.
 ///
@@ -229,11 +262,11 @@ pub fn proposed_source(
     if (!include.is_empty() && !include.is_match(&relative)) || exclude.is_match(&relative) {
         return Ok(discovery);
     }
-    classify(&path, bytes, true, &context, &mut discovery);
-    match discovery.fatal.take() {
-        Some(error) => Err(error),
-        None => Ok(discovery),
+    match classify(&path, bytes, true, &context) {
+        Looked::Fatal(error) => return Err(error),
+        looked => discovery.absorb(looked),
     }
+    Ok(discovery)
 }
 
 fn discover_with_scope(
@@ -266,19 +299,18 @@ fn discover_with_scope(
             .map(|path| (path, explicit_arguments))
             .collect()
     };
+    /* NOTE: Every candidate the walk finds, gathered before any of them is
+     * opened. Traversal is one thread's job and reading a thousand files is
+     * not, so the two are separated: the walk names them, and `load_one`
+     * answers for all of them at once below. */
+    let mut candidates: Vec<(PathBuf, bool, bool)> = Vec::new();
     for (path, explicit_scope) in targets {
         if path.is_file()
             || path
                 .symlink_metadata()
                 .is_ok_and(|metadata| metadata.file_type().is_symlink())
         {
-            load_one(
-                &path,
-                explicit_scope,
-                explicit_scope,
-                &loader,
-                &mut discovery,
-            );
+            candidates.push((path, explicit_scope, explicit_scope));
         } else if path.is_dir() {
             let mut builder = WalkBuilder::new(&path);
             let ignore = resolved.config.files.ignore;
@@ -300,20 +332,46 @@ fn discover_with_scope(
              * names a path inside `.git` — or `.git` itself — is still
              * answered; only what a walk *wanders* into is excluded. */
             builder.filter_entry(|entry| entry.file_name() != GIT_DIRECTORY);
-            for entry in builder.build() {
-                match entry {
-                    Ok(entry) if entry.file_type().is_some_and(|kind| kind.is_file()) => {
-                        load_one(entry.path(), explicit_scope, false, &loader, &mut discovery);
+            /* NOTE: `ignore` reads a directory per thread and answers out of
+             * order, so the candidates are sorted before they are looked at
+             * and the report comes out in the same order on every run. A walk
+             * whose output depended on how the scheduler felt would be a walk
+             * whose diffs could not be reviewed. */
+            builder.threads(rayon::current_num_threads());
+            let found = std::sync::Mutex::new(Vec::new());
+            let failed = std::sync::Mutex::new(Vec::new());
+            builder.build_parallel().run(|| {
+                let found = &found;
+                let failed = &failed;
+                let root = path.clone();
+                Box::new(move |entry| {
+                    match entry {
+                        Ok(entry) if entry.file_type().is_some_and(|kind| kind.is_file()) => {
+                            found
+                                .lock()
+                                .expect("the walk's collector is not poisoned")
+                                .push(entry.into_path());
+                        }
+                        Ok(_) => {}
+                        Err(error) => failed
+                            .lock()
+                            .expect("the walk's collector is not poisoned")
+                            .push(SkippedFile {
+                                path: root.clone(),
+                                reason: error.to_string(),
+                                error: true,
+                                explicit: explicit_scope,
+                            }),
                     }
-                    Ok(_) => {}
-                    Err(error) => discovery.skipped.push(SkippedFile {
-                        path: path.clone(),
-                        reason: error.to_string(),
-                        error: true,
-                        explicit: explicit_scope,
-                    }),
-                }
-            }
+                    ignore::WalkState::Continue
+                })
+            });
+            let mut found = found.into_inner().expect("the walk finished");
+            found.sort_unstable();
+            candidates.extend(found.into_iter().map(|path| (path, explicit_scope, false)));
+            discovery
+                .skipped
+                .extend(failed.into_inner().expect("the walk finished"));
         } else {
             discovery.skipped.push(SkippedFile {
                 path,
@@ -322,6 +380,20 @@ fn discover_with_scope(
                 explicit: explicit_scope,
             });
         }
+    }
+    /* NOTE: Read and classified in parallel, folded in the order the
+     * candidates were gathered. Reading is where the time goes -- a walk over
+     * a large repository is thousands of `open`, `read`, `close` and a
+     * language detection each -- and it is the part that has no reason to
+     * happen one file at a time. */
+    for looked in candidates
+        .par_iter()
+        .map(|(path, explicit_scope, explicit_path)| {
+            load_one(path, *explicit_scope, *explicit_path, &loader)
+        })
+        .collect::<Vec<_>>()
+    {
+        discovery.absorb(looked);
     }
     if let Some(error) = discovery.fatal.take() {
         return Err(error);
@@ -377,13 +449,27 @@ struct LoadContext<'a> {
     generated: &'a crate::generated::Generated,
 }
 
+/// What looking at one path produced.
+///
+/// Returned rather than pushed, so that looking at a path is a pure function
+/// of the path and the configuration — which is what lets a walk look at a
+/// thousand of them at once and fold the answers in one deterministic order.
+enum Looked {
+    /// Excluded by a glob, or not a file at all.
+    Nothing,
+    Found(Box<SourceFile>),
+    Passed(SkippedFile),
+    /// A configuration failure, which applies to the run rather than to this
+    /// path.
+    Fatal(anyhow::Error),
+}
+
 fn load_one(
     path: &Path,
     explicit_scope: bool,
     explicit_path: bool,
     context: &LoadContext<'_>,
-    discovery: &mut Discovery,
-) {
+) -> Looked {
     let LoadContext {
         resolved,
         include,
@@ -396,31 +482,28 @@ fn load_one(
      * the root before either set is asked about it. */
     let relative = resolved.relative_to_root(path);
     if (!include.is_empty() && !include.is_match(&relative)) || exclude.is_match(&relative) {
-        return;
+        return Looked::Nothing;
     }
     let link_metadata = match path.symlink_metadata() {
         Ok(value) => value,
         Err(error) => {
-            discovery.skipped.push(skip(path, explicit_path, error));
-            return;
+            return Looked::Passed(skip(path, explicit_path, error));
         }
     };
     let metadata = if link_metadata.file_type().is_symlink() {
         if !resolved.config.files.follow_symlinks {
-            discovery.skipped.push(SkippedFile {
+            return Looked::Passed(SkippedFile {
                 path: path.to_path_buf(),
                 reason: "symbolic link".into(),
                 error: false,
                 explicit: explicit_path,
             });
-            return;
         }
         match path.metadata() {
             Ok(metadata) if metadata.is_file() => metadata,
-            Ok(_) => return,
+            Ok(_) => return Looked::Nothing,
             Err(error) => {
-                discovery.skipped.push(skip(path, explicit_path, error));
-                return;
+                return Looked::Passed(skip(path, explicit_path, error));
             }
         }
     } else {
@@ -429,22 +512,20 @@ fn load_one(
     /* NOTE: Every path under an explicitly named directory is explicit for hidden and
      * size handling. */
     if !explicit_scope && metadata.len() > resolved.config.files.max_size {
-        discovery.skipped.push(SkippedFile {
+        return Looked::Passed(SkippedFile {
             path: path.to_path_buf(),
             reason: format!("larger than {} bytes", resolved.config.files.max_size),
             error: false,
             explicit: explicit_path,
         });
-        return;
     }
     let source = match fs::read(path) {
         Ok(value) => value,
         Err(error) => {
-            discovery.skipped.push(skip(path, explicit_path, error));
-            return;
+            return Looked::Passed(skip(path, explicit_path, error));
         }
     };
-    classify(path, source, explicit_path, context, discovery);
+    classify(path, source, explicit_path, context)
 }
 
 /// Everything deciding one file's fate that does not depend on reading it.
@@ -460,8 +541,7 @@ fn classify(
     source: Vec<u8>,
     explicit_path: bool,
     context: &LoadContext<'_>,
-    discovery: &mut Discovery,
-) {
+) -> Looked {
     let LoadContext {
         resolved,
         forced_language,
@@ -470,13 +550,12 @@ fn classify(
         ..
     } = context;
     if source.iter().take(8192).any(|byte| *byte == 0) {
-        discovery.skipped.push(SkippedFile {
+        return Looked::Passed(SkippedFile {
             path: path.to_path_buf(),
             reason: "binary file (NUL byte)".into(),
             error: false,
             explicit: explicit_path,
         });
-        return;
     }
     /* NOTE: Before the language is chosen, because this is not a question about
      * what the file is written in. A lock file is perfectly readable TOML and a
@@ -484,13 +563,12 @@ fn classify(
      * is that the comments in them belong to the tool that will write them
      * again. */
     if !resolved.config.files.include_generated && generated.claims(path, &source) {
-        discovery.skipped.push(SkippedFile {
+        return Looked::Passed(SkippedFile {
             path: path.to_path_buf(),
             reason: crate::generated::REASON.into(),
             error: false,
             explicit: explicit_path,
         });
-        return;
     }
     let built_in = (*forced_language)
         .map(|language| Detection {
@@ -510,21 +588,15 @@ fn classify(
     });
     let (language, options) = match resolved.for_path(path, detected_language, detected_dialect) {
         Ok(value) => value,
-        Err(error) => {
-            if discovery.fatal.is_none() {
-                discovery.fatal = Some(error);
-            }
-            return;
-        }
+        Err(error) => return Looked::Fatal(error),
     };
     if !resolved.language_is_enabled(language) {
-        discovery.skipped.push(SkippedFile {
+        return Looked::Passed(SkippedFile {
             path: path.to_path_buf(),
             reason: "language disabled by configuration".into(),
             error: false,
             explicit: explicit_path,
         });
-        return;
     }
     let profile = if language == Language::Unknown {
         profile_for_path(path, resolved)
@@ -537,15 +609,14 @@ fn classify(
         None
     };
     if language == Language::Unknown && profile.is_none() && plugin.is_none() {
-        discovery.skipped.push(SkippedFile {
+        return Looked::Passed(SkippedFile {
             path: path.to_path_buf(),
             reason: NO_LANGUAGE.into(),
             error: false,
             explicit: explicit_path,
         });
-        return;
     }
-    discovery.files.push(SourceFile {
+    Looked::Found(Box::new(SourceFile {
         path: path.to_path_buf(),
         source,
         language,
@@ -554,7 +625,7 @@ fn classify(
         profile,
         plugin,
         detection: detection_reason,
-    });
+    }))
 }
 
 pub fn plugin_for_path(path: &Path, resolved: &ResolvedConfig) -> Option<String> {

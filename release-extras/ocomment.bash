@@ -191,7 +191,7 @@ _ocomment() {
 
     case "${cmd}" in
         ocomment)
-            opts="-q -v -h -V --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --trace --progress --quiet --verbose --help --version check fix diff scan strip lsp init config languages plugin completions coverage ratchet hook selftest doctor man help"
+            opts="-j -q -v -h -V --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help --version check fix diff scan strip lsp init config languages plugin completions coverage ratchet hook selftest doctor man help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -253,6 +253,18 @@ _ocomment() {
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
                     return 0
                     ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 *)
                     COMPREPLY=()
                     ;;
@@ -261,12 +273,16 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__check)
-            opts="-q -v -h --staged --index-only --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --trace --progress --quiet --verbose --help"
+            opts="-j -q -v -h --staged --index-only --base --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --base)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --config)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
@@ -321,6 +337,18 @@ _ocomment() {
                     ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -331,7 +359,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__completions)
-            opts="-q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --trace --progress --quiet --verbose --help bash elvish fish powershell zsh"
+            opts="-j -q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help bash elvish fish powershell zsh"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -391,6 +419,18 @@ _ocomment() {
                     ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -401,7 +441,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__config)
-            opts="-q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --trace --progress --quiet --verbose --help show locate explain schema"
+            opts="-j -q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help show locate explain schema"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -461,6 +501,18 @@ _ocomment() {
                     ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -471,12 +523,16 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__coverage)
-            opts="-q -v -h --staged --index-only --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --trace --progress --quiet --verbose --help"
+            opts="-j -q -v -h --staged --index-only --base --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --base)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --config)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
@@ -531,6 +587,18 @@ _ocomment() {
                     ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -541,12 +609,16 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__diff)
-            opts="-q -v -h --staged --index-only --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --trace --progress --quiet --verbose --help"
+            opts="-j -q -v -h --staged --index-only --base --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --base)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --config)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
@@ -601,6 +673,18 @@ _ocomment() {
                     ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -611,7 +695,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__doctor)
-            opts="-q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --trace --progress --quiet --verbose --help"
+            opts="-j -q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -671,6 +755,18 @@ _ocomment() {
                     ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -681,12 +777,16 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__fix)
-            opts="-i -q -v -h --staged --index-only --dry-run --interactive --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --trace --progress --quiet --verbose --help"
+            opts="-i -j -q -v -h --staged --index-only --base --dry-run --interactive --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --base)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --config)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
@@ -741,6 +841,18 @@ _ocomment() {
                     ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -1101,7 +1213,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__hook)
-            opts="-q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --trace --progress --quiet --verbose --help claude-code"
+            opts="-j -q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help claude-code"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1161,6 +1273,18 @@ _ocomment() {
                     ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -1171,7 +1295,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__init)
-            opts="-q -v -h --fix --force --stdout --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --trace --progress --quiet --verbose --help config lefthook"
+            opts="-j -q -v -h --fix --force --stdout --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help config lefthook"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1231,6 +1355,18 @@ _ocomment() {
                     ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -1241,7 +1377,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__languages)
-            opts="-q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --trace --progress --quiet --verbose --help"
+            opts="-j -q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1301,6 +1437,18 @@ _ocomment() {
                     ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -1311,7 +1459,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__lsp)
-            opts="-q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --trace --progress --quiet --verbose --help"
+            opts="-j -q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1371,6 +1519,18 @@ _ocomment() {
                     ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -1381,7 +1541,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__man)
-            opts="-q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --trace --progress --quiet --verbose --help"
+            opts="-j -q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1441,6 +1601,18 @@ _ocomment() {
                     ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -1451,7 +1623,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__plugin)
-            opts="-q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --trace --progress --quiet --verbose --help add remove list update verify new help"
+            opts="-j -q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help add remove list update verify new help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1513,6 +1685,18 @@ _ocomment() {
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
                     return 0
                     ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 *)
                     COMPREPLY=()
                     ;;
@@ -1521,7 +1705,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__plugin__subcmd__add)
-            opts="-q -v -h --name --sha256 --identity --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --trace --progress --quiet --verbose --help"
+            opts="-j -q -v -h --name --sha256 --identity --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1593,6 +1777,18 @@ _ocomment() {
                     ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -1715,7 +1911,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__plugin__subcmd__list)
-            opts="-q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --trace --progress --quiet --verbose --help"
+            opts="-j -q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1775,6 +1971,18 @@ _ocomment() {
                     ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -1785,7 +1993,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__plugin__subcmd__new)
-            opts="-q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --trace --progress --quiet --verbose --help"
+            opts="-j -q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1845,6 +2053,18 @@ _ocomment() {
                     ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -1855,7 +2075,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__plugin__subcmd__remove)
-            opts="-q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --trace --progress --quiet --verbose --help"
+            opts="-j -q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1915,6 +2135,18 @@ _ocomment() {
                     ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -1925,7 +2157,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__plugin__subcmd__update)
-            opts="-q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --trace --progress --quiet --verbose --help"
+            opts="-j -q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1985,6 +2217,18 @@ _ocomment() {
                     ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -1995,7 +2239,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__plugin__subcmd__verify)
-            opts="-q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --trace --progress --quiet --verbose --help"
+            opts="-j -q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -2057,6 +2301,18 @@ _ocomment() {
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
                     return 0
                     ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 *)
                     COMPREPLY=()
                     ;;
@@ -2065,12 +2321,16 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__ratchet)
-            opts="-q -v -h --update --staged --index-only --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --trace --progress --quiet --verbose --help"
+            opts="-j -q -v -h --update --staged --index-only --base --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --base)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --config)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
@@ -2125,6 +2385,18 @@ _ocomment() {
                     ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -2135,12 +2407,16 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__scan)
-            opts="-q -v -h --staged --index-only --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --trace --progress --quiet --verbose --help"
+            opts="-j -q -v -h --staged --index-only --base --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --base)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --config)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
@@ -2195,6 +2471,18 @@ _ocomment() {
                     ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -2205,7 +2493,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__selftest)
-            opts="-q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --trace --progress --quiet --verbose --help"
+            opts="-j -q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -2265,6 +2553,18 @@ _ocomment() {
                     ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)
@@ -2275,7 +2575,7 @@ _ocomment() {
             return 0
             ;;
         ocomment__subcmd__strip)
-            opts="-q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --trace --progress --quiet --verbose --help"
+            opts="-j -q -v -h --config --policy --layout --language --dialect --keep-kind --remove-kind --include-generated --deny-skipped --force-invalid --force-protected --format --color --hyperlinks --no-preview --annotation-level --explain --source-map --trace --progress --jobs --summary --quiet --verbose --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -2335,6 +2635,18 @@ _ocomment() {
                     ;;
                 --progress)
                     COMPREPLY=($(compgen -W "auto always never" -- "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --summary)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)

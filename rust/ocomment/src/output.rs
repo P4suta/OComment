@@ -2,7 +2,7 @@ use crate::{
     config::PolicyTrace,
     files::{NO_LANGUAGE, STDIN_PATH, SkippedFile},
 };
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::ValueEnum;
 #[cfg(test)]
 use ocomment_core::TransformResult;
@@ -133,6 +133,8 @@ pub struct RenderOptions {
     pub verbosity: Verbosity,
     /// Human lines carry a one-line rendering of the comment text.
     pub preview: bool,
+    /// What a machine format carries besides the verdicts.
+    pub json: JsonOptions,
     /// Human `check` and `scan` lines carry every comment, kept ones included,
     /// each under an indented line naming the rule that decided it.
     pub explain: bool,
@@ -546,7 +548,15 @@ struct JsonFile<'a> {
     changed: bool,
     report: JsonReport<'a>,
     edits: &'a [ocomment_core::Edit],
-    source_map: &'a SourceMap,
+    /// The byte-for-byte mapping from the output back to the source.
+    ///
+    /// Left out unless `--source-map` asks for it. It is one segment per
+    /// unchanged run, so a file with twenty-five comments in it produced
+    /// several hundred lines of a report the caller had asked for because it
+    /// was the machine format — and the thing a machine format is for is being
+    /// read, not scrolled past.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source_map: Option<&'a SourceMap>,
 }
 
 /// The scan report as a machine format writes it: everything
@@ -603,12 +613,38 @@ struct JsonComment<'a> {
     #[serde(flatten)]
     position: JsonPosition,
     kind: CommentKind,
+    /// Which rule decided it, and where that rule was written.
+    ///
+    /// Present when `--explain` asked for it. The human report has printed
+    /// this under each finding since the rule table was written down, and a
+    /// caller that chose a machine format was handed the verdict without the
+    /// reason — so the reason arrives here in fields rather than in the
+    /// sentence the human report composes from them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    explanation: Option<JsonExplanation>,
     /// The comment's own bytes, decoded lossily the way every other text this
     /// tool serialises is. `--no-preview` leaves it out, which is the way to
     /// keep a report over a large tree small.
     #[serde(skip_serializing_if = "Option::is_none")]
     text: Option<Cow<'a, str>>,
     disposition: &'a Disposition,
+}
+
+/// A verdict's reasoning, in fields.
+#[derive(Serialize)]
+struct JsonExplanation {
+    /// The rule's own name, in the vocabulary [`DispositionExplanation`] uses:
+    /// `removed-by-length`, `kept-by-tag`, `kept-load-bearing`.
+    rule: String,
+    /// The same rule as the human report words it.
+    detail: String,
+    /// Where the setting behind it was written — a table and a file — or
+    /// absent when a built-in rule decided and there is no table to point at.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    setting: Option<String>,
+    /// The flag that would overrule it, when one would.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    next_step: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -622,7 +658,13 @@ struct JsonDiagnostic<'a> {
 }
 
 /// The report of one file, with the positions filled in from its source.
-fn json_report<'a>(report: &'a ScanReport, source: &'a [u8], preview: bool) -> JsonReport<'a> {
+fn json_report<'a>(
+    report: &'a ScanReport,
+    source: &'a [u8],
+    language: Language,
+    preview: bool,
+    explainer: Option<&Explainer<'_>>,
+) -> JsonReport<'a> {
     let lines = LineIndex::new(source);
     JsonReport {
         language: report.language,
@@ -633,6 +675,8 @@ fn json_report<'a>(report: &'a ScanReport, source: &'a [u8], preview: bool) -> J
                 span: comment.span,
                 position: JsonPosition::of(&lines, comment.span),
                 kind: comment.kind,
+                explanation: explainer
+                    .map(|explainer| json_explanation(explainer, comment, source, language)),
                 text: preview.then(|| slice_text(source, comment.span)),
                 disposition: &comment.disposition,
             })
@@ -650,6 +694,60 @@ fn json_report<'a>(report: &'a ScanReport, source: &'a [u8], preview: bool) -> J
             .collect(),
         valid: report.valid,
     }
+}
+
+fn json_explanation(
+    explainer: &Explainer<'_>,
+    comment: &Comment,
+    source: &[u8],
+    language: Language,
+) -> JsonExplanation {
+    let start = comment.span.start.min(source.len());
+    let end = comment.span.end.clamp(start, source.len());
+    let verdict = explain_comment_with(
+        &explainer.patterns,
+        comment,
+        &source[start..end],
+        language,
+        &explainer.material.options,
+    );
+    let step = next_step(&verdict);
+    JsonExplanation {
+        rule: explanation_rule(&verdict),
+        detail: verdict.to_string(),
+        setting: explainer
+            .material
+            .trace
+            .origin_of(&verdict, &explainer.material.options),
+        next_step: (!step.is_empty()).then(|| step.trim_start_matches("; ").to_owned()),
+    }
+}
+
+/// The rule's own name, as a machine reads it.
+///
+/// Exhaustive, so a verdict added later has to be named rather than falling
+/// into a bucket a caller would then be matching against forever.
+fn explanation_rule(verdict: &DispositionExplanation) -> String {
+    match verdict {
+        DispositionExplanation::KeptByKind(_) => "kept-by-kind",
+        DispositionExplanation::KeptByRegex { .. } => "kept-by-regex",
+        DispositionExplanation::ProtectedPreamble => "protected-preamble",
+        DispositionExplanation::KeptHtml => "kept-html",
+        DispositionExplanation::KeptLoadBearing { .. } => "kept-load-bearing",
+        DispositionExplanation::KeptDirective { .. } => "kept-directive",
+        DispositionExplanation::KeptDocumentation { .. } => "kept-documentation",
+        DispositionExplanation::KeptLicense { .. } => "kept-license",
+        DispositionExplanation::KeptByTag { .. } => "kept-by-tag",
+        DispositionExplanation::KeptStructural { .. } => "kept-structural",
+        DispositionExplanation::RemovedByKind(_) => "removed-by-kind",
+        DispositionExplanation::RemovedByRegex { .. } => "removed-by-regex",
+        DispositionExplanation::RemovedByPolicy { .. } => "removed-by-policy",
+        DispositionExplanation::RemovedByDefault { .. } => "removed-by-default",
+        DispositionExplanation::RemovedAsTrailing => "removed-as-trailing",
+        DispositionExplanation::RemovedAsExpired { .. } => "removed-as-expired",
+        DispositionExplanation::RemovedByLength { .. } => "removed-by-length",
+    }
+    .to_owned()
 }
 
 /// The bytes of `span`, decoded lossily and left whole.
@@ -1133,8 +1231,10 @@ pub fn render_explained(
     let mut output = stdout();
     match options.format {
         OutputFormat::Human => render_human(&mut output, files, skipped, options, explanations),
-        OutputFormat::Json => render_json(&mut output, files, skipped, options.preview),
-        OutputFormat::Jsonl => render_jsonl(&mut output, files, skipped, options.preview),
+        OutputFormat::Json => render_json(&mut output, files, skipped, options.json, explanations),
+        OutputFormat::Jsonl => {
+            render_jsonl(&mut output, files, skipped, options.json, explanations)
+        }
         OutputFormat::Sarif => render_sarif(&mut output, files, skipped),
         OutputFormat::Github => render_github(&mut output, files, skipped, options),
         OutputFormat::Agent => render_agent(&mut output, files, skipped, options, explanations),
@@ -1795,7 +1895,8 @@ fn render_json(
     output: &mut impl Write,
     files: &[ProcessedFile],
     skipped: &[SkippedFile],
-    preview: bool,
+    json: JsonOptions,
+    explanations: &Explanations,
 ) -> Result<()> {
     #[derive(Serialize)]
     struct Document<'a> {
@@ -1807,7 +1908,7 @@ fn render_json(
         &mut *output,
         &Document {
             version: 1,
-            files: JsonFiles(files, preview),
+            files: JsonFiles(files, json, explanations),
             skipped: JsonSkipped(skipped),
         },
     )
@@ -1816,7 +1917,7 @@ fn render_json(
     Ok(())
 }
 
-struct JsonFiles<'a>(&'a [ProcessedFile], bool);
+struct JsonFiles<'a>(&'a [ProcessedFile], JsonOptions, &'a Explanations);
 
 impl Serialize for JsonFiles<'_> {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -1825,7 +1926,7 @@ impl Serialize for JsonFiles<'_> {
     {
         let mut sequence = serializer.serialize_seq(Some(self.0.len()))?;
         for file in self.0 {
-            sequence.serialize_element(&json_file(file, self.1))?;
+            sequence.serialize_element(&json_file(file, &self.1, self.2))?;
         }
         sequence.end()
     }
@@ -1860,10 +1961,12 @@ fn render_jsonl(
     output: &mut impl Write,
     files: &[ProcessedFile],
     skipped: &[SkippedFile],
-    preview: bool,
+    json: JsonOptions,
+    explanations: &Explanations,
 ) -> Result<()> {
     for file in files {
-        serde_json::to_writer(&mut *output, &json_file(file, preview)).map_err(write_error)?;
+        serde_json::to_writer(&mut *output, &json_file(file, &json, explanations))
+            .map_err(write_error)?;
         wrote(writeln!(output))?;
     }
     for item in skipped {
@@ -1877,15 +1980,38 @@ fn render_jsonl(
     Ok(())
 }
 
-fn json_file(file: &ProcessedFile, preview: bool) -> JsonFile<'_> {
+fn json_file<'a>(
+    file: &'a ProcessedFile,
+    options: &JsonOptions,
+    explanations: &'a Explanations,
+) -> JsonFile<'a> {
+    let explainer = options
+        .explain
+        .then(|| explanations.get(&file.path))
+        .flatten()
+        .map(Explainer::new);
     JsonFile {
         path: file.path.to_string_lossy().into_owned(),
         language: file.language,
         changed: file.result.changed(),
-        report: json_report(&file.result.report, &file.source, preview),
+        report: json_report(
+            &file.result.report,
+            &file.source,
+            file.language,
+            options.preview,
+            explainer.as_ref(),
+        ),
         edits: &file.result.edits,
-        source_map: file.result.source_map(),
+        source_map: options.source_map.then(|| file.result.source_map()),
     }
+}
+
+/// What a machine format carries besides the verdicts.
+#[derive(Clone, Copy, Debug)]
+pub struct JsonOptions {
+    pub preview: bool,
+    pub explain: bool,
+    pub source_map: bool,
 }
 
 /// Where a SARIF reader is sent to learn what the tool itself is.
@@ -3385,4 +3511,68 @@ fn write_agent(
         }
     }
     Ok(())
+}
+
+/// The end-of-run summary as one JSON object, whatever `--format` the run
+/// wrote its product in.
+///
+/// The human summary goes to standard error and the machine formats carry no
+/// summary at all, so a caller that wants the *numbers* — a CI job setting an
+/// output, a dashboard, a script deciding whether to open a pull request — has
+/// had to re-derive them by parsing the product. This is the same count the
+/// run already made, written once, to a file the caller names so it cannot
+/// collide with the product on either stream.
+pub fn write_summary(
+    path: &Path,
+    files: &[ProcessedFile],
+    skipped: &[SkippedFile],
+    operation: Operation,
+) -> Result<()> {
+    let summary = Summary::compute(files, skipped, operation);
+    let mut kinds: BTreeMap<&str, usize> = BTreeMap::new();
+    let mut per_file: Vec<(String, usize)> = Vec::new();
+    for file in files {
+        let mut removable = 0usize;
+        for comment in &file.result.report.comments {
+            if comment.disposition.is_remove() {
+                removable += 1;
+                *kinds.entry(comment.kind.as_str()).or_default() += 1;
+            }
+        }
+        if removable > 0 {
+            per_file.push((report_path(&file.path), removable));
+        }
+    }
+    /* NOTE: Most findings first, then by path, so two runs over the same tree
+     * write the same bytes. */
+    per_file.sort_by(|left, right| right.1.cmp(&left.1).then(left.0.cmp(&right.0)));
+    per_file.truncate(TOP_FILES);
+    let document = json!({
+        "version": 1,
+        "operation": match operation {
+            Operation::Check => "check",
+            Operation::Scan => "scan",
+            Operation::Diff => "diff",
+            Operation::Fix => "fix",
+        },
+        "files_scanned": summary.files_scanned,
+        "files_with_findings": summary.files_with_removable,
+        "removable_comments": summary.removable_comments,
+        "kept_comments": summary.kept_comments,
+        "files_changed": summary.files_changed,
+        "comments_removed": summary.comments_removed,
+        "invalid_files": summary.invalid_files,
+        "skipped_files": summary.skipped_by_reason.values().sum::<usize>() + summary.named_skips,
+        "skipped_by_reason": summary.skipped_by_reason,
+        "io_errors": summary.io_errors,
+        "removable_by_kind": kinds,
+        "top_files": per_file
+            .into_iter()
+            .map(|(path, removable)| json!({ "path": path, "removable": removable }))
+            .collect::<Vec<_>>(),
+    });
+    let rendered =
+        serde_json::to_string_pretty(&document).map_err(|error| output_failure(error.into()))?;
+    std::fs::write(path, format!("{rendered}\n"))
+        .with_context(|| format!("cannot write the run summary to {}", path.display()))
 }

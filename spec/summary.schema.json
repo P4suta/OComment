@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/P4suta/OComment/spec/summary.schema.json",
+  "title": "OComment run summary",
+  "description": "The end-of-run counts, written by `--summary <FILE>` whatever --format the run wrote its product in. One object per run; the file is rewritten, never appended to.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version", "operation", "files_scanned", "files_with_findings",
+    "removable_comments", "kept_comments", "files_changed", "comments_removed",
+    "invalid_files", "skipped_files", "skipped_by_reason", "io_errors",
+    "removable_by_kind", "top_files"
+  ],
+  "properties": {
+    "version": { "const": 1 },
+    "operation": { "enum": ["check", "scan", "diff", "fix"] },
+    "files_scanned": { "type": "integer", "minimum": 0 },
+    "files_with_findings": { "type": "integer", "minimum": 0 },
+    "removable_comments": { "type": "integer", "minimum": 0 },
+    "kept_comments": { "type": "integer", "minimum": 0 },
+    "files_changed": { "type": "integer", "minimum": 0 },
+    "comments_removed": {
+      "description": "Only a `fix` that reached the disk reports removals; every other operation reports 0.",
+      "type": "integer", "minimum": 0
+    },
+    "invalid_files": { "type": "integer", "minimum": 0 },
+    "skipped_files": { "type": "integer", "minimum": 0 },
+    "skipped_by_reason": {
+      "description": "Walked skips under a short stable label. A path named on the command line is counted in `skipped_files` and absent here, because it had its own line on standard output.",
+      "type": "object",
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    },
+    "io_errors": { "type": "integer", "minimum": 0 },
+    "removable_by_kind": {
+      "type": "object",
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    },
+    "top_files": {
+      "description": "The files holding the most removable comments, most first and at most five.",
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["path", "removable"],
+        "properties": {
+          "path": { "type": "string" },
+          "removable": { "type": "integer", "minimum": 1 }
+        }
+      }
+    }
+  }
+}

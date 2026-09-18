@@ -248,7 +248,10 @@ Output:
           - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
 
       --trace <WHEN>
           Record how the run reached its verdicts, on standard error
@@ -265,6 +268,12 @@ Output:
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -314,6 +323,9 @@ Options:
 
       --index-only
           With `--staged`, do not attempt a uniquely mappable working-tree update
+
+      --base <REV>
+          Check only the working-tree files that differ from this revision's merge base with HEAD
 
       --config <FILE>
           Read this configuration file instead of discovering `.ocomment.toml`
@@ -480,7 +492,10 @@ Output:
           - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
 
       --trace <WHEN>
           Record how the run reached its verdicts, on standard error
@@ -497,6 +512,12 @@ Output:
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -523,6 +544,9 @@ Options:
 
       --index-only
           With `--staged`, do not attempt a uniquely mappable working-tree update
+
+      --base <REV>
+          Check only the working-tree files that differ from this revision's merge base with HEAD
 
       --dry-run
           Print the patch `fix` would apply and write nothing
@@ -697,7 +721,10 @@ Output:
           - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
 
       --trace <WHEN>
           Record how the run reached its verdicts, on standard error
@@ -714,6 +741,12 @@ Output:
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -741,6 +774,9 @@ Options:
       --index-only
           With `--staged`, do not attempt a uniquely mappable working-tree update
 
+      --base <REV>
+          Check only the working-tree files that differ from this revision's merge base with HEAD
+
       --config <FILE>
           Read this configuration file instead of discovering `.ocomment.toml`
 
@@ -906,7 +942,10 @@ Output:
           - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
 
       --trace <WHEN>
           Record how the run reached its verdicts, on standard error
@@ -923,6 +962,12 @@ Output:
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -950,6 +995,9 @@ Options:
       --index-only
           With `--staged`, do not attempt a uniquely mappable working-tree update
 
+      --base <REV>
+          Check only the working-tree files that differ from this revision's merge base with HEAD
+
       --config <FILE>
           Read this configuration file instead of discovering `.ocomment.toml`
 
@@ -1115,7 +1163,10 @@ Output:
           - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
 
       --trace <WHEN>
           Record how the run reached its verdicts, on standard error
@@ -1132,6 +1183,12 @@ Output:
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -1314,7 +1371,10 @@ Output:
           - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
 
       --trace <WHEN>
           Record how the run reached its verdicts, on standard error
@@ -1331,6 +1391,12 @@ Output:
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -1513,7 +1579,10 @@ Output:
           - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
 
       --trace <WHEN>
           Record how the run reached its verdicts, on standard error
@@ -1530,6 +1599,12 @@ Output:
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -1728,7 +1803,10 @@ Output:
           - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
 
       --trace <WHEN>
           Record how the run reached its verdicts, on standard error
@@ -1745,6 +1823,12 @@ Output:
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -1934,7 +2018,10 @@ Output:
           - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
 
       --trace <WHEN>
           Record how the run reached its verdicts, on standard error
@@ -1951,6 +2038,12 @@ Output:
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -2133,7 +2226,10 @@ Output:
           - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
 
       --trace <WHEN>
           Record how the run reached its verdicts, on standard error
@@ -2150,6 +2246,12 @@ Output:
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -2341,7 +2443,10 @@ Output:
           - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
 
       --trace <WHEN>
           Record how the run reached its verdicts, on standard error
@@ -2358,6 +2463,12 @@ Output:
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -2553,7 +2664,10 @@ Output:
           - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
 
       --trace <WHEN>
           Record how the run reached its verdicts, on standard error
@@ -2570,6 +2684,12 @@ Output:
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -2756,7 +2876,10 @@ Output:
           - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
 
       --trace <WHEN>
           Record how the run reached its verdicts, on standard error
@@ -2773,6 +2896,12 @@ Output:
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -2955,7 +3084,10 @@ Output:
           - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
 
       --trace <WHEN>
           Record how the run reached its verdicts, on standard error
@@ -2972,6 +3104,12 @@ Output:
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -3158,7 +3296,10 @@ Output:
           - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
 
       --trace <WHEN>
           Record how the run reached its verdicts, on standard error
@@ -3175,6 +3316,12 @@ Output:
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -3361,7 +3508,10 @@ Output:
           - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
 
       --trace <WHEN>
           Record how the run reached its verdicts, on standard error
@@ -3378,6 +3528,12 @@ Output:
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -3564,7 +3720,10 @@ Output:
           - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
 
       --trace <WHEN>
           Record how the run reached its verdicts, on standard error
@@ -3581,6 +3740,12 @@ Output:
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -3769,7 +3934,10 @@ Output:
           - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
 
       --trace <WHEN>
           Record how the run reached its verdicts, on standard error
@@ -3786,6 +3954,12 @@ Output:
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -3812,6 +3986,9 @@ Options:
 
       --index-only
           With `--staged`, do not attempt a uniquely mappable working-tree update
+
+      --base <REV>
+          Check only the working-tree files that differ from this revision's merge base with HEAD
 
       --config <FILE>
           Read this configuration file instead of discovering `.ocomment.toml`
@@ -3978,7 +4155,10 @@ Output:
           - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
 
       --trace <WHEN>
           Record how the run reached its verdicts, on standard error
@@ -3995,6 +4175,12 @@ Output:
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -4025,6 +4211,9 @@ Options:
       --index-only
           With `--staged`, do not attempt a uniquely mappable working-tree update
 
+      --base <REV>
+          Check only the working-tree files that differ from this revision's merge base with HEAD
+
       --config <FILE>
           Read this configuration file instead of discovering `.ocomment.toml`
 
@@ -4190,7 +4379,10 @@ Output:
           - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
 
       --trace <WHEN>
           Record how the run reached its verdicts, on standard error
@@ -4207,6 +4399,12 @@ Output:
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -4396,7 +4594,10 @@ Output:
           - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
 
       --trace <WHEN>
           Record how the run reached its verdicts, on standard error
@@ -4413,6 +4614,12 @@ Output:
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -4595,7 +4802,10 @@ Output:
           - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
 
       --trace <WHEN>
           Record how the run reached its verdicts, on standard error
@@ -4612,6 +4822,12 @@ Output:
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -4794,7 +5010,10 @@ Output:
           - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
 
       --trace <WHEN>
           Record how the run reached its verdicts, on standard error
@@ -4811,6 +5030,12 @@ Output:
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -4993,7 +5218,10 @@ Output:
           - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
 
       --trace <WHEN>
           Record how the run reached its verdicts, on standard error
@@ -5010,6 +5238,12 @@ Output:
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written

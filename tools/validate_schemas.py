@@ -369,9 +369,11 @@ def main() -> int:
     config_schema = json.loads((ROOT / "spec/config.schema.json").read_text())
     result_schema = json.loads((ROOT / "spec/result.schema.json").read_text())
     trace_schema = json.loads((ROOT / "spec/trace.schema.json").read_text())
+    summary_schema = json.loads((ROOT / "spec/summary.schema.json").read_text())
     jsonschema.Draft202012Validator.check_schema(config_schema)
     jsonschema.Draft202012Validator.check_schema(result_schema)
     jsonschema.Draft202012Validator.check_schema(trace_schema)
+    jsonschema.Draft202012Validator.check_schema(summary_schema)
 
     with (ROOT / "spec/default-config.toml").open("rb") as stream:
         jsonschema.validate(tomllib.load(stream), config_schema)
@@ -419,6 +421,27 @@ def main() -> int:
         "edit-planned",
         "file-summary",
     }
+    # NOTE: The summary is written for a run of every operation, because the
+    # NOTE: operation decides which of its counts can be non-zero and a schema
+    # NOTE: that only ever saw `check` would not have met `comments_removed`.
+    with tempfile.TemporaryDirectory(prefix="ocomment-summary-") as raw:
+        directory = pathlib.Path(raw)
+        (directory / "schema.rs").write_bytes(b"let value = 1; // removable\n")
+        (directory / "opaque.unknownext").write_bytes(b"not a language\n")
+        for operation in ("check", "scan", "diff", "fix"):
+            summary_file = directory / f"{operation}.json"
+            subprocess.run(
+                [str(binary), operation, ".", "--quiet", "--summary", str(summary_file)],
+                cwd=directory,
+                check=False,
+                capture_output=True,
+            )
+            document = json.loads(summary_file.read_text())
+            jsonschema.validate(document, summary_schema)
+            if document["operation"] != operation:
+                print(f"the summary of a {operation} run says {document['operation']!r}")
+                return 1
+
     if seen != expected:
         print(
             "the trace fixture reached "
@@ -426,8 +449,8 @@ def main() -> int:
         )
         return 1
     print(
-        "config, result and trace schemas validate canonical runtime examples"
-        f" ({len(seen)} trace events reached)"
+        "config, result, trace and summary schemas validate canonical runtime"
+        f" examples ({len(seen)} trace events reached)"
     )
     return 0
 

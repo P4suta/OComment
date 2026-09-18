@@ -317,6 +317,82 @@ The `rust` CI job runs it next to `tools/check_hooks.py` and
 `tools/check_embedded_specs.py`, and `tools/release-check.sh` runs it again
 against the release binary before a tag is pushed.
 
+## Gating a branch on what it changed
+
+```console
+$ ocomment check --base main
+```
+
+Only the working-tree files that differ from `git merge-base HEAD main`. The
+merge base and not the branch tip: on a branch several commits behind its
+trunk, a plain diff against the trunk reports every file the trunk changed as
+well, and a gate that reported those would be asking this branch to answer for
+somebody else's work. A deleted file is dropped rather than reported — there is
+nothing left to read, and failing on one would refuse the change that cleaned
+it up.
+
+A path named beside it narrows it further: `--base main src` is the files under
+`src` that the branch changed. `--base` applies the ordinary walk limits, so a
+generated file the branch touched is still passed over; a path typed on the
+command line without `--base` is you saying *this one* and lifts them.
+
+### A gate that examined nothing says so
+
+```
+--base main: no changed files to check, so nothing was examined.
+--staged: nothing is staged, so nothing was examined. A runner that stages
+nothing of its own -- `pre-commit run --all-files`, say -- needs a run without
+--staged.
+```
+
+Both runs are correct and both exit 0, which reads exactly like a clean branch.
+That is how `--staged` under `pre-commit run --all-files` becomes a gate that is
+green forever. The run stays right; the silence goes.
+
+## Numbers a later step can read
+
+`--summary <FILE>` writes the end-of-run counts as one JSON object, whatever
+`--format` the run wrote its product in:
+
+```console
+$ ocomment check --format sarif --summary counts.json > ocomment.sarif
+$ jq .removable_comments counts.json
+14
+```
+
+`spec/summary.schema.json` is the schema. The counts are the ones the run
+already made, so there is no second scan to pay for and no parsing of the
+product to get at them — and `comments_removed` is non-zero only for a `fix`
+that reached the disk.
+
+The GitHub Action uses it for its own outputs. `findings-count`,
+`files-with-findings`, `files-scanned`, `removed-count` and `summary-file` are
+available to later steps, and the job summary carries a table of the same
+numbers unless `step-summary: false`:
+
+```yaml
+- uses: P4suta/OComment@v0
+  id: comments
+- if: steps.comments.outputs.findings-count != '0'
+  run: echo "still ${{ steps.comments.outputs.findings-count }} to go"
+```
+
+A run that failed before it finished reports those outputs as **empty** rather
+than as zero: "none found" and "never looked" are different answers, and a gate
+downstream must not read the second as the first.
+
+## Threads
+
+`--jobs <N>` sets how many threads the run uses to walk, read and scan; `0`
+chooses one per core, which is the default. The walk, the reads and the scans
+all take it from the same place, so one flag is the whole knob. It was
+previously settable only through `RAYON_NUM_THREADS`, which is an
+implementation detail leaking as a user interface.
+
+Output order does not depend on it. The candidates a walk finds are sorted
+before any of them is opened, so two runs over the same tree write the same
+bytes however many threads they used.
+
 ## The published pre-commit hooks
 
 `.pre-commit-hooks.yaml` is what pre-commit reads when this repository is used

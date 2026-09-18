@@ -5,7 +5,72 @@ All notable changes to OComment will be documented here. The project follows
 
 ## Unreleased
 
+### Added
+
+- `--base <REV>` checks only the working-tree files that differ from that
+  revision's merge base with HEAD. The merge base and not the tip: on a branch
+  several commits behind its trunk a plain diff reports every file the trunk
+  changed as well, and a gate that reported those would be asking this branch
+  to answer for somebody else's work. A path named beside it narrows it
+  further, and unlike a path named on its own it keeps the walk's limits — a
+  generated file the branch touched is still passed over.
+
+- A run that examined nothing says so. `--base` with no changed files and
+  `--staged` with nothing staged both report nothing and exit 0, which reads
+  exactly like a clean tree; that is how `--staged` under
+  `pre-commit run --all-files` becomes a gate that is green forever. Both runs
+  stay correct and the silence goes.
+
+- `--summary <FILE>` writes the end-of-run counts as one JSON object, whatever
+  `--format` the run wrote its product in, against the new
+  `spec/summary.schema.json`. The counts are the ones the run already made, so
+  there is no second scan and no parsing of the product to get at them.
+
+  The GitHub Action uses it for `findings-count`, `files-with-findings`,
+  `files-scanned`, `removed-count` and `summary-file`, and writes a table of
+  the same numbers to the job summary unless `step-summary: false`. A run that
+  failed before it finished reports those outputs as empty rather than as zero:
+  "none found" and "never looked" are different answers.
+
+- `--jobs <N>` sets how many threads the run uses to walk, read and scan. The
+  walk is parallel now — `ignore`'s own parallel walker, then the reads and the
+  language detection across a thread pool — where it used to read every file on
+  one thread before any scanning began. Measured on this repository, 176 files:
+  33 ms on one thread, 16 ms on eight. Output order does not move: the
+  candidates are sorted before any of them is opened, so two runs over the same
+  tree write the same bytes however many threads they used. The count was
+  previously settable only through `RAYON_NUM_THREADS`, which is an
+  implementation detail leaking as a user interface and was documented nowhere.
+
+- `--explain` works with `--format json` and `--format jsonl`, which carry the
+  rule as fields rather than as the sentence the human report composes: `rule`
+  to match on, `detail` as prose, `setting` naming the table and file it was
+  written in, and `next_step` when a flag would overrule it. SARIF and the
+  GitHub workflow commands still refuse it, because neither has anywhere to put
+  it.
+
+- `rust/ocomment-core/tests/layout_format.rs` asks `gofmt` and `rustfmt`
+  whether the bytes a removal leaves are bytes they still call normal. The
+  answer is `compact` and only `compact`, in every position a comment can sit;
+  `lines` and `columns` never conform and are not meant to, because the empty
+  line and the padding are what they promise. That table is pinned in both
+  directions, so a layout that stopped conforming fails and so does one that
+  started.
+
+- `tools/check_gate_symmetry.py` fails when a test suite has never once watched
+  anything be refused. A gate observed only accepting is half a gate, and the
+  half nobody watched is the half that silently stops working — which has
+  happened here. It found one suite: the property tests, which now carry
+  witnesses that their generators reach the case each property is about, and a
+  negative control for the one property whose claim is that nothing was found.
+
 ### Changed
+
+- `--format json` and `--format jsonl` no longer carry the source map unless
+  `--source-map` asks for it. It is one segment per unchanged run of bytes, so
+  a file with twenty-five comments in it produced several hundred lines of a
+  report the caller had chosen *because* it was the machine format. `edits` is
+  unchanged and still always present.
 
 - This repository passes its own gate at zero. It previously ran a ledger
   against `max_lines = 1` with 1674 comments above the line, which is the

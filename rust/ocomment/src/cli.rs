@@ -237,15 +237,24 @@ struct OutputArgs {
     /// The level `--format github` annotates a removable comment at (default: the run's exit status).
     #[arg(long, global = true, value_enum, value_name = "LEVEL")]
     annotation_level: Option<AnnotationLevelArg>,
-    /// List every comment human `check` and `scan` met and name the rule and setting behind each one.
+    /// List every comment `check` and `scan` met and name the rule and setting behind each one.
     #[arg(long, global = true)]
     explain: bool,
+    /// Include the byte-for-byte map from the output back to the source in the JSON formats.
+    #[arg(long, global = true)]
+    source_map: bool,
     /// Record how the run reached its verdicts, on standard error.
     #[arg(long, global = true, value_enum, default_value_t, value_name = "WHEN")]
     trace: TraceChoice,
     /// When to draw the live scanning counter on standard error.
     #[arg(long, global = true, value_enum, default_value_t, value_name = "WHEN")]
     progress: AutoChoice,
+    /// How many threads the run uses to walk, read and scan; 0 chooses one per core.
+    #[arg(short = 'j', long, global = true, value_name = "N")]
+    jobs: Option<usize>,
+    /// Also write the end-of-run counts to this file, as one JSON object.
+    #[arg(long, global = true, value_name = "FILE")]
+    summary: Option<PathBuf>,
     /// Drop the run summary and notes; the command's product (findings, patch, listing) is still written.
     #[arg(short, long, global = true, conflicts_with = "verbose")]
     quiet: bool,
@@ -273,6 +282,15 @@ impl CommonArgs {
     /// Whether a reported comment carries a rendering of its text.
     pub(crate) fn preview(&self) -> bool {
         !self.output.no_preview
+    }
+
+    /// What a machine format carries besides the verdicts.
+    pub(crate) fn json_options(&self) -> output::JsonOptions {
+        output::JsonOptions {
+            preview: self.preview(),
+            explain: self.output.explain,
+            source_map: self.output.source_map,
+        }
     }
 
     /// How much of the human report this run may write.
@@ -374,7 +392,7 @@ struct TargetArgs {
     git: GitArgs,
 }
 
-/// The `--staged` pair, shared by every command that can read the Git index.
+/// The Git selectors, shared by every command that can read from a repository.
 #[derive(Clone, Debug, Default, Args)]
 struct GitArgs {
     /// Read and update Git index blobs rather than treating the working tree as the source.
@@ -383,6 +401,9 @@ struct GitArgs {
     /// With `--staged`, do not attempt a uniquely mappable working-tree update.
     #[arg(long, requires = "staged")]
     index_only: bool,
+    /// Check only the working-tree files that differ from this revision's merge base with HEAD.
+    #[arg(long, value_name = "REV", conflicts_with = "staged")]
+    base: Option<String>,
 }
 
 #[derive(Args)]
@@ -539,11 +560,28 @@ impl RunFlags {
 pub fn run() -> Result<u8> {
     let cli = Cli::parse();
     let common = cli.common;
-    /* NOTE: The machine formats are schemas rather than prose, and none of them has
-     * a place to put an explanation; the JSON one is closed to extension by
-     * design. So the combination is refused instead of quietly doing nothing. */
-    if common.output.explain && common.output.format != OutputFormat::Human {
-        bail!("--explain is only available with --format human");
+    /* NOTE: One knob, set once, and every parallel part of the run reads it
+     * from here -- the file walk asks `rayon::current_num_threads()` rather
+     * than carrying a count of its own. Thread count was previously settable
+     * only through `RAYON_NUM_THREADS`, which is an implementation detail
+     * leaking as a user interface and was documented nowhere. */
+    if let Some(jobs) = common.output.jobs {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(jobs)
+            .build_global()
+            .context("cannot use that many threads")?;
+    }
+    /* NOTE: `human`, `json` and `jsonl` all have somewhere to put a reason.
+     * SARIF and the GitHub workflow commands do not -- one is a fixed schema
+     * and the other is one line per annotation -- so the combination is
+     * refused rather than quietly doing nothing. */
+    if common.output.explain
+        && !matches!(
+            common.output.format,
+            OutputFormat::Human | OutputFormat::Json | OutputFormat::Jsonl
+        )
+    {
+        bail!("--explain is only available with --format human, json or jsonl");
     }
     /* NOTE: The flag annotates a report of comments, and only `check`, `scan` and
      * the implicit command write one: `fix` reports the files it rewrote,
@@ -710,11 +748,15 @@ fn run_target(
             presentation,
             verbosity,
             preview: !common.output.no_preview,
+            json: common.json_options(),
             annotation_level: common.output.annotation_level.map(AnnotationLevel::from),
             dry_run: flags.dry_run,
         });
     }
-    let discovery = read_targets(&paths, stdin, &resolved, common)?;
+    let discovery = match &args.git.base {
+        Some(base) => base_targets(base, &paths, &mut resolved, common, verbosity)?,
+        None => read_targets(&paths, stdin, &resolved, common)?,
+    };
     /* NOTE: One reading of the clock for the whole run, so that two files
      * judged a second apart cannot disagree about what day it is. */
     let now = std::time::SystemTime::now();
@@ -735,12 +777,22 @@ fn run_target(
     let materialize_output = operation == Operation::Fix
         || flags.interactive
         || (operation == Operation::Diff && common.output.format == OutputFormat::Human);
-    let materialize_source_map = matches!(
-        common.output.format,
-        OutputFormat::Json | OutputFormat::Jsonl
-    );
-    let needs_plan =
-        materialize_output || materialize_source_map || common.output.format == OutputFormat::Sarif;
+    /* NOTE: Built only for a run that will print it. It is one segment per
+     * unchanged run of bytes, which is the largest thing a report carries. */
+    let materialize_source_map = common.output.source_map
+        && matches!(
+            common.output.format,
+            OutputFormat::Json | OutputFormat::Jsonl
+        );
+    /* NOTE: The JSON formats carry the edit list whether or not they carry the
+     * map, so they plan either way: `edits` is part of the report and the map
+     * is the thing `--source-map` is about. */
+    let needs_plan = materialize_output
+        || materialize_source_map
+        || matches!(
+            common.output.format,
+            OutputFormat::Sarif | OutputFormat::Json | OutputFormat::Jsonl
+        );
     {
         let stderr = io::stderr();
         let mut sink = stderr.lock();
@@ -911,6 +963,7 @@ fn run_target(
             presentation,
             verbosity,
             preview: !common.output.no_preview,
+            json: common.json_options(),
             explain,
             dry_run: flags.dry_run,
             force_invalid: resolved.config.policy.force_invalid,
@@ -920,6 +973,12 @@ fn run_target(
         },
         &explanations,
     )?;
+    /* NOTE: Written after the product and before the verdict, so a file that
+     * exists is a run that finished. `-q` does not reach it: a caller who
+     * named a path for the counts asked for the counts. */
+    if let Some(path) = &common.output.summary {
+        output::write_summary(path, &files, &discovery.skipped, operation)?;
+    }
     /* NOTE: Said on its own line rather than folded into the summary: a
      * deadline that passed is not a statistic about the run, it is a thing
      * somebody said they would do. Human runs only, like every other note --
@@ -932,8 +991,13 @@ fn run_target(
         let mut sink = stderr.lock();
         output::note(&mut sink, verbosity, Detail::Normal, &line)?;
     }
-    // NOTE: Asked of a walk and not of a list: only a walk means "everything under here".
-    let walked = !stdin && (paths.is_empty() || paths.iter().any(|path| path.is_dir()));
+    /* NOTE: Asked of a walk and not of a list: only a walk means "everything
+     * under here", and `--base` does not -- it is the caller saying what they
+     * changed, so a pattern with nothing to match in those files has not
+     * thereby failed. */
+    let walked = !stdin
+        && args.git.base.is_none()
+        && (paths.is_empty() || paths.iter().any(|path| path.is_dir()));
     if walked {
         let (_, root_options, root_trace) = resolved.for_path_traced(
             &resolved.root.clone(),
@@ -1089,6 +1153,69 @@ fn target_paths(paths: &[PathBuf], rewrites: bool, staged: bool) -> Result<(Vec<
             .collect(),
         true,
     ))
+}
+
+/// Discover the working-tree files a branch changed, under the limits a walk
+/// applies.
+///
+/// A caller could already write `ocomment check $(git diff --name-only ...)`,
+/// and that run means something slightly different: a path named on the
+/// command line is the caller saying *this one*, so it lifts the hidden-file
+/// and size rules. `--base` is the caller saying *what I changed*, which is a
+/// walk narrowed rather than a list, so the limits stay on and a generated
+/// file the branch touched is still passed over.
+///
+/// The paths a caller *also* named narrow it further: `--base main src` is the
+/// files under `src` that the branch changed.
+fn base_targets(
+    base: &str,
+    paths: &[PathBuf],
+    resolved: &mut config::ResolvedConfig,
+    common: &CommonArgs,
+    verbosity: Verbosity,
+) -> Result<files::Discovery> {
+    let (root, changed) = git::changed_since(base)?;
+    /* NOTE: `git` names a changed path from the repository root, so the globs
+     * and the report are measured from there too -- as a staged run already
+     * does, and for the same reason. */
+    resolved.cwd = root;
+    let selected: Vec<PathBuf> = if paths.is_empty() {
+        changed
+    } else {
+        let scopes: Vec<PathBuf> = paths
+            .iter()
+            .map(|path| {
+                std::path::absolute(resolved.cwd.join(path)).unwrap_or_else(|_| path.clone())
+            })
+            .collect();
+        changed
+            .into_iter()
+            .filter(|path| {
+                scopes
+                    .iter()
+                    .any(|scope| path == scope || path.starts_with(scope))
+            })
+            .collect()
+    };
+    /* NOTE: A branch that changed nothing this run can read is a run that will
+     * report nothing and exit 0, which reads exactly like a clean branch. The
+     * same footgun `--staged` has, and it is said out loud for the same
+     * reason. */
+    if selected.is_empty() {
+        let stderr = io::stderr();
+        let mut sink = stderr.lock();
+        output::note(
+            &mut sink,
+            verbosity,
+            Detail::Normal,
+            &format!(
+                "--base {}: no changed files to check, so nothing was examined.",
+                output::sanitize_message(base)
+            ),
+        )?;
+        return Ok(files::Discovery::default());
+    }
+    files::discover_workspace_with(&selected, resolved, common.language(), common.dialect())
 }
 
 /// Discover the named paths and, when `-` was among them, fold the bytes read

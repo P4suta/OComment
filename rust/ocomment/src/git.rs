@@ -43,6 +43,8 @@ pub struct StagedRequest<'a> {
     pub presentation: Presentation,
     pub verbosity: Verbosity,
     pub preview: bool,
+    /// What a machine format carries besides the verdicts.
+    pub json: crate::output::JsonOptions,
     /// `--annotation-level`, passed through to `--format github`.
     pub annotation_level: Option<AnnotationLevel>,
     /// The run only previews the patch; `fix --dry-run` writes nothing to
@@ -63,14 +65,33 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
         presentation,
         verbosity,
         preview,
+        json,
         annotation_level,
         dry_run,
     } = request;
     let root = repository_root()?;
     let (blobs, mut skipped) = configured_paths(&root, staged_paths(&root, paths)?, resolved)?;
+    /* NOTE: Nothing staged is a run that reports nothing and exits 0, which
+     * reads exactly like a clean index -- and that is how `--staged` under
+     * `pre-commit run --all-files`, which stages nothing, becomes a gate that
+     * is green forever. The run is still correct; it is the silence that is
+     * the trap, so the silence goes. */
+    if blobs.is_empty() && skipped.is_empty() {
+        let stderr = std::io::stderr();
+        let mut sink = stderr.lock();
+        output::note(
+            &mut sink,
+            verbosity,
+            crate::output::Detail::Normal,
+            "--staged: nothing is staged, so nothing was examined. A runner that \
+             stages nothing of its own -- `pre-commit run --all-files`, say -- needs \
+             a run without --staged.",
+        )?;
+    }
     let materialize_output = operation == Operation::Fix
         || (operation == Operation::Diff && format == OutputFormat::Human);
-    let materialize_source_map = matches!(format, OutputFormat::Json | OutputFormat::Jsonl);
+    let materialize_source_map =
+        json.source_map && matches!(format, OutputFormat::Json | OutputFormat::Jsonl);
     let mut scanners = HashMap::new();
     let mut entries = Vec::new();
     for StagedBlob { path, named, mode } in blobs {
@@ -244,6 +265,13 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
             presentation,
             verbosity,
             preview,
+            /* NOTE: A staged run reports index blobs through a path that
+             * carries no policy trace, so there is nothing to explain from;
+             * `run_target` refuses the pair before it gets here. */
+            json: crate::output::JsonOptions {
+                explain: false,
+                ..json
+            },
             explain: false,
             dry_run,
             annotation_level,
@@ -794,6 +822,48 @@ fn bytes_to_path(bytes: &[u8]) -> PathBuf {
 #[cfg(not(unix))]
 fn bytes_to_path(bytes: &[u8]) -> PathBuf {
     PathBuf::from(String::from_utf8_lossy(bytes).into_owned())
+}
+
+/// The working-tree files that differ from `base`, as paths relative to the
+/// repository root.
+///
+/// `merge-base` rather than `base` itself: on a branch several commits behind
+/// its trunk, a plain diff against the trunk reports every file the trunk
+/// changed as well, and a gate that reported those would be asking this branch
+/// to answer for somebody else's work.
+///
+/// A deletion is dropped rather than reported: there is no file left to read,
+/// and a gate that failed on one would be refusing the change that cleaned it
+/// up. `--diff-filter=d` is git's own way of saying so.
+pub fn changed_since(base: &str) -> Result<(PathBuf, Vec<PathBuf>)> {
+    let root = repository_root()?;
+    let merge_base = command_output(
+        Command::new("git")
+            .current_dir(&root)
+            .args(["merge-base", "HEAD"])
+            .arg(base),
+        &format!("--base {base}: cannot find a merge base with HEAD"),
+    )?;
+    let mut merge_base = merge_base;
+    trim_line_ending(&mut merge_base);
+    let merge_base = String::from_utf8(merge_base).context("git printed a non-UTF-8 revision")?;
+    let listing = command_output(
+        Command::new("git").current_dir(&root).args([
+            "diff",
+            "--name-only",
+            "-z",
+            "--diff-filter=d",
+            &merge_base,
+        ]),
+        &format!("--base {base}: cannot list the changed files"),
+    )?;
+    let paths = listing
+        .split(|byte| *byte == 0)
+        .filter(|entry| !entry.is_empty())
+        .map(|entry| root.join(bytes_to_path(entry)))
+        .filter(|path| path.is_file())
+        .collect();
+    Ok((root, paths))
 }
 
 #[cfg(test)]

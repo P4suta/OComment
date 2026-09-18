@@ -3580,7 +3580,7 @@ fn json_and_jsonl_serde_names_are_frozen() {
 
     let jsonl = run(
         directory.path(),
-        &["scan", "sample.py", "--format", "jsonl"],
+        &["scan", "sample.py", "--format", "jsonl", "--source-map"],
     );
     assert_eq!(jsonl.status.code(), Some(0));
     assert_eq!(
@@ -3603,6 +3603,23 @@ fn json_and_jsonl_serde_names_are_frozen() {
             "\n"
         ),
         "the JSONL protocol changed"
+    );
+
+    /* NOTE: And without it. The map is one segment per unchanged run of bytes,
+     * which is the largest thing a report carries and the thing a caller who
+     * only wanted the findings was paying for; `--source-map` is what asks. */
+    let without = run(
+        directory.path(),
+        &["scan", "sample.py", "--format", "jsonl"],
+    );
+    let line = String::from_utf8(without.stdout).unwrap();
+    assert!(
+        !line.contains("source_map"),
+        "the source map is written without being asked for:\n{line}"
+    );
+    assert!(
+        line.contains(r#""edits":[{"span":{"start":61,"end":69},"replacement":""}]}"#),
+        "the report after the edits changed:\n{line}"
     );
 
     let json = run(directory.path(), &["scan", "sample.py", "--format", "json"]);
@@ -6353,14 +6370,32 @@ fn explain_names_the_command_line_when_a_flag_set_the_policy() {
     }
 }
 
-/// The machine formats are schemas, not prose, and none of them has a place to
-/// put an explanation. Asking for one is a usage error rather than a flag that
-/// quietly does nothing.
+/// SARIF is a fixed schema and a GitHub workflow command is one line per
+/// annotation, so neither has anywhere to put a reason. Asking for one is a
+/// usage error rather than a flag that quietly does nothing. The JSON formats
+/// do have somewhere, and carry it.
 #[test]
-fn explain_is_refused_by_every_machine_format() {
+fn explain_is_refused_by_the_formats_with_nowhere_to_put_it() {
     let directory = tempfile::tempdir().unwrap();
     fs::write(directory.path().join("a.rs"), b"let x = 1; // TODO\n").unwrap();
-    for format in ["json", "jsonl", "sarif", "github"] {
+    for format in ["json", "jsonl"] {
+        let output = run(
+            directory.path(),
+            &["scan", "--explain", "--format", format, "a.rs"],
+        );
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "`--format {format} --explain`"
+        );
+        let report = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            report.contains(r#""rule":"removed-by-default""#)
+                || report.contains(r#""rule": "removed-by-default""#),
+            "`--format {format} --explain` carried no reason:\n{report}"
+        );
+    }
+    for format in ["sarif", "github"] {
         let output = run(
             directory.path(),
             &["check", "--explain", "--format", format],
@@ -6372,7 +6407,7 @@ fn explain_is_refused_by_every_machine_format() {
         );
         let error = String::from_utf8_lossy(&output.stderr);
         assert!(
-            error.contains("--explain is only available with --format human"),
+            error.contains("--explain is only available with --format human, json or jsonl"),
             "`--format {format} --explain` said:\n{error}"
         );
         assert!(

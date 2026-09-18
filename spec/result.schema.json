@@ -21,7 +21,7 @@
     "file": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["path", "language", "changed", "report", "edits", "source_map"],
+      "required": ["path", "language", "changed", "report", "edits"],
       "properties": {
         "path": { "type": "string" },
         "language": { "$ref": "#/$defs/language" },
@@ -79,7 +79,29 @@
         "end_column": { "type": "integer", "minimum": 1 },
         "kind": { "$ref": "#/$defs/kind" },
         "text": { "type": "string" },
+        "explanation": { "$ref": "#/$defs/explanation" },
         "disposition": { "$ref": "#/$defs/disposition" }
+      }
+    },
+    "explanation": {
+      "description": "Which rule decided the comment, written by --explain. `rule` is the rule's own name and is the field to match on; `detail` is the same rule as the human report words it and is prose. `setting` names the table and file the setting was written in, and is absent when a built-in rule decided. `next_step` is the flag that would overrule the verdict, when one would.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rule", "detail"],
+      "properties": {
+        "rule": {
+          "enum": [
+            "kept-by-kind", "kept-by-regex", "kept-by-tag", "kept-directive",
+            "kept-documentation", "kept-html", "kept-license",
+            "kept-load-bearing", "kept-structural", "protected-preamble",
+            "removed-as-expired", "removed-as-trailing", "removed-by-default",
+            "removed-by-kind", "removed-by-length", "removed-by-policy",
+            "removed-by-regex"
+          ]
+        },
+        "detail": { "type": "string" },
+        "setting": { "type": "string" },
+        "next_step": { "type": "string" }
       }
     },
     "disposition": {

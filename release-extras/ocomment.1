@@ -4,7 +4,7 @@
 .SH NAME
 ocomment \- Check and remove source\-code comments safely
 .SH SYNOPSIS
-\fBocomment\fR [\fB\-\-config\fR] [\fB\-\-policy\fR] [\fB\-\-layout\fR] [\fB\-\-language\fR] [\fB\-\-dialect\fR] [\fB\-\-keep\-kind\fR] [\fB\-\-remove\-kind\fR] [\fB\-\-include\-generated\fR] [\fB\-\-deny\-skipped\fR] [\fB\-\-force\-invalid\fR] [\fB\-\-force\-protected\fR] [\fB\-\-format\fR] [\fB\-\-color\fR] [\fB\-\-hyperlinks\fR] [\fB\-\-no\-preview\fR] [\fB\-\-annotation\-level\fR] [\fB\-\-explain\fR] [\fB\-\-trace\fR] [\fB\-\-progress\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIPATH\fR] [\fIsubcommands\fR]
+\fBocomment\fR [\fB\-\-config\fR] [\fB\-\-policy\fR] [\fB\-\-layout\fR] [\fB\-\-language\fR] [\fB\-\-dialect\fR] [\fB\-\-keep\-kind\fR] [\fB\-\-remove\-kind\fR] [\fB\-\-include\-generated\fR] [\fB\-\-deny\-skipped\fR] [\fB\-\-force\-invalid\fR] [\fB\-\-force\-protected\fR] [\fB\-\-format\fR] [\fB\-\-color\fR] [\fB\-\-hyperlinks\fR] [\fB\-\-no\-preview\fR] [\fB\-\-annotation\-level\fR] [\fB\-\-explain\fR] [\fB\-\-source\-map\fR] [\fB\-\-trace\fR] [\fB\-\-progress\fR] [\fB\-j\fR|\fB\-\-jobs\fR] [\fB\-\-summary\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIPATH\fR] [\fIsubcommands\fR]
 .SH DESCRIPTION
 OComment scans source bytes without requiring UTF\-8 and reports or removes comment tokens. The default policy removes ordinary comments and keeps the ones something else depends on: documentation, licence notices, tool and language directives, shebangs and encoding lines. Rewrites are prepared and committed as one rollback\-backed transaction.
 .SH OPTIONS
@@ -315,7 +315,10 @@ notice: Annotate as a notice, which GitHub folds away beside an error
 .RE
 .TP
 \fB\-\-explain\fR
-List every comment human `check` and `scan` met and name the rule and setting behind each one
+List every comment `check` and `scan` met and name the rule and setting behind each one
+.TP
+\fB\-\-source\-map\fR
+Include the byte\-for\-byte map from the output back to the source in the JSON formats
 .TP
 \fB\-\-trace\fR \fI<WHEN>\fR [default: off]
 Record how the run reached its verdicts, on standard error
@@ -346,6 +349,12 @@ always
 .IP \(bu 2
 never
 .RE
+.TP
+\fB\-j\fR, \fB\-\-jobs\fR \fI<N>\fR
+How many threads the run uses to walk, read and scan; 0 chooses one per core
+.TP
+\fB\-\-summary\fR \fI<FILE>\fR
+Also write the end\-of\-run counts to this file, as one JSON object
 .TP
 \fB\-q\fR, \fB\-\-quiet\fR
 Drop the run summary and notes; the command\*(Aqs product (findings, patch, listing) is still written
@@ -416,6 +425,9 @@ Read and update Git index blobs rather than treating the working tree as the sou
 \fB\-\-index\-only\fR
 With `\-\-staged`, do not attempt a uniquely mappable working\-tree update
 .TP
+\fB\-\-base\fR \fI<REV>\fR
+Check only the working\-tree files that differ from this revision\*(Aqs merge base with HEAD
+.TP
 [\fIPATH\fR]
 Files or directories to process; `\-` reads standard input (default: current directory)
 .SS ocomment fix
@@ -425,6 +437,9 @@ Read and update Git index blobs rather than treating the working tree as the sou
 .TP
 \fB\-\-index\-only\fR
 With `\-\-staged`, do not attempt a uniquely mappable working\-tree update
+.TP
+\fB\-\-base\fR \fI<REV>\fR
+Check only the working\-tree files that differ from this revision\*(Aqs merge base with HEAD
 .TP
 \fB\-\-dry\-run\fR
 Print the patch `fix` would apply and write nothing
@@ -444,6 +459,9 @@ Read and update Git index blobs rather than treating the working tree as the sou
 \fB\-\-index\-only\fR
 With `\-\-staged`, do not attempt a uniquely mappable working\-tree update
 .TP
+\fB\-\-base\fR \fI<REV>\fR
+Check only the working\-tree files that differ from this revision\*(Aqs merge base with HEAD
+.TP
 [\fIPATH\fR]
 Files or directories to process; `\-` reads standard input (default: current directory)
 .SS ocomment scan
@@ -453,6 +471,9 @@ Read and update Git index blobs rather than treating the working tree as the sou
 .TP
 \fB\-\-index\-only\fR
 With `\-\-staged`, do not attempt a uniquely mappable working\-tree update
+.TP
+\fB\-\-base\fR \fI<REV>\fR
+Check only the working\-tree files that differ from this revision\*(Aqs merge base with HEAD
 .TP
 [\fIPATH\fR]
 Files or directories to process; `\-` reads standard input (default: current directory)
@@ -554,6 +575,9 @@ Read and update Git index blobs rather than treating the working tree as the sou
 \fB\-\-index\-only\fR
 With `\-\-staged`, do not attempt a uniquely mappable working\-tree update
 .TP
+\fB\-\-base\fR \fI<REV>\fR
+Check only the working\-tree files that differ from this revision\*(Aqs merge base with HEAD
+.TP
 [\fIPATH\fR]
 Files or directories to process; `\-` reads standard input (default: current directory)
 .SS ocomment ratchet
@@ -566,6 +590,9 @@ Read and update Git index blobs rather than treating the working tree as the sou
 .TP
 \fB\-\-index\-only\fR
 With `\-\-staged`, do not attempt a uniquely mappable working\-tree update
+.TP
+\fB\-\-base\fR \fI<REV>\fR
+Check only the working\-tree files that differ from this revision\*(Aqs merge base with HEAD
 .TP
 [\fIPATH\fR]
 Files or directories to process; `\-` reads standard input (default: current directory)

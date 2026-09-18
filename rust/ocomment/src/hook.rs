@@ -295,6 +295,7 @@ fn judge(
         presentation: output::Presentation::default(),
         verbosity: output::Verbosity::default(),
         preview: common.preview(),
+        json: common.json_options(),
         explain: false,
         dry_run: false,
         force_invalid: resolved.config.policy.force_invalid,
