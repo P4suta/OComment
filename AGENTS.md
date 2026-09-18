@@ -29,7 +29,7 @@ file, copy it across, and run the tool.
 
 **2. The Rust and OCaml implementations do not share code.**
 That is the point: the cross-check is worth something only because the two were
-written separately. `tools/differential.sh` runs every fixture through both and
+written separately. `cargo xtask differential` runs every fixture through both and
 requires byte-identical normalised output. A change to a scanning rule is a
 change to both, in the same commit.
 
@@ -66,7 +66,7 @@ stops covering what it was written for; that has happened here, and it is what
 cargo test --manifest-path rust/Cargo.toml --workspace
 cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets -- -D warnings
 cargo fmt --all --manifest-path rust/Cargo.toml -- --check
-sh tools/differential.sh
+cargo xtask differential
 python3 tools/validate_schemas.py
 python3 tools/check_embedded_specs.py
 python3 tools/check_directives.py --binary rust/target/debug/ocomment

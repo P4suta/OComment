@@ -31,7 +31,7 @@ Before tagging:
    changelog. Mark it ready and merge it only after its dispatched checks pass.
    `editors/vscode/package.json` and its changelog are deliberately independent
    and are not CLI release inputs.
-2. On the merged `main`, run `./tools/release-check.sh` and confirm the
+2. On the merged `main`, run `cargo xtask release-check` and confirm the
    cross-target smoke jobs and
    three expanded-crate artifact checks are green.
 3. Confirm `HEAD` is a clean, signed commit equal to `origin/main`, version

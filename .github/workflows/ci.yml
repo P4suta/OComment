@@ -88,7 +88,7 @@ jobs:
       - run: python3 tools/gen_docs.py --check
       - run: python3 tools/validate_schemas.py
       - name: Check publishable file sets
-        run: ./tools/package-list.sh
+        run: cargo xtask package-list
 
   msrv:
     runs-on: ubuntu-latest
@@ -117,7 +117,7 @@ jobs:
           ocaml-compiler: "5.5"
       - run: opam install ./ocaml/ocomment-ref.opam --deps-only --with-test
       - run: opam exec -- dune runtest --root ocaml
-      - run: opam exec -- ./tools/differential.sh
+      - run: opam exec -- cargo xtask differential
       - run: cargo build --manifest-path rust/Cargo.toml --locked -p ocomment
       - name: The reference still builds with every comment stripped out of it
         run: |
