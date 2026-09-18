@@ -355,6 +355,29 @@ something — that is going to do the editing.
 the gate. A ledger that has nothing left to say is a file that describes a
 repository that no longer exists.
 
+## What the gate never looked at
+
+```console
+$ ocomment coverage
+1 of 3 files scanned (33.3%)
+2: hidden file or directory ([files] hidden = false)
+       1  .yml
+       1  .toml
+```
+
+The percentage is of the tree and not of the walk. A file the walk *reached*
+and passed over is a skip and has always been reported; a file the walk's own
+limits kept out was met by nothing, so nothing reported it — and `hidden =
+false` is the default, which means every `.github/workflows/*.yml` a project
+has. A run that read one of three files used to say `100.0%`, which was a true
+sentence about the walk and a false assurance about the repository.
+
+Three settings can keep a file out, and each is named with the line a reader
+would change: `[files] hidden`, `[files] include`/`exclude`, and
+`[files] max_size`. A file a `.gitignore` excludes is deliberately not counted
+— that is build output, and a percentage taken over a hundred thousand object
+files would mean nothing.
+
 ## Gating a branch on what it changed
 
 ```console

@@ -5,6 +5,24 @@ All notable changes to OComment will be documented here. The project follows
 
 ## Unreleased
 
+### Fixed
+
+- `ocomment coverage` counts the files the walk never reached. It reported the
+  share of what it *walked*, so a run that read one file of three said
+  `100.0%` — and since `[files] hidden = false` is the default, the files it
+  had not walked were every `.github/workflows/*.yml` in the repository. A skip
+  is a file the walk reached and passed over and has always been reported; this
+  is the other thing, and nothing reported it because nothing met it.
+
+  Each reason names the line a reader would change: `[files] hidden`,
+  `[files] include`/`exclude`, `[files] max_size`. A file a `.gitignore`
+  excludes is deliberately not counted — that is build output, and a percentage
+  over a hundred thousand object files would mean nothing.
+
+  Found by walking a fresh project through its first five minutes with the
+  tool, which is the one thing this repository's own gate can never do for
+  itself: it has `hidden = true`.
+
 ### Added
 
 - `--base <REV>` checks only the working-tree files that differ from that
