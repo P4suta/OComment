@@ -19,7 +19,8 @@ PINS = {
         "v4.2.2",
     ),
     "actions/checkout": ("3d3c42e5aac5ba805825da76410c181273ba90b1", "v7.0.1"),
-    "actions/deploy-pages": ("cd2ce8fcbc39b97be8ca5fce6e763baed58fa128", "v5.0.0"),
+    "actions/deploy-pages": ("368f82528645a54fb793d4d04e342629a3f51346",
+        "v5.0.1"),
     "actions/download-artifact": (
         "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
         "v8.0.1",
@@ -33,7 +34,8 @@ PINS = {
         "fc324d3547104276b827a68afc52ff2a11cc49c9",
         "v5.0.0",
     ),
-    "anchore/sbom-action": ("e22c389904149dbc22b58101806040fa8d37a610", "v0.24.0"),
+    "anchore/sbom-action": ("3ad7283483fc7af8ff2b4ea19663c2d5ca935e26",
+        "v0.24.2"),
     "docker/build-push-action": (
         "53b7df96c91f9c12dcc8a07bcb9ccacbed38856a",
         "v7.3.0",
@@ -45,16 +47,18 @@ PINS = {
         "v4.3.0",
     ),
     "docker/setup-qemu-action": (
-        "96fe6ef7f33517b61c61be40b68a1882f3264fb8",
-        "v4.2.0",
+        "1f40c72289eff860ee54a304f1438e3cff362e0a",
+        "v4.3.0",
     ),
     "dtolnay/rust-toolchain": ("4360b52568e2003a75bf9bc1d59f33a8e3fc893c", "stable toolchain action"),
-    "github/codeql-action": ("db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28", "v4.37.8"),
+    "github/codeql-action": ("b96794f015dfd88f77b49b1c93e0fa7110f94c63",
+        "v4.38.0"),
     # NOTE: The exact release and not the `v3` this action's own README shows.
     # NOTE: A moving major names whatever its publisher last pointed it at, so
     # NOTE: a table carrying one records nothing a reader or
     # NOTE: `check_action_pins.py` can hold the pin to.
-    "ocaml/setup-ocaml": ("f92e0606b7ae4873dd1238465ea4bf6f8e40d85c", "v3.7.2"),
+    "ocaml/setup-ocaml": ("e89b2ded52a6e13f50162220cf5fe47290162032",
+        "v3.8.0"),
     "rust-lang/crates-io-auth-action": (
         "c6f97d42243bad5fab37ca0427f495c86d5b1a18",
         "v1.0.5",

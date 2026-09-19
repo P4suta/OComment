@@ -5,6 +5,27 @@ All notable changes to OComment will be documented here. The project follows
 
 ## Unreleased
 
+### Changed
+
+- The three dependency groups Dependabot proposed, taken after checking them
+  rather than because a bot asked.
+
+  **Rust** (#23): `smallvec`, `toml`, `wasm-encoder`, `wasmparser`, `wast`,
+  `wat`. Scoped to what the bot named rather than a full `cargo update`, which
+  moved 54 packages.
+
+  **Actions** (#24): `actions/deploy-pages` v5.0.1, `anchore/sbom-action`
+  v0.24.2, `docker/setup-qemu-action` v4.3.0, `github/codeql-action` v4.38.0,
+  `ocaml/setup-ocaml` v3.8.0. Every new digest was checked against the tag its
+  publisher says it is; the `setup-ocaml` one carried a `v3` label, and asking
+  which release it actually is turned up v3.8.0.
+
+  **npm** (#50): `vscode-languageclient` ^10.1.1, `@types/node` ^22.20.2,
+  `ovsx` ^1.2.0, `typescript-eslint` ^8.70.0.
+
+  Both lockfiles were asked again afterwards: 733 pinned versions, the same
+  three recorded advisories, nothing new.
+
 ### Added
 
 - `tools/check_action_pins.py` asks the upstream repositories whether the
