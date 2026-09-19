@@ -568,6 +568,15 @@ const PYTHON_CHECKS: &[(&str, &str, &[&str])] = &[
     ("Hooks", "tools/check_hooks.py", &[]),
     ("Editor ids", "tools/check_editor_ids.py", &[]),
     ("CI contracts", "tools/check_ci_contracts.py", &[]),
+    /* NOTE: The one check here that asks somebody else, so it is also the one
+     * a train tunnel or an exhausted rate limit can stop. It says which pin it
+     * did not read and passes; CI runs it without the flag, where neither
+     * excuse is available and a read it cannot make fails the run. */
+    (
+        "Action pins",
+        "tools/check_action_pins.py",
+        &["--best-effort"],
+    ),
     ("Gate symmetry", "tools/check_gate_symmetry.py", &[]),
     (
         "Release metadata",

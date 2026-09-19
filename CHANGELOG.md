@@ -5,6 +5,28 @@ All notable changes to OComment will be documented here. The project follows
 
 ## Unreleased
 
+### Added
+
+- `tools/check_action_pins.py` asks the upstream repositories whether the
+  reviewed action pins are true. The table beside it settles everything a file
+  here can be wrong about — SHA-pinned, reviewed, same digest, same version
+  comment — and cannot settle the one thing that matters most: whether a digest
+  really is the version it is labelled with, which lives in somebody else's
+  repository. A mistyped digest that happens to be a real commit, or a bump
+  whose label does not match the commit it carries, leaves this repository
+  perfectly self-consistent and running code nobody looked at.
+
+  It runs in CI without a flag and in `preflight` with `--best-effort`, because
+  a laptop is allowed to be in a tunnel and a gate is not. `--best-effort` names
+  the pin it could not read rather than folding the gap into a count, and reads
+  with the token `gh` already holds when the environment has none: twenty pins
+  exhaust an unauthenticated hour in three runs, and a local gate that fails for
+  that reason is one a developer learns to ignore.
+
+  It found one on its first run. `ocaml/setup-ocaml` was pinned as `v3`, a
+  moving major that names whatever its publisher last pointed it at rather than
+  the commit under review; the pin is `v3.7.2` and now says so.
+
 ### Fixed
 
 - A `#` inside a `.gitignore` pattern is part of the pattern, and a default
