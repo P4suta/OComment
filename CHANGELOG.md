@@ -7,6 +7,28 @@ All notable changes to OComment will be documented here. The project follows
 
 ### Added
 
+- `tools/check_advisories.py` holds both lockfiles to a ledger of advisories
+  somebody decided about. Dependabot raises alerts here and they are worth
+  having, but an alert arrives after a merge and can be triaged away: both `qs`
+  advisories had been raised and auto-dismissed as low-impact development
+  dependencies, so a run asking for open alerts saw none while the lockfile
+  still carried them.
+
+  It asks OSV — which aggregates RustSec and the GitHub Advisory Database —
+  about every version in `rust/Cargo.lock` and
+  `editors/vscode/package-lock.json`, and fails in both directions. An advisory
+  nobody has written down fails, because somebody has to decide about it. A
+  ledger entry OSV no longer reports fails too, because a list that only grows
+  ends up describing a repository that no longer exists, and an exemption kept
+  past its reason is one nobody is reading.
+
+  Nothing is classified automatically. OSV does not carry RustSec's
+  `informational` flag, and the difference between "unmaintained" and
+  "exploitable tomorrow" is a judgement about this project rather than a field
+  to read — so the three unmaintained crates reached through the WASM plugin
+  host each carry the argument for themselves.
+
+
 - `tools/check_action_pins.py` asks the upstream repositories whether the
   reviewed action pins are true. The table beside it settles everything a file
   here can be wrong about — SHA-pinned, reviewed, same digest, same version
