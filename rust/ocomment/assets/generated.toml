@@ -20,6 +20,7 @@ filenames = [
     "Pipfile.lock",
     "flake.lock",
     "go.sum",
+    "go.work.sum",
     "deno.lock",
     "packages.lock.json",
     # NOTE: OComment's own ledger, written by `ocomment ratchet --update`.

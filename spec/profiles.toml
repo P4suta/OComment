@@ -41,3 +41,33 @@ extensions = ["wit"]
 line_comments = [{ start = "//", kind = "line" }]
 block_comments = [{ start = "/*", end = "*/", nested = true, kind = "block" }]
 strings = [{ start = '"', end = '"', escape = '\' }]
+
+# NOTE: Go's module files. `//` to end of line and nothing else: the grammar
+# NOTE: has no block comment and no string form a `//` could hide inside, so a
+# NOTE: delimiter list says everything there is to say about them.
+[profiles.go-module]
+name = "go-module"
+filenames = ["go.mod", "go.work"]
+line_comments = [{ start = "//", kind = "line" }]
+# NOTE: A profile matches a substring, so each of these also claims a comment
+# NOTE: that merely opens with the same words -- `// indirect dependencies are
+# NOTE: pinned here` is kept, and told it was kept for a marker it is not.
+# NOTE: That is the cost of the only matcher a profile has, and it is paid
+# NOTE: differently by the two below.
+protected_patterns = [
+    # NOTE: Addressed to a tool, and the tier says so: `go mod tidy` writes
+    # NOTE: this and puts it back when it is gone, so the default policies keep
+    # NOTE: it and `--policy all` may still take it. That also caps what the
+    # NOTE: substring match costs -- a line of prose caught by it is kept by a
+    # NOTE: gate and is not beyond every policy there is.
+    { contains = "// indirect", reason = "go mod tidy writes and reads this marker" },
+    # NOTE: Nothing puts this one back. Before the module declaration it is
+    # NOTE: what `go get` warns with and what a proxy serves to everyone
+    # NOTE: downstream; inside a `retract` block it is the reason
+    # NOTE: `go list -m -retracted` prints. Removed, a published deprecation is
+    # NOTE: gone and the people it was addressed to never hear it -- so this
+    # NOTE: one is out of reach of every policy. Go reserves the spelling for
+    # NOTE: exactly this meaning, in godoc as much as here, so a comment in a
+    # NOTE: module file that contains it is a deprecation notice.
+    { contains = "// Deprecated:", reason = "go get and go list read this to warn whoever depends on the module", tier = "load-bearing" },
+]

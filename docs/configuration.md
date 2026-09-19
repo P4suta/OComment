@@ -425,6 +425,19 @@ keep_kind = ["line"]
   each.
 - **`dune`** is a Lisp: `;` opens a line comment, `"..."` is a string with
   backslash escapes so a `;` inside one is text, and `#|...|#` nests.
+- **`go-module`** is `go.mod` and `go.work`: `//` to end of line, no block
+  comment, no string form a `//` could hide inside. Two markers in them are
+  kept, at the strength each has earned. `// indirect` is addressed to
+  `go mod tidy`, which puts it back, so it is a directive — every policy but
+  `all` keeps it. `// Deprecated:` is put back by nothing: before the module
+  declaration it is what `go get` warns with and what a proxy serves to
+  everyone downstream, and inside a `retract` block it is the reason
+  `go list -m -retracted` prints, so no policy reaches it. A profile matches a
+  substring, so each also claims a comment that merely opens with the same
+  words — which is the tier's other job, because a line of prose caught by
+  `// indirect` is kept by a gate rather than put beyond every policy there is.
+  `go.sum` and `go.work.sum` are not here: they are lock files, and
+  `spec/generated.toml` is where a file another tool writes belongs.
 - **`wit`** is the Component Model's interface language, which OComment's own
   plugin contract is written in. It is listed with `//` alone and not `///`
   beside it: a profile is read in one pass, so a delimiter that is a prefix of
