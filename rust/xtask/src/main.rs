@@ -577,6 +577,13 @@ const PYTHON_CHECKS: &[(&str, &str, &[&str])] = &[
         "tools/check_action_pins.py",
         &["--best-effort"],
     ),
+    /* NOTE: Beside it for the same reason and with the same escape: both ask
+     * somebody else, and CI asks without one. */
+    (
+        "Advisories",
+        "tools/check_advisories.py",
+        &["--best-effort"],
+    ),
     ("Gate symmetry", "tools/check_gate_symmetry.py", &[]),
     (
         "Release metadata",

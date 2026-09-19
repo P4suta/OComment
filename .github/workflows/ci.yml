@@ -89,6 +89,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 tools/check_action_pins.py
+      # NOTE: Dependabot raises alerts on this repository and they are worth
+      # NOTE: having, but an alert arrives after a merge and can be triaged
+      # NOTE: away -- both `qs` advisories here had been auto-dismissed, so
+      # NOTE: asking for open ones returned none while the lockfile still
+      # NOTE: carried them. This runs before the merge and answers to a ledger.
+      - name: Both lockfiles answer to the advisory ledger
+        run: python3 tools/check_advisories.py
       - run: python3 tools/sync_release_docs.py --check
       - run: python3 -m unittest tools/test_release_metadata.py tools/test_publish_crates.py tools/test_sync_release_docs.py
       - run: python3 -m pip install --disable-pip-version-check jsonschema==4.25.1
