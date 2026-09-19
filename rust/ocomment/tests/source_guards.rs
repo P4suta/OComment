@@ -402,3 +402,31 @@ fn the_command_line_is_read_as_bytes() {
          the same question without it: {offenders:?}"
     );
 }
+
+/// A skipped file was reached and not read, so the only honest thing to call
+/// the sum of the two is what the walk reached.
+///
+/// Two report headlines added them and called the total `scanned`, which
+/// overstated coverage in the one direction that matters: a run that could
+/// read two of seven files headlined `7 scanned` while `ocomment coverage`
+/// said `28.5%` and the end-of-run summary, three lines below, said `2`. The
+/// addition now happens once, inside the clause that knows what to call it.
+#[test]
+fn what_was_skipped_is_never_counted_as_scanned() {
+    const ADDITION: &str = "files.len() + skipped.len()";
+    let mut offenders = Vec::new();
+    for (name, source) in SOURCES {
+        for (number, line) in source.lines().enumerate() {
+            if line.contains(ADDITION) && !line.contains("fn scanned_clause") {
+                offenders.push(format!("{name}:{}: {}", number + 1, line.trim()));
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "these add the skipped files into a count of what was scanned; \
+         `output::scanned_clause` is the one place that may put the two \
+         numbers together, and it names the result:\n  {}",
+        offenders.join("\n  ")
+    );
+}

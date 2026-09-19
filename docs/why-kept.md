@@ -43,7 +43,7 @@ src/lib.rs
 ```console
 $ ocomment check --explain
 
-  NO  2 comments in 2 files · 3 scanned · policy conservative
+  NO  2 comments in 2 files · 3 files scanned · policy conservative
 
   DECIDE  move it above the code, or drop it               1 comment
     gen/api.rs:2

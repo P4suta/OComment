@@ -17,7 +17,7 @@
 //! measurement, and the moment it starts explaining itself it has become a
 //! second configuration file arguing with the first.
 
-use crate::output::{Detail, OutputFormat, ProcessedFile, Verbosity, note, stdout, wrote};
+use crate::output::{Detail, OutputFormat, ProcessedFile, Verbosity, note, plural, stdout, wrote};
 use anyhow::{Context, Result};
 use serde_json::json;
 use std::{
@@ -221,8 +221,13 @@ pub fn report(
             verbosity,
             Detail::Normal,
             &format!(
-                "{} file(s) hold more than the ledger allows.",
-                drift.grew.len()
+                "{} {} more than the ledger allows.",
+                plural(drift.grew.len(), "file"),
+                if drift.grew.len() == 1 {
+                    "holds"
+                } else {
+                    "hold"
+                }
             ),
         )?;
     }
@@ -231,9 +236,14 @@ pub fn report(
             &mut summary,
             verbosity,
             Detail::Normal,
+            /* NOTE: "in N places" rather than "N entries": the regular
+             * pluralizer every other count goes through appends an `s`, and
+             * the hand-written `entr(ies)` that avoided it printed
+             * `1 entr(ies)` for the commonest case of all. */
             &format!(
-                "{} entr(ies) are out of date; run `ocomment ratchet update` to record the progress.",
-                drift.shrank.len() + drift.absent.len()
+                "The ledger is out of date in {}; \
+                 run `ocomment ratchet update` to record the progress.",
+                plural(drift.shrank.len() + drift.absent.len(), "place")
             ),
         )?;
     }

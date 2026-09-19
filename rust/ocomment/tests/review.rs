@@ -67,7 +67,7 @@ fn project() -> TempDir {
 }
 
 const REVIEW: &str = r#"
-  NO  5 comments in 1 file · 1 scanned · policy conservative
+  NO  5 comments in 1 file · 1 file scanned · policy conservative
 
   DECIDE  make it a documentation comment                 2 comments
     src/budget.rs:3-4
@@ -105,10 +105,11 @@ const REVIEW: &str = r#"
 const AGENT: &str = r#"# ocomment: 5 comments to answer for in 1 of 1 file scanned, policy conservative.
 # Every line starts with a marker. DECIDE opens one question, asked of each
 # FINDING under it. A FINDING names a path and the first and last line of one
-# comment, which may span several. `-` is what is there now, `+` what would
-# replace it, `=` the code the comment is about. KEEP names a file and `|` the
-# setting that would stop the question being asked. BROKEN is a file that did
-# not parse. The argv lines are commands, ready to run.
+# comment, which may span several, and the column when the comment does not
+# open its line. `-` is what is there now, `+` what would replace it, `=` the
+# code the comment is about. KEEP names a file and `|` the setting that would
+# stop the question being asked. BROKEN is a file that did not parse. The
+# argv lines are commands, ready to run.
 
 DECIDE make it a documentation comment | 2 comments
 FINDING src/budget.rs:3-4
@@ -129,7 +130,7 @@ KEEP .ocomment.toml
 | tags = ["TODO"]
 
 DECIDE move it above the code, or drop it | 1 comment
-FINDING src/budget.rs:15
+FINDING src/budget.rs:15:37
 -         Self { remaining: DEFAULT } // start full
 KEEP .ocomment.toml
 | [policy.allow]
@@ -483,5 +484,155 @@ fn a_policy_stricter_than_the_kind_is_a_decision_about_the_policy() {
     assert!(
         !String::from_utf8_lossy(&default.stdout).contains("mean to remove them"),
         "the default policy reached a decision that is only about a stricter one"
+    );
+}
+
+/// The one number a reader takes from the headline is how much of the
+/// repository the run actually read, and it was the sum of what was read and
+/// what was passed over.
+///
+/// Every format that prints a coverage figure is checked here at once, because
+/// the three of them drifted apart the first time: the headline said seven, the
+/// end-of-run summary said two, and `ocomment coverage` said 28.5%. Whichever
+/// one a reader believed, two of the three were wrong.
+#[test]
+fn a_headline_counts_what_was_read_and_not_what_was_passed_over() {
+    let directory = project();
+    for index in 0..5 {
+        std::fs::write(
+            directory.path().join(format!("data{index}.parquet")),
+            b"not source\n",
+        )
+        .expect("the fixture is writable");
+    }
+
+    let review = run(directory.path(), &["check", "."]);
+    let headline = String::from_utf8_lossy(&review.stdout)
+        .lines()
+        .find(|line| line.contains("scanned"))
+        .expect("the headline says what was scanned")
+        .to_owned();
+    assert!(
+        headline.contains("2 of 7 files scanned"),
+        "the headline counted the files it skipped as files it scanned:\n{headline}"
+    );
+
+    /* NOTE: The machine format carries the same two numbers, because its
+     * reader is the one that cannot re-run the scan to check them. */
+    let agent = run(directory.path(), &["check", ".", "--format", "agent"]);
+    let first = String::from_utf8_lossy(&agent.stdout)
+        .lines()
+        .next()
+        .expect("the agent report opens with its counts")
+        .to_owned();
+    assert!(
+        first.contains("of 2 files scanned") && first.contains("5 files reached and not read"),
+        "the agent headline does not separate what was read from what was not:\n{first}"
+    );
+
+    let coverage = run(directory.path(), &["coverage", "."]);
+    assert!(
+        String::from_utf8_lossy(&coverage.stdout).contains("2 of 7 files scanned"),
+        "`coverage` and the headline disagree about the same run"
+    );
+}
+
+/// A file no built-in language claims is read by a profile, in full, and the
+/// reports said `unknown` about it.
+#[test]
+fn every_report_says_which_reader_answered() {
+    let directory = project();
+    std::fs::write(
+        directory.path().join(".gitignore"),
+        b"# The second pattern is not redundant: the first has an inner slash.\n/target\n",
+    )
+    .expect("the fixture is writable");
+
+    let scan = run(directory.path(), &["scan", ".", "--format", "json"]);
+    let document: serde_json::Value =
+        serde_json::from_slice(&scan.stdout).expect("the report parses as JSON");
+    let ignored = document["files"]
+        .as_array()
+        .expect("a file array")
+        .iter()
+        .find(|file| file["path"] == ".gitignore")
+        .expect("the profile read the file");
+    assert_eq!(
+        ignored["language"], "unknown",
+        "no built-in language claims this file, and saying otherwise would be the lie the other way"
+    );
+    assert_eq!(
+        ignored["read_by"],
+        serde_json::json!({ "kind": "profile", "name": "hash-line" }),
+        "the report does not say what read a file it read in full:\n{ignored}"
+    );
+
+    let coverage =
+        String::from_utf8_lossy(&run(directory.path(), &["coverage", "."]).stdout).into_owned();
+    assert!(
+        coverage.contains("read by the `hash-line` profile"),
+        "`coverage` counts a profile-read file as scanned without saying so:\n{coverage}"
+    );
+    assert!(
+        coverage.contains("read by a built-in language"),
+        "the readers are only legible beside each other:\n{coverage}"
+    );
+
+    /* NOTE: A listing of its own. `ocomment languages` is spec/languages.toml
+     * rendered, and a profile name is not something `--language` takes. */
+    let profiles =
+        String::from_utf8_lossy(&run(directory.path(), &["profiles"]).stdout).into_owned();
+    assert!(
+        profiles.contains("hash-line\tbundled\t") && profiles.contains(".gitignore"),
+        "`ocomment profiles` does not say this build can read the file:\n{profiles}"
+    );
+    /* NOTE: This project declares no profiles of its own, so every row is a
+     * shipped one. The comparison is by value, and a shipped profile that left
+     * a field implicit would differ from its resolved copy and be reported
+     * here as the project's. */
+    assert!(
+        !profiles.contains("\tconfigured\t"),
+        "a shipped profile is reported as one this project declared:\n{profiles}"
+    );
+}
+
+/// A finding names the comment it was built from, not the line that comment
+/// sits on.
+///
+/// Two removable comments share a line whenever one of them sits beside code,
+/// and the lookup that fetches a verdict for `--explain` matched on the line —
+/// so it returned the first of the two for both findings, and a plain comment
+/// beside a directive was explained as `this one a `directive``. Everything
+/// around that line was right: the decision, the settings that would keep it,
+/// the code shown above. Only the reason was another comment's.
+#[test]
+fn explain_asks_about_the_comment_the_finding_was_built_from() {
+    let directory = project();
+    std::fs::write(
+        directory.path().join("a.js"),
+        b"let x = 1; /* eslint-disable-line no-x */ /* plain prose */\n",
+    )
+    .expect("the fixture is writable");
+    let output = run(
+        directory.path(),
+        &["check", "--policy", "all", "--explain", "a.js"],
+    );
+    let report = String::from_utf8_lossy(&output.stdout).into_owned();
+    let reasons: Vec<&str> = report
+        .lines()
+        .filter(|line| line.trim_start().starts_with("removed:"))
+        .collect();
+    assert_eq!(
+        reasons.len(),
+        2,
+        "the fixture is meant to produce one finding per comment:\n{report}"
+    );
+    assert!(
+        reasons[0].contains("`directive`"),
+        "the directive was not explained as one:\n{report}"
+    );
+    assert!(
+        reasons[1].contains("`block`"),
+        "the plain comment was explained as the directive beside it:\n{report}"
     );
 }

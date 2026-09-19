@@ -4,7 +4,7 @@ use crate::{
     files::SkippedFile,
     output::{
         self, AnnotationLevel, Operation, OutputFormat, Presentation, ProcessedFile,
-        ProcessedResult, RenderOptions, Verbosity,
+        ProcessedResult, ReadBy, RenderOptions, Verbosity,
     },
     plugin::PluginHost,
 };
@@ -221,10 +221,16 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
             materialize_output,
             materialize_source_map,
         );
+        let read_by = match (&profile, &routed_plugin) {
+            (Some(profile), _) => ReadBy::Profile(profile.name.clone()),
+            (None, Some(plugin)) => ReadBy::Plugin(plugin.clone()),
+            (None, None) => ReadBy::Language,
+        };
         let processed = ProcessedFile {
             path: path.clone(),
             source,
             language,
+            read_by,
             result,
         };
         entries.push(IndexEntry {

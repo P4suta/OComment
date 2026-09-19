@@ -383,10 +383,12 @@ returns the comment kind itself, so it can return `load-bearing` directly.
 
 ### The profiles OComment ships with
 
-`spec/profiles.toml` carries a few, and `ocomment languages` lists them beside
-the built-in languages. They are not built-in languages and are not meant to
-become one: a built-in language is a hand-written scanner, and a format earns
-that when its lexical form has something a delimiter list cannot say — a string
+`spec/profiles.toml` carries a few, and `ocomment profiles` lists them — with
+the ones this project declared or replaced marked as its own. They have a
+listing of their own rather than a place in `ocomment languages` because they
+are not built-in languages and are not meant to become one: a built-in language
+is a hand-written scanner, and a format earns that when its lexical form has
+something a delimiter list cannot say — a string
 that hides a comment token, a nesting rule, an embedded language. The formats
 here have none of that, so a profile says everything there is to say, and says
 it in data rather than in a `match` arm that would then have to be written
@@ -397,6 +399,24 @@ that says "no removable comments in 143 files" while 25 files were never opened
 is a gate over 85% of a repository, and the files it was missing here were
 `.gitignore`, `CODEOWNERS`, `dune` and OComment's own `.wit` interface — every
 one of which holds comments.
+
+**A profile added to a build changes what a gate covers.** Files the previous
+version passed over in silence are read by the next one, and the comments in
+them are reported against the same policy as everything else — the reader does
+not change the verdict, and a `#` line of prose is prose wherever it sits. That
+is deliberate: a rule that softened for files a profile happened to read would
+mean the same bytes getting different answers from different readers. What must
+not be silent is the change in what is *read*, so `ocomment coverage` names the
+reader for every file it scanned, and the count that moves out of `no built-in
+language for this file` and into `read by the \`hash-line\` profile` is the size
+of the change. A project that wants the prose in those files kept says so where
+every other such decision is said:
+
+```toml
+[[overrides]]
+paths = [".gitignore", ".gitattributes", ".github/CODEOWNERS"]
+keep_kind = ["line"]
+```
 
 - **`hash-line`** is the `#`-to-end-of-line family: `CODEOWNERS`, the `ignore`
   files, `.editorconfig`, `.gitmodules`, `.opam`, and OComment's own ledger.

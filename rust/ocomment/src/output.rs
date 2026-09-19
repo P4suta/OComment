@@ -504,6 +504,28 @@ fn kept_for(files: &[ProcessedFile], protection: &str) -> usize {
         .count()
 }
 
+/// The headline's coverage clause: how much of what the walk reached was read.
+///
+/// A skipped file was reached and *not* read, so adding the skips to the files
+/// that were scanned and calling the sum `scanned` says the opposite of what
+/// happened — and says it in the one direction that matters, making a gate
+/// look wider than it is. A run over seven files that could read two of them
+/// headlined `7 scanned` while `ocomment coverage` said `28.5%`, with the
+/// honest number in a clause at the end of the run that the headline
+/// contradicted three lines above it.
+///
+/// When nothing was skipped the two numbers are equal and only one is printed:
+/// a denominator that always matches the numerator teaches a reader to stop
+/// reading it, which is exactly when it stops working.
+fn scanned_clause(scanned: usize, skipped: usize) -> String {
+    let reached = scanned + skipped;
+    if skipped == 0 {
+        plural(scanned, "file") + " scanned"
+    } else {
+        format!("{scanned} of {} scanned", plural(reached, "file"))
+    }
+}
+
 /// `1 file` / `2 files`: the count and its noun, pluralized by the regular
 /// rule. Every noun the summary counts goes through this.
 pub(crate) fn plural(count: usize, noun: &str) -> String {
@@ -517,11 +539,47 @@ fn comments(count: usize, adjective: &str) -> String {
     plural(count, &format!("{adjective}{space}comment"))
 }
 
+/// What read the file.
+///
+/// `Language` answers "which built-in language is this", and for a file a
+/// profile or a plugin read, that question has no answer: `Language::Unknown`
+/// is what detection returns, and every report that carried only the language
+/// said `unknown` about a file the run had just read completely and on
+/// purpose. A count of what was scanned that cannot name the reader also
+/// cannot tell a release that taught the tool a new format from a repository
+/// that grew one, which is the difference between an upgrade a reader can
+/// follow and a wall of findings that appeared overnight.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ReadBy {
+    /// A built-in language, which the file's `language` names.
+    Language,
+    /// A declarative profile, by name.
+    Profile(String),
+    /// A plugin, by name.
+    Plugin(String),
+}
+
+impl ReadBy {
+    /// The reader as a machine format carries it: what kind of reader, and
+    /// which one.
+    #[must_use]
+    pub fn as_json(&self, language: Language) -> Value {
+        match *self {
+            Self::Language => json!({ "kind": "language", "name": language.as_str() }),
+            Self::Profile(ref name) => json!({ "kind": "profile", "name": name }),
+            Self::Plugin(ref name) => json!({ "kind": "plugin", "name": name }),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct ProcessedFile {
     pub path: PathBuf,
     pub source: Vec<u8>,
     pub language: Language,
+    /// What read this file. Dropped for long enough that `--format json`
+    /// reported `"language": "unknown"` for files a profile had read in full.
+    pub read_by: ReadBy,
     pub result: ProcessedResult,
 }
 
@@ -602,6 +660,15 @@ impl ProcessedResult {
 struct JsonFile<'a> {
     path: String,
     language: Language,
+    /// Which reader answered for this file.
+    ///
+    /// `language` alone cannot say. A file a declarative profile read carries
+    /// `Language::Unknown`, because no built-in language claimed it, and a
+    /// reader given only that field was told `unknown` about a file the run
+    /// had read from end to end. The two fields answer different questions and
+    /// both are kept: `language` is which scanner's grammar applied,
+    /// `read_by` is what did the reading.
+    read_by: Value,
     changed: bool,
     report: JsonReport<'a>,
     edits: &'a [ocomment_core::Edit],
@@ -1373,19 +1440,24 @@ fn busiest(groups: &[crate::advice::Group]) -> Option<(String, usize)> {
 /// The comment one finding was built from, so that the engine's verdict can be
 /// asked for again.
 ///
-/// A finding is a run of adjacent comments and carries a path and a line rather
-/// than a span; the verdict belongs to the first comment of the run, which is
-/// the one whose rule decided the rest.
+/// The verdict belongs to the first comment of the run, which is the one whose
+/// rule decided the rest, and the finding names it by the byte it starts at.
+/// A line does not name it: two removable comments share a line whenever one
+/// of them sits beside code, and matching on the line returned the first of
+/// them for both findings — so a plain comment beside a directive was
+/// explained as `this one a \`directive\``. Everything around that line was
+/// right, which is what kept it standing.
 fn found_at<'a>(
     files: &'a [ProcessedFile],
     item: &crate::advice::Item,
 ) -> Option<(&'a ProcessedFile, &'a Comment)> {
     let file = files.iter().find(|file| file.path == item.path)?;
-    let index = LineIndex::new(&file.source);
-    let comment = file.result.report.comments.iter().find(|comment| {
-        comment.disposition.is_remove()
-            && index.line_column(comment.span.start).0 == item.first_line
-    })?;
+    let comment = file
+        .result
+        .report
+        .comments
+        .iter()
+        .find(|comment| comment.span.start == item.start)?;
     Some((file, comment))
 }
 
@@ -1452,10 +1524,10 @@ fn render_fixed(
     wrote(writeln!(output))?;
     wrote(writeln!(
         output,
-        "  {green}OK{reset}  {bold}{} removed{reset}{dim} from {} · {} scanned{reset}",
+        "  {green}OK{reset}  {bold}{} removed{reset}{dim} from {} · {}{reset}",
         comments(removed, ""),
         plural(changed, "file"),
-        plural(files.len() + skipped.len(), "file"),
+        scanned_clause(files.len(), skipped.len()),
     ))?;
     let kept: Vec<(&ProcessedFile, &Comment)> = files
         .iter()
@@ -1552,10 +1624,10 @@ fn render_review(
     wrote(writeln!(output))?;
     wrote(writeln!(
         output,
-        "  {mark}  {bold}{}{reset}{dim} in {} · {} scanned · policy {}{reset}",
+        "  {mark}  {bold}{}{reset}{dim} in {} · {} · policy {}{reset}",
         comments(removable, ""),
         plural(touched, "file"),
-        files.len() + skipped.len(),
+        scanned_clause(files.len(), skipped.len()),
         options.policy,
     ))?;
 
@@ -2466,7 +2538,18 @@ struct JsonDecision {
 #[derive(Serialize)]
 struct JsonFinding {
     path: String,
+    /// The bytes the finding covers, from its first comment's first byte to
+    /// its last comment's last.
+    ///
+    /// A path and a line do not identify it. Two removable comments share a
+    /// line whenever one sits beside code, and two findings then reached this
+    /// format identical in every field — so a reader could neither tell them
+    /// apart nor act on either without going back to the file to work out
+    /// which was which.
+    span: ByteSpan,
     line: usize,
+    /// One-based, and the same column the text formats put after the line.
+    column: usize,
     end_line: usize,
     /// The lines as they are.
     old: Vec<String>,
@@ -2501,7 +2584,9 @@ fn json_decisions(files: &[ProcessedFile], policy: Policy) -> Vec<JsonDecision> 
                 .into_iter()
                 .map(|item| JsonFinding {
                     path: sanitize_path(&item.path.to_string_lossy()),
+                    span: ByteSpan::new(item.start, item.end),
                     line: item.first_line,
+                    column: item.column,
                     end_line: item.last_line,
                     old: item.old,
                     new: item.new,
@@ -2588,6 +2673,7 @@ fn json_file<'a>(
     JsonFile {
         path: file.path.to_string_lossy().into_owned(),
         language: file.language,
+        read_by: file.read_by.as_json(file.language),
         changed: file.result.changed(),
         report: json_report(
             &file.result.report,
@@ -3989,12 +4075,25 @@ fn write_agent(
         .flat_map(|group| &group.items)
         .map(|item| item.path.as_path())
         .collect();
+    /* NOTE: The denominator is what was read, not what the walk reached. A
+     * reader that cannot re-run the scan has no way to catch a coverage
+     * figure that counts the files it skipped, and this is the format whose
+     * reader is a program. The skips are named beside it rather than folded
+     * into it. */
+    let unread = if skipped.is_empty() {
+        String::new()
+    } else {
+        format!(
+            ", {} reached and not read (`ocomment coverage` says which)",
+            plural(skipped.len(), "file")
+        )
+    };
     wrote(writeln!(
         output,
-        "# ocomment: {} to answer for in {} of {} scanned, policy {}.",
+        "# ocomment: {} to answer for in {} of {} scanned{unread}, policy {}.",
         comments(removable, ""),
         touched.len(),
-        plural(files.len() + skipped.len(), "file"),
+        plural(files.len(), "file"),
         options.policy
     ))?;
     for line in AGENT_SCHEMA {
@@ -4080,13 +4179,14 @@ fn write_agent(
 /// format its reader has to go and learn before it can act, and the reader this
 /// is for is one that would rather spend that round trip on the work. Six lines
 /// of preamble buy every one of them back.
-const AGENT_SCHEMA: [&str; 6] = [
+const AGENT_SCHEMA: [&str; 7] = [
     "Every line starts with a marker. DECIDE opens one question, asked of each",
     "FINDING under it. A FINDING names a path and the first and last line of one",
-    "comment, which may span several. `-` is what is there now, `+` what would",
-    "replace it, `=` the code the comment is about. KEEP names a file and `|` the",
-    "setting that would stop the question being asked. BROKEN is a file that did",
-    "not parse. The argv lines are commands, ready to run.",
+    "comment, which may span several, and the column when the comment does not",
+    "open its line. `-` is what is there now, `+` what would replace it, `=` the",
+    "code the comment is about. KEEP names a file and `|` the setting that would",
+    "stop the question being asked. BROKEN is a file that did not parse. The",
+    "argv lines are commands, ready to run.",
 ];
 
 /// A command as the argv a caller can run without retyping it.

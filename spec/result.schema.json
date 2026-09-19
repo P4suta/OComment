@@ -53,6 +53,7 @@
       "required": [
         "path",
         "language",
+        "read_by",
         "changed",
         "report",
         "edits"
@@ -63,6 +64,9 @@
         },
         "language": {
           "$ref": "#/$defs/language"
+        },
+        "read_by": {
+          "$ref": "#/$defs/readBy"
         },
         "changed": {
           "type": "boolean"
@@ -427,6 +431,27 @@
         "unknown"
       ]
     },
+    "readBy": {
+      "description": "Which reader answered for this file. `language` says which built-in grammar applied and is `unknown` for a file no built-in language claimed; a declarative profile or a plugin reads such a file in full, and this says which one did.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "name"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "language",
+            "profile",
+            "plugin"
+          ]
+        },
+        "name": {
+          "type": "string"
+        }
+      }
+    },
     "kind": {
       "enum": [
         "line",
@@ -492,7 +517,9 @@
       "additionalProperties": false,
       "required": [
         "path",
+        "span",
         "line",
+        "column",
         "end_line",
         "old"
       ],
@@ -500,7 +527,14 @@
         "path": {
           "type": "string"
         },
+        "span": {
+          "$ref": "#/$defs/span"
+        },
         "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "column": {
           "type": "integer",
           "minimum": 1
         },
@@ -527,7 +561,8 @@
           "type": "string",
           "description": "The code the comment is about, when the decision turns on it."
         }
-      }
+      },
+      "description": "One run of adjacent comments asking one question. `span` identifies it: a path and a line do not, because two removable comments share a line whenever one of them sits beside code."
     },
     "keepInstead": {
       "type": "object",

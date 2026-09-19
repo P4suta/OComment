@@ -1,4 +1,4 @@
-use crate::config::ResolvedConfig;
+use crate::{config::ResolvedConfig, output::ReadBy};
 use anyhow::{Context, Result, anyhow};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use ignore::WalkBuilder;
@@ -29,6 +29,22 @@ pub struct SourceFile {
     /// the first thing a run that scanned a file as the wrong language needs,
     /// and the only place it can come from is the decision itself.
     pub detection: &'static str,
+}
+
+impl SourceFile {
+    /// What will read this file: the language that was detected, or the
+    /// profile or plugin that claimed it when no language did.
+    ///
+    /// Routing already decided this and every caller was re-deriving it, or
+    /// -- more often -- dropping it and reporting the `Language::Unknown`
+    /// that a profile-read file necessarily carries.
+    pub fn read_by(&self) -> ReadBy {
+        match (&self.profile, &self.plugin) {
+            (Some(profile), _) => ReadBy::Profile(profile.name.clone()),
+            (None, Some(plugin)) => ReadBy::Plugin(plugin.clone()),
+            (None, None) => ReadBy::Language,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

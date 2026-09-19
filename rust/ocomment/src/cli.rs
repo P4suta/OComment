@@ -12,7 +12,9 @@ use crate::{
 use anyhow::{Context, Result, bail, ensure};
 use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{Shell, generate};
-use ocomment_core::{CommentKind, Dialect, Language, PreparedScanner, transform};
+use ocomment_core::{
+    CommentKind, DeclarativeProfile, Dialect, Language, PreparedScanner, transform,
+};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -364,6 +366,8 @@ enum Command {
     Config(ConfigArgs),
     /// List built-in languages, extensions, and dialects
     Languages,
+    /// List the declarative profiles that read files no built-in language does
+    Profiles,
     /// Manage sandboxed WASM scanner plugins
     Plugin(PluginArgs),
     /// Generate shell completions
@@ -651,6 +655,7 @@ pub fn run() -> Result<u8> {
         Some(Command::Init(args)) => run_init(args, common.verbosity()),
         Some(Command::Config(args)) => run_config(args, &common),
         Some(Command::Languages) => print_languages(&common),
+        Some(Command::Profiles) => print_profiles(&common),
         Some(Command::Plugin(args)) => run_plugin(args, &common),
         Some(Command::Completions { shell }) => run_completions(shell),
         Some(Command::Coverage(target)) => run_coverage(&target, &common),
@@ -840,6 +845,7 @@ fn run_target(
                 None
             };
             let language = file.language;
+            let read_by = file.read_by();
             let options = file.options.clone();
             let scanner = scanners
                 .get(&options.scan)
@@ -906,6 +912,7 @@ fn run_target(
                     path: file.path,
                     source: file.source,
                     language,
+                    read_by,
                     result,
                 },
                 material,
@@ -1862,6 +1869,128 @@ fn print_languages(common: &CommonArgs) -> Result<u8> {
     Ok(0)
 }
 
+/// One declarative profile as the listing reports it.
+#[derive(Serialize)]
+struct ProfileRow {
+    /// What the profile is called, which is also what a `[[overrides]]` or a
+    /// `[profiles.<name>]` in the configuration refers to.
+    name: String,
+    /// Where it came from: `bundled` when it is the one this build ships,
+    /// `configured` when the project declared it or replaced a shipped one of
+    /// the same name.
+    source: &'static str,
+    /// Whole file names the profile claims.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    filenames: Vec<String>,
+    /// File extensions the profile claims, without the dot.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    extensions: Vec<String>,
+    /// The comment openers, as a reader would type them.
+    comments: Vec<String>,
+}
+
+/// What this build and this project can read beyond the built-in languages.
+///
+/// `ocomment languages` is the built-in scanner table and nothing else, which
+/// is the right contract for it -- it is `spec/languages.toml`, rendered. It is
+/// also, on its own, an incomplete answer to "can it read this file": a
+/// declarative profile reads files no language claims, and a release that adds
+/// one changes what a gate covers without changing a single policy. Before
+/// this listing existed that change was unannounced, and a project met it as
+/// findings in files the previous version had passed over in silence.
+fn profile_table(common: &CommonArgs) -> Result<Vec<ProfileRow>> {
+    let resolved = config::load(common.config.as_deref())?;
+    /* NOTE: Normalized the way configuration loading normalizes them. A
+     * shipped profile that left `name` implicit would otherwise differ from
+     * the resolved copy in that one field and be reported as one the project
+     * declared -- a listing wrong about exactly the thing it is for. */
+    let bundled: BTreeMap<String, DeclarativeProfile> = config::bundled_profiles()?
+        .into_iter()
+        .map(|(name, mut profile)| {
+            if profile.name.is_empty() {
+                profile.name.clone_from(&name);
+            }
+            (name, profile)
+        })
+        .collect();
+    Ok(resolved
+        .config
+        .profiles
+        .iter()
+        .map(|(name, profile)| ProfileRow {
+            name: name.clone(),
+            /* NOTE: Compared by value rather than by name: a project replaces a
+             * shipped profile by declaring one of the same name, and a listing
+             * that keyed on the name alone would call the replacement bundled
+             * and send a reader to the wrong file to change it. */
+            source: if bundled.get(name) == Some(profile) {
+                "bundled"
+            } else {
+                "configured"
+            },
+            filenames: profile.filenames.clone(),
+            extensions: profile.extensions.clone(),
+            comments: profile
+                .line_comments
+                .iter()
+                .map(|delimiter| delimiter.start.clone())
+                .chain(
+                    profile
+                        .block_comments
+                        .iter()
+                        .map(|delimiter| format!("{}…{}", delimiter.start, delimiter.end)),
+                )
+                .collect(),
+        })
+        .collect())
+}
+
+/// Print the declarative profiles, in the same two shapes `languages` uses.
+fn print_profiles(common: &CommonArgs) -> Result<u8> {
+    let rows = profile_table(common)?;
+    let mut stdout = output::stdout();
+    match common.output.format {
+        /* NOTE: As with the language table, there are no findings to group, so
+         * the terminal format and the pipe format are the same table. */
+        OutputFormat::Human | OutputFormat::Review => {
+            output::wrote(writeln!(stdout, "profile\tsource\tfiles\tcomments"))?;
+            for row in &rows {
+                /* NOTE: Extensions carry their dot here, so that a reader can
+                 * tell `.opam` the suffix from `dune` the whole file name in a
+                 * column that holds both. */
+                let files = row
+                    .filenames
+                    .iter()
+                    .cloned()
+                    .chain(
+                        row.extensions
+                            .iter()
+                            .map(|extension| format!(".{extension}")),
+                    )
+                    .collect::<Vec<_>>()
+                    .join(",");
+                output::wrote(writeln!(
+                    stdout,
+                    "{}\t{}\t{files}\t{}",
+                    row.name,
+                    row.source,
+                    row.comments.join(" ")
+                ))?;
+            }
+        }
+        OutputFormat::Json => {
+            let json = serde_json::to_string_pretty(&rows)
+                .context("cannot render the profile table as JSON")?;
+            output::wrote(writeln!(stdout, "{json}"))?;
+        }
+        OutputFormat::Jsonl | OutputFormat::Sarif | OutputFormat::Github | OutputFormat::Agent => {
+            bail!("`ocomment profiles` is only available with --format human or --format json")
+        }
+    }
+    output::finish(&mut stdout)?;
+    Ok(0)
+}
+
 fn run_plugin(args: PluginArgs, common: &CommonArgs) -> Result<u8> {
     let resolved = config::load(common.config.as_deref())?;
     let mut stdout = output::stdout();
@@ -2053,10 +2182,12 @@ fn scan_for_counts(
             .comments
             .iter()
             .any(|comment| comment.disposition.is_remove());
+        let read_by = file.read_by();
         files.push(ProcessedFile {
             path: file.path,
             source: file.source,
             language: file.language,
+            read_by,
             result: ProcessedResult::report(report, changed),
         });
     }

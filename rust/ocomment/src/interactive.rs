@@ -462,6 +462,7 @@ mod tests {
             path: PathBuf::from(name),
             source,
             language: Language::C,
+            read_by: crate::output::ReadBy::Language,
             result: crate::output::ProcessedResult::complete(result),
         }
     }
