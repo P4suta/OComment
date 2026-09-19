@@ -806,7 +806,7 @@ pub fn load_from(cwd: &Path, explicit: Option<&Path>) -> Result<ResolvedConfig> 
 /// describe file formats whose comments delimiters describe completely --
 /// `.gitignore`, `dune`, `.wit` -- and exist because the alternative was not
 /// reading those files at all.
-fn bundled_profiles() -> Result<Vec<(String, DeclarativeProfile)>> {
+pub fn bundled_profiles() -> Result<Vec<(String, DeclarativeProfile)>> {
     #[derive(Deserialize)]
     struct Bundled {
         profiles: BTreeMap<String, DeclarativeProfile>,

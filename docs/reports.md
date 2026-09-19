@@ -20,7 +20,7 @@ here that carries no meaning of its own.
 
 ```console
 $ ocomment check
-  NO  5 comments in 1 file · 1 scanned · policy conservative
+  NO  5 comments in 1 file · 1 file scanned · policy conservative
 
   DECIDE  make it a documentation comment                 2 comments
     src/budget.rs:3-4
@@ -151,6 +151,17 @@ of a hook decision. See [Agents](agents.md).
 `--format json` carries the whole report — every comment, its span, its line and
 column, its text and its verdict — against
 [`spec/result.schema.json`](https://github.com/P4suta/OComment/blob/main/spec/result.schema.json).
+
+Each file also says what read it. `language` is which built-in grammar applied,
+and it is `unknown` for a file no built-in language claims; `read_by` is the
+reader that answered, which for such a file is a declarative profile or a
+plugin that read it from end to end. One field without the other said `unknown`
+about a file the run had just read in full:
+
+```json
+{ "path": ".gitignore", "language": "unknown",
+  "read_by": { "kind": "profile", "name": "hash-line" } }
+```
 
 It also carries `decisions`: the same grouping the other two formats show, with
 the lines as they are, what would replace them, and the settings to add.

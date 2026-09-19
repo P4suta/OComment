@@ -67,7 +67,7 @@ fn project() -> TempDir {
 }
 
 const REVIEW: &str = r#"
-  NO  5 comments in 1 file · 1 scanned · policy conservative
+  NO  5 comments in 1 file · 1 file scanned · policy conservative
 
   DECIDE  make it a documentation comment                 2 comments
     src/budget.rs:3-4
@@ -483,5 +483,114 @@ fn a_policy_stricter_than_the_kind_is_a_decision_about_the_policy() {
     assert!(
         !String::from_utf8_lossy(&default.stdout).contains("mean to remove them"),
         "the default policy reached a decision that is only about a stricter one"
+    );
+}
+
+/// The one number a reader takes from the headline is how much of the
+/// repository the run actually read, and it was the sum of what was read and
+/// what was passed over.
+///
+/// Every format that prints a coverage figure is checked here at once, because
+/// the three of them drifted apart the first time: the headline said seven, the
+/// end-of-run summary said two, and `ocomment coverage` said 28.5%. Whichever
+/// one a reader believed, two of the three were wrong.
+#[test]
+fn a_headline_counts_what_was_read_and_not_what_was_passed_over() {
+    let directory = project();
+    for index in 0..5 {
+        std::fs::write(
+            directory.path().join(format!("data{index}.parquet")),
+            b"not source\n",
+        )
+        .expect("the fixture is writable");
+    }
+
+    let review = run(directory.path(), &["check", "."]);
+    let headline = String::from_utf8_lossy(&review.stdout)
+        .lines()
+        .find(|line| line.contains("scanned"))
+        .expect("the headline says what was scanned")
+        .to_owned();
+    assert!(
+        headline.contains("2 of 7 files scanned"),
+        "the headline counted the files it skipped as files it scanned:\n{headline}"
+    );
+
+    /* NOTE: The machine format carries the same two numbers, because its
+     * reader is the one that cannot re-run the scan to check them. */
+    let agent = run(directory.path(), &["check", ".", "--format", "agent"]);
+    let first = String::from_utf8_lossy(&agent.stdout)
+        .lines()
+        .next()
+        .expect("the agent report opens with its counts")
+        .to_owned();
+    assert!(
+        first.contains("of 2 files scanned") && first.contains("5 files reached and not read"),
+        "the agent headline does not separate what was read from what was not:\n{first}"
+    );
+
+    let coverage = run(directory.path(), &["coverage", "."]);
+    assert!(
+        String::from_utf8_lossy(&coverage.stdout).contains("2 of 7 files scanned"),
+        "`coverage` and the headline disagree about the same run"
+    );
+}
+
+/// A file no built-in language claims is read by a profile, in full, and the
+/// reports said `unknown` about it.
+#[test]
+fn every_report_says_which_reader_answered() {
+    let directory = project();
+    std::fs::write(
+        directory.path().join(".gitignore"),
+        b"# The second pattern is not redundant: the first has an inner slash.\n/target\n",
+    )
+    .expect("the fixture is writable");
+
+    let scan = run(directory.path(), &["scan", ".", "--format", "json"]);
+    let document: serde_json::Value =
+        serde_json::from_slice(&scan.stdout).expect("the report parses as JSON");
+    let ignored = document["files"]
+        .as_array()
+        .expect("a file array")
+        .iter()
+        .find(|file| file["path"] == ".gitignore")
+        .expect("the profile read the file");
+    assert_eq!(
+        ignored["language"], "unknown",
+        "no built-in language claims this file, and saying otherwise would be the lie the other way"
+    );
+    assert_eq!(
+        ignored["read_by"],
+        serde_json::json!({ "kind": "profile", "name": "hash-line" }),
+        "the report does not say what read a file it read in full:\n{ignored}"
+    );
+
+    let coverage =
+        String::from_utf8_lossy(&run(directory.path(), &["coverage", "."]).stdout).into_owned();
+    assert!(
+        coverage.contains("read by the `hash-line` profile"),
+        "`coverage` counts a profile-read file as scanned without saying so:\n{coverage}"
+    );
+    assert!(
+        coverage.contains("read by a built-in language"),
+        "the readers are only legible beside each other:\n{coverage}"
+    );
+
+    /* NOTE: A listing of its own. `ocomment languages` is spec/languages.toml
+     * rendered, and a profile name is not something `--language` takes. */
+    let profiles =
+        String::from_utf8_lossy(&run(directory.path(), &["profiles"]).stdout).into_owned();
+    assert!(
+        profiles.contains("hash-line\tbundled\t") && profiles.contains(".gitignore"),
+        "`ocomment profiles` does not say this build can read the file:\n{profiles}"
+    );
+    /* NOTE: This project declares no profiles of its own, so every row is a
+     * shipped one. The comparison is by value, and a shipped profile that left
+     * a field implicit would differ from its resolved copy and be reported
+     * here as the project's. */
+    assert!(
+        !profiles.contains("\tconfigured\t"),
+        "a shipped profile is reported as one this project declared:\n{profiles}"
     );
 }

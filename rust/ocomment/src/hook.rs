@@ -282,10 +282,12 @@ fn judge(
                 trace,
             },
         );
+        let read_by = file.read_by();
         processed.push(output::ProcessedFile {
             path: file.path,
             source: file.source,
             language: file.language,
+            read_by,
             result: output::ProcessedResult::report(report, changed),
         });
     }

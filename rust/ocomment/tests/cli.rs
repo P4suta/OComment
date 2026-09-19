@@ -3619,7 +3619,8 @@ fn json_and_jsonl_serde_names_are_frozen() {
     assert_eq!(
         String::from_utf8(jsonl.stdout).unwrap(),
         concat!(
-            r#"{"path":"sample.py","language":"python","changed":true,"report":{"language":"python","#,
+            r#"{"path":"sample.py","language":"python","read_by":{"kind":"language","name":"python"},"#,
+            r#""changed":true,"report":{"language":"python","#,
             r##""comments":[{"span":{"start":0,"end":22},"line":1,"column":1,"end_line":1,"end_column":23,"##,
             r##""kind":"shebang","text":"#!/usr/bin/env python3","disposition":{"action":"keep","##,
             r##""reason":"required source preamble"}},{"span":{"start":23,"end":53},"##,

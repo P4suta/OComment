@@ -61,6 +61,7 @@ Register-ArgumentCompleter -Native -CommandName 'ocomment' -ScriptBlock {
             [CompletionResult]::new('init', 'init', [CompletionResultType]::ParameterValue, 'Write a starter .ocomment.toml or Lefthook configuration')
             [CompletionResult]::new('config', 'config', [CompletionResultType]::ParameterValue, 'Show, locate, explain, or export the resolved configuration')
             [CompletionResult]::new('languages', 'languages', [CompletionResultType]::ParameterValue, 'List built-in languages, extensions, and dialects')
+            [CompletionResult]::new('profiles', 'profiles', [CompletionResultType]::ParameterValue, 'List the declarative profiles that read files no built-in language does')
             [CompletionResult]::new('plugin', 'plugin', [CompletionResultType]::ParameterValue, 'Manage sandboxed WASM scanner plugins')
             [CompletionResult]::new('completions', 'completions', [CompletionResultType]::ParameterValue, 'Generate shell completions')
             [CompletionResult]::new('coverage', 'coverage', [CompletionResultType]::ParameterValue, 'Report which files a walk scanned and which it passed over, and why')
@@ -348,6 +349,38 @@ Register-ArgumentCompleter -Native -CommandName 'ocomment' -ScriptBlock {
             break
         }
         'ocomment;languages' {
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'Read this configuration file instead of discovering `.ocomment.toml`')
+            [CompletionResult]::new('--policy', '--policy', [CompletionResultType]::ParameterName, 'Which classes of comment the run is allowed to remove')
+            [CompletionResult]::new('--layout', '--layout', [CompletionResultType]::ParameterName, 'How the bytes left behind by a removed comment are laid out')
+            [CompletionResult]::new('--language', '--language', [CompletionResultType]::ParameterName, 'Force this language instead of detecting it from path and contents')
+            [CompletionResult]::new('--dialect', '--dialect', [CompletionResultType]::ParameterName, 'Force this dialect of the selected language')
+            [CompletionResult]::new('--keep-kind', '--keep-kind', [CompletionResultType]::ParameterName, 'Comma-separated comment kinds to protect on top of the policy')
+            [CompletionResult]::new('--remove-kind', '--remove-kind', [CompletionResultType]::ParameterName, 'Comma-separated comment kinds to remove regardless of the policy')
+            [CompletionResult]::new('--deny-skipped', '--deny-skipped', [CompletionResultType]::ParameterName, 'Fail when a file was passed over for one of these reasons, rather than noting it')
+            [CompletionResult]::new('--format', '--format', [CompletionResultType]::ParameterName, 'Output encoding')
+            [CompletionResult]::new('--color', '--color', [CompletionResultType]::ParameterName, 'When to colour terminal output')
+            [CompletionResult]::new('--hyperlinks', '--hyperlinks', [CompletionResultType]::ParameterName, 'When to emit terminal hyperlinks for reported paths')
+            [CompletionResult]::new('--annotation-level', '--annotation-level', [CompletionResultType]::ParameterName, 'The level `--format github` annotates a removable comment at (default: the run''s exit status)')
+            [CompletionResult]::new('--trace', '--trace', [CompletionResultType]::ParameterName, 'Record how the run reached its verdicts, on standard error')
+            [CompletionResult]::new('--progress', '--progress', [CompletionResultType]::ParameterName, 'When to draw the live scanning counter on standard error')
+            [CompletionResult]::new('-j', '-j', [CompletionResultType]::ParameterName, 'How many threads the run uses to walk, read and scan; 0 chooses one per core')
+            [CompletionResult]::new('--jobs', '--jobs', [CompletionResultType]::ParameterName, 'How many threads the run uses to walk, read and scan; 0 chooses one per core')
+            [CompletionResult]::new('--summary', '--summary', [CompletionResultType]::ParameterName, 'Also write the end-of-run counts to this file, as one JSON object')
+            [CompletionResult]::new('--include-generated', '--include-generated', [CompletionResultType]::ParameterName, 'Scan files another tool writes: lock files, recorded seeds, generated output')
+            [CompletionResult]::new('--force-invalid', '--force-invalid', [CompletionResultType]::ParameterName, 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment')
+            [CompletionResult]::new('--force-protected', '--force-protected', [CompletionResultType]::ParameterName, 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads')
+            [CompletionResult]::new('--no-preview', '--no-preview', [CompletionResultType]::ParameterName, 'Omit the comment text from human `check` and `scan` lines and from the JSON formats')
+            [CompletionResult]::new('--explain', '--explain', [CompletionResultType]::ParameterName, 'List every comment `check` and `scan` met and name the rule and setting behind each one')
+            [CompletionResult]::new('--source-map', '--source-map', [CompletionResultType]::ParameterName, 'Include the byte-for-byte map from the output back to the source in the JSON formats')
+            [CompletionResult]::new('-q', '-q', [CompletionResultType]::ParameterName, 'Drop the run summary and notes; the command''s product (findings, patch, listing) is still written')
+            [CompletionResult]::new('--quiet', '--quiet', [CompletionResultType]::ParameterName, 'Drop the run summary and notes; the command''s product (findings, patch, listing) is still written')
+            [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Trace what is scanned and summarize every comment kind and skipped file')
+            [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Trace what is scanned and summarize every comment kind and skipped file')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            break
+        }
+        'ocomment;profiles' {
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'Read this configuration file instead of discovering `.ocomment.toml`')
             [CompletionResult]::new('--policy', '--policy', [CompletionResultType]::ParameterName, 'Which classes of comment the run is allowed to remove')
             [CompletionResult]::new('--layout', '--layout', [CompletionResultType]::ParameterName, 'How the bytes left behind by a removed comment are laid out')
@@ -920,6 +953,7 @@ Register-ArgumentCompleter -Native -CommandName 'ocomment' -ScriptBlock {
             [CompletionResult]::new('init', 'init', [CompletionResultType]::ParameterValue, 'Write a starter .ocomment.toml or Lefthook configuration')
             [CompletionResult]::new('config', 'config', [CompletionResultType]::ParameterValue, 'Show, locate, explain, or export the resolved configuration')
             [CompletionResult]::new('languages', 'languages', [CompletionResultType]::ParameterValue, 'List built-in languages, extensions, and dialects')
+            [CompletionResult]::new('profiles', 'profiles', [CompletionResultType]::ParameterValue, 'List the declarative profiles that read files no built-in language does')
             [CompletionResult]::new('plugin', 'plugin', [CompletionResultType]::ParameterValue, 'Manage sandboxed WASM scanner plugins')
             [CompletionResult]::new('completions', 'completions', [CompletionResultType]::ParameterValue, 'Generate shell completions')
             [CompletionResult]::new('coverage', 'coverage', [CompletionResultType]::ParameterValue, 'Report which files a walk scanned and which it passed over, and why')
@@ -957,6 +991,9 @@ Register-ArgumentCompleter -Native -CommandName 'ocomment' -ScriptBlock {
             break
         }
         'ocomment;help;languages' {
+            break
+        }
+        'ocomment;help;profiles' {
             break
         }
         'ocomment;help;plugin' {

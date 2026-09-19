@@ -7,6 +7,39 @@ All notable changes to OComment will be documented here. The project follows
 
 ### Fixed
 
+- A report headline no longer counts the files it skipped as files it scanned.
+  `files + skipped` was being printed as `scanned` in three places — the
+  `review` headline, the `fix` headline, and the first line of `--format
+  agent` — so a run that could read two of seven files opened with `7 scanned`
+  while `ocomment coverage` said `28.5%` and the end-of-run summary, three
+  lines below, said `2`. The error was always in the direction that makes a
+  gate look wider than it is, and the `agent` line carried it to the reader
+  least able to check it. The headline now reads `2 of 7 files scanned`, the
+  agent line names the unread files beside the count rather than inside it,
+  and a source guard keeps the addition to the one function that knows what to
+  call the result.
+
+- Every report says which reader answered for a file. A file read by a
+  declarative profile carries `Language::Unknown`, because no built-in language
+  claimed it, and `ProcessedFile` dropped the profile — so `--format json`
+  reported `"language": "unknown"` for a file the run had just read from end to
+  end, and `coverage` counted it as scanned with nothing to distinguish it from
+  a `.rs`. `read_by` is now on every file in the machine formats
+  (`{"kind": "profile", "name": "hash-line"}`), and `ocomment coverage` splits
+  its scanned total by reader. This is what makes a release that adds a profile
+  legible: the files it newly reads move out of a skip reason and into a named
+  reader, and the size of that move is the size of the change to what the gate
+  covers.
+
+- `docs/configuration.md` said `ocomment languages` lists the shipped profiles
+  beside the built-in languages. It never did, and no test asked it to.
+
+- `ocomment ratchet` printed `1 file(s)` and `1 entr(ies)`. The pluralizer every
+  other count goes through documents itself as the one every noun passes, and
+  these two were written by hand around it — one because the verb had to agree
+  and one because `entry` is irregular. Both now read as sentences: `1 file
+  holds more than the ledger allows`, `The ledger is out of date in 1 place`.
+
 - `ocomment coverage` counts the files the walk never reached. It reported the
   share of what it *walked*, so a run that read one file of three said
   `100.0%` — and since `[files] hidden = false` is the default, the files it
@@ -24,6 +57,14 @@ All notable changes to OComment will be documented here. The project follows
   itself: it has `hidden = true`.
 
 ### Added
+
+- `ocomment profiles` lists the declarative profiles this build and this project
+  can read with — `hash-line`, `dune`, `wit`, and any the configuration adds —
+  with the ones the project declared or replaced marked as its own, compared by
+  value rather than by name so a replacement is not reported as the shipped
+  one. It is a listing of its own rather than rows in `ocomment languages`,
+  which is `spec/languages.toml` rendered and stays that: a profile is not a
+  built-in language and `--language` does not take its name.
 
 - `--base <REV>` checks only the working-tree files that differ from that
   revision's merge base with HEAD. The merge base and not the tip: on a branch

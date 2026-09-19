@@ -53,6 +53,7 @@
       "required": [
         "path",
         "language",
+        "read_by",
         "changed",
         "report",
         "edits"
@@ -63,6 +64,9 @@
         },
         "language": {
           "$ref": "#/$defs/language"
+        },
+        "read_by": {
+          "$ref": "#/$defs/readBy"
         },
         "changed": {
           "type": "boolean"
@@ -426,6 +430,27 @@
         "perl",
         "unknown"
       ]
+    },
+    "readBy": {
+      "description": "Which reader answered for this file. `language` says which built-in grammar applied and is `unknown` for a file no built-in language claimed; a declarative profile or a plugin reads such a file in full, and this says which one did.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "name"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "language",
+            "profile",
+            "plugin"
+          ]
+        },
+        "name": {
+          "type": "string"
+        }
+      }
     },
     "kind": {
       "enum": [

@@ -1197,6 +1197,121 @@ json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
 '--help[Print help (see more with '\''--help'\'')]' \
 && ret=0
 ;;
+(profiles)
+_arguments "${_arguments_options[@]}" : \
+'--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
+'--policy=[Which classes of comment the run is allowed to remove]:POLICY:((conservative\:"Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was \`legal\`)"
+standard\:"Like conservative, and remove documentation, licence and copyright comments too (was \`safe\`)"
+all\:"Remove every comment except shebangs, encoding lines and the directives the language itself reads"))' \
+'--layout=[How the bytes left behind by a removed comment are laid out]:LAYOUT:((lines\:"Keep the line structure and separate tokens that would otherwise join"
+columns\:"Pad each removed comment so the following columns do not shift"
+compact\:"Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run"))' \
+'--language=[Force this language instead of detecting it from path and contents]:LANGUAGE:((rust\:"Rust source files"
+ocaml\:"OCaml implementation and interface files"
+c\:"C source and header files"
+cpp\:"C++ source and header files"
+go\:"Go source files"
+java\:"Java source files, including Unicode escape translation"
+javascript\:"JavaScript modules and scripts, including JSX"
+typescript\:"TypeScript modules and scripts, including TSX"
+python\:"Python source and stub files"
+shell\:"POSIX sh, Bash, and zsh scripts"
+html\:"HTML documents, including nested script and style elements"
+css\:"CSS stylesheets"
+jsonc\:"JSON with comments, including JSON5"
+sql\:"SQL for every supported database dialect"
+kotlin\:"Kotlin source and script files"
+toml\:"TOML documents, including the lock files written in it"
+lua\:"Lua chunks and LuaRocks rockspecs"
+yaml\:"YAML documents, including the tool configurations written in it"
+php\:"PHP scripts and templates; the inline HTML around the tags is content"
+ruby\:"Ruby scripts, gem manifests, and the project files named after their tool"
+zig\:"Zig source files and Zig Object Notation data"
+r\:"R scripts and the \`.Rprofile\` an R session sources at start-up"
+dart\:"Dart source files, whose block comments nest"
+swift\:"Swift source files, whose block comments nest and whose \`#/../#\` is a regex"
+csharp\:"C# source and script files, whose \`#\` lines are preprocessor directives"
+scala\:"Scala source and script files, whose block comments nest and whose XML literals are opaque"
+vue\:"Vue single-file components, whose templates are HTML with \`{{ ... }}\` code"
+svelte\:"Svelte components, whose templates are HTML with \`{ ... }\` code"
+markdown\:"Markdown documents, whose fenced code blocks are scanned as their named languages"
+perl\:"Perl scripts and modules, whose quote words and regexes hide a \`#\`"))' \
+'--dialect=[Force this dialect of the selected language]:DIALECT:((standard\:"The default lexical rules of the language"
+jsx\:"JavaScript with JSX elements"
+tsx\:"TypeScript with JSX elements"
+objective-c\:"Objective-C extensions to C"
+objective-cpp\:"Objective-C++ extensions to C++"
+gnu-c\:"GNU extensions to C"
+gnu-cpp\:"GNU extensions to C++"
+cuda\:"CUDA extensions to C++"
+posix-sh\:"The POSIX shell command language"
+bash53\:"Bash 5.3"
+zsh\:"The Z shell"
+postgresql\:"PostgreSQL, with dollar-quoted bodies"
+mysql\:"MySQL, including its executable versioned comments"
+sqlite\:"SQLite"
+t-sql\:"Microsoft Transact-SQL"
+oracle\:"Oracle SQL and PL/SQL"
+scss\:"SCSS"
+sass\:"The indentation-based Sass syntax"))' \
+'*--keep-kind=[Comma-separated comment kinds to protect on top of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright notice"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--remove-kind=[Comma-separated comment kinds to remove regardless of the policy]:KIND:((line\:"An ordinary comment running to the end of the line"
+block\:"An ordinary delimited comment"
+doc-line\:"A documentation comment running to the end of the line"
+doc-block\:"A delimited documentation comment"
+directive\:"A tool or language directive such as a pragma or lint control"
+license\:"A licence or copyright notice"
+html-comment\:"A DOM-observable HTML comment"
+shebang\:"The interpreter line starting an executable script"
+encoding\:"A source encoding declaration"
+optimizer-hint\:"A compiler or database optimizer hint"
+version-comment\:"A MySQL versioned comment that the server executes"
+load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
+review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
+json\:""
+jsonl\:""
+sarif\:""
+github\:""
+agent\:"The report as an instruction, for a reader that is going to act on it"))' \
+'--color=[When to colour terminal output]:WHEN:(auto always never)' \
+'--hyperlinks=[When to emit terminal hyperlinks for reported paths]:WHEN:(auto always never)' \
+'--annotation-level=[The level \`--format github\` annotates a removable comment at (default\: the run'\''s exit status)]:LEVEL:((error\:"Annotate as an error, which fails a job that checks annotations"
+warning\:"Annotate as a warning"
+notice\:"Annotate as a notice, which GitHub folds away beside an error"))' \
+'--trace=[Record how the run reached its verdicts, on standard error]:WHEN:((off\:"Record nothing, and collect nothing to record"
+human\:"One line per step, for a person reading a terminal"
+json\:"One JSON object per line, against \`spec/trace.schema.json\`"))' \
+'--progress=[When to draw the live scanning counter on standard error]:WHEN:(auto always never)' \
+'-j+[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--jobs=[How many threads the run uses to walk, read and scan; 0 chooses one per core]:N:_default' \
+'--summary=[Also write the end-of-run counts to this file, as one JSON object]:FILE:_files' \
+'--include-generated[Scan files another tool writes\: lock files, recorded seeds, generated output]' \
+'--force-invalid[Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess\: the code under an unterminated block opener is reported as part of it and is not a comment]' \
+'--force-protected[Remove protected comments\: shebangs, encoding lines, and the directives the language or its build reads]' \
+'--no-preview[Omit the comment text from human \`check\` and \`scan\` lines and from the JSON formats]' \
+'--explain[List every comment \`check\` and \`scan\` met and name the rule and setting behind each one]' \
+'--source-map[Include the byte-for-byte map from the output back to the source in the JSON formats]' \
+'(-v --verbose)-q[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'(-v --verbose)--quiet[Drop the run summary and notes; the command'\''s product (findings, patch, listing) is still written]' \
+'-v[Trace what is scanned and summarize every comment kind and skipped file]' \
+'--verbose[Trace what is scanned and summarize every comment kind and skipped file]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+&& ret=0
+;;
 (plugin)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Read this configuration file instead of discovering \`.ocomment.toml\`]:FILE:_files' \
@@ -3049,6 +3164,10 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
+(profiles)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
 (plugin)
 _arguments "${_arguments_options[@]}" : \
 ":: :_ocomment__subcmd__help__subcmd__plugin_commands" \
@@ -3146,6 +3265,7 @@ _ocomment_commands() {
 'init:Write a starter .ocomment.toml or Lefthook configuration' \
 'config:Show, locate, explain, or export the resolved configuration' \
 'languages:List built-in languages, extensions, and dialects' \
+'profiles:List the declarative profiles that read files no built-in language does' \
 'plugin:Manage sandboxed WASM scanner plugins' \
 'completions:Generate shell completions' \
 'coverage:Report which files a walk scanned and which it passed over, and why' \
@@ -3206,6 +3326,7 @@ _ocomment__subcmd__help_commands() {
 'init:Write a starter .ocomment.toml or Lefthook configuration' \
 'config:Show, locate, explain, or export the resolved configuration' \
 'languages:List built-in languages, extensions, and dialects' \
+'profiles:List the declarative profiles that read files no built-in language does' \
 'plugin:Manage sandboxed WASM scanner plugins' \
 'completions:Generate shell completions' \
 'coverage:Report which files a walk scanned and which it passed over, and why' \
@@ -3325,6 +3446,11 @@ _ocomment__subcmd__help__subcmd__plugin__subcmd__update_commands() {
 _ocomment__subcmd__help__subcmd__plugin__subcmd__verify_commands() {
     local commands; commands=()
     _describe -t commands 'ocomment help plugin verify commands' commands "$@"
+}
+(( $+functions[_ocomment__subcmd__help__subcmd__profiles_commands] )) ||
+_ocomment__subcmd__help__subcmd__profiles_commands() {
+    local commands; commands=()
+    _describe -t commands 'ocomment help profiles commands' commands "$@"
 }
 (( $+functions[_ocomment__subcmd__help__subcmd__ratchet_commands] )) ||
 _ocomment__subcmd__help__subcmd__ratchet_commands() {
@@ -3466,6 +3592,11 @@ _ocomment__subcmd__plugin__subcmd__update_commands() {
 _ocomment__subcmd__plugin__subcmd__verify_commands() {
     local commands; commands=()
     _describe -t commands 'ocomment plugin verify commands' commands "$@"
+}
+(( $+functions[_ocomment__subcmd__profiles_commands] )) ||
+_ocomment__subcmd__profiles_commands() {
+    local commands; commands=()
+    _describe -t commands 'ocomment profiles commands' commands "$@"
 }
 (( $+functions[_ocomment__subcmd__ratchet_commands] )) ||
 _ocomment__subcmd__ratchet_commands() {

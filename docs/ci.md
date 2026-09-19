@@ -378,6 +378,30 @@ would change: `[files] hidden`, `[files] include`/`exclude`, and
 — that is build output, and a percentage taken over a hundred thousand object
 files would mean nothing.
 
+When more than one kind of reader answered, the scanned share is split by which
+one did:
+
+```console
+$ ocomment coverage .
+184 of 221 files scanned (83.2%)
+181: read by a built-in language
+  ...
+  3: read by the `hash-line` profile
+       2  .gitignore
+       1  CODEOWNERS
+```
+
+This is what makes an upgrade legible. A release that adds a profile reads
+files the previous one passed over, and those files move out of a skip reason
+and into a named reader — so the gate covers more than it did, and the size of
+the change is a number rather than a wall of findings nobody asked for. The
+verdict on a comment does not depend on which reader found it: a line of prose
+is prose in a `.gitignore` as much as in a `.py`, and a rule that softened for
+one would mean the same bytes getting different answers from different readers.
+A project that wants the prose in those files kept says so the way it says
+everything else, with a
+[path override](configuration.md#the-profiles-ocomment-ships-with).
+
 ## A cached gate is not a gate
 
 A test that runs `ocomment` is a test whose answer depends on a program the
