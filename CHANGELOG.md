@@ -30,6 +30,18 @@ All notable changes to OComment will be documented here. The project follows
   let a comment open after a value. They are two profiles because the two rules
   disagree about the same byte.
 
+  **If you ran `ocomment fix` over a pattern file with a build that had the
+  bundled profiles, check it.** The lines at risk are the ones with a `#` in
+  them that does not open the line, and a diff is the quickest way to see
+  whether any were shortened:
+
+  ```console
+  $ git log -p --  .gitignore .gitattributes .dockerignore CODEOWNERS
+  ```
+
+  Nothing else could have been touched: a file with no such line was already
+  read correctly, and every other reader in the tool already applied this rule.
+
 - `--deny-skipped` refuses a reason it does not know. It matched free text
   against the label the report gives a skip — and that label contains a space,
   so `--deny-skipped unknown-language`, the spelling of every other value this
