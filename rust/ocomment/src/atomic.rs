@@ -161,12 +161,15 @@ fn reject_symlink(path: &Path, phase: &str) -> Result<()> {
     Ok(())
 }
 
+#[cfg(unix)]
 fn sync_parent(path: &Path) -> Result<()> {
-    #[cfg(unix)]
-    {
-        let directory = fs::File::open(parent_directory(path))?;
-        directory.sync_all()?;
-    }
+    let directory = fs::File::open(parent_directory(path))?;
+    directory.sync_all()?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn sync_parent(_: &Path) -> Result<()> {
     Ok(())
 }
 
