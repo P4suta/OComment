@@ -1,6 +1,6 @@
 # Print an optspec for argparse to handle cmd's options that are independent of any subcommand.
 function __fish_ocomment_global_optspecs
-    string join \n config= policy= layout= language= dialect= keep-kind= remove-kind= force-invalid force-protected format= color= hyperlinks= no-preview explain progress= q/quiet v/verbose h/help V/version
+    string join \n config= policy= layout= language= dialect= keep-kind= remove-kind= include-generated deny-skipped= force-invalid force-protected format= color= hyperlinks= no-preview annotation-level= explain source-map trace= progress= j/jobs= summary= q/quiet v/verbose h/help V/version
 end
 
 function __fish_ocomment_needs_command
@@ -25,12 +25,12 @@ function __fish_ocomment_using_subcommand
 end
 
 complete -c ocomment -n "__fish_ocomment_needs_command" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_needs_command" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
-legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+complete -c ocomment -n "__fish_ocomment_needs_command" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too (was `safe`)'
+all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_needs_command" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_needs_command" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -84,41 +84,60 @@ block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_needs_command" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
-complete -c ocomment -n "__fish_ocomment_needs_command" -l format -d 'Output encoding' -r -f -a "human\t''
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_needs_command" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
+complete -c ocomment -n "__fish_ocomment_needs_command" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
+review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_needs_command" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_needs_command" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_needs_command" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
+complete -c ocomment -n "__fish_ocomment_needs_command" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_needs_command" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_needs_command" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
-complete -c ocomment -n "__fish_ocomment_needs_command" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
-complete -c ocomment -n "__fish_ocomment_needs_command" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_needs_command" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_needs_command" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_needs_command" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
+complete -c ocomment -n "__fish_ocomment_needs_command" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
+complete -c ocomment -n "__fish_ocomment_needs_command" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
+complete -c ocomment -n "__fish_ocomment_needs_command" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
+complete -c ocomment -n "__fish_ocomment_needs_command" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
+complete -c ocomment -n "__fish_ocomment_needs_command" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_needs_command" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_needs_command" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_needs_command" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_needs_command" -s h -l help -d 'Print help (see more with \'--help\')'
@@ -132,18 +151,25 @@ complete -c ocomment -n "__fish_ocomment_needs_command" -a "lsp" -d 'Run the LSP
 complete -c ocomment -n "__fish_ocomment_needs_command" -a "init" -d 'Write a starter .ocomment.toml or Lefthook configuration'
 complete -c ocomment -n "__fish_ocomment_needs_command" -a "config" -d 'Show, locate, explain, or export the resolved configuration'
 complete -c ocomment -n "__fish_ocomment_needs_command" -a "languages" -d 'List built-in languages, extensions, and dialects'
+complete -c ocomment -n "__fish_ocomment_needs_command" -a "profiles" -d 'List the declarative profiles that read files no built-in language does'
 complete -c ocomment -n "__fish_ocomment_needs_command" -a "plugin" -d 'Manage sandboxed WASM scanner plugins'
 complete -c ocomment -n "__fish_ocomment_needs_command" -a "completions" -d 'Generate shell completions'
+complete -c ocomment -n "__fish_ocomment_needs_command" -a "coverage" -d 'Report which files a walk scanned and which it passed over, and why'
+complete -c ocomment -n "__fish_ocomment_needs_command" -a "tags" -d 'Count the tags this tree\'s comments open with, against the ones it allows'
+complete -c ocomment -n "__fish_ocomment_needs_command" -a "ratchet" -d 'Check the tree against its ledger, or record the tree in one'
+complete -c ocomment -n "__fish_ocomment_needs_command" -a "hook" -d 'Answer an agent editing hook in the host\'s own protocol'
+complete -c ocomment -n "__fish_ocomment_needs_command" -a "selftest" -d 'Re-run the shared corpus against this binary and report any disagreement'
 complete -c ocomment -n "__fish_ocomment_needs_command" -a "doctor" -d 'Diagnose the environment (config, git, plugins, tools)'
 complete -c ocomment -n "__fish_ocomment_needs_command" -a "man" -d 'Render the roff manual page to stdout'
 complete -c ocomment -n "__fish_ocomment_needs_command" -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l base -d 'Check only the working-tree files that differ from this revision\'s merge base with HEAD' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
-legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too (was `safe`)'
+all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -197,53 +223,73 @@ block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l format -d 'Output encoding' -r -f -a "human\t''
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
+review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand check" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l staged -d 'Read and update Git index blobs rather than treating the working tree as the source'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l index-only -d 'With `--staged`, do not attempt a uniquely mappable working-tree update'
-complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
-complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
-complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
+complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
+complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
+complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -s h -l help -d 'Print help (see more with \'--help\')'
+complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l base -d 'Check only the working-tree files that differ from this revision\'s merge base with HEAD' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
-legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too (was `safe`)'
+all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -297,55 +343,75 @@ block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l format -d 'Output encoding' -r -f -a "human\t''
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
+review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l staged -d 'Read and update Git index blobs rather than treating the working tree as the source'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l index-only -d 'With `--staged`, do not attempt a uniquely mappable working-tree update'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l dry-run -d 'Print the patch `fix` would apply and write nothing'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -s i -l interactive -d 'Ask about each comment in turn and remove only the accepted ones'
-complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
-complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
-complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
+complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
+complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
+complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -s h -l help -d 'Print help (see more with \'--help\')'
+complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l base -d 'Check only the working-tree files that differ from this revision\'s merge base with HEAD' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
-legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too (was `safe`)'
+all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -399,53 +465,73 @@ block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l format -d 'Output encoding' -r -f -a "human\t''
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
+review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l staged -d 'Read and update Git index blobs rather than treating the working tree as the source'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l index-only -d 'With `--staged`, do not attempt a uniquely mappable working-tree update'
-complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
-complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
-complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
+complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
+complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
+complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -s h -l help -d 'Print help (see more with \'--help\')'
+complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l base -d 'Check only the working-tree files that differ from this revision\'s merge base with HEAD' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
-legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too (was `safe`)'
+all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -499,53 +585,72 @@ block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l format -d 'Output encoding' -r -f -a "human\t''
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
+review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l staged -d 'Read and update Git index blobs rather than treating the working tree as the source'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l index-only -d 'With `--staged`, do not attempt a uniquely mappable working-tree update'
-complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
-complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
-complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
+complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
+complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
+complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
-legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too (was `safe`)'
+all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -599,51 +704,70 @@ block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l format -d 'Output encoding' -r -f -a "human\t''
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
+review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
-complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
-complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
+complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
+complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
+complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
+complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
-legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too (was `safe`)'
+all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -697,51 +821,70 @@ block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l format -d 'Output encoding' -r -f -a "human\t''
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
+review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
-complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
-complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
+complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
+complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
+complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
+complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
-legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too (was `safe`)'
+all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -795,54 +938,73 @@ block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l format -d 'Output encoding' -r -f -a "human\t''
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
+review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand init" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l fix -d 'For the Lefthook hook, run `fix` instead of `check`'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l force -d 'Replace the file if it already exists'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l stdout -d 'Print the template to standard output and write no file'
-complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
-complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
-complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
+complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
+complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
+complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
-legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too (was `safe`)'
+all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -896,51 +1058,70 @@ block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l format -d 'Output encoding' -r -f -a "human\t''
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
+review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
-complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
-complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand config" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
+complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
+complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
+complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
+complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
-legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too (was `safe`)'
+all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -994,51 +1175,187 @@ block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l format -d 'Output encoding' -r -f -a "human\t''
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
+review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
-complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
-complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
+complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
+complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
+complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
+complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -s h -l help -d 'Print help (see more with \'--help\')'
+complete -c ocomment -n "__fish_ocomment_using_subcommand profiles" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
+complete -c ocomment -n "__fish_ocomment_using_subcommand profiles" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too (was `safe`)'
+all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand profiles" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
+columns\t'Pad each removed comment so the following columns do not shift'
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand profiles" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
+ocaml\t'OCaml implementation and interface files'
+c\t'C source and header files'
+cpp\t'C++ source and header files'
+go\t'Go source files'
+java\t'Java source files, including Unicode escape translation'
+javascript\t'JavaScript modules and scripts, including JSX'
+typescript\t'TypeScript modules and scripts, including TSX'
+python\t'Python source and stub files'
+shell\t'POSIX sh, Bash, and zsh scripts'
+html\t'HTML documents, including nested script and style elements'
+css\t'CSS stylesheets'
+jsonc\t'JSON with comments, including JSON5'
+sql\t'SQL for every supported database dialect'
+kotlin\t'Kotlin source and script files'
+toml\t'TOML documents, including the lock files written in it'
+lua\t'Lua chunks and LuaRocks rockspecs'
+yaml\t'YAML documents, including the tool configurations written in it'
+php\t'PHP scripts and templates; the inline HTML around the tags is content'
+ruby\t'Ruby scripts, gem manifests, and the project files named after their tool'
+zig\t'Zig source files and Zig Object Notation data'
+r\t'R scripts and the `.Rprofile` an R session sources at start-up'
+dart\t'Dart source files, whose block comments nest'
+swift\t'Swift source files, whose block comments nest and whose `#/../#` is a regex'
+csharp\t'C# source and script files, whose `#` lines are preprocessor directives'
+scala\t'Scala source and script files, whose block comments nest and whose XML literals are opaque'
+vue\t'Vue single-file components, whose templates are HTML with `{{ ... }}` code'
+svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'
+markdown\t'Markdown documents, whose fenced code blocks are scanned as their named languages'
+perl\t'Perl scripts and modules, whose quote words and regexes hide a `#`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand profiles" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
+jsx\t'JavaScript with JSX elements'
+tsx\t'TypeScript with JSX elements'
+objective-c\t'Objective-C extensions to C'
+objective-cpp\t'Objective-C++ extensions to C++'
+gnu-c\t'GNU extensions to C'
+gnu-cpp\t'GNU extensions to C++'
+cuda\t'CUDA extensions to C++'
+posix-sh\t'The POSIX shell command language'
+bash53\t'Bash 5.3'
+zsh\t'The Z shell'
+postgresql\t'PostgreSQL, with dollar-quoted bodies'
+mysql\t'MySQL, including its executable versioned comments'
+sqlite\t'SQLite'
+t-sql\t'Microsoft Transact-SQL'
+oracle\t'Oracle SQL and PL/SQL'
+scss\t'SCSS'
+sass\t'The indentation-based Sass syntax'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand profiles" -l keep-kind -d 'Comma-separated comment kinds to protect on top of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
+block\t'An ordinary delimited comment'
+doc-line\t'A documentation comment running to the end of the line'
+doc-block\t'A delimited documentation comment'
+directive\t'A tool or language directive such as a pragma or lint control'
+license\t'A licence or copyright notice'
+html-comment\t'A DOM-observable HTML comment'
+shebang\t'The interpreter line starting an executable script'
+encoding\t'A source encoding declaration'
+optimizer-hint\t'A compiler or database optimizer hint'
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand profiles" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
+block\t'An ordinary delimited comment'
+doc-line\t'A documentation comment running to the end of the line'
+doc-block\t'A delimited documentation comment'
+directive\t'A tool or language directive such as a pragma or lint control'
+license\t'A licence or copyright notice'
+html-comment\t'A DOM-observable HTML comment'
+shebang\t'The interpreter line starting an executable script'
+encoding\t'A source encoding declaration'
+optimizer-hint\t'A compiler or database optimizer hint'
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand profiles" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand profiles" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
+review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
+json\t''
+jsonl\t''
+sarif\t''
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand profiles" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
+always\t''
+never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand profiles" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
+always\t''
+never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand profiles" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand profiles" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand profiles" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
+always\t''
+never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand profiles" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand profiles" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
+complete -c ocomment -n "__fish_ocomment_using_subcommand profiles" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
+complete -c ocomment -n "__fish_ocomment_using_subcommand profiles" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
+complete -c ocomment -n "__fish_ocomment_using_subcommand profiles" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
+complete -c ocomment -n "__fish_ocomment_using_subcommand profiles" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand profiles" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand profiles" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand profiles" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
+complete -c ocomment -n "__fish_ocomment_using_subcommand profiles" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
+complete -c ocomment -n "__fish_ocomment_using_subcommand profiles" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
-legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too (was `safe`)'
+all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -1092,41 +1409,60 @@ block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l format -d 'Output encoding' -r -f -a "human\t''
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
+review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -s h -l help -d 'Print help (see more with \'--help\')'
@@ -1141,12 +1477,12 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_see
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l sha256 -d 'Expected SHA-256 digest of the component, verified before install' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l identity -d 'Publisher identity recorded alongside the pinned digest' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
-legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too (was `safe`)'
+all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -1200,51 +1536,70 @@ block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l format -d 'Output encoding' -r -f -a "human\t''
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
+review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
-legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too (was `safe`)'
+all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -1298,51 +1653,70 @@ block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l format -d 'Output encoding' -r -f -a "human\t''
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
+review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
-legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too (was `safe`)'
+all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -1396,51 +1770,70 @@ block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l format -d 'Output encoding' -r -f -a "human\t''
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
+review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
-legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too (was `safe`)'
+all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -1494,51 +1887,70 @@ block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l format -d 'Output encoding' -r -f -a "human\t''
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
+review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
-legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too (was `safe`)'
+all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -1592,51 +2004,70 @@ block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l format -d 'Output encoding' -r -f -a "human\t''
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
+review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
-legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too (was `safe`)'
+all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -1690,41 +2121,60 @@ block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l format -d 'Output encoding' -r -f -a "human\t''
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
+review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -s h -l help -d 'Print help (see more with \'--help\')'
@@ -1736,12 +2186,12 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_see
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from help" -f -a "new" -d 'Scaffold a new plugin crate from the scanner WIT world'
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
-legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too (was `safe`)'
+all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -1795,51 +2245,665 @@ block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l format -d 'Output encoding' -r -f -a "human\t''
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
+review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
-complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
-complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
+complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
+complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
+complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
+complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -s h -l help -d 'Print help (see more with \'--help\')'
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l base -d 'Check only the working-tree files that differ from this revision\'s merge base with HEAD' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too (was `safe`)'
+all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
+columns\t'Pad each removed comment so the following columns do not shift'
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
+ocaml\t'OCaml implementation and interface files'
+c\t'C source and header files'
+cpp\t'C++ source and header files'
+go\t'Go source files'
+java\t'Java source files, including Unicode escape translation'
+javascript\t'JavaScript modules and scripts, including JSX'
+typescript\t'TypeScript modules and scripts, including TSX'
+python\t'Python source and stub files'
+shell\t'POSIX sh, Bash, and zsh scripts'
+html\t'HTML documents, including nested script and style elements'
+css\t'CSS stylesheets'
+jsonc\t'JSON with comments, including JSON5'
+sql\t'SQL for every supported database dialect'
+kotlin\t'Kotlin source and script files'
+toml\t'TOML documents, including the lock files written in it'
+lua\t'Lua chunks and LuaRocks rockspecs'
+yaml\t'YAML documents, including the tool configurations written in it'
+php\t'PHP scripts and templates; the inline HTML around the tags is content'
+ruby\t'Ruby scripts, gem manifests, and the project files named after their tool'
+zig\t'Zig source files and Zig Object Notation data'
+r\t'R scripts and the `.Rprofile` an R session sources at start-up'
+dart\t'Dart source files, whose block comments nest'
+swift\t'Swift source files, whose block comments nest and whose `#/../#` is a regex'
+csharp\t'C# source and script files, whose `#` lines are preprocessor directives'
+scala\t'Scala source and script files, whose block comments nest and whose XML literals are opaque'
+vue\t'Vue single-file components, whose templates are HTML with `{{ ... }}` code'
+svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'
+markdown\t'Markdown documents, whose fenced code blocks are scanned as their named languages'
+perl\t'Perl scripts and modules, whose quote words and regexes hide a `#`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
+jsx\t'JavaScript with JSX elements'
+tsx\t'TypeScript with JSX elements'
+objective-c\t'Objective-C extensions to C'
+objective-cpp\t'Objective-C++ extensions to C++'
+gnu-c\t'GNU extensions to C'
+gnu-cpp\t'GNU extensions to C++'
+cuda\t'CUDA extensions to C++'
+posix-sh\t'The POSIX shell command language'
+bash53\t'Bash 5.3'
+zsh\t'The Z shell'
+postgresql\t'PostgreSQL, with dollar-quoted bodies'
+mysql\t'MySQL, including its executable versioned comments'
+sqlite\t'SQLite'
+t-sql\t'Microsoft Transact-SQL'
+oracle\t'Oracle SQL and PL/SQL'
+scss\t'SCSS'
+sass\t'The indentation-based Sass syntax'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l keep-kind -d 'Comma-separated comment kinds to protect on top of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
+block\t'An ordinary delimited comment'
+doc-line\t'A documentation comment running to the end of the line'
+doc-block\t'A delimited documentation comment'
+directive\t'A tool or language directive such as a pragma or lint control'
+license\t'A licence or copyright notice'
+html-comment\t'A DOM-observable HTML comment'
+shebang\t'The interpreter line starting an executable script'
+encoding\t'A source encoding declaration'
+optimizer-hint\t'A compiler or database optimizer hint'
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
+block\t'An ordinary delimited comment'
+doc-line\t'A documentation comment running to the end of the line'
+doc-block\t'A delimited documentation comment'
+directive\t'A tool or language directive such as a pragma or lint control'
+license\t'A licence or copyright notice'
+html-comment\t'A DOM-observable HTML comment'
+shebang\t'The interpreter line starting an executable script'
+encoding\t'A source encoding declaration'
+optimizer-hint\t'A compiler or database optimizer hint'
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
+review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
+json\t''
+jsonl\t''
+sarif\t''
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
+always\t''
+never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
+always\t''
+never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
+always\t''
+never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l staged -d 'Read and update Git index blobs rather than treating the working tree as the source'
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l index-only -d 'With `--staged`, do not attempt a uniquely mappable working-tree update'
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -s h -l help -d 'Print help (see more with \'--help\')'
+complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l base -d 'Check only the working-tree files that differ from this revision\'s merge base with HEAD' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
+complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too (was `safe`)'
+all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
+columns\t'Pad each removed comment so the following columns do not shift'
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
+ocaml\t'OCaml implementation and interface files'
+c\t'C source and header files'
+cpp\t'C++ source and header files'
+go\t'Go source files'
+java\t'Java source files, including Unicode escape translation'
+javascript\t'JavaScript modules and scripts, including JSX'
+typescript\t'TypeScript modules and scripts, including TSX'
+python\t'Python source and stub files'
+shell\t'POSIX sh, Bash, and zsh scripts'
+html\t'HTML documents, including nested script and style elements'
+css\t'CSS stylesheets'
+jsonc\t'JSON with comments, including JSON5'
+sql\t'SQL for every supported database dialect'
+kotlin\t'Kotlin source and script files'
+toml\t'TOML documents, including the lock files written in it'
+lua\t'Lua chunks and LuaRocks rockspecs'
+yaml\t'YAML documents, including the tool configurations written in it'
+php\t'PHP scripts and templates; the inline HTML around the tags is content'
+ruby\t'Ruby scripts, gem manifests, and the project files named after their tool'
+zig\t'Zig source files and Zig Object Notation data'
+r\t'R scripts and the `.Rprofile` an R session sources at start-up'
+dart\t'Dart source files, whose block comments nest'
+swift\t'Swift source files, whose block comments nest and whose `#/../#` is a regex'
+csharp\t'C# source and script files, whose `#` lines are preprocessor directives'
+scala\t'Scala source and script files, whose block comments nest and whose XML literals are opaque'
+vue\t'Vue single-file components, whose templates are HTML with `{{ ... }}` code'
+svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'
+markdown\t'Markdown documents, whose fenced code blocks are scanned as their named languages'
+perl\t'Perl scripts and modules, whose quote words and regexes hide a `#`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
+jsx\t'JavaScript with JSX elements'
+tsx\t'TypeScript with JSX elements'
+objective-c\t'Objective-C extensions to C'
+objective-cpp\t'Objective-C++ extensions to C++'
+gnu-c\t'GNU extensions to C'
+gnu-cpp\t'GNU extensions to C++'
+cuda\t'CUDA extensions to C++'
+posix-sh\t'The POSIX shell command language'
+bash53\t'Bash 5.3'
+zsh\t'The Z shell'
+postgresql\t'PostgreSQL, with dollar-quoted bodies'
+mysql\t'MySQL, including its executable versioned comments'
+sqlite\t'SQLite'
+t-sql\t'Microsoft Transact-SQL'
+oracle\t'Oracle SQL and PL/SQL'
+scss\t'SCSS'
+sass\t'The indentation-based Sass syntax'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l keep-kind -d 'Comma-separated comment kinds to protect on top of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
+block\t'An ordinary delimited comment'
+doc-line\t'A documentation comment running to the end of the line'
+doc-block\t'A delimited documentation comment'
+directive\t'A tool or language directive such as a pragma or lint control'
+license\t'A licence or copyright notice'
+html-comment\t'A DOM-observable HTML comment'
+shebang\t'The interpreter line starting an executable script'
+encoding\t'A source encoding declaration'
+optimizer-hint\t'A compiler or database optimizer hint'
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
+block\t'An ordinary delimited comment'
+doc-line\t'A documentation comment running to the end of the line'
+doc-block\t'A delimited documentation comment'
+directive\t'A tool or language directive such as a pragma or lint control'
+license\t'A licence or copyright notice'
+html-comment\t'A DOM-observable HTML comment'
+shebang\t'The interpreter line starting an executable script'
+encoding\t'A source encoding declaration'
+optimizer-hint\t'A compiler or database optimizer hint'
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
+review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
+json\t''
+jsonl\t''
+sarif\t''
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
+always\t''
+never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
+always\t''
+never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
+always\t''
+never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
+complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l staged -d 'Read and update Git index blobs rather than treating the working tree as the source'
+complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l index-only -d 'With `--staged`, do not attempt a uniquely mappable working-tree update'
+complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
+complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
+complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
+complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
+complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
+complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -s h -l help -d 'Print help (see more with \'--help\')'
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l base -d 'Check only the working-tree files that differ from this revision\'s merge base with HEAD' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too (was `safe`)'
+all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
+columns\t'Pad each removed comment so the following columns do not shift'
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
+ocaml\t'OCaml implementation and interface files'
+c\t'C source and header files'
+cpp\t'C++ source and header files'
+go\t'Go source files'
+java\t'Java source files, including Unicode escape translation'
+javascript\t'JavaScript modules and scripts, including JSX'
+typescript\t'TypeScript modules and scripts, including TSX'
+python\t'Python source and stub files'
+shell\t'POSIX sh, Bash, and zsh scripts'
+html\t'HTML documents, including nested script and style elements'
+css\t'CSS stylesheets'
+jsonc\t'JSON with comments, including JSON5'
+sql\t'SQL for every supported database dialect'
+kotlin\t'Kotlin source and script files'
+toml\t'TOML documents, including the lock files written in it'
+lua\t'Lua chunks and LuaRocks rockspecs'
+yaml\t'YAML documents, including the tool configurations written in it'
+php\t'PHP scripts and templates; the inline HTML around the tags is content'
+ruby\t'Ruby scripts, gem manifests, and the project files named after their tool'
+zig\t'Zig source files and Zig Object Notation data'
+r\t'R scripts and the `.Rprofile` an R session sources at start-up'
+dart\t'Dart source files, whose block comments nest'
+swift\t'Swift source files, whose block comments nest and whose `#/../#` is a regex'
+csharp\t'C# source and script files, whose `#` lines are preprocessor directives'
+scala\t'Scala source and script files, whose block comments nest and whose XML literals are opaque'
+vue\t'Vue single-file components, whose templates are HTML with `{{ ... }}` code'
+svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'
+markdown\t'Markdown documents, whose fenced code blocks are scanned as their named languages'
+perl\t'Perl scripts and modules, whose quote words and regexes hide a `#`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
+jsx\t'JavaScript with JSX elements'
+tsx\t'TypeScript with JSX elements'
+objective-c\t'Objective-C extensions to C'
+objective-cpp\t'Objective-C++ extensions to C++'
+gnu-c\t'GNU extensions to C'
+gnu-cpp\t'GNU extensions to C++'
+cuda\t'CUDA extensions to C++'
+posix-sh\t'The POSIX shell command language'
+bash53\t'Bash 5.3'
+zsh\t'The Z shell'
+postgresql\t'PostgreSQL, with dollar-quoted bodies'
+mysql\t'MySQL, including its executable versioned comments'
+sqlite\t'SQLite'
+t-sql\t'Microsoft Transact-SQL'
+oracle\t'Oracle SQL and PL/SQL'
+scss\t'SCSS'
+sass\t'The indentation-based Sass syntax'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l keep-kind -d 'Comma-separated comment kinds to protect on top of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
+block\t'An ordinary delimited comment'
+doc-line\t'A documentation comment running to the end of the line'
+doc-block\t'A delimited documentation comment'
+directive\t'A tool or language directive such as a pragma or lint control'
+license\t'A licence or copyright notice'
+html-comment\t'A DOM-observable HTML comment'
+shebang\t'The interpreter line starting an executable script'
+encoding\t'A source encoding declaration'
+optimizer-hint\t'A compiler or database optimizer hint'
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
+block\t'An ordinary delimited comment'
+doc-line\t'A documentation comment running to the end of the line'
+doc-block\t'A delimited documentation comment'
+directive\t'A tool or language directive such as a pragma or lint control'
+license\t'A licence or copyright notice'
+html-comment\t'A DOM-observable HTML comment'
+shebang\t'The interpreter line starting an executable script'
+encoding\t'A source encoding declaration'
+optimizer-hint\t'A compiler or database optimizer hint'
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
+review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
+json\t''
+jsonl\t''
+sarif\t''
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
+always\t''
+never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
+always\t''
+never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
+always\t''
+never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l update -d 'Rewrite the ledger to match the tree, rather than checking against it'
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l staged -d 'Read and update Git index blobs rather than treating the working tree as the source'
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l index-only -d 'With `--staged`, do not attempt a uniquely mappable working-tree update'
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -s h -l help -d 'Print help (see more with \'--help\')'
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too (was `safe`)'
+all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
+columns\t'Pad each removed comment so the following columns do not shift'
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
+ocaml\t'OCaml implementation and interface files'
+c\t'C source and header files'
+cpp\t'C++ source and header files'
+go\t'Go source files'
+java\t'Java source files, including Unicode escape translation'
+javascript\t'JavaScript modules and scripts, including JSX'
+typescript\t'TypeScript modules and scripts, including TSX'
+python\t'Python source and stub files'
+shell\t'POSIX sh, Bash, and zsh scripts'
+html\t'HTML documents, including nested script and style elements'
+css\t'CSS stylesheets'
+jsonc\t'JSON with comments, including JSON5'
+sql\t'SQL for every supported database dialect'
+kotlin\t'Kotlin source and script files'
+toml\t'TOML documents, including the lock files written in it'
+lua\t'Lua chunks and LuaRocks rockspecs'
+yaml\t'YAML documents, including the tool configurations written in it'
+php\t'PHP scripts and templates; the inline HTML around the tags is content'
+ruby\t'Ruby scripts, gem manifests, and the project files named after their tool'
+zig\t'Zig source files and Zig Object Notation data'
+r\t'R scripts and the `.Rprofile` an R session sources at start-up'
+dart\t'Dart source files, whose block comments nest'
+swift\t'Swift source files, whose block comments nest and whose `#/../#` is a regex'
+csharp\t'C# source and script files, whose `#` lines are preprocessor directives'
+scala\t'Scala source and script files, whose block comments nest and whose XML literals are opaque'
+vue\t'Vue single-file components, whose templates are HTML with `{{ ... }}` code'
+svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'
+markdown\t'Markdown documents, whose fenced code blocks are scanned as their named languages'
+perl\t'Perl scripts and modules, whose quote words and regexes hide a `#`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
+jsx\t'JavaScript with JSX elements'
+tsx\t'TypeScript with JSX elements'
+objective-c\t'Objective-C extensions to C'
+objective-cpp\t'Objective-C++ extensions to C++'
+gnu-c\t'GNU extensions to C'
+gnu-cpp\t'GNU extensions to C++'
+cuda\t'CUDA extensions to C++'
+posix-sh\t'The POSIX shell command language'
+bash53\t'Bash 5.3'
+zsh\t'The Z shell'
+postgresql\t'PostgreSQL, with dollar-quoted bodies'
+mysql\t'MySQL, including its executable versioned comments'
+sqlite\t'SQLite'
+t-sql\t'Microsoft Transact-SQL'
+oracle\t'Oracle SQL and PL/SQL'
+scss\t'SCSS'
+sass\t'The indentation-based Sass syntax'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l keep-kind -d 'Comma-separated comment kinds to protect on top of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
+block\t'An ordinary delimited comment'
+doc-line\t'A documentation comment running to the end of the line'
+doc-block\t'A delimited documentation comment'
+directive\t'A tool or language directive such as a pragma or lint control'
+license\t'A licence or copyright notice'
+html-comment\t'A DOM-observable HTML comment'
+shebang\t'The interpreter line starting an executable script'
+encoding\t'A source encoding declaration'
+optimizer-hint\t'A compiler or database optimizer hint'
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
+block\t'An ordinary delimited comment'
+doc-line\t'A documentation comment running to the end of the line'
+doc-block\t'A delimited documentation comment'
+directive\t'A tool or language directive such as a pragma or lint control'
+license\t'A licence or copyright notice'
+html-comment\t'A DOM-observable HTML comment'
+shebang\t'The interpreter line starting an executable script'
+encoding\t'A source encoding declaration'
+optimizer-hint\t'A compiler or database optimizer hint'
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
+review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
+json\t''
+jsonl\t''
+sarif\t''
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
+always\t''
+never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
+always\t''
+never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
+always\t''
+never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -s h -l help -d 'Print help (see more with \'--help\')'
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too (was `safe`)'
+all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
+columns\t'Pad each removed comment so the following columns do not shift'
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
+ocaml\t'OCaml implementation and interface files'
+c\t'C source and header files'
+cpp\t'C++ source and header files'
+go\t'Go source files'
+java\t'Java source files, including Unicode escape translation'
+javascript\t'JavaScript modules and scripts, including JSX'
+typescript\t'TypeScript modules and scripts, including TSX'
+python\t'Python source and stub files'
+shell\t'POSIX sh, Bash, and zsh scripts'
+html\t'HTML documents, including nested script and style elements'
+css\t'CSS stylesheets'
+jsonc\t'JSON with comments, including JSON5'
+sql\t'SQL for every supported database dialect'
+kotlin\t'Kotlin source and script files'
+toml\t'TOML documents, including the lock files written in it'
+lua\t'Lua chunks and LuaRocks rockspecs'
+yaml\t'YAML documents, including the tool configurations written in it'
+php\t'PHP scripts and templates; the inline HTML around the tags is content'
+ruby\t'Ruby scripts, gem manifests, and the project files named after their tool'
+zig\t'Zig source files and Zig Object Notation data'
+r\t'R scripts and the `.Rprofile` an R session sources at start-up'
+dart\t'Dart source files, whose block comments nest'
+swift\t'Swift source files, whose block comments nest and whose `#/../#` is a regex'
+csharp\t'C# source and script files, whose `#` lines are preprocessor directives'
+scala\t'Scala source and script files, whose block comments nest and whose XML literals are opaque'
+vue\t'Vue single-file components, whose templates are HTML with `{{ ... }}` code'
+svelte\t'Svelte components, whose templates are HTML with `{ ... }` code'
+markdown\t'Markdown documents, whose fenced code blocks are scanned as their named languages'
+perl\t'Perl scripts and modules, whose quote words and regexes hide a `#`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l dialect -d 'Force this dialect of the selected language' -r -f -a "standard\t'The default lexical rules of the language'
+jsx\t'JavaScript with JSX elements'
+tsx\t'TypeScript with JSX elements'
+objective-c\t'Objective-C extensions to C'
+objective-cpp\t'Objective-C++ extensions to C++'
+gnu-c\t'GNU extensions to C'
+gnu-cpp\t'GNU extensions to C++'
+cuda\t'CUDA extensions to C++'
+posix-sh\t'The POSIX shell command language'
+bash53\t'Bash 5.3'
+zsh\t'The Z shell'
+postgresql\t'PostgreSQL, with dollar-quoted bodies'
+mysql\t'MySQL, including its executable versioned comments'
+sqlite\t'SQLite'
+t-sql\t'Microsoft Transact-SQL'
+oracle\t'Oracle SQL and PL/SQL'
+scss\t'SCSS'
+sass\t'The indentation-based Sass syntax'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l keep-kind -d 'Comma-separated comment kinds to protect on top of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
+block\t'An ordinary delimited comment'
+doc-line\t'A documentation comment running to the end of the line'
+doc-block\t'A delimited documentation comment'
+directive\t'A tool or language directive such as a pragma or lint control'
+license\t'A licence or copyright notice'
+html-comment\t'A DOM-observable HTML comment'
+shebang\t'The interpreter line starting an executable script'
+encoding\t'A source encoding declaration'
+optimizer-hint\t'A compiler or database optimizer hint'
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
+block\t'An ordinary delimited comment'
+doc-line\t'A documentation comment running to the end of the line'
+doc-block\t'A delimited documentation comment'
+directive\t'A tool or language directive such as a pragma or lint control'
+license\t'A licence or copyright notice'
+html-comment\t'A DOM-observable HTML comment'
+shebang\t'The interpreter line starting an executable script'
+encoding\t'A source encoding declaration'
+optimizer-hint\t'A compiler or database optimizer hint'
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
+review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
+json\t''
+jsonl\t''
+sarif\t''
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
+always\t''
+never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
+always\t''
+never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
+always\t''
+never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
-legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too (was `safe`)'
+all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -1893,51 +2957,70 @@ block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l format -d 'Output encoding' -r -f -a "human\t''
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
+review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
-complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
-complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
+complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
+complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
+complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
+complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l config -d 'Read this configuration file instead of discovering `.ocomment.toml`' -r -F
-complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "safe\t'Remove ordinary and doc comments; keep preambles and directives'
-legal\t'Like safe, and keep licence and copyright comments as well'
-all\t'Remove every comment that no keep override protects'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l policy -d 'Which classes of comment the run is allowed to remove' -r -f -a "conservative\t'Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)'
+standard\t'Like conservative, and remove documentation, licence and copyright comments too (was `safe`)'
+all\t'Remove every comment except shebangs, encoding lines and the directives the language itself reads'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l layout -d 'How the bytes left behind by a removed comment are laid out' -r -f -a "lines\t'Keep the line structure and separate tokens that would otherwise join'
 columns\t'Pad each removed comment so the following columns do not shift'
-compact\t'Drop lines that held only a removed comment, and the whitespace it left behind'"
+compact\t'Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l language -d 'Force this language instead of detecting it from path and contents' -r -f -a "rust\t'Rust source files'
 ocaml\t'OCaml implementation and interface files'
 c\t'C source and header files'
@@ -1991,58 +3074,83 @@ block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l remove-kind -d 'Comma-separated comment kinds to remove regardless of the policy' -r -f -a "line\t'An ordinary comment running to the end of the line'
 block\t'An ordinary delimited comment'
 doc-line\t'A documentation comment running to the end of the line'
 doc-block\t'A delimited documentation comment'
 directive\t'A tool or language directive such as a pragma or lint control'
-license\t'A licence or copyright preamble'
+license\t'A licence or copyright notice'
 html-comment\t'A DOM-observable HTML comment'
 shebang\t'The interpreter line starting an executable script'
 encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
-version-comment\t'A MySQL versioned comment that the server executes'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l format -d 'Output encoding' -r -f -a "human\t''
+version-comment\t'A MySQL versioned comment that the server executes'
+load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
+review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
 jsonl\t''
 sarif\t''
-github\t''"
+github\t''
+agent\t'The report as an instruction, for a reader that is going to act on it'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l color -d 'When to colour terminal output' -r -f -a "auto\t''
 always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l hyperlinks -d 'When to emit terminal hyperlinks for reported paths' -r -f -a "auto\t''
 always\t''
 never\t''"
+complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l annotation-level -d 'The level `--format github` annotates a removable comment at (default: the run\'s exit status)' -r -f -a "error\t'Annotate as an error, which fails a job that checks annotations'
+warning\t'Annotate as a warning'
+notice\t'Annotate as a notice, which GitHub folds away beside an error'"
+complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l trace -d 'Record how the run reached its verdicts, on standard error' -r -f -a "off\t'Record nothing, and collect nothing to record'
+human\t'One line per step, for a person reading a terminal'
+json\t'One JSON object per line, against `spec/trace.schema.json`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l progress -d 'When to draw the live scanning counter on standard error' -r -f -a "auto\t''
 always\t''
 never\t''"
-complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l force-invalid -d 'Apply the edits that are still provably safe when the source fails to scan'
-complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l force-protected -d 'Remove protected comments such as shebang and encoding preambles'
-complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l no-preview -d 'Omit the one-line comment text from human `check` and `scan` lines'
-complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l explain -d 'List every comment human `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand man" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
+complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
+complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
+complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l force-protected -d 'Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads'
+complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l no-preview -d 'Omit the comment text from human `check` and `scan` lines and from the JSON formats'
+complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l explain -d 'List every comment `check` and `scan` met and name the rule and setting behind each one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l source-map -d 'Include the byte-for-byte map from the output back to the source in the JSON formats'
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -s q -l quiet -d 'Drop the run summary and notes; the command\'s product (findings, patch, listing) is still written'
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -s v -l verbose -d 'Trace what is scanned and summarize every comment kind and skipped file'
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -s h -l help -d 'Print help (see more with \'--help\')'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions doctor man help" -f -a "check" -d 'Report removable comments (default command)'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions doctor man help" -f -a "fix" -d 'Remove comments in place through an atomic, rollback-backed transaction'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions doctor man help" -f -a "diff" -d 'Print a unified diff of the changes fix would make'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions doctor man help" -f -a "scan" -d 'List every comment with its kind, disposition and byte span'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions doctor man help" -f -a "strip" -d 'Read source on stdin and write the stripped result to stdout'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions doctor man help" -f -a "lsp" -d 'Run the LSP 3.18 server over stdio'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions doctor man help" -f -a "init" -d 'Write a starter .ocomment.toml or Lefthook configuration'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions doctor man help" -f -a "config" -d 'Show, locate, explain, or export the resolved configuration'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions doctor man help" -f -a "languages" -d 'List built-in languages, extensions, and dialects'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions doctor man help" -f -a "plugin" -d 'Manage sandboxed WASM scanner plugins'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions doctor man help" -f -a "completions" -d 'Generate shell completions'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions doctor man help" -f -a "doctor" -d 'Diagnose the environment (config, git, plugins, tools)'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions doctor man help" -f -a "man" -d 'Render the roff manual page to stdout'
-complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages plugin completions doctor man help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages profiles plugin completions coverage tags ratchet hook selftest doctor man help" -f -a "check" -d 'Report removable comments (default command)'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages profiles plugin completions coverage tags ratchet hook selftest doctor man help" -f -a "fix" -d 'Remove comments in place through an atomic, rollback-backed transaction'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages profiles plugin completions coverage tags ratchet hook selftest doctor man help" -f -a "diff" -d 'Print a unified diff of the changes fix would make'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages profiles plugin completions coverage tags ratchet hook selftest doctor man help" -f -a "scan" -d 'List every comment with its kind, disposition and byte span'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages profiles plugin completions coverage tags ratchet hook selftest doctor man help" -f -a "strip" -d 'Read source on stdin and write the stripped result to stdout'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages profiles plugin completions coverage tags ratchet hook selftest doctor man help" -f -a "lsp" -d 'Run the LSP 3.18 server over stdio'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages profiles plugin completions coverage tags ratchet hook selftest doctor man help" -f -a "init" -d 'Write a starter .ocomment.toml or Lefthook configuration'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages profiles plugin completions coverage tags ratchet hook selftest doctor man help" -f -a "config" -d 'Show, locate, explain, or export the resolved configuration'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages profiles plugin completions coverage tags ratchet hook selftest doctor man help" -f -a "languages" -d 'List built-in languages, extensions, and dialects'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages profiles plugin completions coverage tags ratchet hook selftest doctor man help" -f -a "profiles" -d 'List the declarative profiles that read files no built-in language does'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages profiles plugin completions coverage tags ratchet hook selftest doctor man help" -f -a "plugin" -d 'Manage sandboxed WASM scanner plugins'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages profiles plugin completions coverage tags ratchet hook selftest doctor man help" -f -a "completions" -d 'Generate shell completions'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages profiles plugin completions coverage tags ratchet hook selftest doctor man help" -f -a "coverage" -d 'Report which files a walk scanned and which it passed over, and why'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages profiles plugin completions coverage tags ratchet hook selftest doctor man help" -f -a "tags" -d 'Count the tags this tree\'s comments open with, against the ones it allows'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages profiles plugin completions coverage tags ratchet hook selftest doctor man help" -f -a "ratchet" -d 'Check the tree against its ledger, or record the tree in one'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages profiles plugin completions coverage tags ratchet hook selftest doctor man help" -f -a "hook" -d 'Answer an agent editing hook in the host\'s own protocol'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages profiles plugin completions coverage tags ratchet hook selftest doctor man help" -f -a "selftest" -d 'Re-run the shared corpus against this binary and report any disagreement'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages profiles plugin completions coverage tags ratchet hook selftest doctor man help" -f -a "doctor" -d 'Diagnose the environment (config, git, plugins, tools)'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages profiles plugin completions coverage tags ratchet hook selftest doctor man help" -f -a "man" -d 'Render the roff manual page to stdout'
+complete -c ocomment -n "__fish_ocomment_using_subcommand help; and not __fish_seen_subcommand_from check fix diff scan strip lsp init config languages profiles plugin completions coverage tags ratchet hook selftest doctor man help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c ocomment -n "__fish_ocomment_using_subcommand help; and __fish_seen_subcommand_from plugin" -f -a "add" -d 'Install a plugin and pin its digest in .ocomment.lock'
 complete -c ocomment -n "__fish_ocomment_using_subcommand help; and __fish_seen_subcommand_from plugin" -f -a "remove" -d 'Uninstall a plugin and drop its lock entry'
 complete -c ocomment -n "__fish_ocomment_using_subcommand help; and __fish_seen_subcommand_from plugin" -f -a "list" -d 'List the installed plugins and their pinned digests'

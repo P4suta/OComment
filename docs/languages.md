@@ -24,7 +24,7 @@ ocomment: unsupported dialect `mysql` for rust; supported: standard
 ```
 
 OComment has 30 built-in languages covering
-78 file extensions and 18 named dialects.
+79 file extensions and 18 named dialects.
 
 | Language | Extensions | Dialects |
 | --- | --- | --- |
@@ -40,7 +40,7 @@ OComment has 30 built-in languages covering
 | `shell` | `.sh` (`posix-sh`), `.bash` (`bash53`), `.zsh` (`zsh`) | `standard`, `posix-sh`, `bash53`, `zsh` |
 | `html` | `.html`, `.htm`, `.xhtml`, `.shtml` | `standard` |
 | `css` | `.css`, `.scss` (`scss`), `.sass` (`sass`) | `standard`, `scss`, `sass` |
-| `jsonc` | `.jsonc`, `.json5` | `standard` |
+| `jsonc` | `.jsonc`, `.json5`, `.json` | `standard` |
 | `sql` | `.sql` | `standard`, `postgresql`, `mysql`, `sqlite`, `t-sql`, `oracle` |
 | `kotlin` | `.kt`, `.kts` | `standard` |
 | `toml` | `.toml` | `standard` |
@@ -74,7 +74,6 @@ an interpreter-looking name.
 | `javascript` | — | `node`, `deno` |
 | `python` | — | `python` |
 | `shell` | `Dockerfile`, `Containerfile`, `Makefile`, `GNUmakefile`, `.profile`, `.bashrc`, `.zshrc` | `sh`, `bash`, `zsh` |
-| `jsonc` | `tsconfig.json`, `jsconfig.json` | — |
 | `toml` | `Cargo.lock`, `Pipfile`, `poetry.lock`, `uv.lock`, `pdm.lock` | — |
 | `lua` | — | `lua`, `luajit` |
 | `yaml` | `.clang-format`, `.clang-tidy`, `.yamllint` | — |

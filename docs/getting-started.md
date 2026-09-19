@@ -78,8 +78,9 @@ That is why `ocomment check` works as a CI gate on its own, and why `1` from
 
 ## Decide what your project keeps
 
-The default `safe` policy removes ordinary and documentation comments and keeps
-source preambles and tool directives. Write the decision down instead of
+The default `conservative` policy removes ordinary comments and keeps the ones
+something else depends on: documentation, licence notices, tool and language
+directives, shebangs and encoding lines. Write the decision down instead of
 passing flags every time:
 
 ```sh
@@ -95,7 +96,7 @@ ends up looking like this:
 version = 1
 
 [policy]
-mode = "legal"
+mode = "conservative"
 layout = "lines"
 keep_kind = ["doc-line", "doc-block"]
 keep_regex = ['^//\s*NOTE\b']

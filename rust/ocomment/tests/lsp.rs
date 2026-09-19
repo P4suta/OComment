@@ -1,3 +1,9 @@
+//! The LSP server, exercised over its own stdio protocol.
+//!
+//! An editor speaks to this over a pipe and never links the crate, so the
+//! cases here do the same: they write framed JSON-RPC in and read framed
+//! JSON-RPC out.
+
 use serde_json::{Value, json};
 use std::{
     io::{BufRead, BufReader, Read, Write},
@@ -648,6 +654,14 @@ fn folderless_workspace_operations_cover_all_open_documents_only() {
 #[test]
 fn diagnostics_and_hover_name_comment_kinds_in_canonical_spelling() {
     let workspace = tempfile::tempdir().unwrap();
+    /* NOTE: The policy is named because the default keeps documentation
+     * comments and a licence notice both, and this pins how a removable one is
+     * spelled in a diagnostic rather than which policy reaches it. */
+    std::fs::write(
+        workspace.path().join(".ocomment.toml"),
+        b"version = 1\n\n[policy]\nmode = \"standard\"\n",
+    )
+    .unwrap();
     let uri = Url::from_file_path(workspace.path().join("doc.rs")).unwrap();
     let mut client = LspClient::start(workspace.path());
     let _ = client.initialize(workspace.path(), &["utf-8"]);

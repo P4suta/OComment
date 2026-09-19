@@ -6,6 +6,7 @@
 //! the single source of truth; this module only adds the per-value help clap
 //! needs for `--help`, error messages, and shell completions.
 
+use crate::output::AnnotationLevel;
 use clap::{ValueEnum, builder::PossibleValue};
 use ocomment_core::{CommentKind, Dialect, Language, Layout, Policy};
 use std::ops::Deref;
@@ -84,17 +85,35 @@ macro_rules! value_enum_wrapper {
     };
 }
 
+/* NOTE: These name the kinds each policy takes, rather than summarising them
+ * as "preambles". A reader deciding between two policies is deciding about
+ * licence notices, and the word "preamble" is the one that hid that: it reads
+ * as "the header at the top of the file", which is exactly where a licence
+ * notice sits, while the code means the shebang and the encoding line. */
 value_enum_wrapper!(PolicyArg, Policy, |value| match value {
-    Policy::Safe => "Remove ordinary and doc comments; keep preambles and directives",
-    Policy::Legal => "Like safe, and keep licence and copyright comments as well",
-    Policy::All => "Remove every comment that no keep override protects",
+    Policy::Conservative =>
+        "Remove ordinary comments; keep documentation, licence notices, \
+         directives, shebangs and encoding lines (was `legal`)",
+    Policy::Standard =>
+        "Like conservative, and remove documentation, licence and copyright \
+         comments too (was `safe`)",
+    Policy::All =>
+        "Remove every comment except shebangs, encoding lines and the \
+         directives the language itself reads",
+});
+
+value_enum_wrapper!(AnnotationLevelArg, AnnotationLevel, |value| match value {
+    AnnotationLevel::Error => "Annotate as an error, which fails a job that checks annotations",
+    AnnotationLevel::Warning => "Annotate as a warning",
+    AnnotationLevel::Notice => "Annotate as a notice, which GitHub folds away beside an error",
 });
 
 value_enum_wrapper!(LayoutArg, Layout, |value| match value {
     Layout::Lines => "Keep the line structure and separate tokens that would otherwise join",
     Layout::Columns => "Pad each removed comment so the following columns do not shift",
     Layout::Compact =>
-        "Drop lines that held only a removed comment, and the whitespace it left behind",
+        "Drop lines that held only a removed comment, the whitespace it left behind, and any \
+         blank line the removal would otherwise have added to a run",
 });
 
 /* NOTE: The CLI is deliberately stricter than the core `FromStr`, which folds case,
@@ -165,12 +184,14 @@ value_enum_wrapper!(CommentKindArg, CommentKind, |value| match value {
     CommentKind::DocLine => "A documentation comment running to the end of the line",
     CommentKind::DocBlock => "A delimited documentation comment",
     CommentKind::Directive => "A tool or language directive such as a pragma or lint control",
-    CommentKind::License => "A licence or copyright preamble",
+    CommentKind::License => "A licence or copyright notice",
     CommentKind::HtmlComment => "A DOM-observable HTML comment",
     CommentKind::Shebang => "The interpreter line starting an executable script",
     CommentKind::Encoding => "A source encoding declaration",
     CommentKind::OptimizerHint => "A compiler or database optimizer hint",
     CommentKind::VersionComment => "A MySQL versioned comment that the server executes",
+    CommentKind::LoadBearing =>
+        "A directive the language or its build reads as part of the program, such as `//go:build`",
 });
 
 #[cfg(test)]

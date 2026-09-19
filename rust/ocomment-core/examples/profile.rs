@@ -10,7 +10,7 @@
 
 use ocomment_core::{
     BlockDelimiter, CommentKind, DeclarativeProfile, LineDelimiter, ProtectedPattern,
-    StringDelimiter, TransformOptions, transform_profile, validate_profile,
+    ProtectionTier, StringDelimiter, TransformOptions, transform_profile, validate_profile,
 };
 
 const SOURCE: &[u8] = b"set greeting \"; not a comment\"  ; a comment\n\
@@ -25,6 +25,7 @@ fn ini_like() -> DeclarativeProfile {
         line_comments: vec![LineDelimiter {
             start: ";".into(),
             requires_boundary: true,
+            requires_line_start: false,
             kind: CommentKind::Line,
         }],
         block_comments: vec![BlockDelimiter {
@@ -39,9 +40,12 @@ fn ini_like() -> DeclarativeProfile {
             escape: Some("\\".into()),
             multiline: true,
         }],
+        filenames: Vec::new(),
         protected_patterns: vec![ProtectedPattern {
             contains: "keep:".into(),
             reason: "marked to keep".into(),
+            // NOTE: The weaker tier: addressed to a tool, so `all` may take it.
+            tier: ProtectionTier::Tool,
         }],
     }
 }
@@ -70,6 +74,7 @@ fn main() {
     ambiguous.line_comments.push(LineDelimiter {
         start: ";;".into(),
         requires_boundary: false,
+        requires_line_start: false,
         kind: CommentKind::Line,
     });
     println!("---");

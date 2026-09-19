@@ -43,6 +43,7 @@ use thiserror::Error;
 ///     line_comments: vec![LineDelimiter {
 ///         start: ";;".into(),
 ///         requires_boundary: false,
+///         requires_line_start: false,
 ///         kind: CommentKind::Line,
 ///     }],
 ///     strings: vec![StringDelimiter {
@@ -68,6 +69,18 @@ pub struct DeclarativeProfile {
     /// is for whoever picks a profile for a path.
     #[serde(default)]
     pub extensions: Vec<String>,
+    /// Whole file names this profile claims, matched case-sensitively.
+    ///
+    /// Some of the files most worth reaching have no extension at all --
+    /// `dune`, `CODEOWNERS`, `Doxyfile` -- and a profile that could only be
+    /// selected by suffix could not describe them. Case-sensitive because
+    /// these names are conventions of the tools that read them, and those
+    /// tools are case-sensitive about them.
+    ///
+    /// Like [`Self::extensions`], the scanner never reads this; it is for
+    /// whoever picks a profile for a path.
+    #[serde(default)]
+    pub filenames: Vec<String>,
     /// Tokens that open a comment running to the end of the line.
     #[serde(default)]
     pub line_comments: Vec<LineDelimiter>,
@@ -93,6 +106,17 @@ pub struct LineDelimiter {
     /// swallow the rest of the line.
     #[serde(default)]
     pub requires_boundary: bool,
+    /// Only open a comment when the token is the first byte of its line.
+    ///
+    /// Several formats give `#` that rule and only that rule: a `.gitignore`
+    /// pattern may contain one -- `file#name` is a file called `file#name` --
+    /// and `\\#literal` is how a pattern that starts with one is written. A
+    /// profile that opened a comment at either wrote a shorter pattern back,
+    /// so a default `fix` quietly stopped ignoring what the line named. The
+    /// rule is the whole line's first byte and not "after whitespace", because
+    /// leading whitespace in such a file is part of the pattern too.
+    #[serde(default)]
+    pub requires_line_start: bool,
     /// The kind to record, which is what the policy then judges.
     #[serde(default)]
     pub kind: CommentKind,
@@ -135,11 +159,10 @@ pub struct StringDelimiter {
 
 /// A substring that makes a comment a kept directive.
 ///
-/// A comment whose text contains it is recorded as a
-/// [`CommentKind::Directive`], which every policy but
-/// [`Policy::All`](crate::Policy::All) keeps, and `reason` becomes the reason
-/// on its [`Disposition::Keep`](crate::Disposition::Keep).
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+/// A comment whose text contains it is recorded under the kind its
+/// [`ProtectionTier`] names, and `reason` becomes the reason on its
+/// [`Disposition::Keep`](crate::Disposition::Keep).
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProtectedPattern {
     /// The substring to look for, compared against the comment's text as
@@ -147,6 +170,48 @@ pub struct ProtectedPattern {
     pub contains: String,
     /// Why such a comment is kept, phrased for a human. It must not be blank.
     pub reason: String,
+    /// How strongly it is kept. Defaults to [`ProtectionTier::Tool`], which is
+    /// what every profile written before this field existed asked for.
+    #[serde(default)]
+    pub tier: ProtectionTier,
+}
+
+/// How strongly a [`ProtectedPattern`] asks for its comment to be kept.
+///
+/// A profile describes a syntax this crate has no scanner for, and the person
+/// writing one knows something about that syntax that the policy cannot: a
+/// marker their toolchain reads is not the same as a marker their linter
+/// reads, and only one of the two is a choice a policy gets to make. Without
+/// the distinction every profile protection was the weaker one, so
+/// [`Policy::All`](crate::Policy::All) removed a marker a build depended on
+/// and the profile had no way to say otherwise.
+///
+/// The default is the weaker tier because that is what a profile written
+/// without this field already meant, and because claiming the stronger one
+/// should be an act rather than an accident.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ProtectionTier {
+    /// Addressed to a tool. Every policy but
+    /// [`Policy::All`](crate::Policy::All) keeps it, recorded as
+    /// [`CommentKind::Directive`].
+    #[default]
+    Tool,
+    /// Read by the language or its build as part of the program. No policy
+    /// removes it and only
+    /// [`ScanOptions::force_protected`](crate::ScanOptions::force_protected)
+    /// does, recorded as [`CommentKind::LoadBearing`].
+    LoadBearing,
+}
+
+impl ProtectionTier {
+    /// The comment kind a match under this tier is recorded as.
+    pub const fn kind(self) -> CommentKind {
+        match self {
+            Self::Tool => CommentKind::Directive,
+            Self::LoadBearing => CommentKind::LoadBearing,
+        }
+    }
 }
 
 /// Why a [`DeclarativeProfile`] cannot be interpreted.
@@ -374,6 +439,9 @@ fn scan_profile_with(
                 && (!delimiter.requires_boundary
                     || index == 0
                     || source[index - 1].is_ascii_whitespace())
+                /* NOTE: The byte before is the line feed, which is also true of
+                 * a CRLF ending: the `\r` belongs to the line before it. */
+                && (!delimiter.requires_line_start || index == 0 || source[index - 1] == b'\n')
         }) {
             let mut end = index + delimiter.start.len();
             while end < source.len() && !matches!(source[end], b'\r' | b'\n') {
@@ -435,6 +503,12 @@ fn scan_profile_with(
         index += 1;
     }
     let valid = diagnostics.is_empty();
+    /* NOTE: The same rules the built-in scanners apply, for the same reason. A
+     * profile describes a file format rather than a policy, so a project's tag
+     * convention and length limit have to reach a `.gitignore` exactly as they
+     * reach a `.rs` -- and they did not, which showed up as this repository's
+     * own tagged comments surviving in Rust and vanishing in a profile file. */
+    crate::scanner::apply_allow_rules(source, &mut comments, options, patterns);
     Ok(ScanReport {
         language: Language::Unknown,
         comments,
@@ -473,13 +547,22 @@ fn profile_comment(
     options: &ScanOptions,
     patterns: &DispositionPatterns,
 ) -> Comment {
+    /* NOTE: The same classification the built-in scanners run, so that a
+     * licence header or a cross-language tool directive is the kind it is
+     * whichever reader found it. Without this a `# SPDX-License-Identifier:`
+     * was a licence in a Python file and an ordinary comment in a `.gitignore`
+     * -- the same bytes, kept by one reader and removed by the other.
+     * `Language::Unknown` is the truth about a profile: it is not one of the
+     * built-in languages, so the language-specific directives do not apply and
+     * the profile declares its own below. */
+    kind = crate::scanner::classify_comment(source, Language::Unknown, kind, start, end, 0);
     let raw = String::from_utf8_lossy(&source[start..end]);
     let protected = profile
         .protected_patterns
         .iter()
         .find(|pattern| raw.contains(&pattern.contains));
-    if protected.is_some() {
-        kind = CommentKind::Directive;
+    if let Some(pattern) = protected {
+        kind = pattern.tier.kind();
     }
     let mut disposition = disposition(kind, options, &source[start..end], patterns);
     if let (Some(pattern), crate::Disposition::Keep { reason }) = (protected, &mut disposition) {
@@ -489,6 +572,7 @@ fn profile_comment(
         span: ByteSpan::new(start, end),
         kind,
         disposition,
+        shape: None,
     }
 }
 
@@ -509,6 +593,7 @@ fn validate_token(token: &str, name: &'static str) -> Result<(), ProfileError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Policy;
     #[test]
     fn rejects_prefix_ambiguity() {
         let profile = DeclarativeProfile {
@@ -517,11 +602,13 @@ mod tests {
                 LineDelimiter {
                     start: "/".into(),
                     requires_boundary: false,
+                    requires_line_start: false,
                     kind: CommentKind::Line,
                 },
                 LineDelimiter {
                     start: "//".into(),
                     requires_boundary: false,
+                    requires_line_start: false,
                     kind: CommentKind::Line,
                 },
             ],
@@ -533,6 +620,70 @@ mod tests {
         ));
     }
 
+    /// A profile says how strongly each protection asks, and `all` honours it.
+    ///
+    /// Both halves are checked, because a tier that is only ever observed
+    /// keeping has not been shown to be a tier: the tool-tier pattern must be
+    /// taken by `all`, and the load-bearing one must survive it and then go
+    /// when `force_protected` says so.
+    #[test]
+    fn a_profile_protection_states_which_tier_it_claims() {
+        let profile = DeclarativeProfile {
+            name: "demo".into(),
+            line_comments: vec![LineDelimiter {
+                start: ";;".into(),
+                requires_boundary: false,
+                requires_line_start: false,
+                kind: CommentKind::Line,
+            }],
+            protected_patterns: vec![
+                ProtectedPattern {
+                    contains: "KEEPTOOL".into(),
+                    reason: "tool tier".into(),
+                    tier: ProtectionTier::Tool,
+                },
+                ProtectedPattern {
+                    contains: "KEEPBUILD".into(),
+                    reason: "build tier".into(),
+                    tier: ProtectionTier::LoadBearing,
+                },
+            ],
+            ..Default::default()
+        };
+        let source = b";; KEEPTOOL one\n;; KEEPBUILD two\n;; ordinary\n";
+
+        let conservative =
+            scan_profile(source, &profile, ScanOptions::default()).expect("valid profile");
+        assert_eq!(conservative.comments[0].kind, CommentKind::Directive);
+        assert_eq!(conservative.comments[1].kind, CommentKind::LoadBearing);
+        assert!(!conservative.comments[0].disposition.is_remove());
+        assert!(!conservative.comments[1].disposition.is_remove());
+
+        let all = ScanOptions {
+            policy: Policy::All,
+            ..Default::default()
+        };
+        let stripped = scan_profile(source, &profile, all.clone()).expect("valid profile");
+        assert!(
+            stripped.comments[0].disposition.is_remove(),
+            "the tool tier is what `all` is entitled to take"
+        );
+        assert!(
+            !stripped.comments[1].disposition.is_remove(),
+            "no policy reaches the load-bearing tier"
+        );
+
+        let forced = ScanOptions {
+            force_protected: true,
+            ..all
+        };
+        let forced = scan_profile(source, &profile, forced).expect("valid profile");
+        assert!(
+            forced.comments[1].disposition.is_remove(),
+            "force_protected is the one way out, and a tier with no way out is untestable"
+        );
+    }
+
     #[test]
     fn scans_profile_without_looking_inside_strings() {
         let profile = DeclarativeProfile {
@@ -540,6 +691,7 @@ mod tests {
             line_comments: vec![LineDelimiter {
                 start: ";;".into(),
                 requires_boundary: false,
+                requires_line_start: false,
                 kind: CommentKind::Line,
             }],
             strings: vec![StringDelimiter {
@@ -572,6 +724,7 @@ mod tests {
             line_comments: vec![LineDelimiter {
                 start: "#".into(),
                 requires_boundary: false,
+                requires_line_start: false,
                 kind: CommentKind::Line,
             }],
             strings: vec![StringDelimiter {

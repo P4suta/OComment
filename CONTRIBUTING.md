@@ -43,6 +43,46 @@ The repository is intentionally split into independent implementations:
 Do not share scanner code between Rust and OCaml. Matching normalized outputs
 are the cross-check.
 
+**It cannot see a mistake both implementations make.** The corpus asks whether
+the two agree, and two readers written from the same wrong understanding agree
+perfectly. A `#` in a `.gitignore` opens a comment only as the first byte of
+its line; the shipped profile said it opened one anywhere, both implementations
+were told so, and 508 fixtures passed while `ocomment fix` shortened patterns
+and the file quietly stopped ignoring what they named.
+
+So a rule that belongs to something outside this repository — what git does
+with a `#`, what the kernel does with `#!`, what `go mod tidy` puts back — is
+not settled by the two implementations agreeing about it. It is settled by
+finding out, and then written into `spec/fixtures/v1/` as a case, which is
+where an external fact becomes something neither implementation can drift away
+from. A fixture recording *what another tool does* is worth more than one
+recording what this one does, because only the first can fail for a reason
+worth knowing.
+
+## Before you push
+
+```sh
+cargo xtask preflight            # NOTE: everything CI checks that a laptop can
+cargo xtask preflight --quick    # NOTE: everything but the slowest three
+```
+
+Waiting eight minutes to be told about a stale manual page is not a review
+cycle. Every gate below that a laptop can run, runs there, in the order that
+fails soonest for the least money — and `tools/check_ci_contracts.py` holds the task
+against `.github/workflows/ci.yml`, so a gate added to CI cannot quietly stop
+running locally.
+
+`lefthook install` wires it into `pre-push`. What is deliberately left to CI:
+the three-operating-system matrices, the Docker image, CodeQL, and the VS Code
+extension's npm build. Each needs something a laptop is not.
+
+Two steps run in both and mean different things in each. `Action pins` and
+`Advisories` are the only gates that ask somebody else — GitHub for what a
+version tag names, OSV for what is known about a pinned version — and they run
+here with `--best-effort`, which names what it could not read and passes. CI
+runs them without it. So a green `preflight` on a train is a weaker claim than a
+green CI, and the line it printed says which of the two you got.
+
 ## Required checks
 
 Run the checks relevant to your change; scanner or policy changes should run all
@@ -53,7 +93,7 @@ cargo fmt --manifest-path rust/Cargo.toml --all -- --check
 cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets --locked -- -D warnings
 cargo test --manifest-path rust/Cargo.toml --workspace --all-targets --locked
 opam exec -- dune runtest --root ocaml
-opam exec -- ./tools/differential.sh
+opam exec -- cargo xtask differential
 python3 tools/check_embedded_specs.py
 python3 tools/check_hooks.py
 python3 tools/check_editor_ids.py
@@ -62,7 +102,7 @@ python3 -m unittest tools/test_release_metadata.py tools/test_publish_crates.py
 python3 tools/check_directives.py
 python3 tools/validate_schemas.py
 python3 tools/yaml_roundtrip.py
-./tools/package-list.sh
+cargo xtask package-list
 ocomment
 actionlint
 lefthook validate
@@ -92,7 +132,7 @@ sit *below* the body's own indentation, where a surviving comment is what the
 body would swallow and the comment above it is the only thing holding it out;
 and a few thousand generated documents of nested mappings, sequences, and block
 scalars with comments in every position, in LF and in CRLF. It strips every one
-of them under all three layouts and all three policies — `safe`, `legal` and
+of them under all three layouts and all three policies — `conservative`, `standard` and
 `all`, because each keeps a different comment and only a survivor makes the
 hazard reachable — and asserts that PyYAML reads the same value out of it
 afterwards. A document PyYAML rejects *before* the removal is skipped: YAML has
@@ -148,7 +188,7 @@ finding a permanent gate rather than a run someone remembers.
 
 ## Comments carry a tag
 
-OComment checks its own repository. `.ocomment.toml` runs the `legal` policy
+OComment checks its own repository. `.ocomment.toml` runs the `conservative` policy
 with `doc-line` and `doc-block` kept, so documentation is never at risk, and it
 keeps any comment whose first word is one of these tags:
 

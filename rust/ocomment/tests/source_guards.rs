@@ -9,17 +9,26 @@ use std::{collections::BTreeSet, fs, path::PathBuf};
 /// Every first-party source file of the crate, embedded at compile time so the
 /// scan does not depend on the directory the test runs in. The internal runtime
 /// is upstream-derived code and cannot obtain the CLI's stdout handle.
-const SOURCES: [(&str, &str); 11] = [
+const SOURCES: [(&str, &str); 20] = [
+    ("advice.rs", include_str!("../src/advice.rs")),
     ("atomic.rs", include_str!("../src/atomic.rs")),
     ("cli.rs", include_str!("../src/cli.rs")),
     ("config.rs", include_str!("../src/config.rs")),
+    ("coverage.rs", include_str!("../src/coverage.rs")),
+    ("deadline.rs", include_str!("../src/deadline.rs")),
     ("files.rs", include_str!("../src/files.rs")),
+    ("generated.rs", include_str!("../src/generated.rs")),
     ("git.rs", include_str!("../src/git.rs")),
+    ("hook.rs", include_str!("../src/hook.rs")),
     ("interactive.rs", include_str!("../src/interactive.rs")),
     ("lsp.rs", include_str!("../src/lsp.rs")),
     ("main.rs", include_str!("../src/main.rs")),
     ("output.rs", include_str!("../src/output.rs")),
     ("plugin.rs", include_str!("../src/plugin.rs")),
+    ("ratchet.rs", include_str!("../src/ratchet.rs")),
+    ("selftest.rs", include_str!("../src/selftest.rs")),
+    ("tags.rs", include_str!("../src/tags.rs")),
+    ("trace.rs", include_str!("../src/trace.rs")),
     ("values.rs", include_str!("../src/values.rs")),
 ];
 
@@ -158,6 +167,29 @@ fn rust_sources_do_not_suppress_lints() {
         .to_path_buf();
     let mut pending = vec![root.clone()];
     let mut offenders = Vec::new();
+    /* NOTE: The one exception, and it is a path rather than a judgement: the
+     * internal runtime is upstream-derived, so a lint rule about the decisions
+     * *this* program makes does not reach it, and rewriting its match arms
+     * would put a patch between us and every version we take next. The list is
+     * compared exactly below, so a second exception fails here. */
+    const SUPPRESSION_ALLOWED: [&str; 1] = ["src/runtime/mod.rs"];
+    /* NOTE: And it has to be an `expect`. An `allow` that has outlived its
+     * subject is indistinguishable from one that is still working; an `expect`
+     * fails the build the day the lint stops firing, which is the only way a
+     * suppression tells anybody it is no longer needed. */
+    let excused_file = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(SUPPRESSION_ALLOWED[0]);
+    let excused_source = fs::read_to_string(&excused_file).unwrap();
+    assert!(
+        excused_source.contains(concat!("#![", "expect(")),
+        "{} is excused from the suppression rule but does not use `expect`, \
+         so nothing will say when the suppression stops being needed",
+        SUPPRESSION_ALLOWED[0]
+    );
+    assert!(
+        !excused_source.contains(concat!("#![", "allow(")),
+        "{} uses `allow` where the exception requires `expect`",
+        SUPPRESSION_ALLOWED[0]
+    );
     let markers = [
         concat!("#[", "allow("),
         concat!("#![", "allow("),
@@ -179,7 +211,15 @@ fn rust_sources_do_not_suppress_lints() {
                         .chars()
                         .filter(|character| !character.is_whitespace())
                         .collect();
-                    if markers.iter().any(|marker| compact.contains(marker)) {
+                    let relative = path
+                        .strip_prefix(&root)
+                        .unwrap_or(&path)
+                        .to_string_lossy()
+                        .replace('\\', "/");
+                    let excused = SUPPRESSION_ALLOWED
+                        .iter()
+                        .any(|allowed| relative.ends_with(allowed));
+                    if !excused && markers.iter().any(|marker| compact.contains(marker)) {
                         offenders.push(format!(
                             "{}:{}",
                             path.strip_prefix(&root).unwrap().display(),
@@ -258,4 +298,135 @@ fn identifier_before(source: &str, at: usize) -> &str {
         .last()
         .map_or(at, |(index, _)| index);
     &source[start..at]
+}
+
+/// Suppression is not something a caller can decide, and this says so.
+///
+/// The convention in CONTRIBUTING.md is that standard output carries the
+/// command's product and standard error carries the summary and the notes, and
+/// that `-q` drops the second. It was a convention rather than a mechanism, so
+/// three separate tests of the quiet level grew on the product side — one of
+/// which left `ocomment check -q` exiting 1 having printed nothing at all,
+/// which is exactly the shape a pre-commit hook wants and the one thing it
+/// could not get.
+///
+/// The mechanism is now in the type: `Verbosity` wraps a private `Level` and
+/// derives no `PartialEq`, so `verbosity == Verbosity::Quiet` does not
+/// compile. The only question available is `shows(Detail)`, and the only
+/// writer that asks it is `note`.
+///
+/// This checks the mechanism is still there. A `PartialEq` derive or a public
+/// level would put the old failure back within reach, and neither would break
+/// anything else.
+#[test]
+fn a_caller_cannot_ask_whether_the_run_is_quiet() {
+    let output = SOURCES
+        .iter()
+        .find(|(name, _)| *name == "output.rs")
+        .map(|(_, source)| *source)
+        .expect("output.rs is in the source list");
+    let declaration = output
+        .lines()
+        .position(|line| line.starts_with("pub struct Verbosity("))
+        .expect("Verbosity is a newtype around a private level");
+    let derive = output
+        .lines()
+        .nth(declaration.saturating_sub(1))
+        .unwrap_or_default();
+    assert!(
+        !derive.contains("PartialEq"),
+        "`Verbosity` derives PartialEq, so a caller can compare one against \
+         another and decide for itself whether to speak. Suppression belongs \
+         to `note`: give it a `Detail` instead. The derive line is: {derive}"
+    );
+    assert!(
+        output.contains("enum Level {"),
+        "the levels are no longer private, so a caller can match on one"
+    );
+    assert!(
+        !output.contains("pub enum Level {"),
+        "the levels were made public, which puts the decision back in reach"
+    );
+}
+
+/// The list above is the whole crate, and this is what keeps it so.
+///
+/// Every guard in this file reads `SOURCES`, so a module missing from it is a
+/// module none of them covers — and nothing about adding a module makes anyone
+/// come here. The directory is the authority; the list only has to agree with
+/// it. `runtime/` is the one exclusion, for the reason the list's own doc
+/// comment gives, and it is named rather than inferred.
+#[test]
+fn the_embedded_list_is_every_source_file_in_the_crate() {
+    let directory = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
+    let on_disk: BTreeSet<String> = fs::read_dir(&directory)
+        .expect("the crate has a src directory")
+        .map(|entry| entry.expect("a readable directory entry").path())
+        .filter(|path| path.extension().is_some_and(|value| value == "rs"))
+        .map(|path| {
+            path.file_name()
+                .expect("a file with an extension has a name")
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    let listed: BTreeSet<String> = SOURCES.iter().map(|(name, _)| (*name).to_owned()).collect();
+    assert_eq!(
+        listed, on_disk,
+        "`SOURCES` and `src/` disagree, so some module is outside every guard \
+         in this file"
+    );
+}
+
+/// `std::env::args` panics on an argument that is not UTF-8, and this program
+/// is given paths.
+///
+/// A path on a Unix filesystem is bytes. `args()` decides that bytes which are
+/// not text are a reason to abort the process, which is the wrong answer for a
+/// tool whose arguments are mostly filenames -- and the failure is invisible to
+/// anyone developing on macOS, where such a name cannot be created at all. The
+/// Linux job caught it once. This is so that fixing it once is enough: the next
+/// reader reaching for the command line finds `args_os` because the other one
+/// does not build.
+#[test]
+fn the_command_line_is_read_as_bytes() {
+    let offenders: Vec<&str> = SOURCES
+        .iter()
+        .filter(|(_, text)| text.contains("env::args()"))
+        .map(|(name, _)| *name)
+        .collect();
+    assert!(
+        offenders.is_empty(),
+        "these read the command line with `env::args()`, which panics on an \
+         argument that is not UTF-8; `env::args_os()` and a lossy read answer \
+         the same question without it: {offenders:?}"
+    );
+}
+
+/// A skipped file was reached and not read, so the only honest thing to call
+/// the sum of the two is what the walk reached.
+///
+/// Two report headlines added them and called the total `scanned`, which
+/// overstated coverage in the one direction that matters: a run that could
+/// read two of seven files headlined `7 scanned` while `ocomment coverage`
+/// said `28.5%` and the end-of-run summary, three lines below, said `2`. The
+/// addition now happens once, inside the clause that knows what to call it.
+#[test]
+fn what_was_skipped_is_never_counted_as_scanned() {
+    const ADDITION: &str = "files.len() + skipped.len()";
+    let mut offenders = Vec::new();
+    for (name, source) in SOURCES {
+        for (number, line) in source.lines().enumerate() {
+            if line.contains(ADDITION) && !line.contains("fn scanned_clause") {
+                offenders.push(format!("{name}:{}: {}", number + 1, line.trim()));
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "these add the skipped files into a count of what was scanned; \
+         `output::scanned_clause` is the one place that may put the two \
+         numbers together, and it names the result:\n  {}",
+        offenders.join("\n  ")
+    );
 }

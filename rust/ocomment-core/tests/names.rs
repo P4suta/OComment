@@ -92,7 +92,7 @@ fn dialect_names_are_stable() {
 #[test]
 fn comment_kind_names_are_stable() {
     check_stable_names!(CommentKind);
-    assert_eq!(CommentKind::ALL.len(), 11);
+    assert_eq!(CommentKind::ALL.len(), 12);
 }
 
 #[test]
@@ -279,6 +279,8 @@ fn comment_kind_aliases_are_pinned() {
         ("encoding", CommentKind::Encoding),
         ("optimizer-hint", CommentKind::OptimizerHint),
         ("version-comment", CommentKind::VersionComment),
+        ("load-bearing", CommentKind::LoadBearing),
+        ("load_bearing", CommentKind::LoadBearing),
     ];
     for (text, expected) in cases {
         assert_eq!(CommentKind::from_str(text), Ok(expected), "`{text}`");
@@ -303,15 +305,32 @@ fn comment_kind_parsing_folds_case_and_underscores() {
 
 #[test]
 fn policy_and_layout_aliases_are_pinned() {
-    assert_eq!(Policy::from_str("safe"), Ok(Policy::Safe));
-    assert_eq!(Policy::from_str("legal"), Ok(Policy::Legal));
+    assert_eq!(Policy::from_str("safe"), Ok(Policy::Standard));
+    assert_eq!(Policy::from_str("legal"), Ok(Policy::Conservative));
     assert_eq!(Policy::from_str("all"), Ok(Policy::All));
-    assert_eq!(Policy::from_str("SAFE"), Ok(Policy::Safe));
+    assert_eq!(Policy::from_str("SAFE"), Ok(Policy::Standard));
     assert_eq!(Layout::from_str("lines"), Ok(Layout::Lines));
     assert_eq!(Layout::from_str("columns"), Ok(Layout::Columns));
     assert_eq!(Layout::from_str("compact"), Ok(Layout::Compact));
     assert_eq!(Layout::from_str("Compact"), Ok(Layout::Compact));
-    assert!(Policy::ALL.iter().all(|value| value.aliases().is_empty()));
+    /* NOTE: The policies carry their former spellings so that a configuration
+     * or a command line written against the old names still resolves, and to
+     * the same behaviour those names always had. Pinning them here is what
+     * stops the compatibility from being dropped by accident. */
+    assert_eq!(Policy::Conservative.aliases(), ["legal"]);
+    assert_eq!(Policy::Standard.aliases(), ["safe"]);
+    assert!(Policy::All.aliases().is_empty());
+    assert_eq!(Policy::Conservative.former_name(), Some("legal"));
+    assert_eq!(Policy::Standard.former_name(), Some("safe"));
+    assert_eq!(Policy::All.former_name(), None);
+    /* NOTE: The order of `ALL` is how much each policy takes, weakest first,
+     * and help output reads it in that order. A reordering would make the
+     * names stop describing a scale. */
+    assert_eq!(
+        Policy::ALL.map(Policy::as_str),
+        ["conservative", "standard", "all"]
+    );
+    assert_eq!(Policy::default(), Policy::Conservative);
     assert!(Layout::ALL.iter().all(|value| value.aliases().is_empty()));
 }
 
@@ -348,10 +367,10 @@ fn disposition_display_is_human_readable() {
     assert_eq!(Disposition::Remove.to_string(), "remove");
     assert_eq!(
         Disposition::Keep {
-            reason: "legal policy".to_owned()
+            reason: "conservative policy".to_owned()
         }
         .to_string(),
-        "keep (legal policy)"
+        "keep (conservative policy)"
     );
 }
 
@@ -363,21 +382,22 @@ fn disposition_serde_shape_is_frozen() {
     );
     assert_eq!(
         serde_json::to_value(Disposition::Keep {
-            reason: "legal policy".to_owned()
+            reason: "conservative policy".to_owned()
         })
         .unwrap(),
-        serde_json::json!({"action": "keep", "reason": "legal policy"})
+        serde_json::json!({"action": "keep", "reason": "conservative policy"})
     );
 }
 
-/// The differential protocol freezes these six strings; the OCaml reference
+/// The differential protocol freezes these seven strings; the OCaml reference
 /// compares them byte-for-byte.
-const KEEP_REASONS: [&str; 6] = [
-    "kept by kind or regex override",
+const KEEP_REASONS: [&str; 7] = [
+    "kept by keep_kind",
+    "kept by keep_regex",
     "required source preamble",
     "HTML comments are DOM-observable",
     "tool or language directive",
-    "legal policy",
+    "conservative policy",
     "structural in a YAML block scalar trail",
 ];
 
@@ -406,7 +426,21 @@ fn keep_reasons_are_observable_through_scan() {
             },
             comments: 1,
             index: 0,
-            reason: "kept by kind or regex override",
+            reason: "kept by keep_kind",
+        },
+        /* NOTE: The companion of the fixture above. The two rules used to
+         * share one reason, so one fixture covered both and neither was
+         * actually observed on its own. */
+        ReasonFixture {
+            source: b"// keep me\n",
+            language: Language::Rust,
+            options: ScanOptions {
+                keep_regex: vec!["keep me".into()],
+                ..Default::default()
+            },
+            comments: 1,
+            index: 0,
+            reason: "kept by keep_regex",
         },
         ReasonFixture {
             source: b"#!/bin/sh\n",
@@ -436,12 +470,12 @@ fn keep_reasons_are_observable_through_scan() {
             source: b"// Copyright 2026 Example\n",
             language: Language::Rust,
             options: ScanOptions {
-                policy: Policy::Legal,
+                policy: Policy::Conservative,
                 ..Default::default()
             },
             comments: 1,
             index: 0,
-            reason: "legal policy",
+            reason: "conservative policy",
         },
         /* NOTE: The one reason that needs a second comment to exist at all: the
          * block scalar leans on the first comment only because the directive
@@ -483,5 +517,113 @@ fn keep_reasons_are_observable_through_scan() {
         observed,
         BTreeSet::from(KEEP_REASONS),
         "the fixtures no longer exercise every frozen keep reason"
+    );
+}
+
+/// The policy table and the scanner agree, kind by kind and policy by policy.
+///
+/// `Policy::keeps` is the table the crate documentation prints and the
+/// scanner decides by. It was prose in one place and a chain of `if`s in
+/// another, and the CLI grew a third copy to answer "would a weaker policy
+/// have kept this?" — which was wrong in the only case that occurs. One table
+/// now, and this is what holds it to what a scan actually does.
+#[test]
+fn the_policy_table_is_what_a_scan_does() {
+    for policy in Policy::ALL {
+        for kind in CommentKind::ALL {
+            /* NOTE: A protected kind is held back before the policy is asked,
+             * so what `keeps` answers for it is what the policy would do with
+             * the protection lifted -- which is what `force_protected` asks
+             * for, and is the arrangement this compares against. */
+            let options = ScanOptions {
+                policy,
+                force_protected: true,
+                ..Default::default()
+            };
+            let (source, language) = match kind {
+                CommentKind::Line => ("let x = 1; // plain\n", Language::Rust),
+                CommentKind::Block => ("let x = 1; /* block */\n", Language::Rust),
+                CommentKind::DocLine => ("/// doc\nfn f() {}\n", Language::Rust),
+                CommentKind::DocBlock => ("/** doc */\nfn f() {}\n", Language::Rust),
+                CommentKind::Directive => ("// rustfmt::skip\n", Language::Rust),
+                CommentKind::License => ("// SPDX-License-Identifier: MIT\n", Language::Rust),
+                CommentKind::HtmlComment => ("<!-- note -->\n", Language::Html),
+                CommentKind::Shebang => ("#!/bin/sh\n", Language::Shell),
+                CommentKind::Encoding => ("# -*- coding: utf-8 -*-\n", Language::Python),
+                CommentKind::OptimizerHint => {
+                    ("select /*+ index(t) */ 1 from dual;\n", Language::Sql)
+                }
+                CommentKind::VersionComment => ("/*!40101 SET NAMES utf8 */\n", Language::Sql),
+                CommentKind::LoadBearing => ("//go:build linux\n", Language::Go),
+            };
+            let report = scan(source.as_bytes(), language, options);
+            let Some(comment) = report.comments.iter().find(|comment| comment.kind == kind) else {
+                panic!("no `{kind}` in the fixture for it: {source:?}");
+            };
+            assert_eq!(
+                !comment.disposition.is_remove(),
+                policy.keeps(kind),
+                "policy {policy} and kind {kind}: the table and the scan disagree"
+            );
+        }
+    }
+}
+
+/// Every kind states a protection, and the two tiers name themselves.
+#[test]
+fn every_kind_states_its_protection() {
+    use ocomment_core::Protection;
+    assert_eq!(Protection::None.reason(), None);
+    assert_eq!(
+        Protection::Preamble.reason(),
+        Some("required source preamble")
+    );
+    assert_eq!(
+        Protection::LoadBearing.reason(),
+        Some("required by the language or its build")
+    );
+    /* NOTE: Spelled out rather than derived, because deriving it from the same
+     * match it is checking would check nothing. A kind that changes tier has to
+     * change here too, and that is meant to be an act. */
+    for (kind, expected) in [
+        (CommentKind::Line, Protection::None),
+        (CommentKind::Block, Protection::None),
+        (CommentKind::DocLine, Protection::None),
+        (CommentKind::DocBlock, Protection::None),
+        (CommentKind::Directive, Protection::None),
+        (CommentKind::License, Protection::None),
+        (CommentKind::HtmlComment, Protection::None),
+        (CommentKind::Shebang, Protection::Preamble),
+        (CommentKind::Encoding, Protection::Preamble),
+        (CommentKind::OptimizerHint, Protection::LoadBearing),
+        (CommentKind::VersionComment, Protection::LoadBearing),
+        (CommentKind::LoadBearing, Protection::LoadBearing),
+    ] {
+        assert_eq!(kind.protection(), expected, "{kind}");
+    }
+}
+
+/// Of the policies that would make a run clean, the one that still takes the
+/// most is the one worth suggesting.
+#[test]
+fn the_policy_that_keeps_a_set_while_taking_the_most_is_found() {
+    assert_eq!(
+        Policy::strongest_keeping(&[CommentKind::DocLine, CommentKind::License]),
+        Some(Policy::Conservative),
+        "only `conservative` keeps documentation, so it is the only answer"
+    );
+    /* NOTE: Both `conservative` and `standard` keep a directive, and the answer
+     * is `standard`: the caller is removing comments, so of the two the one
+     * worth naming is the one that still takes the documentation and the
+     * licence header. Naming the gentlest would answer a question nobody
+     * asked. */
+    assert_eq!(
+        Policy::strongest_keeping(&[CommentKind::Directive]),
+        Some(Policy::Standard)
+    );
+    assert_eq!(
+        Policy::strongest_keeping(&[CommentKind::Line]),
+        None,
+        "no policy keeps an ordinary comment, and saying one does would be advice that fails"
     );
 }

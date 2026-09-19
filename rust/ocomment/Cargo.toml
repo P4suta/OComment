@@ -26,6 +26,10 @@ pkg-fmt = "zip"
 name = "ocomment"
 path = "src/main.rs"
 
+
+[lints]
+workspace = true
+
 [dependencies]
 anyhow.workspace = true
 bytemuck.workspace = true

@@ -1,8 +1,8 @@
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use globset::{Glob, GlobMatcher};
 use ocomment_core::{
-    CommentKind, DeclarativeProfile, Dialect, DispositionExplanation, Language, Layout, Policy,
-    ScanOptions, TransformOptions, validate_profile,
+    AllowRules, CommentKind, DeclarativeProfile, Dialect, DispositionExplanation, Language, Layout,
+    Policy, ProtectedPattern, ScanOptions, TransformOptions, validate_profile,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -20,6 +20,7 @@ pub struct Config {
     pub files: FilesConfig,
     pub policy: PolicyConfig,
     pub git: GitConfig,
+    pub ratchet: RatchetConfig,
     pub lsp: LspConfig,
     pub languages: BTreeMap<String, LanguageConfig>,
     pub profiles: BTreeMap<String, DeclarativeProfile>,
@@ -36,6 +37,14 @@ pub struct FilesConfig {
     pub ignore: bool,
     pub include: Vec<String>,
     pub exclude: Vec<String>,
+    /// Scan files another tool writes: lock files, recorded seed lists, the
+    /// output of a code generator.
+    ///
+    /// Off, because a comment in one of those belongs to the tool that wrote
+    /// it and will be written again on the next run. It is the class most
+    /// likely to be auto-fixed without being read, since nobody opens a
+    /// generated file before committing it.
+    pub include_generated: bool,
 }
 
 impl Default for FilesConfig {
@@ -47,6 +56,7 @@ impl Default for FilesConfig {
             ignore: true,
             include: Vec::new(),
             exclude: Vec::new(),
+            include_generated: false,
         }
     }
 }
@@ -62,12 +72,22 @@ pub struct PolicyConfig {
     pub remove_regex: Vec<String>,
     pub force_invalid: bool,
     pub force_protected: bool,
+    /// What a comment has to be to survive, beyond what its kind decides.
+    #[serde(default)]
+    pub allow: AllowRules,
+    /// Markers this project's own tools read; see [`ScanOptions::protected`].
+    #[serde(default)]
+    pub protected: Vec<ProtectedPattern>,
 }
 
 impl Default for PolicyConfig {
     fn default() -> Self {
         Self {
-            mode: Policy::Safe,
+            /* NOTE: Deferred to the core enum rather than named here, so the
+             * built-in default the CLI reports and the default the library
+             * documents cannot drift apart. They did: renaming the policies
+             * left this line naming the old default under its new spelling. */
+            mode: Policy::default(),
             layout: Layout::Lines,
             keep_kind: Vec::new(),
             remove_kind: Vec::new(),
@@ -75,8 +95,21 @@ impl Default for PolicyConfig {
             remove_regex: Vec::new(),
             force_invalid: false,
             force_protected: false,
+            allow: AllowRules::default(),
+            protected: Vec::new(),
         }
     }
+}
+
+/// Where the ledger lives, and whether a run is held to it.
+///
+/// Empty means no ledger: a project that has not asked for one is not held to
+/// a file that does not exist.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct RatchetConfig {
+    /// The ledger's path, relative to the project root.
+    pub ledger: String,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -140,6 +173,13 @@ pub struct PathOverride {
     pub remove_kind: Vec<CommentKind>,
     pub keep_regex: Vec<String>,
     pub remove_regex: Vec<String>,
+    /// A different `[policy.allow]` for this part of the tree, replacing the
+    /// global one whole rather than merging into it.
+    ///
+    /// Whole, because these rules are a convention and half a convention is
+    /// not one: a table that merged would let a subtree inherit a length limit
+    /// it never asked for and could not turn off.
+    pub allow: Option<AllowRules>,
 }
 
 /// Where one effective setting came from.
@@ -161,16 +201,17 @@ pub enum Source {
 }
 
 impl Source {
-    /// How an explanation names this source, given the file a `Global` value
-    /// was written in.
+    /// How an explanation names this source, given the `[policy]` key it
+    /// decided and the file a `Global` value was written in.
     ///
     /// `#N` counts an `[[overrides]]` table from zero, the way the regex
     /// indices printed beside it count the patterns they address.
-    fn describe(&self, origin: Option<&Path>) -> String {
+    fn describe(&self, key: &str, origin: Option<&Path>) -> String {
         match self {
             Self::Global => match origin {
                 Some(path) => format!(
-                    "[policy] in {}",
+                    "{} in {}",
+                    policy_table(key),
                     crate::output::sanitize_path(&path.display().to_string())
                 ),
                 None => "built-in defaults".to_owned(),
@@ -186,14 +227,25 @@ impl Source {
 
 /// The `[policy]` keys a trace can attribute to a file, spelled as the file
 /// spells them.
-const POLICY_KEYS: [&str; 6] = [
+const POLICY_KEYS: [&str; 7] = [
     "mode",
     "layout",
     "keep_kind",
     "remove_kind",
     "keep_regex",
     "remove_regex",
+    "allow",
 ];
+
+/// The table a `[policy]` key is written in, which is the table an explanation
+/// sends a reader to. Every key but one is written in `[policy]` itself.
+fn policy_table(key: &str) -> &'static str {
+    if key == "allow" {
+        "[policy.allow]"
+    } else {
+        "[policy]"
+    }
+}
 
 /// Which configuration file last set each `[policy]` key. A key no file sets
 /// keeps no entry, and an explanation calls it a built-in default rather than
@@ -229,6 +281,9 @@ pub struct PolicyTrace {
     pub remove_kind: Vec<Source>,
     pub keep_regex: Vec<Source>,
     pub remove_regex: Vec<Source>,
+    /// Which layer last set `[policy.allow]`. The table is replaced whole
+    /// rather than merged entry by entry, so one source covers all of it.
+    pub allow: Source,
     origins: PolicyOrigins,
 }
 
@@ -266,16 +321,41 @@ impl PolicyTrace {
             }
             /* NOTE: Every one of these is the policy having the last word, whether it
              * took the comment out or protected it. */
-            DispositionExplanation::RemovedByPolicy(_)
-            | DispositionExplanation::RemovedByDefault(_)
+            DispositionExplanation::RemovedByPolicy { .. }
+            | DispositionExplanation::RemovedByDefault { .. }
+            | DispositionExplanation::KeptDocumentation { .. }
             | DispositionExplanation::KeptLicense { .. } => (&self.policy, "mode"),
+            /* NOTE: The three rules that are about a comment's shape rather
+             * than its kind, and the one table that sets all three. */
+            DispositionExplanation::KeptByTag { .. }
+            | DispositionExplanation::RemovedAsTrailing
+            | DispositionExplanation::RemovedAsExpired { .. }
+            | DispositionExplanation::RemovedByLength { .. } => (&self.allow, "allow"),
             // NOTE: A built-in rule, decided by no setting at all.
             DispositionExplanation::ProtectedPreamble
+            | DispositionExplanation::KeptLoadBearing { .. }
             | DispositionExplanation::KeptHtml
             | DispositionExplanation::KeptDirective { .. }
             | DispositionExplanation::KeptStructural { .. } => return None,
         };
-        Some(source.describe(self.origins.get(key).map(PathBuf::as_path)))
+        Some(source.describe(key, self.origins.get(key).map(PathBuf::as_path)))
+    }
+
+    /// Where the `key` entry at `index` was written, worded exactly as
+    /// [`Self::origin_of`] words the setting behind a verdict.
+    ///
+    /// `origin_of` starts from a comment and asks which setting decided it.
+    /// This starts from the setting, which is what a report about a setting
+    /// *nothing* decided has to do: there is no comment to ask about.
+    pub fn origin_at(&self, key: &str, index: usize) -> Option<String> {
+        let source = match key {
+            "keep_kind" => self.keep_kind.get(index),
+            "remove_kind" => self.remove_kind.get(index),
+            "keep_regex" => self.keep_regex.get(index),
+            "remove_regex" => self.remove_regex.get(index),
+            _ => None,
+        }?;
+        Some(source.describe(key, self.origins.get(key).map(PathBuf::as_path)))
     }
 }
 
@@ -390,6 +470,47 @@ impl ResolvedConfig {
         relative.to_string_lossy().replace('\\', "/")
     }
 
+    /// The `[[overrides]]` entries whose globs matched none of these paths,
+    /// with the globs they were written as.
+    ///
+    /// A settings block that matches no file does nothing, and nothing said
+    /// so. The report this feeds exists to catch a `keep_regex` that will
+    /// never fire; a path glob that will never fire is the same mistake one
+    /// level up, and it is the level at which a project narrows a rule to the
+    /// files the rule is about — so a typo there does not narrow anything, it
+    /// leaves the wider rule in place over files somebody had decided to
+    /// exempt.
+    ///
+    /// Matched against every path the walk reached, scanned or skipped: a file
+    /// the walk passed over is still a file the glob was written for, and
+    /// calling the glob unused because its file is in a language this build
+    /// cannot read would send a reader to fix the wrong line.
+    pub fn unused_overrides<'a>(
+        &'a self,
+        paths: impl IntoIterator<Item = &'a Path>,
+    ) -> Vec<(usize, &'a [String])> {
+        let mut used = vec![false; self.overrides.len()];
+        for path in paths {
+            let normalized = self.relative_to_root(path);
+            for (index, override_) in self.overrides.iter().enumerate() {
+                if !used[index]
+                    && override_
+                        .matchers
+                        .iter()
+                        .any(|matcher| matcher.is_match(&normalized))
+                {
+                    used[index] = true;
+                }
+            }
+        }
+        self.overrides
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| !used[*index])
+            .map(|(index, override_)| (index, override_.value.paths.as_slice()))
+            .collect()
+    }
+
     pub fn language_is_enabled(&self, language: Language) -> bool {
         self.cli_overrides.language.is_some()
             || self
@@ -437,6 +558,7 @@ impl ResolvedConfig {
         let mut remove = self.config.policy.remove_kind.clone();
         let mut keep_regex = self.config.policy.keep_regex.clone();
         let mut remove_regex = self.config.policy.remove_regex.clone();
+        let mut allow = self.config.policy.allow.clone();
 
         if let Some(language_config) = self.config.languages.get(chosen_language.as_str()) {
             if let Some(value) = language_config.dialect {
@@ -472,6 +594,9 @@ impl ResolvedConfig {
                 extend_unique(&mut remove, &override_.value.remove_kind);
                 extend_unique(&mut keep_regex, &override_.value.keep_regex);
                 extend_unique(&mut remove_regex, &override_.value.remove_regex);
+                if let Some(value) = &override_.value.allow {
+                    allow = value.clone();
+                }
             }
         }
         if self.cli_overrides.policy {
@@ -494,6 +619,8 @@ impl ResolvedConfig {
             remove_kinds: remove,
             keep_regex,
             remove_regex,
+            allow,
+            protected: self.config.policy.protected.clone(),
         };
         Ok((chosen_language, TransformOptions { scan, layout }))
     }
@@ -581,6 +708,9 @@ impl ResolvedConfig {
              * come from the command line. */
             keep_regex: attribute(&self.config.policy.keep_regex, None, "", &keep_patterns),
             remove_regex: attribute(&self.config.policy.remove_regex, None, "", &remove_patterns),
+            /* NOTE: No flag sets an allow rule, so the command line never wins
+             * this one and the file the merge left standing is the answer. */
+            allow: Source::Global,
             origins: self.origins.clone(),
         };
         /* NOTE: A single-valued setting is not merged but replaced, so the last layer
@@ -681,6 +811,15 @@ pub fn load_from(cwd: &Path, explicit: Option<&Path>) -> Result<ResolvedConfig> 
     let mut config: Config = merged
         .try_into()
         .context("cannot resolve merged configuration")?;
+    /* NOTE: Under the configuration's own, never over it: a project that
+     * disagrees with a shipped profile replaces it by declaring one of the
+     * same name, which is the ordinary way every other setting is overridden.
+     * They are added after the merge because they are not a configuration
+     * layer -- no `[profiles]` table in any file should be able to delete one
+     * by being silent about it. */
+    for (name, profile) in bundled_profiles()? {
+        config.profiles.entry(name).or_insert(profile);
+    }
     for (name, profile) in &mut config.profiles {
         if profile.name.is_empty() {
             profile.name = name.clone();
@@ -699,6 +838,23 @@ pub fn load_from(cwd: &Path, explicit: Option<&Path>) -> Result<ResolvedConfig> 
         overrides,
         origins,
     })
+}
+
+/// The declarative profiles OComment ships with.
+///
+/// `spec/profiles.toml` is the canonical copy and this is the one the binary
+/// embeds; `tools/check_embedded_specs.py` holds them to each other. They
+/// describe file formats whose comments delimiters describe completely --
+/// `.gitignore`, `dune`, `.wit` -- and exist because the alternative was not
+/// reading those files at all.
+pub fn bundled_profiles() -> Result<Vec<(String, DeclarativeProfile)>> {
+    #[derive(Deserialize)]
+    struct Bundled {
+        profiles: BTreeMap<String, DeclarativeProfile>,
+    }
+    let bundled: Bundled = toml::from_str(include_str!("../assets/profiles.toml"))
+        .context("the embedded profile set is not valid TOML")?;
+    Ok(bundled.profiles.into_iter().collect())
 }
 
 /// Layer one configuration file over the merged document, noting every
@@ -781,7 +937,30 @@ pub fn supported_dialects(language: Language) -> &'static [Dialect] {
             Dialect::TSql,
             Dialect::Oracle,
         ],
-        _ => &[Dialect::Standard],
+        Language::Rust
+        | Language::Ocaml
+        | Language::Go
+        | Language::Java
+        | Language::Python
+        | Language::Html
+        | Language::Jsonc
+        | Language::Kotlin
+        | Language::Toml
+        | Language::Lua
+        | Language::Yaml
+        | Language::Php
+        | Language::Ruby
+        | Language::Zig
+        | Language::R
+        | Language::Dart
+        | Language::Swift
+        | Language::CSharp
+        | Language::Scala
+        | Language::Vue
+        | Language::Svelte
+        | Language::Markdown
+        | Language::Perl
+        | Language::Unknown => &[Dialect::Standard],
     }
 }
 
@@ -857,7 +1036,7 @@ fn parse_layer(path: &Path, require_version: bool) -> Result<toml::Value> {
              * as it was spelled, with nothing in it a terminal would act on. */
             crate::output::sanitize_path(&path.display().to_string()),
             crate::output::sanitize_message(&message),
-            unknown_key_hint(&message)
+            unknown_key_hint(&message) + &unknown_value_hint(&message)
         )
     })?;
     if require_version && config.version != Some(1) {
@@ -883,7 +1062,12 @@ fn merge_value(base: &mut toml::Value, overlay: toml::Value) {
                                 base.insert(key, toml::Value::Array(incoming));
                             }
                         }
-                        other => {
+                        other @ toml::Value::String(_)
+                        | other @ toml::Value::Integer(_)
+                        | other @ toml::Value::Float(_)
+                        | other @ toml::Value::Boolean(_)
+                        | other @ toml::Value::Datetime(_)
+                        | other @ toml::Value::Table(_) => {
                             base.insert(key, other);
                         }
                     }
@@ -942,7 +1126,10 @@ pub(crate) fn lexical(path: &Path) -> PathBuf {
             {
                 resolved.pop();
             }
-            component => resolved.push(component),
+            component @ Component::Prefix(_)
+            | component @ Component::RootDir
+            | component @ Component::ParentDir
+            | component @ Component::Normal(_) => resolved.push(component),
         }
     }
     resolved
@@ -987,6 +1174,29 @@ fn extend_unique<T: Clone + Eq>(target: &mut Vec<T>, values: &[T]) {
         if !target.contains(value) {
             target.push(value.clone());
         }
+    }
+}
+
+/// What to say when a value is one this build does not know.
+///
+/// A configuration written for a newer OComment reaches an older one as
+/// `unknown variant \`conservative\``. That is accurate and says nothing about
+/// the fix, and the reader cannot work it out: both builds answer `--version`
+/// with the same number for the whole of a release cycle, so neither they nor
+/// the file can tell which binary is running. Naming the build turns "unknown
+/// variant" into "reinstall".
+///
+/// Only for an unknown *value*. An unknown key is a typo far more often than
+/// it is a version skew, and [`unknown_key_hint`] already answers that one by
+/// naming the key the writer meant.
+fn unknown_value_hint(message: &str) -> String {
+    if message.contains("unknown variant") {
+        format!(
+            "; this is ocomment {}, so a value it does not know may belong to a newer one",
+            env!("CARGO_PKG_VERSION")
+        )
+    } else {
+        String::new()
     }
 }
 

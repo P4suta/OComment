@@ -6,6 +6,7 @@ use crate::{
         unicode_line_terminator_width,
     },
 };
+use std::borrow::Cow;
 use unicode_width::UnicodeWidthChar;
 
 /// Scan `source` and produce the bytes a removal would write.
@@ -192,6 +193,7 @@ fn external_report(
                 &source[span.start..span.end],
                 &prepared.patterns,
             ),
+            shape: None,
         });
     }
     /* NOTE: The one verdict a comment's own bytes cannot reach, so it is
@@ -216,22 +218,45 @@ pub(crate) fn transform_report(
     plan_report(source, report, options.layout, options.scan.force_invalid).finish(source)
 }
 
-pub(crate) fn plan_report(
+/// Plan the edits a report calls for, without scanning again.
+///
+/// [`transform_plan`] is this with the scan in front of it. They are separate
+/// because a report is not always the one a scan produced untouched: a caller
+/// may hold a rule the scanner cannot decide — one that needs a clock, a
+/// repository, anything outside the bytes — and a plan built from a fresh scan
+/// would quietly ignore it.
+pub fn plan_report(
     source: &[u8],
     report: crate::ScanReport,
     layout: Layout,
     force_invalid: bool,
 ) -> TransformPlan {
     let edits = if report.valid || force_invalid {
+        /* NOTE: A forced run is a run over a file the scanner could not finish,
+         * so the comments it reported are not all worth the same. It asks for
+         * the edits a broken file still supports, not for every edit a broken
+         * report happens to name. */
+        let considered: Cow<'_, [Comment]> = if report.established_everything() {
+            Cow::Borrowed(report.comments.as_slice())
+        } else {
+            Cow::Owned(
+                report
+                    .comments
+                    .iter()
+                    .filter(|comment| report.established(comment.span))
+                    .cloned()
+                    .collect(),
+            )
+        };
         /* NOTE: The one hole whose own bytes carry meaning, so every layout has
          * to be told where not to leave one. `compact` takes the line already;
          * what it does not know on its own is how far past the line to go
          * under a `|+` body. */
-        let swallow = lines_a_removal_must_swallow(source, report.language, &report.comments);
+        let swallow = lines_a_removal_must_swallow(source, report.language, &considered);
         match layout {
-            Layout::Lines => line_edits(source, &report.comments, &swallow),
-            Layout::Columns => column_edits(source, &report.comments, &swallow),
-            Layout::Compact => compact_edits(source, &report.comments, &swallow),
+            Layout::Lines => line_edits(source, &considered, &swallow),
+            Layout::Columns => column_edits(source, &considered, &swallow),
+            Layout::Compact => compact_edits(source, &considered, &swallow),
         }
     } else {
         Vec::new()
@@ -431,6 +456,10 @@ fn column_edits(source: &[u8], comments: &[Comment], swallow: &[Option<ByteSpan>
 /// it is what keeps all three layouts writing the same bytes there.
 fn compact_edits(source: &[u8], comments: &[Comment], swallow: &[Option<ByteSpan>]) -> Vec<Edit> {
     let mut edits = Vec::new();
+    /* NOTE: Which edits the blank-run pass below may widen. A swallowed line
+     * is the one place all three layouts are required to write the same bytes,
+     * so it is left exactly where the other two put it. */
+    let mut collapsible = Vec::new();
     let mut scan = 0usize;
     let mut line_start = 0usize;
     let mut floor = 0usize;
@@ -447,6 +476,7 @@ fn compact_edits(source: &[u8], comments: &[Comment], swallow: &[Option<ByteSpan
                 span,
                 replacement: Vec::new(),
             });
+            collapsible.push(false);
             continue;
         }
         while scan < comment.span.start {
@@ -467,8 +497,140 @@ fn compact_edits(source: &[u8], comments: &[Comment], swallow: &[Option<ByteSpan
         let edit = compact_edit(source, comment, line_start, floor, ceiling);
         floor = edit.span.end;
         edits.push(edit);
+        collapsible.push(true);
     }
+    collapse_created_blank_runs(source, &mut edits, &collapsible);
     edits
+}
+
+/// Take back the blank lines a removal *created*.
+///
+/// Dropping the line a comment held is what `compact` is for, and it is not
+/// the whole of what the comment occupied. A comment set off by a blank line
+/// above and another below is three lines of file for one comment, and taking
+/// only the middle one leaves the two blanks touching — a run one line longer
+/// than the file ever had, in a place where the file had never put one. Every
+/// formatter with an opinion says so: `swift-format` reports `[RemoveLine]`,
+/// `gofmt` closes the gap, `rustfmt` collapses it. A tool that has to be
+/// followed by a formatter to finish its own edit has not finished it.
+///
+/// The rule is the narrow one, because widening it would mean reflowing a file
+/// rather than removing a comment from it: **a removal never leaves more
+/// consecutive blank lines than the longest run it was already standing next
+/// to.** With `before` blanks above and `after` below, the removal takes
+/// `min(before, after)` of the ones below it, which leaves `max(before,
+/// after)`. Blank lines above a removal are never touched, and the count taken
+/// can never exceed the count that followed the comment, so two lines of code
+/// that had a blank line between them still do.
+///
+/// Only a removal that took whole lines is eligible: an edit that begins in
+/// the middle of a line is a comment with code beside it, and the line it sits
+/// on is staying.
+fn collapse_created_blank_runs(source: &[u8], edits: &mut [Edit], collapsible: &[bool]) {
+    if edits.is_empty() {
+        return;
+    }
+    let starts = line_starts(source);
+    let line_of = |offset: usize| starts.partition_point(|start| *start <= offset) - 1;
+    let at_line_start = |offset: usize| starts.binary_search(&offset).is_ok();
+
+    let mut index = 0;
+    while index < edits.len() {
+        if !collapsible.get(index).copied().unwrap_or(false)
+            || !edits[index].replacement.is_empty()
+            || !at_line_start(edits[index].span.start)
+        {
+            index += 1;
+            continue;
+        }
+        /* NOTE: Comments written on consecutive lines are separate comments and
+         * separate edits, and the blank runs either side belong to the block
+         * they make together rather than to any one of them. So the touching
+         * edits are treated as one removal. */
+        let mut last = index;
+        while last + 1 < edits.len()
+            && collapsible.get(last + 1).copied().unwrap_or(false)
+            && edits[last + 1].replacement.is_empty()
+            && edits[last].span.end == edits[last + 1].span.start
+        {
+            last += 1;
+        }
+        let run_end = edits[last].span.end;
+        if at_line_start(run_end) {
+            let mut before = 0usize;
+            let mut line = line_of(edits[index].span.start);
+            while line > 0 && line_is_blank(source, &starts, line - 1) {
+                before += 1;
+                line -= 1;
+            }
+            let mut after = 0usize;
+            let mut line = line_of(run_end);
+            while line_is_blank(source, &starts, line) {
+                after += 1;
+                line += 1;
+            }
+            let mut end = run_end;
+            for _ in 0..before.min(after) {
+                match starts.get(line_of(end) + 1) {
+                    Some(next) => end = *next,
+                    None => break,
+                }
+            }
+            /* INVARIANT: The blanks a removal takes must not reach the next
+             * edit. They cannot in fact -- the line that edit is on holds a
+             * comment and so is not blank -- but the clamp is what keeps the
+             * edits provably sorted and non-overlapping. */
+            let ceiling = edits
+                .get(last + 1)
+                .map_or(source.len(), |next| next.span.start);
+            edits[last].span.end = end.min(ceiling).max(run_end);
+        }
+        index = last + 1;
+    }
+}
+
+/// Where every line of `source` begins, in order, starting at `0`.
+///
+/// A source that ends with a terminator has a final entry at its length: the
+/// empty last line, which is a line start with nothing on it and which
+/// [`line_is_blank`] therefore refuses to call a blank line.
+fn line_starts(source: &[u8]) -> Vec<usize> {
+    let mut starts = vec![0usize];
+    let mut index = 0;
+    while index < source.len() {
+        match unicode_line_terminator_width(source, index) {
+            Some(width) => {
+                index += width;
+                starts.push(index);
+            }
+            None => index += 1,
+        }
+    }
+    starts
+}
+
+/// Whether line `line` holds nothing but blanks and its terminator.
+///
+/// The position past the last terminator is not a line at all: there is no
+/// line there to take, and counting it would let a removal at the end of a
+/// file swallow the terminator that ends it.
+fn line_is_blank(source: &[u8], starts: &[usize], line: usize) -> bool {
+    let Some(&start) = starts.get(line) else {
+        return false;
+    };
+    let end = starts.get(line + 1).copied().unwrap_or(source.len());
+    if start >= end {
+        return false;
+    }
+    let mut index = start;
+    while index < end {
+        match unicode_line_terminator_width(source, index) {
+            Some(width) => index += width,
+            None if source[index].is_ascii_whitespace() => index += 1,
+            None => return false,
+        }
+    }
+    true
 }
 
 /// One [`Layout::Compact`] edit.
@@ -757,7 +919,7 @@ mod tests {
     }
 
     #[test]
-    fn html_is_byte_identical_in_safe_mode() {
+    fn html_is_byte_identical_in_standard_mode() {
         let input = b"a<!-- visible\ncomment -->b";
         assert_eq!(
             transform(input, Language::Html, TransformOptions::default()).output,

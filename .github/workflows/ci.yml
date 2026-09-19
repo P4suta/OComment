@@ -24,12 +24,28 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # NOTE: stable toolchain action
+      # NOTE: stable toolchain action
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
         with:
           components: clippy,rustfmt
+      # NOTE: For the formatter-conformance cases. `gofmt` ships with the Go
+      # NOTE: toolchain and the runner image already carries one; this is the
+      # NOTE: line that says the test depends on it.
+      - run: gofmt --help 2>/dev/null || command -v gofmt
       - run: cargo fmt --all --manifest-path rust/Cargo.toml -- --check
       - run: cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets --locked -- -D warnings
+      # NOTE: The tests that name a file with raw non-UTF-8 bytes skip
+      # NOTE: themselves on a filesystem that refuses such a name, which is how
+      # NOTE: they stop failing on macOS for a reason that is not about
+      # NOTE: OComment. ext4 holds one, so here the skip is a failure and the
+      # NOTE: property is actually observed rather than merely compiled.
+      # NOTE: And the formatter-conformance cases, for the same reason: they
+      # NOTE: skip where `gofmt` or `rustfmt` is missing, and this runner has
+      # NOTE: both, so a skip here is a test that quietly stopped running.
       - run: cargo test --manifest-path rust/Cargo.toml --workspace --all-targets --locked
+        env:
+          OCOMMENT_REQUIRE_NON_UTF8_PATHS: "1"
+          OCOMMENT_REQUIRE_FORMATTERS: "1"
       # NOTE: `--all-targets` above builds every target but silently drops the
       # NOTE: doctests, so the examples in the library rustdoc are only ever
       # NOTE: compiled and run by this step.
@@ -55,9 +71,31 @@ jobs:
           RUSTDOCFLAGS: -D warnings
         run: cargo doc --manifest-path rust/Cargo.toml --no-deps -p ocomment-core -p ocomment-plugin-sdk -p ocomment --locked
       - run: python3 tools/check_embedded_specs.py
+      # NOTE: Half a gate is a gate that would go on passing if the thing it
+      # NOTE: tests stopped refusing anything; see the file for the run that
+      # NOTE: did exactly that here.
+      - run: python3 tools/check_gate_symmetry.py
+      - run: python3 tools/gen_selftest_corpus.py --check
       - run: python3 tools/check_hooks.py
       - run: python3 tools/check_editor_ids.py
       - run: python3 tools/check_ci_contracts.py
+      # NOTE: The only check here that asks somebody else. The table beside it
+      # NOTE: settles everything a file in this repository can be wrong about
+      # NOTE: and cannot settle whether a digest really is the version it is
+      # NOTE: labelled with, which lives upstream. It runs here and not in
+      # NOTE: `preflight` because a laptop is allowed to be offline and a gate
+      # NOTE: is not.
+      - name: The reviewed action pins are what upstream says they are
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 tools/check_action_pins.py
+      # NOTE: Dependabot raises alerts on this repository and they are worth
+      # NOTE: having, but an alert arrives after a merge and can be triaged
+      # NOTE: away -- both `qs` advisories here had been auto-dismissed, so
+      # NOTE: asking for open ones returned none while the lockfile still
+      # NOTE: carried them. This runs before the merge and answers to a ledger.
+      - name: Both lockfiles answer to the advisory ledger
+        run: python3 tools/check_advisories.py
       - run: python3 tools/sync_release_docs.py --check
       - run: python3 -m unittest tools/test_release_metadata.py tools/test_publish_crates.py tools/test_sync_release_docs.py
       - run: python3 -m pip install --disable-pip-version-check jsonschema==4.25.1
@@ -67,7 +105,7 @@ jobs:
       - run: python3 tools/gen_docs.py --check
       - run: python3 tools/validate_schemas.py
       - name: Check publishable file sets
-        run: ./tools/package-list.sh
+        run: cargo xtask package-list
 
   msrv:
     runs-on: ubuntu-latest
@@ -76,7 +114,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # NOTE: stable toolchain action
+      # NOTE: stable toolchain action
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
         with:
           toolchain: 1.88.0
       - run: cargo check --manifest-path rust/Cargo.toml --workspace --all-targets --locked
@@ -88,13 +127,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # NOTE: stable toolchain action
-      - uses: ocaml/setup-ocaml@f92e0606b7ae4873dd1238465ea4bf6f8e40d85c # v3
+      # NOTE: stable toolchain action
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+      - uses: ocaml/setup-ocaml@e89b2ded52a6e13f50162220cf5fe47290162032 # v3.8.0
         with:
           ocaml-compiler: "5.5"
       - run: opam install ./ocaml/ocomment-ref.opam --deps-only --with-test
       - run: opam exec -- dune runtest --root ocaml
-      - run: opam exec -- ./tools/differential.sh
+      - run: opam exec -- cargo xtask differential
       - run: cargo build --manifest-path rust/Cargo.toml --locked -p ocomment
       - name: The reference still builds with every comment stripped out of it
         run: |
@@ -123,21 +163,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # NOTE: stable toolchain action
+      # NOTE: stable toolchain action
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
       - run: cargo build --manifest-path rust/Cargo.toml --locked -p ocomment
       - run: python3 -m pip install --disable-pip-version-check pyyaml==6.0.2
-      # NOTE: The one invariant no byte-level fixture can state: a YAML block scalar
-      # NOTE: reads the lines below it, so the hole a removal leaves on a comment line
-      # NOTE: can be read back as part of a value. This strips thousands of generated
-      # NOTE: documents under every layout and every policy and asks a real YAML
-      # NOTE: parser whether they still mean the same thing.
-      # NOTE:
-      # NOTE: The corpus and both enumerated sweeps run in full here -- they are where
-      # NOTE: the hazard lives and they are the same documents on every run. Only the
-      # NOTE: pseudo-random set is cut, because its cost is linear and its value is
-      # NOTE: not: `python3 tools/yaml_roundtrip.py` runs the whole 2400 on demand,
-      # NOTE: and `--seed` moves it. Every pass is one `fsync` per rewritten file, so
-      # NOTE: the tool overlaps them rather than waiting on them in turn.
+      # NOTE: Why this runs, and why only the random set is cut here: see "The
+      # NOTE: YAML round trip" in docs/ci.md.
       - name: Removing YAML comments never changes what the document parses to
         run: python3 tools/yaml_roundtrip.py --cases 200
       - name: Report the environment and the configuration OComment resolved
@@ -145,9 +176,23 @@ jobs:
           set -euo pipefail
           ./rust/target/debug/ocomment doctor
           ./rust/target/debug/ocomment config explain
-      # NOTE: A bare run is the gate: it walks the repository under the ordinary
-      # NOTE: hidden-file and size limits and under `.ocomment.toml`, so a new
-      # NOTE: explanatory comment that carries no tag fails the build.
+      # NOTE: The same corpus the library test and the differential run use,
+      # NOTE: asked of the executable instead. It is not a third copy of that
+      # NOTE: check: it is the one that runs where `spec/` is not on disk, which
+      # NOTE: is every machine an artefact is installed on. Running it here is
+      # NOTE: what keeps it working, because a self-test nobody runs is a
+      # NOTE: self-test that quietly stopped reaching the corpus.
+      - name: The binary re-runs the shared corpus against itself
+        run: ./rust/target/debug/ocomment selftest
+      # NOTE: `coverage` and not `check`, because this step is about the files
+      # NOTE: nothing read rather than about what was found in the ones that
+      # NOTE: were: its exit code answers for skips alone.
+      - name: Every file was read
+        run: ./rust/target/debug/ocomment coverage --deny-skipped --quiet
+      # NOTE: The gate. A bare run walks the repository under the ordinary
+      # NOTE: limits and under `.ocomment.toml`, so a comment that carries no
+      # NOTE: tag, runs past the length rule, or sits beside code fails the
+      # NOTE: build -- and so does a promise whose deadline has passed.
       - name: OComment checks its own repository
         run: ./rust/target/debug/ocomment --format github
       - name: Strip every comment out of a copy of the workspace
@@ -184,7 +229,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # NOTE: stable toolchain action
+      # NOTE: stable toolchain action
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
       - run: cargo build --manifest-path rust/Cargo.toml --release --locked -p ocomment
       - name: Unix smoke test
         if: runner.os != 'Windows'
@@ -205,7 +251,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # NOTE: stable toolchain action
+      # NOTE: stable toolchain action
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
       - run: cargo build --manifest-path rust/Cargo.toml --locked -p ocomment
       - name: Create the action fixture
         shell: bash
@@ -262,7 +309,8 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: editors/vscode/package-lock.json
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # NOTE: stable toolchain action
+      # NOTE: stable toolchain action
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
       - run: npm ci
       - run: npm run lint
       - run: npm run compile

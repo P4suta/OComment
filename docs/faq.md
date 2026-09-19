@@ -1,11 +1,15 @@
 # FAQ
 
-## Does the default policy really remove documentation comments?
+## Does the default policy remove documentation comments?
 
-Yes. `safe` removes `doc-line` and `doc-block` along with ordinary comments; it
-is *safe* in the sense that it never removes something another program reads,
-not in the sense that it never removes something a human wrote. Documentation
-comments are commentary, and a build artifact usually wants them gone.
+No. A doc comment is not commentary about the code, it is the API
+documentation, and it ships: removing one empties a page on docs.rs, an entry
+on pkg.go.dev, a section of a javadoc site. That is a public loss of the same
+kind as removing a licence notice, and the default declines both.
+
+`standard` takes them, which is a policy someone names on purpose. If you want
+them gone for one build artifact and kept in the source, that is what
+`[[overrides]]` is for.
 
 If your project wants them kept — this one does — say so once:
 
@@ -60,8 +64,21 @@ edits, is read, reported on, and rewritten with those bytes untouched. Only the
 spans it actually removes are changed.
 
 A file that fails to *lex* — an unterminated block comment, say — is reported as
-invalid and left alone, unless `--force-invalid` tells the run to apply the edits
-that are still provably safe.
+invalid and left alone, unless `--force-invalid` tells the run to edit the part
+that scanned.
+
+That part ends where the lex failed. A scanner that cannot find the end of a
+token does not know where the next one starts, so an unterminated `/*` is
+reported as a comment running to the end of the file — and the code under it is
+not a comment. `--force-invalid` removes the comments the scanner closed before
+the failure and leaves everything from there on alone. The verdicts on the rest
+still stand in the report: they are removable, and they are still in the file,
+which is what a file that does not lex earns.
+
+The one exception is an error that cost the lexer nothing. A malformed Java
+`\uXXXX` escape is found in a pass over the whole source before a token is read,
+so it makes the file invalid without putting a single comment in doubt, and a
+forced run over it edits everything.
 
 ## Why is this comment still here after `fix`?
 

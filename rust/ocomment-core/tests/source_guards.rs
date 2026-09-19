@@ -362,3 +362,117 @@ fn split_top_level(body: &str) -> Vec<&str> {
 fn collapsed(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
+
+/// The two files that raise errors, embedded so the guard does not depend on
+/// the directory the test runs in.
+const ERROR_SOURCES: [(&str, &str); 2] = [
+    ("src/scanner.rs", include_str!("../src/scanner.rs")),
+    ("src/profile.rs", include_str!("../src/profile.rs")),
+];
+
+/// The two ways this crate names a diagnostic code: the scanner's helper takes
+/// it as the first argument, and the profile path builds the struct directly.
+const CODE_MARKERS: [&str; 2] = ["self.error(", "code: "];
+
+/// Every code literal that follows one of the markers, wherever the argument
+/// sits on the line the call opens or on the next one.
+fn codes_raised() -> BTreeSet<String> {
+    let mut found = BTreeSet::new();
+    for (_, text) in ERROR_SOURCES {
+        for marker in CODE_MARKERS {
+            let mut rest = text;
+            while let Some(at) = rest.find(marker) {
+                rest = &rest[at + marker.len()..];
+                let Some(open) = rest.find('"') else { break };
+                /* NOTE: A marker whose literal is further away than the next
+                 * line is not a call this guard can read. The reverse direction
+                 * catches a misread: a code nobody found here would show up as
+                 * a ledger entry with no raiser. */
+                if rest[..open].matches('\n').count() > 1 {
+                    continue;
+                }
+                let literal = &rest[open + 1..];
+                let Some(close) = literal.find('"') else {
+                    break;
+                };
+                found.insert(literal[..close].to_owned());
+            }
+        }
+    }
+    found
+}
+
+/// Every error the scanners raise is classified, and every classification is
+/// raised by a scanner.
+///
+/// The first direction is the one that matters: an error added tomorrow decides
+/// how much of a file a forced run may still edit, and `damage` answers `Rest`
+/// for a code it does not know. That default is safe, and it is also silent --
+/// a new error whose damage is confined to the bytes it names would quietly
+/// stop `--force-invalid` from doing its job over everything after it, and
+/// nothing would say why. The second direction keeps the ledger from describing
+/// a scanner that no longer exists.
+#[test]
+fn error_codes_are_all_classified() {
+    let raised = codes_raised();
+    let classified: BTreeSet<String> = ocomment_core::ERROR_CODES
+        .iter()
+        .map(|&(code, _)| code.to_owned())
+        .collect();
+    let unclassified: Vec<_> = raised.difference(&classified).collect();
+    assert!(
+        unclassified.is_empty(),
+        "these errors are raised but `ERROR_CODES` does not say how far their damage \
+         reaches, so `--force-invalid` would decline to edit anything after them \
+         without anyone having decided that: {unclassified:?}"
+    );
+    let unraised: Vec<_> = classified.difference(&raised).collect();
+    assert!(
+        unraised.is_empty(),
+        "`ERROR_CODES` classifies errors no scanner raises: {unraised:?}"
+    );
+}
+
+/// The declared order of the severities is the order they claim to be in.
+///
+/// `ALL` says "most to least severe" and the derived ordering says the same
+/// thing from the declaration, and `is_failure` reads both as one question.
+/// Two statements of one fact can part; this is what stops them.
+#[test]
+fn the_severities_are_declared_most_severe_first() {
+    use ocomment_core::Severity;
+    let mut sorted = Severity::ALL;
+    sorted.sort_unstable();
+    assert_eq!(
+        sorted,
+        Severity::ALL,
+        "`ALL` and the derived ordering disagree about which severity is worse"
+    );
+    assert!(Severity::Error.is_failure());
+    for severity in Severity::ALL.into_iter().filter(|s| *s != Severity::Error) {
+        assert!(
+            !severity.is_failure(),
+            "{severity} is not an error and was read as one"
+        );
+    }
+}
+
+/// A severity is compared as a category, not as a name.
+///
+/// `severity == Severity::Error` means "did the scan fail", and that is a
+/// question about a category with one member today. The same shape -- a
+/// comparison naming one variant while meaning a group -- has been wrong twice
+/// in this repository already, once in `OutputFormat` where it reached CI.
+#[test]
+fn a_severity_is_asked_about_rather_than_named() {
+    let offenders: Vec<&str> = ERROR_SOURCES
+        .iter()
+        .filter(|(_, text)| text.contains("== Severity::") || text.contains("!= Severity::"))
+        .map(|(name, _)| *name)
+        .collect();
+    assert!(
+        offenders.is_empty(),
+        "these compare a severity by name; `is_failure()` asks the question \
+         they mean, in one place: {offenders:?}"
+    );
+}

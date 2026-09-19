@@ -15,7 +15,7 @@ base64 so invalid UTF-8 is never normalized by a JSON implementation.
 sends the fixture id, so a response names the case it belongs to.
 
 The Rust conformance driver and `ocomment-ref` must compare comment spans,
-classification, dispositions, diagnostics, edits, safe/all output, and source
+classification, dispositions, diagnostics, edits, conservative/all output, and source
 map segments byte-for-byte.
 
 ## Where the requests come from
@@ -35,7 +35,7 @@ A case maps onto a request directly, under the same names:
 | `language` | `language` |
 | `dialect` | `options.dialect` |
 | `operation` | `operation`, defaulting to `transform` |
-| `options` | `options`, over the defaults `{"policy": "safe", "layout": "lines"}` |
+| `options` | `options`, over the defaults `{"policy": "conservative", "layout": "lines"}` |
 | `source_utf8` or `source_base64` | `source_base64` |
 | `spans`, `edits`, `profile` | the same key, unchanged |
 

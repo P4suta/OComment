@@ -55,6 +55,10 @@ inputs:
     description: Directory the command runs in. Relative paths and SARIF output resolve against it.
     required: false
     default: "."
+  step-summary:
+    description: Write a Markdown table of the run's counts to the job summary.
+    required: false
+    default: "true"
   token:
     description: Token used to resolve the latest release and verify attestations.
     required: false
@@ -70,6 +74,21 @@ outputs:
   sarif-file:
     description: Absolute path of the SARIF file in the runner's own spelling, empty when format is not sarif.
     value: ${{ steps.run.outputs.sarif-file }}
+  findings-count:
+    description: How many removable comments the run reported.
+    value: ${{ steps.run.outputs.findings-count }}
+  files-with-findings:
+    description: How many files held at least one of them.
+    value: ${{ steps.run.outputs.files-with-findings }}
+  files-scanned:
+    description: How many files the run read.
+    value: ${{ steps.run.outputs.files-scanned }}
+  removed-count:
+    description: How many comments a `fix` actually removed; 0 for every other command.
+    value: ${{ steps.run.outputs.removed-count }}
+  summary-file:
+    description: Absolute path of the JSON run summary, against spec/summary.schema.json.
+    value: ${{ steps.run.outputs.summary-file }}
 
 runs:
   using: composite
@@ -86,6 +105,11 @@ runs:
       run: |
         set -euo pipefail
 
+        # NOTE: This needs `shell: bash`. `$'\n'` is a bash quoting form, and
+        # NOTE: dash -- which is `sh` on Ubuntu -- matches nothing with it, so
+        # NOTE: the check would accept a line break instead of rejecting it,
+        # NOTE: with no error. `tools/check_ci_contracts.py` refuses any other
+        # NOTE: shell here for that reason.
         reject_line_breaks() {
           case "$2" in
             *$'\n'*|*$'\r'*)
@@ -278,9 +302,15 @@ runs:
         INPUT_SARIF_FILE: ${{ inputs.sarif-file }}
         INPUT_UPLOAD_SARIF: ${{ inputs.upload-sarif }}
         INPUT_WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        INPUT_STEP_SUMMARY: ${{ inputs.step-summary }}
       run: |
         set -euo pipefail
 
+        # NOTE: This needs `shell: bash`. `$'\n'` is a bash quoting form, and
+        # NOTE: dash -- which is `sh` on Ubuntu -- matches nothing with it, so
+        # NOTE: the check would accept a line break instead of rejecting it,
+        # NOTE: with no error. `tools/check_ci_contracts.py` refuses any other
+        # NOTE: shell here for that reason.
         reject_line_breaks() {
           case "$2" in
             *$'\n'*|*$'\r'*)
@@ -305,7 +335,15 @@ runs:
         reject_line_breaks "sarif-file" "${INPUT_SARIF_FILE}"
         reject_line_breaks "upload-sarif" "${INPUT_UPLOAD_SARIF}"
         reject_line_breaks "working-directory" "${INPUT_WORKING_DIRECTORY}"
+        reject_line_breaks "step-summary" "${INPUT_STEP_SUMMARY}"
 
+        case "${INPUT_STEP_SUMMARY}" in
+          true|false) ;;
+          *)
+            echo "::error::step-summary must be true or false"
+            exit 2
+            ;;
+        esac
         case "${INPUT_COMMAND}" in
           check|diff) ;;
           *)
@@ -336,6 +374,13 @@ runs:
         # shellcheck disable=SC2206 # paths and args are documented as whitespace-separated.
         arguments+=(${INPUT_ARGS})
         set +f
+
+        # The counts come out of the run itself rather than out of its product,
+        # so they are the same numbers whatever --format the caller chose and
+        # there is no second scan to pay for. The file is the run's, not the
+        # caller's: a caller who wants one passes --summary in args.
+        summary_file="${RUNNER_TEMP}/ocomment-summary-${RANDOM}-$$.json"
+        arguments+=(--summary "${summary_file}")
 
         sarif_file=""
         if [ "${INPUT_FORMAT}" = "sarif" ]; then
@@ -371,6 +416,69 @@ runs:
         echo "ocomment exited ${code}"
         write_output exit-code "${code}"
         write_output sarif-file "${sarif_output}"
+
+        # A run that failed before it finished writes no summary, and the
+        # counts are reported as empty rather than as zero: "none found" and
+        # "never looked" are different answers and a gate downstream must not
+        # read the second as the first.
+        findings=""
+        files_with=""
+        scanned=""
+        removed=""
+        summary_output=""
+        if [ -f "${summary_file}" ]; then
+          summary_output="${summary_file}"
+          if command -v cygpath >/dev/null 2>&1; then
+            summary_output="$(cygpath -w "${summary_file}")"
+          fi
+          read -r findings files_with scanned removed < <(node -e '
+            const summary = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8"));
+            process.stdout.write([
+              summary.removable_comments,
+              summary.files_with_findings,
+              summary.files_scanned,
+              summary.comments_removed,
+            ].join(" ") + "\n");
+          ' "${summary_file}")
+
+          if [ "${INPUT_STEP_SUMMARY}" = "true" ] && [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+            node -e '
+              const fs = require("node:fs");
+              const summary = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+              const rows = [
+                ["Files scanned", summary.files_scanned],
+                ["Files with findings", summary.files_with_findings],
+                ["Removable comments", summary.removable_comments],
+                ["Comments removed", summary.comments_removed],
+                ["Files that would not scan", summary.invalid_files],
+                ["Files passed over", summary.skipped_files],
+              ];
+              const lines = [
+                `## OComment \`${summary.operation}\``,
+                "",
+                "| | |",
+                "| --- | ---: |",
+                ...rows.map(([name, value]) => `| ${name} | ${value} |`),
+              ];
+              const kinds = Object.entries(summary.removable_by_kind ?? {});
+              if (kinds.length > 0) {
+                lines.push("", "By kind: " + kinds.map(([k, n]) => `\`${k}\` ${n}`).join(", "));
+              }
+              if ((summary.top_files ?? []).length > 0) {
+                lines.push("", "Where they are:");
+                for (const entry of summary.top_files) {
+                  lines.push(`- \`${entry.path}\` — ${entry.removable}`);
+                }
+              }
+              fs.appendFileSync(process.argv[2], lines.join("\n") + "\n");
+            ' "${summary_file}" "${GITHUB_STEP_SUMMARY}"
+          fi
+        fi
+        write_output findings-count "${findings}"
+        write_output files-with-findings "${files_with}"
+        write_output files-scanned "${scanned}"
+        write_output removed-count "${removed}"
+        write_output summary-file "${summary_output}"
 
     - name: Validate the OComment result
       shell: bash
@@ -411,7 +519,7 @@ runs:
 
     - name: Upload SARIF results
       if: ${{ inputs.upload-sarif == 'true' && steps.run.outputs.sarif-file != '' && (steps.run.outputs.exit-code == '0' || steps.run.outputs.exit-code == '1') }}
-      uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
+      uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
       with:
         sarif_file: ${{ steps.run.outputs.sarif-file }}
         category: ocomment

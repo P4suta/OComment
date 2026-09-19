@@ -56,6 +56,11 @@ DIRECTIVES = ROOT / "spec/directives.toml"
 # NOTE: reads it, and the report says which, so the samples below say it too.
 KEPT_AS_PREAMBLE = "required source preamble"
 KEPT_AS_DIRECTIVE = "tool or language directive"
+# NOTE: The third reason, and the only one a `remove` policy cannot overrule.
+# NOTE: `spec/directives.toml` files these under `load_bearing`, and the two
+# NOTE: lists are checked against each other below so that a marker cannot be
+# NOTE: promoted in the spec without its sample saying what changed.
+KEPT_AS_LOAD_BEARING = "required by the language or its build"
 
 # NOTE: Where the marker goes in a sample's template. It is substituted rather
 # NOTE: than formatted, so a sample is free to contain braces of its own.
@@ -128,7 +133,7 @@ SAMPLES: dict[str, Sample] = {
         # NOTE: protecting it is right. What the marker still promises is that
         # NOTE: it opens the comment, so the near-miss mentions it instead.
         "// a note about go:build linux",
-        KEPT_AS_DIRECTIVE,
+        KEPT_AS_LOAD_BEARING,
     ),
     "+build": Sample(
         "go",
@@ -136,7 +141,7 @@ SAMPLES: dict[str, Sample] = {
         f"{SLOT}\n// control\n",
         "// +build linux",
         "// a note about +build linux",
-        KEPT_AS_DIRECTIVE,
+        KEPT_AS_LOAD_BEARING,
     ),
     "triple-slash-reference": Sample(
         "typescript",
@@ -148,7 +153,7 @@ SAMPLES: dict[str, Sample] = {
         # NOTE: the boundary left to get wrong is the opener. Two slashes are
         # NOTE: an ordinary comment that happens to quote the directive.
         '// <reference path="types.d.ts" />',
-        KEPT_AS_DIRECTIVE,
+        KEPT_AS_LOAD_BEARING,
     ),
     "sourceMappingURL": Sample(
         "javascript",
@@ -175,7 +180,7 @@ SAMPLES: dict[str, Sample] = {
         # NOTE: boundary after it to get wrong; `#__PURE__ish` is still the
         # NOTE: bundler's marker with rubbish appended.
         "/* a note about #__PURE__ elsewhere */",
-        KEPT_AS_DIRECTIVE,
+        KEPT_AS_LOAD_BEARING,
     ),
     "@__PURE__": Sample(
         "javascript",
@@ -183,7 +188,38 @@ SAMPLES: dict[str, Sample] = {
         f"const value = {SLOT} factory();\n// control\n",
         "/*@__PURE__*/",
         "/* a note about @__PURE__ elsewhere */",
-        KEPT_AS_DIRECTIVE,
+        KEPT_AS_LOAD_BEARING,
+    ),
+    "#__NO_SIDE_EFFECTS__": Sample(
+        "javascript",
+        None,
+        f"{SLOT}\nexport function f() {{}}\n// control\n",
+        "/*#__NO_SIDE_EFFECTS__*/",
+        "/* a note about #__NO_SIDE_EFFECTS__ elsewhere */",
+        KEPT_AS_LOAD_BEARING,
+    ),
+    "webpack": Sample(
+        "javascript",
+        None,
+        f'const m = import({SLOT} "./m");\n// control\n',
+        '/* webpackChunkName: "x" */',
+        # NOTE: The same option with the colon taken out. A webpack option is
+        # NOTE: the word, one more word, and a colon, so this is the marker
+        # NOTE: right up to the byte that ends its name -- which is the byte
+        # NOTE: worth getting wrong, and the one `/* webpackish prose */` would
+        # NOTE: never have exercised.
+        '/* webpackChunkName "x" */',
+        KEPT_AS_LOAD_BEARING,
+    ),
+    "vite-ignore": Sample(
+        "javascript",
+        None,
+        f"const m = import({SLOT} url);\n// control\n",
+        "/* @vite-ignore */",
+        # NOTE: The marker stands alone before the import expression, so it
+        # NOTE: ends at whitespace and `@vite-ignoreish` is not it.
+        "/* @vite-ignoreish */",
+        KEPT_AS_LOAD_BEARING,
     ),
     "lint-and-formatter": Sample(
         "javascript",
@@ -217,7 +253,7 @@ SAMPLES: dict[str, Sample] = {
         # NOTE: a hint a hint; a block comment that merely opens with one is an
         # NOTE: ordinary comment about the index.
         "/* + index(t) */",
-        KEPT_AS_DIRECTIVE,
+        KEPT_AS_LOAD_BEARING,
     ),
     "version-comment": Sample(
         "sql",
@@ -225,7 +261,7 @@ SAMPLES: dict[str, Sample] = {
         f"{SLOT} -- control\n",
         "/*!40101 SET NAMES utf8 */",
         "/* !40101 SET NAMES utf8 */",
-        KEPT_AS_DIRECTIVE,
+        KEPT_AS_LOAD_BEARING,
     ),
     "syntax=": Sample(
         "shell",
@@ -236,7 +272,7 @@ SAMPLES: dict[str, Sample] = {
         # NOTE: marker carries its own boundary and `syntax=ish` is the
         # NOTE: directive naming a frontend that does not exist.
         "# a note about syntax=docker/dockerfile:1",
-        KEPT_AS_DIRECTIVE,
+        KEPT_AS_LOAD_BEARING,
     ),
     "hadolint": Sample(
         "shell",
@@ -441,7 +477,7 @@ SAMPLES: dict[str, Sample] = {
         f"{SLOT}\n# control\n",
         "# frozen_string_literal: true",
         f"# frozen_string_literal{NEGATIVE_SUFFIX}",
-        KEPT_AS_DIRECTIVE,
+        KEPT_AS_LOAD_BEARING,
     ),
     "warn_indent:": Sample(
         "ruby",
@@ -449,7 +485,7 @@ SAMPLES: dict[str, Sample] = {
         f"{SLOT}\n# control\n",
         "# warn_indent: true",
         f"# warn_indent{NEGATIVE_SUFFIX}",
-        KEPT_AS_DIRECTIVE,
+        KEPT_AS_LOAD_BEARING,
     ),
     "shareable_constant_value:": Sample(
         "ruby",
@@ -457,7 +493,7 @@ SAMPLES: dict[str, Sample] = {
         f"{SLOT}\n# control\n",
         "# shareable_constant_value: literal",
         f"# shareable_constant_value{NEGATIVE_SUFFIX}",
-        KEPT_AS_DIRECTIVE,
+        KEPT_AS_LOAD_BEARING,
     ),
     # NOTE: The three tools every Ruby project runs. `rubocop:` and `standard:`
     # NOTE: are namespaces -- `disable`, `enable`, `todo` -- so letters run on
@@ -535,7 +571,7 @@ SAMPLES: dict[str, Sample] = {
         f"{SLOT}\n// control\n",
         "// @dart = 2.12",
         f"// @dart{NEGATIVE_SUFFIX}",
-        KEPT_AS_DIRECTIVE,
+        KEPT_AS_LOAD_BEARING,
     ),
     # NOTE: `dart_style` matches its two markers by equality on the whole comment
     # NOTE: rather than by prefix -- `front_end/piece_writer.dart` switches on
@@ -581,7 +617,7 @@ SAMPLES: dict[str, Sample] = {
         f"{SLOT}\n// control\n",
         "// swift-tools-version:5.9",
         "// a note about swift-tools-version:5.9",
-        KEPT_AS_DIRECTIVE,
+        KEPT_AS_LOAD_BEARING,
     ),
     "swiftlint:": Sample(
         "swift",
@@ -646,6 +682,116 @@ SAMPLES: dict[str, Sample] = {
     # NOTE: `int    a     =    1;` unformatted under the marker and reformatted
     # NOTE: it under `// csharpier-ignore some text`, under `//  csharpier-ignore`
     # NOTE: with a second space, and under the near-miss below.
+
+    # NOTE: The tool tier of the languages whose entries were blank. Eclipse
+    # NOTE: reads `$NON-NLS-n$` and stops reporting the string literal on that
+    # NOTE: line as one that was never externalised; Checkstyle's suppression
+    # NOTE: filter reads `CHECKSTYLE:OFF`; SonarQube reads `NOSONAR` in most of
+    # NOTE: the languages it analyses; Eclipse and IntelliJ both read
+    # NOTE: `@formatter:off`. Each near-miss is a comment that opens with the
+    # NOTE: same letters and means nothing to the tool.
+    "$non-nls": Sample(
+        "java",
+        None,
+        f"{SLOT}\n// control\n",
+        "//$NON-NLS-1$",
+        "// a note about $NON-NLS-1$",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "checkstyle:": Sample(
+        "java",
+        None,
+        f"{SLOT}\n// control\n",
+        "// CHECKSTYLE:OFF",
+        "// checkstyle is configured in the build file",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "nosonar": Sample(
+        "java",
+        None,
+        f"{SLOT}\n// control\n",
+        "// NOSONAR the cast is checked above",
+        "// nosonarqube is what the product is called",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "formatter:": Sample(
+        "java",
+        None,
+        f"{SLOT}\n// control\n",
+        "// @formatter:off",
+        "// formatters are configured elsewhere",
+        KEPT_AS_DIRECTIVE,
+    ),
+
+    # NOTE: Python's two blank spots. `# pylint: disable=` turns one check off
+    # NOTE: and `# pragma: no cover` takes the line out of the coverage report,
+    # NOTE: which is the same job `# nocov` does for R and
+    # NOTE: `@codeCoverageIgnore` for PHP.
+    "pylint:": Sample(
+        "python",
+        None,
+        f"{SLOT}\n# control\n",
+        "# pylint: disable=invalid-name",
+        "# pylint is run in the pipeline",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "pragma:": Sample(
+        "python",
+        None,
+        f"{SLOT}\n# control\n",
+        "# pragma: no cover",
+        "# pragmatism about naming",
+        KEPT_AS_DIRECTIVE,
+    ),
+
+    # NOTE: Perl::Critic is addressed and released by a phrase rather than by a
+    # NOTE: prefix, so each near-miss is the phrase with a longer word in place
+    # NOTE: of its last.
+    "no critic": Sample(
+        "perl",
+        None,
+        f"{SLOT}\n# control\n",
+        "## no critic (ProhibitMagicNumbers)",
+        "# no criticism intended",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "use critic": Sample(
+        "perl",
+        None,
+        f"{SLOT}\n# control\n",
+        "## use critic",
+        "# use critical thinking",
+        KEPT_AS_DIRECTIVE,
+    ),
+
+    # NOTE: Three more the survey asked for. cppcheck reads its own name as a
+    # NOTE: prefix, so the near-miss is a comment that mentions it; staticcheck's
+    # NOTE: two are named in full because `lint:` alone is also a note about
+    # NOTE: linting; scalafmt reads its pair by equality.
+    "cppcheck-suppress": Sample(
+        "c",
+        None,
+        f"{SLOT}\n// control\n",
+        "// cppcheck-suppress nullPointer",
+        "// a note about cppcheck-suppress",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "lint:ignore": Sample(
+        "go",
+        None,
+        f"{SLOT}\n// control\n",
+        "//lint:ignore SA1000 the pattern is checked",
+        "// lint: we should add one",
+        KEPT_AS_DIRECTIVE,
+    ),
+    "format:": Sample(
+        "scala",
+        None,
+        f"{SLOT}\n// control\n",
+        "// format: off",
+        "// format: off for now",
+        KEPT_AS_DIRECTIVE,
+    ),
     "csharpier-ignore": Sample(
         "csharp",
         None,
@@ -666,7 +812,7 @@ SAMPLES: dict[str, Sample] = {
         f"{SLOT}\n// control\n",
         "//> using scala \"3.3.0\"",
         "// a note about //> using scala",
-        KEPT_AS_DIRECTIVE,
+        KEPT_AS_LOAD_BEARING,
     ),
     "@schema": Sample(
         "yaml",
@@ -683,14 +829,85 @@ SAMPLES: dict[str, Sample] = {
 }
 
 
-def protected_names() -> list[str]:
-    """The `protected` list the shared spec publishes."""
+def protected_names() -> tuple[list[str], list[str]]:
+    """The two protection tiers the shared spec publishes, in its own order.
+
+    `protected` is the tool tier a `remove` policy may take; `load_bearing` is
+    the tier it may not, because the language or its build reads those as part
+    of the program. The distinction is the whole point of this check, so a spec
+    missing either list is an error rather than an empty tier that quietly
+    tests nothing.
+    """
     with DIRECTIVES.open("rb") as stream:
         table = tomllib.load(stream)
-    names = table.get("protected")
-    if not isinstance(names, list) or not names:
-        raise SystemExit(f"{DIRECTIVES.relative_to(ROOT)} lists nothing under `protected`")
-    return names
+    tiers = []
+    for key in ("protected", "load_bearing"):
+        names = table.get(key)
+        if not isinstance(names, list) or not names:
+            raise SystemExit(f"{DIRECTIVES.relative_to(ROOT)} lists nothing under `{key}`")
+        tiers.append(names)
+    return tiers[0], tiers[1]
+
+
+def check_language_survey(binary: pathlib.Path, failures: list[str]) -> None:
+    """Every language the binary has must state what it holds in both tiers.
+
+    A catalogue that lists only what exists cannot tell "this language has no
+    load-bearing comment" from "nobody has looked at this language", and those
+    are different claims. The two survey tables make the second one impossible
+    to leave implicit: a language missing from one is a language that was added
+    without the question being asked, and that is how a tier ends up covering
+    seven languages out of thirty without anyone deciding it should.
+
+    Both tiers are surveyed, because the tier that decides whether a default
+    `fix` takes a comment out is the tool tier, and it went years with `java`
+    and `perl` holding nothing while every other language named its linter's
+    marker. Nothing said so, because only the other tier was being asked.
+
+    The markers each entry names are checked against the tier itself, so an
+    entry cannot drift into naming something the tier does not hold. The
+    cross-language markers -- `eslint`, `noqa`, `nolint`, `NOSONAR`, the
+    formatter pragmas -- are left out of the entries on purpose: they are
+    recognised in every language, so naming them in each would turn the survey
+    into a list that is the same everywhere and says nothing about any of them.
+    """
+    with DIRECTIVES.open("rb") as stream:
+        table = tomllib.load(stream)
+
+    listing = subprocess.run(
+        [str(binary), "languages"],
+        capture_output=True,
+        check=True,
+        text=True,
+    ).stdout.splitlines()
+    languages = {line.split("\t", 1)[0] for line in listing[1:] if line.strip()}
+    protected, load_bearing = protected_names()
+
+    for key, tier, label in (
+        ("load_bearing_by_language", load_bearing, "load-bearing tier"),
+        ("protected_by_language", protected, "tool tier"),
+    ):
+        survey = table.get(key)
+        if not isinstance(survey, dict):
+            failures.append(f"{DIRECTIVES.relative_to(ROOT)} has no `[{key}]` table")
+            continue
+        for language in sorted(languages - set(survey)):
+            failures.append(
+                f"`{language}` is a built-in language but {DIRECTIVES.relative_to(ROOT)}"
+                f" does not say what it holds in the {label}; add it to `[{key}]`,"
+                " with an empty list if it holds nothing of its own"
+            )
+        for language in sorted(set(survey) - languages):
+            failures.append(
+                f"`{language}` is in `[{key}]` but is not a built-in language"
+            )
+        for language in sorted(set(survey) & languages):
+            for marker in survey[language]:
+                if marker not in tier:
+                    failures.append(
+                        f"`{language}` names `{marker}` in `[{key}]`, but"
+                        f" `{key.removesuffix('_by_language')}` does not list it"
+                    )
 
 
 def marker_word(marker: str) -> str:
@@ -706,9 +923,13 @@ def marker_word(marker: str) -> str:
     return match.group() if match else ""
 
 
-def scan(binary: pathlib.Path, sample: Sample, comment: str) -> list[dict]:
+def scan(
+    binary: pathlib.Path, sample: Sample, comment: str, policy: str | None = None
+) -> list[dict]:
     """Every comment the binary reports for one built sample, in source order."""
     arguments = [str(binary), "scan", "--format", "json", "--language", sample.language]
+    if policy is not None:
+        arguments += ["--policy", policy]
     if sample.dialect is not None:
         arguments += ["--dialect", sample.dialect]
     completed = subprocess.run(
@@ -761,6 +982,47 @@ def check_sample(binary: pathlib.Path, name: str, failures: list[str]) -> None:
             " so the marker is matched loosely enough to protect a comment that"
             " is only about it"
         )
+    check_policy_all(binary, sample, where, failures)
+
+
+def check_policy_all(
+    binary: pathlib.Path, sample: Sample, where: str, failures: list[str]
+) -> None:
+    """Run the same sample under `--policy all` and hold the tier to its promise.
+
+    This is the check the two tiers exist for. Under the default policy every
+    marker in the spec is kept and the two are indistinguishable; `all` is
+    where they part, and it is the run a project reaches for when it wants
+    comments gone -- so it is also the run that used to delete a build
+    constraint. A tool-tier marker has to go, because `all` said it would take
+    every comment and a linter suppression is one. A load-bearing marker has to
+    stay, because removing it would change what compiles or what the code does,
+    and no policy is offered that choice.
+    """
+    comments = scan(binary, sample, sample.marker, policy="all")
+    if len(comments) != 2:
+        failures.append(
+            f"{where}: {len(comments)} comments found under --policy all, expected 2"
+        )
+        return
+    action = comments[0]["disposition"].get("action")
+    # NOTE: A preamble is held back from `all` by the same force_protected gate
+    # NOTE: as a load-bearing directive -- it is the older half of that gate --
+    # NOTE: so the two expect a keep and only the tool tier expects a removal.
+    if sample.reason in (KEPT_AS_LOAD_BEARING, KEPT_AS_PREAMBLE):
+        if action != "keep":
+            failures.append(
+                f"{where}: `{sample.marker}` is {sample.reason} and --policy all"
+                f" {action}s it; the language or its build reads that comment, so"
+                " a run that took it would change the code rather than a report"
+                " about it"
+            )
+    elif action != "remove":
+        failures.append(
+            f"{where}: `{sample.marker}` is in the tool tier and --policy all"
+            f" {action}s it; `all` promised to take every comment a tool merely"
+            " reads, and a marker it holds back belongs under `load_bearing`"
+        )
 
 
 def main() -> int:
@@ -775,7 +1037,8 @@ def main() -> int:
     if not binary.is_file():
         parser.error(f"CLI binary does not exist: {binary}")
 
-    names = protected_names()
+    tool_tier, load_bearing = protected_names()
+    names = tool_tier + load_bearing
     failures: list[str] = []
     for name in sorted(set(names) - set(SAMPLES)):
         failures.append(
@@ -786,16 +1049,36 @@ def main() -> int:
         failures.append(
             f"`{name}` has a sample but {DIRECTIVES.relative_to(ROOT)} does not protect it"
         )
+    # INVARIANT: The tier a marker is filed under in the shared spec and the
+    # INVARIANT: reason its sample expects are two spellings of one decision, so
+    # INVARIANT: they are compared rather than both trusted. Moving a marker
+    # INVARIANT: between the lists is meant to be a visible act: it changes what
+    # INVARIANT: `--policy all` does to a real checkout.
+    for name in sorted(set(load_bearing) & set(SAMPLES)):
+        if SAMPLES[name].reason != KEPT_AS_LOAD_BEARING:
+            failures.append(
+                f"`{name}` is under `load_bearing` in {DIRECTIVES.relative_to(ROOT)}"
+                f" but its sample expects {SAMPLES[name].reason!r}"
+            )
+    for name in sorted(set(tool_tier) & set(SAMPLES)):
+        if SAMPLES[name].reason == KEPT_AS_LOAD_BEARING:
+            failures.append(
+                f"`{name}` expects {KEPT_AS_LOAD_BEARING!r} but"
+                f" {DIRECTIVES.relative_to(ROOT)} files it under `protected`"
+            )
     for name in names:
         if name in SAMPLES:
             check_sample(binary, name, failures)
+    check_language_survey(binary, failures)
 
     if failures:
         print("\n".join(failures))
         return 1
     print(
-        f"{len(names)} protected directives in spec/directives.toml are recognised,"
-        " and none of them protects the near-miss written in its place"
+        f"{len(names)} protected directives in spec/directives.toml are recognised"
+        f" ({len(load_bearing)} of them load-bearing and out of reach of"
+        " --policy all), and none of them protects the near-miss written in its"
+        " place"
     )
     return 0
 

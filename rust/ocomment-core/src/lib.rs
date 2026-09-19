@@ -75,16 +75,27 @@
 //! delimiters, then from its own text and position — and the [`Policy`] then
 //! decides that kind:
 //!
-//! | Kind | [`Policy::Safe`] | [`Policy::Legal`] | [`Policy::All`] |
+//! The columns are in the order of how much each policy takes, and the first
+//! of them is the default.
+//!
+//! | Kind | [`Policy::Conservative`] | [`Policy::Standard`] | [`Policy::All`] |
 //! | --- | --- | --- | --- |
-//! | `line`, `block`, `doc-line`, `doc-block` | remove | remove | remove |
-//! | `license` | remove | keep | remove |
-//! | `directive`, `html-comment`, `optimizer-hint`, `version-comment` | keep | keep | remove |
+//! | `line`, `block` | remove | remove | remove |
+//! | `doc-line`, `doc-block` | keep | remove | remove |
+//! | `license` | keep | remove | remove |
+//! | `directive`, `html-comment` | keep | keep | remove |
 //! | `shebang`, `encoding` | keep | keep | keep unless forced |
+//! | `load-bearing`, `optimizer-hint`, `version-comment` | keep | keep | keep unless forced |
 //!
 //! The shebang and the encoding declaration are the two a source needs to keep
-//! working, so even [`Policy::All`] leaves them until
-//! [`ScanOptions::force_protected`] says otherwise. The policy is the last word
+//! working; a [`CommentKind::LoadBearing`] directive is read by the language or
+//! its build as part of the program; and a SQL
+//! [`CommentKind::VersionComment`] is a statement the server executes while a
+//! [`CommentKind::OptimizerHint`] decides the plan it produces. Removing any of
+//! them changes what the toolchain produces rather than what a tool reports, so
+//! even [`Policy::All`] leaves them until [`ScanOptions::force_protected`] says
+//! otherwise.
+//! The policy is the last word
 //! rather than the first: [`ScanOptions::keep_kinds`],
 //! [`ScanOptions::keep_regex`], [`ScanOptions::remove_kinds`] and
 //! [`ScanOptions::remove_regex`] are all tested before it.
@@ -161,11 +172,11 @@ pub use detect::{Detection, detect_language, shebang_interpreters};
 pub use incremental::{DocumentChange, IncrementalDocument, IncrementalError, PositionEncoding};
 pub use profile::{
     BlockDelimiter, DeclarativeProfile, LineDelimiter, ProfileError, ProtectedPattern,
-    StringDelimiter, scan_profile, transform_profile, validate_profile,
+    ProtectionTier, StringDelimiter, scan_profile, transform_profile, validate_profile,
 };
 pub use scanner::{
-    DispositionPatterns, PreparedScanner, explain_comment, explain_comment_with,
+    DispositionPatterns, PreparedScanner, comment_text, explain_comment, explain_comment_with,
     explain_disposition, explain_disposition_with, scan,
 };
-pub use transform::{apply_edits, transform, transform_plan, transform_spans};
+pub use transform::{apply_edits, plan_report, transform, transform_plan, transform_spans};
 pub use types::*;

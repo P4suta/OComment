@@ -1,13 +1,28 @@
+//! The `ocomment` command.
+//!
+//! Every module below has a side effect: files, Git, plugins, output, hooks.
+//! The engine that decides what a comment is has none and lives in
+//! `ocomment-core`.
+
+mod advice;
 mod atomic;
 mod cli;
 mod config;
+mod coverage;
+mod deadline;
 mod files;
+mod generated;
 mod git;
+mod hook;
 mod interactive;
 mod lsp;
 mod output;
 mod plugin;
+mod ratchet;
 pub mod runtime;
+mod selftest;
+mod tags;
+mod trace;
 mod values;
 
 use std::{

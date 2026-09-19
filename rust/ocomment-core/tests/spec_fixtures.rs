@@ -20,18 +20,19 @@ use ocomment_core::{
 use serde_json::{Value, json};
 use std::{collections::BTreeSet, fs, path::PathBuf, str::FromStr};
 
-// INVARIANT: The floors live in `spec/fixtures/v1/floor.txt`, which
-// INVARIANT: `tools/differential.py` reads too, so a case deleted from the
-// INVARIANT: corpus fails the Rust test suite as well — on a machine with no
-// INVARIANT: OCaml toolchain — and neither runner can be raised or lowered on
-// INVARIANT: its own. `cases` is the least number of cases the corpus may hold;
-// INVARIANT: `expectations` is the least number of those that must carry a
-// INVARIANT: recorded `expect` block. A case with none is still held to the
-// INVARIANT: structural promises below, so the second floor is what stops the
-// INVARIANT: corpus from quietly degrading into that weaker check. Deleting a
-// INVARIANT: block to re-record it is the documented way to change a recorded
-// INVARIANT: behaviour, and `differential.py --record` puts it back before this
-// INVARIANT: test is meant to run again.
+/// The file both corpus runners read their floors from.
+///
+/// `tools/differential.py` reads it too, so a case deleted from the corpus
+/// fails the Rust test suite as well — on a machine with no OCaml toolchain —
+/// and neither runner can be raised or lowered on its own. `cases` is the
+/// least number of cases the corpus may hold; `expectations` is the least
+/// number of those that must carry a recorded `expect` block. A case with none
+/// is still held to the structural promises below, so the second floor is what
+/// stops the corpus from quietly degrading into that weaker check.
+///
+/// Deleting a block to re-record it is the documented way to change a recorded
+/// behaviour, and `differential.py --record` puts it back before this test is
+/// meant to run again.
 const FLOOR_FILE: &str = "floor.txt";
 
 /// One floor from `floor.txt`, which holds a `#` comment or a name and a

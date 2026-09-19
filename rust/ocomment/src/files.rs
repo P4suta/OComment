@@ -1,10 +1,11 @@
-use crate::config::ResolvedConfig;
+use crate::{config::ResolvedConfig, output::ReadBy};
 use anyhow::{Context, Result, anyhow};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use ignore::WalkBuilder;
 use ocomment_core::{
     DeclarativeProfile, Detection, Dialect, Language, TransformOptions, detect_language,
 };
+use rayon::prelude::*;
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -21,6 +22,29 @@ pub struct SourceFile {
     pub options: TransformOptions,
     pub profile: Option<DeclarativeProfile>,
     pub plugin: Option<String>,
+    /// What decided the language: `extension`, `reserved-filename`, `shebang`,
+    /// `content`, `command-line`, or `configuration-routing`.
+    ///
+    /// Detection already answers this and the answer was being dropped. It is
+    /// the first thing a run that scanned a file as the wrong language needs,
+    /// and the only place it can come from is the decision itself.
+    pub detection: &'static str,
+}
+
+impl SourceFile {
+    /// What will read this file: the language that was detected, or the
+    /// profile or plugin that claimed it when no language did.
+    ///
+    /// Routing already decided this and every caller was re-deriving it, or
+    /// -- more often -- dropping it and reporting the `Language::Unknown`
+    /// that a profile-read file necessarily carries.
+    pub fn read_by(&self) -> ReadBy {
+        match (&self.profile, &self.plugin) {
+            (Some(profile), _) => ReadBy::Profile(profile.name.clone()),
+            (None, Some(plugin)) => ReadBy::Plugin(plugin.clone()),
+            (None, None) => ReadBy::Language,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -42,6 +66,24 @@ pub struct Discovery {
     /// one unreadable path. It is carried out of the walk and returned after
     /// traversal unwinds, instead of being reported as an I/O skip.
     fatal: Option<anyhow::Error>,
+}
+
+impl Discovery {
+    /// Fold one answer in. The first configuration failure is the one reported:
+    /// they are all the same failure, and a run that listed it once per file
+    /// would bury it.
+    fn absorb(&mut self, looked: Looked) {
+        match looked {
+            Looked::Nothing => {}
+            Looked::Found(file) => self.files.push(*file),
+            Looked::Passed(skipped) => self.skipped.push(skipped),
+            Looked::Fatal(error) => {
+                if self.fatal.is_none() {
+                    self.fatal = Some(error);
+                }
+            }
+        }
+    }
 }
 
 /// The path standard input is reported under. It is not a real file name: the
@@ -111,7 +153,9 @@ pub fn stdin_source(
         })
         .or_else(|| detect_language(None, &bytes));
     let Some(Detection {
-        language, dialect, ..
+        language,
+        dialect,
+        reason: detection_reason,
     }) = detection
     else {
         return Err(skipped(STDIN_LANGUAGE_HELP, true));
@@ -134,6 +178,7 @@ pub fn stdin_source(
         options,
         profile: None,
         plugin: None,
+        detection: detection_reason,
     })
 }
 
@@ -184,6 +229,64 @@ pub fn discover_workspace(paths: &[PathBuf], resolved: &ResolvedConfig) -> Resul
     discover_with_scope(paths, resolved, None, None, false)
 }
 
+/// The same, with a language and dialect the caller forced.
+///
+/// `--base` uses this: the paths come from Git rather than from the caller, so
+/// they are walked under the ordinary limits, but a `--language` on the same
+/// command line still has to reach them.
+pub fn discover_workspace_with(
+    paths: &[PathBuf],
+    resolved: &ResolvedConfig,
+    forced_language: Option<Language>,
+    forced_dialect: Option<Dialect>,
+) -> Result<Discovery> {
+    discover_with_scope(paths, resolved, forced_language, forced_dialect, false)
+}
+
+/// One file's worth of bytes, judged as though they were the contents of
+/// `path`.
+///
+/// The path decides everything about the judgement — the language, the
+/// `[[overrides]]` that apply, whether the file is excluded at all — and the
+/// bytes are the ones the caller is proposing to put there. That pair is what
+/// a pre-write hook has and what nothing else in this module accepts: a walk
+/// reads the bytes off the disk, and `-` has bytes with no name.
+///
+/// The returned [`Discovery`] holds the one file, or the one skip that says
+/// why there is nothing to judge. `path` is never opened.
+pub fn proposed_source(
+    path: &Path,
+    bytes: Vec<u8>,
+    resolved: &ResolvedConfig,
+    forced_language: Option<Language>,
+    forced_dialect: Option<Dialect>,
+) -> Result<Discovery> {
+    let include = compile_globs(&resolved.config.files.include)?;
+    let exclude = compile_globs(&resolved.config.files.exclude)?;
+    let generated = crate::generated::Generated::load()?;
+    let context = LoadContext {
+        resolved,
+        forced_language,
+        forced_dialect,
+        include: &include,
+        exclude: &exclude,
+        generated: &generated,
+    };
+    let mut discovery = Discovery::default();
+    let path = reported_path(path);
+    let relative = resolved.relative_to_root(&path);
+    if (!include.is_empty() && !include.is_match(&relative)) || exclude.is_match(&relative) {
+        return Ok(discovery);
+    }
+    match classify(&path, bytes, true, &context) {
+        Looked::Fatal(error) => return Err(error),
+        looked @ Looked::Nothing | looked @ Looked::Found(_) | looked @ Looked::Passed(_) => {
+            discovery.absorb(looked)
+        }
+    }
+    Ok(discovery)
+}
+
 fn discover_with_scope(
     paths: &[PathBuf],
     resolved: &ResolvedConfig,
@@ -193,12 +296,14 @@ fn discover_with_scope(
 ) -> Result<Discovery> {
     let include = compile_globs(&resolved.config.files.include)?;
     let exclude = compile_globs(&resolved.config.files.exclude)?;
+    let generated = crate::generated::Generated::load()?;
     let loader = LoadContext {
         resolved,
         forced_language,
         forced_dialect,
         include: &include,
         exclude: &exclude,
+        generated: &generated,
     };
     let mut discovery = Discovery::default();
     /* NOTE: Only an editor asking for its workspace arrives here without a target;
@@ -212,19 +317,18 @@ fn discover_with_scope(
             .map(|path| (path, explicit_arguments))
             .collect()
     };
+    /* NOTE: Every candidate the walk finds, gathered before any of them is
+     * opened. Traversal is one thread's job and reading a thousand files is
+     * not, so the two are separated: the walk names them, and `load_one`
+     * answers for all of them at once below. */
+    let mut candidates: Vec<(PathBuf, bool, bool)> = Vec::new();
     for (path, explicit_scope) in targets {
         if path.is_file()
             || path
                 .symlink_metadata()
                 .is_ok_and(|metadata| metadata.file_type().is_symlink())
         {
-            load_one(
-                &path,
-                explicit_scope,
-                explicit_scope,
-                &loader,
-                &mut discovery,
-            );
+            candidates.push((path, explicit_scope, explicit_scope));
         } else if path.is_dir() {
             let mut builder = WalkBuilder::new(&path);
             let ignore = resolved.config.files.ignore;
@@ -246,20 +350,46 @@ fn discover_with_scope(
              * names a path inside `.git` — or `.git` itself — is still
              * answered; only what a walk *wanders* into is excluded. */
             builder.filter_entry(|entry| entry.file_name() != GIT_DIRECTORY);
-            for entry in builder.build() {
-                match entry {
-                    Ok(entry) if entry.file_type().is_some_and(|kind| kind.is_file()) => {
-                        load_one(entry.path(), explicit_scope, false, &loader, &mut discovery);
+            /* NOTE: `ignore` reads a directory per thread and answers out of
+             * order, so the candidates are sorted before they are looked at
+             * and the report comes out in the same order on every run. A walk
+             * whose output depended on how the scheduler felt would be a walk
+             * whose diffs could not be reviewed. */
+            builder.threads(rayon::current_num_threads());
+            let found = std::sync::Mutex::new(Vec::new());
+            let failed = std::sync::Mutex::new(Vec::new());
+            builder.build_parallel().run(|| {
+                let found = &found;
+                let failed = &failed;
+                let root = path.clone();
+                Box::new(move |entry| {
+                    match entry {
+                        Ok(entry) if entry.file_type().is_some_and(|kind| kind.is_file()) => {
+                            found
+                                .lock()
+                                .expect("the walk's collector is not poisoned")
+                                .push(entry.into_path());
+                        }
+                        Ok(_) => {}
+                        Err(error) => failed
+                            .lock()
+                            .expect("the walk's collector is not poisoned")
+                            .push(SkippedFile {
+                                path: root.clone(),
+                                reason: error.to_string(),
+                                error: true,
+                                explicit: explicit_scope,
+                            }),
                     }
-                    Ok(_) => {}
-                    Err(error) => discovery.skipped.push(SkippedFile {
-                        path: path.clone(),
-                        reason: error.to_string(),
-                        error: true,
-                        explicit: explicit_scope,
-                    }),
-                }
-            }
+                    ignore::WalkState::Continue
+                })
+            });
+            let mut found = found.into_inner().expect("the walk finished");
+            found.sort_unstable();
+            candidates.extend(found.into_iter().map(|path| (path, explicit_scope, false)));
+            discovery
+                .skipped
+                .extend(failed.into_inner().expect("the walk finished"));
         } else {
             discovery.skipped.push(SkippedFile {
                 path,
@@ -268,6 +398,20 @@ fn discover_with_scope(
                 explicit: explicit_scope,
             });
         }
+    }
+    /* NOTE: Read and classified in parallel, folded in the order the
+     * candidates were gathered. Reading is where the time goes -- a walk over
+     * a large repository is thousands of `open`, `read`, `close` and a
+     * language detection each -- and it is the part that has no reason to
+     * happen one file at a time. */
+    for looked in candidates
+        .par_iter()
+        .map(|(path, explicit_scope, explicit_path)| {
+            load_one(path, *explicit_scope, *explicit_path, &loader)
+        })
+        .collect::<Vec<_>>()
+    {
+        discovery.absorb(looked);
     }
     if let Some(error) = discovery.fatal.take() {
         return Err(error);
@@ -319,6 +463,23 @@ struct LoadContext<'a> {
     forced_dialect: Option<Dialect>,
     include: &'a GlobSet,
     exclude: &'a GlobSet,
+    /// The catalogue of files another tool writes, parsed once per walk.
+    generated: &'a crate::generated::Generated,
+}
+
+/// What looking at one path produced.
+///
+/// Returned rather than pushed, so that looking at a path is a pure function
+/// of the path and the configuration — which is what lets a walk look at a
+/// thousand of them at once and fold the answers in one deterministic order.
+enum Looked {
+    /// Excluded by a glob, or not a file at all.
+    Nothing,
+    Found(Box<SourceFile>),
+    Passed(SkippedFile),
+    /// A configuration failure, which applies to the run rather than to this
+    /// path.
+    Fatal(anyhow::Error),
 }
 
 fn load_one(
@@ -326,14 +487,12 @@ fn load_one(
     explicit_scope: bool,
     explicit_path: bool,
     context: &LoadContext<'_>,
-    discovery: &mut Discovery,
-) {
+) -> Looked {
     let LoadContext {
         resolved,
-        forced_language,
-        forced_dialect,
         include,
         exclude,
+        ..
     } = context;
     let path = &reported_path(path);
     /* NOTE: The globs are written relative to the root; the path was typed — or
@@ -341,31 +500,28 @@ fn load_one(
      * the root before either set is asked about it. */
     let relative = resolved.relative_to_root(path);
     if (!include.is_empty() && !include.is_match(&relative)) || exclude.is_match(&relative) {
-        return;
+        return Looked::Nothing;
     }
     let link_metadata = match path.symlink_metadata() {
         Ok(value) => value,
         Err(error) => {
-            discovery.skipped.push(skip(path, explicit_path, error));
-            return;
+            return Looked::Passed(skip(path, explicit_path, error));
         }
     };
     let metadata = if link_metadata.file_type().is_symlink() {
         if !resolved.config.files.follow_symlinks {
-            discovery.skipped.push(SkippedFile {
+            return Looked::Passed(SkippedFile {
                 path: path.to_path_buf(),
                 reason: "symbolic link".into(),
                 error: false,
                 explicit: explicit_path,
             });
-            return;
         }
         match path.metadata() {
             Ok(metadata) if metadata.is_file() => metadata,
-            Ok(_) => return,
+            Ok(_) => return Looked::Nothing,
             Err(error) => {
-                discovery.skipped.push(skip(path, explicit_path, error));
-                return;
+                return Looked::Passed(skip(path, explicit_path, error));
             }
         }
     } else {
@@ -374,29 +530,63 @@ fn load_one(
     /* NOTE: Every path under an explicitly named directory is explicit for hidden and
      * size handling. */
     if !explicit_scope && metadata.len() > resolved.config.files.max_size {
-        discovery.skipped.push(SkippedFile {
+        return Looked::Passed(SkippedFile {
             path: path.to_path_buf(),
             reason: format!("larger than {} bytes", resolved.config.files.max_size),
             error: false,
             explicit: explicit_path,
         });
-        return;
     }
     let source = match fs::read(path) {
         Ok(value) => value,
         Err(error) => {
-            discovery.skipped.push(skip(path, explicit_path, error));
-            return;
+            return Looked::Passed(skip(path, explicit_path, error));
         }
     };
+    classify(path, source, explicit_path, context)
+}
+
+/// Everything deciding one file's fate that does not depend on reading it.
+///
+/// Split out from [`load_one`] because the bytes and the path are separable
+/// questions: [`proposed_source`] has a path that exists and contents that do
+/// not, and every rule below — the binary test, the generated catalogue, the
+/// language, the overrides, the profile and plugin routing — has to reach the
+/// same answer for it that a walk would reach for the file once it is written.
+/// Two copies of this would be two answers.
+fn classify(
+    path: &Path,
+    source: Vec<u8>,
+    explicit_path: bool,
+    context: &LoadContext<'_>,
+) -> Looked {
+    let LoadContext {
+        resolved,
+        forced_language,
+        forced_dialect,
+        generated,
+        ..
+    } = context;
     if source.iter().take(8192).any(|byte| *byte == 0) {
-        discovery.skipped.push(SkippedFile {
+        return Looked::Passed(SkippedFile {
             path: path.to_path_buf(),
             reason: "binary file (NUL byte)".into(),
             error: false,
             explicit: explicit_path,
         });
-        return;
+    }
+    /* NOTE: Before the language is chosen, because this is not a question about
+     * what the file is written in. A lock file is perfectly readable TOML and a
+     * recorded seed list is perfectly readable prose; what makes them skippable
+     * is that the comments in them belong to the tool that will write them
+     * again. */
+    if !resolved.config.files.include_generated && generated.claims(path, &source) {
+        return Looked::Passed(SkippedFile {
+            path: path.to_path_buf(),
+            reason: crate::generated::REASON.into(),
+            error: false,
+            explicit: explicit_path,
+        });
     }
     let built_in = (*forced_language)
         .map(|language| Detection {
@@ -408,7 +598,7 @@ fn load_one(
     let Detection {
         language: detected_language,
         dialect: detected_dialect,
-        ..
+        reason: detection_reason,
     } = built_in.unwrap_or(Detection {
         language: Language::Unknown,
         dialect: Dialect::Standard,
@@ -416,21 +606,15 @@ fn load_one(
     });
     let (language, options) = match resolved.for_path(path, detected_language, detected_dialect) {
         Ok(value) => value,
-        Err(error) => {
-            if discovery.fatal.is_none() {
-                discovery.fatal = Some(error);
-            }
-            return;
-        }
+        Err(error) => return Looked::Fatal(error),
     };
     if !resolved.language_is_enabled(language) {
-        discovery.skipped.push(SkippedFile {
+        return Looked::Passed(SkippedFile {
             path: path.to_path_buf(),
             reason: "language disabled by configuration".into(),
             error: false,
             explicit: explicit_path,
         });
-        return;
     }
     let profile = if language == Language::Unknown {
         profile_for_path(path, resolved)
@@ -443,15 +627,14 @@ fn load_one(
         None
     };
     if language == Language::Unknown && profile.is_none() && plugin.is_none() {
-        discovery.skipped.push(SkippedFile {
+        return Looked::Passed(SkippedFile {
             path: path.to_path_buf(),
             reason: NO_LANGUAGE.into(),
             error: false,
             explicit: explicit_path,
         });
-        return;
     }
-    discovery.files.push(SourceFile {
+    Looked::Found(Box::new(SourceFile {
         path: path.to_path_buf(),
         source,
         language,
@@ -459,7 +642,8 @@ fn load_one(
         options,
         profile,
         plugin,
-    });
+        detection: detection_reason,
+    }))
 }
 
 pub fn plugin_for_path(path: &Path, resolved: &ResolvedConfig) -> Option<String> {
@@ -473,17 +657,24 @@ pub fn plugin_for_path(path: &Path, resolved: &ResolvedConfig) -> Option<String>
 }
 
 pub fn profile_for_path(path: &Path, resolved: &ResolvedConfig) -> Option<DeclarativeProfile> {
-    let extension = path.extension()?.to_str()?.trim_start_matches('.');
+    let name = path.file_name().and_then(|value| value.to_str());
+    let extension = path.extension().and_then(|value| value.to_str());
     resolved
         .config
         .profiles
         .values()
         .find(|profile| {
-            profile.extensions.iter().any(|candidate| {
-                candidate
-                    .trim_start_matches('.')
-                    .eq_ignore_ascii_case(extension)
-            })
+            /* NOTE: The whole name is tried first, so that a profile claiming
+             * `dune-project` wins over one claiming `.project`. A name is the
+             * more specific claim of the two. */
+            name.is_some_and(|name| profile.filenames.iter().any(|candidate| candidate == name))
+                || extension.is_some_and(|extension| {
+                    profile.extensions.iter().any(|candidate| {
+                        candidate
+                            .trim_start_matches('.')
+                            .eq_ignore_ascii_case(extension)
+                    })
+                })
         })
         .cloned()
 }
@@ -523,4 +714,125 @@ fn skip(path: &Path, explicit: bool, error: impl std::fmt::Display) -> SkippedFi
         error: true,
         explicit,
     }
+}
+
+/// Why a file in the tree was never offered to the walk at all.
+///
+/// A skip is a file the walk reached and passed over, and it is reported. This
+/// is the other thing: a file the walk's own limits kept out, which nothing
+/// reported because nothing met it. `ocomment coverage` said `100.0%` over a
+/// repository whose every GitHub workflow was under `.github` and therefore
+/// hidden -- a true sentence about what was walked and a false assurance about
+/// what was checked.
+///
+/// A file a `.gitignore` excludes is deliberately not here. It is not a gap in
+/// the gate: it is build output, and a percentage taken over a hundred
+/// thousand object files would mean nothing at all.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum NotWalked {
+    /// `[files] hidden = false`, and a path component opens with a dot.
+    Hidden,
+    /// `[files] include` did not name it, or `[files] exclude` did.
+    Configured,
+    /// `[files] max_size`.
+    TooLarge,
+}
+
+impl NotWalked {
+    /// The setting a reader would change, phrased as the report prints it.
+    pub const fn reason(self) -> &'static str {
+        match self {
+            Self::Hidden => "hidden file or directory ([files] hidden = false)",
+            Self::Configured => "excluded by configuration ([files] include/exclude)",
+            Self::TooLarge => "larger than the size limit ([files] max_size)",
+        }
+    }
+}
+
+/// Every file under `paths` that this configuration's walk would not reach,
+/// and the setting that kept each one out.
+///
+/// Nothing is read. The walk here lifts only the hidden-file rule, so what it
+/// finds is the repository as its own ignore files describe it, and each path
+/// missing from `reached` is attributed to the first configured limit that
+/// would have stopped it -- in the order the walk applies them.
+pub fn not_walked(
+    paths: &[PathBuf],
+    resolved: &ResolvedConfig,
+    reached: &[PathBuf],
+) -> Result<Vec<(PathBuf, NotWalked)>> {
+    let include = compile_globs(&resolved.config.files.include)?;
+    let exclude = compile_globs(&resolved.config.files.exclude)?;
+    let implicit = [PathBuf::from(DEFAULT_TARGET)];
+    let targets = if paths.is_empty() {
+        &implicit[..]
+    } else {
+        paths
+    };
+    let reached: std::collections::HashSet<&Path> = reached.iter().map(PathBuf::as_path).collect();
+    let mut missed = Vec::new();
+    for target in targets {
+        if !target.is_dir() {
+            continue;
+        }
+        let ignore = resolved.config.files.ignore;
+        let mut builder = WalkBuilder::new(target);
+        builder
+            .standard_filters(ignore)
+            .hidden(false)
+            .follow_links(resolved.config.files.follow_symlinks);
+        if ignore {
+            builder.add_custom_ignore_filename(".ocommentignore");
+        }
+        builder.filter_entry(|entry| entry.file_name() != GIT_DIRECTORY);
+        for entry in builder.build().flatten() {
+            if !entry.file_type().is_some_and(|kind| kind.is_file()) {
+                continue;
+            }
+            let path = reported_path(entry.path());
+            if reached.contains(path.as_path()) {
+                continue;
+            }
+            if let Some(reason) = kept_out(&path, resolved, &include, &exclude) {
+                missed.push((path, reason));
+            }
+        }
+    }
+    missed.sort();
+    missed.dedup();
+    Ok(missed)
+}
+
+/// Which of the walk's limits would have stopped `path`, tested in the order
+/// the walk applies them.
+///
+/// `None` cannot happen for a path this function is asked about: the caller
+/// has already taken out everything the walk reached, and the walk that found
+/// this one lifted exactly one rule. It is returned rather than asserted
+/// because a filesystem that changed under the two walks is not a defect worth
+/// a panic.
+fn kept_out(
+    path: &Path,
+    resolved: &ResolvedConfig,
+    include: &GlobSet,
+    exclude: &GlobSet,
+) -> Option<NotWalked> {
+    if !resolved.config.files.hidden
+        && path
+            .components()
+            .any(|component| component.as_os_str().to_string_lossy().starts_with('.'))
+    {
+        return Some(NotWalked::Hidden);
+    }
+    let relative = resolved.relative_to_root(path);
+    if (!include.is_empty() && !include.is_match(&relative)) || exclude.is_match(&relative) {
+        return Some(NotWalked::Configured);
+    }
+    if path
+        .metadata()
+        .is_ok_and(|metadata| metadata.len() > resolved.config.files.max_size)
+    {
+        return Some(NotWalked::TooLarge);
+    }
+    None
 }

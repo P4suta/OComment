@@ -485,6 +485,7 @@ fn parse_comment_kind(value: &str) -> Result<CommentKind> {
         "encoding" => CommentKind::Encoding,
         "optimizer-hint" => CommentKind::OptimizerHint,
         "version-comment" => CommentKind::VersionComment,
+        "load-bearing" => CommentKind::LoadBearing,
         other => bail!("plugin returned unknown comment kind `{other}`"),
     })
 }

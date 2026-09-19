@@ -1,13 +1,20 @@
 version = 1
 
+# Which files are read at all.
 [files]
 max_size = 33554432
 hidden = false
 follow_symlinks = false
 ignore = true
+include_generated = false
+# Narrow the walk, or carve paths out of it. Globs are relative to the
+# directory this file is in, and `include` is a whitelist when it is not empty.
+# include = ["src/**", "tests/**"]
+# exclude = ["vendor/**", "third_party/**"]
 
+# What may be removed from the files that were read.
 [policy]
-mode = "safe"
+mode = "conservative"
 layout = "lines"
 keep_kind = []
 remove_kind = []
@@ -15,6 +22,63 @@ keep_regex = []
 remove_regex = []
 force_invalid = false
 force_protected = false
+
+# What a comment has to be beyond being of a kind the policy keeps. A policy
+# decides by kind, and a one-line rationale and a forty-line essay are both
+# `line`; these are the other axes.
+#
+# [policy.allow]
+# tags = ["NOTE", "SAFETY", "INVARIANT"]   # kept whatever the policy says
+# max_lines = 1                            # per run of adjacent comments
+# trailing = false                         # never beside code
+#
+# A tag that is a promise rather than a remark. Allowed like any other until
+# the line carrying it reaches this age, counted from the commit that added
+# it, and a finding after that. `"0d"` means "from the next commit".
+#
+# [policy.allow.expiry]
+# TODO = "14d"
+# FIXME = "7d"
+
+# Markers your own tools read. A pattern here decides what the comment *is*:
+# `tier = "tool"` records it as a directive, which every policy but `all`
+# keeps, and `tier = "load-bearing"` records it as one no policy reaches. A
+# `keep_regex` cannot do this -- it leaves the comment ordinary, and `--policy
+# all` is entitled to an ordinary comment.
+#
+# protected = [
+#   { contains = "rust-mutants:", reason = "read by the mutation tester", tier = "load-bearing" },
+#   { contains = "my-linter:", reason = "read by our linter" },
+# ]
+
+# A different decision for one part of the tree. Every entry whose `paths`
+# match is applied in order, over `[policy]` above, and each may set any of
+# `policy`, `layout`, `language`, `dialect`, `keep_kind`, `remove_kind`,
+# `keep_regex` and `remove_regex`.
+#
+# [[overrides]]
+# paths = ["src/generated/**"]
+# policy = "all"
+#
+# [[overrides]]
+# paths = ["scripts/**"]
+# keep_kind = ["line", "block"]
+#
+# An override may also carry its own `[policy.allow]`, which replaces the
+# global one for the paths it matches rather than merging into it.
+#
+# [[overrides]]
+# paths = ["docs/**"]
+# [overrides.allow]
+# tags = ["NOTE"]
+
+# A syntax with no built-in scanner, described by its delimiters. `ocomment
+# languages` lists the ones that need no profile.
+#
+# [profiles.ini]
+# name = "ini"
+# extensions = ["ini", "cfg"]
+# line_comments = [{ start = ";", kind = "line" }]
 
 [git]
 staged = false

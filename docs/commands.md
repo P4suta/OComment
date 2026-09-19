@@ -31,6 +31,7 @@ blocks below. `ocomment man` renders the same material as a manual page.
 - [`ocomment init`](#ocomment-init)
 - [`ocomment config`](#ocomment-config)
 - [`ocomment languages`](#ocomment-languages)
+- [`ocomment profiles`](#ocomment-profiles)
 - [`ocomment plugin`](#ocomment-plugin)
 - [`ocomment plugin add`](#ocomment-plugin-add)
 - [`ocomment plugin remove`](#ocomment-plugin-remove)
@@ -39,6 +40,11 @@ blocks below. `ocomment man` renders the same material as a manual page.
 - [`ocomment plugin verify`](#ocomment-plugin-verify)
 - [`ocomment plugin new`](#ocomment-plugin-new)
 - [`ocomment completions`](#ocomment-completions)
+- [`ocomment coverage`](#ocomment-coverage)
+- [`ocomment tags`](#ocomment-tags)
+- [`ocomment ratchet`](#ocomment-ratchet)
+- [`ocomment hook`](#ocomment-hook)
+- [`ocomment selftest`](#ocomment-selftest)
 - [`ocomment doctor`](#ocomment-doctor)
 - [`ocomment man`](#ocomment-man)
 
@@ -46,7 +52,7 @@ blocks below. `ocomment man` renders the same material as a manual page.
 
 ```console
 $ ocomment --help
-OComment scans source bytes without requiring UTF-8 and reports or removes comment tokens. The default policy protects source preambles and tool or language directives. Rewrites are prepared and committed as one rollback-backed transaction.
+OComment scans source bytes without requiring UTF-8 and reports or removes comment tokens. The default policy removes ordinary comments and keeps the ones something else depends on: documentation, licence notices, tool and language directives, shebangs and encoding lines. Rewrites are prepared and committed as one rollback-backed transaction.
 
 Usage: ocomment [OPTIONS] [PATH]...
        ocomment <COMMAND>
@@ -61,8 +67,14 @@ Commands:
   init         Write a starter .ocomment.toml or Lefthook configuration
   config       Show, locate, explain, or export the resolved configuration
   languages    List built-in languages, extensions, and dialects
+  profiles     List the declarative profiles that read files no built-in language does
   plugin       Manage sandboxed WASM scanner plugins
   completions  Generate shell completions
+  coverage     Report which files a walk scanned and which it passed over, and why
+  tags         Count the tags this tree's comments open with, against the ones it allows
+  ratchet      Check the tree against its ledger, or record the tree in one
+  hook         Answer an agent editing hook in the host's own protocol
+  selftest     Re-run the shared corpus against this binary and report any disagreement
   doctor       Diagnose the environment (config, git, plugins, tools)
   man          Render the roff manual page to stdout
   help         Print this message or the help of the given subcommand(s)
@@ -86,9 +98,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -96,7 +108,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -165,12 +177,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -181,25 +194,47 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
           Output encoding
+
+          Possible values:
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
+          - json
+          - jsonl
+          - sarif
+          - github
+          - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
-          [possible values: human, json, jsonl, sarif, github]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -214,16 +249,43 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
 
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -274,6 +336,9 @@ Options:
       --index-only
           With `--staged`, do not attempt a uniquely mappable working-tree update
 
+      --base <REV>
+          Check only the working-tree files that differ from this revision's merge base with HEAD
+
       --config <FILE>
           Read this configuration file instead of discovering `.ocomment.toml`
 
@@ -285,9 +350,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -295,7 +360,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -364,12 +429,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -380,25 +446,47 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
           Output encoding
+
+          Possible values:
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
+          - json
+          - jsonl
+          - sarif
+          - github
+          - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
-          [possible values: human, json, jsonl, sarif, github]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -413,16 +501,43 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
 
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -450,6 +565,9 @@ Options:
       --index-only
           With `--staged`, do not attempt a uniquely mappable working-tree update
 
+      --base <REV>
+          Check only the working-tree files that differ from this revision's merge base with HEAD
+
       --dry-run
           Print the patch `fix` would apply and write nothing
 
@@ -469,9 +587,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -479,7 +597,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -548,12 +666,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -564,25 +683,47 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
           Output encoding
+
+          Possible values:
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
+          - json
+          - jsonl
+          - sarif
+          - github
+          - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
-          [possible values: human, json, jsonl, sarif, github]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -597,16 +738,43 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
 
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -634,6 +802,9 @@ Options:
       --index-only
           With `--staged`, do not attempt a uniquely mappable working-tree update
 
+      --base <REV>
+          Check only the working-tree files that differ from this revision's merge base with HEAD
+
       --config <FILE>
           Read this configuration file instead of discovering `.ocomment.toml`
 
@@ -645,9 +816,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -655,7 +826,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -724,12 +895,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -740,25 +912,47 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
           Output encoding
+
+          Possible values:
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
+          - json
+          - jsonl
+          - sarif
+          - github
+          - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
-          [possible values: human, json, jsonl, sarif, github]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -773,16 +967,43 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
 
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -810,6 +1031,9 @@ Options:
       --index-only
           With `--staged`, do not attempt a uniquely mappable working-tree update
 
+      --base <REV>
+          Check only the working-tree files that differ from this revision's merge base with HEAD
+
       --config <FILE>
           Read this configuration file instead of discovering `.ocomment.toml`
 
@@ -821,9 +1045,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -831,7 +1055,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -900,12 +1124,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -916,25 +1141,47 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
           Output encoding
+
+          Possible values:
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
+          - json
+          - jsonl
+          - sarif
+          - github
+          - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
-          [possible values: human, json, jsonl, sarif, github]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -949,16 +1196,43 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
 
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -987,9 +1261,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -997,7 +1271,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -1066,12 +1340,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -1082,25 +1357,47 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
           Output encoding
+
+          Possible values:
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
+          - json
+          - jsonl
+          - sarif
+          - github
+          - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
-          [possible values: human, json, jsonl, sarif, github]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -1115,16 +1412,43 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
 
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -1153,9 +1477,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -1163,7 +1487,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -1232,12 +1556,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -1248,25 +1573,47 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
           Output encoding
+
+          Possible values:
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
+          - json
+          - jsonl
+          - sarif
+          - github
+          - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
-          [possible values: human, json, jsonl, sarif, github]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -1281,16 +1628,43 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
 
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -1335,9 +1709,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -1345,7 +1719,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -1414,12 +1788,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -1430,25 +1805,47 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
           Output encoding
+
+          Possible values:
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
+          - json
+          - jsonl
+          - sarif
+          - github
+          - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
-          [possible values: human, json, jsonl, sarif, github]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -1463,16 +1860,43 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
 
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -1508,9 +1932,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -1518,7 +1942,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -1587,12 +2011,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -1603,25 +2028,47 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
           Output encoding
+
+          Possible values:
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
+          - json
+          - jsonl
+          - sarif
+          - github
+          - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
-          [possible values: human, json, jsonl, sarif, github]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -1636,16 +2083,43 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
 
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -1674,9 +2148,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -1684,7 +2158,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -1753,12 +2227,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -1769,25 +2244,47 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
           Output encoding
+
+          Possible values:
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
+          - json
+          - jsonl
+          - sarif
+          - github
+          - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
-          [possible values: human, json, jsonl, sarif, github]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -1802,16 +2299,259 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
 
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
+
+  -q, --quiet
+          Drop the run summary and notes; the command's product (findings, patch, listing) is still written
+
+  -v, --verbose
+          Trace what is scanned and summarize every comment kind and skipped file
+```
+
+## `ocomment profiles`
+
+```console
+$ ocomment profiles --help
+List the declarative profiles that read files no built-in language does
+
+Usage: ocomment profiles [OPTIONS]
+
+Options:
+      --config <FILE>
+          Read this configuration file instead of discovering `.ocomment.toml`
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+Policy:
+      --policy <POLICY>
+          Which classes of comment the run is allowed to remove
+
+          Possible values:
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
+
+      --layout <LAYOUT>
+          How the bytes left behind by a removed comment are laid out
+
+          Possible values:
+          - lines:   Keep the line structure and separate tokens that would otherwise join
+          - columns: Pad each removed comment so the following columns do not shift
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+
+      --language <LANGUAGE>
+          Force this language instead of detecting it from path and contents
+
+          Possible values:
+          - rust:       Rust source files
+          - ocaml:      OCaml implementation and interface files
+          - c:          C source and header files
+          - cpp:        C++ source and header files
+          - go:         Go source files
+          - java:       Java source files, including Unicode escape translation
+          - javascript: JavaScript modules and scripts, including JSX
+          - typescript: TypeScript modules and scripts, including TSX
+          - python:     Python source and stub files
+          - shell:      POSIX sh, Bash, and zsh scripts
+          - html:       HTML documents, including nested script and style elements
+          - css:        CSS stylesheets
+          - jsonc:      JSON with comments, including JSON5
+          - sql:        SQL for every supported database dialect
+          - kotlin:     Kotlin source and script files
+          - toml:       TOML documents, including the lock files written in it
+          - lua:        Lua chunks and LuaRocks rockspecs
+          - yaml:       YAML documents, including the tool configurations written in it
+          - php:        PHP scripts and templates; the inline HTML around the tags is content
+          - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
+          - zig:        Zig source files and Zig Object Notation data
+          - r:          R scripts and the `.Rprofile` an R session sources at start-up
+          - dart:       Dart source files, whose block comments nest
+          - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
+          - csharp:     C# source and script files, whose `#` lines are preprocessor directives
+          - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
+          - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
+          - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
+          - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
+          - perl:       Perl scripts and modules, whose quote words and regexes hide a `#`
+
+      --dialect <DIALECT>
+          Force this dialect of the selected language
+
+          Possible values:
+          - standard:      The default lexical rules of the language
+          - jsx:           JavaScript with JSX elements
+          - tsx:           TypeScript with JSX elements
+          - objective-c:   Objective-C extensions to C
+          - objective-cpp: Objective-C++ extensions to C++
+          - gnu-c:         GNU extensions to C
+          - gnu-cpp:       GNU extensions to C++
+          - cuda:          CUDA extensions to C++
+          - posix-sh:      The POSIX shell command language
+          - bash53:        Bash 5.3
+          - zsh:           The Z shell
+          - postgresql:    PostgreSQL, with dollar-quoted bodies
+          - mysql:         MySQL, including its executable versioned comments
+          - sqlite:        SQLite
+          - t-sql:         Microsoft Transact-SQL
+          - oracle:        Oracle SQL and PL/SQL
+          - scss:          SCSS
+          - sass:          The indentation-based Sass syntax
+
+      --keep-kind <KIND>
+          Comma-separated comment kinds to protect on top of the policy
+
+          Possible values:
+          - line:            An ordinary comment running to the end of the line
+          - block:           An ordinary delimited comment
+          - doc-line:        A documentation comment running to the end of the line
+          - doc-block:       A delimited documentation comment
+          - directive:       A tool or language directive such as a pragma or lint control
+          - license:         A licence or copyright notice
+          - html-comment:    A DOM-observable HTML comment
+          - shebang:         The interpreter line starting an executable script
+          - encoding:        A source encoding declaration
+          - optimizer-hint:  A compiler or database optimizer hint
+          - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --remove-kind <KIND>
+          Comma-separated comment kinds to remove regardless of the policy
+
+          Possible values:
+          - line:            An ordinary comment running to the end of the line
+          - block:           An ordinary delimited comment
+          - doc-line:        A documentation comment running to the end of the line
+          - doc-block:       A delimited documentation comment
+          - directive:       A tool or language directive such as a pragma or lint control
+          - license:         A licence or copyright notice
+          - html-comment:    A DOM-observable HTML comment
+          - shebang:         The interpreter line starting an executable script
+          - encoding:        A source encoding declaration
+          - optimizer-hint:  A compiler or database optimizer hint
+          - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
+
+      --force-invalid
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
+
+      --force-protected
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
+
+Output:
+      --format <FORMAT>
+          Output encoding
+
+          Possible values:
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
+          - json
+          - jsonl
+          - sarif
+          - github
+          - agent:  The report as an instruction, for a reader that is going to act on it
+          
+          [default: review]
+
+      --color <WHEN>
+          When to colour terminal output
+          
+          [default: auto]
+          [possible values: auto, always, never]
+
+      --hyperlinks <WHEN>
+          When to emit terminal hyperlinks for reported paths
+          
+          [default: auto]
+          [possible values: auto, always, never]
+
+      --no-preview
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
+
+      --explain
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
+
+      --progress <WHEN>
+          When to draw the live scanning counter on standard error
+          
+          [default: auto]
+          [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -1849,9 +2589,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -1859,7 +2599,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -1928,12 +2668,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -1944,25 +2685,47 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
           Output encoding
+
+          Possible values:
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
+          - json
+          - jsonl
+          - sarif
+          - github
+          - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
-          [possible values: human, json, jsonl, sarif, github]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -1977,16 +2740,43 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
 
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -2028,9 +2818,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -2038,7 +2828,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -2107,12 +2897,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -2123,25 +2914,47 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
           Output encoding
+
+          Possible values:
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
+          - json
+          - jsonl
+          - sarif
+          - github
+          - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
-          [possible values: human, json, jsonl, sarif, github]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -2156,16 +2969,43 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
 
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -2198,9 +3038,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -2208,7 +3048,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -2277,12 +3117,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -2293,25 +3134,47 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
           Output encoding
+
+          Possible values:
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
+          - json
+          - jsonl
+          - sarif
+          - github
+          - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
-          [possible values: human, json, jsonl, sarif, github]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -2326,16 +3189,43 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
 
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -2364,9 +3254,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -2374,7 +3264,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -2443,12 +3333,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -2459,25 +3350,47 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
           Output encoding
+
+          Possible values:
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
+          - json
+          - jsonl
+          - sarif
+          - github
+          - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
-          [possible values: human, json, jsonl, sarif, github]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -2492,16 +3405,43 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
 
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -2534,9 +3474,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -2544,7 +3484,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -2613,12 +3553,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -2629,25 +3570,47 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
           Output encoding
+
+          Possible values:
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
+          - json
+          - jsonl
+          - sarif
+          - github
+          - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
-          [possible values: human, json, jsonl, sarif, github]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -2662,16 +3625,43 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
 
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -2704,9 +3694,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -2714,7 +3704,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -2783,12 +3773,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -2799,25 +3790,47 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
           Output encoding
+
+          Possible values:
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
+          - json
+          - jsonl
+          - sarif
+          - github
+          - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
-          [possible values: human, json, jsonl, sarif, github]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -2832,16 +3845,43 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
 
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -2874,9 +3914,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -2884,7 +3924,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -2953,12 +3993,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -2969,25 +4010,47 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
           Output encoding
+
+          Possible values:
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
+          - json
+          - jsonl
+          - sarif
+          - github
+          - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
-          [possible values: human, json, jsonl, sarif, github]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -3002,16 +4065,43 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
 
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -3046,9 +4136,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -3056,7 +4146,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -3125,12 +4215,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -3141,25 +4232,47 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
           Output encoding
+
+          Possible values:
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
+          - json
+          - jsonl
+          - sarif
+          - github
+          - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
-          [possible values: human, json, jsonl, sarif, github]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -3174,16 +4287,1172 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
 
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
+
+  -q, --quiet
+          Drop the run summary and notes; the command's product (findings, patch, listing) is still written
+
+  -v, --verbose
+          Trace what is scanned and summarize every comment kind and skipped file
+```
+
+## `ocomment coverage`
+
+```console
+$ ocomment coverage --help
+Report which files a walk scanned and which it passed over, and why
+
+Usage: ocomment coverage [OPTIONS] [PATH]...
+
+Arguments:
+  [PATH]...
+          Files or directories to process; `-` reads standard input (default: current directory)
+
+Options:
+      --staged
+          Read and update Git index blobs rather than treating the working tree as the source
+
+      --index-only
+          With `--staged`, do not attempt a uniquely mappable working-tree update
+
+      --base <REV>
+          Check only the working-tree files that differ from this revision's merge base with HEAD
+
+      --config <FILE>
+          Read this configuration file instead of discovering `.ocomment.toml`
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+Policy:
+      --policy <POLICY>
+          Which classes of comment the run is allowed to remove
+
+          Possible values:
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
+
+      --layout <LAYOUT>
+          How the bytes left behind by a removed comment are laid out
+
+          Possible values:
+          - lines:   Keep the line structure and separate tokens that would otherwise join
+          - columns: Pad each removed comment so the following columns do not shift
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+
+      --language <LANGUAGE>
+          Force this language instead of detecting it from path and contents
+
+          Possible values:
+          - rust:       Rust source files
+          - ocaml:      OCaml implementation and interface files
+          - c:          C source and header files
+          - cpp:        C++ source and header files
+          - go:         Go source files
+          - java:       Java source files, including Unicode escape translation
+          - javascript: JavaScript modules and scripts, including JSX
+          - typescript: TypeScript modules and scripts, including TSX
+          - python:     Python source and stub files
+          - shell:      POSIX sh, Bash, and zsh scripts
+          - html:       HTML documents, including nested script and style elements
+          - css:        CSS stylesheets
+          - jsonc:      JSON with comments, including JSON5
+          - sql:        SQL for every supported database dialect
+          - kotlin:     Kotlin source and script files
+          - toml:       TOML documents, including the lock files written in it
+          - lua:        Lua chunks and LuaRocks rockspecs
+          - yaml:       YAML documents, including the tool configurations written in it
+          - php:        PHP scripts and templates; the inline HTML around the tags is content
+          - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
+          - zig:        Zig source files and Zig Object Notation data
+          - r:          R scripts and the `.Rprofile` an R session sources at start-up
+          - dart:       Dart source files, whose block comments nest
+          - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
+          - csharp:     C# source and script files, whose `#` lines are preprocessor directives
+          - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
+          - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
+          - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
+          - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
+          - perl:       Perl scripts and modules, whose quote words and regexes hide a `#`
+
+      --dialect <DIALECT>
+          Force this dialect of the selected language
+
+          Possible values:
+          - standard:      The default lexical rules of the language
+          - jsx:           JavaScript with JSX elements
+          - tsx:           TypeScript with JSX elements
+          - objective-c:   Objective-C extensions to C
+          - objective-cpp: Objective-C++ extensions to C++
+          - gnu-c:         GNU extensions to C
+          - gnu-cpp:       GNU extensions to C++
+          - cuda:          CUDA extensions to C++
+          - posix-sh:      The POSIX shell command language
+          - bash53:        Bash 5.3
+          - zsh:           The Z shell
+          - postgresql:    PostgreSQL, with dollar-quoted bodies
+          - mysql:         MySQL, including its executable versioned comments
+          - sqlite:        SQLite
+          - t-sql:         Microsoft Transact-SQL
+          - oracle:        Oracle SQL and PL/SQL
+          - scss:          SCSS
+          - sass:          The indentation-based Sass syntax
+
+      --keep-kind <KIND>
+          Comma-separated comment kinds to protect on top of the policy
+
+          Possible values:
+          - line:            An ordinary comment running to the end of the line
+          - block:           An ordinary delimited comment
+          - doc-line:        A documentation comment running to the end of the line
+          - doc-block:       A delimited documentation comment
+          - directive:       A tool or language directive such as a pragma or lint control
+          - license:         A licence or copyright notice
+          - html-comment:    A DOM-observable HTML comment
+          - shebang:         The interpreter line starting an executable script
+          - encoding:        A source encoding declaration
+          - optimizer-hint:  A compiler or database optimizer hint
+          - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --remove-kind <KIND>
+          Comma-separated comment kinds to remove regardless of the policy
+
+          Possible values:
+          - line:            An ordinary comment running to the end of the line
+          - block:           An ordinary delimited comment
+          - doc-line:        A documentation comment running to the end of the line
+          - doc-block:       A delimited documentation comment
+          - directive:       A tool or language directive such as a pragma or lint control
+          - license:         A licence or copyright notice
+          - html-comment:    A DOM-observable HTML comment
+          - shebang:         The interpreter line starting an executable script
+          - encoding:        A source encoding declaration
+          - optimizer-hint:  A compiler or database optimizer hint
+          - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
+
+      --force-invalid
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
+
+      --force-protected
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
+
+Output:
+      --format <FORMAT>
+          Output encoding
+
+          Possible values:
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
+          - json
+          - jsonl
+          - sarif
+          - github
+          - agent:  The report as an instruction, for a reader that is going to act on it
+          
+          [default: review]
+
+      --color <WHEN>
+          When to colour terminal output
+          
+          [default: auto]
+          [possible values: auto, always, never]
+
+      --hyperlinks <WHEN>
+          When to emit terminal hyperlinks for reported paths
+          
+          [default: auto]
+          [possible values: auto, always, never]
+
+      --no-preview
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
+
+      --explain
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
+
+      --progress <WHEN>
+          When to draw the live scanning counter on standard error
+          
+          [default: auto]
+          [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
+
+  -q, --quiet
+          Drop the run summary and notes; the command's product (findings, patch, listing) is still written
+
+  -v, --verbose
+          Trace what is scanned and summarize every comment kind and skipped file
+```
+
+## `ocomment tags`
+
+```console
+$ ocomment tags --help
+Count the tags this tree's comments open with, against the ones it allows
+
+Usage: ocomment tags [OPTIONS] [PATH]...
+
+Arguments:
+  [PATH]...
+          Files or directories to process; `-` reads standard input (default: current directory)
+
+Options:
+      --staged
+          Read and update Git index blobs rather than treating the working tree as the source
+
+      --index-only
+          With `--staged`, do not attempt a uniquely mappable working-tree update
+
+      --base <REV>
+          Check only the working-tree files that differ from this revision's merge base with HEAD
+
+      --config <FILE>
+          Read this configuration file instead of discovering `.ocomment.toml`
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+Policy:
+      --policy <POLICY>
+          Which classes of comment the run is allowed to remove
+
+          Possible values:
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
+
+      --layout <LAYOUT>
+          How the bytes left behind by a removed comment are laid out
+
+          Possible values:
+          - lines:   Keep the line structure and separate tokens that would otherwise join
+          - columns: Pad each removed comment so the following columns do not shift
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+
+      --language <LANGUAGE>
+          Force this language instead of detecting it from path and contents
+
+          Possible values:
+          - rust:       Rust source files
+          - ocaml:      OCaml implementation and interface files
+          - c:          C source and header files
+          - cpp:        C++ source and header files
+          - go:         Go source files
+          - java:       Java source files, including Unicode escape translation
+          - javascript: JavaScript modules and scripts, including JSX
+          - typescript: TypeScript modules and scripts, including TSX
+          - python:     Python source and stub files
+          - shell:      POSIX sh, Bash, and zsh scripts
+          - html:       HTML documents, including nested script and style elements
+          - css:        CSS stylesheets
+          - jsonc:      JSON with comments, including JSON5
+          - sql:        SQL for every supported database dialect
+          - kotlin:     Kotlin source and script files
+          - toml:       TOML documents, including the lock files written in it
+          - lua:        Lua chunks and LuaRocks rockspecs
+          - yaml:       YAML documents, including the tool configurations written in it
+          - php:        PHP scripts and templates; the inline HTML around the tags is content
+          - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
+          - zig:        Zig source files and Zig Object Notation data
+          - r:          R scripts and the `.Rprofile` an R session sources at start-up
+          - dart:       Dart source files, whose block comments nest
+          - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
+          - csharp:     C# source and script files, whose `#` lines are preprocessor directives
+          - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
+          - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
+          - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
+          - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
+          - perl:       Perl scripts and modules, whose quote words and regexes hide a `#`
+
+      --dialect <DIALECT>
+          Force this dialect of the selected language
+
+          Possible values:
+          - standard:      The default lexical rules of the language
+          - jsx:           JavaScript with JSX elements
+          - tsx:           TypeScript with JSX elements
+          - objective-c:   Objective-C extensions to C
+          - objective-cpp: Objective-C++ extensions to C++
+          - gnu-c:         GNU extensions to C
+          - gnu-cpp:       GNU extensions to C++
+          - cuda:          CUDA extensions to C++
+          - posix-sh:      The POSIX shell command language
+          - bash53:        Bash 5.3
+          - zsh:           The Z shell
+          - postgresql:    PostgreSQL, with dollar-quoted bodies
+          - mysql:         MySQL, including its executable versioned comments
+          - sqlite:        SQLite
+          - t-sql:         Microsoft Transact-SQL
+          - oracle:        Oracle SQL and PL/SQL
+          - scss:          SCSS
+          - sass:          The indentation-based Sass syntax
+
+      --keep-kind <KIND>
+          Comma-separated comment kinds to protect on top of the policy
+
+          Possible values:
+          - line:            An ordinary comment running to the end of the line
+          - block:           An ordinary delimited comment
+          - doc-line:        A documentation comment running to the end of the line
+          - doc-block:       A delimited documentation comment
+          - directive:       A tool or language directive such as a pragma or lint control
+          - license:         A licence or copyright notice
+          - html-comment:    A DOM-observable HTML comment
+          - shebang:         The interpreter line starting an executable script
+          - encoding:        A source encoding declaration
+          - optimizer-hint:  A compiler or database optimizer hint
+          - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --remove-kind <KIND>
+          Comma-separated comment kinds to remove regardless of the policy
+
+          Possible values:
+          - line:            An ordinary comment running to the end of the line
+          - block:           An ordinary delimited comment
+          - doc-line:        A documentation comment running to the end of the line
+          - doc-block:       A delimited documentation comment
+          - directive:       A tool or language directive such as a pragma or lint control
+          - license:         A licence or copyright notice
+          - html-comment:    A DOM-observable HTML comment
+          - shebang:         The interpreter line starting an executable script
+          - encoding:        A source encoding declaration
+          - optimizer-hint:  A compiler or database optimizer hint
+          - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
+
+      --force-invalid
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
+
+      --force-protected
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
+
+Output:
+      --format <FORMAT>
+          Output encoding
+
+          Possible values:
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
+          - json
+          - jsonl
+          - sarif
+          - github
+          - agent:  The report as an instruction, for a reader that is going to act on it
+          
+          [default: review]
+
+      --color <WHEN>
+          When to colour terminal output
+          
+          [default: auto]
+          [possible values: auto, always, never]
+
+      --hyperlinks <WHEN>
+          When to emit terminal hyperlinks for reported paths
+          
+          [default: auto]
+          [possible values: auto, always, never]
+
+      --no-preview
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
+
+      --explain
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
+
+      --progress <WHEN>
+          When to draw the live scanning counter on standard error
+          
+          [default: auto]
+          [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
+
+  -q, --quiet
+          Drop the run summary and notes; the command's product (findings, patch, listing) is still written
+
+  -v, --verbose
+          Trace what is scanned and summarize every comment kind and skipped file
+```
+
+## `ocomment ratchet`
+
+```console
+$ ocomment ratchet --help
+Check the tree against its ledger, or record the tree in one
+
+Usage: ocomment ratchet [OPTIONS] [PATH]...
+
+Arguments:
+  [PATH]...
+          Files or directories to process; `-` reads standard input (default: current directory)
+
+Options:
+      --update
+          Rewrite the ledger to match the tree, rather than checking against it
+
+      --staged
+          Read and update Git index blobs rather than treating the working tree as the source
+
+      --index-only
+          With `--staged`, do not attempt a uniquely mappable working-tree update
+
+      --base <REV>
+          Check only the working-tree files that differ from this revision's merge base with HEAD
+
+      --config <FILE>
+          Read this configuration file instead of discovering `.ocomment.toml`
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+Policy:
+      --policy <POLICY>
+          Which classes of comment the run is allowed to remove
+
+          Possible values:
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
+
+      --layout <LAYOUT>
+          How the bytes left behind by a removed comment are laid out
+
+          Possible values:
+          - lines:   Keep the line structure and separate tokens that would otherwise join
+          - columns: Pad each removed comment so the following columns do not shift
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+
+      --language <LANGUAGE>
+          Force this language instead of detecting it from path and contents
+
+          Possible values:
+          - rust:       Rust source files
+          - ocaml:      OCaml implementation and interface files
+          - c:          C source and header files
+          - cpp:        C++ source and header files
+          - go:         Go source files
+          - java:       Java source files, including Unicode escape translation
+          - javascript: JavaScript modules and scripts, including JSX
+          - typescript: TypeScript modules and scripts, including TSX
+          - python:     Python source and stub files
+          - shell:      POSIX sh, Bash, and zsh scripts
+          - html:       HTML documents, including nested script and style elements
+          - css:        CSS stylesheets
+          - jsonc:      JSON with comments, including JSON5
+          - sql:        SQL for every supported database dialect
+          - kotlin:     Kotlin source and script files
+          - toml:       TOML documents, including the lock files written in it
+          - lua:        Lua chunks and LuaRocks rockspecs
+          - yaml:       YAML documents, including the tool configurations written in it
+          - php:        PHP scripts and templates; the inline HTML around the tags is content
+          - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
+          - zig:        Zig source files and Zig Object Notation data
+          - r:          R scripts and the `.Rprofile` an R session sources at start-up
+          - dart:       Dart source files, whose block comments nest
+          - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
+          - csharp:     C# source and script files, whose `#` lines are preprocessor directives
+          - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
+          - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
+          - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
+          - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
+          - perl:       Perl scripts and modules, whose quote words and regexes hide a `#`
+
+      --dialect <DIALECT>
+          Force this dialect of the selected language
+
+          Possible values:
+          - standard:      The default lexical rules of the language
+          - jsx:           JavaScript with JSX elements
+          - tsx:           TypeScript with JSX elements
+          - objective-c:   Objective-C extensions to C
+          - objective-cpp: Objective-C++ extensions to C++
+          - gnu-c:         GNU extensions to C
+          - gnu-cpp:       GNU extensions to C++
+          - cuda:          CUDA extensions to C++
+          - posix-sh:      The POSIX shell command language
+          - bash53:        Bash 5.3
+          - zsh:           The Z shell
+          - postgresql:    PostgreSQL, with dollar-quoted bodies
+          - mysql:         MySQL, including its executable versioned comments
+          - sqlite:        SQLite
+          - t-sql:         Microsoft Transact-SQL
+          - oracle:        Oracle SQL and PL/SQL
+          - scss:          SCSS
+          - sass:          The indentation-based Sass syntax
+
+      --keep-kind <KIND>
+          Comma-separated comment kinds to protect on top of the policy
+
+          Possible values:
+          - line:            An ordinary comment running to the end of the line
+          - block:           An ordinary delimited comment
+          - doc-line:        A documentation comment running to the end of the line
+          - doc-block:       A delimited documentation comment
+          - directive:       A tool or language directive such as a pragma or lint control
+          - license:         A licence or copyright notice
+          - html-comment:    A DOM-observable HTML comment
+          - shebang:         The interpreter line starting an executable script
+          - encoding:        A source encoding declaration
+          - optimizer-hint:  A compiler or database optimizer hint
+          - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --remove-kind <KIND>
+          Comma-separated comment kinds to remove regardless of the policy
+
+          Possible values:
+          - line:            An ordinary comment running to the end of the line
+          - block:           An ordinary delimited comment
+          - doc-line:        A documentation comment running to the end of the line
+          - doc-block:       A delimited documentation comment
+          - directive:       A tool or language directive such as a pragma or lint control
+          - license:         A licence or copyright notice
+          - html-comment:    A DOM-observable HTML comment
+          - shebang:         The interpreter line starting an executable script
+          - encoding:        A source encoding declaration
+          - optimizer-hint:  A compiler or database optimizer hint
+          - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
+
+      --force-invalid
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
+
+      --force-protected
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
+
+Output:
+      --format <FORMAT>
+          Output encoding
+
+          Possible values:
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
+          - json
+          - jsonl
+          - sarif
+          - github
+          - agent:  The report as an instruction, for a reader that is going to act on it
+          
+          [default: review]
+
+      --color <WHEN>
+          When to colour terminal output
+          
+          [default: auto]
+          [possible values: auto, always, never]
+
+      --hyperlinks <WHEN>
+          When to emit terminal hyperlinks for reported paths
+          
+          [default: auto]
+          [possible values: auto, always, never]
+
+      --no-preview
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
+
+      --explain
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
+
+      --progress <WHEN>
+          When to draw the live scanning counter on standard error
+          
+          [default: auto]
+          [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
+
+  -q, --quiet
+          Drop the run summary and notes; the command's product (findings, patch, listing) is still written
+
+  -v, --verbose
+          Trace what is scanned and summarize every comment kind and skipped file
+```
+
+## `ocomment hook`
+
+```console
+$ ocomment hook --help
+Answer an agent editing hook in the host's own protocol
+
+Usage: ocomment hook [OPTIONS] <SURFACE>
+
+Arguments:
+  <SURFACE>
+          Which host's hook protocol is spoken on standard input and output
+
+          Possible values:
+          - claude-code: Claude Code's `PreToolUse` and `PostToolUse` hooks
+
+Options:
+      --config <FILE>
+          Read this configuration file instead of discovering `.ocomment.toml`
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+Policy:
+      --policy <POLICY>
+          Which classes of comment the run is allowed to remove
+
+          Possible values:
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
+
+      --layout <LAYOUT>
+          How the bytes left behind by a removed comment are laid out
+
+          Possible values:
+          - lines:   Keep the line structure and separate tokens that would otherwise join
+          - columns: Pad each removed comment so the following columns do not shift
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+
+      --language <LANGUAGE>
+          Force this language instead of detecting it from path and contents
+
+          Possible values:
+          - rust:       Rust source files
+          - ocaml:      OCaml implementation and interface files
+          - c:          C source and header files
+          - cpp:        C++ source and header files
+          - go:         Go source files
+          - java:       Java source files, including Unicode escape translation
+          - javascript: JavaScript modules and scripts, including JSX
+          - typescript: TypeScript modules and scripts, including TSX
+          - python:     Python source and stub files
+          - shell:      POSIX sh, Bash, and zsh scripts
+          - html:       HTML documents, including nested script and style elements
+          - css:        CSS stylesheets
+          - jsonc:      JSON with comments, including JSON5
+          - sql:        SQL for every supported database dialect
+          - kotlin:     Kotlin source and script files
+          - toml:       TOML documents, including the lock files written in it
+          - lua:        Lua chunks and LuaRocks rockspecs
+          - yaml:       YAML documents, including the tool configurations written in it
+          - php:        PHP scripts and templates; the inline HTML around the tags is content
+          - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
+          - zig:        Zig source files and Zig Object Notation data
+          - r:          R scripts and the `.Rprofile` an R session sources at start-up
+          - dart:       Dart source files, whose block comments nest
+          - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
+          - csharp:     C# source and script files, whose `#` lines are preprocessor directives
+          - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
+          - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
+          - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
+          - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
+          - perl:       Perl scripts and modules, whose quote words and regexes hide a `#`
+
+      --dialect <DIALECT>
+          Force this dialect of the selected language
+
+          Possible values:
+          - standard:      The default lexical rules of the language
+          - jsx:           JavaScript with JSX elements
+          - tsx:           TypeScript with JSX elements
+          - objective-c:   Objective-C extensions to C
+          - objective-cpp: Objective-C++ extensions to C++
+          - gnu-c:         GNU extensions to C
+          - gnu-cpp:       GNU extensions to C++
+          - cuda:          CUDA extensions to C++
+          - posix-sh:      The POSIX shell command language
+          - bash53:        Bash 5.3
+          - zsh:           The Z shell
+          - postgresql:    PostgreSQL, with dollar-quoted bodies
+          - mysql:         MySQL, including its executable versioned comments
+          - sqlite:        SQLite
+          - t-sql:         Microsoft Transact-SQL
+          - oracle:        Oracle SQL and PL/SQL
+          - scss:          SCSS
+          - sass:          The indentation-based Sass syntax
+
+      --keep-kind <KIND>
+          Comma-separated comment kinds to protect on top of the policy
+
+          Possible values:
+          - line:            An ordinary comment running to the end of the line
+          - block:           An ordinary delimited comment
+          - doc-line:        A documentation comment running to the end of the line
+          - doc-block:       A delimited documentation comment
+          - directive:       A tool or language directive such as a pragma or lint control
+          - license:         A licence or copyright notice
+          - html-comment:    A DOM-observable HTML comment
+          - shebang:         The interpreter line starting an executable script
+          - encoding:        A source encoding declaration
+          - optimizer-hint:  A compiler or database optimizer hint
+          - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --remove-kind <KIND>
+          Comma-separated comment kinds to remove regardless of the policy
+
+          Possible values:
+          - line:            An ordinary comment running to the end of the line
+          - block:           An ordinary delimited comment
+          - doc-line:        A documentation comment running to the end of the line
+          - doc-block:       A delimited documentation comment
+          - directive:       A tool or language directive such as a pragma or lint control
+          - license:         A licence or copyright notice
+          - html-comment:    A DOM-observable HTML comment
+          - shebang:         The interpreter line starting an executable script
+          - encoding:        A source encoding declaration
+          - optimizer-hint:  A compiler or database optimizer hint
+          - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
+
+      --force-invalid
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
+
+      --force-protected
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
+
+Output:
+      --format <FORMAT>
+          Output encoding
+
+          Possible values:
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
+          - json
+          - jsonl
+          - sarif
+          - github
+          - agent:  The report as an instruction, for a reader that is going to act on it
+          
+          [default: review]
+
+      --color <WHEN>
+          When to colour terminal output
+          
+          [default: auto]
+          [possible values: auto, always, never]
+
+      --hyperlinks <WHEN>
+          When to emit terminal hyperlinks for reported paths
+          
+          [default: auto]
+          [possible values: auto, always, never]
+
+      --no-preview
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
+
+      --explain
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
+
+      --progress <WHEN>
+          When to draw the live scanning counter on standard error
+          
+          [default: auto]
+          [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
+
+  -q, --quiet
+          Drop the run summary and notes; the command's product (findings, patch, listing) is still written
+
+  -v, --verbose
+          Trace what is scanned and summarize every comment kind and skipped file
+```
+
+## `ocomment selftest`
+
+```console
+$ ocomment selftest --help
+Re-run the shared corpus against this binary and report any disagreement
+
+Usage: ocomment selftest [OPTIONS]
+
+Options:
+      --config <FILE>
+          Read this configuration file instead of discovering `.ocomment.toml`
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+Policy:
+      --policy <POLICY>
+          Which classes of comment the run is allowed to remove
+
+          Possible values:
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
+
+      --layout <LAYOUT>
+          How the bytes left behind by a removed comment are laid out
+
+          Possible values:
+          - lines:   Keep the line structure and separate tokens that would otherwise join
+          - columns: Pad each removed comment so the following columns do not shift
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
+
+      --language <LANGUAGE>
+          Force this language instead of detecting it from path and contents
+
+          Possible values:
+          - rust:       Rust source files
+          - ocaml:      OCaml implementation and interface files
+          - c:          C source and header files
+          - cpp:        C++ source and header files
+          - go:         Go source files
+          - java:       Java source files, including Unicode escape translation
+          - javascript: JavaScript modules and scripts, including JSX
+          - typescript: TypeScript modules and scripts, including TSX
+          - python:     Python source and stub files
+          - shell:      POSIX sh, Bash, and zsh scripts
+          - html:       HTML documents, including nested script and style elements
+          - css:        CSS stylesheets
+          - jsonc:      JSON with comments, including JSON5
+          - sql:        SQL for every supported database dialect
+          - kotlin:     Kotlin source and script files
+          - toml:       TOML documents, including the lock files written in it
+          - lua:        Lua chunks and LuaRocks rockspecs
+          - yaml:       YAML documents, including the tool configurations written in it
+          - php:        PHP scripts and templates; the inline HTML around the tags is content
+          - ruby:       Ruby scripts, gem manifests, and the project files named after their tool
+          - zig:        Zig source files and Zig Object Notation data
+          - r:          R scripts and the `.Rprofile` an R session sources at start-up
+          - dart:       Dart source files, whose block comments nest
+          - swift:      Swift source files, whose block comments nest and whose `#/../#` is a regex
+          - csharp:     C# source and script files, whose `#` lines are preprocessor directives
+          - scala:      Scala source and script files, whose block comments nest and whose XML literals are opaque
+          - vue:        Vue single-file components, whose templates are HTML with `{{ ... }}` code
+          - svelte:     Svelte components, whose templates are HTML with `{ ... }` code
+          - markdown:   Markdown documents, whose fenced code blocks are scanned as their named languages
+          - perl:       Perl scripts and modules, whose quote words and regexes hide a `#`
+
+      --dialect <DIALECT>
+          Force this dialect of the selected language
+
+          Possible values:
+          - standard:      The default lexical rules of the language
+          - jsx:           JavaScript with JSX elements
+          - tsx:           TypeScript with JSX elements
+          - objective-c:   Objective-C extensions to C
+          - objective-cpp: Objective-C++ extensions to C++
+          - gnu-c:         GNU extensions to C
+          - gnu-cpp:       GNU extensions to C++
+          - cuda:          CUDA extensions to C++
+          - posix-sh:      The POSIX shell command language
+          - bash53:        Bash 5.3
+          - zsh:           The Z shell
+          - postgresql:    PostgreSQL, with dollar-quoted bodies
+          - mysql:         MySQL, including its executable versioned comments
+          - sqlite:        SQLite
+          - t-sql:         Microsoft Transact-SQL
+          - oracle:        Oracle SQL and PL/SQL
+          - scss:          SCSS
+          - sass:          The indentation-based Sass syntax
+
+      --keep-kind <KIND>
+          Comma-separated comment kinds to protect on top of the policy
+
+          Possible values:
+          - line:            An ordinary comment running to the end of the line
+          - block:           An ordinary delimited comment
+          - doc-line:        A documentation comment running to the end of the line
+          - doc-block:       A delimited documentation comment
+          - directive:       A tool or language directive such as a pragma or lint control
+          - license:         A licence or copyright notice
+          - html-comment:    A DOM-observable HTML comment
+          - shebang:         The interpreter line starting an executable script
+          - encoding:        A source encoding declaration
+          - optimizer-hint:  A compiler or database optimizer hint
+          - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --remove-kind <KIND>
+          Comma-separated comment kinds to remove regardless of the policy
+
+          Possible values:
+          - line:            An ordinary comment running to the end of the line
+          - block:           An ordinary delimited comment
+          - doc-line:        A documentation comment running to the end of the line
+          - doc-block:       A delimited documentation comment
+          - directive:       A tool or language directive such as a pragma or lint control
+          - license:         A licence or copyright notice
+          - html-comment:    A DOM-observable HTML comment
+          - shebang:         The interpreter line starting an executable script
+          - encoding:        A source encoding declaration
+          - optimizer-hint:  A compiler or database optimizer hint
+          - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
+
+      --force-invalid
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
+
+      --force-protected
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
+
+Output:
+      --format <FORMAT>
+          Output encoding
+
+          Possible values:
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
+          - json
+          - jsonl
+          - sarif
+          - github
+          - agent:  The report as an instruction, for a reader that is going to act on it
+          
+          [default: review]
+
+      --color <WHEN>
+          When to colour terminal output
+          
+          [default: auto]
+          [possible values: auto, always, never]
+
+      --hyperlinks <WHEN>
+          When to emit terminal hyperlinks for reported paths
+          
+          [default: auto]
+          [possible values: auto, always, never]
+
+      --no-preview
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
+
+      --explain
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
+
+      --progress <WHEN>
+          When to draw the live scanning counter on standard error
+          
+          [default: auto]
+          [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -3212,9 +5481,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -3222,7 +5491,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -3291,12 +5560,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -3307,25 +5577,47 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
           Output encoding
+
+          Possible values:
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
+          - json
+          - jsonl
+          - sarif
+          - github
+          - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
-          [possible values: human, json, jsonl, sarif, github]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -3340,16 +5632,43 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
 
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
@@ -3378,9 +5697,9 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
-          - safe:  Remove ordinary and doc comments; keep preambles and directives
-          - legal: Like safe, and keep licence and copyright comments as well
-          - all:   Remove every comment that no keep override protects
+          - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
+          - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
+          - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
 
       --layout <LAYOUT>
           How the bytes left behind by a removed comment are laid out
@@ -3388,7 +5707,7 @@ Policy:
           Possible values:
           - lines:   Keep the line structure and separate tokens that would otherwise join
           - columns: Pad each removed comment so the following columns do not shift
-          - compact: Drop lines that held only a removed comment, and the whitespace it left behind
+          - compact: Drop lines that held only a removed comment, the whitespace it left behind, and any blank line the removal would otherwise have added to a run
 
       --language <LANGUAGE>
           Force this language instead of detecting it from path and contents
@@ -3457,12 +5776,13 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
 
       --remove-kind <KIND>
           Comma-separated comment kinds to remove regardless of the policy
@@ -3473,25 +5793,47 @@ Policy:
           - doc-line:        A documentation comment running to the end of the line
           - doc-block:       A delimited documentation comment
           - directive:       A tool or language directive such as a pragma or lint control
-          - license:         A licence or copyright preamble
+          - license:         A licence or copyright notice
           - html-comment:    A DOM-observable HTML comment
           - shebang:         The interpreter line starting an executable script
           - encoding:        A source encoding declaration
           - optimizer-hint:  A compiler or database optimizer hint
           - version-comment: A MySQL versioned comment that the server executes
+          - load-bearing:    A directive the language or its build reads as part of the program, such as `//go:build`
+
+      --include-generated
+          Scan files another tool writes: lock files, recorded seeds, generated output
+
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
-          Apply the edits that are still provably safe when the source fails to scan
+          Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
 
       --force-protected
-          Remove protected comments such as shebang and encoding preambles
+          Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads
 
 Output:
       --format <FORMAT>
           Output encoding
+
+          Possible values:
+          - human:  Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding
+          - review: The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe
+          - json
+          - jsonl
+          - sarif
+          - github
+          - agent:  The report as an instruction, for a reader that is going to act on it
           
-          [default: human]
-          [possible values: human, json, jsonl, sarif, github]
+          [default: review]
 
       --color <WHEN>
           When to colour terminal output
@@ -3506,16 +5848,43 @@ Output:
           [possible values: auto, always, never]
 
       --no-preview
-          Omit the one-line comment text from human `check` and `scan` lines
+          Omit the comment text from human `check` and `scan` lines and from the JSON formats
+
+      --annotation-level <LEVEL>
+          The level `--format github` annotates a removable comment at (default: the run's exit status)
+
+          Possible values:
+          - error:   Annotate as an error, which fails a job that checks annotations
+          - warning: Annotate as a warning
+          - notice:  Annotate as a notice, which GitHub folds away beside an error
 
       --explain
-          List every comment human `check` and `scan` met and name the rule and setting behind each one
+          List every comment `check` and `scan` met and name the rule and setting behind each one
+
+      --source-map
+          Include the byte-for-byte map from the output back to the source in the JSON formats
+
+      --trace <WHEN>
+          Record how the run reached its verdicts, on standard error
+
+          Possible values:
+          - off:   Record nothing, and collect nothing to record
+          - human: One line per step, for a person reading a terminal
+          - json:  One JSON object per line, against `spec/trace.schema.json`
+          
+          [default: off]
 
       --progress <WHEN>
           When to draw the live scanning counter on standard error
           
           [default: auto]
           [possible values: auto, always, never]
+
+  -j, --jobs <N>
+          How many threads the run uses to walk, read and scan; 0 chooses one per core
+
+      --summary <FILE>
+          Also write the end-of-run counts to this file, as one JSON object
 
   -q, --quiet
           Drop the run summary and notes; the command's product (findings, patch, listing) is still written
