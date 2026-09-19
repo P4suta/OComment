@@ -161,12 +161,22 @@ fn reject_symlink(path: &Path, phase: &str) -> Result<()> {
     Ok(())
 }
 
+/// Flush the directory entry, so a rename survives a power cut.
+///
+/// Split by system rather than guarded inside one body: the parameter is unused
+/// on the arm that does nothing, and a warning a platform emits and nobody
+/// reads is one more line of noise between a reader and the warning that
+/// matters.
+#[cfg(unix)]
 fn sync_parent(path: &Path) -> Result<()> {
-    #[cfg(unix)]
-    {
-        let directory = fs::File::open(parent_directory(path))?;
-        directory.sync_all()?;
-    }
+    let directory = fs::File::open(parent_directory(path))?;
+    directory.sync_all()?;
+    Ok(())
+}
+
+/// Windows has no directory handle to flush; the rename is durable on its own.
+#[cfg(not(unix))]
+fn sync_parent(_: &Path) -> Result<()> {
     Ok(())
 }
 

@@ -7,6 +7,29 @@ All notable changes to OComment will be documented here. The project follows
 
 ### Fixed
 
+- The test suite runs on the systems this repository publishes a binary for.
+  `cargo test` ran on Linux alone while `release.yml` shipped
+  `x86_64-pc-windows-msvc`; what Windows CI measured was that the crate builds
+  and prints its version. Because that job went green the whole run went green,
+  and a reader takes a green run for *Windows passes* — which is worse than
+  claiming nothing, because the ground for it is nowhere in the output.
+
+  The first thing it found was already known to one person who had run it by
+  hand: `a_first_segment_that_reads_as_a_drive_letter_is_disambiguated` asked a
+  question with two right answers. `c:/a.rs` names a directory called `c:` in a
+  POSIX checkout and the root of a drive on Windows, `std::path` says so, and
+  the SARIF location follows — under `%SRCROOT%` with a `./` on one system,
+  under no base on the other. The implementation was right on both; the test
+  held one system's answer and nothing had ever asked the other. It now asks
+  each, and a second case pins `under_source_root` itself, because both halves
+  would pass if that function simply stopped answering.
+
+- `sync_parent` is split by system instead of guarding its body, so the Windows
+  build no longer warns about a parameter the arm that does nothing cannot use.
+  Taken from an abandoned branch.
+
+### Fixed
+
 - A Go comment that opens with the word `go:` or `line ` after a space is
   prose, and both implementations were reading it as something the build
   requires. `// go:generate is what this line is about` was kept as

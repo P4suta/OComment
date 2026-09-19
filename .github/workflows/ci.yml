@@ -239,6 +239,17 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: '& rust/target/release/ocomment.exe --version'
+      # NOTE: The suite, on the systems this repository ships a binary for.
+      # NOTE: Until now `cargo test` ran on Linux alone while `release.yml`
+      # NOTE: shipped x86_64-pc-windows-msvc: what Windows measured was that it
+      # NOTE: builds and prints its version, and because this job went green
+      # NOTE: the whole run did, reading as "Windows passes". Skipped on Linux,
+      # NOTE: where the `rust` job runs it with the switches that turn a skip
+      # NOTE: into a failure -- which must not be set here, because they are
+      # NOTE: read with `is_some` and a "0" would demand rather than excuse.
+      - name: The suite runs where the binary ships
+        if: runner.os != 'Linux'
+        run: cargo test --manifest-path rust/Cargo.toml --workspace --locked
 
   action-smoke:
     strategy:

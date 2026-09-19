@@ -3756,12 +3756,31 @@ mod tests {
     /// scheme, so a checkout that really does hold a directory named `c:` says
     /// so with the one `.` segment a URI keeps for the purpose. Nothing else
     /// gains one, and a path that is under no base is left exactly as it was.
+    ///
+    /// The two spellings this is about are a different path on each system, so
+    /// the case is asked once per system rather than assumed. `c:/a.rs` names
+    /// a directory called `c:` in a POSIX checkout and the root of a drive on
+    /// Windows, and `std::path` says so: `components()` yields two `Normal`s
+    /// there and a `Prefix` here. Being under the source root and needing a
+    /// `./` follows from that, so the answer differs and both are right.
     #[test]
     fn a_first_segment_that_reads_as_a_drive_letter_is_disambiguated() {
-        let location = artifact_location(Path::new("c:/a.rs"));
-        assert_eq!(location["uri"], json!("./c:/a.rs"));
-        assert_eq!(location["uriBaseId"], json!(SRCROOT));
-        assert_eq!(artifact_location(Path::new("c:"))["uri"], json!("./c:"));
+        #[cfg(unix)]
+        {
+            let location = artifact_location(Path::new("c:/a.rs"));
+            assert_eq!(location["uri"], json!("./c:/a.rs"));
+            assert_eq!(location["uriBaseId"], json!(SRCROOT));
+            assert_eq!(artifact_location(Path::new("c:"))["uri"], json!("./c:"));
+        }
+        #[cfg(windows)]
+        {
+            /* NOTE: An absolute path, so it is under no base and claims none.
+             * The `./` exists to stop a reader taking a relative reference for
+             * a scheme, and there is no relative reference here to mistake. */
+            let location = artifact_location(Path::new("c:/a.rs"));
+            assert_eq!(location["uri"], json!(sarif_uri(Path::new("c:/a.rs"))));
+            assert!(location.get("uriBaseId").is_none());
+        }
         for plain in ["a.rs", "sub/doc.rs", "cc:/a.rs", "sub/c:/a.rs"] {
             assert_eq!(
                 artifact_location(Path::new(plain))["uri"],
@@ -3774,6 +3793,29 @@ mod tests {
             json!("/tmp/c:/a.rs"),
             "a path under no base was rewritten"
         );
+    }
+
+    /// The same question the case above asks, asked of the thing it turns on.
+    ///
+    /// Both halves of that test would pass if `under_source_root` simply
+    /// stopped answering, so this names what each system is expected to say
+    /// and why: a checkout holds `c:` as a directory only where `c:` can be a
+    /// directory name.
+    #[test]
+    fn a_drive_letter_is_a_directory_name_on_one_system_and_a_root_on_the_other() {
+        assert_eq!(under_source_root(Path::new("c:/a.rs")), cfg!(unix));
+        for both in ["a.rs", "sub/doc.rs", "cc:/a.rs"] {
+            assert!(
+                under_source_root(Path::new(both)),
+                "`{both}` is a relative path on every system"
+            );
+        }
+        for neither in ["/tmp/a.rs", "../a.rs"] {
+            assert!(
+                !under_source_root(Path::new(neither)),
+                "`{neither}` is not under the checkout on any system"
+            );
+        }
     }
 
     /// Every result points into the rules by index, so the two orders have to
