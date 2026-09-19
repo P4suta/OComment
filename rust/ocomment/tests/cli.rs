@@ -7165,6 +7165,57 @@ fn a_profile_reader_classifies_a_licence_the_way_every_other_reader_does() {
     );
 }
 
+/// A `#` inside a pattern is part of the pattern, and removing it rewrites what
+/// the file matches.
+///
+/// `.gitignore` and the formats that share its shape give `#` one rule: it
+/// opens a comment as the first byte of a line and nowhere else. Read anywhere
+/// else, a default `fix` wrote a shorter pattern back — `file#name` became
+/// `file`, `\#literal` became `\` — so the file quietly stopped ignoring what
+/// the line named, and the re-scan that guards every write saw nothing wrong
+/// because the result still lexed and was still idempotent.
+#[test]
+fn a_hash_inside_a_pattern_is_not_a_comment() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path();
+    fs::write(path.join(".ocomment.toml"), b"version = 1\n").unwrap();
+    let patterns = concat!(
+        "# a real comment\n",
+        "build/\n",
+        "file#name\n",
+        "\\#literal-hash\n",
+        "trailing  # not a comment in git\n",
+    );
+    fs::write(path.join(".gitignore"), patterns).unwrap();
+
+    /* NOTE: `--policy all` because it is the one that reaches every kind: if a
+     * pattern survives this it survives anything weaker. */
+    let fixed = run(path, &["fix", "--policy", "all", ".gitignore"]);
+    assert_eq!(fixed.status.code(), Some(0));
+    assert_eq!(
+        fs::read_to_string(path.join(".gitignore")).unwrap(),
+        concat!(
+            "\n",
+            "build/\n",
+            "file#name\n",
+            "\\#literal-hash\n",
+            "trailing  # not a comment in git\n",
+        ),
+        "a removal rewrote what the file matches"
+    );
+
+    /* NOTE: The other half of the `#` family, where git's own configuration
+     * syntax does let a comment open after a value. The two rules disagree
+     * about the same byte, which is why they are two profiles. */
+    fs::write(path.join(".gitmodules"), b"\tpath = vendor  # why\n").unwrap();
+    let anywhere =
+        String::from_utf8(run(path, &["scan", "--format", "human", ".gitmodules"]).stdout).unwrap();
+    assert!(
+        anywhere.contains("# why"),
+        "a comment git's config syntax allows was not read:\n{anywhere}"
+    );
+}
+
 /// Go's module files are read, and the two markers in them are kept at the
 /// strength each one has earned.
 ///

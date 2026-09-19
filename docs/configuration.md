@@ -418,11 +418,17 @@ paths = [".gitignore", ".gitattributes", ".github/CODEOWNERS"]
 keep_kind = ["line"]
 ```
 
-- **`hash-line`** is the `#`-to-end-of-line family: `CODEOWNERS`, the `ignore`
-  files, `.editorconfig`, `.gitmodules`, `.opam`, and OComment's own ledger.
-  Each of these formats has exactly that rule and no string form that could
-  hide the `#`, which is why they share one profile rather than having one
-  each.
+- **`hash-line`** is the pattern-list family: `CODEOWNERS`, the `ignore` files,
+  `.editorconfig`, and OComment's own ledger. A `#` opens a comment here only
+  as the first byte of its line. Anywhere else it belongs to the pattern —
+  `file#name` names a file with one in it, `\#literal` is how a pattern that
+  starts with one is written, and a `#` after the pattern is still the pattern.
+  Reading any of those as a comment wrote a shorter pattern back, so a default
+  `fix` quietly stopped ignoring what the line named.
+- **`hash-anywhere`** is the other half: `.gitmodules` and `.opam`, whose
+  syntaxes do let a comment open after a value. It is separate rather than
+  sharing the rule above because the two rules disagree about the same byte,
+  and a profile that has to be right about both is right about neither.
 - **`dune`** is a Lisp: `;` opens a line comment, `"..."` is a string with
   backslash escapes so a `;` inside one is text, and `#|...|#` nests.
 - **`go-module`** is `go.mod` and `go.work`: `//` to end of line, no block

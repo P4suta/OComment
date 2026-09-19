@@ -25,6 +25,7 @@ fn ini_like() -> DeclarativeProfile {
         line_comments: vec![LineDelimiter {
             start: ";".into(),
             requires_boundary: true,
+            requires_line_start: false,
             kind: CommentKind::Line,
         }],
         block_comments: vec![BlockDelimiter {
@@ -73,6 +74,7 @@ fn main() {
     ambiguous.line_comments.push(LineDelimiter {
         start: ";;".into(),
         requires_boundary: false,
+        requires_line_start: false,
         kind: CommentKind::Line,
     });
     println!("---");
