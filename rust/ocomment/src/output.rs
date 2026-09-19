@@ -1440,19 +1440,24 @@ fn busiest(groups: &[crate::advice::Group]) -> Option<(String, usize)> {
 /// The comment one finding was built from, so that the engine's verdict can be
 /// asked for again.
 ///
-/// A finding is a run of adjacent comments and carries a path and a line rather
-/// than a span; the verdict belongs to the first comment of the run, which is
-/// the one whose rule decided the rest.
+/// The verdict belongs to the first comment of the run, which is the one whose
+/// rule decided the rest, and the finding names it by the byte it starts at.
+/// A line does not name it: two removable comments share a line whenever one
+/// of them sits beside code, and matching on the line returned the first of
+/// them for both findings — so a plain comment beside a directive was
+/// explained as `this one a \`directive\``. Everything around that line was
+/// right, which is what kept it standing.
 fn found_at<'a>(
     files: &'a [ProcessedFile],
     item: &crate::advice::Item,
 ) -> Option<(&'a ProcessedFile, &'a Comment)> {
     let file = files.iter().find(|file| file.path == item.path)?;
-    let index = LineIndex::new(&file.source);
-    let comment = file.result.report.comments.iter().find(|comment| {
-        comment.disposition.is_remove()
-            && index.line_column(comment.span.start).0 == item.first_line
-    })?;
+    let comment = file
+        .result
+        .report
+        .comments
+        .iter()
+        .find(|comment| comment.span.start == item.start)?;
     Some((file, comment))
 }
 
@@ -2533,7 +2538,18 @@ struct JsonDecision {
 #[derive(Serialize)]
 struct JsonFinding {
     path: String,
+    /// The bytes the finding covers, from its first comment's first byte to
+    /// its last comment's last.
+    ///
+    /// A path and a line do not identify it. Two removable comments share a
+    /// line whenever one sits beside code, and two findings then reached this
+    /// format identical in every field — so a reader could neither tell them
+    /// apart nor act on either without going back to the file to work out
+    /// which was which.
+    span: ByteSpan,
     line: usize,
+    /// One-based, and the same column the text formats put after the line.
+    column: usize,
     end_line: usize,
     /// The lines as they are.
     old: Vec<String>,
@@ -2568,7 +2584,9 @@ fn json_decisions(files: &[ProcessedFile], policy: Policy) -> Vec<JsonDecision> 
                 .into_iter()
                 .map(|item| JsonFinding {
                     path: sanitize_path(&item.path.to_string_lossy()),
+                    span: ByteSpan::new(item.start, item.end),
                     line: item.first_line,
+                    column: item.column,
                     end_line: item.last_line,
                     old: item.old,
                     new: item.new,
@@ -4161,13 +4179,14 @@ fn write_agent(
 /// format its reader has to go and learn before it can act, and the reader this
 /// is for is one that would rather spend that round trip on the work. Six lines
 /// of preamble buy every one of them back.
-const AGENT_SCHEMA: [&str; 6] = [
+const AGENT_SCHEMA: [&str; 7] = [
     "Every line starts with a marker. DECIDE opens one question, asked of each",
     "FINDING under it. A FINDING names a path and the first and last line of one",
-    "comment, which may span several. `-` is what is there now, `+` what would",
-    "replace it, `=` the code the comment is about. KEEP names a file and `|` the",
-    "setting that would stop the question being asked. BROKEN is a file that did",
-    "not parse. The argv lines are commands, ready to run.",
+    "comment, which may span several, and the column when the comment does not",
+    "open its line. `-` is what is there now, `+` what would replace it, `=` the",
+    "code the comment is about. KEEP names a file and `|` the setting that would",
+    "stop the question being asked. BROKEN is a file that did not parse. The",
+    "argv lines are commands, ready to run.",
 ];
 
 /// A command as the argv a caller can run without retyping it.

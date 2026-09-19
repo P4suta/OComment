@@ -121,10 +121,11 @@ $ ocomment check --format agent
 # ocomment: 5 comments to answer for in 1 of 1 file scanned, policy conservative.
 # Every line starts with a marker. DECIDE opens one question, asked of each
 # FINDING under it. A FINDING names a path and the first and last line of one
-# comment, which may span several. `-` is what is there now, `+` what would
-# replace it, `=` the code the comment is about. KEEP names a file and `|` the
-# setting that would stop the question being asked. BROKEN is a file that did
-# not parse. The argv lines are commands, ready to run.
+# comment, which may span several, and the column when the comment does not
+# open its line. `-` is what is there now, `+` what would replace it, `=` the
+# code the comment is about. KEEP names a file and `|` the setting that would
+# stop the question being asked. BROKEN is a file that did not parse. The
+# argv lines are commands, ready to run.
 
 DECIDE make it a documentation comment | 2 comments
 FINDING src/budget.rs:3-4
@@ -174,7 +175,9 @@ the lines as they are, what would replace them, and the settings to add.
   "findings": [
     {
       "path": "src/budget.rs",
+      "span": { "start": 26, "end": 147 },
       "line": 3,
+      "column": 1,
       "end_line": 4,
       "old": ["// The retry budget is per connection, not per request, because the"],
       "new": ["/// The retry budget is per connection, not per request, because the"],
@@ -184,6 +187,14 @@ the lines as they are, what would replace them, and the settings to add.
   "keep_instead": { "file": ".ocomment.toml", "add": "[policy.allow]\ntags = [\"NOTE\"]" }
 }
 ```
+
+`span` is what identifies a finding; the path and the line do not. Two
+removable comments share a line whenever one of them sits beside code —
+`let x = 1; /* directive */ /* prose */` is two findings, asked two different
+questions — and named by line alone they arrive identical. The text formats
+put the column after the line in that case for the same reason, and leave it
+off for a comment that only happens to be indented, which is the only one on
+its line.
 
 `--format jsonl` is the same content one object per line. `--format sarif` and
 `--format github` are for the tools that read them; see [CI and hooks](ci.md).

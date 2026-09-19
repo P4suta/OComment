@@ -31,6 +31,26 @@ All notable changes to OComment will be documented here. The project follows
   reader, and the size of that move is the size of the change to what the gate
   covers.
 
+- A finding is identified by the comment it was built from, not by the line
+  that comment sits on. Two removable comments share a line whenever one of
+  them sits beside code — `let x = 1; /* directive */ /* prose */` is two
+  findings — and every report named both of them `a.js:1`:
+
+  - `--explain` fetched the verdict by line, got the first comment for both,
+    and explained the plain comment as `this one a \`directive\``. That is the
+    one thing `--explain` exists to be checked on, and everything around it —
+    the decision, the setting that would keep it, the code above it — was
+    right, which is what kept it standing.
+  - `--format json` produced two findings identical in every field, so a
+    reader could neither tell them apart nor act on either.
+  - `review` and `agent` printed the same locator twice with the same source
+    line under it.
+
+  A finding now carries the bytes it covers. The machine format gained `span`
+  and `column`, and the text formats put the column after the line when
+  something other than whitespace is in front of the comment — which is exactly
+  when a line stops naming one finding, and never for a merely indented one.
+
 - `docs/configuration.md` said `ocomment languages` lists the shipped profiles
   beside the built-in languages. It never did, and no test asked it to.
 

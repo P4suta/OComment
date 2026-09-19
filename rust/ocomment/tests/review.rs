@@ -105,10 +105,11 @@ const REVIEW: &str = r#"
 const AGENT: &str = r#"# ocomment: 5 comments to answer for in 1 of 1 file scanned, policy conservative.
 # Every line starts with a marker. DECIDE opens one question, asked of each
 # FINDING under it. A FINDING names a path and the first and last line of one
-# comment, which may span several. `-` is what is there now, `+` what would
-# replace it, `=` the code the comment is about. KEEP names a file and `|` the
-# setting that would stop the question being asked. BROKEN is a file that did
-# not parse. The argv lines are commands, ready to run.
+# comment, which may span several, and the column when the comment does not
+# open its line. `-` is what is there now, `+` what would replace it, `=` the
+# code the comment is about. KEEP names a file and `|` the setting that would
+# stop the question being asked. BROKEN is a file that did not parse. The
+# argv lines are commands, ready to run.
 
 DECIDE make it a documentation comment | 2 comments
 FINDING src/budget.rs:3-4
@@ -129,7 +130,7 @@ KEEP .ocomment.toml
 | tags = ["TODO"]
 
 DECIDE move it above the code, or drop it | 1 comment
-FINDING src/budget.rs:15
+FINDING src/budget.rs:15:37
 -         Self { remaining: DEFAULT } // start full
 KEEP .ocomment.toml
 | [policy.allow]
@@ -592,5 +593,46 @@ fn every_report_says_which_reader_answered() {
     assert!(
         !profiles.contains("\tconfigured\t"),
         "a shipped profile is reported as one this project declared:\n{profiles}"
+    );
+}
+
+/// A finding names the comment it was built from, not the line that comment
+/// sits on.
+///
+/// Two removable comments share a line whenever one of them sits beside code,
+/// and the lookup that fetches a verdict for `--explain` matched on the line —
+/// so it returned the first of the two for both findings, and a plain comment
+/// beside a directive was explained as `this one a `directive``. Everything
+/// around that line was right: the decision, the settings that would keep it,
+/// the code shown above. Only the reason was another comment's.
+#[test]
+fn explain_asks_about_the_comment_the_finding_was_built_from() {
+    let directory = project();
+    std::fs::write(
+        directory.path().join("a.js"),
+        b"let x = 1; /* eslint-disable-line no-x */ /* plain prose */\n",
+    )
+    .expect("the fixture is writable");
+    let output = run(
+        directory.path(),
+        &["check", "--policy", "all", "--explain", "a.js"],
+    );
+    let report = String::from_utf8_lossy(&output.stdout).into_owned();
+    let reasons: Vec<&str> = report
+        .lines()
+        .filter(|line| line.trim_start().starts_with("removed:"))
+        .collect();
+    assert_eq!(
+        reasons.len(),
+        2,
+        "the fixture is meant to produce one finding per comment:\n{report}"
+    );
+    assert!(
+        reasons[0].contains("`directive`"),
+        "the directive was not explained as one:\n{report}"
+    );
+    assert!(
+        reasons[1].contains("`block`"),
+        "the plain comment was explained as the directive beside it:\n{report}"
     );
 }

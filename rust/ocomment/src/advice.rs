@@ -148,6 +148,24 @@ impl Decision {
 #[derive(Clone, Debug)]
 pub struct Item {
     pub path: PathBuf,
+    /// The bytes the run covers, from its first comment's first byte to its
+    /// last comment's last.
+    ///
+    /// The path and the line do not identify a finding. Two removable comments
+    /// share a line whenever one of them sits beside code, and a lookup keyed
+    /// on the line returned the first of them for both — so `--explain`
+    /// printed one comment's verdict under the other, which is the one thing a
+    /// reader consults `--explain` to check, and two findings reached a
+    /// machine format identical in every field.
+    pub start: usize,
+    pub end: usize,
+    /// One-based, the column the first comment of the run opens at.
+    pub column: usize,
+    /// Something other than whitespace is in front of it on its line.
+    ///
+    /// Which is exactly when a path and a line stop naming one finding: the
+    /// thing in front may be code, and it may be another comment.
+    pub beside: bool,
     /// One-based, inclusive on both ends.
     pub first_line: usize,
     pub last_line: usize,
@@ -294,9 +312,12 @@ fn file_items(file: &ProcessedFile, policy: Policy) -> Vec<(Decision, Item)> {
                     && open.kind == placed.kind =>
             {
                 open.last = placed.last;
+                open.end = placed.end;
                 open.comments += 1;
             }
             _ => runs.push(Run {
+                start: placed.start,
+                end: placed.end,
                 first: placed.first,
                 last: placed.last,
                 column: placed.column,
@@ -316,6 +337,13 @@ fn file_items(file: &ProcessedFile, policy: Policy) -> Vec<(Decision, Item)> {
 
 /// A run of adjacent comments, before anything has been decided about it.
 struct Run {
+    /// From the first comment's first byte to the last comment's last. A run
+    /// is reported by path and line, and neither a reader asking the engine
+    /// for the verdict behind one finding nor a program applying its edit can
+    /// name it by the line: two removable comments share a line whenever one
+    /// of them sits beside code.
+    start: usize,
+    end: usize,
     first: usize,
     last: usize,
     column: usize,
@@ -330,6 +358,8 @@ impl Run {
     /// A run that nothing joins, which is how a kept comment or a comment this
     /// could not place separates the two paragraphs around it.
     const BREAK: Self = Self {
+        start: 0,
+        end: 0,
         first: 0,
         last: 0,
         column: 0,
@@ -405,6 +435,10 @@ fn item_of(
         decision,
         Item {
             path: file.path.clone(),
+            start: run.start,
+            end: run.end,
+            column: run.column,
+            beside: run.beside,
             first_line: run.first,
             last_line: run.last,
             comments: run.comments,
@@ -418,6 +452,11 @@ fn item_of(
 
 /// One comment, placed: which lines it covers and whether it opens a promise.
 struct Placed {
+    /// The bytes the comment covers. The start is the only thing about a
+    /// comment that is unique: two of them share a line whenever one sits
+    /// beside code.
+    start: usize,
+    end: usize,
     first: usize,
     last: usize,
     column: usize,
@@ -445,6 +484,8 @@ fn place(lines: &[String], index: &crate::output::LineIndex, comment: &Comment) 
         .trim()
         .is_empty();
     Some(Placed {
+        start: comment.span.start,
+        end: comment.span.end,
         first,
         last,
         column,
@@ -590,13 +631,24 @@ pub fn promote(lines: &[String], prefix: &str) -> Vec<String> {
 impl Item {
     /// The path and lines as every report here writes them, so a reader
     /// searching one can search the other.
+    ///
+    /// The column comes too when something other than whitespace is in front
+    /// of the comment. That is exactly when a path and a line stop naming one
+    /// finding — a second comment on a line always has the first in front of
+    /// it — and the report was printing the two as one location twice. An
+    /// indented comment is the only one on its line and does not need it.
     #[must_use]
     pub fn where_it_is(&self) -> String {
         let path = crate::output::sanitize_path(&self.path.to_string_lossy());
-        if self.first_line == self.last_line {
+        let lines = if self.first_line == self.last_line {
             format!("{path}:{}", self.first_line)
         } else {
             format!("{path}:{}-{}", self.first_line, self.last_line)
+        };
+        if self.beside {
+            format!("{lines}:{}", self.column)
+        } else {
+            lines
         }
     }
 }

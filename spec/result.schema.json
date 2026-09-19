@@ -517,7 +517,9 @@
       "additionalProperties": false,
       "required": [
         "path",
+        "span",
         "line",
+        "column",
         "end_line",
         "old"
       ],
@@ -525,7 +527,14 @@
         "path": {
           "type": "string"
         },
+        "span": {
+          "$ref": "#/$defs/span"
+        },
         "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "column": {
           "type": "integer",
           "minimum": 1
         },
@@ -552,7 +561,8 @@
           "type": "string",
           "description": "The code the comment is about, when the decision turns on it."
         }
-      }
+      },
+      "description": "One run of adjacent comments asking one question. `span` identifies it: a path and a line do not, because two removable comments share a line whenever one of them sits beside code."
     },
     "keepInstead": {
       "type": "object",
