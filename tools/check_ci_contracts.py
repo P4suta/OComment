@@ -50,7 +50,11 @@ PINS = {
     ),
     "dtolnay/rust-toolchain": ("4360b52568e2003a75bf9bc1d59f33a8e3fc893c", "stable toolchain action"),
     "github/codeql-action": ("db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28", "v4.37.8"),
-    "ocaml/setup-ocaml": ("f92e0606b7ae4873dd1238465ea4bf6f8e40d85c", "v3"),
+    # NOTE: The exact release and not the `v3` this action's own README shows.
+    # NOTE: A moving major names whatever its publisher last pointed it at, so
+    # NOTE: a table carrying one records nothing a reader or
+    # NOTE: `check_action_pins.py` can hold the pin to.
+    "ocaml/setup-ocaml": ("f92e0606b7ae4873dd1238465ea4bf6f8e40d85c", "v3.7.2"),
     "rust-lang/crates-io-auth-action": (
         "c6f97d42243bad5fab37ca0427f495c86d5b1a18",
         "v1.0.5",
