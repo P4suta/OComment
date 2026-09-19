@@ -110,6 +110,29 @@ All notable changes to OComment will be documented here. The project follows
 
 ### Added
 
+- `go.mod` and `go.work` are read, by a bundled `go-module` profile. They take
+  `//` to end of line and nothing else — no block comment, no string form a
+  `//` could hide inside — so a delimiter list describes them completely. A
+  repository gating on this tool was not reading them at all; in the one this
+  came from that is 32 of the 166 files a run passed over.
+
+  Two markers in them are kept, at the strength each has earned.
+  `// indirect` is addressed to `go mod tidy`, which writes it and puts it back
+  when it is gone, so it is a directive: every policy but `all` keeps it, and a
+  default `fix` no longer proposes deleting it from every `require` line.
+  `// Deprecated:` is put back by nothing — before the module declaration it is
+  what `go get` warns with and what a proxy serves to everyone downstream, and
+  inside a `retract` block it is the reason `go list -m -retracted` prints — so
+  no policy reaches it.
+
+  A profile matches a substring and cannot say *this is the whole comment*, so
+  each marker also claims a comment that merely opens with the same words. That
+  is the tier's other job: a line of prose caught by `// indirect` is kept by a
+  gate rather than put beyond every policy there is.
+
+- `go.work.sum` joins `go.sum` in the generated catalogue. Both are written by
+  the Go toolchain and neither is anybody's to edit.
+
 - `ocomment profiles` lists the declarative profiles this build and this project
   can read with — `hash-line`, `dune`, `wit`, and any the configuration adds —
   with the ones the project declared or replaced marked as its own, compared by

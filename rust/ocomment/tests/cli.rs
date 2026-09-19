@@ -7165,6 +7165,87 @@ fn a_profile_reader_classifies_a_licence_the_way_every_other_reader_does() {
     );
 }
 
+/// Go's module files are read, and the two markers in them are kept at the
+/// strength each one has earned.
+///
+/// `go.mod` and `go.work` take `//` to end of line and nothing else, so a
+/// delimiter list describes them completely — and until it did, a repository
+/// that gated on this tool was not reading them at all. `// indirect` is
+/// addressed to `go mod tidy`, which puts it back, so the default policies keep
+/// it and `--policy all` may still take it. `// Deprecated:` is not put back by
+/// anything: it is what `go get` warns with and what a proxy serves downstream,
+/// so no policy reaches it.
+#[test]
+fn a_go_module_file_is_read_and_its_markers_are_kept_by_strength() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path();
+    fs::write(path.join(".ocomment.toml"), b"version = 1\n").unwrap();
+    /* NOTE: The licence header first. A project that requires one on every
+     * file and gates on this tool had `go.mod` unread until now, so the day
+     * it becomes readable is the day the header is classified for the first
+     * time -- and a reader that stopped at the lexical kind would call it
+     * ordinary and ask for its removal. */
+    let module = concat!(
+        "// SPDX-License-Identifier: Apache-2.0\n",
+        "// Deprecated: use example.com/x/v2 instead.\n",
+        "module example.com/x\n",
+        "\n",
+        "go 1.24\n",
+        "\n",
+        "// The pin is not arbitrary: v1.3.0 changed the signature of Walk.\n",
+        "require (\n",
+        "\tgolang.org/x/sys v0.28.0 // indirect\n",
+        ")\n",
+    );
+    fs::write(path.join("go.mod"), module).unwrap();
+    fs::write(path.join("go.work"), b"go 1.24\n\nuse .\n").unwrap();
+
+    let coverage = String::from_utf8(run(path, &["coverage", "."]).stdout).unwrap();
+    assert!(
+        coverage.contains("read by the `go-module` profile"),
+        "the module files were not read:\n{coverage}"
+    );
+
+    /* NOTE: The prose line and nothing else. A gate that reported the two
+     * markers would be asking a project to delete what its toolchain wrote. */
+    let default = run(path, &["check", "--format", "human", "go.mod"]);
+    let report = String::from_utf8(default.stdout).unwrap();
+    assert!(
+        report.contains("The pin is not arbitrary") && report.lines().count() == 1,
+        "the default policy did not report the prose alone:\n{report}"
+    );
+
+    let scanned = String::from_utf8(run(path, &["scan", "--format", "json", "go.mod"]).stdout)
+        .expect("the report is UTF-8");
+    let value: serde_json::Value = serde_json::from_str(&scanned).expect("the report parses");
+    let licence = value["files"][0]["report"]["comments"][0].clone();
+    assert_eq!(
+        (
+            licence["kind"].as_str(),
+            licence["disposition"]["action"].as_str()
+        ),
+        (Some("license"), Some("keep")),
+        "a licence header is a licence header whichever reader found it:\n{licence}"
+    );
+
+    let all = String::from_utf8(
+        run(
+            path,
+            &["check", "--policy", "all", "--format", "human", "go.mod"],
+        )
+        .stdout,
+    )
+    .unwrap();
+    assert!(
+        all.contains("// indirect"),
+        "`--policy all` did not reach the marker go mod tidy puts back:\n{all}"
+    );
+    assert!(
+        !all.contains("Deprecated:"),
+        "a published deprecation was reported as removable:\n{all}"
+    );
+}
+
 /// A name that still works has to say that it has moved.
 ///
 /// `legal` and `safe` resolve to `conservative` and `standard` so that a
