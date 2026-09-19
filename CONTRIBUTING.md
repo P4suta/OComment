@@ -43,6 +43,22 @@ The repository is intentionally split into independent implementations:
 Do not share scanner code between Rust and OCaml. Matching normalized outputs
 are the cross-check.
 
+**It cannot see a mistake both implementations make.** The corpus asks whether
+the two agree, and two readers written from the same wrong understanding agree
+perfectly. A `#` in a `.gitignore` opens a comment only as the first byte of
+its line; the shipped profile said it opened one anywhere, both implementations
+were told so, and 508 fixtures passed while `ocomment fix` shortened patterns
+and the file quietly stopped ignoring what they named.
+
+So a rule that belongs to something outside this repository — what git does
+with a `#`, what the kernel does with `#!`, what `go mod tidy` puts back — is
+not settled by the two implementations agreeing about it. It is settled by
+finding out, and then written into `spec/fixtures/v1/` as a case, which is
+where an external fact becomes something neither implementation can drift away
+from. A fixture recording *what another tool does* is worth more than one
+recording what this one does, because only the first can fail for a reason
+worth knowing.
+
 ## Before you push
 
 ```sh
