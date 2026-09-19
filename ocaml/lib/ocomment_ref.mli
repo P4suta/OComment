@@ -82,7 +82,15 @@ type source_map_segment = { original : byte_span; output : byte_span; exact : bo
 type source_map = source_map_segment list
 type transform_result = { output : bytes; edits : edit list; report : scan_report; source_map : source_map }
 
-type line_delimiter = { line_start : string; requires_boundary : bool; line_kind : comment_kind }
+type line_delimiter = {
+  line_start : string;
+  requires_boundary : bool;
+  (** Only open a comment when the token is the first byte of its line.
+     A pattern list gives [#] that rule and only that rule: [file#name]
+     names a file with one in it. *)
+  requires_line_start : bool;
+  line_kind : comment_kind;
+}
 type block_delimiter = { block_start : string; block_end_token : string; nested : bool; block_kind : comment_kind }
 type string_delimiter = { string_start : string; string_end : string; escape : string option; multiline : bool }
 

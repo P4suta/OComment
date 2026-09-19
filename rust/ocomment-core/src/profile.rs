@@ -43,6 +43,7 @@ use thiserror::Error;
 ///     line_comments: vec![LineDelimiter {
 ///         start: ";;".into(),
 ///         requires_boundary: false,
+///         requires_line_start: false,
 ///         kind: CommentKind::Line,
 ///     }],
 ///     strings: vec![StringDelimiter {
@@ -105,6 +106,17 @@ pub struct LineDelimiter {
     /// swallow the rest of the line.
     #[serde(default)]
     pub requires_boundary: bool,
+    /// Only open a comment when the token is the first byte of its line.
+    ///
+    /// Several formats give `#` that rule and only that rule: a `.gitignore`
+    /// pattern may contain one -- `file#name` is a file called `file#name` --
+    /// and `\\#literal` is how a pattern that starts with one is written. A
+    /// profile that opened a comment at either wrote a shorter pattern back,
+    /// so a default `fix` quietly stopped ignoring what the line named. The
+    /// rule is the whole line's first byte and not "after whitespace", because
+    /// leading whitespace in such a file is part of the pattern too.
+    #[serde(default)]
+    pub requires_line_start: bool,
     /// The kind to record, which is what the policy then judges.
     #[serde(default)]
     pub kind: CommentKind,
@@ -427,6 +439,9 @@ fn scan_profile_with(
                 && (!delimiter.requires_boundary
                     || index == 0
                     || source[index - 1].is_ascii_whitespace())
+                /* NOTE: The byte before is the line feed, which is also true of
+                 * a CRLF ending: the `\r` belongs to the line before it. */
+                && (!delimiter.requires_line_start || index == 0 || source[index - 1] == b'\n')
         }) {
             let mut end = index + delimiter.start.len();
             while end < source.len() && !matches!(source[end], b'\r' | b'\n') {
@@ -587,11 +602,13 @@ mod tests {
                 LineDelimiter {
                     start: "/".into(),
                     requires_boundary: false,
+                    requires_line_start: false,
                     kind: CommentKind::Line,
                 },
                 LineDelimiter {
                     start: "//".into(),
                     requires_boundary: false,
+                    requires_line_start: false,
                     kind: CommentKind::Line,
                 },
             ],
@@ -616,6 +633,7 @@ mod tests {
             line_comments: vec![LineDelimiter {
                 start: ";;".into(),
                 requires_boundary: false,
+                requires_line_start: false,
                 kind: CommentKind::Line,
             }],
             protected_patterns: vec![
@@ -673,6 +691,7 @@ mod tests {
             line_comments: vec![LineDelimiter {
                 start: ";;".into(),
                 requires_boundary: false,
+                requires_line_start: false,
                 kind: CommentKind::Line,
             }],
             strings: vec![StringDelimiter {
@@ -705,6 +724,7 @@ mod tests {
             line_comments: vec![LineDelimiter {
                 start: "#".into(),
                 requires_boundary: false,
+                requires_line_start: false,
                 kind: CommentKind::Line,
             }],
             strings: vec![StringDelimiter {

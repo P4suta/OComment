@@ -239,6 +239,15 @@ delimiter that is a prefix of another, a nested block whose tokens overlap, and
 a delimiter containing a line terminator, because none of those has a single
 reading.
 
+`requires_boundary` and `requires_line_start` are how a profile says where its
+token is allowed to open. The first keeps a token that also occurs inside an
+identifier from swallowing the rest of the line; the second is for the formats
+whose `#` is a comment as the first byte of a line and part of the data
+anywhere else, which is every pattern list — a `.gitignore` entry may contain
+one, and `\#literal` is how an entry that starts with one is written. Without
+the second, a removal in such a file writes a shorter pattern back and the file
+quietly stops matching what the line named.
+
 ```rust
 use ocomment_core::{
     CommentKind, DeclarativeProfile, LineDelimiter, StringDelimiter, TransformOptions,
@@ -251,6 +260,7 @@ let profile = DeclarativeProfile {
     line_comments: vec![LineDelimiter {
         start: ";;".into(),
         requires_boundary: false,
+        requires_line_start: false,
         kind: CommentKind::Line,
     }],
     strings: vec![StringDelimiter {

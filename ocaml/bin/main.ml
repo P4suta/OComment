@@ -125,6 +125,7 @@ let profile_of_json json =
   let line_comments = list_or_empty "line_comments" json |> List.map (fun item ->
     ({ line_start = member_string "start" item;
        requires_boundary = bool_or false "requires_boundary" item;
+       requires_line_start = bool_or false "requires_line_start" item;
        line_kind = comment_kind_of_string (string_or "line" "kind" item) } : line_delimiter)) in
   let block_comments = list_or_empty "block_comments" json |> List.map (fun item ->
     ({ block_start = member_string "start" item;

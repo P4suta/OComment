@@ -5,6 +5,12 @@ version = 1
 # NOTE: them is a built-in language, and what each one says: see "The profiles
 # NOTE: OComment ships with" in docs/configuration.md.
 
+# NOTE: `#` opens a comment only as the first byte of its line. These formats
+# NOTE: are pattern lists, and a `#` anywhere else belongs to the pattern:
+# NOTE: `file#name` names a file with one in it, and `\#literal` is how a
+# NOTE: pattern that starts with one is written. Reading either as a comment
+# NOTE: wrote a shorter pattern back, so a default `fix` quietly stopped
+# NOTE: ignoring what the line named.
 [profiles.hash-line]
 name = "hash-line"
 filenames = [
@@ -17,11 +23,19 @@ filenames = [
     ".prettierignore",
     ".vscodeignore",
     ".editorconfig",
-    ".gitmodules",
     ".ocommentignore",
     # NOTE: OComment's own ledger.
     ".ocomment-ledger",
 ]
+line_comments = [{ start = "#", requires_line_start = true, kind = "line" }]
+
+# NOTE: The other half of the `#` family, where a comment may open anywhere on
+# NOTE: the line. Git's configuration syntax says so and so does opam's, and
+# NOTE: they are separated from the list above rather than sharing its rule
+# NOTE: because the two rules disagree about the same byte.
+[profiles.hash-anywhere]
+name = "hash-anywhere"
+filenames = [".gitmodules"]
 extensions = ["opam"]
 line_comments = [{ start = "#", kind = "line" }]
 

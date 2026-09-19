@@ -7,6 +7,29 @@ All notable changes to OComment will be documented here. The project follows
 
 ### Fixed
 
+- A `#` inside a `.gitignore` pattern is part of the pattern, and a default
+  `fix` was removing it along with the rest of the line. Git gives `#` one rule
+  in these files — it opens a comment as the first byte of a line and nowhere
+  else — and the profile that reads them opened one anywhere:
+
+  | before | after `ocomment fix` |
+  |---|---|
+  | `file#name` | `file` |
+  | `\#literal-hash` | `\` |
+  | `trailing  # not a comment in git` | `trailing` |
+
+  So the file stopped ignoring what those lines named, which is a change to
+  what every later run of every tool sees. The re-scan that guards each write
+  passed, because the result still lexed and was still idempotent: nothing in
+  it could know the file now means something else.
+
+  `LineDelimiter` gains `requires_line_start`, in both implementations and in
+  the shared corpus, and the shipped profile is split. `hash-line` is the
+  pattern-list family — `CODEOWNERS`, the `ignore` files, `.editorconfig`, the
+  ledger — and `hash-anywhere` is `.gitmodules` and `.opam`, whose syntaxes do
+  let a comment open after a value. They are two profiles because the two rules
+  disagree about the same byte.
+
 - `--deny-skipped` refuses a reason it does not know. It matched free text
   against the label the report gives a skip — and that label contains a space,
   so `--deny-skipped unknown-language`, the spelling of every other value this
