@@ -113,6 +113,7 @@ type transform_result = { output : bytes; edits : edit list; report : scan_repor
 type line_delimiter = {
   line_start : string;
   requires_boundary : bool;
+  requires_line_start : bool;
   line_kind : comment_kind;
 }
 
@@ -6721,7 +6722,9 @@ let scan_profile source profile options =
         loop finish
       | None -> match List.find_opt (fun delimiter -> starts source index delimiter.line_start &&
           (not delimiter.requires_boundary || index = 0 ||
-            ascii_whitespace (Bytes.get source (index - 1)))) profile.line_comments with
+            ascii_whitespace (Bytes.get source (index - 1))) &&
+          (not delimiter.requires_line_start || index = 0 ||
+            Bytes.get source (index - 1) = '\n')) profile.line_comments with
         | Some delimiter ->
           let finish = line_end source (index + String.length delimiter.line_start) in
           accumulator.comments_rev <- profile_comment source profile options index finish
