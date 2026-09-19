@@ -2448,6 +2448,51 @@
       }
     },
     {
+      "id": "go-directives-begin-at-the-marker",
+      "language": "go",
+      "operation": "scan",
+      "options": {
+        "policy": "conservative"
+      },
+      "source_utf8": "//go:build linux\n// go:generate is what this line is about\n//line generated.go:1\n// line the user put it on, which is a sentence\n// +build ignore\n",
+      "note": "Go reads `//go:` and `//line ` only when they begin at the marker: `// go:generate` and `// line ...` are prose that opens with the same word and the toolchain ignores them. `// +build` is the older build constraint and is the opposite -- the space is part of the form. Both implementations took all five from the trimmed text, so a sentence starting `go:` was kept as something the build requires, out of reach of every policy, with `--explain` saying so. The rule is Go's rather than this repository's, which is why it is recorded here: two readers written from the same wrong understanding agree with each other perfectly.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 16,
+            "kind": "load-bearing",
+            "action": "keep"
+          },
+          {
+            "start": 17,
+            "end": 58,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 59,
+            "end": 80,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 81,
+            "end": 128,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 129,
+            "end": 145,
+            "kind": "load-bearing",
+            "action": "keep"
+          }
+        ]
+      }
+    },
+    {
       "id": "declarative-profile-safe",
       "language": "c",
       "operation": "transform-profile",

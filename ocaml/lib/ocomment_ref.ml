@@ -571,11 +571,21 @@ let is_directive language text raw =
      the same word in each. *)
   opens_with_keyword compact "nosonar" ||
   match language with
-  (* NOTE: staticcheck's two are named in full rather than by the namespace in
-     front of them, because "lint:" alone is also how a person writes a note to
-     themselves about linting. *)
-  | Go -> List.exists (fun prefix -> String.starts_with ~prefix compact)
-      ["go:"; "+build"; "line "; "lint:ignore"; "lint:file-ignore"]
+  (* NOTE: The compiler's two have to begin at the marker: "// go:generate" is
+     prose that opens with the same word and Go ignores it.  Read from [raw],
+     because [compact] has had the leading whitespace trimmed and cannot tell
+     them apart.  The other three stay on [compact]: "// +build" is the older
+     constraint, where the space is part of the form, and staticcheck's two are
+     a tool's directives rather than the compiler's -- which is the distinction
+     this is about.  They are named in full because "lint:" alone is also how
+     somebody writes a note to themselves about linting. *)
+  | Go ->
+    String.starts_with ~prefix:"//go:" raw
+    || String.starts_with ~prefix:"/*go:" raw
+    || String.starts_with ~prefix:"//line " raw
+    || String.starts_with ~prefix:"/*line " raw
+    || List.exists (fun prefix -> String.starts_with ~prefix compact)
+         ["+build"; "lint:ignore"; "lint:file-ignore"]
   | TypeScript ->
     (String.starts_with ~prefix:"///" raw && String.starts_with ~prefix:"<" compact)
     || bundler_directive compact
@@ -728,8 +738,13 @@ let bundler_is_load_bearing compact =
 let is_load_bearing language text raw =
   let compact = directive_compact text in
   match language with
-  | Go -> String.starts_with ~prefix:"go:" compact ||
-      String.starts_with ~prefix:"+build" compact
+  (* NOTE: The same distinction as in [directive_name], and it has to be made
+     again here because this decides load-bearing from the text rather than
+     from the directive name the other one returned.  A spaced "// go:generate"
+     is prose, and prose no policy can reach is worse than prose that stays. *)
+  | Go -> String.starts_with ~prefix:"//go:" raw
+      || String.starts_with ~prefix:"/*go:" raw
+      || String.starts_with ~prefix:"+build" compact
   | Swift -> String.starts_with ~prefix:"swift-tools-version:" compact
   | Ruby -> List.exists (fun prefix -> String.starts_with ~prefix compact)
       ["frozen_string_literal:"; "warn_indent:"; "shareable_constant_value:"]

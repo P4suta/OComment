@@ -5,6 +5,28 @@ All notable changes to OComment will be documented here. The project follows
 
 ## Unreleased
 
+### Fixed
+
+- A Go comment that opens with the word `go:` or `line ` after a space is
+  prose, and both implementations were reading it as something the build
+  requires. `// go:generate is what this line is about` was kept as
+  load-bearing — out of reach of every policy short of `--force-protected` —
+  and `--explain` said the language or its build required it. The suppression
+  worked and its reason was false, which is the harder half to notice: nothing
+  misbehaves, a sentence simply cannot be deleted and the tool explains why in
+  terms of a rule that does not apply to it.
+
+  Go reads `//go:` and `//line ` only at the marker itself. `// +build` is the
+  opposite — the older build constraint, where the space is part of the form —
+  and staticcheck's `lint:ignore` and `lint:file-ignore` stay on the trimmed
+  text, because they are a tool's directives rather than the compiler's, which
+  is the distinction the whole fix is about.
+
+  The rule is Go's rather than this repository's, so it is recorded in
+  `spec/fixtures/v1/` as a case rather than only in two scanners: two readers
+  written from the same wrong understanding agree with each other perfectly,
+  which is how this passed 509 differential fixtures.
+
 ### Changed
 
 - The three dependency groups Dependabot proposed, taken after checking them

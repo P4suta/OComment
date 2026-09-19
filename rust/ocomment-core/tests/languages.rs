@@ -194,6 +194,40 @@ fn go_build_and_compiler_directives_are_protected() {
 }
 
 #[test]
+fn a_spaced_line_is_prose_rather_than_the_go_line_directive() {
+    let source = b"//line generated.go:1\n// line the user put it on, which is a sentence\n";
+    let report = scan(source, Language::Go, ScanOptions::default());
+    assert_eq!(
+        report
+            .comments
+            .iter()
+            .filter(|comment| comment.kind == CommentKind::Directive)
+            .count(),
+        1
+    );
+    assert_eq!(removable(&report), 1);
+}
+
+#[test]
+fn a_spaced_go_colon_is_prose_rather_than_a_compiler_directive() {
+    let source = b"//go:build linux\n// go:generate is what this line is about\n";
+    let report = scan(source, Language::Go, ScanOptions::default());
+    /* NOTE: `LoadBearing` and not `Directive`: `//go:` is read by the build
+     * itself, so no policy reaches it. The kind is the point here only because
+     * the two lines have to land on different sides of it -- one is the
+     * toolchain's and one is a sentence that opens with the same word. */
+    assert_eq!(
+        report
+            .comments
+            .iter()
+            .map(|comment| comment.kind)
+            .collect::<Vec<_>>(),
+        vec![CommentKind::LoadBearing, CommentKind::Line]
+    );
+    assert_eq!(removable(&report), 1);
+}
+
+#[test]
 fn java_unicode_escapes_obey_backslash_eligibility() {
     let escaped_comment = br"int x; \u002f\u002f comment\u000aint y;";
     let report = scan(escaped_comment, Language::Java, ScanOptions::default());
