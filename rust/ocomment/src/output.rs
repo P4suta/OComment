@@ -334,6 +334,49 @@ fn removed_count(file: &ProcessedFile) -> usize {
 /// because it is commentary about the run rather than the run's product, and
 /// `-q` drops it with the rest of the commentary.
 ///
+/// Report the `[[overrides]]` blocks that did nothing.
+///
+/// The report beside this one catches a `keep_regex` written against text the
+/// comment does not hold. A path glob written against a path no file has is
+/// the same mistake one level up, and a worse one to make quietly: an override
+/// is how a project exempts files from a rule it keeps everywhere else, so a
+/// glob that matches nothing leaves that rule in force over exactly the files
+/// somebody had decided it should not apply to. The settings look present and
+/// the behaviour is as though they were never written.
+///
+/// Said with the count it was measured against, because it is a statement
+/// about this run and not about the repository: a glob for `.gitignore` is
+/// right to match nothing in a walk that met no `.gitignore`.
+pub fn report_unused_overrides(
+    unused: &[(usize, &[String])],
+    reached: usize,
+    verbosity: Verbosity,
+) -> Result<()> {
+    if unused.is_empty() {
+        return Ok(());
+    }
+    let stderr = io::stderr();
+    let mut report = stderr.lock();
+    for (index, globs) in unused {
+        let written: Vec<String> = globs
+            .iter()
+            .map(|glob| format!("`{}`", sanitize_message(glob)))
+            .collect();
+        note(
+            &mut report,
+            verbosity,
+            Detail::Normal,
+            &format!(
+                "[[overrides]] #{index} ({}) matched none of the {} this run reached, \
+                 so everything it sets was left unapplied",
+                written.join(", "),
+                plural(reached, "file")
+            ),
+        )?;
+    }
+    Ok(())
+}
+
 /// It is written from the comments the run actually scanned, so it says "this
 /// run" and means it. A run narrowed to a handful of paths is expected to meet
 /// fewer patterns than a walk of the repository, which is why the caller only
@@ -461,6 +504,51 @@ fn origin_clause(trace: &PolicyTrace, key: &str, index: usize) -> String {
 /// Visible to the crate so the modules that *produce* the reasons — `files`
 /// and `git` — can name this function in their own documentation rather than
 /// describing a rule they do not own.
+/// A reason a caller can refuse with `--deny-skipped`.
+///
+/// Closed, and spelled the way every other value this tool takes is spelled.
+/// The flag used to accept free text, matched against the label
+/// [`skip_label`] produces — which contains a space. So `unknown-language`,
+/// the spelling anyone would type and the one the help implies, matched
+/// nothing, was accepted without a word, and left the gate open. A gate that
+/// is off because of a typo is the exact failure this flag exists to prevent,
+/// one level up from where it prevents it.
+///
+/// A generated file is deliberately absent. Being passed over is what should
+/// happen to one, which `docs/configuration.md` says in as many words; this
+/// list is where that sentence is enforced rather than merely written.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub enum SkipReason {
+    /// Nothing here reads this kind of file: no built-in language claimed it,
+    /// and no profile or plugin was routed to it.
+    UnknownLanguage,
+    /// The file could not be read at all.
+    Unreadable,
+    /// Past `[files] max_size`.
+    TooLarge,
+    /// A NUL byte in the first bytes read.
+    Binary,
+    /// Turned off by `[languages.<name>] enabled = false`.
+    LanguageDisabled,
+}
+
+impl SkipReason {
+    /// The label [`skip_label`] gives the same skip.
+    ///
+    /// The two spellings have to agree, and they are in one file so that a
+    /// change to either is a change a reader sees beside the other.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::UnknownLanguage => "unknown language",
+            Self::Unreadable => "unreadable",
+            Self::TooLarge => "too large",
+            Self::Binary => "binary",
+            Self::LanguageDisabled => "language disabled",
+        }
+    }
+}
+
 pub(crate) fn skip_label(reason: &str) -> &str {
     if reason.starts_with("larger than ") {
         "too large"
@@ -3471,6 +3559,51 @@ pub fn invalid(files: &[ProcessedFile]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every reason `--deny-skipped` accepts has to be a reason a skip is
+    /// actually reported under.
+    ///
+    /// The flag matches the caller's word against the label the report gives
+    /// the skip, so a reason with no skip behind it is a reason that turns the
+    /// gate off and says nothing — which is the failure the flag exists to
+    /// catch, one level up from where it catches it. The two spellings live in
+    /// one file so a change to either is visible beside the other; this is
+    /// what makes that arrangement a check rather than a convention.
+    #[test]
+    fn every_refusable_reason_is_one_a_skip_is_reported_under() {
+        /* NOTE: The reason strings as `files.rs` writes them, so this fails if
+         * a skip is reworded without its refusable name following. */
+        let reported = [
+            (SkipReason::UnknownLanguage, crate::files::NO_LANGUAGE),
+            (SkipReason::TooLarge, "larger than 1048576 bytes"),
+            (SkipReason::Binary, "binary file (NUL byte)"),
+            (
+                SkipReason::LanguageDisabled,
+                "language disabled by configuration",
+            ),
+        ];
+        for (reason, raw) in reported {
+            assert_eq!(
+                skip_label(raw),
+                reason.label(),
+                "`{reason:?}` names no skip the report produces"
+            );
+        }
+        /* NOTE: The one that is not a `skip_label` answer. An unreadable file
+         * carries the I/O error as its reason, and `coverage::denied` labels
+         * it from this enum rather than from a literal of its own. */
+        let covered: Vec<SkipReason> = reported.iter().map(|(reason, _)| *reason).collect();
+        /* NOTE: Asked of clap's own variant list rather than of a second one
+         * written here. What the flag accepts is the set that has to be
+         * covered, and a hand-kept copy of it is one more place to add a
+         * reason to and forget. */
+        for reason in SkipReason::value_variants() {
+            assert!(
+                covered.contains(reason) || *reason == SkipReason::Unreadable,
+                "`{reason:?}` was added to the flag and to nothing else"
+            );
+        }
+    }
 
     fn linear_line_column(source: &[u8], offset: usize) -> (usize, usize) {
         let offset = offset.min(source.len());

@@ -2827,6 +2827,105 @@ fn config_explain_names_every_pattern_and_kind_it_resolved() {
     );
 }
 
+/// `--deny-skipped` refuses a reason it does not know, rather than accepting
+/// it and doing nothing.
+///
+/// The flag matched free text against a label that contains a space, so
+/// `unknown-language` — the spelling of every other value this tool takes, and
+/// the one its own help implies — matched nothing, was accepted, and left the
+/// gate open. A gate that is off because of a typo is the failure this flag
+/// exists to prevent.
+#[test]
+fn a_reason_deny_skipped_does_not_know_is_refused() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(directory.path().join(".ocomment.toml"), b"version = 1\n").unwrap();
+    fs::write(directory.path().join("clean.rs"), b"fn a() {}\n").unwrap();
+    fs::write(directory.path().join("data.parquet"), b"not source\n").unwrap();
+
+    /* NOTE: Nothing removable, so the exit status answers for the skip alone. */
+    let quiet = run(directory.path(), &["check", "."]);
+    assert_eq!(quiet.status.code(), Some(0));
+
+    let named = run(
+        directory.path(),
+        &["check", "--deny-skipped=unknown-language", "."],
+    );
+    assert_eq!(
+        named.status.code(),
+        Some(1),
+        "the reason a caller would type did not refuse the skip:\n{}",
+        String::from_utf8_lossy(&named.stderr)
+    );
+
+    let unknown = run(directory.path(), &["check", "--deny-skipped=banana", "."]);
+    let stderr = String::from_utf8_lossy(&unknown.stderr).into_owned();
+    assert_eq!(
+        unknown.status.code(),
+        Some(2),
+        "a reason with no skip behind it was accepted:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("unknown-language") && stderr.contains("language-disabled"),
+        "the refusal does not say which reasons there are:\n{stderr}"
+    );
+
+    /* NOTE: The bare flag beside a path. An optional value that is not anchored
+     * to an `=` eats the path behind it, and the run then walks the default
+     * target by luck rather than by request. */
+    let bare = run(directory.path(), &["check", "--deny-skipped", "."]);
+    assert_eq!(
+        bare.status.code(),
+        Some(1),
+        "the bare flag swallowed the path:\n{}",
+        String::from_utf8_lossy(&bare.stderr)
+    );
+}
+
+/// A path override that matched nothing is reported too.
+///
+/// The check beside this one covers the patterns a policy carries and was
+/// silent about the globs that decide which files the policy applies to. An
+/// override is how a project exempts files from a rule it keeps everywhere
+/// else, so a glob that matches nothing leaves that rule in force over exactly
+/// the files somebody decided it should not cover — and the settings under it
+/// still read as though they were doing something.
+#[test]
+fn a_path_override_that_matched_nothing_is_reported() {
+    let directory = tempfile::tempdir().unwrap();
+    let write_config = |globs: &str| {
+        fs::write(
+            directory.path().join(".ocomment.toml"),
+            format!("version = 1\n\n[[overrides]]\npaths = [{globs}]\nkeep_kind = [\"line\"]\n"),
+        )
+        .unwrap();
+    };
+    fs::write(directory.path().join("a.rs"), b"// ordinary\nfn a() {}\n").unwrap();
+    fs::write(directory.path().join(".gitignore"), b"# prose\n/target\n").unwrap();
+
+    write_config("\".gitignore\"");
+    let matched = run(directory.path(), &["check", "."]);
+    let stderr = String::from_utf8(matched.stderr).unwrap();
+    assert!(
+        !stderr.contains("[[overrides]]"),
+        "an override that is doing its job was reported as doing nothing:\n{stderr}"
+    );
+
+    /* NOTE: One character off the name of a file that is right there. The
+     * override silently stops applying and the rule it was exempting the file
+     * from comes back, which is the harm the note has to name. */
+    write_config("\".gitignor\"");
+    let typo = run(directory.path(), &["check", "."]);
+    let stderr = String::from_utf8(typo.stderr).unwrap();
+    assert!(
+        stderr.contains("[[overrides]] #0 (`.gitignor`) matched none of the"),
+        "the glob that matches no file was not reported:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("left unapplied"),
+        "the report does not say what the consequence was:\n{stderr}"
+    );
+}
+
 /// A setting that matched nothing is reported instead of being left silent.
 ///
 /// This is the failure that looks like success: a `keep_regex` you believe is

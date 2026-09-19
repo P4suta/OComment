@@ -103,7 +103,11 @@ encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
 version-comment\t'A MySQL versioned comment that the server executes'
 load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
-complete -c ocomment -n "__fish_ocomment_needs_command" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it' -r
+complete -c ocomment -n "__fish_ocomment_needs_command" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
 complete -c ocomment -n "__fish_ocomment_needs_command" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
 review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
@@ -238,7 +242,11 @@ encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
 version-comment\t'A MySQL versioned comment that the server executes'
 load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand check" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
 review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
@@ -354,7 +362,11 @@ encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
 version-comment\t'A MySQL versioned comment that the server executes'
 load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
 review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
@@ -472,7 +484,11 @@ encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
 version-comment\t'A MySQL versioned comment that the server executes'
 load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand diff" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
 review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
@@ -588,7 +604,11 @@ encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
 version-comment\t'A MySQL versioned comment that the server executes'
 load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand scan" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
 review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
@@ -703,7 +723,11 @@ encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
 version-comment\t'A MySQL versioned comment that the server executes'
 load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand strip" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
 review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
@@ -816,7 +840,11 @@ encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
 version-comment\t'A MySQL versioned comment that the server executes'
 load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand lsp" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
 review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
@@ -929,7 +957,11 @@ encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
 version-comment\t'A MySQL versioned comment that the server executes'
 load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
 review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
@@ -1045,7 +1077,11 @@ encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
 version-comment\t'A MySQL versioned comment that the server executes'
 load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand config" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
 review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
@@ -1158,7 +1194,11 @@ encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
 version-comment\t'A MySQL versioned comment that the server executes'
 load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand languages" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
 review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
@@ -1271,7 +1311,11 @@ encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
 version-comment\t'A MySQL versioned comment that the server executes'
 load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand profiles" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand profiles" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand profiles" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
 review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
@@ -1384,7 +1428,11 @@ encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
 version-comment\t'A MySQL versioned comment that the server executes'
 load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and not __fish_seen_subcommand_from add remove list update verify new help" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
 review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
@@ -1507,7 +1555,11 @@ encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
 version-comment\t'A MySQL versioned comment that the server executes'
 load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from add" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
 review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
@@ -1620,7 +1672,11 @@ encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
 version-comment\t'A MySQL versioned comment that the server executes'
 load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from remove" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
 review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
@@ -1733,7 +1789,11 @@ encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
 version-comment\t'A MySQL versioned comment that the server executes'
 load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from list" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
 review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
@@ -1846,7 +1906,11 @@ encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
 version-comment\t'A MySQL versioned comment that the server executes'
 load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from update" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
 review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
@@ -1959,7 +2023,11 @@ encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
 version-comment\t'A MySQL versioned comment that the server executes'
 load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from verify" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
 review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
@@ -2072,7 +2140,11 @@ encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
 version-comment\t'A MySQL versioned comment that the server executes'
 load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand plugin; and __fish_seen_subcommand_from new" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
 review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
@@ -2192,7 +2264,11 @@ encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
 version-comment\t'A MySQL versioned comment that the server executes'
 load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand completions" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
 review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
@@ -2306,7 +2382,11 @@ encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
 version-comment\t'A MySQL versioned comment that the server executes'
 load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand coverage" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
 review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
@@ -2422,7 +2502,11 @@ encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
 version-comment\t'A MySQL versioned comment that the server executes'
 load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand tags" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
 review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
@@ -2538,7 +2622,11 @@ encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
 version-comment\t'A MySQL versioned comment that the server executes'
 load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand ratchet" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
 review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
@@ -2654,7 +2742,11 @@ encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
 version-comment\t'A MySQL versioned comment that the server executes'
 load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand hook" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
 review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
@@ -2767,7 +2859,11 @@ encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
 version-comment\t'A MySQL versioned comment that the server executes'
 load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand selftest" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
 review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
@@ -2880,7 +2976,11 @@ encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
 version-comment\t'A MySQL versioned comment that the server executes'
 load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand doctor" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
 review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''
@@ -2993,7 +3093,11 @@ encoding\t'A source encoding declaration'
 optimizer-hint\t'A compiler or database optimizer hint'
 version-comment\t'A MySQL versioned comment that the server executes'
 load-bearing\t'A directive the language or its build reads as part of the program, such as `//go:build`'"
-complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it' -r
+complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l deny-skipped -d 'Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable' -r -f -a "unknown-language\t'Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it'
+unreadable\t'The file could not be read at all'
+too-large\t'Past `[files] max_size`'
+binary\t'A NUL byte in the first bytes read'
+language-disabled\t'Turned off by `[languages.<name>] enabled = false`'"
 complete -c ocomment -n "__fish_ocomment_using_subcommand man" -l format -d 'Output encoding' -r -f -a "human\t'Every finding on one line, in the `path:line:column:` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding'
 review\t'The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe'
 json\t''

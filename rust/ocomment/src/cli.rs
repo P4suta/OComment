@@ -196,16 +196,26 @@ struct PolicyArgs {
     /// Scan files another tool writes: lock files, recorded seeds, generated output.
     #[arg(long, global = true)]
     include_generated: bool,
-    /// Fail when a file was passed over for one of these reasons, rather than noting it.
+    /// Fail when a file was passed over for one of these reasons, rather than
+    /// noting it. With no reason given, the two that are holes rather than
+    /// decisions: unknown-language and unreadable.
     #[arg(
         long,
         global = true,
         value_name = "REASON",
+        value_enum,
         value_delimiter = ',',
-        num_args = 0..,
-        default_missing_value = "unknown language,unreadable"
+        /* NOTE: One comma-separated argument, and only after an `=`. A flag
+         * whose value is optional and unanchored eats the path behind it:
+         * `--deny-skipped .` read `.` as a reason, and the run then walked the
+         * default target by luck rather than by request. The `=` is what lets
+         * the bare flag and a path coexist on one command line, which is how
+         * this flag is written in a CI file. */
+        require_equals = true,
+        num_args = 0..=1,
+        default_missing_value = "unknown-language,unreadable"
     )]
-    deny_skipped: Option<Vec<String>>,
+    deny_skipped: Option<Vec<output::SkipReason>>,
     /// Edit a file that failed to scan, outside the bytes the failure covers.
     /// What the scanner calls a comment inside them is a guess: the code under
     /// an unterminated block opener is reported as part of it and is not a
@@ -1018,6 +1028,20 @@ fn run_target(
             Dialect::Standard,
         )?;
         output::report_unused_settings(&files, &root_options.scan, &root_trace, verbosity)?;
+        /* NOTE: Every path the walk reached, skips included. A file the walk
+         * passed over is still a file the glob was written for, and calling
+         * the glob unused because its language has no scanner here would send
+         * a reader to fix the wrong line. */
+        let reached: Vec<&std::path::Path> = files
+            .iter()
+            .map(|file| file.path.as_path())
+            .chain(discovery.skipped.iter().map(|item| item.path.as_path()))
+            .collect();
+        output::report_unused_overrides(
+            &resolved.unused_overrides(reached.iter().copied()),
+            reached.len(),
+            verbosity,
+        )?;
     }
     if invalid {
         return Ok(2);
@@ -2266,13 +2290,14 @@ fn run_tags(target: &TargetArgs, common: &CommonArgs) -> Result<u8> {
 /// say which files to decide about.
 fn deny_exit_code(
     skipped: &[files::SkippedFile],
-    reasons: Option<&[String]>,
+    reasons: Option<&[output::SkipReason]>,
     verbosity: Verbosity,
 ) -> Result<u8> {
     let Some(reasons) = reasons else {
         return Ok(0);
     };
-    let denied = coverage::denied(skipped, reasons);
+    let labels: Vec<&str> = reasons.iter().map(|reason| reason.label()).collect();
+    let denied = coverage::denied(skipped, &labels);
     if denied.is_empty() {
         return Ok(0);
     }
@@ -2294,8 +2319,9 @@ fn deny_exit_code(
         verbosity,
         Detail::Normal,
         &format!(
-            "{} file(s) were not covered; teach the language, exclude the path, or drop the reason from --deny-skipped.",
-            denied.len()
+            "{} {} not covered; teach the language, exclude the path, or drop the reason from --deny-skipped.",
+            output::plural(denied.len(), "file"),
+            if denied.len() == 1 { "was" } else { "were" }
         ),
     )?;
     Ok(1)

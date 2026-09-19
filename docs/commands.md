@@ -205,8 +205,15 @@ Policy:
       --include-generated
           Scan files another tool writes: lock files, recorded seeds, generated output
 
-      --deny-skipped [<REASON>...]
-          Fail when a file was passed over for one of these reasons, rather than noting it
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
           Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
@@ -450,8 +457,15 @@ Policy:
       --include-generated
           Scan files another tool writes: lock files, recorded seeds, generated output
 
-      --deny-skipped [<REASON>...]
-          Fail when a file was passed over for one of these reasons, rather than noting it
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
           Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
@@ -680,8 +694,15 @@ Policy:
       --include-generated
           Scan files another tool writes: lock files, recorded seeds, generated output
 
-      --deny-skipped [<REASON>...]
-          Fail when a file was passed over for one of these reasons, rather than noting it
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
           Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
@@ -902,8 +923,15 @@ Policy:
       --include-generated
           Scan files another tool writes: lock files, recorded seeds, generated output
 
-      --deny-skipped [<REASON>...]
-          Fail when a file was passed over for one of these reasons, rather than noting it
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
           Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
@@ -1124,8 +1152,15 @@ Policy:
       --include-generated
           Scan files another tool writes: lock files, recorded seeds, generated output
 
-      --deny-skipped [<REASON>...]
-          Fail when a file was passed over for one of these reasons, rather than noting it
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
           Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
@@ -1333,8 +1368,15 @@ Policy:
       --include-generated
           Scan files another tool writes: lock files, recorded seeds, generated output
 
-      --deny-skipped [<REASON>...]
-          Fail when a file was passed over for one of these reasons, rather than noting it
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
           Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
@@ -1542,8 +1584,15 @@ Policy:
       --include-generated
           Scan files another tool writes: lock files, recorded seeds, generated output
 
-      --deny-skipped [<REASON>...]
-          Fail when a file was passed over for one of these reasons, rather than noting it
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
           Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
@@ -1767,8 +1816,15 @@ Policy:
       --include-generated
           Scan files another tool writes: lock files, recorded seeds, generated output
 
-      --deny-skipped [<REASON>...]
-          Fail when a file was passed over for one of these reasons, rather than noting it
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
           Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
@@ -1983,8 +2039,15 @@ Policy:
       --include-generated
           Scan files another tool writes: lock files, recorded seeds, generated output
 
-      --deny-skipped [<REASON>...]
-          Fail when a file was passed over for one of these reasons, rather than noting it
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
           Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
@@ -2192,8 +2255,15 @@ Policy:
       --include-generated
           Scan files another tool writes: lock files, recorded seeds, generated output
 
-      --deny-skipped [<REASON>...]
-          Fail when a file was passed over for one of these reasons, rather than noting it
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
           Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
@@ -2401,8 +2471,15 @@ Policy:
       --include-generated
           Scan files another tool writes: lock files, recorded seeds, generated output
 
-      --deny-skipped [<REASON>...]
-          Fail when a file was passed over for one of these reasons, rather than noting it
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
           Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
@@ -2619,8 +2696,15 @@ Policy:
       --include-generated
           Scan files another tool writes: lock files, recorded seeds, generated output
 
-      --deny-skipped [<REASON>...]
-          Fail when a file was passed over for one of these reasons, rather than noting it
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
           Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
@@ -2841,8 +2925,15 @@ Policy:
       --include-generated
           Scan files another tool writes: lock files, recorded seeds, generated output
 
-      --deny-skipped [<REASON>...]
-          Fail when a file was passed over for one of these reasons, rather than noting it
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
           Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
@@ -3054,8 +3145,15 @@ Policy:
       --include-generated
           Scan files another tool writes: lock files, recorded seeds, generated output
 
-      --deny-skipped [<REASON>...]
-          Fail when a file was passed over for one of these reasons, rather than noting it
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
           Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
@@ -3263,8 +3361,15 @@ Policy:
       --include-generated
           Scan files another tool writes: lock files, recorded seeds, generated output
 
-      --deny-skipped [<REASON>...]
-          Fail when a file was passed over for one of these reasons, rather than noting it
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
           Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
@@ -3476,8 +3581,15 @@ Policy:
       --include-generated
           Scan files another tool writes: lock files, recorded seeds, generated output
 
-      --deny-skipped [<REASON>...]
-          Fail when a file was passed over for one of these reasons, rather than noting it
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
           Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
@@ -3689,8 +3801,15 @@ Policy:
       --include-generated
           Scan files another tool writes: lock files, recorded seeds, generated output
 
-      --deny-skipped [<REASON>...]
-          Fail when a file was passed over for one of these reasons, rather than noting it
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
           Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
@@ -3902,8 +4021,15 @@ Policy:
       --include-generated
           Scan files another tool writes: lock files, recorded seeds, generated output
 
-      --deny-skipped [<REASON>...]
-          Fail when a file was passed over for one of these reasons, rather than noting it
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
           Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
@@ -4117,8 +4243,15 @@ Policy:
       --include-generated
           Scan files another tool writes: lock files, recorded seeds, generated output
 
-      --deny-skipped [<REASON>...]
-          Fail when a file was passed over for one of these reasons, rather than noting it
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
           Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
@@ -4339,8 +4472,15 @@ Policy:
       --include-generated
           Scan files another tool writes: lock files, recorded seeds, generated output
 
-      --deny-skipped [<REASON>...]
-          Fail when a file was passed over for one of these reasons, rather than noting it
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
           Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
@@ -4561,8 +4701,15 @@ Policy:
       --include-generated
           Scan files another tool writes: lock files, recorded seeds, generated output
 
-      --deny-skipped [<REASON>...]
-          Fail when a file was passed over for one of these reasons, rather than noting it
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
           Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
@@ -4786,8 +4933,15 @@ Policy:
       --include-generated
           Scan files another tool writes: lock files, recorded seeds, generated output
 
-      --deny-skipped [<REASON>...]
-          Fail when a file was passed over for one of these reasons, rather than noting it
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
           Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
@@ -5002,8 +5156,15 @@ Policy:
       --include-generated
           Scan files another tool writes: lock files, recorded seeds, generated output
 
-      --deny-skipped [<REASON>...]
-          Fail when a file was passed over for one of these reasons, rather than noting it
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
           Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
@@ -5211,8 +5372,15 @@ Policy:
       --include-generated
           Scan files another tool writes: lock files, recorded seeds, generated output
 
-      --deny-skipped [<REASON>...]
-          Fail when a file was passed over for one of these reasons, rather than noting it
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
           Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
@@ -5420,8 +5588,15 @@ Policy:
       --include-generated
           Scan files another tool writes: lock files, recorded seeds, generated output
 
-      --deny-skipped [<REASON>...]
-          Fail when a file was passed over for one of these reasons, rather than noting it
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
           Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
@@ -5629,8 +5804,15 @@ Policy:
       --include-generated
           Scan files another tool writes: lock files, recorded seeds, generated output
 
-      --deny-skipped [<REASON>...]
-          Fail when a file was passed over for one of these reasons, rather than noting it
+      --deny-skipped[=<REASON>]
+          Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions: unknown-language and unreadable
+
+          Possible values:
+          - unknown-language:  Nothing here reads this kind of file: no built-in language claimed it, and no profile or plugin was routed to it
+          - unreadable:        The file could not be read at all
+          - too-large:         Past `[files] max_size`
+          - binary:            A NUL byte in the first bytes read
+          - language-disabled: Turned off by `[languages.<name>] enabled = false`
 
       --force-invalid
           Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment
