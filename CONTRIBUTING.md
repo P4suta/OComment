@@ -76,6 +76,13 @@ running locally.
 the three-operating-system matrices, the Docker image, CodeQL, and the VS Code
 extension's npm build. Each needs something a laptop is not.
 
+Two steps run in both and mean different things in each. `Action pins` and
+`Advisories` are the only gates that ask somebody else — GitHub for what a
+version tag names, OSV for what is known about a pinned version — and they run
+here with `--best-effort`, which names what it could not read and passes. CI
+runs them without it. So a green `preflight` on a train is a weaker claim than a
+green CI, and the line it printed says which of the two you got.
+
 ## Required checks
 
 Run the checks relevant to your change; scanner or policy changes should run all
