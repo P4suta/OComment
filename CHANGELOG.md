@@ -7,6 +7,18 @@ All notable changes to OComment will be documented here. The project follows
 
 ### Fixed
 
+- `qs` moves to 6.16.0, past two moderate advisories: a denial of service
+  through an attacker-controlled `isBuffer`, and an array-limit bypass through
+  comma parsing in bracket keys. It reaches the extension through
+  `typed-rest-client` under `@vscode/vsce`, which is a development dependency
+  and is also what packages and publishes the `.vsix`.
+
+  Both had been raised here and **auto-dismissed** as low-impact development
+  dependencies, so a run asking for open alerts saw none. That triage is
+  defensible — the tool talks to a marketplace rather than to anybody's input —
+  but `^6.9.1` already permitted the fixed version, so the whole of the exposure
+  was a lockfile that had not been asked.
+
 - A `#` inside a `.gitignore` pattern is part of the pattern, and a default
   `fix` was removing it along with the rest of the line. Git gives `#` one rule
   in these files — it opens a comment as the first byte of a line and nowhere
