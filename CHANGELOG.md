@@ -7,6 +7,38 @@ All notable changes to OComment will be documented here. The project follows
 
 ### Fixed
 
+- `--deny-skipped` refuses a reason it does not know. It matched free text
+  against the label the report gives a skip — and that label contains a space,
+  so `--deny-skipped unknown-language`, the spelling of every other value this
+  tool takes and the one its own help implies, matched nothing, was accepted,
+  and left the gate open at exit 0. A gate that is off because of a typo is the
+  failure this flag exists to prevent, one level up from where it prevents it.
+
+  The reasons are now a closed list that `--help` prints — `unknown-language`,
+  `unreadable`, `too-large`, `binary`, `language-disabled` — and a test holds
+  each of them to a skip the report actually produces, so a reason cannot be
+  added to the flag and to nothing else. A generated file stays absent
+  deliberately: being passed over is what should happen to one.
+
+  The value now needs an `=`. An optional value that is not anchored to one
+  eats the path behind it: `--deny-skipped .` read `.` as a reason and the run
+  walked the default target by luck rather than by request. `--deny-skipped`
+  bare and `--deny-skipped=unknown-language .` both work; the form without the
+  `=` fails loudly on the path it cannot find.
+
+- An `[[overrides]]` block whose globs match no file is reported. The check
+  that catches a `keep_regex` written against text no comment holds was silent
+  about the globs that decide which files a policy applies to — and that is the
+  worse one to get wrong quietly, because an override is how a project exempts
+  files from a rule it keeps everywhere else. A glob one character off the name
+  of a file sitting right there leaves the wider rule in force over exactly the
+  files somebody had decided it should not cover, while the settings under it
+  still read as though they were doing something.
+
+  Said with the count it was measured against — `matched none of the 218 files
+  this run reached` — because it is a statement about the run: a glob for
+  `.gitignore` is right to match nothing in a walk that met no `.gitignore`.
+
 - A report headline no longer counts the files it skipped as files it scanned.
   `files + skipped` was being printed as `scanned` in three places — the
   `review` headline, the `fix` headline, and the first line of `--format

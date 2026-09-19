@@ -94,7 +94,11 @@ encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
-'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions\: unknown-language and unreadable]::REASON:((unknown-language\:"Nothing here reads this kind of file\: no built-in language claimed it, and no profile or plugin was routed to it"
+unreadable\:"The file could not be read at all"
+too-large\:"Past \`\[files\] max_size\`"
+binary\:"A NUL byte in the first bytes read"
+language-disabled\:"Turned off by \`\[languages.<name>\] enabled = false\`"))' \
 '--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
 review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
@@ -220,7 +224,11 @@ encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
-'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions\: unknown-language and unreadable]::REASON:((unknown-language\:"Nothing here reads this kind of file\: no built-in language claimed it, and no profile or plugin was routed to it"
+unreadable\:"The file could not be read at all"
+too-large\:"Past \`\[files\] max_size\`"
+binary\:"A NUL byte in the first bytes read"
+language-disabled\:"Turned off by \`\[languages.<name>\] enabled = false\`"))' \
 '--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
 review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
@@ -339,7 +347,11 @@ encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
-'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions\: unknown-language and unreadable]::REASON:((unknown-language\:"Nothing here reads this kind of file\: no built-in language claimed it, and no profile or plugin was routed to it"
+unreadable\:"The file could not be read at all"
+too-large\:"Past \`\[files\] max_size\`"
+binary\:"A NUL byte in the first bytes read"
+language-disabled\:"Turned off by \`\[languages.<name>\] enabled = false\`"))' \
 '--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
 review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
@@ -461,7 +473,11 @@ encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
-'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions\: unknown-language and unreadable]::REASON:((unknown-language\:"Nothing here reads this kind of file\: no built-in language claimed it, and no profile or plugin was routed to it"
+unreadable\:"The file could not be read at all"
+too-large\:"Past \`\[files\] max_size\`"
+binary\:"A NUL byte in the first bytes read"
+language-disabled\:"Turned off by \`\[languages.<name>\] enabled = false\`"))' \
 '--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
 review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
@@ -580,7 +596,11 @@ encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
-'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions\: unknown-language and unreadable]::REASON:((unknown-language\:"Nothing here reads this kind of file\: no built-in language claimed it, and no profile or plugin was routed to it"
+unreadable\:"The file could not be read at all"
+too-large\:"Past \`\[files\] max_size\`"
+binary\:"A NUL byte in the first bytes read"
+language-disabled\:"Turned off by \`\[languages.<name>\] enabled = false\`"))' \
 '--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
 review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
@@ -698,7 +718,11 @@ encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
-'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions\: unknown-language and unreadable]::REASON:((unknown-language\:"Nothing here reads this kind of file\: no built-in language claimed it, and no profile or plugin was routed to it"
+unreadable\:"The file could not be read at all"
+too-large\:"Past \`\[files\] max_size\`"
+binary\:"A NUL byte in the first bytes read"
+language-disabled\:"Turned off by \`\[languages.<name>\] enabled = false\`"))' \
 '--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
 review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
@@ -813,7 +837,11 @@ encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
-'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions\: unknown-language and unreadable]::REASON:((unknown-language\:"Nothing here reads this kind of file\: no built-in language claimed it, and no profile or plugin was routed to it"
+unreadable\:"The file could not be read at all"
+too-large\:"Past \`\[files\] max_size\`"
+binary\:"A NUL byte in the first bytes read"
+language-disabled\:"Turned off by \`\[languages.<name>\] enabled = false\`"))' \
 '--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
 review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
@@ -928,7 +956,11 @@ encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
-'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions\: unknown-language and unreadable]::REASON:((unknown-language\:"Nothing here reads this kind of file\: no built-in language claimed it, and no profile or plugin was routed to it"
+unreadable\:"The file could not be read at all"
+too-large\:"Past \`\[files\] max_size\`"
+binary\:"A NUL byte in the first bytes read"
+language-disabled\:"Turned off by \`\[languages.<name>\] enabled = false\`"))' \
 '--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
 review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
@@ -1047,7 +1079,11 @@ encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
-'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions\: unknown-language and unreadable]::REASON:((unknown-language\:"Nothing here reads this kind of file\: no built-in language claimed it, and no profile or plugin was routed to it"
+unreadable\:"The file could not be read at all"
+too-large\:"Past \`\[files\] max_size\`"
+binary\:"A NUL byte in the first bytes read"
+language-disabled\:"Turned off by \`\[languages.<name>\] enabled = false\`"))' \
 '--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
 review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
@@ -1163,7 +1199,11 @@ encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
-'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions\: unknown-language and unreadable]::REASON:((unknown-language\:"Nothing here reads this kind of file\: no built-in language claimed it, and no profile or plugin was routed to it"
+unreadable\:"The file could not be read at all"
+too-large\:"Past \`\[files\] max_size\`"
+binary\:"A NUL byte in the first bytes read"
+language-disabled\:"Turned off by \`\[languages.<name>\] enabled = false\`"))' \
 '--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
 review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
@@ -1278,7 +1318,11 @@ encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
-'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions\: unknown-language and unreadable]::REASON:((unknown-language\:"Nothing here reads this kind of file\: no built-in language claimed it, and no profile or plugin was routed to it"
+unreadable\:"The file could not be read at all"
+too-large\:"Past \`\[files\] max_size\`"
+binary\:"A NUL byte in the first bytes read"
+language-disabled\:"Turned off by \`\[languages.<name>\] enabled = false\`"))' \
 '--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
 review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
@@ -1393,7 +1437,11 @@ encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
-'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions\: unknown-language and unreadable]::REASON:((unknown-language\:"Nothing here reads this kind of file\: no built-in language claimed it, and no profile or plugin was routed to it"
+unreadable\:"The file could not be read at all"
+too-large\:"Past \`\[files\] max_size\`"
+binary\:"A NUL byte in the first bytes read"
+language-disabled\:"Turned off by \`\[languages.<name>\] enabled = false\`"))' \
 '--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
 review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
@@ -1519,7 +1567,11 @@ encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
-'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions\: unknown-language and unreadable]::REASON:((unknown-language\:"Nothing here reads this kind of file\: no built-in language claimed it, and no profile or plugin was routed to it"
+unreadable\:"The file could not be read at all"
+too-large\:"Past \`\[files\] max_size\`"
+binary\:"A NUL byte in the first bytes read"
+language-disabled\:"Turned off by \`\[languages.<name>\] enabled = false\`"))' \
 '--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
 review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
@@ -1635,7 +1687,11 @@ encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
-'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions\: unknown-language and unreadable]::REASON:((unknown-language\:"Nothing here reads this kind of file\: no built-in language claimed it, and no profile or plugin was routed to it"
+unreadable\:"The file could not be read at all"
+too-large\:"Past \`\[files\] max_size\`"
+binary\:"A NUL byte in the first bytes read"
+language-disabled\:"Turned off by \`\[languages.<name>\] enabled = false\`"))' \
 '--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
 review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
@@ -1751,7 +1807,11 @@ encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
-'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions\: unknown-language and unreadable]::REASON:((unknown-language\:"Nothing here reads this kind of file\: no built-in language claimed it, and no profile or plugin was routed to it"
+unreadable\:"The file could not be read at all"
+too-large\:"Past \`\[files\] max_size\`"
+binary\:"A NUL byte in the first bytes read"
+language-disabled\:"Turned off by \`\[languages.<name>\] enabled = false\`"))' \
 '--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
 review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
@@ -1866,7 +1926,11 @@ encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
-'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions\: unknown-language and unreadable]::REASON:((unknown-language\:"Nothing here reads this kind of file\: no built-in language claimed it, and no profile or plugin was routed to it"
+unreadable\:"The file could not be read at all"
+too-large\:"Past \`\[files\] max_size\`"
+binary\:"A NUL byte in the first bytes read"
+language-disabled\:"Turned off by \`\[languages.<name>\] enabled = false\`"))' \
 '--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
 review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
@@ -1982,7 +2046,11 @@ encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
-'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions\: unknown-language and unreadable]::REASON:((unknown-language\:"Nothing here reads this kind of file\: no built-in language claimed it, and no profile or plugin was routed to it"
+unreadable\:"The file could not be read at all"
+too-large\:"Past \`\[files\] max_size\`"
+binary\:"A NUL byte in the first bytes read"
+language-disabled\:"Turned off by \`\[languages.<name>\] enabled = false\`"))' \
 '--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
 review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
@@ -2098,7 +2166,11 @@ encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
-'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions\: unknown-language and unreadable]::REASON:((unknown-language\:"Nothing here reads this kind of file\: no built-in language claimed it, and no profile or plugin was routed to it"
+unreadable\:"The file could not be read at all"
+too-large\:"Past \`\[files\] max_size\`"
+binary\:"A NUL byte in the first bytes read"
+language-disabled\:"Turned off by \`\[languages.<name>\] enabled = false\`"))' \
 '--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
 review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
@@ -2262,7 +2334,11 @@ encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
-'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions\: unknown-language and unreadable]::REASON:((unknown-language\:"Nothing here reads this kind of file\: no built-in language claimed it, and no profile or plugin was routed to it"
+unreadable\:"The file could not be read at all"
+too-large\:"Past \`\[files\] max_size\`"
+binary\:"A NUL byte in the first bytes read"
+language-disabled\:"Turned off by \`\[languages.<name>\] enabled = false\`"))' \
 '--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
 review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
@@ -2379,7 +2455,11 @@ encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
-'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions\: unknown-language and unreadable]::REASON:((unknown-language\:"Nothing here reads this kind of file\: no built-in language claimed it, and no profile or plugin was routed to it"
+unreadable\:"The file could not be read at all"
+too-large\:"Past \`\[files\] max_size\`"
+binary\:"A NUL byte in the first bytes read"
+language-disabled\:"Turned off by \`\[languages.<name>\] enabled = false\`"))' \
 '--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
 review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
@@ -2498,7 +2578,11 @@ encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
-'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions\: unknown-language and unreadable]::REASON:((unknown-language\:"Nothing here reads this kind of file\: no built-in language claimed it, and no profile or plugin was routed to it"
+unreadable\:"The file could not be read at all"
+too-large\:"Past \`\[files\] max_size\`"
+binary\:"A NUL byte in the first bytes read"
+language-disabled\:"Turned off by \`\[languages.<name>\] enabled = false\`"))' \
 '--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
 review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
@@ -2617,7 +2701,11 @@ encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
-'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions\: unknown-language and unreadable]::REASON:((unknown-language\:"Nothing here reads this kind of file\: no built-in language claimed it, and no profile or plugin was routed to it"
+unreadable\:"The file could not be read at all"
+too-large\:"Past \`\[files\] max_size\`"
+binary\:"A NUL byte in the first bytes read"
+language-disabled\:"Turned off by \`\[languages.<name>\] enabled = false\`"))' \
 '--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
 review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
@@ -2736,7 +2824,11 @@ encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
-'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions\: unknown-language and unreadable]::REASON:((unknown-language\:"Nothing here reads this kind of file\: no built-in language claimed it, and no profile or plugin was routed to it"
+unreadable\:"The file could not be read at all"
+too-large\:"Past \`\[files\] max_size\`"
+binary\:"A NUL byte in the first bytes read"
+language-disabled\:"Turned off by \`\[languages.<name>\] enabled = false\`"))' \
 '--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
 review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
@@ -2852,7 +2944,11 @@ encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
-'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions\: unknown-language and unreadable]::REASON:((unknown-language\:"Nothing here reads this kind of file\: no built-in language claimed it, and no profile or plugin was routed to it"
+unreadable\:"The file could not be read at all"
+too-large\:"Past \`\[files\] max_size\`"
+binary\:"A NUL byte in the first bytes read"
+language-disabled\:"Turned off by \`\[languages.<name>\] enabled = false\`"))' \
 '--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
 review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
@@ -2967,7 +3063,11 @@ encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
-'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions\: unknown-language and unreadable]::REASON:((unknown-language\:"Nothing here reads this kind of file\: no built-in language claimed it, and no profile or plugin was routed to it"
+unreadable\:"The file could not be read at all"
+too-large\:"Past \`\[files\] max_size\`"
+binary\:"A NUL byte in the first bytes read"
+language-disabled\:"Turned off by \`\[languages.<name>\] enabled = false\`"))' \
 '--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
 review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""
@@ -3082,7 +3182,11 @@ encoding\:"A source encoding declaration"
 optimizer-hint\:"A compiler or database optimizer hint"
 version-comment\:"A MySQL versioned comment that the server executes"
 load-bearing\:"A directive the language or its build reads as part of the program, such as \`//go\:build\`"))' \
-'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it]::REASON:_default' \
+'*--deny-skipped=[Fail when a file was passed over for one of these reasons, rather than noting it. With no reason given, the two that are holes rather than decisions\: unknown-language and unreadable]::REASON:((unknown-language\:"Nothing here reads this kind of file\: no built-in language claimed it, and no profile or plugin was routed to it"
+unreadable\:"The file could not be read at all"
+too-large\:"Past \`\[files\] max_size\`"
+binary\:"A NUL byte in the first bytes read"
+language-disabled\:"Turned off by \`\[languages.<name>\] enabled = false\`"))' \
 '--format=[Output encoding]:FORMAT:((human\:"Every finding on one line, in the \`path\:line\:column\:\` stream a pipeline greps. Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding"
 review\:"The findings grouped by the decision each one asks for, with the edit beside it. The default everywhere, terminal or pipe"
 json\:""

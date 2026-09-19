@@ -15,7 +15,7 @@
 
 use crate::{
     files::{NotWalked, SkippedFile, SourceFile},
-    output::{OutputFormat, ReadBy, skip_label, stdout, wrote},
+    output::{OutputFormat, ReadBy, SkipReason, skip_label, stdout, wrote},
 };
 use anyhow::Result;
 use serde_json::json;
@@ -322,16 +322,20 @@ pub fn render(coverage: &Coverage, format: OutputFormat) -> Result<()> {
 /// knows are different: those are files the gate was meant to cover and did
 /// not, and a run that is supposed to be a gate should be able to say so with
 /// its exit status rather than in a note.
-pub fn denied(skipped: &[SkippedFile], reasons: &[String]) -> Vec<PathBuf> {
+pub fn denied(skipped: &[SkippedFile], reasons: &[&str]) -> Vec<PathBuf> {
     skipped
         .iter()
         .filter(|item| {
+            /* NOTE: Named through the enum rather than as a literal. It is
+             * the one label no `skip_label` answer produces -- an unreadable
+             * file carries the I/O error as its reason -- so a literal here
+             * would be the one spelling nothing held to the others. */
             let label = if item.error {
-                "unreadable"
+                SkipReason::Unreadable.label()
             } else {
                 skip_label(&item.reason)
             };
-            reasons.iter().any(|wanted| wanted == label)
+            reasons.contains(&label)
         })
         .map(|item| item.path.clone())
         .collect()

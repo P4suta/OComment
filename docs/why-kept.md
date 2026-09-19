@@ -279,6 +279,20 @@ nothing in it is a pattern doing no work, while a run over one file
 is a question about that file and a pattern with nothing to say
 about it has not thereby failed.
 
+The same walk names an `[[overrides]]` block whose globs matched no
+file. A pattern that protects nothing is one failure that looks
+like success; a path glob that matches nothing is the other, and it
+is the one that fails in the direction of removing more. An
+override is how a project exempts files from a rule it keeps
+everywhere else, so a glob a character off the name of a file
+sitting right there leaves that rule in force over exactly the
+files somebody decided it should not cover:
+
+```console
+$ ocomment check
+[[overrides]] #0 (`.gitignor`) matched none of the 3 files this run reached, so everything it sets was left unapplied
+```
+
 ## Keeping less
 
 `--remove-kind` is the mirror of `keep_kind` and removes a kind the

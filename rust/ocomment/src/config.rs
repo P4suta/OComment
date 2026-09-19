@@ -470,6 +470,47 @@ impl ResolvedConfig {
         relative.to_string_lossy().replace('\\', "/")
     }
 
+    /// The `[[overrides]]` entries whose globs matched none of these paths,
+    /// with the globs they were written as.
+    ///
+    /// A settings block that matches no file does nothing, and nothing said
+    /// so. The report this feeds exists to catch a `keep_regex` that will
+    /// never fire; a path glob that will never fire is the same mistake one
+    /// level up, and it is the level at which a project narrows a rule to the
+    /// files the rule is about — so a typo there does not narrow anything, it
+    /// leaves the wider rule in place over files somebody had decided to
+    /// exempt.
+    ///
+    /// Matched against every path the walk reached, scanned or skipped: a file
+    /// the walk passed over is still a file the glob was written for, and
+    /// calling the glob unused because its file is in a language this build
+    /// cannot read would send a reader to fix the wrong line.
+    pub fn unused_overrides<'a>(
+        &'a self,
+        paths: impl IntoIterator<Item = &'a Path>,
+    ) -> Vec<(usize, &'a [String])> {
+        let mut used = vec![false; self.overrides.len()];
+        for path in paths {
+            let normalized = self.relative_to_root(path);
+            for (index, override_) in self.overrides.iter().enumerate() {
+                if !used[index]
+                    && override_
+                        .matchers
+                        .iter()
+                        .any(|matcher| matcher.is_match(&normalized))
+                {
+                    used[index] = true;
+                }
+            }
+        }
+        self.overrides
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| !used[*index])
+            .map(|(index, override_)| (index, override_.value.paths.as_slice()))
+            .collect()
+    }
+
     pub fn language_is_enabled(&self, language: Language) -> bool {
         self.cli_overrides.language.is_some()
             || self

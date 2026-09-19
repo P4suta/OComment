@@ -238,7 +238,7 @@ _ocomment() {
                     return 0
                     ;;
                 --deny-skipped)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    COMPREPLY=($(compgen -W "unknown-language unreadable too-large binary language-disabled" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -324,7 +324,7 @@ _ocomment() {
                     return 0
                     ;;
                 --deny-skipped)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    COMPREPLY=($(compgen -W "unknown-language unreadable too-large binary language-disabled" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -406,7 +406,7 @@ _ocomment() {
                     return 0
                     ;;
                 --deny-skipped)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    COMPREPLY=($(compgen -W "unknown-language unreadable too-large binary language-disabled" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -488,7 +488,7 @@ _ocomment() {
                     return 0
                     ;;
                 --deny-skipped)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    COMPREPLY=($(compgen -W "unknown-language unreadable too-large binary language-disabled" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -574,7 +574,7 @@ _ocomment() {
                     return 0
                     ;;
                 --deny-skipped)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    COMPREPLY=($(compgen -W "unknown-language unreadable too-large binary language-disabled" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -660,7 +660,7 @@ _ocomment() {
                     return 0
                     ;;
                 --deny-skipped)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    COMPREPLY=($(compgen -W "unknown-language unreadable too-large binary language-disabled" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -742,7 +742,7 @@ _ocomment() {
                     return 0
                     ;;
                 --deny-skipped)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    COMPREPLY=($(compgen -W "unknown-language unreadable too-large binary language-disabled" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -828,7 +828,7 @@ _ocomment() {
                     return 0
                     ;;
                 --deny-skipped)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    COMPREPLY=($(compgen -W "unknown-language unreadable too-large binary language-disabled" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -1288,7 +1288,7 @@ _ocomment() {
                     return 0
                     ;;
                 --deny-skipped)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    COMPREPLY=($(compgen -W "unknown-language unreadable too-large binary language-disabled" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -1370,7 +1370,7 @@ _ocomment() {
                     return 0
                     ;;
                 --deny-skipped)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    COMPREPLY=($(compgen -W "unknown-language unreadable too-large binary language-disabled" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -1452,7 +1452,7 @@ _ocomment() {
                     return 0
                     ;;
                 --deny-skipped)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    COMPREPLY=($(compgen -W "unknown-language unreadable too-large binary language-disabled" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -1534,7 +1534,7 @@ _ocomment() {
                     return 0
                     ;;
                 --deny-skipped)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    COMPREPLY=($(compgen -W "unknown-language unreadable too-large binary language-disabled" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -1616,7 +1616,7 @@ _ocomment() {
                     return 0
                     ;;
                 --deny-skipped)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    COMPREPLY=($(compgen -W "unknown-language unreadable too-large binary language-disabled" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -1698,7 +1698,7 @@ _ocomment() {
                     return 0
                     ;;
                 --deny-skipped)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    COMPREPLY=($(compgen -W "unknown-language unreadable too-large binary language-disabled" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -1792,7 +1792,7 @@ _ocomment() {
                     return 0
                     ;;
                 --deny-skipped)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    COMPREPLY=($(compgen -W "unknown-language unreadable too-large binary language-disabled" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -1986,7 +1986,7 @@ _ocomment() {
                     return 0
                     ;;
                 --deny-skipped)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    COMPREPLY=($(compgen -W "unknown-language unreadable too-large binary language-disabled" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -2068,7 +2068,7 @@ _ocomment() {
                     return 0
                     ;;
                 --deny-skipped)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    COMPREPLY=($(compgen -W "unknown-language unreadable too-large binary language-disabled" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -2150,7 +2150,7 @@ _ocomment() {
                     return 0
                     ;;
                 --deny-skipped)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    COMPREPLY=($(compgen -W "unknown-language unreadable too-large binary language-disabled" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -2232,7 +2232,7 @@ _ocomment() {
                     return 0
                     ;;
                 --deny-skipped)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    COMPREPLY=($(compgen -W "unknown-language unreadable too-large binary language-disabled" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -2314,7 +2314,7 @@ _ocomment() {
                     return 0
                     ;;
                 --deny-skipped)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    COMPREPLY=($(compgen -W "unknown-language unreadable too-large binary language-disabled" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -2396,7 +2396,7 @@ _ocomment() {
                     return 0
                     ;;
                 --deny-skipped)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    COMPREPLY=($(compgen -W "unknown-language unreadable too-large binary language-disabled" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -2482,7 +2482,7 @@ _ocomment() {
                     return 0
                     ;;
                 --deny-skipped)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    COMPREPLY=($(compgen -W "unknown-language unreadable too-large binary language-disabled" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -2568,7 +2568,7 @@ _ocomment() {
                     return 0
                     ;;
                 --deny-skipped)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    COMPREPLY=($(compgen -W "unknown-language unreadable too-large binary language-disabled" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -2650,7 +2650,7 @@ _ocomment() {
                     return 0
                     ;;
                 --deny-skipped)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    COMPREPLY=($(compgen -W "unknown-language unreadable too-large binary language-disabled" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -2732,7 +2732,7 @@ _ocomment() {
                     return 0
                     ;;
                 --deny-skipped)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    COMPREPLY=($(compgen -W "unknown-language unreadable too-large binary language-disabled" -- "${cur}"))
                     return 0
                     ;;
                 --format)
@@ -2818,7 +2818,7 @@ _ocomment() {
                     return 0
                     ;;
                 --deny-skipped)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    COMPREPLY=($(compgen -W "unknown-language unreadable too-large binary language-disabled" -- "${cur}"))
                     return 0
                     ;;
                 --format)
