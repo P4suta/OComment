@@ -6147,11 +6147,29 @@ let opens_a_link_reference trimmed =
       let destination = String.trim (String.sub rest at (String.length rest - at)) in
       destination <> "" && not (String.exists (fun c -> c = ' ' || c = '\t') destination)
 
+(** Whether a line ends in a run of rule characters long enough to be a drawn line.
+   Four rather than three, because three is also how somebody writing plain ASCII spells an em dash. *)
+let ends_in_a_drawn_run trimmed =
+  let length = String.length trimmed in
+  if length = 0 then false
+  else
+    let last = trimmed.[length - 1] in
+    if not (last = '-' || last = '=' || last = '_' || last = '*' || last = '~' || last = '#')
+    then false
+    else
+      let rec run index = if index >= 0 && trimmed.[index] = last then run (index - 1) else length - 1 - index in
+      run (length - 1) >= 4
+
+(** Whether a line is something drawn rather than something written.
+   A horizontal rule and a setext underline are the plain cases: one rule character, repeated, and nothing else.
+   A labelled divider -- [--- presentation ------------] -- is the same thing with its name written into it, and it is how a configuration file separates its sections.
+   Both are recognised by the run the line *ends* with, which is what tells a divider from a sentence. *)
 let is_rule trimmed =
   let marker = trimmed.[0] in
-  (marker = '-' || marker = '=' || marker = '_' || marker = '*')
-  && String.length trimmed >= 3
-  && String.for_all (fun c -> c = marker || c = ' ' || c = '\t') trimmed
+  ((marker = '-' || marker = '=' || marker = '_' || marker = '*')
+   && String.length trimmed >= 3
+   && String.for_all (fun c -> c = marker || c = ' ' || c = '\t') trimmed)
+  || ends_in_a_drawn_run trimmed
 
 (** Whether a line opens a named section of a documentation convention, which is written at the start of its own line with what belongs to it indented under it. *)
 let opens_a_named_section trimmed =
@@ -6454,6 +6472,22 @@ let take_run_apart source openers (run : comment list) =
               (body :: bodies) rest
   in loop None None [] run
 
+(** The label a line opens with, which is a word in capitals with a colon and a space after it.
+   [NOTE:], [TODO:], [SAFETY:], [INVARIANT:] -- one convention, recognised by its shape rather than from a list, because the list a configuration keeps answers a different question: which tags keep a comment alive.
+   The capitals are required and so is the space: [The cat sat] is prose that happens to open a line, and [HTTP://host] is an address. *)
+let label body =
+  match String.index_opt body ':' with
+  | None -> []
+  | Some at ->
+    let word = String.sub body 0 at in
+    let next_is_space =
+      at + 1 >= String.length body || body.[at + 1] = ' ' in
+    if String.length word >= 2 && String.length word <= 16
+       && String.for_all (fun c ->
+            (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c = '_') word
+       && next_is_space
+    then [ word ] else []
+
 (** The tag every line of this run opens with, which is part of its marker rather than part of its prose.
 
    A project whose configuration names tags has to write one on every comment,
@@ -6486,7 +6520,7 @@ let shared_tag bodies tags =
         (match best with
          | Some (current : string) when String.length current >= String.length found -> best
          | _ -> Some found)
-      else best) None tags in
+      else best) None (tags @ label body) in
   match bodies with
   | [] -> None
   | first :: _ ->

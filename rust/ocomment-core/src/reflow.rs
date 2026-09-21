@@ -295,14 +295,32 @@ fn opens_a_link_reference(trimmed: &str) -> bool {
     !destination.is_empty() && !destination.contains(char::is_whitespace)
 }
 
-/// Whether a line is a horizontal rule or a setext underline.
+/// Whether a line is something drawn rather than something written.
+///
+/// A horizontal rule and a setext underline are the plain cases: one rule character, repeated, and nothing else.
+/// A labelled divider — `--- presentation ------------` — is the same thing with its name written into it, and it is how a configuration file or a long source file separates its sections.
+/// Both are recognised by the run the line *ends* with, which is what tells a divider from a sentence: prose does not end in four dashes, and a line that does is drawing something.
+/// Reading one as prose joined the section title to the first sentence under it, which is a heading deleted.
 fn is_rule(trimmed: &str) -> bool {
-    let marker = trimmed.as_bytes()[0];
-    matches!(marker, b'-' | b'=' | b'_' | b'*')
+    let bytes = trimmed.as_bytes();
+    let marker = bytes[0];
+    let drawn_throughout = matches!(marker, b'-' | b'=' | b'_' | b'*')
         && trimmed.len() >= 3
-        && trimmed
-            .bytes()
-            .all(|byte| byte == marker || byte == b' ' || byte == b'\t')
+        && bytes
+            .iter()
+            .all(|byte| *byte == marker || *byte == b' ' || *byte == b'\t');
+    drawn_throughout || ends_in_a_drawn_run(bytes)
+}
+
+/// Whether a line ends in a run of rule characters long enough to be a drawn line.
+///
+/// Four rather than three, because three is also how somebody writing plain ASCII spells an em dash.
+fn ends_in_a_drawn_run(bytes: &[u8]) -> bool {
+    let Some(last) = bytes.last().copied() else {
+        return false;
+    };
+    matches!(last, b'-' | b'=' | b'_' | b'*' | b'~' | b'#')
+        && bytes.iter().rev().take_while(|byte| **byte == last).count() >= 4
 }
 
 /// Whether a line opens a list item.

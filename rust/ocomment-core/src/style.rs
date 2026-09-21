@@ -289,10 +289,15 @@ fn continuation_prefix<'a>(interior: &[&'a str], opener: &str) -> Option<&'a str
 /// That is a paragraph whose lines the tag rule already disagrees about, and moving its breaks would settle the disagreement by accident.
 ///
 /// A common prefix would be the general form of this and is deliberately not what is looked for: `# The cat sat` above `# The dog ran` shares one, and treating `The ` as a marker would join them into nonsense.
-/// Only a tag the configuration named is a marker.
+/// What is looked for is a tag the configuration named, or — where it named none that matches — a label: a word in capitals with a colon after it.
+/// The second is not a guess about prose.
+/// A configuration's tag list says which tags keep a comment alive, which is a question a project answers; whether `NOTE:` at the start of every line of a paragraph is a label is a question about the text, and a machine-wide rule that removes nothing has no tag list to answer it with.
+/// Without it, reflowing a run of `# NOTE:` lines under such a configuration wrote `as a setting NOTE: rather than` into the middle of a sentence.
 fn shared_tag<'a>(bodies: &[&'a str], tags: &[&str]) -> Option<&'a str> {
     let opening = |body: &'a str| -> Option<&'a str> {
         tags.iter()
+            .copied()
+            .chain(label(body))
             .filter_map(|tag| {
                 let rest = body.get(..tag.len())?;
                 (rest.eq_ignore_ascii_case(tag)).then(|| {
@@ -322,6 +327,23 @@ fn shared_tag<'a>(bodies: &[&'a str], tags: &[&str]) -> Option<&'a str> {
         .iter()
         .all(|body| opening(body) == Some(tag))
         .then_some(tag)
+}
+
+/// The label a line opens with, which is a word in capitals with a colon and a space after it.
+///
+/// `NOTE:`, `TODO:`, `SAFETY:`, `INVARIANT:` — one convention, recognised by its shape rather than from a list, because the list a configuration keeps answers a different question.
+/// The capitals are required and so is the space: `The cat sat` is prose that happens to open a line, and `HTTP://host` is an address.
+fn label(body: &str) -> Option<&str> {
+    let end = body.find(':')?;
+    let word = body.get(..end)?;
+    let next = body.as_bytes().get(end + 1);
+    (word.len() >= 2
+        && word.len() <= 16
+        && word
+            .bytes()
+            .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit() || byte == b'_')
+        && matches!(next, None | Some(b' ')))
+    .then_some(word)
 }
 
 /// What each line of a rewritten run begins with.

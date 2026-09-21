@@ -15790,6 +15790,123 @@
         ],
         "diagnostics": []
       }
+    },
+    {
+      "id": "wrap-leaves-a-labelled-divider-alone",
+      "language": "shell",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "x=1\n# --- keybindings ------------------------------------\n# Splits, mapped the same way the other machine maps them.\ny=2\n",
+      "note": "A section divider with its name written into it is a thing drawn, not a sentence, and joining the line under it onto it deletes the heading. A plain rule of nothing but dashes was already read as one; a labelled one is recognised by the run it ends with, because prose does not end in four dashes.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 4,
+            "end": 58,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 59,
+            "end": 117,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "x=1\n# --- keybindings ------------------------------------\n# Splits, mapped the same way the other machine maps them.\ny=2\n"
+      }
+    },
+    {
+      "id": "wrap-reads-a-label-as-a-marker-with-no-tag-list",
+      "language": "toml",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "# NOTE: The policy this machine holds every commit to, as a setting\n# NOTE: rather than as a gate's own opinion. It merges under a project's.\nversion = 1\n",
+      "note": "A configuration's tag list says which tags keep a comment alive, which is a question a project answers. Whether a word in capitals with a colon after it is a label is a question about the text, and a machine-wide rule that removes nothing has no tag list to answer it with -- so reflowing this wrote `as a setting NOTE: rather than` into the middle of a sentence.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 67,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 68,
+            "end": 141,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 0,
+            "end": 141,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "# NOTE: The policy this machine holds every commit to, as a setting rather than as a gate's own opinion.\n# NOTE: It merges under a project's."
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "# NOTE: The policy this machine holds every commit to, as a setting rather than as a gate's own opinion.\n# NOTE: It merges under a project's.\nversion = 1\n"
+      }
+    },
+    {
+      "id": "wrap-does-not-read-an-ordinary-word-as-a-marker",
+      "language": "toml",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "# The cat sat on the mat and then\n# the dog ran away. A second sentence.\nversion = 1\n",
+      "note": "The other half of the rule, and why it is narrow. A shared prefix is not a marker: these two lines share one, and reading it as a marker would join them into nonsense. Capitals and a colon and a space are all required.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 33,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 34,
+            "end": 72,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 0,
+            "end": 72,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "# The cat sat on the mat and then the dog ran away.\n# A second sentence."
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "# The cat sat on the mat and then the dog ran away.\n# A second sentence.\nversion = 1\n"
+      }
     }
   ]
 }
