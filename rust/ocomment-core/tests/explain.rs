@@ -15,8 +15,8 @@
 
 use ocomment_core::{
     Action, Age, AllowRules, CommentKind, DispositionExplanation, DispositionPatterns, Language,
-    Policy, ProtectedPattern, ProtectionTier, ScanOptions, explain_comment, explain_comment_with,
-    explain_disposition, explain_disposition_with, scan,
+    Policy, ProtectedPattern, ProtectionTier, ScanOptions, StyleRule, StyleRules, explain_comment,
+    explain_comment_with, explain_disposition, explain_disposition_with, scan,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -81,6 +81,7 @@ fn every_option_is_classified(options: ScanOptions) {
         keep_regex: _,
         remove_regex: _,
         allow: _,
+        style: _,
         protected: _,
         /* NOTE: Out of reach, and for the same reason in both cases: neither
          * changes any verdict. `dialect` chooses which bytes lex as a comment
@@ -90,6 +91,18 @@ fn every_option_is_classified(options: ScanOptions) {
         dialect: _,
         force_invalid: _,
     } = options;
+}
+
+/// The same classification one level down, for the same reason.
+///
+/// `style` is a table rather than a value, so covering "the `style` field" is
+/// not covering the rules in it.
+fn every_style_rule_is_classified(rules: StyleRules) {
+    let StyleRules {
+        // NOTE: Steered by `style_variants`.
+        space_after_marker: _,
+        trailing_whitespace: _,
+    } = rules;
 }
 
 /// The same classification one level down, for the same reason.
@@ -157,6 +170,12 @@ fn option_variants() -> Vec<ScanOptions> {
                     ..base.clone()
                 });
             }
+            for style in style_variants() {
+                variants.push(ScanOptions {
+                    style,
+                    ..base.clone()
+                });
+            }
             /* NOTE: A project's own markers, one per tier. The fixtures carry
              * `ordinary` and `Copyright`, so both arms are reached and the
              * stronger tier is reached under every policy including `all`. */
@@ -180,8 +199,32 @@ fn option_variants() -> Vec<ScanOptions> {
     for options in &variants {
         every_option_is_classified(options.clone());
         every_allow_rule_is_classified(options.allow.clone());
+        every_style_rule_is_classified(options.style.clone());
     }
     variants
+}
+
+/// One variant per style rule, and one with both, so that a fixture meets each
+/// rule alone and meets the order they are applied in.
+///
+/// The pair matters on its own: `restyle` records the first rule that found
+/// something, and a sweep that only ever set one rule could not tell a
+/// first-of-two from an only-one.
+fn style_variants() -> Vec<StyleRules> {
+    vec![
+        StyleRules {
+            space_after_marker: Some(true),
+            ..Default::default()
+        },
+        StyleRules {
+            trailing_whitespace: Some(false),
+            ..Default::default()
+        },
+        StyleRules {
+            space_after_marker: Some(true),
+            trailing_whitespace: Some(false),
+        },
+    ]
 }
 
 /// One variant per shape rule, and one with all three, so that a fixture meets
@@ -300,13 +343,18 @@ fn explanations_agree_with_the_scanner_over_the_whole_branch_table() {
             for comment in &report.comments {
                 let raw = &source[comment.span.start..comment.span.end];
                 let explanation = explain_comment(comment, raw, language, &options);
+                /* NOTE: The whole verdict, not `is_remove()` on both sides.
+                 * That comparison was written when there were two verdicts, and
+                 * it goes on passing once there are three: a rewrite and a keep
+                 * are both "not a removal", so an explanation that called a
+                 * rewritten comment kept agreed with it perfectly. */
                 assert_eq!(
-                    explanation.action().is_remove(),
-                    comment.disposition.is_remove(),
+                    explanation.action(),
+                    comment.disposition().action(),
                     "{language} {} `{}` under {options:?}: {explanation} contradicts {}",
                     comment.kind,
                     String::from_utf8_lossy(raw),
-                    comment.disposition,
+                    comment.disposition(),
                 );
             }
         }
@@ -339,7 +387,7 @@ fn the_two_entry_points_agree_away_from_the_one_rule() {
                         assert_eq!(named, language);
                         assert_eq!(language, Language::Yaml);
                         assert!(
-                            bytes_alone.action().is_remove(),
+                            bytes_alone.action().removes(),
                             "the bytes alone would have removed it: {bytes_alone}"
                         );
                     }
@@ -352,15 +400,15 @@ fn the_two_entry_points_agree_away_from_the_one_rule() {
                      * states for every verdict and this one repeats for these. */
                     DispositionExplanation::KeptByTag { .. } => {
                         from_the_file.insert("tag");
-                        assert!(!comment.disposition.is_remove());
+                        assert!(!comment.action().removes());
                     }
                     DispositionExplanation::RemovedAsTrailing => {
                         from_the_file.insert("trailing");
-                        assert!(comment.disposition.is_remove());
+                        assert!(comment.action().removes());
                     }
                     DispositionExplanation::RemovedByLength { lines, limit } => {
                         from_the_file.insert("length");
-                        assert!(comment.disposition.is_remove());
+                        assert!(comment.action().removes());
                         assert!(lines > limit, "{lines} lines is not over {limit}");
                     }
                     /* NOTE: Unreachable by construction rather than by
@@ -370,7 +418,13 @@ fn the_two_entry_points_agree_away_from_the_one_rule() {
                     DispositionExplanation::RemovedAsExpired { .. } => {
                         panic!("a scan reached a verdict that needs a repository to reach")
                     }
-                    other @ (DispositionExplanation::KeptByKind(_)
+                    /* NOTE: Both halves of this one are read off the comment's
+                     * own bytes -- the style rules are a pure function of them
+                     * -- so it belongs with the verdicts the two entry points
+                     * have to agree about, not with the ones the file decides. */
+                    other @ (DispositionExplanation::RewrittenByStyle { .. }
+                    | DispositionExplanation::KeptByPolicy { .. }
+                    | DispositionExplanation::KeptByKind(_)
                     | DispositionExplanation::KeptByRegex { .. }
                     | DispositionExplanation::ProtectedPreamble
                     | DispositionExplanation::KeptHtml
@@ -449,8 +503,8 @@ fn an_invalid_regex_explains_the_same_way_the_scanner_scans() {
         }
     );
     assert_eq!(
-        explanation.action().is_remove(),
-        report.comments[0].disposition.is_remove(),
+        explanation.action().removes(),
+        report.comments[0].action().removes(),
     );
 }
 
@@ -905,8 +959,8 @@ fn documentation_is_kept_by_the_conservative_policy_and_taken_by_the_standard_on
 
 #[test]
 fn the_action_helper_is_the_inverse_of_a_removal() {
-    assert!(Action::Remove.is_remove());
-    assert!(!Action::Keep.is_remove());
+    assert!(Action::Remove.removes());
+    assert!(!Action::Keep.removes());
     assert_eq!(Action::Keep.as_str(), "keep");
     assert_eq!(Action::Remove.as_str(), "remove");
     assert_eq!(Action::Keep.to_string(), "keep");
@@ -950,7 +1004,7 @@ fn a_deadline_is_not_this_crates_to_reach() {
     let source = b"// TODO: a promise\nfn a() {}\n";
     let report = scan(source, Language::Rust, options.clone());
     let comment = &report.comments[0];
-    assert!(!comment.disposition.is_remove(), "the scan took it back");
+    assert!(!comment.action().removes(), "the scan took it back");
     let explanation = explain_comment(
         comment,
         &source[comment.span.start..comment.span.end],
@@ -1039,6 +1093,10 @@ fn shown_by(verdict: &DispositionExplanation) -> Vec<String> {
         DispositionExplanation::RemovedByDefault { policy, kind: _ } => {
             vec![policy.to_string()]
         }
+        // NOTE: The kind reaches the reader as a category here too.
+        DispositionExplanation::KeptByPolicy { policy, kind: _ } => {
+            vec![policy.to_string()]
+        }
         DispositionExplanation::KeptByTag { tag } => vec![tag.clone()],
         DispositionExplanation::RemovedAsExpired { tag, age, limit } => {
             vec![tag.clone(), age.to_string(), limit.to_string()]
@@ -1047,6 +1105,13 @@ fn shown_by(verdict: &DispositionExplanation) -> Vec<String> {
             vec![lines.to_string(), limit.to_string()]
         }
         DispositionExplanation::KeptStructural { language } => vec![language.to_string()],
+        /* NOTE: The rule's own sentence is the whole of what happened, and it
+         * is `detail()` rather than the rule's name: a reader is told what is
+         * wrong with the comment, not which identifier decided it. The name is
+         * what the machine formats carry. */
+        DispositionExplanation::RewrittenByStyle { rule } => {
+            vec![rule.detail().to_owned()]
+        }
     }
 }
 
@@ -1098,6 +1163,16 @@ fn every_verdict() -> Vec<DispositionExplanation> {
         DispositionExplanation::RemovedByLength { lines: 9, limit: 8 },
         DispositionExplanation::KeptStructural {
             language: Language::Yaml,
+        },
+        DispositionExplanation::KeptByPolicy {
+            policy: Policy::None,
+            kind: CommentKind::Line,
+        },
+        DispositionExplanation::RewrittenByStyle {
+            rule: StyleRule::SpaceAfterMarker,
+        },
+        DispositionExplanation::RewrittenByStyle {
+            rule: StyleRule::TrailingWhitespace,
         },
     ]
 }

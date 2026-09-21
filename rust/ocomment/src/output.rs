@@ -7,7 +7,7 @@ use clap::ValueEnum;
 #[cfg(test)]
 use ocomment_core::TransformResult;
 use ocomment_core::{
-    ByteSpan, Comment, CommentKind, Diagnostic, Disposition, DispositionExplanation,
+    Action, ByteSpan, Comment, CommentKind, Diagnostic, Disposition, DispositionExplanation,
     DispositionPatterns, Edit, Language, Policy, Protection, ScanOptions, ScanReport, Severity,
     SourceMap, TransformPlan, explain_comment_with,
 };
@@ -224,8 +224,19 @@ impl AnnotationLevel {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Summary {
     pub files_scanned: usize,
-    pub files_with_removable: usize,
+    /// Files holding at least one comment this run would change, whether by
+    /// removing it or by rewriting it.
+    ///
+    /// Was `files_with_removable`, which was already serialised under the name
+    /// it has now: the report had been counting findings and calling them
+    /// removals since before there was anything else to count.
+    pub files_with_findings: usize,
     pub removable_comments: usize,
+    /// Comments a style rule would rewrite. Counted apart from the removals
+    /// because the two ask a reader for different things: a removal is a
+    /// decision they have to make, and a rewrite is one the tool has already
+    /// made and is offering to apply.
+    pub rewritable_comments: usize,
     pub kept_comments: usize,
     pub files_changed: usize,
     pub comments_removed: usize,
@@ -248,6 +259,16 @@ pub struct Summary {
 }
 
 impl Summary {
+    /// Every comment this run would change: the removals and the rewrites.
+    ///
+    /// The number every "is there anything to do" question wants, and the one
+    /// that has to be asked rather than reading `removable_comments` — which
+    /// is how a run with nothing but rewrites to its name came to report
+    /// itself clean while exiting 1.
+    pub const fn findings(&self) -> usize {
+        self.removable_comments + self.rewritable_comments
+    }
+
     pub fn compute(files: &[ProcessedFile], skipped: &[SkippedFile], operation: Operation) -> Self {
         let mut summary = Self {
             files_scanned: files.len(),
@@ -255,10 +276,12 @@ impl Summary {
         };
         for file in files {
             let removable = removable_count(file);
+            let rewritable = rewritable_count(file);
             summary.removable_comments += removable;
-            summary.kept_comments += file.result.report.comments.len() - removable;
-            if removable > 0 {
-                summary.files_with_removable += 1;
+            summary.rewritable_comments += rewritable;
+            summary.kept_comments += file.result.report.comments.len() - removable - rewritable;
+            if removable > 0 || rewritable > 0 {
+                summary.files_with_findings += 1;
             }
             if !file.result.report.valid {
                 summary.invalid_files += 1;
@@ -298,7 +321,29 @@ fn removable_count(file: &ProcessedFile) -> usize {
         .report
         .comments
         .iter()
-        .filter(|comment| comment.disposition.is_remove())
+        .filter(|comment| comment.action().removes())
+        .count()
+}
+
+/// Whether a comment is one this run has something to say about.
+///
+/// The question nearly every predicate in this file is really asking, and the
+/// question that used to be spelled `is_remove()` because removal was the only
+/// answer. A rewrite is a finding too: it appears in the report, it changes
+/// the bytes on disk, and it makes `check` exit non-zero. What it is not is a
+/// removal, and the handful of places that genuinely mean removal still say
+/// so.
+fn reported(comment: &Comment) -> bool {
+    comment.disposition().action().changes_bytes()
+}
+
+/// How many comments this run would rewrite rather than remove.
+fn rewritable_count(file: &ProcessedFile) -> usize {
+    file.result
+        .report
+        .comments
+        .iter()
+        .filter(|comment| comment.action() == Action::Rewrite)
         .count()
 }
 
@@ -315,7 +360,7 @@ fn removed_count(file: &ProcessedFile) -> usize {
     report
         .comments
         .iter()
-        .filter(|comment| comment.disposition.is_remove() && report.established(comment.span))
+        .filter(|comment| comment.action().removes() && report.established(comment.span))
         .count()
 }
 
@@ -587,7 +632,7 @@ fn kept_for(files: &[ProcessedFile], protection: &str) -> usize {
         .iter()
         .flat_map(|file| &file.result.report.comments)
         .filter(|comment| {
-            matches!(&comment.disposition, Disposition::Keep { reason } if reason == protection)
+            matches!(comment.disposition(), Disposition::Keep { reason } if reason == protection)
         })
         .count()
 }
@@ -906,7 +951,7 @@ fn json_report<'a>(
                 explanation: explainer
                     .map(|explainer| json_explanation(explainer, comment, source, language)),
                 text: preview.then(|| slice_text(source, comment.span)),
-                disposition: &comment.disposition,
+                disposition: comment.disposition(),
             })
             .collect(),
         diagnostics: report
@@ -974,6 +1019,16 @@ fn explanation_rule(verdict: &DispositionExplanation) -> String {
         DispositionExplanation::RemovedAsTrailing => "removed-as-trailing",
         DispositionExplanation::RemovedAsExpired { .. } => "removed-as-expired",
         DispositionExplanation::RemovedByLength { .. } => "removed-by-length",
+        DispositionExplanation::KeptByPolicy { .. } => "kept-by-policy",
+        /* NOTE: The rule's own name is part of the answer here, and not for
+         * symmetry: a caller matching on `rewritten-by-style` would be told
+         * that a comment is being rewritten without being told what about it
+         * was wrong, which is the only thing they could act on. The other
+         * verdicts carry that in a field; this one carries it in the name,
+         * because the rule *is* the verdict. */
+        DispositionExplanation::RewrittenByStyle { rule } => {
+            return format!("rewritten-by-{rule}");
+        }
     }
     .to_owned()
 }
@@ -1004,6 +1059,21 @@ pub fn kept_label(kind: CommentKind, reason: &str) -> String {
 /// line of its own.
 fn kept_prefix(kind: CommentKind) -> String {
     format!("kept {kind} comment")
+}
+
+/// The one-line label for a comment OComment would rewrite.
+///
+/// Worded as what is wrong rather than as what will happen, the way a kept
+/// comment's label is: "rewritable" would be a word about the tool, and the
+/// reader is being told something about their comment.
+pub fn rewritten_label(kind: CommentKind, reason: &str) -> String {
+    format!("{}: {reason}", rewritten_prefix(kind))
+}
+
+/// The same label without a reason, for a report that gives the reason on a
+/// line of its own.
+fn rewritten_prefix(kind: CommentKind) -> String {
+    format!("rewritten {kind} comment")
 }
 
 /// What `--explain` needs to account for one file's comments: the options its
@@ -1146,6 +1216,12 @@ fn next_step(verdict: &DispositionExplanation) -> String {
         DispositionExplanation::RemovedByLength { limit, .. } => {
             format!("; cut the run to {}", plural(*limit, "line"))
         }
+        /* NOTE: The one verdict whose way out is to let the tool do it. Every
+         * other line here tells a reader what to change; this one tells them
+         * the change is already written and waiting. */
+        DispositionExplanation::RewrittenByStyle { .. } => {
+            "; run `ocomment fix` to apply it".to_owned()
+        }
         /* NOTE: The one keep with no flag behind it. `--policy all` does not
          * reach it either: what holds the body open is whatever comment is
          * still standing under this one, so that is the line to take first. */
@@ -1160,6 +1236,10 @@ fn next_step(verdict: &DispositionExplanation) -> String {
         | DispositionExplanation::RemovedByRegex { .. }
         | DispositionExplanation::RemovedByPolicy { .. }
         | DispositionExplanation::RemovedByDefault { .. }
+        /* NOTE: `none` is the mode somebody chose on purpose, so there is
+         * nothing to suggest: a reader who set it is not looking for the flag
+         * that would undo it. */
+        | DispositionExplanation::KeptByPolicy { .. }
         | DispositionExplanation::KeptByTag { .. } => String::new(),
     }
 }
@@ -1624,7 +1704,7 @@ fn render_fixed(
                 .report
                 .comments
                 .iter()
-                .filter(|comment| !comment.disposition.is_remove())
+                .filter(|comment| !reported(comment))
                 .map(move |comment| (file, comment))
         })
         .collect();
@@ -1693,7 +1773,7 @@ fn render_review(
                 .report
                 .comments
                 .iter()
-                .filter(|comment| !comment.disposition.is_remove())
+                .filter(|comment| !reported(comment))
                 .count()
         })
         .sum();
@@ -1845,7 +1925,7 @@ fn render_review(
                     .report
                     .comments
                     .iter()
-                    .filter(|comment| !comment.disposition.is_remove())
+                    .filter(|comment| !reported(comment))
                 {
                     let (line, _) = index.line_column(comment.span.start);
                     wrote(writeln!(
@@ -1921,12 +2001,7 @@ fn render_human(
             Operation::Check | Operation::Diff if options.explain => {
                 !file.result.report.comments.is_empty()
             }
-            Operation::Check | Operation::Diff => file
-                .result
-                .report
-                .comments
-                .iter()
-                .any(|comment| comment.disposition.is_remove()),
+            Operation::Check | Operation::Diff => file.result.report.comments.iter().any(reported),
         };
         let lines = (!file.result.report.diagnostics.is_empty() || reports_comments)
             .then(|| LineIndex::new(&file.source));
@@ -1964,7 +2039,7 @@ fn render_human(
                     "{}:{line}:{column}: {} {} {}..{}{}",
                     display_path(&file.path, presentation.hyperlinks),
                     comment.kind,
-                    comment.disposition,
+                    comment.disposition(),
                     comment.span.start,
                     comment.span.end,
                     preview_suffix(&file.source, comment.span, options)
@@ -1981,31 +2056,33 @@ fn render_human(
                 ))?;
             }
         } else {
-            /* NOTE: `check` reports what it would remove. Asked to explain itself it
-             * reports the rest too, because a comment it left alone is exactly
-             * the one the reader is asking about. */
+            /* NOTE: `check` reports what it would change, which is what it
+             * would remove and what it would rewrite. Asked to explain itself
+             * it reports the rest too, because a comment it left alone is
+             * exactly the one the reader is asking about. */
             for comment in &file.result.report.comments {
-                let removable = comment.disposition.is_remove();
-                if !options.explain && !removable {
+                let action = comment.disposition().action();
+                if !options.explain && !reported(comment) {
                     continue;
                 }
                 let (line, column) = lines
                     .as_ref()
                     .expect("a finding requested a line index")
                     .line_column(comment.span.start);
+                /* NOTE: Three colours for three verdicts. A rewrite is blue
+                 * rather than the removal's yellow because it is not a warning:
+                 * nothing is being taken away and the reader has nothing to
+                 * decide. */
+                let (escape, label) = match action {
+                    Action::Remove => ("\x1b[33m", removable_label(comment.kind)),
+                    Action::Rewrite => ("\x1b[34m", rewritten_prefix(comment.kind)),
+                    Action::Keep => ("\x1b[32m", kept_prefix(comment.kind)),
+                };
                 wrote(writeln!(
                     output,
-                    "{}:{line}:{column}: {}{}{}{}",
+                    "{}:{line}:{column}: {}{label}{}{}",
                     display_path(&file.path, presentation.hyperlinks),
-                    color(
-                        if removable { "\x1b[33m" } else { "\x1b[32m" },
-                        presentation.color
-                    ),
-                    if removable {
-                        removable_label(comment.kind)
-                    } else {
-                        kept_prefix(comment.kind)
-                    },
+                    color(escape, presentation.color),
                     color("\x1b[0m", presentation.color),
                     preview_suffix(&file.source, comment.span, options)
                 ))?;
@@ -2248,7 +2325,7 @@ fn concentration(files: &[ProcessedFile], options: &RenderOptions) -> Vec<String
     for file in files {
         let mut count = 0usize;
         for comment in &file.result.report.comments {
-            if comment.disposition.is_remove() {
+            if comment.action().removes() {
                 count += 1;
                 let slot = CommentKind::ALL
                     .iter()
@@ -2371,35 +2448,61 @@ fn nothing_to(options: &RenderOptions) -> &'static str {
 }
 
 /// The one-line verdict for the run, without the skipped-file clause.
+///
+/// Every sentence here is unchanged when nothing would be rewritten, which is
+/// every run that has not asked for a style rule. That is deliberate: these
+/// lines are what a CI job greps for, and a report that reworded itself for
+/// every reader because a feature they do not use exists would be a report
+/// that broke their job to tell them nothing.
 fn summary_line(summary: &Summary, options: &RenderOptions) -> String {
     let scanned = plural(summary.files_scanned, "file");
+    let files = plural(summary.files_with_findings, "file");
     let found = || {
+        if summary.rewritable_comments == 0 {
+            return format!(
+                "Found {} in {files} ({scanned} scanned).",
+                comments(summary.removable_comments, "removable"),
+            );
+        }
+        if summary.removable_comments == 0 {
+            return format!(
+                "Found {} to rewrite in {files} ({scanned} scanned).",
+                comments(summary.rewritable_comments, ""),
+            );
+        }
         format!(
-            "Found {} in {} ({scanned} scanned).",
+            "Found {} and {} to rewrite in {files} ({scanned} scanned).",
             comments(summary.removable_comments, "removable"),
-            plural(summary.files_with_removable, "file")
+            summary.rewritable_comments,
         )
     };
     match options.operation {
         /* NOTE: `fix --dry-run` is the diff of a fix: it counts what a real run would
          * take out and points back at the run that would write it. */
         Operation::Diff if options.dry_run => {
-            if summary.removable_comments == 0 {
+            if summary.findings() == 0 {
                 return format!("Nothing to fix in {scanned}.");
             }
+            if summary.rewritable_comments == 0 {
+                return format!(
+                    "Would remove {} in {files}. Rerun without --dry-run to apply.",
+                    comments(summary.removable_comments, ""),
+                );
+            }
             format!(
-                "Would remove {} in {}. Rerun without --dry-run to apply.",
-                comments(summary.removable_comments, ""),
-                plural(summary.files_with_removable, "file")
+                "Would change {} in {files}. Rerun without --dry-run to apply.",
+                comments(summary.findings(), ""),
             )
         }
         Operation::Check | Operation::Diff => {
-            if summary.removable_comments == 0 {
+            if summary.findings() == 0 {
                 return format!("No removable comments in {scanned}.");
             }
             let next = if options.operation == Operation::Diff {
                 "apply the patch"
-            } else if summary.removable_comments == 1 {
+            } else if summary.removable_comments == 0 {
+                "apply the rewrites"
+            } else if summary.findings() == 1 {
                 "remove it"
             } else {
                 "remove them"
@@ -2428,7 +2531,7 @@ fn summary_line(summary: &Summary, options: &RenderOptions) -> String {
                 } else {
                     format!("{head}; each re-scanned clean and idempotent before writing.")
                 }
-            } else if summary.removable_comments == 0 {
+            } else if summary.findings() == 0 {
                 format!("Nothing to fix in {scanned}.")
             } else {
                 /* NOTE: The transaction never reached the disk; report what is still
@@ -2436,10 +2539,17 @@ fn summary_line(summary: &Summary, options: &RenderOptions) -> String {
                 found()
             }
         }
-        Operation::Scan => format!(
+        Operation::Scan if summary.rewritable_comments == 0 => format!(
             "Scanned {scanned}: {} ({} removable, {} kept).",
             comments(summary.removable_comments + summary.kept_comments, ""),
             summary.removable_comments,
+            summary.kept_comments
+        ),
+        Operation::Scan => format!(
+            "Scanned {scanned}: {} ({} removable, {} to rewrite, {} kept).",
+            comments(summary.findings() + summary.kept_comments, ""),
+            summary.removable_comments,
+            summary.rewritable_comments,
             summary.kept_comments
         ),
     }
@@ -2481,7 +2591,7 @@ fn kind_breakdown(files: &[ProcessedFile], options: &RenderOptions) -> Option<St
                 .iter()
                 .position(|kind| *kind == comment.kind)
                 .expect("CommentKind::ALL lists every kind");
-            if comment.disposition.is_remove() {
+            if comment.action().removes() {
                 removable[slot] += 1;
             } else {
                 kept[slot] += 1;
@@ -3081,24 +3191,13 @@ impl Serialize for SarifResults<'_> {
         let mut results = serializer.serialize_seq(None)?;
         for file in self.files {
             if file.result.report.diagnostics.is_empty()
-                && !file
-                    .result
-                    .report
-                    .comments
-                    .iter()
-                    .any(|comment| comment.disposition.is_remove())
+                && !file.result.report.comments.iter().any(reported)
             {
                 continue;
             }
             let location = artifact_location(&file.path);
             let lines = LineIndex::new(&file.source);
-            for comment in file
-                .result
-                .report
-                .comments
-                .iter()
-                .filter(|comment| comment.disposition.is_remove())
-            {
+            for comment in file.result.report.comments.iter().filter(|c| reported(c)) {
                 let (line, column) = lines.line_column(comment.span.start);
                 let (end_line, end_column) = lines.line_column(comment.span.end);
                 let (fix_span, replacement) = fix_for_span(file, comment.span);
@@ -3317,23 +3416,12 @@ fn render_github(
     let level = annotation_level(options);
     for file in files {
         if file.result.report.diagnostics.is_empty()
-            && !file
-                .result
-                .report
-                .comments
-                .iter()
-                .any(|comment| comment.disposition.is_remove())
+            && !file.result.report.comments.iter().any(reported)
         {
             continue;
         }
         let lines = LineIndex::new(&file.source);
-        for comment in file
-            .result
-            .report
-            .comments
-            .iter()
-            .filter(|comment| comment.disposition.is_remove())
-        {
+        for comment in file.result.report.comments.iter().filter(|c| reported(c)) {
             let (line, column) = lines.line_column(comment.span.start);
             wrote(writeln!(
                 output,
@@ -4398,7 +4486,7 @@ pub fn write_summary(
     for file in files {
         let mut removable = 0usize;
         for comment in &file.result.report.comments {
-            if comment.disposition.is_remove() {
+            if comment.action().removes() {
                 removable += 1;
                 *kinds.entry(comment.kind.as_str()).or_default() += 1;
             }
@@ -4420,7 +4508,7 @@ pub fn write_summary(
             Operation::Fix => "fix",
         },
         "files_scanned": summary.files_scanned,
-        "files_with_findings": summary.files_with_removable,
+        "files_with_findings": summary.files_with_findings,
         "removable_comments": summary.removable_comments,
         "kept_comments": summary.kept_comments,
         "files_changed": summary.files_changed,

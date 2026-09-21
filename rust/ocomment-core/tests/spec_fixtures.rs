@@ -392,9 +392,10 @@ fn check_expectation(case: &Value, expect: &Value, outcome: &Outcome) {
                 start: comment.span.start,
                 end: comment.span.end,
                 kind: comment.kind.as_str().to_owned(),
-                action: match comment.disposition {
+                action: match comment.disposition() {
                     Disposition::Remove => "remove".to_owned(),
                     Disposition::Keep { .. } => "keep".to_owned(),
+                    Disposition::Rewrite { .. } => "rewrite".to_owned(),
                 },
             })
             .collect();

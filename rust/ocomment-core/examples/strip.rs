@@ -50,7 +50,10 @@ fn main() -> ExitCode {
     for comment in &result.report.comments {
         println!(
             "  {:>4}..{:<4} {:<9} {}",
-            comment.span.start, comment.span.end, comment.kind, comment.disposition
+            comment.span.start,
+            comment.span.end,
+            comment.kind,
+            comment.disposition()
         );
     }
     println!("---");

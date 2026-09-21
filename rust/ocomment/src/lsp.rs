@@ -1,7 +1,7 @@
 use crate::{
     config::{self, ResolvedConfig},
     files,
-    output::{kept_label, removable_label},
+    output::{kept_label, removable_label, rewritten_label},
     plugin::PluginHost,
 };
 use anyhow::Result as AnyResult;
@@ -236,7 +236,7 @@ impl Backend {
             .report
             .comments
             .iter()
-            .filter(|comment| comment.disposition.is_remove())
+            .filter(|comment| comment.disposition().action().changes_bytes())
         {
             diagnostics.push(tower_lsp::lsp_types::Diagnostic {
                 range: span_to_range(document.text.as_bytes(), comment.span, &encoding),
@@ -1005,10 +1005,13 @@ impl LanguageServer for Backend {
         else {
             return Ok(None);
         };
-        let text = match &comment.disposition {
+        let text = match comment.disposition() {
             Disposition::Remove => format!("OComment: {}", removable_label(comment.kind)),
             Disposition::Keep { reason } => {
-                format!("OComment: {}", kept_label(comment.kind, reason))
+                format!("OComment: {}", kept_label(comment.kind, reason.as_str()))
+            }
+            Disposition::Rewrite { rule, .. } => {
+                format!("OComment: {}", rewritten_label(comment.kind, rule.detail()))
             }
         };
         Ok(Some(Hover {

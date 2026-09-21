@@ -254,3 +254,154 @@ fn recorded_counterexamples_still_match_a_full_scan_for_every_builtin() {
         }
     }
 }
+
+/// The style rules under a policy that removes nothing, which is the only way
+/// to watch them on their own.
+fn style_only(rules: ocomment_core::StyleRules) -> TransformOptions {
+    TransformOptions {
+        scan: ScanOptions {
+            policy: ocomment_core::Policy::None,
+            style: rules,
+            ..ScanOptions::default()
+        },
+        layout: Layout::Lines,
+    }
+}
+
+/// Every style rule at once, which is the hardest case: the rules compose, and
+/// a property that held for each alone could still fail for the pair.
+fn every_style_rule() -> ocomment_core::StyleRules {
+    ocomment_core::StyleRules {
+        space_after_marker: Some(true),
+        trailing_whitespace: Some(false),
+    }
+}
+
+/// `bytes` with every ASCII space, tab and line break taken out.
+///
+/// What a rewrite is allowed to move, and therefore what a comparison of the
+/// two sides has to ignore to be a comparison of the words.
+fn without_spacing(bytes: &[u8]) -> Vec<u8> {
+    bytes
+        .iter()
+        .copied()
+        .filter(|byte| !byte.is_ascii_whitespace())
+        .collect()
+}
+
+proptest! {
+    /// Rewriting twice is rewriting once.
+    ///
+    /// The property a formatter is worth nothing without, and the one the
+    /// prose gate this replaces did not have: its checker accepted line breaks
+    /// its fixer would go on to remove, so running the fixer produced a file
+    /// the checker liked and the fixer would change again.
+    #[test]
+    fn restyling_a_restyled_source_changes_nothing(source in lexical_source(0..48)) {
+        for language in [Language::Rust, Language::Python, Language::Html, Language::Ocaml] {
+            let options = style_only(every_style_rule());
+            let once = transform(&source, language, options.clone());
+            if !once.report.valid {
+                continue;
+            }
+            let twice = transform(&once.output, language, options);
+            prop_assert_eq!(
+                &twice.output, &once.output,
+                "{} rewrote its own output: {:?}", language, String::from_utf8_lossy(&once.output)
+            );
+        }
+    }
+
+    /// What `fix` writes, `check` has nothing left to say about.
+    ///
+    /// Idempotence says the bytes settle; this says the *report* settles. The
+    /// two are not the same claim, and it is the second one a gate depends on:
+    /// a run whose output still holds findings is a run that fails the commit
+    /// it was asked to clean.
+    #[test]
+    fn a_restyled_source_holds_no_findings(source in lexical_source(0..48)) {
+        for language in [Language::Rust, Language::Python, Language::Html, Language::Ocaml] {
+            let options = style_only(every_style_rule());
+            let result = transform(&source, language, options.clone());
+            if !result.report.valid {
+                continue;
+            }
+            let after = scan(&result.output, language, options.scan.clone());
+            if !after.valid {
+                continue;
+            }
+            for comment in &after.comments {
+                prop_assert!(
+                    !comment.action().changes_bytes(),
+                    "{language} left a finding in its own output: {:?} in {:?}",
+                    comment,
+                    String::from_utf8_lossy(&result.output)
+                );
+            }
+        }
+    }
+
+    /// A rewritten comment is still one comment, and still the same kind of
+    /// comment.
+    ///
+    /// The failure this rules out is the one the prose gate shipped: it
+    /// rebuilt `/* One. Two. */` as two lines each opening `/*` and closing
+    /// neither, so a formatter asked to tidy a file wrote a file that did not
+    /// compile. Nothing about that is specific to block comments — it is what
+    /// happens whenever a rewrite forgets a delimiter.
+    #[test]
+    fn a_rewrite_leaves_one_comment_of_the_same_kind(source in lexical_source(0..48)) {
+        for language in [Language::Rust, Language::Python, Language::Html, Language::Ocaml] {
+            let options = style_only(every_style_rule());
+            let result = transform(&source, language, options.clone());
+            if !result.report.valid {
+                continue;
+            }
+            let after = scan(&result.output, language, options.scan.clone());
+            prop_assert!(
+                after.valid,
+                "{language} wrote a source that no longer lexes: {:?}",
+                String::from_utf8_lossy(&result.output)
+            );
+            prop_assert_eq!(
+                after.comments.len(), result.report.comments.len(),
+                "{} changed how many comments there are: {:?}",
+                language, String::from_utf8_lossy(&result.output)
+            );
+            for (before, now) in result.report.comments.iter().zip(&after.comments) {
+                prop_assert_eq!(
+                    before.kind, now.kind,
+                    "{} changed a comment's kind: {:?}",
+                    language, String::from_utf8_lossy(&result.output)
+                );
+            }
+        }
+    }
+
+    /// A rewrite moves white space and nothing else.
+    ///
+    /// The last wall between a formatter and the accusation that it ate
+    /// somebody's sentence. Every rule this axis holds today is about spacing,
+    /// and a rule that is not would have to be exempted here deliberately
+    /// rather than by this test quietly not covering it.
+    #[test]
+    fn a_rewrite_moves_only_white_space(source in lexical_source(0..48)) {
+        for language in [Language::Rust, Language::Python, Language::Html, Language::Ocaml] {
+            let options = style_only(every_style_rule());
+            let result = transform(&source, language, options);
+            if !result.report.valid {
+                continue;
+            }
+            for comment in &result.report.comments {
+                let Some(replacement) = comment.disposition().replacement() else {
+                    continue;
+                };
+                let raw = &source[comment.span.start..comment.span.end];
+                prop_assert_eq!(
+                    without_spacing(raw), without_spacing(replacement),
+                    "{} changed the words of {:?}", language, String::from_utf8_lossy(raw)
+                );
+            }
+        }
+    }
+}

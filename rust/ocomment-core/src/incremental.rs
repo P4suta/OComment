@@ -938,7 +938,7 @@ mod tests {
             document.report().comments[0].kind,
             crate::CommentKind::Encoding
         );
-        assert!(!document.report().comments[0].disposition.is_remove());
+        assert!(!document.report().comments[0].action().removes());
         assert_eq!(document.report().comments, expected.comments);
         assert_eq!(document.report(), &expected);
         assert_eq!(document.safe_checkpoints(), expected_checkpoints);
@@ -1147,8 +1147,8 @@ z: 1
         let mut document =
             IncrementalDocument::new(source.to_vec(), Language::Yaml, ScanOptions::default(), 1);
         assert_eq!(
-            document.report().comments[0].disposition,
-            Disposition::Keep {
+            document.report().comments[0].disposition(),
+            &Disposition::Keep {
                 reason: "structural in a YAML block scalar trail".to_owned()
             },
         );
@@ -1173,7 +1173,7 @@ z: 1
         assert_eq!(document.report(), &expected);
         assert_eq!(document.safe_checkpoints(), expected_checkpoints);
         assert!(
-            document.report().comments[0].disposition.is_remove(),
+            document.report().comments[0].action().removes(),
             "the directive is outside the deeper body: {:?}",
             document.report().comments,
         );

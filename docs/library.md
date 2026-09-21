@@ -40,7 +40,7 @@ use ocomment_core::{CommentKind, Language, ScanOptions, scan};
 let report = scan(b"let x = 1; // note\n", Language::Rust, ScanOptions::default());
 assert_eq!(report.comments.len(), 1);
 assert_eq!(report.comments[0].kind, CommentKind::Line);
-assert!(report.comments[0].disposition.is_remove());
+assert!(report.comments[0].action().removes());
 ```
 
 ```rust
@@ -259,15 +259,14 @@ let profile = DeclarativeProfile {
     extensions: vec!["lisp".into()],
     line_comments: vec![LineDelimiter {
         start: ";;".into(),
-        requires_boundary: false,
-        requires_line_start: false,
         kind: CommentKind::Line,
+        ..Default::default()
     }],
     strings: vec![StringDelimiter {
         start: "\"".into(),
         end: "\"".into(),
         escape: Some("\\".into()),
-        multiline: false,
+        ..Default::default()
     }],
     ..Default::default()
 };

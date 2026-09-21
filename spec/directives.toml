@@ -126,6 +126,14 @@ markdown = []
 vue = []
 svelte = []
 
+# NOTE: The mode that removes nothing, for a repository that wants the style
+# NOTE: rules and not the removals. Every kind is listed rather than the table
+# NOTE: being left out: a policy absent from this matrix is a policy nothing
+# NOTE: checks, and "keeps everything" is a claim worth checking.
+[policy.none]
+remove = []
+keep = ["line", "block", "doc-line", "doc-block", "license", "directive", "load-bearing", "html-comment", "shebang", "encoding", "optimizer-hint", "version-comment"]
+
 [policy.conservative]
 remove = ["line", "block", "doc-line", "doc-block"]
 keep = ["license", "directive", "load-bearing", "html-comment", "shebang", "encoding", "optimizer-hint", "version-comment"]

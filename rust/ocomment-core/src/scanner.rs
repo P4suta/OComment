@@ -1,6 +1,6 @@
 use crate::{
-    ByteSpan, Comment, CommentKind, Diagnostic, Dialect, Disposition, DispositionExplanation,
-    Language, Policy, ScanOptions, ScanReport, Severity, ShapeRule,
+    Action, ByteSpan, Comment, CommentKind, Diagnostic, Dialect, Disposition,
+    DispositionExplanation, Language, Policy, ScanOptions, ScanReport, Severity, ShapeRule,
 };
 use memchr::{memchr, memchr2, memchr3, memmem};
 use regex::bytes::RegexSet;
@@ -76,19 +76,19 @@ impl PreparedScanner {
 /// assert!(report.valid);
 /// assert_eq!(report.comments.len(), 1);
 /// assert_eq!(report.comments[0].kind, CommentKind::Line);
-/// assert!(report.comments[0].disposition.is_remove());
+/// assert!(report.comments[0].action().removes());
 ///
 /// // A build tag decides which files the compiler is given, so it is
 /// // load-bearing: no policy removes one, and `--policy all` is no exception.
 /// let tagged = scan(b"//go:build linux\n", Language::Go, ScanOptions::default());
 /// assert_eq!(tagged.comments[0].kind, CommentKind::LoadBearing);
-/// assert!(!tagged.comments[0].disposition.is_remove());
+/// assert!(!tagged.comments[0].action().removes());
 ///
 /// // A lint suppression is addressed to a tool rather than to the build, so
 /// // the default policy keeps it and `all` is free to take it.
 /// let linted = scan(b"// rustfmt::skip\n", Language::Rust, ScanOptions::default());
 /// assert_eq!(linted.comments[0].kind, CommentKind::Directive);
-/// assert!(!linted.comments[0].disposition.is_remove());
+/// assert!(!linted.comments[0].action().removes());
 /// ```
 pub fn scan(source: &[u8], language: Language, options: ScanOptions) -> ScanReport {
     scan_internal(source, language, options, 0, false, None).0
@@ -220,6 +220,10 @@ fn finish_scan(mut scanner: Scanner<'_>) -> (ScanReport, Vec<usize>, bool) {
         &scanner.options,
         &scanner.patterns,
     );
+    /* NOTE: After, and not beside. The style rules are asked only about
+     * comments that are staying, and which those are is not settled until the
+     * shape rules have had their turn. */
+    apply_style_rules(scanner.source, &mut scanner.comments, &scanner.options);
     (
         ScanReport {
             language,
@@ -260,7 +264,7 @@ pub(crate) fn apply_allow_rules(
     let tags = rules.every_tag();
     if !tags.is_empty() {
         for comment in comments.iter_mut() {
-            if comment.disposition.is_remove()
+            if comment.action().removes()
                 && let Some(tag) = matching_tag(source, comment, &tags)
             {
                 decide(
@@ -275,7 +279,11 @@ pub(crate) fn apply_allow_rules(
 
     if rules.trailing == Some(false) {
         for comment in comments.iter_mut() {
-            if !comment.disposition.is_remove()
+            /* NOTE: `== Keep` rather than "not a removal". The style rules
+             * run after this one and can leave a comment neither removed nor
+             * as written, and a rule that asked the negative question would
+             * have started reaching those the day they arrived. */
+            if comment.action() == Action::Keep
                 && reachable(source, comment, options, patterns)
                 && has_code_before_it(source, comment.span.start)
             {
@@ -342,14 +350,11 @@ fn named_outright(
 
 /// Record a shape rule on a comment, verdict and all.
 ///
-/// The only way [`apply_allow_rules`] settles anything, and the reason it is
-/// the only way: a rule that wrote the disposition by hand could write one the
-/// rule it recorded disagrees with, and then `--explain` would say "removed"
-/// under a line reading "kept". Both fields come from the one value here, so
-/// a rule added later cannot reintroduce that.
+/// A thin name for [`Comment::decide_by_shape`], which is where the invariant
+/// now lives: the fields it writes are private, so writing one without the
+/// other is not something a rule added later can do by hand.
 fn decide(comment: &mut Comment, rule: ShapeRule) {
-    comment.disposition = rule.disposition();
-    comment.shape = Some(rule);
+    comment.decide_by_shape(rule);
 }
 
 /// Whether the shape rules apply to a comment of this kind at all.
@@ -385,6 +390,80 @@ const fn subject_to_shape(kind: CommentKind) -> bool {
         | CommentKind::OptimizerHint
         | CommentKind::VersionComment
         | CommentKind::LoadBearing => false,
+    }
+}
+
+/// Whether the style rules apply to a comment of this kind at all.
+///
+/// Very nearly the mirror of [`subject_to_shape`], and the one place the two
+/// disagree is the point of the whole axis. A documentation comment is exempt
+/// from the length rule *because* it is documentation — it is as long as its
+/// content requires. That same fact is why it is the first thing the style
+/// rules should reach: it is the prose in the repository that most readers
+/// actually read, and it is the prose nobody has a tool for.
+///
+/// A licence notice is out, and out more firmly than anywhere else. It is a
+/// legal text quoted verbatim, and "verbatim" is the whole of its value; a
+/// formatter that tidied one would be changing a document this project does
+/// not own.
+///
+/// The directives and the preamble are out for the reason they are always out:
+/// a tool reads them, a tool is not a reader, and rewriting bytes something
+/// parses is how a tidy-up changes what a build does.
+///
+/// Exhaustive, so a new kind has to be classified rather than inheriting an
+/// answer.
+const fn subject_to_style(kind: CommentKind) -> bool {
+    match kind {
+        CommentKind::Line
+        | CommentKind::Block
+        | CommentKind::DocLine
+        | CommentKind::DocBlock
+        | CommentKind::HtmlComment => true,
+        CommentKind::License
+        | CommentKind::Directive
+        | CommentKind::Shebang
+        | CommentKind::Encoding
+        | CommentKind::OptimizerHint
+        | CommentKind::VersionComment
+        | CommentKind::LoadBearing => false,
+    }
+}
+
+/// Apply the rules that are about how a comment is written.
+///
+/// Asked only about comments that are staying. A comment the policy or a shape
+/// rule removed has no style question to answer, and asking it anyway would
+/// put a "rewrite this" line in a report under a comment the same run is about
+/// to delete.
+///
+/// Unlike [`apply_allow_rules`] this reads one comment at a time, because
+/// every rule it holds today is about one comment's own bytes. The rule that
+/// is not — a paragraph wrapped at a column, which is a property of the run a
+/// comment belongs to — is why `comments` is taken as a slice rather than an
+/// iterator.
+pub(crate) fn apply_style_rules(source: &[u8], comments: &mut [Comment], options: &ScanOptions) {
+    apply_style_rules_with(source, comments, options, crate::Markers::BUILTIN);
+}
+
+/// The same, against the delimiters a declarative profile declares.
+///
+/// A profile's comments open with the profile's tokens, and a rule about the
+/// text written against the marker has to be asked about the marker the file
+/// actually uses.
+pub(crate) fn apply_style_rules_with(
+    source: &[u8],
+    comments: &mut [Comment],
+    options: &ScanOptions,
+    markers: crate::Markers<'_>,
+) {
+    if options.style.is_empty() {
+        return;
+    }
+    for comment in comments.iter_mut() {
+        if subject_to_style(comment.kind) {
+            comment.restyle(source, &options.style, markers);
+        }
     }
 }
 
@@ -458,7 +537,7 @@ fn line_span(source: &[u8], start: usize, end: usize) -> usize {
 /// limit that counted across blank lines would measure the gap as well as the
 /// prose, so `// a`, five blank lines and `// b` would come to seven lines of
 /// commentary without anybody having written a long comment.
-fn comment_runs(source: &[u8], comments: &[Comment]) -> Vec<(usize, usize)> {
+pub(crate) fn comment_runs(source: &[u8], comments: &[Comment]) -> Vec<(usize, usize)> {
     let mut runs = Vec::new();
     let mut index = 0;
     while index < comments.len() {
@@ -755,12 +834,11 @@ impl<'a> Scanner<'a> {
         );
         let raw = &self.source[start..end];
         let (kind, disposition) = claim(kind, &self.options, raw, &self.patterns);
-        self.comments.push(Comment {
-            span: ByteSpan::new(start + self.offset, end + self.offset),
+        self.comments.push(Comment::new(
+            ByteSpan::new(start + self.offset, end + self.offset),
             kind,
             disposition,
-            shape: None,
-        });
+        ));
     }
 
     fn merge_child(&mut self, child: Scanner<'_>) {
@@ -2192,9 +2270,7 @@ impl<'a> Scanner<'a> {
                 &self.comments,
             );
             for index in keeps {
-                self.comments[index].disposition = Disposition::Keep {
-                    reason: YAML_STRUCTURAL_TRAIL.to_owned(),
-                };
+                self.comments[index].keep_as_structural();
             }
         }
     }
@@ -6596,7 +6672,18 @@ pub(crate) fn disposition(
             | CommentKind::Encoding
             | CommentKind::OptimizerHint
             | CommentKind::VersionComment
-            | CommentKind::LoadBearing => "conservative policy",
+            | CommentKind::LoadBearing => {
+                /* NOTE: Two policies reach here and they keep the comment for
+                 * different reasons, so they say different things. `none`
+                 * keeps it because it keeps everything; `conservative` keeps
+                 * it because of what it is. A reader deciding whether to
+                 * change the mode or the kind lists needs to know which. */
+                if options.policy == Policy::None {
+                    "policy none removes nothing"
+                } else {
+                    "conservative policy"
+                }
+            }
         }
         .into(),
     }
@@ -6628,8 +6715,8 @@ fn legal_marker_of(raw: &[u8]) -> Option<&'static str> {
 /// Name the rule that decides this comment's fate.
 ///
 /// The branches below are the branches of `disposition()` in the same order,
-/// so `explain_disposition(..).action().is_remove()` always equals
-/// `disposition(..).is_remove()` for the same comment and options. An
+/// so `explain_disposition(..).action()` always equals
+/// `disposition(..).action()` for the same comment and options. An
 /// unparseable pattern list is ignored here as the scanner ignores it, which
 /// keeps the two in step even on input the scanner has already flagged.
 ///
@@ -6685,6 +6772,35 @@ pub fn explain_disposition(
 /// which is what the wrapper falls back to — and the two functions then return
 /// the identical explanation.
 pub fn explain_disposition_with(
+    patterns: &DispositionPatterns,
+    kind: CommentKind,
+    raw: &[u8],
+    language: Language,
+    options: &ScanOptions,
+) -> DispositionExplanation {
+    let verdict = explain_kept_or_removed(patterns, kind, raw, language, options);
+    /* NOTE: Last, and only over a comment that is staying. The rules above
+     * decide whether there is still a comment to have an opinion about; this
+     * one is the opinion. A comment named outright by `keep_kind` or
+     * `keep_regex` is not exempt: those settings say which comments survive,
+     * and surviving is not the same as being spelled a particular way. */
+    if verdict.action() == Action::Keep
+        && subject_to_style(kind)
+        /* NOTE: The built-in set, because this entry point is asked about a
+         * comment by its bytes alone and has no file to know a profile from.
+         * A profile-scanned comment is explained through the comment itself,
+         * which carries the verdict the profile's own markers reached. */
+        && let Some((rule, _)) =
+            crate::style::restyle(raw, &options.style, crate::Markers::BUILTIN)
+    {
+        return rule.explanation();
+    }
+    verdict
+}
+
+/// The keep-or-remove half of [`explain_disposition_with`], which is every
+/// rule that can take a comment away or hold it back.
+fn explain_kept_or_removed(
     patterns: &DispositionPatterns,
     kind: CommentKind,
     raw: &[u8],
@@ -6747,6 +6863,17 @@ pub fn explain_disposition_with(
             return DispositionExplanation::KeptDocumentation { kind };
         }
     }
+    /* NOTE: Last, where the policy default belongs, and a separate branch
+     * from the one under it rather than a condition inside it: `none` and the
+     * other three reach opposite verdicts, and a single branch that decided
+     * which by reading the mode would be the policy table written a second
+     * time. `Policy::keeps` is the table. */
+    if options.policy == Policy::None {
+        return DispositionExplanation::KeptByPolicy {
+            policy: options.policy,
+            kind,
+        };
+    }
     DispositionExplanation::RemovedByDefault {
         policy: options.policy,
         kind,
@@ -6807,11 +6934,17 @@ pub fn explain_comment_with(
     options: &ScanOptions,
 ) -> DispositionExplanation {
     /* NOTE: A recorded rule is the answer, because it is the one the scanner
-     * actually reached and the only one nothing here can re-derive. */
-    if let Some(rule) = &comment.shape {
+     * actually reached and the only one nothing here can re-derive. The style
+     * rule is asked first: it is the last rule applied, so where both are
+     * recorded the style rule is the one that settled the verdict on the
+     * line. */
+    if let Some(rule) = comment.style() {
         return rule.explanation();
     }
-    if is_yaml_structural_trail(&comment.disposition) {
+    if let Some(rule) = comment.shape() {
+        return rule.explanation();
+    }
+    if is_yaml_structural_trail(comment.disposition()) {
         return DispositionExplanation::KeptStructural { language };
     }
     explain_disposition_with(patterns, comment.kind, raw, language, options)
@@ -7179,39 +7312,65 @@ pub fn comment_text(raw: &[u8]) -> &[u8] {
 }
 
 pub(crate) fn strip_comment_markers(raw: &[u8]) -> &[u8] {
-    let mut start = 0;
-    let mut end = raw.len();
-    for marker in [
-        b"<!--".as_slice(),
-        b"///",
-        b"//!",
-        b"//",
-        b"/**",
-        b"/*",
-        b"(*",
-        /* NOTE: Lisp's and SQL's and Lua's. They were absent, which is how a
-         * rule written against the text of a comment came to work in some
-         * languages and not others: a `keep_regex` matching `^#\s*NOTE` is
-         * asked of the raw token, and the raw token in a Lua file opens with
-         * `--`. */
-        b";;",
-        b";",
-        b"--",
-        b"%",
-        b"#",
-    ] {
-        if raw.starts_with(marker) {
-            start = marker.len();
-            break;
-        }
-    }
-    for marker in [b"-->".as_slice(), b"*/", b"*)"] {
-        if raw.ends_with(marker) {
-            end = end.saturating_sub(marker.len());
-            break;
-        }
-    }
-    &raw[start.min(end)..end]
+    let (start, end) = comment_marker_bounds(raw);
+    &raw[start..end]
+}
+
+/// The delimiters the built-in languages open a comment with.
+///
+/// Every spelling any of the thirty reach for, in one list rather than per
+/// language: a rule about what a comment *says* has to be asked the same
+/// question in every language, and one written against a per-language list
+/// worked in some and not others — a `keep_regex` matching `^#\s*NOTE`
+/// protects a Python comment and silently fails on the identical rule in Lua,
+/// where the token opens `--`.
+pub(crate) const BUILTIN_OPENERS: &[&[u8]] = &[
+    b"<!--", b"///", b"//!", b"//", b"/**", b"/*", b"(*", b";;", b";", b"--", b"%", b"#",
+];
+
+/// The delimiters the built-in languages close one with.
+pub(crate) const BUILTIN_CLOSERS: &[&[u8]] = &[b"-->", b"*/", b"*)"];
+
+/// Where a comment's delimiters end and begin again: the byte after the
+/// opening marker, and the byte the closing marker starts at.
+///
+/// `strip_comment_markers` is this and a slice. It was only ever the slice,
+/// and a caller that has to *rebuild* a comment needs the two numbers rather
+/// than the bytes between them — the marker is what it puts back.
+pub(crate) fn comment_marker_bounds(raw: &[u8]) -> (usize, usize) {
+    marker_bounds_with(raw, BUILTIN_OPENERS, BUILTIN_CLOSERS)
+}
+
+/// The same, against a delimiter set the caller supplies.
+///
+/// A file read under a declarative profile opens its comments with the tokens
+/// the profile declares, and asking the built-in list about one is a guess:
+/// the built-in list knows `--` and not Haddock's `-- |`, so a rule about the
+/// text written against the marker would have judged the space that belongs to
+/// the marker.
+///
+/// The longest match wins, for the reason a profile's own scan takes the
+/// longest: `///` is the start of nothing and the whole of something, and a
+/// list that answered in declaration order would answer differently for the
+/// same bytes depending on how it was written down.
+pub(crate) fn marker_bounds_with(
+    raw: &[u8],
+    openers: &[&[u8]],
+    closers: &[&[u8]],
+) -> (usize, usize) {
+    let longest = |candidates: &[&[u8]], matches: &dyn Fn(&[u8]) -> bool| {
+        candidates
+            .iter()
+            .filter(|marker| matches(marker))
+            .map(|marker| marker.len())
+            .max()
+            .unwrap_or(0)
+    };
+    let start = longest(openers, &|marker| raw.starts_with(marker));
+    let end = raw
+        .len()
+        .saturating_sub(longest(closers, &|marker| raw.ends_with(marker)));
+    (start.min(end), end)
 }
 
 /// The legal marker `text` carries, or `None` when it carries none. The marker
@@ -8980,16 +9139,13 @@ pub(crate) struct YamlBlockScalar {
     chomping: Chomping,
 }
 
-/// The keep reason the scanner writes for a comment a YAML block scalar leans
-/// on, and the one keep no option can overrule.
+/// Whether `disposition` is the keep a comment in a YAML block scalar trail
+/// carries.
 ///
-/// Frozen: the differential protocol compares this string byte for byte, and
-/// `--explain` recognises the rule by it.
-pub(crate) const YAML_STRUCTURAL_TRAIL: &str = "structural in a YAML block scalar trail";
-
-/// Whether `disposition` is the keep [`YAML_STRUCTURAL_TRAIL`] names.
+/// The spelling lives on [`Comment`] — see `Comment::keep_as_structural` — so
+/// that the one place that writes it is the one place that recognises it.
 pub(crate) fn is_yaml_structural_trail(disposition: &Disposition) -> bool {
-    matches!(disposition, Disposition::Keep { reason } if reason == YAML_STRUCTURAL_TRAIL)
+    matches!(disposition, Disposition::Keep { reason } if reason == crate::types::STRUCTURAL_TRAIL)
 }
 
 /// Which comments in the trails of `blocks` no removal may take, as indices
@@ -9044,7 +9200,7 @@ fn yaml_structural_trail_keeps(
                  * node, and it is not a line any removal here can move. */
                 break;
             };
-            if comments[found].disposition.is_remove() {
+            if comments[found].action().removes() {
                 if shield.is_none() && indent < block.content_indent {
                     shield = Some(found);
                 }
@@ -9080,16 +9236,15 @@ pub(crate) fn keep_yaml_structural_trails(
     if language != Language::Yaml || comments.is_empty() || memchr2(b'|', b'>', source).is_none() {
         return;
     }
-    if !comments.iter().any(|comment| {
-        comment.disposition.is_remove() && starts_its_line(source, comment.span.start)
-    }) {
+    if !comments
+        .iter()
+        .any(|comment| comment.action().removes() && starts_its_line(source, comment.span.start))
+    {
         return;
     }
     let blocks = yaml_block_scalars(source);
     for index in yaml_structural_trail_keeps(source, 0, &blocks, comments) {
-        comments[index].disposition = Disposition::Keep {
-            reason: YAML_STRUCTURAL_TRAIL.to_owned(),
-        };
+        comments[index].keep_as_structural();
     }
 }
 
@@ -9190,9 +9345,10 @@ pub(crate) fn lines_a_removal_must_swallow(
     if memchr2(b'|', b'>', source).is_none() {
         return Vec::new();
     }
-    if !comments.iter().any(|comment| {
-        comment.disposition.is_remove() && starts_its_line(source, comment.span.start)
-    }) {
+    if !comments
+        .iter()
+        .any(|comment| comment.action().removes() && starts_its_line(source, comment.span.start))
+    {
         return Vec::new();
     }
     let blocks = yaml_block_scalars(source);
@@ -9216,7 +9372,7 @@ pub(crate) fn lines_a_removal_must_swallow(
                  * node, and the comments under *it* are that node's. */
                 break;
             };
-            if comments[found].disposition.is_remove() {
+            if comments[found].action().removes() {
                 let mut taken = past_terminator(source, end);
                 if block.chomping == Chomping::Keep {
                     while taken < source.len() {
@@ -11973,11 +12129,11 @@ mod tests {
             },
         );
         assert!(matches!(
-            report.comments[0].disposition,
+            report.comments[0].disposition(),
             Disposition::Keep { .. }
         ));
-        assert!(report.comments[1].disposition.is_remove());
-        assert!(report.comments[2].disposition.is_remove());
+        assert!(report.comments[1].action().removes());
+        assert!(report.comments[2].action().removes());
     }
 
     #[test]
@@ -11987,8 +12143,8 @@ mod tests {
             Language::Html,
         );
         assert_eq!(report.comments.len(), 2);
-        assert!(!report.comments[0].disposition.is_remove());
-        assert!(report.comments[1].disposition.is_remove());
+        assert!(!report.comments[0].action().removes());
+        assert!(report.comments[1].action().removes());
     }
 
     /// A Scala checkpoint may not stand directly before a `<` that could open

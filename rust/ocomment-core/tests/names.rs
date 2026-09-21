@@ -98,7 +98,7 @@ fn comment_kind_names_are_stable() {
 #[test]
 fn policy_names_are_stable() {
     check_stable_names!(Policy);
-    assert_eq!(Policy::ALL.len(), 3);
+    assert_eq!(Policy::ALL.len(), 4);
 }
 
 #[test]
@@ -326,9 +326,11 @@ fn policy_and_layout_aliases_are_pinned() {
     /* NOTE: The order of `ALL` is how much each policy takes, weakest first,
      * and help output reads it in that order. A reordering would make the
      * names stop describing a scale. */
+    assert!(Policy::None.aliases().is_empty());
+    assert_eq!(Policy::None.former_name(), None);
     assert_eq!(
         Policy::ALL.map(Policy::as_str),
-        ["conservative", "standard", "all"]
+        ["none", "conservative", "standard", "all"]
     );
     assert_eq!(Policy::default(), Policy::Conservative);
     assert!(Layout::ALL.iter().all(|value| value.aliases().is_empty()));
@@ -501,15 +503,15 @@ fn keep_reasons_are_observable_through_scan() {
             report.comments
         );
         assert_eq!(
-            report.comments[case.index].disposition,
-            Disposition::Keep {
+            report.comments[case.index].disposition(),
+            &Disposition::Keep {
                 reason: case.reason.to_owned()
             },
             "`{}` fixture",
             case.reason
         );
         assert_eq!(
-            report.comments[case.index].disposition.to_string(),
+            report.comments[case.index].disposition().to_string(),
             format!("keep ({})", case.reason)
         );
     }
@@ -561,7 +563,7 @@ fn the_policy_table_is_what_a_scan_does() {
                 panic!("no `{kind}` in the fixture for it: {source:?}");
             };
             assert_eq!(
-                !comment.disposition.is_remove(),
+                !comment.action().removes(),
                 policy.keeps(kind),
                 "policy {policy} and kind {kind}: the table and the scan disagree"
             );
@@ -626,4 +628,17 @@ fn the_policy_that_keeps_a_set_while_taking_the_most_is_found() {
         None,
         "no policy keeps an ordinary comment, and saying one does would be advice that fails"
     );
+    /* NOTE: `none` keeps every kind there is, so it is the answer to every
+     * question this could be asked -- which is exactly why it is not one of
+     * the answers. A suggestion that always fits is a suggestion that has
+     * stopped depending on the question. The line above is the one that would
+     * have gone quietly wrong: it asserts `None` for an ordinary comment, and
+     * `none` keeps ordinary comments. */
+    for kind in CommentKind::ALL {
+        assert_ne!(
+            Policy::strongest_keeping(&[kind]),
+            Some(Policy::None),
+            "{kind}: `none` is not advice"
+        );
+    }
 }

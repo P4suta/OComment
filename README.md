@@ -5,8 +5,9 @@
 [![MSRV 1.88](https://img.shields.io/badge/MSRV-1.88-93450a.svg)](rust/Cargo.toml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
-OComment is a fast, byte-preserving comment checker and remover. The production
-tool is the Rust `ocomment` binary and the public `ocomment-core` library.
+OComment is a fast, byte-preserving comment checker, formatter and remover. The
+production tool is the Rust `ocomment` binary and the public `ocomment-core`
+library.
 `ocomment-ref` is an independent OCaml implementation used to check the scanner,
 classification, diagnostics, edits, transformed bytes, and source maps.
 
@@ -120,6 +121,34 @@ licence and copyright comments as well.
 touching a shebang, an encoding line, or a directive the language itself
 reads. The three are named in the order of how much they take.
 HTML comments are kept unless `all` or `--remove-kind html-comment` is explicit.
+
+`none` removes nothing at all. It is the mode for a repository that wants the
+other axis and not the removals:
+
+```toml
+[policy]
+mode = "none"
+
+[style]
+space_after_marker = true
+trailing_whitespace = false
+```
+
+The first rewrites `//text` as `// text`, leaving a ruler like `////////`
+alone; the second strips white space from the end of every line a comment
+covers.
+
+`[style]` decides how a comment that survives is *written*, which is a
+different question from whether it survives: a comment that fails one of the
+rules under `[policy.allow]` is removed, and a comment that fails one of these
+is rewritten. `check` reports both, `fix` applies both, and `diff` writes a
+patch for both. Every style rule is off unless you turn it on.
+
+The style rules reach documentation comments, which the length and position
+rules deliberately do not: a doc comment is exempt from a length limit because
+it is documentation, and that is exactly why it is the prose most worth
+tidying. They do not reach a licence notice, a directive, or the preamble —
+a legal text is quoted verbatim and a directive is read by a tool.
 
 The `lines` layout keeps every line where it was, `columns` keeps every column
 as well, and `compact` drops the lines a removed comment had to itself.

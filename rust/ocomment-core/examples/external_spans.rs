@@ -52,7 +52,7 @@ fn main() {
     )
     .expect("the spans are non-empty, sorted, and inside the source");
     for comment in &result.report.comments {
-        println!("  {:<9} {}", comment.kind, comment.disposition);
+        println!("  {:<9} {}", comment.kind, comment.disposition());
     }
     println!("---");
     print!("{}", String::from_utf8_lossy(&result.output));

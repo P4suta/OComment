@@ -98,6 +98,7 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
+          - none:         Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals
           - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
           - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
@@ -350,6 +351,7 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
+          - none:         Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals
           - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
           - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
@@ -587,6 +589,7 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
+          - none:         Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals
           - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
           - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
@@ -816,6 +819,7 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
+          - none:         Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals
           - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
           - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
@@ -1045,6 +1049,7 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
+          - none:         Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals
           - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
           - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
@@ -1261,6 +1266,7 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
+          - none:         Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals
           - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
           - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
@@ -1477,6 +1483,7 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
+          - none:         Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals
           - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
           - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
@@ -1709,6 +1716,7 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
+          - none:         Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals
           - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
           - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
@@ -1932,6 +1940,7 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
+          - none:         Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals
           - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
           - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
@@ -2148,6 +2157,7 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
+          - none:         Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals
           - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
           - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
@@ -2364,6 +2374,7 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
+          - none:         Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals
           - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
           - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
@@ -2589,6 +2600,7 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
+          - none:         Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals
           - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
           - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
@@ -2818,6 +2830,7 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
+          - none:         Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals
           - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
           - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
@@ -3038,6 +3051,7 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
+          - none:         Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals
           - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
           - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
@@ -3254,6 +3268,7 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
+          - none:         Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals
           - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
           - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
@@ -3474,6 +3489,7 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
+          - none:         Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals
           - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
           - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
@@ -3694,6 +3710,7 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
+          - none:         Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals
           - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
           - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
@@ -3914,6 +3931,7 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
+          - none:         Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals
           - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
           - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
@@ -4136,6 +4154,7 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
+          - none:         Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals
           - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
           - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
@@ -4365,6 +4384,7 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
+          - none:         Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals
           - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
           - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
@@ -4594,6 +4614,7 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
+          - none:         Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals
           - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
           - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
@@ -4826,6 +4847,7 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
+          - none:         Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals
           - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
           - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
@@ -5049,6 +5071,7 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
+          - none:         Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals
           - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
           - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
@@ -5265,6 +5288,7 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
+          - none:         Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals
           - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
           - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
@@ -5481,6 +5505,7 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
+          - none:         Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals
           - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
           - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads
@@ -5697,6 +5722,7 @@ Policy:
           Which classes of comment the run is allowed to remove
 
           Possible values:
+          - none:         Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals
           - conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
           - standard:     Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
           - all:          Remove every comment except shebangs, encoding lines and the directives the language itself reads

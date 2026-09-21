@@ -677,7 +677,7 @@ def languages_page() -> str:
     return "\n".join(lines) + "\n"
 
 
-POLICIES = ("conservative", "standard", "all")
+POLICIES = ("none", "conservative", "standard", "all")
 LAYOUTS = ("lines", "columns", "compact")
 
 
@@ -799,6 +799,8 @@ def policies_page(cli: Cli, workspace: pathlib.Path) -> str:
     lines.extend(
         [
             "",
+            "`none` is the mode for a repository that wants the style rules and not the",
+            "removals: it returns the sample unchanged.",
             "`conservative` and `standard` differ over the licence header alone, and `all`",
             "is the only one that takes the `// rustfmt::skip` directive out.",
             "`all` still refuses to touch a shebang or an encoding preamble until",

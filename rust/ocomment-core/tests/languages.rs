@@ -23,7 +23,7 @@ fn removable(report: &ocomment_core::ScanReport) -> usize {
     report
         .comments
         .iter()
-        .filter(|comment| comment.disposition.is_remove())
+        .filter(|comment| comment.action().removes())
         .count()
 }
 
@@ -185,7 +185,7 @@ fn go_build_and_compiler_directives_are_protected() {
         stripped
             .comments
             .iter()
-            .filter(|comment| !comment.disposition.is_remove())
+            .filter(|comment| !comment.action().removes())
             .count(),
         2,
         "--policy all took a build constraint: {:?}",
@@ -711,7 +711,7 @@ fn html_comments_are_explicit_only_and_embedded_languages_recurse() {
      * could not place is a comment it cannot promise is one. */
     assert!(forced.edits.is_empty());
     assert_eq!(forced.report.comments.len(), 1);
-    assert!(forced.report.comments[0].disposition.is_remove());
+    assert!(forced.report.comments[0].action().removes());
 }
 
 #[test]
@@ -744,8 +744,8 @@ fn sql_dialects_handle_special_quotes_and_protected_hints() {
     assert_eq!(report.comments.len(), 2);
     assert_eq!(report.comments[0].kind, CommentKind::OptimizerHint);
     assert!(matches!(
-        report.comments[0].disposition,
-        Disposition::Keep { .. }
+        report.comments[0].disposition(),
+        &Disposition::Keep { .. }
     ));
 
     let mysql = b"/*!40101 SET NAMES utf8 */ # ordinary\n";
@@ -1743,15 +1743,15 @@ fn a_yaml_trail_comment_a_block_scalar_leans_on_is_kept() {
     let report = scan(source, Language::Yaml, ScanOptions::default());
     assert_eq!(report.comments.len(), 2, "found {:?}", report.comments);
     assert_eq!(
-        report.comments[0].disposition,
-        Disposition::Keep {
+        report.comments[0].disposition(),
+        &Disposition::Keep {
             reason: STRUCTURAL.to_owned()
         },
         "the shallow comment is what ends the body"
     );
     assert_eq!(
-        report.comments[1].disposition,
-        Disposition::Keep {
+        report.comments[1].disposition(),
+        &Disposition::Keep {
             reason: "tool or language directive".to_owned()
         }
     );
@@ -1786,8 +1786,8 @@ fn a_structural_yaml_trail_comment_is_kept_under_every_chomping_indicator() {
             source.extend_from_slice(b"z: 1\n");
             let report = scan(&source, Language::Yaml, ScanOptions::default());
             assert_eq!(
-                report.comments[0].disposition,
-                Disposition::Keep {
+                report.comments[0].disposition(),
+                &Disposition::Keep {
                     reason: STRUCTURAL.to_owned()
                 },
                 "{:?}",
@@ -1829,10 +1829,10 @@ fn a_yaml_trail_comment_shallower_than_the_body_content_is_still_removable() {
     for (source, want) in expected {
         let report = scan(source, Language::Yaml, ScanOptions::default());
         assert!(
-            report.comments[0].disposition.is_remove(),
+            report.comments[0].action().removes(),
             "{:?} kept a comment no value leans on: {:?}",
             String::from_utf8_lossy(source),
-            report.comments[0].disposition
+            report.comments[0].disposition()
         );
         yaml_layouts_write(source, want, ScanOptions::default());
     }
@@ -1873,8 +1873,8 @@ fn a_structural_yaml_trail_keep_outlives_policy_all() {
     let source = b"k: |\n  a\n# shallow\n  # KEEPME\nz: 1\n";
     let report = scan(source, Language::Yaml, options.clone());
     assert_eq!(
-        report.comments[0].disposition,
-        Disposition::Keep {
+        report.comments[0].disposition(),
+        &Disposition::Keep {
             reason: STRUCTURAL.to_owned()
         }
     );
@@ -1889,8 +1889,8 @@ fn a_structural_yaml_trail_keep_follows_a_nested_owner() {
     let source = b"outer:\n  inner: |\n    x\n  # shallow\n    # yamllint disable\nz: 1\n";
     let report = scan(source, Language::Yaml, ScanOptions::default());
     assert_eq!(
-        report.comments[0].disposition,
-        Disposition::Keep {
+        report.comments[0].disposition(),
+        &Disposition::Keep {
             reason: STRUCTURAL.to_owned()
         }
     );
@@ -1911,8 +1911,8 @@ fn a_structural_yaml_trail_keep_survives_crlf_line_endings() {
     let source = b"k: |\r\n  a\r\n# shallow\r\n  # yamllint disable\r\nz: 1\r\n";
     let report = scan(source, Language::Yaml, ScanOptions::default());
     assert_eq!(
-        report.comments[0].disposition,
-        Disposition::Keep {
+        report.comments[0].disposition(),
+        &Disposition::Keep {
             reason: STRUCTURAL.to_owned()
         }
     );
@@ -2362,7 +2362,7 @@ fn a_unicode_rust_lifetime_or_loop_label_opens_no_character_literal() {
             ByteSpan::new(source.len() - b"// remove\n".len(), source.len() - 1),
             "{source:?}"
         );
-        assert!(report.comments[0].disposition.is_remove(), "{source:?}");
+        assert!(report.comments[0].action().removes(), "{source:?}");
     }
 }
 
@@ -2406,7 +2406,7 @@ fn a_character_literal_never_reaches_across_a_line_terminator() {
         );
         assert_eq!(report.comments.len(), 1, "{language:?} {source:?}");
         assert!(
-            report.comments[0].disposition.is_remove(),
+            report.comments[0].action().removes(),
             "{language:?} {source:?}"
         );
     }
@@ -2454,7 +2454,7 @@ fn a_character_literal_never_reaches_across_a_line_terminator() {
     assert!(report.diagnostics.is_empty(), "{:?}", report.diagnostics);
     assert_eq!(report.comments.len(), 1, "{:?}", report.comments);
     assert_eq!(report.comments[0].span, ByteSpan::new(15, 24));
-    assert!(report.comments[0].disposition.is_remove());
+    assert!(report.comments[0].action().removes());
 
     // NOTE: A closing quote further along the same line is still a literal, and
     // NOTE: an ASCII character before it is still a lifetime, so neither is
@@ -2511,7 +2511,7 @@ fn a_byte_order_mark_does_not_hide_the_first_line() {
     let report = scan(python, Language::Python, ScanOptions::default());
     assert_eq!(report.comments.len(), 1);
     assert_eq!(report.comments[0].kind, CommentKind::Shebang);
-    assert!(!report.comments[0].disposition.is_remove());
+    assert!(!report.comments[0].action().removes());
     assert_eq!(
         transform(python, Language::Python, TransformOptions::default()).output,
         python
@@ -2531,7 +2531,7 @@ fn a_byte_order_mark_does_not_hide_the_first_line() {
     let report = scan(lua_comment, Language::Lua, ScanOptions::default());
     assert_eq!(report.comments.len(), 1);
     assert_eq!(report.comments[0].kind, CommentKind::Line);
-    assert!(report.comments[0].disposition.is_remove());
+    assert!(report.comments[0].action().removes());
 
     let shell = b"\xef\xbb\xbf#!/bin/sh\necho 1\n";
     let report = scan(shell, Language::Shell, ScanOptions::default());
@@ -2577,7 +2577,7 @@ fn a_byte_order_mark_does_not_hide_the_first_line() {
             CommentKind::Shebang,
             "{language:?}"
         );
-        assert!(!report.comments[0].disposition.is_remove(), "{language:?}");
+        assert!(!report.comments[0].action().removes(), "{language:?}");
     }
 }
 
@@ -2600,7 +2600,7 @@ fn a_keyword_directive_survives_a_missing_argument() {
             CommentKind::Directive,
             "{source:?}"
         );
-        assert!(!report.comments[0].disposition.is_remove(), "{source:?}");
+        assert!(!report.comments[0].action().removes(), "{source:?}");
     }
     let removed: &[(Language, &[u8])] = &[
         (Language::Toml, b"#:schemata are plural\nkey = 1\n"),
@@ -2609,7 +2609,7 @@ fn a_keyword_directive_survives_a_missing_argument() {
     for (language, source) in removed {
         let report = scan(source, *language, ScanOptions::default());
         assert_eq!(report.comments.len(), 1, "{source:?}");
-        assert!(report.comments[0].disposition.is_remove(), "{source:?}");
+        assert!(report.comments[0].action().removes(), "{source:?}");
     }
 }
 
@@ -2878,7 +2878,7 @@ fn a_php_hash_bang_line_is_a_preamble_only_at_the_first_byte() {
     assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
     assert_eq!(report.comments.len(), 2, "{:?}", report.comments);
     assert_eq!(report.comments[0].kind, CommentKind::Shebang);
-    assert!(!report.comments[0].disposition.is_remove());
+    assert!(!report.comments[0].action().removes());
     assert_eq!(removable(&report), 1);
     assert_eq!(
         transform(source, Language::Php, TransformOptions::default()).output,
@@ -4239,7 +4239,7 @@ fn zig_fmt_directives_are_protected() {
     assert_eq!(report.comments.len(), 4, "{:?}", report.comments);
     for comment in &report.comments[..3] {
         assert_eq!(comment.kind, CommentKind::Directive, "{comment:?}");
-        assert!(!comment.disposition.is_remove(), "{comment:?}");
+        assert!(!comment.action().removes(), "{comment:?}");
     }
     assert_eq!(report.comments[3].kind, CommentKind::Line);
     assert_eq!(removable(&report), 1);
@@ -4636,7 +4636,7 @@ fn r_tool_directives_are_protected() {
     assert_eq!(report.comments.len(), 9, "{:?}", report.comments);
     for comment in &report.comments[..8] {
         assert_eq!(comment.kind, CommentKind::Directive, "{comment:?}");
-        assert!(!comment.disposition.is_remove(), "{comment:?}");
+        assert!(!comment.action().removes(), "{comment:?}");
     }
     assert_eq!(report.comments[8].kind, CommentKind::Line);
     assert_eq!(removable(&report), 1);
@@ -4671,7 +4671,7 @@ fn an_r_shebang_is_a_preamble_only_on_the_first_line() {
     assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
     assert_eq!(report.comments.len(), 2, "{:?}", report.comments);
     assert_eq!(report.comments[0].kind, CommentKind::Shebang);
-    assert!(!report.comments[0].disposition.is_remove());
+    assert!(!report.comments[0].action().removes());
     assert_eq!(report.comments[1].kind, CommentKind::Line);
     assert_eq!(removable(&report), 1);
 
@@ -5115,7 +5115,7 @@ fn dart_tool_and_language_directives_are_protected() {
         assert_eq!(comment.kind, CommentKind::Directive, "{comment:?}");
     }
     for comment in &report.comments[..5] {
-        assert!(!comment.disposition.is_remove(), "{comment:?}");
+        assert!(!comment.action().removes(), "{comment:?}");
     }
     assert_eq!(report.comments[5].kind, CommentKind::Line);
     assert_eq!(removable(&report), 1);
@@ -5157,7 +5157,7 @@ fn dart_script_tag_is_a_shebang_only_at_the_first_byte() {
     assert_eq!(report.comments.len(), 2, "{:?}", report.comments);
     assert_eq!(report.comments[0].kind, CommentKind::Shebang);
     assert_eq!(report.comments[0].span, ByteSpan::new(0, 19));
-    assert!(!report.comments[0].disposition.is_remove());
+    assert!(!report.comments[0].action().removes());
     assert_eq!(removable(&report), 1);
 
     let later = b"var a = 1;\n#!/usr/bin/env dart\n// remove\n";
@@ -5688,8 +5688,8 @@ fn swift_shebang_is_a_preamble_only_on_the_first_line() {
     assert_eq!(first.comments.len(), 2, "{:?}", first.comments);
     assert_eq!(first.comments[0].kind, CommentKind::Shebang);
     assert!(matches!(
-        first.comments[0].disposition,
-        Disposition::Keep { .. }
+        first.comments[0].disposition(),
+        &Disposition::Keep { .. }
     ));
     assert_eq!(removable(&first), 1);
 
@@ -6107,7 +6107,7 @@ fn csharp_shebang_is_a_preamble_only_on_the_first_line() {
     );
     assert_eq!(first.comments.len(), 2, "{:?}", first.comments);
     assert_eq!(first.comments[0].kind, CommentKind::Shebang);
-    assert!(!first.comments[0].disposition.is_remove());
+    assert!(!first.comments[0].action().removes());
     assert_eq!(removable(&first), 1);
 
     let later = scan(

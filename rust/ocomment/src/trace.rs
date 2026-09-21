@@ -292,7 +292,7 @@ pub fn trace_decisions(
                     line,
                     column,
                     kind: comment.kind.as_str(),
-                    action: if comment.disposition.is_remove() {
+                    action: if comment.action().removes() {
                         "remove"
                     } else {
                         "keep"
@@ -324,7 +324,7 @@ pub fn trace_decisions(
                     .report
                     .comments
                     .iter()
-                    .filter(|comment| comment.disposition.is_remove())
+                    .filter(|comment| comment.action().removes())
                     .count(),
                 changed: file.result.changed(),
                 valid: file.result.report.valid,

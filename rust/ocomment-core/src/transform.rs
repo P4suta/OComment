@@ -1,6 +1,6 @@
 use crate::{
-    ByteSpan, Comment, CommentKind, Edit, ExternalSpanError, Language, Layout, PreparedScanner,
-    ScanReport, SourceMap, TransformOptions, TransformPlan, TransformResult,
+    Action, ByteSpan, Comment, CommentKind, Edit, ExternalSpanError, Language, Layout,
+    PreparedScanner, ScanReport, SourceMap, TransformOptions, TransformPlan, TransformResult,
     scanner::{
         disposition, keep_yaml_structural_trails, lines_a_removal_must_swallow, scan,
         unicode_line_terminator_width,
@@ -184,17 +184,16 @@ fn external_report(
             return Err(ExternalSpanError::OrderOrOverlap { index });
         }
         cursor = span.end;
-        comments.push(Comment {
+        comments.push(Comment::new(
             span,
             kind,
-            disposition: disposition(
+            disposition(
                 kind,
                 prepared.options(),
                 &source[span.start..span.end],
                 &prepared.patterns,
             ),
-            shape: None,
-        });
+        ));
     }
     /* NOTE: The one verdict a comment's own bytes cannot reach, so it is
      * applied to the hand-off as a built-in scan applies it: a YAML block
@@ -293,6 +292,32 @@ impl TransformPlan {
     }
 }
 
+/// The edit a rewritten comment plans: its own span, and the bytes the style
+/// rules make of it.
+///
+/// Not a layout question, which is why all three layouts build it the same
+/// way. A layout decides what is left *where a comment used to be*, and a
+/// rewritten comment has not been anywhere: it is still there, spelled
+/// differently.
+///
+/// [`Layout::Columns`] is the one layout this costs something. Its promise is
+/// that every column after an edit keeps its number, and a replacement of a
+/// different width cannot keep it. The promise is kept for removals, which is
+/// what the layout exists for; a caller that has asked for both is asking for
+/// two things that contradict each other, and the CLI refuses the pair rather
+/// than picking one silently.
+///
+/// The bytes are the verdict's own. Nothing is recomputed here and there is
+/// nothing to recompute it from: the rules that decided are not in scope, and
+/// that is the point — a planner holding the rules is a planner that can plan
+/// with different ones than the scan used.
+fn rewrite_edit(comment: &Comment) -> Option<Edit> {
+    Some(Edit {
+        span: comment.span,
+        replacement: comment.disposition().replacement()?.to_vec(),
+    })
+}
+
 /// Apply sorted, non-overlapping half-open edits.
 ///
 /// The bytes outside the edited spans are copied through untouched, which is
@@ -354,8 +379,13 @@ fn line_edits(source: &[u8], comments: &[Comment], swallow: &[Option<ByteSpan>])
     let mut edits = Vec::new();
     let mut floor = 0usize;
     for (index, comment) in comments.iter().enumerate() {
-        if !comment.disposition.is_remove() {
-            continue;
+        match comment.disposition().action() {
+            Action::Keep => continue,
+            Action::Rewrite => {
+                edits.extend(rewrite_edit(comment));
+                continue;
+            }
+            Action::Remove => {}
         }
         let edit = match swallow.get(index).copied().flatten() {
             Some(line) => Edit {
@@ -405,8 +435,13 @@ fn column_edits(source: &[u8], comments: &[Comment], swallow: &[Option<ByteSpan>
     let mut cursor = 0usize;
     let mut column = 0usize;
     for (index, comment) in comments.iter().enumerate() {
-        if !comment.disposition.is_remove() {
-            continue;
+        match comment.disposition().action() {
+            Action::Keep => continue,
+            Action::Rewrite => {
+                edits.extend(rewrite_edit(comment));
+                continue;
+            }
+            Action::Remove => {}
         }
         /* NOTE: A swallowed line takes its terminator with it, so what follows
          * starts a line of its own in the output as it did in the source and
@@ -464,8 +499,13 @@ fn compact_edits(source: &[u8], comments: &[Comment], swallow: &[Option<ByteSpan
     let mut line_start = 0usize;
     let mut floor = 0usize;
     for (index, comment) in comments.iter().enumerate() {
-        if !comment.disposition.is_remove() {
-            continue;
+        match comment.disposition().action() {
+            Action::Keep => continue,
+            Action::Rewrite => {
+                edits.extend(rewrite_edit(comment));
+                continue;
+            }
+            Action::Remove => {}
         }
         if let Some(line) = swallow.get(index).copied().flatten() {
             let span = ByteSpan::new(line.start.max(floor), line.end.max(floor));

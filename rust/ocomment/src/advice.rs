@@ -277,7 +277,7 @@ fn file_items(file: &ProcessedFile, policy: Policy) -> Vec<(Decision, Item)> {
     let index = crate::output::LineIndex::new(&file.source);
     let mut runs: Vec<Run> = Vec::new();
     for comment in &file.result.report.comments {
-        if !comment.disposition.is_remove() {
+        if !comment.action().removes() {
             runs.push(Run::BREAK);
             continue;
         }
@@ -490,7 +490,7 @@ fn place(lines: &[String], index: &crate::output::LineIndex, comment: &Comment) 
         last,
         column,
         tag,
-        shape: comment.shape.clone(),
+        shape: comment.shape().cloned(),
         beside,
         kind: comment.kind,
     })

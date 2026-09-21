@@ -91,6 +91,9 @@ macro_rules! value_enum_wrapper {
  * as "the header at the top of the file", which is exactly where a licence
  * notice sits, while the code means the shebang and the encoding line. */
 value_enum_wrapper!(PolicyArg, Policy, |value| match value {
+    Policy::None =>
+        "Remove nothing. Every comment is kept, which is the mode for a repository that \
+         wants the style rules and not the removals",
     Policy::Conservative =>
         "Remove ordinary comments; keep documentation, licence notices, \
          directives, shebangs and encoding lines (was `legal`)",

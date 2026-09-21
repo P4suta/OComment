@@ -37,7 +37,7 @@
 //! let report = scan(b"let x = 1; // note\n", Language::Rust, ScanOptions::default());
 //! assert_eq!(report.comments.len(), 1);
 //! assert_eq!(report.comments[0].kind, CommentKind::Line);
-//! assert!(report.comments[0].disposition.is_remove());
+//! assert!(report.comments[0].action().removes());
 //! ```
 //!
 //! ```
@@ -162,6 +162,7 @@ mod detect;
 mod incremental;
 mod profile;
 mod scanner;
+mod style;
 mod transform;
 mod types;
 
@@ -178,5 +179,6 @@ pub use scanner::{
     DispositionPatterns, PreparedScanner, comment_text, explain_comment, explain_comment_with,
     explain_disposition, explain_disposition_with, scan,
 };
+pub use style::{Markers, restyle};
 pub use transform::{apply_edits, plan_report, transform, transform_plan, transform_spans};
 pub use types::*;

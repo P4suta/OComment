@@ -160,6 +160,70 @@ and silences nothing a line above it. The protections no policy reaches — a
 shebang, an encoding line, a directive the language or its build reads — are
 out for the reason they are always out.
 
+## How a comment that survives is written
+
+The rules above decide what stays.
+`[style]` decides how what stays reads, and it is a table of its own for that reason: a comment that fails one of the rules above is *removed*, and a comment that fails one of these is *rewritten*.
+One table whose entries have two different consequences is a table nobody can add to safely.
+
+```toml
+[style]
+space_after_marker = true
+trailing_whitespace = false
+```
+
+Every rule here is off unless you turn it on.
+A formatter that starts reformatting a repository because it was installed is a formatter somebody uninstalls.
+
+- **`space_after_marker = true`** rewrites `//text` as `// text`.
+  It says nothing about a comment that already has a space, and nothing about a marker with no text after it: a bare `//` is a blank line in a paragraph rather than a comment missing its space.
+  It is deliberately timid about what counts as text — it acts only when the first character is neither white space nor ASCII punctuation — so a ruler like `////////` or `#####` or `//------` comes back unchanged.
+- **`trailing_whitespace = false`** strips white space from the end of every line a comment covers, the last one included.
+  A line comment's span ends where its text ends, so the spaces `// note   ` trails are inside it.
+  What a *removal* leaves behind is the layout's business and is not touched here.
+
+An `[[overrides]]` entry may carry its own `[style]`, which replaces the global one whole rather than merging into it, for the reason `[policy.allow]` does.
+
+### What the style rules reach
+
+Almost the mirror of the rules above, and the one place they disagree is the point.
+
+| Kind | `[policy.allow]` | `[style]` |
+| --- | --- | --- |
+| `line`, `block`, `html-comment` | yes | yes |
+| `doc-line`, `doc-block` | no | **yes** |
+| `license` | no | no |
+| `directive`, `shebang`, `encoding`, `load-bearing`, `optimizer-hint`, `version-comment` | no | no |
+
+A documentation comment is exempt from the length rule *because* it is documentation — it is as long as its content requires.
+That same fact is why it is the first thing the style rules should reach: it is the prose in a repository that most readers actually read, and it is the prose nobody has a tool for.
+
+A licence notice is out, and out more firmly than anything else.
+It is a legal text quoted verbatim, and verbatim is the whole of its value; a formatter that tidied one would be changing a document the project does not own.
+The directives and the preamble are out for the reason they are always out: a tool reads them, a tool is not a reader, and rewriting bytes something parses is how a tidy-up changes what a build does.
+
+A comment whose bytes are not valid UTF-8 is never rewritten.
+The engine does not decode a whole source, and a boundary guessed at inside bytes it could not read is how a formatter corrupts a file it was asked to tidy.
+
+### Removing nothing
+
+`mode = "none"` is the policy for a repository that wants the style rules and not the removals.
+
+```toml
+[policy]
+mode = "none"
+
+[style]
+space_after_marker = true
+trailing_whitespace = false
+```
+
+It sits at the weak end of the scale the other three already form, and it answers before the kind table rather than inside it, so every kind is kept for the same reason.
+Saying this used to mean listing every comment kind under `keep_kind`, which is a setting that has to be revisited each time a kind is added: it said "these twelve kinds" when what it meant was "all of them".
+
+It is the policy default and not the first word.
+`remove_kind` and `remove_regex` still name comments outright, and a comment they name still goes.
+
 ### Taking stock of the convention
 
 ```console
@@ -332,8 +396,15 @@ include_generated = true      # NOTE: scan them anyway
 
 ## Declarative language profiles
 
-Profiles cover unambiguous delimiter-based syntaxes. Ambiguous or empty
-definitions are rejected while loading configuration.
+Profiles cover delimiter-based syntaxes. Empty definitions are rejected while
+loading configuration, and so are two delimiters spelled the same way — nothing
+could choose between them.
+
+One comment token being the *start* of another is not ambiguous and is not
+refused. It is how a language spells a documentation comment — `//` beside
+`///` beside `////` — and the scan takes the longest token that matches, so the
+order the delimiters are written in carries no meaning and an author cannot get
+it wrong.
 
 ```toml
 [profiles.lisp]

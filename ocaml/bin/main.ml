@@ -34,7 +34,15 @@ let base64_encode bytes =
   in loop 0; Buffer.contents output
 
 let span_json (span : byte_span) = `Assoc ["start", `Int span.start; "end", `Int span.finish]
-let disposition_json = function Remove -> `Assoc ["action", `String "remove"] | Keep reason -> `Assoc ["action", `String "keep"; "reason", `String reason]
+(* NOTE: The replacement is rendered as a string, exactly as the Rust field
+   is: a rewrite only ever reaches a comment whose bytes decode, so there is
+   nothing lossy about it on either side. *)
+let disposition_json = function
+  | Remove -> `Assoc ["action", `String "remove"]
+  | Keep reason -> `Assoc ["action", `String "keep"; "reason", `String reason]
+  | Rewrite (rule, replacement) ->
+    `Assoc ["action", `String "rewrite"; "rule", `String (style_rule_name rule);
+            "replacement", `String (Bytes.to_string replacement)]
 
 (** Absent when no shape rule settled the comment, exactly as the Rust
    field is skipped when it is None, so the two encodings stay byte-comparable. *)
@@ -126,6 +134,7 @@ let profile_of_json json =
     ({ line_start = member_string "start" item;
        requires_boundary = bool_or false "requires_boundary" item;
        requires_line_start = bool_or false "requires_line_start" item;
+       forbidden_after = string_or "" "forbidden_after" item;
        line_kind = comment_kind_of_string (string_or "line" "kind" item) } : line_delimiter)) in
   let block_comments = list_or_empty "block_comments" json |> List.map (fun item ->
     ({ block_start = member_string "start" item;
@@ -144,7 +153,8 @@ let profile_of_json json =
          | `String "load-bearing" -> ProfileLoadBearing
          | _ -> Tool) }
       : protected_pattern)) in
-  ({ name = member_string "name" json; extensions = strings "extensions" json;
+  ({ doc_continuation = bool_or false "doc_continuation" json;
+     name = member_string "name" json; extensions = strings "extensions" json;
      line_comments; block_comments; strings = string_delimiters; protected_patterns }
     : declarative_profile)
 
@@ -152,6 +162,7 @@ let options json =
   let policy = match Yojson.Safe.Util.member "policy" json with
     | `String "all" -> All
     | `String ("standard" | "safe") -> (Standard : policy)
+    | `String "none" -> RemoveNothing
     | _ -> Conservative in
   let layout = match Yojson.Safe.Util.member "layout" json with `String "columns" -> Columns | `String "compact" -> Compact | _ -> Lines in
   let dialect = match Yojson.Safe.Util.member "dialect" json with `String value -> dialect_of_string value | _ -> Standard in
@@ -180,6 +191,14 @@ let options json =
               | `Assoc entries -> List.map fst entries
               | _ -> []) }
         | _ -> { tags = []; max_lines = None; trailing = None; expiring_tags = [] });
+      (* NOTE: The other axis, read from the same JSON the Rust driver reads. *)
+      style = (match Yojson.Safe.Util.member "style" json with
+        | `Assoc _ as style ->
+          { space_after_marker = (match Yojson.Safe.Util.member "space_after_marker" style with
+              | `Bool value -> Some value | _ -> None);
+            trailing_whitespace = (match Yojson.Safe.Util.member "trailing_whitespace" style with
+              | `Bool value -> Some value | _ -> None) }
+        | _ -> { space_after_marker = None; trailing_whitespace = None });
       (* NOTE: Read from the same JSON the Rust driver reads; `contains` is the
          field name the shared schema uses. *)
       protected = list_or_empty "protected" json |> List.map (fun item ->

@@ -272,9 +272,10 @@ fn compare(outcome: &Outcome, expect: &Value) -> Option<String> {
             ));
         }
         for (found, wanted) in report.comments.iter().zip(comments) {
-            let action = match found.disposition {
+            let action = match found.disposition() {
                 Disposition::Remove => "remove",
                 Disposition::Keep { .. } => "keep",
+                Disposition::Rewrite { .. } => "rewrite",
             };
             let start = wanted["start"].as_u64().unwrap_or_default() as usize;
             let end = wanted["end"].as_u64().unwrap_or_default() as usize;

@@ -2,7 +2,7 @@ use anyhow::{Context, Result, anyhow, bail, ensure};
 use globset::{Glob, GlobMatcher};
 use ocomment_core::{
     AllowRules, CommentKind, DeclarativeProfile, Dialect, DispositionExplanation, Language, Layout,
-    Policy, ProtectedPattern, ScanOptions, TransformOptions, validate_profile,
+    Policy, ProtectedPattern, ScanOptions, StyleRules, TransformOptions, validate_profile,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -19,6 +19,15 @@ pub struct Config {
     pub version: Option<u32>,
     pub files: FilesConfig,
     pub policy: PolicyConfig,
+    /// How the comments that survive are written.
+    ///
+    /// A table of its own rather than a corner of `[policy]`, because the
+    /// policy decides what stays and this decides how what stays reads. A
+    /// project that removes nothing still has an opinion about the second, and
+    /// under `[policy]` it would have had to say so inside a table whose every
+    /// other entry is about removal.
+    #[serde(default)]
+    pub style: StyleRules,
     pub git: GitConfig,
     pub ratchet: RatchetConfig,
     pub lsp: LspConfig,
@@ -180,6 +189,9 @@ pub struct PathOverride {
     /// not one: a table that merged would let a subtree inherit a length limit
     /// it never asked for and could not turn off.
     pub allow: Option<AllowRules>,
+    /// A different `[style]` for this part of the tree, replacing the global
+    /// one whole rather than merging into it, for the reason `allow` does.
+    pub style: Option<StyleRules>,
 }
 
 /// Where one effective setting came from.
@@ -227,7 +239,7 @@ impl Source {
 
 /// The `[policy]` keys a trace can attribute to a file, spelled as the file
 /// spells them.
-const POLICY_KEYS: [&str; 7] = [
+const POLICY_KEYS: [&str; 8] = [
     "mode",
     "layout",
     "keep_kind",
@@ -235,15 +247,20 @@ const POLICY_KEYS: [&str; 7] = [
     "keep_regex",
     "remove_regex",
     "allow",
+    "style",
 ];
 
 /// The table a `[policy]` key is written in, which is the table an explanation
-/// sends a reader to. Every key but one is written in `[policy]` itself.
+/// sends a reader to. Most are written in `[policy]` itself.
+///
+/// `style` is not under `[policy]` at all, and the answer here is what sends a
+/// reader to the table they would actually edit rather than to the one the
+/// trace happens to file it under.
 fn policy_table(key: &str) -> &'static str {
-    if key == "allow" {
-        "[policy.allow]"
-    } else {
-        "[policy]"
+    match key {
+        "allow" => "[policy.allow]",
+        "style" => "[style]",
+        _ => "[policy]",
     }
 }
 
@@ -284,6 +301,8 @@ pub struct PolicyTrace {
     /// Which layer last set `[policy.allow]`. The table is replaced whole
     /// rather than merged entry by entry, so one source covers all of it.
     pub allow: Source,
+    /// Which layer last set `[style]`, for the reason `allow` has one.
+    pub style: Source,
     origins: PolicyOrigins,
 }
 
@@ -323,6 +342,7 @@ impl PolicyTrace {
              * took the comment out or protected it. */
             DispositionExplanation::RemovedByPolicy { .. }
             | DispositionExplanation::RemovedByDefault { .. }
+            | DispositionExplanation::KeptByPolicy { .. }
             | DispositionExplanation::KeptDocumentation { .. }
             | DispositionExplanation::KeptLicense { .. } => (&self.policy, "mode"),
             /* NOTE: The three rules that are about a comment's shape rather
@@ -331,6 +351,8 @@ impl PolicyTrace {
             | DispositionExplanation::RemovedAsTrailing
             | DispositionExplanation::RemovedAsExpired { .. }
             | DispositionExplanation::RemovedByLength { .. } => (&self.allow, "allow"),
+            // NOTE: The other axis, and the other table.
+            DispositionExplanation::RewrittenByStyle { .. } => (&self.style, "style"),
             // NOTE: A built-in rule, decided by no setting at all.
             DispositionExplanation::ProtectedPreamble
             | DispositionExplanation::KeptLoadBearing { .. }
@@ -559,6 +581,7 @@ impl ResolvedConfig {
         let mut keep_regex = self.config.policy.keep_regex.clone();
         let mut remove_regex = self.config.policy.remove_regex.clone();
         let mut allow = self.config.policy.allow.clone();
+        let mut style = self.config.style.clone();
 
         if let Some(language_config) = self.config.languages.get(chosen_language.as_str()) {
             if let Some(value) = language_config.dialect {
@@ -597,6 +620,9 @@ impl ResolvedConfig {
                 if let Some(value) = &override_.value.allow {
                     allow = value.clone();
                 }
+                if let Some(value) = &override_.value.style {
+                    style = value.clone();
+                }
             }
         }
         if self.cli_overrides.policy {
@@ -620,6 +646,7 @@ impl ResolvedConfig {
             keep_regex,
             remove_regex,
             allow,
+            style,
             protected: self.config.policy.protected.clone(),
         };
         Ok((chosen_language, TransformOptions { scan, layout }))
@@ -711,6 +738,8 @@ impl ResolvedConfig {
             /* NOTE: No flag sets an allow rule, so the command line never wins
              * this one and the file the merge left standing is the answer. */
             allow: Source::Global,
+            // NOTE: No flag sets a style rule either, for now.
+            style: Source::Global,
             origins: self.origins.clone(),
         };
         /* NOTE: A single-valued setting is not merged but replaced, so the last layer

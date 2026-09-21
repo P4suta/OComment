@@ -162,7 +162,7 @@ fn offers(file: &ProcessedFile) -> Vec<(&Comment, &Edit)> {
         .report
         .comments
         .iter()
-        .filter(|comment| comment.disposition.is_remove())
+        .filter(|comment| comment.disposition().action().changes_bytes())
         .zip(file.result.edits.iter())
         .collect()
 }

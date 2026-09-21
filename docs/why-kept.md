@@ -88,20 +88,20 @@ checked against, and this is that table. `--policy` and `[policy] mode`
 choose a column, and the settings in the next sections move a single
 comment out of the column its kind lands in.
 
-| Comment kind | `conservative` | `standard` | `all` |
-| --- | --- | --- | --- |
-| `line` | removed | removed | removed |
-| `block` | removed | removed | removed |
-| `doc-line` | removed | removed | removed |
-| `doc-block` | removed | removed | removed |
-| `license` | kept | removed | removed |
-| `directive` | kept | kept | removed |
-| `load-bearing` | kept | kept | kept unless `--force-protected` |
-| `html-comment` | kept | kept | removed |
-| `shebang` | kept | kept | kept unless `--force-protected` |
-| `encoding` | kept | kept | kept unless `--force-protected` |
-| `optimizer-hint` | kept | kept | kept unless `--force-protected` |
-| `version-comment` | kept | kept | kept unless `--force-protected` |
+| Comment kind | `none` | `conservative` | `standard` | `all` |
+| --- | --- | --- | --- | --- |
+| `line` | kept | removed | removed | removed |
+| `block` | kept | removed | removed | removed |
+| `doc-line` | kept | removed | removed | removed |
+| `doc-block` | kept | removed | removed | removed |
+| `license` | kept | kept | removed | removed |
+| `directive` | kept | kept | kept | removed |
+| `load-bearing` | kept | kept | kept | kept unless `--force-protected` |
+| `html-comment` | kept | kept | kept | removed |
+| `shebang` | kept | kept | kept | kept unless `--force-protected` |
+| `encoding` | kept | kept | kept | kept unless `--force-protected` |
+| `optimizer-hint` | kept | kept | kept | kept unless `--force-protected` |
+| `version-comment` | kept | kept | kept | kept unless `--force-protected` |
 
 ## Markers that survive a removal
 

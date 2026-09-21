@@ -185,7 +185,7 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
             if starts_added {
                 selected_comments.push(comment.clone());
             } else if intersects
-                && comment.disposition.is_remove()
+                && comment.disposition().action().changes_bytes()
                 && matches!(comment.kind, CommentKind::Block | CommentKind::DocBlock)
             {
                 conflict = Some(comment.span);

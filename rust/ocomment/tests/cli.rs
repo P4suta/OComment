@@ -2533,7 +2533,7 @@ fn check_help_groups_options_and_lists_possible_values() {
     assert_eq!(short.status.code(), Some(0));
     let short = String::from_utf8(short.stdout).unwrap();
     assert!(
-        short.contains("[possible values: conservative, standard, all]"),
+        short.contains("[possible values: none, conservative, standard, all]"),
         "`check -h` lacks the policy values:\n{short}"
     );
     assert!(short.contains("Policy:"), "no Policy heading:\n{short}");
@@ -2567,7 +2567,7 @@ fn unknown_policy_value_reports_the_possible_values() {
     let error = String::from_utf8_lossy(&output.stderr);
     assert!(error.contains("invalid value 'foo'"), "{error}");
     assert!(
-        error.contains("[possible values: conservative, standard, all]"),
+        error.contains("[possible values: none, conservative, standard, all]"),
         "{error}"
     );
 }

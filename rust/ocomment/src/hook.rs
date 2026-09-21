@@ -273,7 +273,7 @@ fn judge(
             && report
                 .comments
                 .iter()
-                .any(|comment| comment.disposition.is_remove());
+                .any(|comment| comment.disposition().action().changes_bytes());
         let (_, _, trace) = resolved.for_path_traced(&file.path, file.language, file.dialect)?;
         explanations.insert(
             file.path.clone(),

@@ -99,8 +99,8 @@ pub fn apply(
         .comments
         .iter()
         .enumerate()
-        .filter(|(_, comment)| match &comment.shape {
-            Some(ShapeRule::Tagged { tag }) => rules.expiry.contains_key(tag),
+        .filter(|(_, comment)| match comment.shape() {
+            Some(ShapeRule::Tagged { tag }) => rules.expiry.contains_key(tag.as_str()),
             _ => false,
         })
         .map(|(index, _)| index)
@@ -117,10 +117,10 @@ pub fn apply(
     let lines = LineIndex::new(source);
     for index in candidates {
         let comment = &mut report.comments[index];
-        let Some(ShapeRule::Tagged { tag }) = &comment.shape else {
+        let Some(ShapeRule::Tagged { tag }) = comment.shape() else {
             continue;
         };
-        let limit = rules.expiry[tag];
+        let limit = rules.expiry[tag.as_str()];
         let Some(age) = ages.get(&lines.line_of(comment.span.start)).copied() else {
             continue;
         };
@@ -129,9 +129,10 @@ pub fn apply(
         }
         let tag = tag.clone();
         *overdue.by_tag.entry(tag.clone()).or_default() += 1;
-        let rule = ShapeRule::Expired { tag, age, limit };
-        comment.disposition = rule.disposition();
-        comment.shape = Some(rule);
+        /* NOTE: One call, both halves. The verdict and the rule used to be
+         * written here as two statements, which is two chances to write a
+         * pair that disagree. */
+        comment.decide_by_shape(ShapeRule::Expired { tag, age, limit });
     }
     Ok(overdue)
 }

@@ -42,15 +42,14 @@ use thiserror::Error;
 ///     extensions: vec!["lisp".into()],
 ///     line_comments: vec![LineDelimiter {
 ///         start: ";;".into(),
-///         requires_boundary: false,
-///         requires_line_start: false,
 ///         kind: CommentKind::Line,
+///         ..Default::default()
 ///     }],
 ///     strings: vec![StringDelimiter {
 ///         start: "\"".into(),
 ///         end: "\"".into(),
 ///         escape: Some("\\".into()),
-///         multiline: false,
+///         ..Default::default()
 ///     }],
 ///     ..Default::default()
 /// };
@@ -93,10 +92,37 @@ pub struct DeclarativeProfile {
     /// Substrings that turn a comment into a kept directive.
     #[serde(default)]
     pub protected_patterns: Vec<ProtectedPattern>,
+    /// Whether an ordinary line comment directly below a documentation one
+    /// continues it.
+    ///
+    /// Some languages mark only the *first* line of a documentation comment
+    /// and continue it with the ordinary opener. Haddock is written
+    ///
+    /// ```text
+    /// -- | The first line is marked.
+    /// --   The rest is not.
+    /// ```
+    ///
+    /// and both lines are the documentation. Read one token at a time the
+    /// second is a remark, and a policy that removes remarks would take half a
+    /// published page away — which is the same loss removing a doc comment
+    /// outright would be, arrived at by a route nothing was watching.
+    ///
+    /// A run is what continues: adjacent comment lines with no code and no
+    /// blank line between them, which is what
+    /// [`AllowRules::max_lines`](crate::AllowRules::max_lines) already
+    /// measures. A blank line ends it, because that is how a writer says the
+    /// next remark is a separate remark.
+    ///
+    /// Off by default. A language whose documentation comment marks every line
+    /// — Rust's `///`, Gleam's — must leave it off: there a `//` under a `///`
+    /// is a remark the author wrote deliberately.
+    #[serde(default)]
+    pub doc_continuation: bool,
 }
 
 /// A token that opens a comment running to the end of the line.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LineDelimiter {
     /// The opening token.
@@ -117,13 +143,31 @@ pub struct LineDelimiter {
     /// leading whitespace in such a file is part of the pattern too.
     #[serde(default)]
     pub requires_line_start: bool,
+    /// Characters that, coming directly after the token, mean it does not open
+    /// a comment after all.
+    ///
+    /// The mirror of [`Self::requires_boundary`], which looks at the byte
+    /// before. Several languages build operators out of the same characters
+    /// their comment opens with, and the rule that tells the two apart is what
+    /// comes next: in Haskell `-->` and `<--` are operators while `-- x` is a
+    /// comment, and the clause that says so is Haskell 2010 §2.2.
+    ///
+    /// The token's final character may repeat before the test, because that is
+    /// how such a language spells the token: Haskell's opener is a *run* of
+    /// dashes, so `---x` is a comment and `---->` is an operator. A profile
+    /// that left this empty is one where the question does not arise, and
+    /// nothing repeats.
+    ///
+    /// Compared by byte, so only ASCII characters belong here.
+    #[serde(default)]
+    pub forbidden_after: String,
     /// The kind to record, which is what the policy then judges.
     #[serde(default)]
     pub kind: CommentKind,
 }
 
 /// A token pair that opens and closes a delimited comment.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BlockDelimiter {
     /// The opening token.
@@ -140,7 +184,7 @@ pub struct BlockDelimiter {
 }
 
 /// A string form the scan skips over, so a comment token inside one is text.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StringDelimiter {
     /// The opening token.
@@ -300,7 +344,14 @@ pub fn validate_profile(profile: &DeclarativeProfile) -> Result<(), ProfileError
     }
     for (index, left) in comments.iter().enumerate() {
         for right in comments.iter().skip(index + 1) {
-            if left.starts_with(*right) || right.starts_with(*left) {
+            /* NOTE: Equal, not "a prefix of". One comment token being the
+             * start of another is how a language spells a documentation
+             * comment -- Gleam's `//`, `///` and `////`, Haskell's `--` and
+             * `-- |` -- and the scan resolves it by taking the longest token
+             * that matches, so the relationship carries no ambiguity. Two
+             * delimiters spelled the same way do: nothing could choose between
+             * them, and they would differ only in the kind they record. */
+            if left == right {
                 return Err(ProfileError::AmbiguousDelimiter(
                     (*left).into(),
                     (*right).into(),
@@ -388,6 +439,188 @@ impl PreparedScanner {
     }
 }
 
+/// Whether what follows the token — past any repetition of its final
+/// character — leaves it opening a comment.
+///
+/// See [`LineDelimiter::forbidden_after`]. A delimiter that names no such
+/// characters answers yes without reading anything, which is every profile
+/// written before the field existed.
+fn opens_past_its_run(source: &[u8], index: usize, delimiter: &LineDelimiter) -> bool {
+    if delimiter.forbidden_after.is_empty() {
+        return true;
+    }
+    let mut cursor = index + delimiter.start.len();
+    if let Some(last) = delimiter.start.as_bytes().last() {
+        while source.get(cursor) == Some(last) {
+            cursor += 1;
+        }
+    }
+    /* NOTE: The end of the source, and the end of the line, both open a
+     * comment: an empty one is still one, and a token with nothing after it is
+     * not a token somebody built an operator out of. */
+    source
+        .get(cursor)
+        .is_none_or(|byte| !delimiter.forbidden_after.as_bytes().contains(byte))
+}
+
+/// Every token this profile opens a comment with.
+fn profile_openers(profile: &DeclarativeProfile) -> Vec<&[u8]> {
+    profile
+        .line_comments
+        .iter()
+        .map(|delimiter| delimiter.start.as_bytes())
+        .chain(
+            profile
+                .block_comments
+                .iter()
+                .map(|delimiter| delimiter.start.as_bytes()),
+        )
+        .collect()
+}
+
+/// Every token this profile closes one with. A line comment closes at the end
+/// of its line and contributes none.
+fn profile_closers(profile: &DeclarativeProfile) -> Vec<&[u8]> {
+    profile
+        .block_comments
+        .iter()
+        .map(|delimiter| delimiter.end.as_bytes())
+        .collect()
+}
+
+/// Carry a documentation kind down the run it opens.
+///
+/// See [`DeclarativeProfile::doc_continuation`]. Applied before any policy or
+/// rule reads a kind, so every later question — what the policy keeps, what
+/// the shape rules skip, what the style rules reach — is asked about the kind
+/// the language actually gives the line.
+fn continue_documentation(
+    source: &[u8],
+    comments: &mut [Comment],
+    profile: &DeclarativeProfile,
+    options: &ScanOptions,
+    patterns: &DispositionPatterns,
+) {
+    for (start, end) in crate::scanner::comment_runs(source, comments) {
+        let mut carrying = false;
+        for comment in &mut comments[start..end] {
+            match comment.kind {
+                CommentKind::DocLine => carrying = true,
+                CommentKind::Line if carrying => {
+                    /* NOTE: Rebuilt rather than relabelled. The verdict was
+                     * read off the kind, so a kind written over the top of it
+                     * would leave a comment whose disposition answers for the
+                     * kind it used to be. There is one place that knows how to
+                     * make a comment under a profile, and this is it. */
+                    *comment = profile_comment(
+                        source,
+                        comment.span.start,
+                        comment.span.end,
+                        CommentKind::DocLine,
+                        profile,
+                        options,
+                        patterns,
+                    );
+                }
+                /* NOTE: Anything else ends the carry rather than passing
+                 * through it. A licence notice or a directive between two
+                 * documentation lines is not documentation, and the line under
+                 * it is not a continuation of the one above it either. A plain
+                 * line comment reaches here only when nothing was being
+                 * carried, where ending the carry is what has already
+                 * happened. */
+                CommentKind::Line
+                | CommentKind::Block
+                | CommentKind::DocBlock
+                | CommentKind::Directive
+                | CommentKind::License
+                | CommentKind::HtmlComment
+                | CommentKind::Shebang
+                | CommentKind::Encoding
+                | CommentKind::OptimizerHint
+                | CommentKind::VersionComment
+                | CommentKind::LoadBearing => carrying = false,
+            }
+        }
+    }
+}
+
+/// Whether a block comment that closes with `end` opens again at `index`.
+///
+/// Every declared opener that pairs with the same closer counts, because they
+/// all have to be got past before that closer ends anything.
+fn nested_opener(source: &[u8], index: usize, profile: &DeclarativeProfile, end: &str) -> bool {
+    nested_opener_len(source, index, profile, end) > 0
+}
+
+/// How long that opener is, or zero when none opens here. The longest wins,
+/// for the reason [`opener_at`] gives.
+fn nested_opener_len(
+    source: &[u8],
+    index: usize,
+    profile: &DeclarativeProfile,
+    end: &str,
+) -> usize {
+    profile
+        .block_comments
+        .iter()
+        .filter(|other| other.end == end && starts(source, index, other.start.as_bytes()))
+        .map(|other| other.start.len())
+        .max()
+        .unwrap_or(0)
+}
+
+/// Which comment delimiter opens at `index`, and what kind of one it is.
+enum Opener<'a> {
+    Line(&'a LineDelimiter),
+    Block(&'a BlockDelimiter),
+}
+
+/// The comment delimiter that opens at `index`, taking the longest token that
+/// matches.
+///
+/// Longest rather than first-declared, which is the whole of what lets a
+/// profile describe a language that spells its documentation comment as a
+/// longer form of its ordinary one. First-declared would work too, for an
+/// author who happened to list `////` above `//`; it would silently do
+/// something else for one who did not, and an order that has to be right is a
+/// way to be wrong.
+///
+/// A tie is impossible rather than broken: two matching tokens of the same
+/// length would have to be the same token, and [`validate_profile`] refuses a
+/// profile that declares one twice.
+fn opener_at<'a>(
+    source: &[u8],
+    index: usize,
+    profile: &'a DeclarativeProfile,
+) -> Option<Opener<'a>> {
+    let mut best: Option<(usize, Opener<'a>)> = None;
+    let mut consider = |length: usize, opener: Opener<'a>| {
+        if best.as_ref().is_none_or(|(best, _)| length > *best) {
+            best = Some((length, opener));
+        }
+    };
+    for delimiter in &profile.line_comments {
+        if starts(source, index, delimiter.start.as_bytes())
+            && (!delimiter.requires_boundary
+                || index == 0
+                || source[index - 1].is_ascii_whitespace())
+            /* NOTE: The byte before is the line feed, which is also true of a
+             * CRLF ending: the `\r` belongs to the line before it. */
+            && (!delimiter.requires_line_start || index == 0 || source[index - 1] == b'\n')
+            && opens_past_its_run(source, index, delimiter)
+        {
+            consider(delimiter.start.len(), Opener::Line(delimiter));
+        }
+    }
+    for delimiter in &profile.block_comments {
+        if starts(source, index, delimiter.start.as_bytes()) {
+            consider(delimiter.start.len(), Opener::Block(delimiter));
+        }
+    }
+    best.map(|(_, opener)| opener)
+}
+
 fn scan_profile_with(
     source: &[u8],
     profile: &DeclarativeProfile,
@@ -434,73 +667,72 @@ fn scan_profile_with(
             }
             continue;
         }
-        if let Some(delimiter) = profile.line_comments.iter().find(|delimiter| {
-            starts(source, index, delimiter.start.as_bytes())
-                && (!delimiter.requires_boundary
-                    || index == 0
-                    || source[index - 1].is_ascii_whitespace())
-                /* NOTE: The byte before is the line feed, which is also true of
-                 * a CRLF ending: the `\r` belongs to the line before it. */
-                && (!delimiter.requires_line_start || index == 0 || source[index - 1] == b'\n')
-        }) {
-            let mut end = index + delimiter.start.len();
-            while end < source.len() && !matches!(source[end], b'\r' | b'\n') {
-                end += 1;
+        match opener_at(source, index, profile) {
+            Some(Opener::Line(delimiter)) => {
+                let mut end = index + delimiter.start.len();
+                while end < source.len() && !matches!(source[end], b'\r' | b'\n') {
+                    end += 1;
+                }
+                comments.push(profile_comment(
+                    source,
+                    index,
+                    end,
+                    delimiter.kind,
+                    profile,
+                    options,
+                    patterns,
+                ));
+                index = end;
             }
-            comments.push(profile_comment(
-                source,
-                index,
-                end,
-                delimiter.kind,
-                profile,
-                options,
-                patterns,
-            ));
-            index = end;
-            continue;
-        }
-        if let Some(delimiter) = profile
-            .block_comments
-            .iter()
-            .find(|delimiter| starts(source, index, delimiter.start.as_bytes()))
-        {
-            let start = index;
-            index += delimiter.start.len();
-            let mut depth = 1usize;
-            while index < source.len() {
-                if delimiter.nested && starts(source, index, delimiter.start.as_bytes()) {
-                    depth += 1;
-                    index += delimiter.start.len();
-                } else if starts(source, index, delimiter.end.as_bytes()) {
-                    depth -= 1;
-                    index += delimiter.end.len();
-                    if depth == 0 {
-                        break;
+            Some(Opener::Block(delimiter)) => {
+                let start = index;
+                index += delimiter.start.len();
+                let mut depth = 1usize;
+                while index < source.len() {
+                    /* NOTE: Any opener that closes with this delimiter's `end`
+                     * counts, not just the one that began the comment. Nesting is
+                     * a property of the pairing: Haskell writes a documentation
+                     * comment `{-| ... -}` and a remark `{- ... -}`, and a remark
+                     * nested inside the documentation is still something the
+                     * `-}` has to get past. Counting only the opener that began
+                     * the comment let the inner `-}` close the outer comment and
+                     * left the outer one dangling as code. */
+                    if delimiter.nested && nested_opener(source, index, profile, &delimiter.end) {
+                        depth += 1;
+                        index += nested_opener_len(source, index, profile, &delimiter.end);
+                    } else if starts(source, index, delimiter.end.as_bytes()) {
+                        depth -= 1;
+                        index += delimiter.end.len();
+                        if depth == 0 {
+                            break;
+                        }
+                    } else {
+                        index += 1;
                     }
-                } else {
-                    index += 1;
+                }
+                comments.push(profile_comment(
+                    source,
+                    start,
+                    index,
+                    delimiter.kind,
+                    profile,
+                    options,
+                    patterns,
+                ));
+                if depth != 0 {
+                    diagnostics.push(Diagnostic {
+                        code: "unterminated-profile-comment".into(),
+                        message: format!(
+                            "unterminated block comment in profile `{}`",
+                            profile.name
+                        ),
+                        severity: Severity::Error,
+                        span: ByteSpan::new(start, index),
+                    });
                 }
             }
-            comments.push(profile_comment(
-                source,
-                start,
-                index,
-                delimiter.kind,
-                profile,
-                options,
-                patterns,
-            ));
-            if depth != 0 {
-                diagnostics.push(Diagnostic {
-                    code: "unterminated-profile-comment".into(),
-                    message: format!("unterminated block comment in profile `{}`", profile.name),
-                    severity: Severity::Error,
-                    span: ByteSpan::new(start, index),
-                });
-            }
-            continue;
+            None => index += 1,
         }
-        index += 1;
     }
     let valid = diagnostics.is_empty();
     /* NOTE: The same rules the built-in scanners apply, for the same reason. A
@@ -508,7 +740,25 @@ fn scan_profile_with(
      * convention and length limit have to reach a `.gitignore` exactly as they
      * reach a `.rs` -- and they did not, which showed up as this repository's
      * own tagged comments surviving in Rust and vanishing in a profile file. */
+    if profile.doc_continuation {
+        continue_documentation(source, &mut comments, profile, options, patterns);
+    }
     crate::scanner::apply_allow_rules(source, &mut comments, options, patterns);
+    /* NOTE: And the other axis, for the same reason: a project's spelling
+     * convention reaches a `.gitignore` exactly as it reaches a `.rs`. The
+     * profile's own delimiters are what it is asked about, because they are
+     * what the file opens its comments with. */
+    let openers = profile_openers(profile);
+    let closers = profile_closers(profile);
+    crate::scanner::apply_style_rules_with(
+        source,
+        &mut comments,
+        options,
+        crate::Markers {
+            openers: &openers,
+            closers: &closers,
+        },
+    );
     Ok(ScanReport {
         language: Language::Unknown,
         comments,
@@ -568,12 +818,7 @@ fn profile_comment(
     if let (Some(pattern), crate::Disposition::Keep { reason }) = (protected, &mut disposition) {
         *reason = pattern.reason.clone();
     }
-    Comment {
-        span: ByteSpan::new(start, end),
-        kind,
-        disposition,
-        shape: None,
-    }
+    Comment::new(ByteSpan::new(start, end), kind, disposition)
 }
 
 fn starts(source: &[u8], index: usize, token: &[u8]) -> bool {
@@ -594,22 +839,22 @@ fn validate_token(token: &str, name: &'static str) -> Result<(), ProfileError> {
 mod tests {
     use super::*;
     use crate::Policy;
+    /// Two delimiters spelled the same way: nothing could choose between them,
+    /// and they would differ only in the kind they record.
     #[test]
-    fn rejects_prefix_ambiguity() {
+    fn rejects_a_delimiter_declared_twice() {
         let profile = DeclarativeProfile {
             name: "x".into(),
             line_comments: vec![
                 LineDelimiter {
-                    start: "/".into(),
-                    requires_boundary: false,
-                    requires_line_start: false,
+                    start: "//".into(),
                     kind: CommentKind::Line,
+                    ..Default::default()
                 },
                 LineDelimiter {
                     start: "//".into(),
-                    requires_boundary: false,
-                    requires_line_start: false,
-                    kind: CommentKind::Line,
+                    kind: CommentKind::DocLine,
+                    ..Default::default()
                 },
             ],
             ..Default::default()
@@ -618,6 +863,87 @@ mod tests {
             validate_profile(&profile),
             Err(ProfileError::AmbiguousDelimiter(..))
         ));
+    }
+
+    /// One token being the start of another is how a language spells a
+    /// documentation comment. It was refused as ambiguous, which made such a
+    /// language inexpressible; the scan resolves it by taking the longest
+    /// token that matches.
+    #[test]
+    fn a_prefix_is_resolved_by_length_rather_than_refused() {
+        /* NOTE: Declared shortest first, which is the order that used to be
+         * wrong. Nothing about the answer depends on it. */
+        let profile = DeclarativeProfile {
+            name: "gleam-like".into(),
+            line_comments: vec![
+                LineDelimiter {
+                    start: "//".into(),
+                    kind: CommentKind::Line,
+                    ..Default::default()
+                },
+                LineDelimiter {
+                    start: "///".into(),
+                    kind: CommentKind::DocLine,
+                    ..Default::default()
+                },
+                LineDelimiter {
+                    start: "////".into(),
+                    kind: CommentKind::DocLine,
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        assert!(validate_profile(&profile).is_ok());
+        let report = scan_profile(
+            b"//// module\n/// item\n// remark\n",
+            &profile,
+            ScanOptions::default(),
+        )
+        .expect("the profile is valid");
+        let kinds: Vec<_> = report.comments.iter().map(|comment| comment.kind).collect();
+        assert_eq!(
+            kinds,
+            [
+                CommentKind::DocLine,
+                CommentKind::DocLine,
+                CommentKind::Line
+            ]
+        );
+    }
+
+    /// The clause that tells a Haskell comment from a Haskell operator, which
+    /// is the one thing a delimiter list could not say.
+    #[test]
+    fn a_forbidden_character_after_the_run_closes_the_opener() {
+        let profile = DeclarativeProfile {
+            name: "haskell-like".into(),
+            line_comments: vec![LineDelimiter {
+                start: "--".into(),
+                forbidden_after: "<>|-".into(),
+                kind: CommentKind::Line,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let report = scan_profile(
+            b"a --> b\nc ----> d\n---x is a comment\n-- so is this\n",
+            &profile,
+            ScanOptions::default(),
+        )
+        .expect("the profile is valid");
+        let text: Vec<_> = report
+            .comments
+            .iter()
+            .map(|comment| {
+                String::from_utf8_lossy(
+                    &b"a --> b\nc ----> d\n---x is a comment\n-- so is this\n"
+                        [comment.span.start..comment.span.end],
+                )
+                .into_owned()
+            })
+            .collect();
+        assert_eq!(text, ["---x is a comment", "-- so is this"]);
     }
 
     /// A profile says how strongly each protection asks, and `all` honours it.
@@ -632,9 +958,8 @@ mod tests {
             name: "demo".into(),
             line_comments: vec![LineDelimiter {
                 start: ";;".into(),
-                requires_boundary: false,
-                requires_line_start: false,
                 kind: CommentKind::Line,
+                ..Default::default()
             }],
             protected_patterns: vec![
                 ProtectedPattern {
@@ -656,8 +981,8 @@ mod tests {
             scan_profile(source, &profile, ScanOptions::default()).expect("valid profile");
         assert_eq!(conservative.comments[0].kind, CommentKind::Directive);
         assert_eq!(conservative.comments[1].kind, CommentKind::LoadBearing);
-        assert!(!conservative.comments[0].disposition.is_remove());
-        assert!(!conservative.comments[1].disposition.is_remove());
+        assert!(!conservative.comments[0].action().removes());
+        assert!(!conservative.comments[1].action().removes());
 
         let all = ScanOptions {
             policy: Policy::All,
@@ -665,11 +990,11 @@ mod tests {
         };
         let stripped = scan_profile(source, &profile, all.clone()).expect("valid profile");
         assert!(
-            stripped.comments[0].disposition.is_remove(),
+            stripped.comments[0].action().removes(),
             "the tool tier is what `all` is entitled to take"
         );
         assert!(
-            !stripped.comments[1].disposition.is_remove(),
+            !stripped.comments[1].action().removes(),
             "no policy reaches the load-bearing tier"
         );
 
@@ -679,7 +1004,7 @@ mod tests {
         };
         let forced = scan_profile(source, &profile, forced).expect("valid profile");
         assert!(
-            forced.comments[1].disposition.is_remove(),
+            forced.comments[1].action().removes(),
             "force_protected is the one way out, and a tier with no way out is untestable"
         );
     }
@@ -690,9 +1015,8 @@ mod tests {
             name: "demo".into(),
             line_comments: vec![LineDelimiter {
                 start: ";;".into(),
-                requires_boundary: false,
-                requires_line_start: false,
                 kind: CommentKind::Line,
+                ..Default::default()
             }],
             strings: vec![StringDelimiter {
                 start: "\"".into(),
@@ -723,9 +1047,8 @@ mod tests {
             name: "ambiguous".into(),
             line_comments: vec![LineDelimiter {
                 start: "#".into(),
-                requires_boundary: false,
-                requires_line_start: false,
                 kind: CommentKind::Line,
+                ..Default::default()
             }],
             strings: vec![StringDelimiter {
                 start: "##".into(),

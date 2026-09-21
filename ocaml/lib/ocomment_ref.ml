@@ -7,8 +7,13 @@ type language =
    resolves a bare constructor to the last type that declares it.  The dialect's
    is used throughout this file and the policy's is used once, so the dialect is
    the one worth leaving unannotated; the single policy use is written
-   `(Standard : policy)`. *)
-type policy = Conservative | Standard | All
+   `(Standard : policy)`.
+
+   The mode that removes nothing is spelled `RemoveNothing` rather than `None`,
+   which is taken: a constructor by that name shadows `option`'s in every scope
+   this type is open in, and the two would then be told apart by inference
+   rather than by reading.  The name on the wire is still `none`. *)
+type policy = RemoveNothing | Conservative | Standard | All
 
 type dialect =
   | Standard | Jsx | Tsx | ObjectiveC | ObjectiveCpp | GnuC | GnuCpp | Cuda
@@ -37,7 +42,29 @@ let protection_reason = function
   | Preamble -> Some "required source preamble"
   | LoadBearingTier -> Some "required by the language or its build"
 
-type disposition = Remove | Keep of string
+(** A rule about how a comment is written, as opposed to whether it stays.
+   Every rule here reaches the same verdict: a style rule never removes a
+   comment and never leaves one alone, because a rule with nothing to change
+   is never recorded. *)
+type style_rule = SpaceAfterMarker | TrailingWhitespace
+
+let style_rule_name = function
+  | SpaceAfterMarker -> "space-after-marker"
+  | TrailingWhitespace -> "trailing-whitespace"
+
+(** Every style rule, in the order they are applied.  The order is part of the
+   answer: where two rules both find something, the first one is the one the
+   comment records. *)
+let all_style_rules = [ SpaceAfterMarker; TrailingWhitespace ]
+
+(** What the run decided about one comment.  Three-valued rather than two: a
+   comment that stays and a comment that stays spelled differently are not the
+   same outcome, and only one of them leaves the bytes alone.
+
+   `Rewrite` carries the replacement rather than leaving it to be recomputed.
+   A verdict whose bytes are worked out again somewhere else is a verdict that
+   can disagree with what is written to the file. *)
+type disposition = Remove | Keep of string | Rewrite of style_rule * bytes
 type severity = Error | Warning | Info | Hint
 type diagnostic = { code : string; message : string; severity : severity; span : byte_span }
 
@@ -46,6 +73,18 @@ type diagnostic = { code : string; message : string; severity : severity; span :
    code sits before one -- so unlike every other rule it cannot be re-derived
    from a comment's own bytes, and is recorded rather than guessed at. *)
 type shape_rule = Tagged of string | Trailing | TooLong of int * int
+
+(** What a comment has to be to be worth a style rule's attention.  Very nearly
+   the mirror of `subject_to_shape`, and the one place they disagree is the
+   point of the axis: a documentation comment is exempt from the length rule
+   because it is documentation, and that is exactly why it is the first thing
+   the style rules should reach.  A licence notice is out, and out more firmly
+   than anything else: it is quoted verbatim and verbatim is the whole of its
+   value. *)
+let subject_to_style = function
+  | Line | Block | DocLine | DocBlock | HtmlComment -> true
+  | License | Directive | Shebang | Encoding | OptimizerHint | VersionComment
+  | LoadBearing -> false
 
 type comment =
   { span : byte_span; kind : comment_kind; disposition : disposition;
@@ -62,10 +101,25 @@ let decide (comment : comment) rule =
   { comment with disposition = shape_disposition rule; shape = Some rule }
 type layout = Lines | Columns | Compact
 
-(** What a comment has to be beyond being of a kind the policy keeps.  The
-   policy decides by kind, and a kind is a coarse thing to decide by: a one-line
-   rationale and a forty-line essay are both Line.  These are the other axes,
-   and they cut across the policy rather than under it. *)
+(** How a comment that survives is written.  Not a corner of `allow_rules`:
+   those are the conditions of survival and a comment that fails one is
+   removed, while a comment that fails one of these is rewritten.  One table
+   whose entries have two different consequences is a table nobody can add to
+   safely. *)
+type style_rules = {
+  space_after_marker : bool option;
+  trailing_whitespace : bool option;
+}
+
+let no_style_rules = { space_after_marker = None; trailing_whitespace = None }
+
+let style_rules_empty rules =
+  rules.space_after_marker = None && rules.trailing_whitespace = None
+
+let style_rule_asked_for rules = function
+  | SpaceAfterMarker -> rules.space_after_marker = Some true
+  | TrailingWhitespace -> rules.trailing_whitespace = Some false
+
 type allow_rules = {
   tags : string list;
   max_lines : int option;
@@ -97,6 +151,7 @@ type scan_options = {
   keep_regex : string list;
   remove_regex : string list;
   allow : allow_rules;
+  style : style_rules;
   (* NOTE: Markers this project's own tools read.  A `keep_regex` leaves the
      comment ordinary, which `all` is entitled to remove; a pattern here
      decides what the comment is. *)
@@ -114,6 +169,14 @@ type line_delimiter = {
   line_start : string;
   requires_boundary : bool;
   requires_line_start : bool;
+  (* NOTE: Characters that, coming directly after the token, mean it does not
+     open a comment after all -- the mirror of `requires_boundary`, which looks
+     at the byte before.  The token's final character may repeat before the
+     test, because that is how a language needing this rule spells the token:
+     Haskell's opener is a run of dashes, so `-- x` is a comment while `-->`
+     and `---->` are operators and `---x` is a comment again (Haskell 2010
+     section 2.2). *)
+  forbidden_after : string;
   line_kind : comment_kind;
 }
 
@@ -144,12 +207,21 @@ type declarative_profile = {
   block_comments : block_delimiter list;
   strings : string_delimiter list;
   protected_patterns : protected_pattern list;
+  (* NOTE: Whether an ordinary line comment directly below a documentation one
+     continues it.  Haddock marks only the first line and continues with the
+     ordinary opener, so read one token at a time the rest is a remark and a
+     policy that removes remarks would take half a published page away.  A run
+     is what continues, and a blank line ends it.  Off for a language whose
+     documentation comment marks every line, where a plain comment under a doc
+     comment is a remark the author meant. *)
+  doc_continuation : bool;
 }
 
 let default_scan_options = {
   policy = Conservative; dialect = Standard; force_invalid = false; force_protected = false;
   keep_kinds = []; remove_kinds = []; keep_regex = []; remove_regex = [];
   allow = { tags = []; max_lines = None; trailing = None; expiring_tags = [] };
+  style = no_style_rules;
   protected = [];
 }
 
@@ -346,6 +418,11 @@ let disposition options kind raw =
      removing a licence notice, and this policy already declined that kind. *)
   else if (kind = License || kind = DocLine || kind = DocBlock)
           && options.policy = Conservative then Keep "conservative policy"
+  (* NOTE: Last, where a policy default belongs.  `none` keeps what reaches it
+     for a different reason from the one `conservative` keeps documentation
+     for, and a reader deciding whether to change the mode or the kind lists
+     needs to be told which. *)
+  else if options.policy = RemoveNothing then Keep "policy none removes nothing"
   else Remove
 
 let contains text needle =
@@ -367,7 +444,10 @@ let claim options kind raw =
       | Tool -> Directive
       | ProfileLoadBearing -> LoadBearing in
     let decided = match disposition options kind raw with
-      | Keep _ -> Keep protected.reason
+      (* NOTE: A pattern decides what the comment *is*, which is a question
+         about whether it stays.  A rewrite answers how it is spelled and is
+         reached later, so it cannot arrive here. *)
+      | Keep _ | Rewrite _ -> Keep protected.reason
       | Remove -> Remove in
     (kind, decided)
 
@@ -6431,6 +6511,101 @@ let comment_runs source (comments : comment list) : comment list list =
          else build (List.rev current :: acc) [comment] rest)
   in build [] [] comments
 
+(** How far into a comment's bytes its opening marker reaches, and where its
+   closing marker begins.  `strip_comment_markers` is this and a slice; a
+   caller that has to rebuild a comment needs the two numbers, because the
+   marker is what it puts back. *)
+let marker_bounds_with raw openers closers =
+  let longest matches candidates =
+    List.fold_left (fun best marker ->
+      if matches marker then max best (String.length marker) else best) 0 candidates in
+  let start = longest (fun marker -> String.starts_with ~prefix:marker raw) openers in
+  let finish = String.length raw
+    - longest (fun marker -> String.ends_with ~suffix:marker raw) closers in
+  (min start finish, finish)
+
+(** Whether `raw` decodes as UTF-8.  A comment that does not is never
+   rewritten: neither implementation decodes a whole source, and a boundary
+   guessed at inside bytes nothing could read is how a tidy-up corrupts a
+   file. *)
+let is_utf8 raw =
+  let length = String.length raw in
+  let continuation index =
+    index < length && Char.code raw.[index] land 0xC0 = 0x80 in
+  let rec loop index =
+    if index >= length then true
+    else
+      let byte = Char.code raw.[index] in
+      if byte < 0x80 then loop (index + 1)
+      else if byte land 0xE0 = 0xC0 then
+        byte >= 0xC2 && continuation (index + 1) && loop (index + 2)
+      else if byte land 0xF0 = 0xE0 then
+        continuation (index + 1) && continuation (index + 2) && loop (index + 3)
+      else if byte land 0xF8 = 0xF0 then
+        byte <= 0xF4 && continuation (index + 1) && continuation (index + 2)
+        && continuation (index + 3) && loop (index + 4)
+      else false
+  in loop 0
+
+let is_ascii_punctuation = function
+  | '!' .. '/' | ':' .. '@' | '[' .. '`' | '{' .. '~' -> true
+  | _ -> false
+
+(** Put a space between the opening marker and the text written against it.
+   Deliberately timid: it acts only when the first character of the text is
+   neither whitespace nor ASCII punctuation, which leaves a ruler like
+   "////////" or "#####" alone.  A divider is not a comment missing its
+   space, and inserting one there puts a hole in the divider. *)
+let space_after_marker raw openers closers =
+  let (start, finish) = marker_bounds_with raw openers closers in
+  if start = 0 || start >= finish then None
+  else
+    let first = raw.[start] in
+    if first = ' ' || first = '\t' || is_ascii_punctuation first then None
+    else Some (String.sub raw 0 start ^ " " ^ String.sub raw start (String.length raw - start))
+
+(** Strip whitespace from the end of every line the comment covers, the last
+   one included: a line comment's span ends where its text ends, so the spaces
+   a "// note   " trails are inside it.  What a *removal* leaves behind is the
+   layout's business and is not touched here. *)
+let trailing_whitespace raw =
+  let lines = String.split_on_char '\n' raw in
+  let trim line =
+    let carriage = String.ends_with ~suffix:"\r" line in
+    let body = if carriage then String.sub line 0 (String.length line - 1) else line in
+    let rec last index =
+      if index <= 0 then 0
+      else match body.[index - 1] with
+        | ' ' | '\t' | '\011' | '\012' -> last (index - 1)
+        | _ -> index
+    in
+    String.sub body 0 (last (String.length body)) ^ (if carriage then "\r" else "")
+  in
+  let rewritten = String.concat "\n" (List.map trim lines) in
+  if rewritten = raw then None else Some rewritten
+
+(** Rewrite one comment's bytes under `rules`, or `None` when the rules find
+   nothing to change.  The rules compose, and the rule reported is the first
+   one that had anything to do: a reader is being told why the comment is in
+   the report at all. *)
+let restyle raw rules openers closers =
+  if style_rules_empty rules || not (is_utf8 raw) then None
+  else
+    let apply (bytes, first) rule =
+      if not (style_rule_asked_for rules rule) then (bytes, first)
+      else
+        let next = match rule with
+          | SpaceAfterMarker -> space_after_marker bytes openers closers
+          | TrailingWhitespace -> trailing_whitespace bytes
+        in
+        match next with
+        | None -> (bytes, first)
+        | Some bytes -> (bytes, (match first with None -> Some rule | some -> some))
+    in
+    match List.fold_left apply (raw, None) all_style_rules with
+    | (_, None) -> None
+    | (bytes, Some rule) -> Some (rule, bytes)
+
 (** Whether the shape rules apply to a comment of this kind at all.  They
    apply to commentary and to nothing else: a doc comment is the API
    documentation and a licence notice is a legal text, and both are as long as
@@ -6492,6 +6667,39 @@ let apply_allow_rules source options (comments : comment list) : comment list =
             if reachable source options comment
             then decide comment (TooLong (lines, limit))
             else comment) run)
+
+(** Apply the rules about how a comment is written.
+
+   Asked only about comments that are staying: a comment the policy or a shape
+   rule took has no spelling to correct, and asking anyway would put a "rewrite
+   this" line under a comment the same run is about to delete.  Run after the
+   allow rules for that reason -- which comments are staying is not settled
+   until those have had their turn. *)
+let apply_style_rules_with source options openers closers (comments : comment list)
+    : comment list =
+  if style_rules_empty options.style then comments
+  else
+    List.map (fun (comment : comment) ->
+      match comment.disposition with
+      | Remove | Rewrite _ -> comment
+      | Keep _ ->
+        if not (subject_to_style comment.kind) then comment
+        else
+          let raw = Bytes.sub_string source comment.span.start
+              (max 0 (comment.span.finish - comment.span.start)) in
+          match restyle raw options.style openers closers with
+          | None -> comment
+          | Some (rule, replacement) ->
+            { comment with disposition = Rewrite (rule, Bytes.of_string replacement) })
+      comments
+
+(* NOTE: The built-in delimiter set.  A file read under a declarative profile
+   opens its comments with the profile's own tokens, and asking this list about
+   one is a guess: it knows `--` and not Haddock's `-- |`, so a rule about the
+   text written against the marker would have judged the space that belongs to
+   the marker. *)
+let apply_style_rules source options comments =
+  apply_style_rules_with source options comment_openers comment_closers comments
 
 let rec scan_html source language options accumulator =
   let tag_boundary = function None -> true | Some character ->
@@ -6617,6 +6825,7 @@ and scan source language options =
      rules are about where a comment sits rather than what it says, and a
      decision made one comment at a time cannot see that. *)
   let comments = apply_allow_rules source options comments in
+  let comments = apply_style_rules source options comments in
   let diagnostics = List.rev accumulator.diagnostics_rev
     |> List.map (fun (diagnostic : diagnostic) -> { diagnostic with span = clamp diagnostic.span }) in
   { language; comments; diagnostics; valid = not (List.exists (fun diagnostic -> diagnostic.severity = Error) diagnostics) }
@@ -6655,7 +6864,19 @@ let validate_profile profile =
         | Some second -> Result.Error (Printf.sprintf "ambiguous delimiter prefix: `%s` and `%s`"
             first second)
         | None -> prefixes tail) in
-    (match prefixes comment_starts with
+    (* NOTE: Between two comment delimiters a prefix is not ambiguous: one
+       token being the start of another is how a language spells a
+       documentation comment, and the scan takes the longest token that
+       matches.  Two delimiters spelled the same way are ambiguous, because
+       nothing could choose between them. *)
+    let rec duplicates = function
+      | [] -> Result.Ok ()
+      | first :: tail ->
+        (match List.find_opt (fun second -> first = second) tail with
+        | Some second -> Result.Error (Printf.sprintf "ambiguous delimiter prefix: `%s` and `%s`"
+            first second)
+        | None -> duplicates tail) in
+    (match duplicates comment_starts with
     | Result.Error _ as error -> error
     | Result.Ok () -> match List.find_map (fun left ->
         List.find_opt (fun right -> String.starts_with ~prefix:left right ||
@@ -6697,7 +6918,8 @@ let profile_comment source profile options start finish kind =
       | Tool -> Directive
       | ProfileLoadBearing -> LoadBearing in
     let selected = disposition options kind raw in
-    let disposition = match selected with Keep _ -> Keep protected.reason | Remove -> Remove in
+    let disposition = match selected with
+      | Keep _ | Rewrite _ -> Keep protected.reason | Remove -> Remove in
     { span = { start; finish }; kind; disposition; shape = None }
 
 let scan_profile source profile options =
@@ -6716,15 +6938,65 @@ let scan_profile source profile options =
       | _ when not delimiter.multiline &&
           (Bytes.get source index = '\r' || Bytes.get source index = '\n') -> (index, false)
       | _ -> scan_string token_start delimiter (index + 1) in
+    (* NOTE: Any opener that closes with this delimiter's end token counts, not
+       just the one that began the comment.  Nesting is a property of the
+       pairing: Haskell writes documentation `{-| ... -}` and a remark
+       `{- ... -}`, and a remark nested inside the documentation still has to
+       be got past before the `-}` ends anything.  Counting only the opener
+       that began the comment let the inner `-}` close the outer one and left
+       the rest of it standing as code. *)
+    let nested_opener_len delimiter index =
+      List.fold_left (fun best other ->
+        if other.block_end_token = delimiter.block_end_token
+           && starts source index other.block_start
+        then max best (String.length other.block_start) else best) 0 profile.block_comments in
     let rec scan_block delimiter index depth =
       if index >= Bytes.length source then (index, depth)
-      else if delimiter.nested && starts source index delimiter.block_start then
-        scan_block delimiter (index + String.length delimiter.block_start) (depth + 1)
+      else if delimiter.nested && nested_opener_len delimiter index > 0 then
+        scan_block delimiter (index + nested_opener_len delimiter index) (depth + 1)
       else if starts source index delimiter.block_end_token then
         let remaining = depth - 1 in
         if remaining = 0 then (index + String.length delimiter.block_end_token, 0)
         else scan_block delimiter (index + String.length delimiter.block_end_token) remaining
       else scan_block delimiter (index + 1) depth in
+    (* NOTE: What follows the token, past any repetition of its final
+       character, decides whether the token opens a comment at all.  A
+       delimiter naming no such characters answers yes without reading
+       anything, which is every profile written before the field existed. *)
+    let opens_past_its_run delimiter index =
+      if delimiter.forbidden_after = "" then true
+      else
+        let last = delimiter.line_start.[String.length delimiter.line_start - 1] in
+        let rec run cursor =
+          if cursor < Bytes.length source && Bytes.get source cursor = last
+          then run (cursor + 1) else cursor in
+        let cursor = run (index + String.length delimiter.line_start) in
+        cursor >= Bytes.length source
+        || not (String.contains delimiter.forbidden_after (Bytes.get source cursor)) in
+    (* NOTE: The longest token that matches, not the first one declared.  One
+       comment token being the start of another is how a language spells a
+       documentation comment, and an order that has to be right is a way to be
+       wrong.  A tie is impossible: two matching tokens of the same length
+       would have to be the same token, which validation refuses. *)
+    let longest current length best =
+      match best with
+      | Some (_, other) when other >= length -> best
+      | _ -> Some (current, length) in
+    let line_opener index =
+      List.fold_left (fun best delimiter ->
+        if starts source index delimiter.line_start &&
+          (not delimiter.requires_boundary || index = 0 ||
+            ascii_whitespace (Bytes.get source (index - 1))) &&
+          (not delimiter.requires_line_start || index = 0 ||
+            Bytes.get source (index - 1) = '\n') &&
+          opens_past_its_run delimiter index
+        then longest delimiter (String.length delimiter.line_start) best
+        else best) None profile.line_comments in
+    let block_opener index =
+      List.fold_left (fun best delimiter ->
+        if starts source index delimiter.block_start
+        then longest delimiter (String.length delimiter.block_start) best
+        else best) None profile.block_comments in
     let rec loop index =
       if index >= Bytes.length source then () else
       match List.find_opt (fun delimiter -> starts source index delimiter.string_start)
@@ -6735,19 +7007,22 @@ let scan_profile source profile options =
         if not closed then add_error accumulator "unterminated-profile-string"
           (Printf.sprintf "unterminated string in profile `%s`" profile.name) index finish;
         loop finish
-      | None -> match List.find_opt (fun delimiter -> starts source index delimiter.line_start &&
-          (not delimiter.requires_boundary || index = 0 ||
-            ascii_whitespace (Bytes.get source (index - 1))) &&
-          (not delimiter.requires_line_start || index = 0 ||
-            Bytes.get source (index - 1) = '\n')) profile.line_comments with
-        | Some delimiter ->
-          let finish = line_end source (index + String.length delimiter.line_start) in
-          accumulator.comments_rev <- profile_comment source profile options index finish
-            delimiter.line_kind :: accumulator.comments_rev;
-          loop finish
-        | None -> match List.find_opt (fun delimiter -> starts source index delimiter.block_start)
-            profile.block_comments with
-          | Some delimiter ->
+      | None ->
+        let line = line_opener index and block = block_opener index in
+        let line_length = match line with Some (_, length) -> length | None -> 0 in
+        let block_length = match block with Some (_, length) -> length | None -> 0 in
+        if line_length > 0 && line_length >= block_length then
+          match line with
+          | None -> loop (index + 1)
+          | Some (delimiter, _) ->
+            let finish = line_end source (index + String.length delimiter.line_start) in
+            accumulator.comments_rev <- profile_comment source profile options index finish
+              delimiter.line_kind :: accumulator.comments_rev;
+            loop finish
+        else if block_length > 0 then
+          match block with
+          | None -> loop (index + 1)
+          | Some (delimiter, _) ->
             let finish, depth = scan_block delimiter
               (index + String.length delimiter.block_start) 1 in
             accumulator.comments_rev <- profile_comment source profile options index finish
@@ -6756,14 +7031,38 @@ let scan_profile source profile options =
               (Printf.sprintf "unterminated block comment in profile `%s`" profile.name)
               index finish;
             loop finish
-          | None -> loop (index + 1)
+        else loop (index + 1)
     in
     loop 0;
     let comments = List.rev accumulator.comments_rev and diagnostics = List.rev accumulator.diagnostics_rev in
     (* NOTE: The same rules the built-in scanners apply.  A profile describes a
        file format rather than a policy, so a project's tag convention and
        length limit have to reach a ".gitignore" exactly as they reach a ".rs". *)
+    (* NOTE: Before any policy or rule reads a kind, so every later question is
+       asked about the kind the language actually gives the line.  The comment
+       is rebuilt rather than relabelled: its verdict was read off its kind, so
+       a kind written over the top would leave a disposition answering for the
+       kind it used to be. *)
+    let comments =
+      if not profile.doc_continuation then comments
+      else
+        comment_runs source comments
+        |> List.concat_map (fun run ->
+          let carrying = ref false in
+          List.map (fun (comment : comment) ->
+            match comment.kind with
+            | DocLine -> carrying := true; comment
+            | Line when !carrying ->
+              profile_comment source profile options comment.span.start comment.span.finish DocLine
+            | _ -> carrying := false; comment) run) in
     let comments = apply_allow_rules source options comments in
+    (* NOTE: The profile's own delimiters, because they are what the file opens
+       its comments with. *)
+    let openers = List.map (fun (d : line_delimiter) -> d.line_start) profile.line_comments
+      @ List.map (fun (d : block_delimiter) -> d.block_start) profile.block_comments in
+    let closers = List.map (fun (d : block_delimiter) -> d.block_end_token)
+      profile.block_comments in
+    let comments = apply_style_rules_with source options openers closers comments in
     Result.Ok { language = Unknown; comments; diagnostics;
       valid = not (List.exists (fun diagnostic -> diagnostic.severity = Error) diagnostics) }
 
@@ -7103,6 +7402,13 @@ let compact_edits source comments swallowed =
     | [] -> collapse_created_blank_runs source (List.rev edits)
     | (comment : comment) :: tail -> match comment.disposition with
       | Keep _ -> loop (index + 1) scan line_start floor edits tail
+      (* NOTE: Not a layout question, which is why all three write it the same
+         way: a layout decides what is left where a comment used to be, and a
+         rewritten comment has not been anywhere. *)
+      | Rewrite (_, replacement) ->
+        loop (index + 1) scan line_start comment.span.finish
+          (({ span = comment.span; replacement }, false) :: edits)
+          tail
       | Remove -> match swallowed index with
       | Some (line : byte_span) ->
         let span = { start = max line.start floor; finish = max line.finish floor } in
@@ -7372,6 +7678,13 @@ let transform_report source report options =
         | [] -> List.rev edits
         | (comment : comment) :: tail -> (match comment.disposition with
           | Keep _ -> loop (index + 1) cursor column edits tail
+          (* NOTE: The one layout a rewrite costs something.  Its promise is
+             that every column after an edit keeps its number, and a
+             replacement of a different width cannot keep it.  The promise is
+             kept for removals, which is what the layout exists for. *)
+          | Rewrite (_, replacement) ->
+            loop (index + 1) comment.span.finish column
+              ({ span = comment.span; replacement } :: edits) tail
           | Remove -> match swallowed index with
             (* NOTE: A swallowed line takes its terminator with it, so what
                follows starts a line of its own in the output as it did in the
@@ -7388,6 +7701,10 @@ let transform_report source report options =
         | [] -> List.rev edits
         | (comment : comment) :: tail -> (match comment.disposition with
           | Keep _ -> loop (index + 1) floor edits tail
+          | Rewrite (_, replacement) ->
+            let edit =
+              { span = comment.span; replacement } in
+            loop (index + 1) edit.span.finish (edit :: edits) tail
           | Remove ->
             let edit = match swallowed index with
               | Some line ->

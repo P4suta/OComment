@@ -62,7 +62,7 @@ pub fn count(files: &[ProcessedFile], root: &Path) -> Counts {
             .report
             .comments
             .iter()
-            .filter(|comment| comment.disposition.is_remove())
+            .filter(|comment| comment.disposition().action().changes_bytes())
             .count();
         if removable == 0 {
             continue;

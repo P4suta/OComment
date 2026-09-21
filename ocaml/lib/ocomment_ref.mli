@@ -5,7 +5,10 @@ type language =
 
 (** Declared before `dialect` for the reason the implementation gives: both
    carry a `Standard`, and the dialect's is the one worth leaving unannotated. *)
-type policy = Conservative | Standard | All
+(* NOTE: `RemoveNothing` rather than `None`, which is taken: a constructor by
+   that name shadows `option`'s wherever this type is open.  The name on the
+   wire is still `none`. *)
+type policy = RemoveNothing | Conservative | Standard | All
 
 type dialect =
   | Standard | Jsx | Tsx | ObjectiveC | ObjectiveCpp | GnuC | GnuCpp | Cuda
@@ -20,7 +23,17 @@ type comment_kind =
 
 type protection = NoProtection | Preamble | LoadBearingTier
 
-type disposition = Remove | Keep of string
+(** A rule about how a comment is written, as opposed to whether it stays. *)
+type style_rule = SpaceAfterMarker | TrailingWhitespace
+
+val style_rule_name : style_rule -> string
+
+(** What the run decided about one comment.  Three-valued rather than two: a
+   comment that stays and a comment that stays spelled differently are not the
+   same outcome, and only one of them leaves the bytes alone.  `Rewrite`
+   carries its replacement, so what the report describes and what a fix writes
+   cannot be computed twice and disagree. *)
+type disposition = Remove | Keep of string | Rewrite of style_rule * bytes
 type severity = Error | Warning | Info | Hint
 type diagnostic = { code : string; message : string; severity : severity; span : byte_span }
 
@@ -32,6 +45,14 @@ type comment =
   { span : byte_span; kind : comment_kind; disposition : disposition;
     shape : shape_rule option }
 type layout = Lines | Columns | Compact
+
+(** How a comment that survives is written.  A sibling of `allow_rules` and
+   not a field of it: a comment that fails one of those is removed, and a
+   comment that fails one of these is rewritten. *)
+type style_rules = {
+  space_after_marker : bool option;
+  trailing_whitespace : bool option;
+}
 
 (** What a comment has to be beyond being of a kind the policy keeps.  The
    policy decides by kind, and a kind is a coarse thing to decide by: a one-line
@@ -68,6 +89,7 @@ type scan_options = {
   keep_regex : string list;
   remove_regex : string list;
   allow : allow_rules;
+  style : style_rules;
   (* NOTE: Markers this project's own tools read.  The catalogue this
      implementation ships knows the tools everybody uses and cannot know yours,
      and a `keep_regex` leaves the comment ordinary -- which `all` is entitled
@@ -89,6 +111,12 @@ type line_delimiter = {
      A pattern list gives [#] that rule and only that rule: [file#name]
      names a file with one in it. *)
   requires_line_start : bool;
+  (** Characters that, coming directly after the token, mean it does not open a
+     comment after all.  The mirror of [requires_boundary], which looks at the
+     byte before.  The token's final character may repeat before the test:
+     Haskell's opener is a run of dashes, so [-- x] is a comment while [-->] is
+     an operator and [---x] is a comment again. *)
+  forbidden_after : string;
   line_kind : comment_kind;
 }
 type block_delimiter = { block_start : string; block_end_token : string; nested : bool; block_kind : comment_kind }
@@ -103,6 +131,10 @@ type declarative_profile = {
   name : string; extensions : string list; line_comments : line_delimiter list;
   block_comments : block_delimiter list; strings : string_delimiter list;
   protected_patterns : protected_pattern list;
+  (** Whether an ordinary line comment directly below a documentation one
+     continues it.  Haddock marks only the first line and continues with the
+     ordinary opener, so read one token at a time the rest is a remark. *)
+  doc_continuation : bool;
 }
 
 val default_scan_options : scan_options

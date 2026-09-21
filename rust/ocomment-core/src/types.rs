@@ -630,7 +630,12 @@ impl FromStr for CommentKind {
     }
 }
 
-/// What the policy decided about one comment.
+/// What the run decided about one comment.
+///
+/// Two of these are the policy's answer and the third is the style axis's. A
+/// comment is never both removed and rewritten: the style rules are asked only
+/// about comments something else decided to keep, so "write it differently" is
+/// an answer to a question that only arises once the comment is staying.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "action", rename_all = "kebab-case")]
 pub enum Disposition {
@@ -641,12 +646,46 @@ pub enum Disposition {
         /// Which rule protected the comment, phrased for a human.
         reason: String,
     },
+    /// The comment stays and its bytes are rewritten.
+    ///
+    /// The replacement travels with the verdict rather than being recomputed
+    /// by whoever plans the edit. It was a parameter, and a parameter is a
+    /// second chance to answer a question that already had an answer: a caller
+    /// that planned with different rules from the ones that decided would have
+    /// written bytes the report did not describe, and nothing would have said
+    /// so.
+    Rewrite {
+        /// The style rule that found something to change. The first one that
+        /// did, where several applied.
+        rule: StyleRule,
+        /// The bytes that replace the comment's span, delimiters included.
+        #[serde(with = "bytes_serde")]
+        replacement: Vec<u8>,
+    },
 }
 
 impl Disposition {
-    /// Whether this is [`Self::Remove`].
-    pub const fn is_remove(&self) -> bool {
-        matches!(self, Self::Remove)
+    /// The verdict alone. See [`Action::changes_bytes`] for the question a
+    /// caller planning an edit is actually asking.
+    pub const fn action(&self) -> Action {
+        match self {
+            Self::Remove => Action::Remove,
+            Self::Keep { .. } => Action::Keep,
+            Self::Rewrite { .. } => Action::Rewrite,
+        }
+    }
+
+    /// The bytes this verdict puts in the comment's place, when it puts any
+    /// there.
+    ///
+    /// `None` for a keep and for a removal alike, and the two are not the same
+    /// answer: a removal's replacement is the layout's to decide and is not
+    /// carried here. This is only ever the rewrite's own bytes.
+    pub fn replacement(&self) -> Option<&[u8]> {
+        match self {
+            Self::Rewrite { replacement, .. } => Some(replacement),
+            Self::Keep { .. } | Self::Remove => None,
+        }
     }
 }
 
@@ -655,9 +694,17 @@ impl fmt::Display for Disposition {
         match self {
             Self::Remove => f.write_str("remove"),
             Self::Keep { reason } => write!(f, "keep ({reason})"),
+            Self::Rewrite { rule, .. } => write!(f, "rewrite ({})", rule.detail()),
         }
     }
 }
+
+/// The reason a comment kept for where it sits carries.
+///
+/// Part of the wire format: the differential compares keep reasons between the
+/// two implementations byte for byte, so this string is a shared contract and
+/// not a message.
+pub(crate) const STRUCTURAL_TRAIL: &str = "structural in a YAML block scalar trail";
 
 /// A rule about a comment's *shape* rather than its kind, and the verdict it
 /// reached.
@@ -743,12 +790,19 @@ impl ShapeRule {
     }
 }
 
-/// A [`DispositionExplanation`] with the reasoning taken away: the
-/// keep-or-remove verdict on its own.
+/// A [`DispositionExplanation`] with the reasoning taken away: the verdict on
+/// its own.
+///
+/// Three-valued rather than two, because a run reaches three different
+/// outcomes about a comment and only two of them leave its bytes alone. The
+/// third is the whole of the style axis: a comment the policy keeps, written
+/// differently from how it was found.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Action {
-    /// The comment stays.
+    /// The comment stays, byte for byte.
     Keep,
+    /// The comment stays, and its bytes are rewritten.
+    Rewrite,
     /// The comment goes.
     Remove,
 }
@@ -759,13 +813,33 @@ impl Action {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Keep => "keep",
+            Self::Rewrite => "rewrite",
             Self::Remove => "remove",
         }
     }
 
-    /// Whether this is [`Self::Remove`].
-    pub const fn is_remove(self) -> bool {
+    /// Whether this verdict takes the comment away.
+    ///
+    /// One of exactly two questions about a verdict, and the pair is the whole
+    /// vocabulary on purpose. It was spelled `is_remove` and it lived on
+    /// [`Disposition`] as well, which is two names for one question on two
+    /// types — and the one on `Disposition` was the one every caller reached
+    /// for, including the callers that meant [`Self::changes_bytes`]. There is
+    /// now one place to ask, and asking requires having said which question.
+    pub const fn removes(self) -> bool {
         matches!(self, Self::Remove)
+    }
+
+    /// Whether a comment this verdict decided has different bytes afterwards.
+    ///
+    /// Not `!= Keep`, and not `is_remove()` either, and the difference is the
+    /// one this repository keeps finding: a comparison that names one variant
+    /// while meaning a category answers wrongly the day the category gains a
+    /// member. Every caller planning an edit is asking this question — it had
+    /// been spelled `is_remove()` because removal was the only way a byte
+    /// moved, and that stopped being true here.
+    pub const fn changes_bytes(self) -> bool {
+        matches!(self, Self::Remove | Self::Rewrite)
     }
 }
 
@@ -852,6 +926,19 @@ pub enum DispositionExplanation {
         /// The kind it was removed as.
         kind: CommentKind,
     },
+    /// Nothing named the comment, so the policy default kept it.
+    ///
+    /// [`Policy::None`] is the only policy that answers this way, and it
+    /// answers it for every kind that reaches this far. It is the counterpart
+    /// of [`Self::RemovedByDefault`] and carries the same two fields for the
+    /// same reason: a reader is being told which setting decided, and the mode
+    /// alone does not say what it decided *about*.
+    KeptByPolicy {
+        /// The policy that kept it.
+        policy: Policy,
+        /// The kind it was kept as.
+        kind: CommentKind,
+    },
     /// Nothing protected the comment, so the policy default removed it.
     ///
     /// A policy removes several kinds and removes them for different reasons,
@@ -902,6 +989,16 @@ pub enum DispositionExplanation {
         /// [`Language::Yaml`] wherever this is returned today.
         language: Language,
     },
+    /// A comment something else kept, which a style rule then rewrote.
+    ///
+    /// Tested after every rule above, and never in competition with one: those
+    /// decide whether the comment stays, and this one is asked only about a
+    /// comment that is staying. It is the only verdict here that reports
+    /// [`Action::Rewrite`].
+    RewrittenByStyle {
+        /// The style rule that found something to change.
+        rule: StyleRule,
+    },
 }
 
 impl DispositionExplanation {
@@ -918,7 +1015,9 @@ impl DispositionExplanation {
             | Self::KeptDocumentation { .. }
             | Self::KeptLicense { .. }
             | Self::KeptByTag { .. }
+            | Self::KeptByPolicy { .. }
             | Self::KeptStructural { .. } => Action::Keep,
+            Self::RewrittenByStyle { .. } => Action::Rewrite,
             Self::RemovedByKind(_)
             | Self::RemovedByRegex { .. }
             | Self::RemovedByPolicy { .. }
@@ -930,17 +1029,22 @@ impl DispositionExplanation {
     }
 }
 
-/// What a policy removed, named as the kind rather than as "comments".
+/// What a policy decided about, named as the kind rather than as "comments".
 ///
-/// A policy default removes more than one kind, and a reader who is told only
-/// that "the policy removes ordinary comments" cannot tell whether the comment
-/// in front of them was ordinary. Naming the kind is what makes the sentence
-/// checkable against the kind the same line already reports.
+/// A policy default reaches more than one kind and reaches them for different
+/// reasons, and a reader who is told only that "the policy removes ordinary
+/// comments" cannot tell whether the comment in front of them was ordinary.
+/// Naming the kind is what makes the sentence checkable against the kind the
+/// same line already reports.
 ///
 /// The kinds a policy default cannot reach — a shebang, a load-bearing
 /// directive — are spelled generically rather than omitted, so that adding a
 /// kind cannot silently produce a sentence with a hole in it.
-const fn removed_noun(kind: CommentKind) -> &'static str {
+///
+/// Was `removed_noun`, which named the only verdict a policy default could
+/// reach at the time. [`Policy::None`] reaches the other one with the same
+/// nouns.
+const fn kind_noun(kind: CommentKind) -> &'static str {
     match kind {
         CommentKind::Line | CommentKind::Block => "ordinary comments",
         CommentKind::DocLine | CommentKind::DocBlock => "doc comments",
@@ -1015,8 +1119,12 @@ impl fmt::Display for DispositionExplanation {
                 )
             }
             Self::RemovedByDefault { policy, kind } => {
-                write!(f, "removed: policy `{policy}` removes {}", removed_noun(*kind))
+                write!(f, "removed: policy `{policy}` removes {}", kind_noun(*kind))
             }
+            Self::KeptByPolicy { policy, kind } => {
+                write!(f, "kept: policy `{policy}` keeps {}", kind_noun(*kind))
+            }
+            Self::RewrittenByStyle { rule } => write!(f, "rewritten: {}", rule.detail()),
             Self::KeptByTag { tag } => {
                 write!(f, "kept: its text opens with the allowed tag `{tag}`")
             }
@@ -1047,14 +1155,131 @@ pub struct Comment {
     /// What the comment turned out to be.
     pub kind: CommentKind,
     /// Whether it is removed, and why if it is not.
-    pub disposition: Disposition,
+    ///
+    /// Private, with [`Self::disposition`] and [`Self::action`] to read it and
+    /// [`Self::decide_by_shape`] and [`Self::restyle`] to write it. A public
+    /// field is a public invitation to set it without setting the rule that
+    /// justifies it, and the two then serialise a comment whose verdict and
+    /// whose explanation say different things.
+    disposition: Disposition,
     /// The shape rule that settled it, when one did.
     ///
     /// `None` is the ordinary case: the policy, the kind lists and the pattern
     /// lists decided, and all three can be read back off the comment's own
     /// bytes. A [`ShapeRule`] cannot, so it is carried rather than guessed at.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub shape: Option<ShapeRule>,
+    shape: Option<ShapeRule>,
+}
+
+impl Comment {
+    /// One comment as the scan first found it, before any rule about its shape
+    /// or its spelling has been asked.
+    ///
+    /// Crate-private, because outside the crate there is no such thing as a
+    /// comment somebody found: a [`Comment`] is what a scan produces, and one
+    /// built by hand could carry a [`Disposition::Rewrite`] whose replacement
+    /// nothing computed.
+    pub(crate) const fn new(span: ByteSpan, kind: CommentKind, disposition: Disposition) -> Self {
+        Self {
+            span,
+            kind,
+            disposition,
+            shape: None,
+        }
+    }
+
+    /// What the run decided.
+    pub const fn disposition(&self) -> &Disposition {
+        &self.disposition
+    }
+
+    /// The verdict alone, which is the question every caller planning an edit
+    /// is asking.
+    pub const fn action(&self) -> Action {
+        self.disposition.action()
+    }
+
+    /// The shape rule that settled whether the comment stays, when one did.
+    pub const fn shape(&self) -> Option<&ShapeRule> {
+        self.shape.as_ref()
+    }
+
+    /// The style rule that asked for the rewrite, when the comment is being
+    /// rewritten.
+    ///
+    /// Read out of the verdict rather than stored beside it. It was a field,
+    /// and a field is a second place for the same fact: a comment could be
+    /// recorded as rewritten by one rule while carrying a verdict written by
+    /// another, and both halves would serialise happily.
+    pub const fn style(&self) -> Option<StyleRule> {
+        match &self.disposition {
+            Disposition::Rewrite { rule, .. } => Some(*rule),
+            Disposition::Keep { .. } | Disposition::Remove => None,
+        }
+    }
+
+    /// Settle this comment with a rule about its shape, verdict and all.
+    ///
+    /// The only way a shape rule reaches a comment, and the reason it is the
+    /// only way: a caller that wrote the verdict by hand could write one the
+    /// rule it recorded disagrees with, and then `--explain` would say
+    /// "removed" under a line reading "kept". Both come from the one value
+    /// here, so a rule added later cannot reintroduce that.
+    pub fn decide_by_shape(&mut self, rule: ShapeRule) {
+        self.disposition = rule.disposition();
+        self.shape = Some(rule);
+    }
+
+    /// Keep a comment because of where it sits in a YAML block scalar trail.
+    ///
+    /// The one keep with no rule value behind it, and the one this type has to
+    /// name itself. It is recognised by its reason string — see
+    /// [`Self::is_structural_keep`] — and a reason recognised by its spelling
+    /// is a reason that must be spelled in exactly one place. It was spelled
+    /// in three.
+    pub fn keep_as_structural(&mut self) {
+        self.disposition = Disposition::Keep {
+            reason: STRUCTURAL_TRAIL.to_owned(),
+        };
+    }
+
+    /// Whether this is the keep [`Self::keep_as_structural`] records.
+    pub fn is_structural_keep(&self) -> bool {
+        matches!(&self.disposition, Disposition::Keep { reason } if reason == STRUCTURAL_TRAIL)
+    }
+
+    /// Settle a comment that is staying with the style rules, reading its own
+    /// bytes out of the source it was found in.
+    ///
+    /// The replacement is not a parameter. It was, and a parameter is a way to
+    /// record a verdict whose bytes nothing computed: the rule would say one
+    /// thing, the bytes another, and the file on disk would follow the bytes.
+    /// Given a source and a set of rules there is now exactly one verdict this
+    /// can reach, and the span it reads is its own.
+    ///
+    /// Exhaustive on purpose, and the two arms that do nothing are the
+    /// invariant: a comment that is going has no spelling to correct, and a
+    /// comment already being rewritten has been through this once. A style
+    /// rule therefore cannot contradict the verdict the policy reached,
+    /// because it cannot reach a comment the policy took.
+    pub(crate) fn restyle(
+        &mut self,
+        source: &[u8],
+        rules: &StyleRules,
+        markers: crate::Markers<'_>,
+    ) {
+        match &self.disposition {
+            Disposition::Keep { .. } => {
+                let Some(raw) = source.get(self.span.start..self.span.end) else {
+                    return;
+                };
+                if let Some((rule, replacement)) = crate::style::restyle(raw, rules, markers) {
+                    self.disposition = Disposition::Rewrite { rule, replacement };
+                }
+            }
+            Disposition::Rewrite { .. } | Disposition::Remove => {}
+        }
+    }
 }
 
 /// How serious a [`Diagnostic`] is.
@@ -1324,6 +1549,17 @@ pub enum ExternalSpanError {
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Policy {
+    /// Removes nothing. Every comment is kept, whatever its kind.
+    ///
+    /// The mode for a repository that wants the style rules and not the
+    /// removals. Saying so used to mean listing every [`CommentKind`] under
+    /// `keep_kind`, which is a configuration that has to be revisited each
+    /// time a kind is added — the setting said "these twelve kinds" when what
+    /// it meant was "all of them".
+    ///
+    /// It takes less than [`Self::Conservative`], so it sits at the weak end
+    /// of the scale the other three already form.
+    None,
     /// The default. Removes ordinary and documentation comments; keeps
     /// license notices, directives, HTML comments, SQL hints and version
     /// comments, and the shebang or encoding preamble. A
@@ -1357,11 +1593,12 @@ impl Policy {
     /// them reads as a scale. It is also the order help output uses, which is
     /// where a reader forms the expectation that the names have an order at
     /// all.
-    pub const ALL: [Self; 3] = [Self::Conservative, Self::Standard, Self::All];
+    pub const ALL: [Self; 4] = [Self::None, Self::Conservative, Self::Standard, Self::All];
 
     /// The canonical name, identical to the serde representation.
     pub const fn as_str(self) -> &'static str {
         match self {
+            Self::None => "none",
             Self::Conservative => "conservative",
             Self::Standard => "standard",
             Self::All => "all",
@@ -1375,6 +1612,7 @@ impl Policy {
     /// behaviour they always named; what changed is which one is the default.
     pub const fn aliases(self) -> &'static [&'static str] {
         match self {
+            Self::None => &[],
             Self::Conservative => &["legal"],
             Self::Standard => &["safe"],
             Self::All => &[],
@@ -1400,6 +1638,13 @@ impl Policy {
     /// The match is exhaustive, which is the point: a new [`CommentKind`] does
     /// not compile until every policy has an answer for it.
     pub const fn keeps(self, kind: CommentKind) -> bool {
+        /* NOTE: `none` answers before the table rather than inside it. Every
+         * row would otherwise have to name it, and a row that forgot would be
+         * a policy that removes something under the mode whose whole meaning
+         * is that it removes nothing. */
+        if matches!(self, Self::None) {
+            return true;
+        }
         match kind {
             CommentKind::Line | CommentKind::Block => false,
             CommentKind::DocLine | CommentKind::DocBlock | CommentKind::License => {
@@ -1431,10 +1676,18 @@ impl Policy {
     ///
     /// `ALL` is ordered by how much each policy takes, weakest first, so this
     /// walks it backwards.
+    ///
+    /// [`Self::None`] is not among the answers, and leaving it out is the
+    /// whole of what makes this advice. It keeps every set, so including it
+    /// would make "which gentler policy would keep this?" answerable for every
+    /// comment ever reported — with "switch the removals off". That is a
+    /// decision a project can certainly make, and it is not an answer to the
+    /// question the caller asked, which is which comments they meant to keep.
     pub fn strongest_keeping(kinds: &[CommentKind]) -> Option<Self> {
         Self::ALL
             .into_iter()
             .rev()
+            .filter(|policy| !matches!(policy, Self::None))
             .find(|policy| kinds.iter().all(|kind| policy.keeps(*kind)))
     }
 
@@ -1443,7 +1696,7 @@ impl Policy {
         match self {
             Self::Conservative => Some("legal"),
             Self::Standard => Some("safe"),
-            Self::All => None,
+            Self::None | Self::All => None,
         }
     }
 }
@@ -1587,6 +1840,8 @@ pub struct ScanOptions {
     pub remove_regex: Vec<String>,
     /// What a comment has to be to survive, beyond what its kind decides.
     pub allow: AllowRules,
+    /// How a comment that survives is written.
+    pub style: StyleRules,
     /// Markers this project's own tools read, and how strongly each is held.
     ///
     /// A directive is a comment addressed to a tool, and the catalogue of them
@@ -1703,6 +1958,125 @@ impl AllowRules {
     }
 }
 
+/// How a comment that survives is written.
+///
+/// The other axis, and deliberately not a field of [`AllowRules`]. Those are
+/// the conditions of survival, and a comment that fails one of them is
+/// *removed*; these are about a comment that is staying, and a comment that
+/// fails one of them is *rewritten*. Filing the second under the first would
+/// mean one table whose entries have two different consequences, and the first
+/// reader to add a rule to it would have to guess which.
+///
+/// Every rule here is off by default. A formatter that starts reformatting a
+/// repository because it was installed is a formatter somebody uninstalls.
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct StyleRules {
+    /// Whether a comment's text is separated from its marker by a space.
+    ///
+    /// `Some(true)` rewrites `//text` as `// text`. It says nothing about a
+    /// comment that already has one, and nothing about a marker with no text
+    /// after it at all: a bare `//` is a blank line in a paragraph, not a
+    /// comment missing its space.
+    pub space_after_marker: Option<bool>,
+    /// Whether a line of a comment may end in white space.
+    ///
+    /// `Some(false)` strips it. It reaches inside the comment only: the space
+    /// a removal would leave *after* a comment is the layout's business, and
+    /// this rule does not have an opinion about it.
+    pub trailing_whitespace: Option<bool>,
+}
+
+impl StyleRules {
+    /// Whether any rule here is set at all.
+    pub const fn is_empty(&self) -> bool {
+        self.space_after_marker.is_none() && self.trailing_whitespace.is_none()
+    }
+}
+
+/// A rule about how a comment is *written*, and the verdict it reached.
+///
+/// The style axis's counterpart to [`ShapeRule`], and written to the same
+/// discipline: the rule is the record, and the disposition and the explanation
+/// are both read off this one value so that the two cannot drift apart.
+///
+/// Every variant reaches the same verdict, which is why there is no
+/// `action()` returning anything else: a style rule never removes a comment
+/// and never leaves one alone. If it had nothing to change it was never
+/// recorded.
+///
+/// It serialises as a plain string rather than as an internally-tagged
+/// object, which is what every other fieldless enum in this crate does.
+/// [`ShapeRule`] carries fields and is tagged, and copying its attribute here
+/// produced `{"rule": "space-after-marker"}` where the OCaml reference wrote
+/// `"space-after-marker"`. The differential is what said so, before any
+/// expectation had been recorded.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum StyleRule {
+    /// [`StyleRules::space_after_marker`]: the text was written against the
+    /// marker.
+    SpaceAfterMarker,
+    /// [`StyleRules::trailing_whitespace`]: a line of it ended in white space.
+    TrailingWhitespace,
+}
+
+impl StyleRule {
+    /// Every style rule, in the order they are applied.
+    ///
+    /// Application order is the declaration order, and it matters: two rules
+    /// that both reach a comment compose, and the recorded rule is the first
+    /// one that found something to change. A list written by hand would be a
+    /// list that stops covering what it was written for, so
+    /// `every_style_rule_is_applied` checks this against the pass itself.
+    pub const ALL: [Self; 2] = [Self::SpaceAfterMarker, Self::TrailingWhitespace];
+
+    /// The verdict this rule reaches, which is fixed for every style rule.
+    pub const fn action(self) -> Action {
+        Action::Rewrite
+    }
+
+    /// The canonical name, identical to the serde representation.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::SpaceAfterMarker => "space-after-marker",
+            Self::TrailingWhitespace => "trailing-whitespace",
+        }
+    }
+
+    /// The explanation this rule writes for the comment it decided.
+    pub const fn explanation(self) -> DispositionExplanation {
+        DispositionExplanation::RewrittenByStyle { rule: self }
+    }
+
+    /// What the rule found, as the sentence an explanation puts under a
+    /// finding.
+    ///
+    /// Written as what is *wrong* rather than as what will happen, because the
+    /// verdict on the line above already says what will happen and a reader
+    /// asking for an explanation is asking the other question.
+    pub const fn detail(self) -> &'static str {
+        match self {
+            Self::SpaceAfterMarker => "its text is written against the comment marker",
+            Self::TrailingWhitespace => "a line of it ends in white space",
+        }
+    }
+
+    /// Whether [`StyleRules`] asks for this rule.
+    pub const fn asked_for_by(self, rules: &StyleRules) -> bool {
+        match self {
+            Self::SpaceAfterMarker => matches!(rules.space_after_marker, Some(true)),
+            Self::TrailingWhitespace => matches!(rules.trailing_whitespace, Some(false)),
+        }
+    }
+}
+
+impl fmt::Display for StyleRule {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 /// How long a promise has, in days.
 ///
 /// Written `"14d"` or `"2w"` in a configuration, and `"0d"` for a deadline
@@ -1798,6 +2172,7 @@ impl Default for ScanOptions {
             keep_regex: Vec::new(),
             remove_regex: Vec::new(),
             allow: AllowRules::default(),
+            style: StyleRules::default(),
             protected: Vec::new(),
         }
     }

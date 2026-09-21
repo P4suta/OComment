@@ -59,7 +59,7 @@ fn transformed(source: &[u8], language: Language, policy: Policy, layout: Layout
             .report
             .comments
             .iter()
-            .filter(|comment| comment.disposition.is_remove())
+            .filter(|comment| comment.action().removes())
             .count(),
         result.edits.len(),
         "one edit per removed comment"
@@ -448,8 +448,8 @@ fn external_spans_keep_the_comment_a_yaml_block_scalar_leans_on() {
         )
         .expect("the spans are sorted, non-empty and inside the source");
         assert_eq!(
-            result.report.comments[1].disposition,
-            Disposition::Keep {
+            result.report.comments[1].disposition(),
+            &Disposition::Keep {
                 reason: "structural in a YAML block scalar trail".into()
             },
             "{layout:?} let the hand-off remove the comment the block scalar ends at"

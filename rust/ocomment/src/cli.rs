@@ -911,7 +911,7 @@ fn run_target(
                     && report
                         .comments
                         .iter()
-                        .any(|comment| comment.disposition.is_remove());
+                        .any(|comment| comment.disposition().action().changes_bytes());
                 ProcessedResult::report(report, changed)
             };
             if progress {
@@ -1090,7 +1090,7 @@ fn verify_rewrite(path: &std::path::Path, rewritten: &ocomment_core::ScanReport)
     let left = rewritten
         .comments
         .iter()
-        .filter(|comment| comment.disposition.is_remove())
+        .filter(|comment| comment.action().removes())
         .count();
     ensure!(
         left == 0,
@@ -2205,7 +2205,7 @@ fn scan_for_counts(
         let changed = report
             .comments
             .iter()
-            .any(|comment| comment.disposition.is_remove());
+            .any(|comment| comment.disposition().action().changes_bytes());
         let read_by = file.read_by();
         files.push(ProcessedFile {
             path: file.path,
