@@ -1,7 +1,6 @@
 # Reading a report
 
-Three readers ask three different questions of the same run, and there is a
-format for each.
+Three readers ask three different questions of the same run, and there is a format for each.
 
 | | who | what it answers |
 |---|---|---|
@@ -9,12 +8,9 @@ format for each.
 | `human` | a pipeline, counting | where each one is, one line at a time |
 | `agent` | a program, acting | the edit, and the command to run next |
 
-`review` is the default, in a pipe as much as on a terminal. That is deliberate
-and it is not what most tools do: a person on a screen and an agent reading the
-same run through a pipe are in one conversation about one report, and a format
-that changes shape between them leaves each arguing from something the other
-cannot see. Colour still follows the terminal, because colour is the one thing
-here that carries no meaning of its own.
+`review` is the default, in a pipe as much as on a terminal.
+That is deliberate and it is not what most tools do: a person on a screen and an agent reading the same run through a pipe are in one conversation about one report, and a format that changes shape between them leaves each arguing from something the other cannot see.
+Colour still follows the terminal, because colour is the one thing here that carries no meaning of its own.
 
 ## `review`
 
@@ -41,24 +37,18 @@ $ ocomment check
   ALLOWED 1 comment this run did not report; `--explain` names the rule that kept each
 ```
 
-Findings are grouped by the decision they ask for rather than by the rule that
-produced them, because five comments under one rule are not five questions.
-They are one question asked five times, and the answer to each is decided by
-the code the comment sits on — which is why the code is there.
+Findings are grouped by the decision they ask for rather than by the rule that produced them, because five comments under one rule are not five questions.
+They are one question asked five times, and the answer to each is decided by the code the comment sits on — which is why the code is there.
 
-Adjacent comment lines are one finding. A comment beside code never is: forty
-trailing notes on forty assignments are forty decisions, one per statement.
+Adjacent comment lines are one finding.
+A comment beside code never is: forty trailing notes on forty assignments are forty decisions, one per statement.
 
-**`or keep them` is the other half of every decision.** A gate that can only say
-"delete it" is one somebody turns off the first time it is wrong about a single
-comment. What it offers is a *setting* rather than a flag — a flag makes one run
-pass and a setting is a decision the repository keeps. It will not offer you the
-shortest path to a green run; a gate that names the flag which silences it, at
-the moment it fires, is arguing against its own finding.
+**`or keep them` is the other half of every decision.** A gate that can only say "delete it" is one somebody turns off the first time it is wrong about a single comment.
+What it offers is a *setting* rather than a flag — a flag makes one run pass and a setting is a decision the repository keeps.
+It will not offer you the shortest path to a green run; a gate that names the flag which silences it, at the moment it fires, is arguing against its own finding.
 
-**`ALLOWED` is what the run did not report.** A tool that is silent when it is
-green leaves nobody able to check that the green is right. `--explain` turns the
-count into the list, with the rule that kept each:
+**`ALLOWED` is what the run did not report.** A tool that is silent when it is green leaves nobody able to check that the green is right.
+`--explain` turns the count into the list, with the rule that kept each:
 
 ```console
 $ ocomment check --explain
@@ -67,15 +57,12 @@ $ ocomment check --explain
       kept: policy conservative protects documentation comments, and this is a `doc-line`
 ```
 
-`--explain` also puts the engine's own verdict under each finding. The decision
-above it says *what to do*, read from where the comment sits; the line
-`--explain` adds says *why it is being asked*, which is the rule and the setting
-behind it.
+`--explain` also puts the engine's own verdict under each finding.
+The decision above it says *what to do*, read from where the comment sits; the line `--explain` adds says *why it is being asked*, which is the rule and the setting behind it.
 
 ### When there are thousands
 
-Above twenty findings a group shows its shape instead of its contents: where its
-comments are, most first, and two of them as an example.
+Above twenty findings a group shows its shape instead of its contents: where its comments are, most first, and two of them as an example.
 
 ```console
   DECIDE  make it a documentation comment              4679 comments
@@ -89,11 +76,9 @@ comments are, most first, and two of them as an example.
    ocomment check rust/ocomment-core/src/scanner.rs   the 2259 in one file, in full
 ```
 
-A count with no location cannot set an order. "1,973 of these are in one file"
-is the difference between a project-wide problem and an afternoon, and the last
-line is the one thing a count never gives you: somewhere to start. It is
-withheld when the busiest file holds under a twentieth of the total, because
-that is not a place to start — it is a place that happens to be first.
+A count with no location cannot set an order.
+"1,973 of these are in one file" is the difference between a project-wide problem and an afternoon, and the last line is the one thing a count never gives you: somewhere to start.
+It is withheld when the busiest file holds under a twentieth of the total, because that is not a place to start — it is a place that happens to be first.
 
 ## `human`
 
@@ -105,16 +90,12 @@ src/budget.rs:3:1: removable line comment: // The retry budget is per connection
 src/budget.rs:9:1: removable line comment: // TODO: make this configurable
 ```
 
-Kept because a pipeline written against it should not have to be rewritten, and
-because one line per finding is the right shape for counting even when it is the
-wrong shape for deciding. The end-of-run summary on standard error is the same
-whichever format wrote the report.
+Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding.
+The end-of-run summary on standard error is the same whichever format wrote the report.
 
 ## `agent`
 
-The same report for a reader that is going to act on it, carrying its own
-schema — a machine format whose reader has to go and learn it first spends a
-round trip doing that.
+The same report for a reader that is going to act on it, carrying its own schema — a machine format whose reader has to go and learn it first spends a round trip doing that.
 
 ```console
 $ ocomment check --format agent
@@ -140,32 +121,27 @@ RECHECK ["ocomment","check"]
 REMOVE-ALL ["ocomment","fix"] removes 5 comments, including any above that were worth keeping
 ```
 
-Every payload line carries a marker, so text that happens to contain a colon or
-a keyword cannot be mistaken for structure. Commands are argv arrays rather than
-prose, because a copied array cannot be mistyped.
+Every payload line carries a marker, so text that happens to contain a colon or a keyword cannot be mistaken for structure.
+Commands are argv arrays rather than prose, because a copied array cannot be mistyped.
 
-A clean run writes nothing at all, which is what makes this usable as the body
-of a hook decision. See [Agents](agents.md).
+A clean run writes nothing at all, which is what makes this usable as the body of a hook decision.
+See [Agents](agents.md).
 
 ## `json`, `jsonl`, `sarif`, `github`
 
-`--format json` carries the whole report — every comment, its span, its line and
-column, its text and its verdict — against
-[`spec/result.schema.json`](https://github.com/P4suta/OComment/blob/main/spec/result.schema.json).
+`--format json` carries the whole report — every comment, its span, its line and column, its text and its verdict — against [`spec/result.schema.json`](https://github.com/P4suta/OComment/blob/main/spec/result.schema.json).
 
-Each file also says what read it. `language` is which built-in grammar applied,
-and it is `unknown` for a file no built-in language claims; `read_by` is the
-reader that answered, which for such a file is a declarative profile or a
-plugin that read it from end to end. One field without the other said `unknown`
-about a file the run had just read in full:
+Each file also says what read it.
+`language` is which built-in grammar applied,
+and it is `unknown` for a file no built-in language claims; `read_by` is the reader that answered, which for such a file is a declarative profile or a plugin that read it from end to end.
+One field without the other said `unknown` about a file the run had just read in full:
 
 ```json
 { "path": ".gitignore", "language": "unknown",
   "read_by": { "kind": "profile", "name": "hash-line" } }
 ```
 
-It also carries `decisions`: the same grouping the other two formats show, with
-the lines as they are, what would replace them, and the settings to add.
+It also carries `decisions`: the same grouping the other two formats show, with the lines as they are, what would replace them, and the settings to add.
 
 ```json
 {
@@ -188,16 +164,13 @@ the lines as they are, what would replace them, and the settings to add.
 }
 ```
 
-`span` is what identifies a finding; the path and the line do not. Two
-removable comments share a line whenever one of them sits beside code —
-`let x = 1; /* directive */ /* prose */` is two findings, asked two different
-questions — and named by line alone they arrive identical. The text formats
-put the column after the line in that case for the same reason, and leave it
-off for a comment that only happens to be indented, which is the only one on
-its line.
+`span` is what identifies a finding; the path and the line do not.
+Two removable comments share a line whenever one of them sits beside code —
+`let x = 1; /* directive */ /* prose */` is two findings, asked two different questions — and named by line alone they arrive identical.
+The text formats put the column after the line in that case for the same reason, and leave it off for a comment that only happens to be indented, which is the only one on its line.
 
-`--format jsonl` is the same content one object per line. `--format sarif` and
-`--format github` are for the tools that read them; see [CI and hooks](ci.md).
+`--format jsonl` is the same content one object per line.
+`--format sarif` and `--format github` are for the tools that read them; see [CI and hooks](ci.md).
 
 ## After a fix
 
@@ -212,8 +185,6 @@ $ ocomment fix
 ```
 
 A run that says only what it removed is a run whose judgement nobody can audit:
-you are told five went and have no way to check that the sixth was right to
-stay.
+you are told five went and have no way to check that the sixth was right to stay.
 
-`diff` writes a patch under either person-facing format, because a patch is a
-product rather than a report about one and there is no grouped view of one.
+`diff` writes a patch under either person-facing format, because a patch is a product rather than a report about one and there is no grouped view of one.

@@ -1,13 +1,12 @@
 # Scanner plugins
 
-OComment scanner plugins are WebAssembly components implementing
-`spec/ocomment-scanner.wit`. A plugin receives source bytes and scan options and
-returns only comment spans and kinds. It cannot edit files. The host rechecks
-API version, bounds, ordering, overlap, policy, and every generated edit.
+OComment scanner plugins are WebAssembly components implementing `spec/ocomment-scanner.wit`.
+A plugin receives source bytes and scan options and returns only comment spans and kinds.
+It cannot edit files.
+The host rechecks API version, bounds, ordering, overlap, policy, and every generated edit.
 
-The host exposes no WASI, filesystem, network, clock, random, or imported host
-functions. Each invocation receives an input-proportional fuel budget and
-explicit memory and instance limits.
+The host exposes no WASI, filesystem, network, clock, random, or imported host functions.
+Each invocation receives an input-proportional fuel budget and explicit memory and instance limits.
 
 ```sh
 ocomment plugin new my-scanner
@@ -17,8 +16,8 @@ wasm-tools component new target/wasm32-unknown-unknown/release/my_scanner.wasm \
   -o my-scanner.component.wasm
 ```
 
-Add local artifacts directly. Remote artifacts require a verified digest and
-Sigstore identity and are fetched only by explicit `add` or `update` commands.
+Add local artifacts directly.
+Remote artifacts require a verified digest and Sigstore identity and are fetched only by explicit `add` or `update` commands.
 Normal scans and LSP sessions are offline.
 
 ```sh
@@ -32,10 +31,10 @@ ocomment plugin add 'oci:ghcr.io/owner/my-scanner:v1#my-scanner.wasm' \
 ocomment plugin verify
 ```
 
-`.ocomment.lock` pins the source, version, SHA-256, signature identity, API, and
-capabilities. `plugin update` accepts a new digest only after verifying the
-artifact against the identity already pinned in that lock. Artifacts live below
-`.ocomment/plugins/`. Route a locked and enabled plugin by extension:
+`.ocomment.lock` pins the source, version, SHA-256, signature identity, API, and capabilities.
+`plugin update` accepts a new digest only after verifying the artifact against the identity already pinned in that lock.
+Artifacts live below `.ocomment/plugins/`.
+Route a locked and enabled plugin by extension:
 
 ```toml
 [plugins]
