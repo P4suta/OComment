@@ -194,8 +194,24 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
             })
             .cloned()
             .collect();
+        /* NOTE: The paragraphs too, by the same rule.
+         * A run is a finding of its own and is not in the comment list, so selecting only the comments left a report that named a paragraph this commit never touched — and a machine-wide gate that reported one would be asking somebody to reflow a history that is not theirs. */
+        let selected_runs = full
+            .report
+            .runs
+            .iter()
+            .filter(|run| {
+                let line = lines.line_number(run.span.start);
+                let end = lines.line_number(run.span.end.saturating_sub(1));
+                ranges
+                    .iter()
+                    .any(|range| range.start <= end && line < range.end)
+            })
+            .cloned()
+            .collect();
         let mut report = full.report;
         report.comments = selected_comments;
+        report.runs = selected_runs;
         if let Some(span) = conflict {
             report.valid = false;
             report.diagnostics.push(Diagnostic {

@@ -8,8 +8,8 @@ use clap::ValueEnum;
 use ocomment_core::TransformResult;
 use ocomment_core::{
     Action, ByteSpan, Comment, CommentKind, Diagnostic, Disposition, DispositionExplanation,
-    DispositionPatterns, Edit, Language, Policy, Protection, ScanOptions, ScanReport, Severity,
-    SourceMap, TransformPlan, explain_comment_with,
+    DispositionPatterns, Edit, Language, Policy, ProseOrigin, Protection, ScanOptions, ScanReport,
+    Severity, SourceMap, TransformPlan, explain_comment_with,
 };
 use serde::{Serialize, Serializer, ser::SerializeSeq};
 use serde_json::{Value, json};
@@ -1969,9 +1969,15 @@ fn render_human(
                     .as_ref()
                     .expect("a finding requested a line index")
                     .line_column(run.span.start);
+                /* NOTE: Named for where the prose was found.
+                 * A paragraph of a Markdown document is not a comment, and a report that called it one would be telling a reader something about their file that is not so. */
+                let what = match run.origin {
+                    ProseOrigin::Comments => "rewritten comment paragraph",
+                    ProseOrigin::Document => "rewritten paragraph",
+                };
                 wrote(writeln!(
                     output,
-                    "{}:{line}:{column}: {}rewritten comment paragraph{}{}",
+                    "{}:{line}:{column}: {}{what}{}{}",
                     display_path(&file.path, presentation.hyperlinks),
                     color("[34m", presentation.color),
                     color("[0m", presentation.color),
