@@ -11,9 +11,8 @@ use thiserror::Error;
 
 /// The units a client counts a position's `character` in.
 ///
-/// This is the LSP `positionEncoding` capability. The engine's own
-/// coordinates are always byte offsets; an encoding only says how to read
-/// the numbers a client sends.
+/// This is the LSP `positionEncoding` capability.
+/// The engine's own coordinates are always byte offsets; an encoding only says how to read the numbers a client sends.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum PositionEncoding {
     /// UTF-8 code units, which are the bytes themselves.
@@ -27,8 +26,7 @@ pub enum PositionEncoding {
 
 /// One edit a client made to a document.
 ///
-/// The spans of a batch address the document as it stands *before* the
-/// batch, so a client never has to compensate for its own earlier changes.
+/// The spans of a batch address the document as it stands *before* the batch, so a client never has to compensate for its own earlier changes.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DocumentChange {
     /// The bytes to replace, empty to insert at that offset.
@@ -39,18 +37,11 @@ pub struct DocumentChange {
 
 /// A document that rescans only what an edit disturbed.
 ///
-/// This is the path an editor takes, where a full scan on every keystroke
-/// would be wasted work. The document keeps the previous revision's report
-/// and its restart points, and an edit is answered by scanning from the last
-/// safe point before it up to the first point where the new scan converges
-/// with the old one; everything outside that window is reused, with the spans
-/// past the edit shifted by its length delta.
+/// This is the path an editor takes, where a full scan on every keystroke would be wasted work.
+/// The document keeps the previous revision's report and its restart points, and an edit is answered by scanning from the last safe point before it up to the first point where the new scan converges with the old one; everything outside that window is reused, with the spans past the edit shifted by its length delta.
 ///
-/// The result is byte-for-byte the report [`scan`](crate::scan) would have
-/// produced for the same bytes — a restart point is only used while the
-/// bytes around it still permit one, and a scan that fails to converge
-/// simply runs to the end. [`Self::last_rescan_span`] says how much of the
-/// document the last edit actually cost.
+/// The result is byte-for-byte the report [`scan`](crate::scan) would have produced for the same bytes — a restart point is only used while the bytes around it still permit one, and a scan that fails to converge simply runs to the end.
+/// [`Self::last_rescan_span`] says how much of the document the last edit actually cost.
 ///
 /// # Examples
 ///
@@ -106,12 +97,10 @@ pub struct IncrementalDocument {
 
 /// Why an edit or a position was refused.
 ///
-/// Every one of these is raised before the document is touched, so a refused
-/// call leaves the previous revision intact.
+/// Every one of these is raised before the document is touched, so a refused call leaves the previous revision intact.
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
 pub enum IncrementalError {
-    /// The batch's version does not advance on the current one, so it
-    /// describes a revision that has already been overtaken.
+    /// The batch's version does not advance on the current one, so it describes a revision that has already been overtaken.
     #[error("stale document version {received}; current version is {current}")]
     StaleVersion {
         /// The version the batch claimed.
@@ -119,12 +108,10 @@ pub enum IncrementalError {
         /// The version the document is already at.
         current: i64,
     },
-    /// A change is inverted, starts before its predecessor ends, or reaches
-    /// past the end of the document.
+    /// A change is inverted, starts before its predecessor ends, or reaches past the end of the document.
     #[error("change span lies outside the document")]
     InvalidSpan,
-    /// The line does not exist, or `character` does not land on a boundary of
-    /// the encoding it was counted in.
+    /// The line does not exist, or `character` does not land on a boundary of the encoding it was counted in.
     #[error("position does not lie on a valid encoding boundary")]
     InvalidPosition,
 }
@@ -132,8 +119,7 @@ pub enum IncrementalError {
 impl IncrementalDocument {
     /// Scan `source` once and hold on to what it takes to rescan cheaply.
     ///
-    /// `version` is the client's revision number for these bytes; every later
-    /// [`Self::apply_changes`] has to advance on it.
+    /// `version` is the client's revision number for these bytes; every later [`Self::apply_changes`] has to advance on it.
     pub fn new(source: Vec<u8>, language: Language, options: ScanOptions, version: i64) -> Self {
         let prepared = PreparedScanner::lossy(options.clone());
         let (report, safe_checkpoints) =
@@ -171,12 +157,8 @@ impl IncrementalDocument {
     }
     /// The bytes a removal would write, from the report already in hand.
     ///
-    /// No comment is scanned again: this is the current report run through the
-    /// same layout and source-map engine [`transform`](crate::transform) uses.
-    /// A YAML document does get one extra lexical pass in there, because where
-    /// a block scalar body ends decides which comment lines a removal has to
-    /// take whole and no report carries that; it is linear, like the edit walk
-    /// beside it, and every other language skips it on the language check.
+    /// No comment is scanned again: this is the current report run through the same layout and source-map engine [`transform`](crate::transform) uses.
+    /// A YAML document does get one extra lexical pass in there, because where a block scalar body ends decides which comment lines a removal has to take whole and no report carries that; it is linear, like the edit walk beside it, and every other language skips it on the language check.
     pub fn transform(&self, layout: Layout) -> TransformResult {
         transform_report(
             &self.source,
@@ -193,41 +175,33 @@ impl IncrementalDocument {
     }
     /// The stretch of the current bytes the last edit had to rescan.
     ///
-    /// A fresh document reports the whole source. An edit that reused both
-    /// ends reports only the window between them, which is what makes the
-    /// saving measurable rather than assumed.
+    /// A fresh document reports the whole source.
+    /// An edit that reused both ends reports only the window between them, which is what makes the saving measurable rather than assumed.
     pub const fn last_rescan_span(&self) -> ByteSpan {
         self.last_rescan
     }
     /// The byte offset each line starts at, `0` first.
     ///
-    /// A CRLF pair counts as one terminator, so `checkpoints()[n]` is where
-    /// line `n` begins for [`Self::byte_offset`].
+    /// A CRLF pair counts as one terminator, so `checkpoints()[n]` is where line `n` begins for [`Self::byte_offset`].
     pub fn checkpoints(&self) -> &[usize] {
         &self.checkpoints
     }
     /// The offsets a rescan may restart from and still reproduce a full scan.
     ///
-    /// Far fewer than [`Self::checkpoints`]: a line start only qualifies while
-    /// the scanner is in a clean top-level state there and the bytes around it
-    /// keep it that way.
+    /// Far fewer than [`Self::checkpoints`]: a line start only qualifies while the scanner is in a clean top-level state there and the bytes around it keep it that way.
     pub fn safe_checkpoints(&self) -> &[usize] {
         &self.safe_checkpoints
     }
 
-    /// Apply a sorted, non-overlapping batch whose spans refer to the current
-    /// document snapshot. Validation is transactional: an invalid batch does
-    /// not alter the source, report, checkpoints, or version.
+    /// Apply a sorted, non-overlapping batch whose spans refer to the current document snapshot.
+    /// Validation is transactional: an invalid batch does not alter the source, report, checkpoints, or version.
     ///
-    /// An empty batch is accepted and only advances the version, which is what
-    /// a client that saved without typing sends.
+    /// An empty batch is accepted and only advances the version, which is what a client that saved without typing sends.
     ///
     /// # Errors
     ///
-    /// [`IncrementalError::StaleVersion`] when `version` does not advance on
-    /// the current one, and [`IncrementalError::InvalidSpan`] when a change is
-    /// inverted, starts before its predecessor ends, or reaches past the end
-    /// of the document. Both are raised before anything is written.
+    /// [`IncrementalError::StaleVersion`] when `version` does not advance on the current one, and [`IncrementalError::InvalidSpan`] when a change is inverted, starts before its predecessor ends, or reaches past the end of the document.
+    /// Both are raised before anything is written.
     ///
     /// # Examples
     ///
@@ -280,13 +254,8 @@ impl IncrementalDocument {
         let safe_start = if !can_reuse {
             0
         } else {
-            /* INVARIANT: The checkpoints belong to the *previous* revision, and a
-             * checkpoint is only a restart point while the bytes around it
-             * still allow one: an edit that turns line 2 into a Python encoding
-             * declaration, or that splices two C lines together, withdraws that
-             * permission. Every candidate is therefore re-asked against the
-             * edited document, falling back to an earlier checkpoint and
-             * ultimately to a full scan. */
+            /* INVARIANT: The checkpoints belong to the *previous* revision, and a checkpoint is only a restart point while the bytes around it still allow one: an edit that turns line 2 into a Python encoding declaration, or that splices two C lines together, withdraws that permission.
+             * Every candidate is therefore re-asked against the edited document, falling back to an earlier checkpoint and ultimately to a full scan. */
             let rules = RestartRules::of(&next, self.language);
             let usable = self
                 .safe_checkpoints
@@ -299,11 +268,9 @@ impl IncrementalDocument {
                 .unwrap_or(0)
         };
         let old_convergence = if can_reuse {
-            /* INVARIANT: Converging keeps the previous revision's report for every byte
-             * past the convergence point, shifted by the edit's length delta —
-             * including each comment's kind. Only the preamble rules care where
-             * a comment sits, so the tail may be reused exactly while it lies
-             * past the preamble both where it was and where the edit moves it;
+            /* INVARIANT: Converging keeps the previous revision's report for every byte past the convergence point, shifted by the edit's length delta —
+             * including each comment's kind.
+             * Only the preamble rules care where a comment sits, so the tail may be reused exactly while it lies past the preamble both where it was and where the edit moves it;
              * otherwise the scan runs on to the first checkpoint that does. */
             self.safe_checkpoints.iter().copied().find(|point| {
                 *point >= old_tail_start.max(safe_start)
@@ -317,10 +284,7 @@ impl IncrementalDocument {
         let mut partial = None;
         if let Some(old_convergence) = old_convergence {
             let new_convergence = new_tail_start + old_convergence - old_tail_start;
-            /* INVARIANT: The scanner is handed the whole suffix, never a slice cut at the
-             * convergence point: lexical lookahead that reaches past the cut
-             * would otherwise decide differently than it does in the real
-             * document and the rescan would lose comments or diagnostics. */
+            /* INVARIANT: The scanner is handed the whole suffix, never a slice cut at the convergence point: lexical lookahead that reaches past the cut would otherwise decide differently than it does in the real document and the rescan would lose comments or diagnostics. */
             let (report, checkpoints, converged) = scan_until_checkpoint_prepared(
                 &next[safe_start..],
                 self.language,
@@ -332,8 +296,7 @@ impl IncrementalDocument {
                 reused_tail = Some((old_convergence, new_convergence));
                 partial = Some((report, checkpoints, new_convergence));
             } else {
-                /* NOTE: Lexical state diverged, so the scan already ran to the end of
-                 * the suffix; that report is exactly the fallback. */
+                /* NOTE: Lexical state diverged, so the scan already ran to the end of the suffix; that report is exactly the fallback. */
                 partial = Some((report, checkpoints, next.len()));
             }
         }
@@ -398,6 +361,7 @@ impl IncrementalDocument {
                 .iter()
                 .any(|diagnostic| diagnostic.severity.is_failure()),
             comments,
+            runs: Vec::new(),
             diagnostics,
         };
         let mut safe_checkpoints: Vec<_> = self
@@ -408,10 +372,8 @@ impl IncrementalDocument {
             .collect();
         safe_checkpoints.extend(suffix_checkpoints);
         if let Some((old_convergence, new_convergence)) = reused_tail {
-            /* INVARIANT: the converged tail's checkpoints come from the previous
-             * revision, and an edit can grow a lexical construct — a `<` tag,
-             * a quote pair, an XML literal — across one, so each is re-asked
-             * against the edited document exactly as a candidate restart is. */
+            /* INVARIANT: the converged tail's checkpoints come from the previous revision, and an edit can grow a lexical construct — a `<` tag,
+             * a quote pair, an XML literal — across one, so each is re-asked against the edited document exactly as a candidate restart is. */
             let rules = RestartRules::of(&next, self.language);
             safe_checkpoints.extend(
                 self.safe_checkpoints
@@ -435,16 +397,14 @@ impl IncrementalDocument {
 
     /// The byte offset of a line-and-character position.
     ///
-    /// `line` is zero-based, and `character` is a zero-based offset into that
-    /// line counted in the units `encoding` names. The end of a line is a
-    /// valid position; the terminator itself is not part of the line.
+    /// `line` is zero-based, and `character` is a zero-based offset into that line counted in the units `encoding` names.
+    /// The end of a line is a valid position; the terminator itself is not part of the line.
     ///
     /// # Errors
     ///
     /// [`IncrementalError::InvalidPosition`] when the line does not exist,
-    /// when `character` reaches past the end of the line, or when it lands
-    /// inside a character instead of on a boundary. A line whose bytes are
-    /// not valid UTF-8 has no UTF-16 or UTF-32 positions at all.
+    /// when `character` reaches past the end of the line, or when it lands inside a character instead of on a boundary.
+    /// A line whose bytes are not valid UTF-8 has no UTF-16 or UTF-32 positions at all.
     pub fn byte_offset(
         &self,
         line: u32,
@@ -541,20 +501,15 @@ mod tests {
     };
     use proptest::{prelude::*, sample::select};
 
-    /// A pool length as a `prop_oneof!` weight, so that drawing uniformly from
-    /// a pool of `n` gives each of its members the weight one arm would have.
+    /// A pool length as a `prop_oneof!` weight, so that drawing uniformly from a pool of `n` gives each of its members the weight one arm would have.
     fn weight(length: usize) -> u32 {
         u32::try_from(length).expect("the pool is far smaller than a weight")
     }
 
     /// One byte of the shared pool, or a uniformly random one.
     ///
-    /// The pool is [`crate::lexical_pool::BYTES`], and `tests/properties.rs`
-    /// draws from the same one: a fragment worth generating against the
-    /// whole-file scanner is worth generating against the incremental one. The
-    /// extra `\n` arm doubles that byte's weight, because a line boundary is
-    /// where a checkpoint may be offered and every one of them is a restart
-    /// this suite gets to try.
+    /// The pool is [`crate::lexical_pool::BYTES`], and `tests/properties.rs` draws from the same one: a fragment worth generating against the whole-file scanner is worth generating against the incremental one.
+    /// The extra `\n` arm doubles that byte's weight, because a line boundary is where a checkpoint may be offered and every one of them is a restart this suite gets to try.
     fn lexical_byte() -> impl Strategy<Value = u8> {
         prop_oneof![
             4 => any::<u8>(),
@@ -565,10 +520,7 @@ mod tests {
 
     /// A fragment: one byte of the pool, or one whole token from it.
     ///
-    /// The tokens are [`crate::lexical_pool::TOKENS`] — multi-byte openers a
-    /// single-byte alphabet can never synthesise — and each is drawn as often
-    /// as one byte is, which is what the eight-to-one weight in front of the
-    /// byte arm keeps in proportion.
+    /// The tokens are [`crate::lexical_pool::TOKENS`] — multi-byte openers a single-byte alphabet can never synthesise — and each is drawn as often as one byte is, which is what the eight-to-one weight in front of the byte arm keeps in proportion.
     fn lexical_fragment() -> impl Strategy<Value = Vec<u8>> {
         prop_oneof![
             8 => lexical_byte().prop_map(|byte| vec![byte]),
@@ -583,11 +535,8 @@ mod tests {
             .prop_map(|fragments| fragments.concat())
     }
 
-    /// One end of an edit span, drawn with a heavy bias towards the two
-    /// document boundaries. The degenerate spans live there — an empty edit at
-    /// offset 0, an append at the end, a replacement that swallows the whole
-    /// document — and a uniform draw finds them only as often as it finds any
-    /// other single offset.
+    /// One end of an edit span, drawn with a heavy bias towards the two document boundaries.
+    /// The degenerate spans live there — an empty edit at offset 0, an append at the end, a replacement that swallows the whole document — and a uniform draw finds them only as often as it finds any other single offset.
     fn edit_endpoint() -> impl Strategy<Value = usize> {
         prop_oneof![
             1 => Just(0usize),
@@ -596,10 +545,8 @@ mod tests {
         ]
     }
 
-    /// Place a drawn endpoint in `source`. The document length is unknown when
-    /// the endpoint is drawn, so `usize::MAX` is the name of its end; every
-    /// other draw wraps into the document and keeps the interior offsets
-    /// spread evenly.
+    /// Place a drawn endpoint in `source`.
+    /// The document length is unknown when the endpoint is drawn, so `usize::MAX` is the name of its end; every other draw wraps into the document and keeps the interior offsets spread evenly.
     fn endpoint(source: &[u8], drawn: usize) -> usize {
         if drawn == usize::MAX {
             source.len()
@@ -608,9 +555,7 @@ mod tests {
         }
     }
 
-    /// The endpoint mapping has to reach both boundaries exactly, or the
-    /// biased draws below would still miss the degenerate spans they exist to
-    /// produce.
+    /// The endpoint mapping has to reach both boundaries exactly, or the biased draws below would still miss the degenerate spans they exist to produce.
     #[test]
     fn an_edit_endpoint_reaches_both_document_boundaries() {
         let source = b"// comment\n";
@@ -651,24 +596,15 @@ mod tests {
     }
 
     proptest! {
-        /* NOTE: Unit-test proptests cannot persist regressions next to `src`, so the
-         * shrunk counterexample is reported inline instead. */
+        /* NOTE: Unit-test proptests cannot persist regressions next to `src`, so the shrunk counterexample is reported inline instead. */
         #![proptest_config(ProptestConfig { failure_persistence: None, ..ProptestConfig::default() })]
 
-        /// Every safe checkpoint must be a restart point: scanning the suffix
-        /// that begins there, at that offset, has to reproduce exactly the part
-        /// of the full scan that begins there. The incremental engine reuses the
-        /// prefix of the previous report on the strength of this invariant, so a
-        /// checkpoint that is not a clean lexical state silently corrupts a
-        /// rescan.
+                /// Every safe checkpoint must be a restart point: scanning the suffix that begins there, at that offset, has to reproduce exactly the part of the full scan that begins there.
+        /// The incremental engine reuses the prefix of the previous report on the strength of this invariant, so a checkpoint that is not a clean lexical state silently corrupts a rescan.
         ///
-        /// The rescan is the observable half. The other half is the mechanism
-        /// under it: no checkpoint may stand at or before the furthest byte any
-        /// decision made before it consulted. A rescan that agrees only because
-        /// the lookahead which read across the checkpoint happens to re-lex the
-        /// same bytes and reach the same answer is agreeing by luck, and the
-        /// luck runs out at the next lookahead — so the watermark is asserted
-        /// directly, per language, before the restarts are tried.
+        /// The rescan is the observable half.
+        /// The other half is the mechanism under it: no checkpoint may stand at or before the furthest byte any decision made before it consulted.
+        /// A rescan that agrees only because the lookahead which read across the checkpoint happens to re-lex the same bytes and reach the same answer is agreeing by luck, and the luck runs out at the next lookahead — so the watermark is asserted directly, per language, before the restarts are tried.
         #[test]
         fn safe_checkpoints_restart_every_builtin_scan_exactly(
             source in lexical_source(0..48),
@@ -725,10 +661,8 @@ mod tests {
             }
         }
 
-        /// The cross-edit form of the same invariant. A checkpoint is chosen
-        /// from the *previous* document's list, so it also has to survive the
-        /// edit: after `apply_changes` the document must be indistinguishable
-        /// from a full scan of the edited bytes — comments, diagnostics,
+                /// The cross-edit form of the same invariant.
+        /// A checkpoint is chosen from the *previous* document's list, so it also has to survive the edit: after `apply_changes` the document must be indistinguishable from a full scan of the edited bytes — comments, diagnostics,
         /// validity and the checkpoint list alike.
         #[test]
         fn arbitrary_edits_leave_every_builtin_document_equal_to_a_full_scan(
@@ -781,10 +715,8 @@ mod tests {
         }
     }
 
-    /// Regression: Python emitted a safe checkpoint at the start of line 2, but
-    /// an encoding declaration is only recognised while scanning from offset 0,
-    /// so a rescan that restarted there demoted `# coding:` from `Encoding`
-    /// (kept) to a plain line comment (removed).
+    /// Regression: Python emitted a safe checkpoint at the start of line 2, but an encoding declaration is only recognised while scanning from offset 0,
+    /// so a rescan that restarted there demoted `# coding:` from `Encoding` (kept) to a plain line comment (removed).
     #[test]
     fn a_rescan_never_demotes_a_second_line_python_encoding_declaration() {
         let source = b"value = 1\n# coding: latin-1\ntail = 2\n".to_vec();
@@ -810,19 +742,14 @@ mod tests {
         assert_eq!(document.safe_checkpoints(), expected_checkpoints);
     }
 
-    /// Ruby reads a source-encoding declaration out of the same two lines
-    /// Python does, and only while scanning from offset 0, so the start of line
-    /// 2 is a restart point for it under exactly the same condition. A rescan
-    /// that restarted there anyway would demote `# coding:` from `Encoding`
-    /// (kept) to a plain line comment (removed).
+    /// Ruby reads a source-encoding declaration out of the same two lines Python does, and only while scanning from offset 0, so the start of line 2 is a restart point for it under exactly the same condition.
+    /// A rescan that restarted there anyway would demote `# coding:` from `Encoding` (kept) to a plain line comment (removed).
     #[test]
     fn a_rescan_never_demotes_a_second_line_ruby_encoding_declaration() {
         let source = b"value = 1\n# coding: latin-1\ntail = 2\n".to_vec();
         let mut document =
             IncrementalDocument::new(source, Language::Ruby, ScanOptions::default(), 1);
-        /* NOTE: The edit falls inside the declaration itself, so the last
-         * checkpoint before it is the start of line 2 — the one offset this
-         * rule exists to refuse. */
+        /* NOTE: The edit falls inside the declaration itself, so the last checkpoint before it is the start of line 2 — the one offset this rule exists to refuse. */
         document
             .apply_changes(
                 &[DocumentChange {
@@ -844,21 +771,15 @@ mod tests {
         assert_eq!(document.safe_checkpoints(), expected_checkpoints);
     }
 
-    /// Regression: an edit that closes a tag the earlier scan had read as text
-    /// must withdraw every checkpoint the old reading offered inside it. A
-    /// tag's attributes can hold `<` of their own — `<div a="<b>"` reads the
-    /// second `<` as text inside the first tag's quotes — so a walk back to
-    /// the nearest `<` alone stands inside the outer tag once the edit
-    /// supplies its `>`; every `<` before the offset has to close.
+    /// Regression: an edit that closes a tag the earlier scan had read as text must withdraw every checkpoint the old reading offered inside it.
+    /// A tag's attributes can hold `<` of their own — `<div a="<b>"` reads the second `<` as text inside the first tag's quotes — so a walk back to the nearest `<` alone stands inside the outer tag once the edit supplies its `>`; every `<` before the offset has to close.
     #[test]
     fn an_edit_that_closes_a_tag_withdraws_the_checkpoints_inside_it() {
         let source = b"<div a=\"<b>\"\nline2\n".to_vec();
         assert_eq!(source.len(), 19);
         let mut document =
             IncrementalDocument::new(source, Language::Vue, ScanOptions::default(), 1);
-        /* NOTE: the span is the document's end, and the replacement is the
-         * `>` the outer tag had been missing, which closes the tag across
-         * both checkpoints the unclosed tag had let stand. */
+        /* NOTE: the span is the document's end, and the replacement is the `>` the outer tag had been missing, which closes the tag across both checkpoints the unclosed tag had let stand. */
         document
             .apply_changes(
                 &[DocumentChange {
@@ -875,11 +796,8 @@ mod tests {
         assert_eq!(document.safe_checkpoints(), expected_checkpoints);
     }
 
-    /// A here document body and an embedded document are two Ruby states whose
-    /// lines say nothing about themselves: the `#` at the head of one is a byte
-    /// of the value, and the line that decides so sits above it. Neither offers
-    /// a restart point, so the checkpoints of such a file are the line starts
-    /// outside them and nothing else.
+    /// A here document body and an embedded document are two Ruby states whose lines say nothing about themselves: the `#` at the head of one is a byte of the value, and the line that decides so sits above it.
+    /// Neither offers a restart point, so the checkpoints of such a file are the line starts outside them and nothing else.
     #[test]
     fn a_ruby_line_start_inside_an_opaque_construct_is_no_restart_point() {
         let heredoc = IncrementalDocument::new(
@@ -898,8 +816,7 @@ mod tests {
         );
         assert_eq!(document.safe_checkpoints(), [0, 21, 27]);
 
-        /* NOTE: The DATA section behind the marker is not source at all, so the
-         * marker's own line break is the last restart point there is. */
+        /* NOTE: The DATA section behind the marker is not source at all, so the marker's own line break is the last restart point there is. */
         let data = IncrementalDocument::new(
             b"a = 1\n__END__\nnot source\n".to_vec(),
             Language::Ruby,
@@ -909,11 +826,7 @@ mod tests {
         assert_eq!(data.safe_checkpoints(), [0, 6]);
     }
 
-    /// Regression: `safe_start` was chosen from the *previous* document's
-    /// checkpoint list and never re-validated against the edited bytes, so an
-    /// edit that turned line 2 into a Python encoding declaration restarted the
-    /// scan at a checkpoint the edited document no longer admits and demoted
-    /// the declaration from `Encoding` (kept) to a line comment (removed).
+    /// Regression: `safe_start` was chosen from the *previous* document's checkpoint list and never re-validated against the edited bytes, so an edit that turned line 2 into a Python encoding declaration restarted the scan at a checkpoint the edited document no longer admits and demoted the declaration from `Encoding` (kept) to a line comment (removed).
     #[test]
     fn an_edit_that_creates_an_encoding_declaration_invalidates_the_reused_checkpoint() {
         let source = b"value = 1\n# note\ntail\n".to_vec();
@@ -944,11 +857,8 @@ mod tests {
         assert_eq!(document.safe_checkpoints(), expected_checkpoints);
     }
 
-    /// The same shape, stated without naming a language: whenever an edit
-    /// rewrites a line whose bytes decide whether an earlier checkpoint is a
-    /// restart point, the engine must agree with a full scan of the edited
-    /// document. Only Python's encoding rule has that property today, so the
-    /// loop also guards every other built-in against acquiring one silently.
+    /// The same shape, stated without naming a language: whenever an edit rewrites a line whose bytes decide whether an earlier checkpoint is a restart point, the engine must agree with a full scan of the edited document.
+    /// Only Python's encoding rule has that property today, so the loop also guards every other built-in against acquiring one silently.
     #[test]
     fn edits_to_a_preamble_line_never_reuse_a_checkpoint_the_edit_invalidates() {
         for language in Language::ALL {
@@ -991,11 +901,8 @@ mod tests {
         }
     }
 
-    /// Regression: the reused *tail* carries the previous revision's
-    /// classification, and a shebang is a shebang only at absolute offset 0.
-    /// Inserting a line in front of one used to shift the old `Shebang` comment
-    /// down and keep it, where a full scan of the edited bytes sees an ordinary
-    /// line comment.
+    /// Regression: the reused *tail* carries the previous revision's classification, and a shebang is a shebang only at absolute offset 0.
+    /// Inserting a line in front of one used to shift the old `Shebang` comment down and keep it, where a full scan of the edited bytes sees an ordinary line comment.
     #[test]
     fn an_edit_that_pushes_a_shebang_off_offset_zero_stops_reusing_its_kind() {
         let mut document = IncrementalDocument::new(
@@ -1024,9 +931,7 @@ mod tests {
         assert_eq!(document.safe_checkpoints(), expected_checkpoints);
     }
 
-    /// The mirror image: deleting the lines in front of a `#!` line pulls it to
-    /// offset 0, where a full scan reads a shebang, so the previous revision's
-    /// ordinary line comment must not be reused either.
+    /// The mirror image: deleting the lines in front of a `#!` line pulls it to offset 0, where a full scan reads a shebang, so the previous revision's ordinary line comment must not be reused either.
     #[test]
     fn an_edit_that_pulls_a_hashbang_line_to_offset_zero_stops_reusing_its_kind() {
         let mut document = IncrementalDocument::new(
@@ -1055,13 +960,8 @@ mod tests {
         assert_eq!(document.safe_checkpoints(), expected_checkpoints);
     }
 
-    /// Regression: C and C++ splice `\\<newline>` out of the input before
-    /// lexing, and a spliced document is scanned through a remapped copy that
-    /// tracks no checkpoints at all — a full scan of it offers offset 0 and
-    /// nothing else. An edit that introduces a splice therefore invalidates
-    /// every checkpoint the previous revision recorded, but the reused one was
-    /// never re-checked against the edited bytes, so the document went on
-    /// advertising a restart point the edited source no longer has.
+    /// Regression: C and C++ splice `\\<newline>` out of the input before lexing, and a spliced document is scanned through a remapped copy that tracks no checkpoints at all — a full scan of it offers offset 0 and nothing else.
+    /// An edit that introduces a splice therefore invalidates every checkpoint the previous revision recorded, but the reused one was never re-checked against the edited bytes, so the document went on advertising a restart point the edited source no longer has.
     #[test]
     fn an_edit_that_introduces_a_c_line_splice_invalidates_every_checkpoint() {
         let mut document = IncrementalDocument::new(
@@ -1086,13 +986,8 @@ mod tests {
         assert_eq!(document.safe_checkpoints(), expected_checkpoints);
     }
 
-    /// Regression: how far a YAML block scalar body reaches is decided by the
-    /// lines below it, so an edit under one can swallow an offset the previous
-    /// revision recorded as a line start — appending a line to a document that
-    /// ended inside a body is enough, and a restart there would read the
-    /// content of a scalar as YAML. No body begins before its own header, so
-    /// the checkpoints a YAML document offers stop at the first one, and a
-    /// document that opens none offers every line start as before.
+    /// Regression: how far a YAML block scalar body reaches is decided by the lines below it, so an edit under one can swallow an offset the previous revision recorded as a line start — appending a line to a document that ended inside a body is enough, and a restart there would read the content of a scalar as YAML.
+    /// No body begins before its own header, so the checkpoints a YAML document offers stop at the first one, and a document that opens none offers every line start as before.
     #[test]
     fn a_yaml_block_scalar_ends_the_checkpoints_of_the_document_it_opens() {
         let plain = IncrementalDocument::new(
@@ -1130,11 +1025,8 @@ mod tests {
         );
     }
 
-    /// The keep a block scalar's trail decides is a property of the whole
-    /// document, so a rescan that reuses a tail has to reach the same one. The
-    /// checkpoints a YAML document offers stop at its first block scalar, which
-    /// puts every trail inside the suffix a rescan reads or inside the tail it
-    /// carries over untouched; either way the answer is the full scan's.
+    /// The keep a block scalar's trail decides is a property of the whole document, so a rescan that reuses a tail has to reach the same one.
+    /// The checkpoints a YAML document offers stop at its first block scalar, which puts every trail inside the suffix a rescan reads or inside the tail it carries over untouched; either way the answer is the full scan's.
     #[test]
     fn a_yaml_structural_trail_keep_survives_an_incremental_rescan() {
         let source = b"a: 1
@@ -1152,9 +1044,7 @@ z: 1
                 reason: "structural in a YAML block scalar trail".to_owned()
             },
         );
-        /* NOTE: Deepening the body past the directive under it takes the value
-         * away from that directive, and the comment above it stops being
-         * structure the moment it does. */
+        /* NOTE: Deepening the body past the directive under it takes the value away from that directive, and the comment above it stops being structure the moment it does. */
         let deepen = source
             .windows(4)
             .position(|window| window == b"\n  x")
@@ -1179,12 +1069,8 @@ z: 1
         );
     }
 
-    /// PHP mode is document state rather than line state: whether the `#` at a
-    /// line start opens a comment depends on whether an unclosed `<?php` sits
-    /// above it, and the bytes of the line itself say nothing about that. Only
-    /// a line break the scanner meets in inline HTML is a restart point, so a
-    /// file that is all PHP offers offset 0 and nothing else and a template
-    /// offers the line starts of its HTML.
+    /// PHP mode is document state rather than line state: whether the `#` at a line start opens a comment depends on whether an unclosed `<?php` sits above it, and the bytes of the line itself say nothing about that.
+    /// Only a line break the scanner meets in inline HTML is a restart point, so a file that is all PHP offers offset 0 and nothing else and a template offers the line starts of its HTML.
     #[test]
     fn a_php_line_start_is_a_restart_point_only_in_inline_html() {
         let html = IncrementalDocument::new(
@@ -1203,9 +1089,7 @@ z: 1
         );
         assert_eq!(code.safe_checkpoints(), [0]);
 
-        /* NOTE: The line break behind a `?>` belongs to the tag, so the byte
-         * after it is the start of the first inline-HTML line and a restart
-         * point like any other. */
+        /* NOTE: The line break behind a `?>` belongs to the tag, so the byte after it is the start of the first inline-HTML line and a restart point like any other. */
         let mut template = IncrementalDocument::new(
             b"<?php $a = 1; ?>\n<p>x</p>\n".to_vec(),
             Language::Php,
@@ -1228,11 +1112,8 @@ z: 1
         assert_eq!(template.safe_checkpoints(), expected_checkpoints);
     }
 
-    /// Regression: a checkpoint sits immediately after a line terminator, and
-    /// CRLF is one terminator. Inserting the LF of a CRLF pair right after an
-    /// existing CR moves the boundary one byte on, so the offset the previous
-    /// revision recorded now splits the pair — a full scan never offers it, and
-    /// restarting there would resume in the middle of a line ending.
+    /// Regression: a checkpoint sits immediately after a line terminator, and CRLF is one terminator.
+    /// Inserting the LF of a CRLF pair right after an existing CR moves the boundary one byte on, so the offset the previous revision recorded now splits the pair — a full scan never offers it, and restarting there would resume in the middle of a line ending.
     #[test]
     fn an_edit_that_completes_a_crlf_pair_invalidates_the_checkpoint_it_splits() {
         let mut document = IncrementalDocument::new(
@@ -1357,10 +1238,7 @@ z: 1
         );
     }
 
-    /// Regression: the rescan window used to be scanned as a *truncated* byte
-    /// slice, so lexical decisions that peek past the window end (here Rust's
-    /// six-byte character-literal lookahead) saw a different document than a
-    /// full scan and the unterminated literal was silently lost.
+    /// Regression: the rescan window used to be scanned as a *truncated* byte slice, so lexical decisions that peek past the window end (here Rust's six-byte character-literal lookahead) saw a different document than a full scan and the unterminated literal was silently lost.
     #[test]
     fn a_truncated_rescan_window_still_reports_an_unterminated_char_literal() {
         let source = vec![
@@ -1386,17 +1264,11 @@ z: 1
         assert_eq!(document.safe_checkpoints(), expected_checkpoints);
     }
 
-    /// Regression: `rust_char_start` decided whether an apostrophe opened a
-    /// character literal by reading up to six bytes forward, and the window was
-    /// allowed to run past a line terminator — while `scan_c_family` still
-    /// offers a checkpoint at the line start behind it. The decision for a
-    /// token on line 1 therefore depended on bytes on line 2, which is exactly
-    /// what a checkpoint promises cannot happen: an edit on line 2 left the
-    /// reused prefix describing a literal a full scan no longer sees.
+    /// Regression: `rust_char_start` decided whether an apostrophe opened a character literal by reading up to six bytes forward, and the window was allowed to run past a line terminator — while `scan_c_family` still offers a checkpoint at the line start behind it.
+    /// The decision for a token on line 1 therefore depended on bytes on line 2, which is exactly what a checkpoint promises cannot happen: an edit on line 2 left the reused prefix describing a literal a full scan no longer sees.
     #[test]
     fn a_rust_character_literal_never_decides_across_a_line_terminator() {
-        /* NOTE: The bare window: `'` at the end of line 1 and the apostrophe
-         * that would close it two bytes on, past the terminator. */
+        /* NOTE: The bare window: `'` at the end of line 1 and the apostrophe that would close it two bytes on, past the terminator. */
         let mut document = IncrementalDocument::new(
             b"let a = '\nx;\n".to_vec(),
             Language::Rust,
@@ -1420,10 +1292,7 @@ z: 1
         assert_eq!(document.report(), &expected);
         assert_eq!(document.safe_checkpoints(), expected_checkpoints);
 
-        /* NOTE: The escaped window, which reaches one byte further: `'\` at the
-         * end of line 1 and the closing apostrophe at the head of line 2. A
-         * full scan used to read the terminator as the escaped character and
-         * swallow it, dropping the checkpoint the line start had. */
+        /* NOTE: The escaped window, which reaches one byte further: `'\` at the end of line 1 and the closing apostrophe at the head of line 2. A full scan used to read the terminator as the escaped character and swallow it, dropping the checkpoint the line start had. */
         let mut escaped = IncrementalDocument::new(
             b"let a = '\\\nx;\n".to_vec(),
             Language::Rust,
@@ -1447,10 +1316,8 @@ z: 1
         assert_eq!(escaped.safe_checkpoints(), [0, 11, 14]);
     }
 
-    /// The OCaml half of the same rule. `ocaml_char_start` reads two bytes
-    /// forward for a bare character and eight for an escaped one, and both
-    /// windows used to run past a line terminator that `scan_ocaml` offers a
-    /// checkpoint behind.
+    /// The OCaml half of the same rule.
+    /// `ocaml_char_start` reads two bytes forward for a bare character and eight for an escaped one, and both windows used to run past a line terminator that `scan_ocaml` offers a checkpoint behind.
     #[test]
     fn an_ocaml_character_literal_never_decides_across_a_line_terminator() {
         let mut document = IncrementalDocument::new(
@@ -1504,22 +1371,16 @@ z: 1
     }
 
     /// A here-document delimiter is a word, and a quoted word may span lines:
-    /// `<<"EO`, a line break, `F"` names the delimiter `EO\nF`. The parse that
-    /// reads it is therefore a lookahead with no line bound, and the path that
-    /// gives up on an unterminated quote rewinds the scan to the byte after the
-    /// operator and lexes the same bytes again from a state it already decided
-    /// out of them. That the re-lex reaches the same end today is two lexers
-    /// agreeing, not a promise, so the watermark withdraws every checkpoint
-    /// the parse read through and the two edits below — one that opens the
-    /// quote, one that closes it again — stay equal to a full scan.
+    /// `<<"EO`, a line break, `F"` names the delimiter `EO\nF`.
+    /// The parse that reads it is therefore a lookahead with no line bound, and the path that gives up on an unterminated quote rewinds the scan to the byte after the operator and lexes the same bytes again from a state it already decided out of them.
+    /// That the re-lex reaches the same end today is two lexers agreeing, not a promise, so the watermark withdraws every checkpoint the parse read through and the two edits below — one that opens the quote, one that closes it again — stay equal to a full scan.
     #[test]
     fn a_quoted_shell_heredoc_delimiter_withdraws_the_checkpoints_it_read_past() {
         let closed = b"cat <<\"EO\nF\"\nx\nEO\nF\n# c\n".to_vec();
         let mut document =
             IncrementalDocument::new(closed.clone(), Language::Shell, ScanOptions::default(), 1);
         assert_eq!(document.safe_checkpoints(), [0]);
-        /* NOTE: deleting the closing quote leaves the delimiter word open, so
-         * the parse reads to the end of the document and gives up there. */
+        /* NOTE: deleting the closing quote leaves the delimiter word open, so the parse reads to the end of the document and gives up there. */
         document
             .apply_changes(
                 &[DocumentChange {
@@ -1562,12 +1423,8 @@ z: 1
         assert_eq!(reopened.source(), &closed[..]);
         assert_eq!(reopened.report(), &expected);
         assert_eq!(reopened.safe_checkpoints(), expected_checkpoints);
-        /* NOTE: The document above is invalid, and an invalid report is never
-         * reused, which leaves the watermark unexercised. This one is valid and
-         * its checkpoints are withdrawn by nothing but the reach: `<<#"` reads
-         * a word that opens a quote, the quote finds no partner, and the parse
-         * gives up having read every byte — then the scan rewinds to where `#`
-         * is a comment opener instead. */
+        /* NOTE: The document above is invalid, and an invalid report is never reused, which leaves the watermark unexercised.
+         * This one is valid and its checkpoints are withdrawn by nothing but the reach: `<<#"` reads a word that opens a quote, the quote finds no partner, and the parse gives up having read every byte — then the scan rewinds to where `#` is a comment opener instead. */
         let mut giving_up = IncrementalDocument::new(
             b"cat <<#\"\nx\n# c\n".to_vec(),
             Language::Shell,
@@ -1577,11 +1434,8 @@ z: 1
         assert!(giving_up.report().valid);
         assert_eq!(giving_up.report().comments.len(), 2);
         assert_eq!(giving_up.safe_checkpoints(), [0]);
-        /* NOTE: Closing the quote on line 3 gives the delimiter word the whole
-         * file, and the here-document it opens is then the unterminated one: the
-         * full scan finds no comment at all. A rescan restarted from the line
-         * start at 11 — which is what stands there without the reach — would
-         * keep both of the old comments and call the file valid. */
+        /* NOTE: Closing the quote on line 3 gives the delimiter word the whole file, and the here-document it opens is then the unterminated one: the full scan finds no comment at all.
+         * A rescan restarted from the line start at 11 — which is what stands there without the reach — would keep both of the old comments and call the file valid. */
         giving_up
             .apply_changes(
                 &[DocumentChange {
@@ -1603,16 +1457,9 @@ z: 1
         assert_eq!(giving_up.safe_checkpoints(), expected_checkpoints);
     }
 
-    /// OCaml's quoted strings are where that property first caught a
-    /// checkpoint standing inside what a decision had read — and the answer is
-    /// not to withdraw the rest of the document but to stop reading it. A
-    /// quoted-string tag is `[a-z_]*` with the `|` directly behind it, so the
-    /// search is bounded by that class: an ordinary `{` gives up at the first
-    /// byte outside it, and every line under it keeps the restart point it
-    /// earned. What the bound has to be worth is soundness, so both edits are
-    /// checked against a full scan — the one on a later line, which restarts
-    /// from a kept checkpoint, and the one that turns the `{` into a real
-    /// quoted string, which lies before every checkpoint but 0.
+    /// OCaml's quoted strings are where that property first caught a checkpoint standing inside what a decision had read — and the answer is not to withdraw the rest of the document but to stop reading it.
+    /// A quoted-string tag is `[a-z_]*` with the `|` directly behind it, so the search is bounded by that class: an ordinary `{` gives up at the first byte outside it, and every line under it keeps the restart point it earned.
+    /// What the bound has to be worth is soundness, so both edits are checked against a full scan — the one on a later line, which restarts from a kept checkpoint, and the one that turns the `{` into a real quoted string, which lies before every checkpoint but 0.
     #[test]
     fn an_ocaml_quoted_string_tag_search_is_bounded_by_its_tag_class() {
         let stray = b"let x = {aa\n(* c *)\ny\n".to_vec();
@@ -1622,9 +1469,7 @@ z: 1
         assert_eq!(document.report().comments.len(), 1);
         assert_eq!(document.safe_checkpoints(), [0, 12, 20, 22]);
 
-        /* NOTE: An edit on the last line restarts from one of those kept
-         * checkpoints rather than from 0, which is the whole point of keeping
-         * them, and it still answers what a full scan answers. */
+        /* NOTE: An edit on the last line restarts from one of those kept checkpoints rather than from 0, which is the whole point of keeping them, and it still answers what a full scan answers. */
         document
             .apply_changes(
                 &[DocumentChange {
@@ -1645,10 +1490,7 @@ z: 1
         assert_eq!(document.report(), &expected);
         assert_eq!(document.safe_checkpoints(), expected_checkpoints);
 
-        /* NOTE: The `|` is what makes the tag a tag, and it stands before every
-         * checkpoint the file has but 0: the `{aa|` opens a quoted string that
-         * no `|aa}` closes, so the file is one unterminated literal and the
-         * comment on line 2 is inside it. */
+        /* NOTE: The `|` is what makes the tag a tag, and it stands before every checkpoint the file has but 0: the `{aa|` opens a quoted string that no `|aa}` closes, so the file is one unterminated literal and the comment on line 2 is inside it. */
         let mut opened =
             IncrementalDocument::new(stray, Language::Ocaml, ScanOptions::default(), 1);
         opened

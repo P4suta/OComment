@@ -130,13 +130,18 @@ other axis and not the removals:
 mode = "none"
 
 [style]
+wrap = "sentence"
 space_after_marker = true
 trailing_whitespace = false
 ```
 
-The first rewrites `//text` as `// text`, leaving a ruler like `////////`
-alone; the second strips white space from the end of every line a comment
-covers.
+`wrap = "sentence"` puts one sentence on each line of a comment paragraph,
+undoing the breaks that only exist to keep a line short and leaving the ones
+somebody meant — a break after a clause stays where its writer put it. A fenced
+code block, a table, a list item's indentation, a rustdoc section heading and a
+link reference definition are passed through byte for byte. The other two
+rewrite `//text` as `// text`, leaving a ruler like `////////` alone, and strip
+white space from the end of every line a comment covers.
 
 `[style]` decides how a comment that survives is *written*, which is a
 different question from whether it survives: a comment that fails one of the

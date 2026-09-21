@@ -577,6 +577,15 @@
       "additionalProperties": false,
       "description": "How a comment that survives is written. A sibling of [policy.allow] and not a field of it: a comment that fails one of those is removed, and a comment that fails one of these is rewritten. Every rule is off by default.",
       "properties": {
+        "wrap": {
+          "enum": [
+            "preserve",
+            "unwrap",
+            "sentence"
+          ],
+          "default": "preserve",
+          "description": "Where the line breaks in a paragraph of comment prose go. `preserve` leaves every break where it is. `unwrap` undoes a break that only exists to keep a line short: a line that does not end at a break somebody meant \u2014 the end of a sentence, the end of a clause \u2014 and is followed by more of the same paragraph was broken to fit a column, and a column is not a unit of meaning. `sentence` undoes those and puts one back after every sentence, so a diff reviews one sentence at a time. A break after a clause is left where its writer put it either way: the rule that reads the prose and the rule that rewrites it have to agree."
+        },
         "space_after_marker": {
           "type": "boolean",
           "description": "Rewrite `//text` as `// text`. Says nothing about a comment that already has a space, nor about a marker with no text after it: a bare `//` is a blank line in a paragraph, and a run of markers is a divider."

@@ -1,16 +1,11 @@
 //! Agent editing hooks: the same check, spoken in an agent host's protocol.
 //!
-//! A hook host hands its hook a description of an edit on standard input and
-//! reads a decision back. Nothing in this module decides anything: it works
-//! out which bytes are about to become which file, hands that pair to the same
-//! machinery `ocomment check` runs, and writes the answer in the shape the
-//! host reads. The judgement, the configuration, the policy and the report are
-//! the ones every other command uses.
+//! A hook host hands its hook a description of an edit on standard input and reads a decision back.
+//! Nothing in this module decides anything: it works out which bytes are about to become which file, hands that pair to the same machinery `ocomment check` runs, and writes the answer in the shape the host reads.
+//! The judgement, the configuration, the policy and the report are the ones every other command uses.
 //!
-//! This is where the coupling lives, deliberately and in one file — the same
-//! arrangement as `editors/` and `action.yml`, which speak an editor's and a
-//! CI system's protocols without either reaching into the scanner. Supporting
-//! another host is one more [`Surface`] and one more `decide` arm.
+//! This is where the coupling lives, deliberately and in one file — the same arrangement as `editors/` and `action.yml`, which speak an editor's and a CI system's protocols without either reaching into the scanner.
+//! Supporting another host is one more [`Surface`] and one more `decide` arm.
 
 use crate::{
     cli::CommonArgs,
@@ -37,9 +32,8 @@ pub enum Surface {
 
 /// What the run is being asked about: the bytes, and the path they are for.
 ///
-/// `None` is the ordinary answer. Most hook events are about something that is
-/// not a file — a command, a prompt, the end of a session — and a hook with no
-/// opinion has to be silent rather than guess.
+/// `None` is the ordinary answer.
+/// Most hook events are about something that is not a file — a command, a prompt, the end of a session — and a hook with no opinion has to be silent rather than guess.
 type Subject = Option<(PathBuf, Vec<u8>)>;
 
 pub fn run(surface: Surface, common: &CommonArgs) -> Result<u8> {
@@ -54,17 +48,14 @@ pub fn run(surface: Surface, common: &CommonArgs) -> Result<u8> {
 
 /// Claude Code's hook payload, cut down to the fields a comment check needs.
 ///
-/// Unknown fields are ignored rather than refused: the payload grows, and a
-/// hook that failed on a field it had never heard of would break every editing
-/// session the day the host added one.
+/// Unknown fields are ignored rather than refused: the payload grows, and a hook that failed on a field it had never heard of would break every editing session the day the host added one.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 struct ClaudeCodeHook {
     hook_event_name: String,
     tool_name: String,
     tool_input: ToolInput,
-    /// The directory the session is working in, which is where the
-    /// configuration is discovered from.
+    /// The directory the session is working in, which is where the configuration is discovered from.
     cwd: Option<String>,
 }
 
@@ -90,22 +81,18 @@ struct Replacement {
     replace_all: bool,
 }
 
-/// Whether this event is about a file that is about to change, or one that just
-/// did.
+/// Whether this event is about a file that is about to change, or one that just did.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum When {
-    /// The edit has not happened. Refusing it keeps the comment out of the file
-    /// rather than reporting it once it is in.
+    /// The edit has not happened.
+    /// Refusing it keeps the comment out of the file rather than reporting it once it is in.
     Before,
     /// The edit has happened and the bytes are on the disk.
     After,
 }
 
 fn claude_code(payload: &str, common: &CommonArgs) -> Result<u8> {
-    /* NOTE: A payload this run cannot parse is the host's business rather than
-     * the edit's, so it is reported as a hook failure — exit 1, which Claude
-     * Code treats as non-blocking — instead of standing in the way of an edit
-     * nothing has actually judged. */
+    /* NOTE: A payload this run cannot parse is the host's business rather than the edit's, so it is reported as a hook failure — exit 1, which Claude Code treats as non-blocking — instead of standing in the way of an edit nothing has actually judged. */
     let hook: ClaudeCodeHook =
         serde_json::from_str(payload).context("cannot read the hook payload as JSON")?;
     let when = match hook.hook_event_name.as_str() {
@@ -131,11 +118,8 @@ fn claude_code(payload: &str, common: &CommonArgs) -> Result<u8> {
         return Ok(0);
     };
     match when {
-        /* NOTE: A denial carries its own reason and exits 0, because exit 2
-         * would take the reason from standard error instead and the two would
-         * have to be kept in step. Nothing here ever answers `allow`: that
-         * would wave the edit past the permission rules its user set, and this
-         * hook was asked about comments. */
+        /* NOTE: A denial carries its own reason and exits 0, because exit 2 would take the reason from standard error instead and the two would have to be kept in step.
+         * Nothing here ever answers `allow`: that would wave the edit past the permission rules its user set, and this hook was asked about comments. */
         When::Before => {
             let decision = json!({
                 "hookSpecificOutput": {
@@ -149,9 +133,8 @@ fn claude_code(payload: &str, common: &CommonArgs) -> Result<u8> {
             output::finish(&mut stdout)?;
             Ok(0)
         }
-        /* NOTE: The edit already happened, so there is nothing left to refuse
-         * and the report is a correction. Exit 2 is how this host puts one in
-         * front of the model; the text comes from standard error. */
+        /* NOTE: The edit already happened, so there is nothing left to refuse and the report is a correction.
+         * Exit 2 is how this host puts one in front of the model; the text comes from standard error. */
         When::After => {
             let stderr = std::io::stderr();
             let mut sink = stderr.lock();
@@ -161,17 +144,13 @@ fn claude_code(payload: &str, common: &CommonArgs) -> Result<u8> {
     }
 }
 
-/// The tools whose events are about a file that is about to hold different
-/// bytes.
+/// The tools whose events are about a file that is about to hold different bytes.
 ///
-/// Named rather than inferred from the payload, because several tools carry a
-/// `file_path` and only these put anything in the file. Reading one is not an
-/// edit, and a hook that blocked on a file the agent had merely read would be
-/// reporting a comment nobody had just written.
+/// Named rather than inferred from the payload, because several tools carry a `file_path` and only these put anything in the file.
+/// Reading one is not an edit, and a hook that blocked on a file the agent had merely read would be reporting a comment nobody had just written.
 const EDITING_TOOLS: [&str; 4] = ["Write", "Edit", "MultiEdit", "NotebookEdit"];
 
-/// The path and the bytes this event is about, or `None` if it is about
-/// something else.
+/// The path and the bytes this event is about, or `None` if it is about something else.
 fn subject(hook: &ClaudeCodeHook, when: When) -> Result<Subject> {
     if !EDITING_TOOLS.contains(&hook.tool_name.as_str()) {
         return Ok(None);
@@ -180,17 +159,13 @@ fn subject(hook: &ClaudeCodeHook, when: When) -> Result<Subject> {
         return Ok(None);
     };
     if when == When::After {
-        /* NOTE: Read rather than reconstructed. Whatever the tool reported it
-         * would do, the file is the file. */
+        /* NOTE: Read rather than reconstructed.
+         * Whatever the tool reported it would do, the file is the file. */
         return Ok(std::fs::read(&path).ok().map(|bytes| (path, bytes)));
     }
     let input = &hook.tool_input;
-    /* NOTE: `Write` carries the whole file; the two edit tools carry
-     * replacements against the file as it stands, so the file is read and the
-     * replacements applied the way the tool is about to apply them. A
-     * replacement that does not match is an edit the tool will refuse on its
-     * own, and this hook says nothing about it rather than judging bytes that
-     * will never exist. */
+    /* NOTE: `Write` carries the whole file; the two edit tools carry replacements against the file as it stands, so the file is read and the replacements applied the way the tool is about to apply them.
+     * A replacement that does not match is an edit the tool will refuse on its own, and this hook says nothing about it rather than judging bytes that will never exist. */
     if let Some(content) = &input.content {
         return Ok(Some((path, content.clone().into_bytes())));
     }
@@ -228,13 +203,10 @@ fn subject(hook: &ClaudeCodeHook, when: When) -> Result<Subject> {
     Ok(Some((path, proposed.into_bytes())))
 }
 
-/// The agent report for `bytes` judged as the contents of `path`, or `None`
-/// when there is nothing to say.
+/// The agent report for `bytes` judged as the contents of `path`, or `None` when there is nothing to say.
 ///
-/// Everything below is the same call `ocomment check` makes. A hook that
-/// scanned differently from the command would be a second implementation of
-/// the project's policy, and the first thing it would disagree with is the
-/// gate the project already runs.
+/// Everything below is the same call `ocomment check` makes.
+/// A hook that scanned differently from the command would be a second implementation of the project's policy, and the first thing it would disagree with is the gate the project already runs.
 fn judge(
     path: &Path,
     bytes: Vec<u8>,
@@ -256,11 +228,9 @@ fn judge(
         let scanner = PreparedScanner::new(file.options.scan.clone())
             .context("cannot prepare comment policy")?;
         let mut report = crate::cli::scan_bytes(&file.source, &file, &scanner, &plugin_host)?;
-        /* NOTE: The bytes under judgement are not the ones on the disk, and the
-         * deadline is read from the history of the file they would become —
-         * `git blame --contents` answers for exactly that. Without this an
-         * editing hook would be the one surface where a promise never ran
-         * out. */
+        /* NOTE: The bytes under judgement are not the ones on the disk, and the deadline is read from the history of the file they would become —
+         * `git blame --contents` answers for exactly that.
+         * Without this an editing hook would be the one surface where a promise never ran out. */
         deadline::apply(
             &resolved.root,
             &file.path,
@@ -269,11 +239,7 @@ fn judge(
             &file.options.scan.allow,
             std::time::SystemTime::now(),
         )?;
-        let changed = (report.valid || scanner.options().force_invalid)
-            && report
-                .comments
-                .iter()
-                .any(|comment| comment.disposition().action().changes_bytes());
+        let changed = (report.valid || scanner.options().force_invalid) && report.changes_bytes();
         let (_, _, trace) = resolved.for_path_traced(&file.path, file.language, file.dialect)?;
         explanations.insert(
             file.path.clone(),

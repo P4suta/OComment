@@ -168,6 +168,7 @@ One table whose entries have two different consequences is a table nobody can ad
 
 ```toml
 [style]
+wrap = "sentence"
 space_after_marker = true
 trailing_whitespace = false
 ```
@@ -175,6 +176,24 @@ trailing_whitespace = false
 Every rule here is off unless you turn it on.
 A formatter that starts reformatting a repository because it was installed is a formatter somebody uninstalls.
 
+- **`wrap`** decides where the line breaks in a paragraph of comment prose go.
+  `"preserve"` is the default and leaves every break where it is.
+  `"unwrap"` undoes a break that only exists to keep a line short.
+  `"sentence"` undoes those and puts one back after every sentence, so a diff reviews one sentence at a time and a line break means something.
+
+  The unit is the *run*, not the comment.
+  Four consecutive `///` lines are four comments to a scanner and one paragraph to a reader, and joining two of them moves the newline and the indentation between them — bytes that belong to neither comment.
+  That is why a rewritten run is reported as one finding rather than as several, and why it is the one rule whose verdict is not any comment's.
+
+  **A break after a clause is left where its writer put it.**
+  A comma, a colon or a dash ends a clause, the rule allows a break after one, and a fixer that removed breaks its own checker accepts would not be a fixer whose output is its checker's fixed point.
+
+  A great deal is passed through byte for byte, and deliberately: a fenced code block, an indented example, a table, a block quote, a heading — which in a Rust doc comment is a rustdoc section — a list item's own indentation, a documentation tag such as `@param`, and a link reference definition.
+  A formatter that reflowed any of those has not tidied a comment; it has broken the page the comment was.
+
+  A sentence ends at `。`, `！` or `？` wherever they occur, and at `.`, `!` or `?` only where white space follows and the word in front is not one that always carries one.
+  That is what tells a sentence from a host name, a version number, an abbreviation and an initial in a name.
+  Two lines of Japanese are joined without a space put between them.
 - **`space_after_marker = true`** rewrites `//text` as `// text`.
   It says nothing about a comment that already has a space, and nothing about a marker with no text after it: a bare `//` is a blank line in a paragraph rather than a comment missing its space.
   It is deliberately timid about what counts as text — it acts only when the first character is neither white space nor ASCII punctuation — so a ruler like `////////` or `#####` or `//------` comes back unchanged.

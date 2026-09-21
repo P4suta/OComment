@@ -11,14 +11,12 @@ use unicode_width::UnicodeWidthChar;
 
 /// Scan `source` and produce the bytes a removal would write.
 ///
-/// This is [`scan`] followed by the edits its report calls for. Nothing is
-/// written anywhere: the caller gets the new bytes, the edits that made them,
-/// the report they were decided from, and a
-/// [`SourceMap`](crate::SourceMap) between the two.
+/// This is [`scan`] followed by the edits its report calls for.
+/// Nothing is written anywhere: the caller gets the new bytes, the edits that made them,
+/// the report they were decided from, and a [`SourceMap`](crate::SourceMap) between the two.
 ///
 /// A source the scanner reported invalid — an unterminated comment or string —
-/// is returned byte for byte with no edits at all, unless
-/// [`ScanOptions::force_invalid`](crate::ScanOptions::force_invalid) is set.
+/// is returned byte for byte with no edits at all, unless [`ScanOptions::force_invalid`](crate::ScanOptions::force_invalid) is set.
 ///
 /// # Examples
 ///
@@ -43,11 +41,10 @@ pub fn transform(source: &[u8], language: Language, options: TransformOptions) -
     transform_plan(source, language, options).finish(source)
 }
 
-/// Scan `source` and compute its edits without building output bytes or a
-/// source map.
+/// Scan `source` and compute its edits without building output bytes or a source map.
 ///
-/// This is the lazy counterpart of [`transform`]. It is useful for checkers
-/// and report writers that only need the report or edit list.
+/// This is the lazy counterpart of [`transform`].
+/// It is useful for checkers and report writers that only need the report or edit list.
 pub fn transform_plan(
     source: &[u8],
     language: Language,
@@ -75,8 +72,7 @@ impl PreparedScanner {
         self.transform_plan(source, language, layout).finish(source)
     }
 
-    /// Validate externally supplied spans and plan their edits with this
-    /// scanner's already-compiled policy.
+    /// Validate externally supplied spans and plan their edits with this scanner's already-compiled policy.
     pub fn transform_spans_plan(
         &self,
         source: &[u8],
@@ -104,19 +100,16 @@ impl PreparedScanner {
     }
 }
 
-/// Transform a scanner's already-classified comment spans using the same
-/// policy, layout, edit validation, and source-map engine as built-in scans.
+/// Transform a scanner's already-classified comment spans using the same policy, layout, edit validation, and source-map engine as built-in scans.
 ///
-/// This is the safe hand-off point for declarative or WASM scanners. Spans
-/// must be non-empty, sorted, non-overlapping, and contained in `source`.
+/// This is the safe hand-off point for declarative or WASM scanners.
+/// Spans must be non-empty, sorted, non-overlapping, and contained in `source`.
 ///
-/// The report that comes back carries no diagnostics and is always valid: the
-/// external scanner, not this crate, judged whether the source lexed.
+/// The report that comes back carries no diagnostics and is always valid: the external scanner, not this crate, judged whether the source lexed.
 ///
 /// # Errors
 ///
-/// Returns [`ExternalSpanError`] naming the first span that reaches past the
-/// end of `source`, covers no bytes, or starts before its predecessor ends,
+/// Returns [`ExternalSpanError`] naming the first span that reaches past the end of `source`, covers no bytes, or starts before its predecessor ends,
 /// or reporting a `keep_regex`/`remove_regex` entry that would not compile.
 /// Nothing is transformed when validation fails.
 ///
@@ -195,15 +188,13 @@ fn external_report(
             ),
         ));
     }
-    /* NOTE: The one verdict a comment's own bytes cannot reach, so it is
-     * applied to the hand-off as a built-in scan applies it: a YAML block
-     * scalar leaning on the comment that ends it keeps that comment, whoever
-     * found it. Without this the report would promise a removal that
-     * `lines_a_removal_must_swallow` cannot make safe. */
+    /* NOTE: The one verdict a comment's own bytes cannot reach, so it is applied to the hand-off as a built-in scan applies it: a YAML block scalar leaning on the comment that ends it keeps that comment, whoever found it.
+     * Without this the report would promise a removal that `lines_a_removal_must_swallow` cannot make safe. */
     keep_yaml_structural_trails(source, language, &mut comments);
     Ok(ScanReport {
         language,
         comments,
+        runs: Vec::new(),
         diagnostics: Vec::new(),
         valid: true,
     })
@@ -219,11 +210,8 @@ pub(crate) fn transform_report(
 
 /// Plan the edits a report calls for, without scanning again.
 ///
-/// [`transform_plan`] is this with the scan in front of it. They are separate
-/// because a report is not always the one a scan produced untouched: a caller
-/// may hold a rule the scanner cannot decide — one that needs a clock, a
-/// repository, anything outside the bytes — and a plan built from a fresh scan
-/// would quietly ignore it.
+/// [`transform_plan`] is this with the scan in front of it.
+/// They are separate because a report is not always the one a scan produced untouched: a caller may hold a rule the scanner cannot decide — one that needs a clock, a repository, anything outside the bytes — and a plan built from a fresh scan would quietly ignore it.
 pub fn plan_report(
     source: &[u8],
     report: crate::ScanReport,
@@ -232,9 +220,8 @@ pub fn plan_report(
 ) -> TransformPlan {
     let edits = if report.valid || force_invalid {
         /* NOTE: A forced run is a run over a file the scanner could not finish,
-         * so the comments it reported are not all worth the same. It asks for
-         * the edits a broken file still supports, not for every edit a broken
-         * report happens to name. */
+         * so the comments it reported are not all worth the same.
+         * It asks for the edits a broken file still supports, not for every edit a broken report happens to name. */
         let considered: Cow<'_, [Comment]> = if report.established_everything() {
             Cow::Borrowed(report.comments.as_slice())
         } else {
@@ -247,16 +234,29 @@ pub fn plan_report(
                     .collect(),
             )
         };
-        /* NOTE: The one hole whose own bytes carry meaning, so every layout has
-         * to be told where not to leave one. `compact` takes the line already;
-         * what it does not know on its own is how far past the line to go
-         * under a `|+` body. */
+        /* NOTE: The one hole whose own bytes carry meaning, so every layout has to be told where not to leave one.
+         * `compact` takes the line already;
+         * what it does not know on its own is how far past the line to go under a `|+` body. */
         let swallow = lines_a_removal_must_swallow(source, report.language, &considered);
-        match layout {
+        let mut edits = match layout {
             Layout::Lines => line_edits(source, &considered, &swallow),
             Layout::Columns => column_edits(source, &considered, &swallow),
             Layout::Compact => compact_edits(source, &considered, &swallow),
-        }
+        };
+        /* NOTE: A run's edit cannot collide with a comment's.
+         * A run is only recorded over comments the policy kept and no other rule touched, so the layouts above have nothing to say about any of them, and the two sets are disjoint by construction rather than by a check here. */
+        edits.extend(
+            report
+                .runs
+                .iter()
+                .filter(|run| report.established(run.span))
+                .map(|run| Edit {
+                    span: run.span,
+                    replacement: run.replacement.clone(),
+                }),
+        );
+        edits.sort_by_key(|edit| edit.span.start);
+        edits
     } else {
         Vec::new()
     };
@@ -268,8 +268,7 @@ impl TransformPlan {
     ///
     /// # Panics
     ///
-    /// Panics when `source` is not the source the plan was made for and an
-    /// edit consequently lies outside it, just like [`apply_edits`].
+    /// Panics when `source` is not the source the plan was made for and an edit consequently lies outside it, just like [`apply_edits`].
     pub fn finish(self, source: &[u8]) -> TransformResult {
         let output = apply_edits(source, &self.edits);
         let source_map = SourceMap::from_edits(source.len(), &self.edits);
@@ -292,25 +291,17 @@ impl TransformPlan {
     }
 }
 
-/// The edit a rewritten comment plans: its own span, and the bytes the style
-/// rules make of it.
+/// The edit a rewritten comment plans: its own span, and the bytes the style rules make of it.
 ///
-/// Not a layout question, which is why all three layouts build it the same
-/// way. A layout decides what is left *where a comment used to be*, and a
-/// rewritten comment has not been anywhere: it is still there, spelled
-/// differently.
+/// Not a layout question, which is why all three layouts build it the same way.
+/// A layout decides what is left *where a comment used to be*, and a rewritten comment has not been anywhere: it is still there, spelled differently.
 ///
-/// [`Layout::Columns`] is the one layout this costs something. Its promise is
-/// that every column after an edit keeps its number, and a replacement of a
-/// different width cannot keep it. The promise is kept for removals, which is
-/// what the layout exists for; a caller that has asked for both is asking for
-/// two things that contradict each other, and the CLI refuses the pair rather
-/// than picking one silently.
+/// [`Layout::Columns`] is the one layout this costs something.
+/// Its promise is that every column after an edit keeps its number, and a replacement of a different width cannot keep it.
+/// The promise is kept for removals, which is what the layout exists for; a caller that has asked for both is asking for two things that contradict each other, and the CLI refuses the pair rather than picking one silently.
 ///
-/// The bytes are the verdict's own. Nothing is recomputed here and there is
-/// nothing to recompute it from: the rules that decided are not in scope, and
-/// that is the point — a planner holding the rules is a planner that can plan
-/// with different ones than the scan used.
+/// The bytes are the verdict's own.
+/// Nothing is recomputed here and there is nothing to recompute it from: the rules that decided are not in scope, and that is the point — a planner holding the rules is a planner that can plan with different ones than the scan used.
 fn rewrite_edit(comment: &Comment) -> Option<Edit> {
     Some(Edit {
         span: comment.span,
@@ -320,16 +311,12 @@ fn rewrite_edit(comment: &Comment) -> Option<Edit> {
 
 /// Apply sorted, non-overlapping half-open edits.
 ///
-/// The bytes outside the edited spans are copied through untouched, which is
-/// what makes a transformation byte-preserving: a BOM, CRLF line endings, a
-/// missing final newline, and bytes that are not UTF-8 at all all survive.
+/// The bytes outside the edited spans are copied through untouched, which is what makes a transformation byte-preserving: a BOM, CRLF line endings, a missing final newline, and bytes that are not UTF-8 at all all survive.
 ///
 /// # Panics
 ///
-/// Panics if an edit has `start > end`, starts before its predecessor ends, or
-/// reaches past the end of `source`. The edits of a
-/// [`TransformResult`] always satisfy that contract; edits assembled by hand
-/// have to be sorted first.
+/// Panics if an edit has `start > end`, starts before its predecessor ends, or reaches past the end of `source`.
+/// The edits of a [`TransformResult`] always satisfy that contract; edits assembled by hand have to be sorted first.
 ///
 /// # Examples
 ///
@@ -370,11 +357,9 @@ pub fn apply_edits(source: &[u8], edits: &[Edit]) -> Vec<u8> {
     output
 }
 
-/// The edits [`Layout::Lines`] makes: one per removed comment, over exactly
-/// the bytes that comment covers — save where `swallow` names a whole line,
-/// because there the hole itself would say something (see
-/// [`lines_a_removal_must_swallow`]). This is the layout that promises line
-/// numbers and those lines are the one place it cannot keep that promise.
+/// The edits [`Layout::Lines`] makes: one per removed comment, over exactly the bytes that comment covers — save where `swallow` names a whole line,
+/// because there the hole itself would say something (see [`lines_a_removal_must_swallow`]).
+/// This is the layout that promises line numbers and those lines are the one place it cannot keep that promise.
 fn line_edits(source: &[u8], comments: &[Comment], swallow: &[Option<ByteSpan>]) -> Vec<Edit> {
     let mut edits = Vec::new();
     let mut floor = 0usize;
@@ -407,11 +392,9 @@ fn line_edits(source: &[u8], comments: &[Comment], swallow: &[Option<ByteSpan>])
     edits
 }
 
-/// What [`Layout::Lines`] leaves in place of a removed comment: the line
-/// terminators the comment spanned, so every following line keeps its number,
-/// and a single space when the comment was all that kept two tokens apart. A
-/// comment that spanned a terminator needs no space of its own, because a
-/// newline is a lexical separator already.
+/// What [`Layout::Lines`] leaves in place of a removed comment: the line terminators the comment spanned, so every following line keeps its number,
+/// and a single space when the comment was all that kept two tokens apart.
+/// A comment that spanned a terminator needs no space of its own, because a newline is a lexical separator already.
 fn line_replacement(source: &[u8], span: ByteSpan) -> Vec<u8> {
     let mut output = newline_sequence(&source[span.start..span.end]);
     if output.is_empty() && has_non_whitespace_neighbors(source, span) {
@@ -420,16 +403,11 @@ fn line_replacement(source: &[u8], span: ByteSpan) -> Vec<u8> {
     output
 }
 
-/// The edits [`Layout::Columns`] makes: one per removed comment, of spaces as
-/// wide as the comment was — save where `swallow` names a line, because a line
-/// of spaces under a YAML block scalar body is indented into it (see
-/// [`lines_a_removal_must_swallow`]). This is the layout that promises columns
-/// and those lines are the one place it cannot keep that promise.
+/// The edits [`Layout::Columns`] makes: one per removed comment, of spaces as wide as the comment was — save where `swallow` names a line, because a line of spaces under a YAML block scalar body is indented into it (see [`lines_a_removal_must_swallow`]).
+/// This is the layout that promises columns and those lines are the one place it cannot keep that promise.
 ///
-/// The display column is threaded from one edit to the next so every source
-/// byte is inspected at most once. It also reflects an explicitly removed HTML
-/// comment: because that edit emits no bytes, the newlines it covered do not
-/// move the column the edits after it are measured from.
+/// The display column is threaded from one edit to the next so every source byte is inspected at most once.
+/// It also reflects an explicitly removed HTML comment: because that edit emits no bytes, the newlines it covered do not move the column the edits after it are measured from.
 fn column_edits(source: &[u8], comments: &[Comment], swallow: &[Option<ByteSpan>]) -> Vec<Edit> {
     let mut edits = Vec::new();
     let mut cursor = 0usize;
@@ -443,9 +421,7 @@ fn column_edits(source: &[u8], comments: &[Comment], swallow: &[Option<ByteSpan>
             }
             Action::Remove => {}
         }
-        /* NOTE: A swallowed line takes its terminator with it, so what follows
-         * starts a line of its own in the output as it did in the source and
-         * the column count begins again there. */
+        /* NOTE: A swallowed line takes its terminator with it, so what follows starts a line of its own in the output as it did in the source and the column count begins again there. */
         if let Some(line) = swallow.get(index).copied().flatten() {
             let span = ByteSpan::new(line.start.max(cursor), line.end);
             cursor = span.end;
@@ -472,27 +448,19 @@ fn column_edits(source: &[u8], comments: &[Comment], swallow: &[Option<ByteSpan>
     edits
 }
 
-/// The edits [`Layout::Compact`] makes: [`Layout::Lines`], plus the promise
-/// that a line which held nothing but a removed comment goes away instead of
-/// staying behind as a blank one.
+/// The edits [`Layout::Compact`] makes: [`Layout::Lines`], plus the promise that a line which held nothing but a removed comment goes away instead of staying behind as a blank one.
 ///
-/// Whether a comment was alone on its line is judged from the bytes of the
-/// original source, so a line holding two comments and nothing else keeps its
-/// terminator: neither of them was alone on it.
+/// Whether a comment was alone on its line is judged from the bytes of the original source, so a line holding two comments and nothing else keeps its terminator: neither of them was alone on it.
 ///
 /// The start of the current line is tracked forward through the whole source,
-/// comment bodies included, so a comment beginning on a line that an earlier
-/// comment ended is still measured from that line's real beginning.
+/// comment bodies included, so a comment beginning on a line that an earlier comment ended is still measured from that line's real beginning.
 ///
-/// `swallow` names the lines whose hole would carry meaning, and it reaches
-/// further than a line: under a `|+` body it takes the empty lines the comment
-/// was sheltering too (see [`lines_a_removal_must_swallow`]). Taking the line
-/// is what `compact` does anyway, so this only ever widens what it takes, and
-/// it is what keeps all three layouts writing the same bytes there.
+/// `swallow` names the lines whose hole would carry meaning, and it reaches further than a line: under a `|+` body it takes the empty lines the comment was sheltering too (see [`lines_a_removal_must_swallow`]).
+/// Taking the line is what `compact` does anyway, so this only ever widens what it takes, and it is what keeps all three layouts writing the same bytes there.
 fn compact_edits(source: &[u8], comments: &[Comment], swallow: &[Option<ByteSpan>]) -> Vec<Edit> {
     let mut edits = Vec::new();
-    /* NOTE: Which edits the blank-run pass below may widen. A swallowed line
-     * is the one place all three layouts are required to write the same bytes,
+    /* NOTE: Which edits the blank-run pass below may widen.
+     * A swallowed line is the one place all three layouts are required to write the same bytes,
      * so it is left exactly where the other two put it. */
     let mut collapsible = Vec::new();
     let mut scan = 0usize;
@@ -528,8 +496,7 @@ fn compact_edits(source: &[u8], comments: &[Comment], swallow: &[Option<ByteSpan
                 _ => scan += 1,
             }
         }
-        /* NOTE: The next comment of any disposition, kept ones included: the
-         * blanks an edit swallows must never reach into one. */
+        /* NOTE: The next comment of any disposition, kept ones included: the blanks an edit swallows must never reach into one. */
         let ceiling = comments
             .get(index + 1)
             .map_or(source.len(), |next| next.span.start)
@@ -545,27 +512,16 @@ fn compact_edits(source: &[u8], comments: &[Comment], swallow: &[Option<ByteSpan
 
 /// Take back the blank lines a removal *created*.
 ///
-/// Dropping the line a comment held is what `compact` is for, and it is not
-/// the whole of what the comment occupied. A comment set off by a blank line
-/// above and another below is three lines of file for one comment, and taking
-/// only the middle one leaves the two blanks touching — a run one line longer
-/// than the file ever had, in a place where the file had never put one. Every
-/// formatter with an opinion says so: `swift-format` reports `[RemoveLine]`,
-/// `gofmt` closes the gap, `rustfmt` collapses it. A tool that has to be
-/// followed by a formatter to finish its own edit has not finished it.
+/// Dropping the line a comment held is what `compact` is for, and it is not the whole of what the comment occupied.
+/// A comment set off by a blank line above and another below is three lines of file for one comment, and taking only the middle one leaves the two blanks touching — a run one line longer than the file ever had, in a place where the file had never put one.
+/// Every formatter with an opinion says so: `swift-format` reports `[RemoveLine]`,
+/// `gofmt` closes the gap, `rustfmt` collapses it.
+/// A tool that has to be followed by a formatter to finish its own edit has not finished it.
 ///
-/// The rule is the narrow one, because widening it would mean reflowing a file
-/// rather than removing a comment from it: **a removal never leaves more
-/// consecutive blank lines than the longest run it was already standing next
-/// to.** With `before` blanks above and `after` below, the removal takes
-/// `min(before, after)` of the ones below it, which leaves `max(before,
-/// after)`. Blank lines above a removal are never touched, and the count taken
-/// can never exceed the count that followed the comment, so two lines of code
-/// that had a blank line between them still do.
+/// The rule is the narrow one, because widening it would mean reflowing a file rather than removing a comment from it: **a removal never leaves more consecutive blank lines than the longest run it was already standing next to.** With `before` blanks above and `after` below, the removal takes `min(before, after)` of the ones below it, which leaves `max(before,
+/// after)`. Blank lines above a removal are never touched, and the count taken can never exceed the count that followed the comment, so two lines of code that had a blank line between them still do.
 ///
-/// Only a removal that took whole lines is eligible: an edit that begins in
-/// the middle of a line is a comment with code beside it, and the line it sits
-/// on is staying.
+/// Only a removal that took whole lines is eligible: an edit that begins in the middle of a line is a comment with code beside it, and the line it sits on is staying.
 fn collapse_created_blank_runs(source: &[u8], edits: &mut [Edit], collapsible: &[bool]) {
     if edits.is_empty() {
         return;
@@ -583,10 +539,8 @@ fn collapse_created_blank_runs(source: &[u8], edits: &mut [Edit], collapsible: &
             index += 1;
             continue;
         }
-        /* NOTE: Comments written on consecutive lines are separate comments and
-         * separate edits, and the blank runs either side belong to the block
-         * they make together rather than to any one of them. So the touching
-         * edits are treated as one removal. */
+        /* NOTE: Comments written on consecutive lines are separate comments and separate edits, and the blank runs either side belong to the block they make together rather than to any one of them.
+         * So the touching edits are treated as one removal. */
         let mut last = index;
         while last + 1 < edits.len()
             && collapsible.get(last + 1).copied().unwrap_or(false)
@@ -616,10 +570,8 @@ fn collapse_created_blank_runs(source: &[u8], edits: &mut [Edit], collapsible: &
                     None => break,
                 }
             }
-            /* INVARIANT: The blanks a removal takes must not reach the next
-             * edit. They cannot in fact -- the line that edit is on holds a
-             * comment and so is not blank -- but the clamp is what keeps the
-             * edits provably sorted and non-overlapping. */
+            /* INVARIANT: The blanks a removal takes must not reach the next edit.
+             * They cannot in fact -- the line that edit is on holds a comment and so is not blank -- but the clamp is what keeps the edits provably sorted and non-overlapping. */
             let ceiling = edits
                 .get(last + 1)
                 .map_or(source.len(), |next| next.span.start);
@@ -631,9 +583,7 @@ fn collapse_created_blank_runs(source: &[u8], edits: &mut [Edit], collapsible: &
 
 /// Where every line of `source` begins, in order, starting at `0`.
 ///
-/// A source that ends with a terminator has a final entry at its length: the
-/// empty last line, which is a line start with nothing on it and which
-/// [`line_is_blank`] therefore refuses to call a blank line.
+/// A source that ends with a terminator has a final entry at its length: the empty last line, which is a line start with nothing on it and which [`line_is_blank`] therefore refuses to call a blank line.
 fn line_starts(source: &[u8]) -> Vec<usize> {
     let mut starts = vec![0usize];
     let mut index = 0;
@@ -651,9 +601,7 @@ fn line_starts(source: &[u8]) -> Vec<usize> {
 
 /// Whether line `line` holds nothing but blanks and its terminator.
 ///
-/// The position past the last terminator is not a line at all: there is no
-/// line there to take, and counting it would let a removal at the end of a
-/// file swallow the terminator that ends it.
+/// The position past the last terminator is not a line at all: there is no line there to take, and counting it would let a removal at the end of a file swallow the terminator that ends it.
 fn line_is_blank(source: &[u8], starts: &[usize], line: usize) -> bool {
     let Some(&start) = starts.get(line) else {
         return false;
@@ -675,10 +623,7 @@ fn line_is_blank(source: &[u8], starts: &[usize], line: usize) -> bool {
 
 /// One [`Layout::Compact`] edit.
 ///
-/// `line_start` is where the line holding `comment` begins, `floor` is the end
-/// of the previous edit and `ceiling` the start of the next comment, so the
-/// span that comes back is sorted and non-overlapping with its neighbours
-/// however a scanner laid the comments out.
+/// `line_start` is where the line holding `comment` begins, `floor` is the end of the previous edit and `ceiling` the start of the next comment, so the span that comes back is sorted and non-overlapping with its neighbours however a scanner laid the comments out.
 fn compact_edit(
     source: &[u8],
     comment: &Comment,
@@ -687,9 +632,7 @@ fn compact_edit(
     ceiling: usize,
 ) -> Edit {
     let span = comment.span;
-    /* NOTE: An HTML comment closes up completely under every layout, the
-     * newlines it spanned included, so it never counts as ending a line by
-     * spanning one and never puts a terminator back. */
+    /* NOTE: An HTML comment closes up completely under every layout, the newlines it spanned included, so it never counts as ending a line by spanning one and never puts a terminator back. */
     let html = comment.kind == CommentKind::HtmlComment;
     let interior = first_line_terminator(source, span);
     let tail = line_tail(source, span.end);
@@ -714,18 +657,13 @@ fn compact_edit(
     let replacement = if html {
         Vec::new()
     } else if !ends_the_line {
-        /* NOTE: An interior comment: the line goes on after it, so keeping the
-         * two tokens either side apart is the whole story, exactly as under
-         * `lines`. */
+        /* NOTE: An interior comment: the line goes on after it, so keeping the two tokens either side apart is the whole story, exactly as under `lines`. */
         line_replacement(source, span)
     } else if let Some(terminator) = interior.filter(|_| head_code) {
-        /* NOTE: The code before the comment keeps its own line, and the
-         * terminator that ended that line was inside the comment. */
+        /* NOTE: The code before the comment keeps its own line, and the terminator that ended that line was inside the comment. */
         terminator.to_vec()
     } else {
-        /* NOTE: Nothing that survives on this line follows the comment, so the
-         * line terminator - the one kept after it or the one that ended the
-         * code line - is separator enough. */
+        /* NOTE: Nothing that survives on this line follows the comment, so the line terminator - the one kept after it or the one that ended the code line - is separator enough. */
         Vec::new()
     };
     Edit {
@@ -734,9 +672,8 @@ fn compact_edit(
     }
 }
 
-/// The first line terminator inside a comment, as the bytes that wrote it, so
-/// a CRLF file keeps its CRLF. A terminator that would reach past the end of
-/// the comment is not one: the same rule [`newline_sequence`] applies.
+/// The first line terminator inside a comment, as the bytes that wrote it, so a CRLF file keeps its CRLF.
+/// A terminator that would reach past the end of the comment is not one: the same rule [`newline_sequence`] applies.
 fn first_line_terminator(source: &[u8], span: ByteSpan) -> Option<&[u8]> {
     let mut index = span.start;
     while index < span.end {
@@ -748,11 +685,9 @@ fn first_line_terminator(source: &[u8], span: ByteSpan) -> Option<&[u8]> {
     None
 }
 
-/// How the line a comment ended on runs out: where the blanks after the
-/// comment stop, and how wide the line terminator there is — `0` at the end of
-/// the source. `None` when something other than blanks follows on that line,
-/// which is what makes the comment an interior one rather than the last thing
-/// on its line.
+/// How the line a comment ended on runs out: where the blanks after the comment stop, and how wide the line terminator there is — `0` at the end of the source.
+/// `None` when something other than blanks follows on that line,
+/// which is what makes the comment an interior one rather than the last thing on its line.
 fn line_tail(source: &[u8], from: usize) -> Option<(usize, usize)> {
     let mut index = from;
     loop {
@@ -767,9 +702,8 @@ fn line_tail(source: &[u8], from: usize) -> Option<(usize, usize)> {
     }
 }
 
-/// Where the run of blanks that ends at `at` begins. It never reaches before
-/// `floor` and never crosses a line terminator, so trimming what a removal
-/// left at the end of a line can never touch the line before it.
+/// Where the run of blanks that ends at `at` begins.
+/// It never reaches before `floor` and never crosses a line terminator, so trimming what a removal left at the end of a line can never touch the line before it.
 fn blank_start(source: &[u8], at: usize, floor: usize) -> usize {
     let mut index = at;
     while index > floor

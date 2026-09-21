@@ -1,43 +1,30 @@
 //! How a comment that survives is written.
 //!
-//! The other axis. [`ScanOptions::allow`](crate::ScanOptions::allow) decides
-//! whether a comment stays; this decides how it reads once it has. The two are
-//! deliberately not the same table: a comment that fails a condition of
-//! survival is removed, and a comment that fails a rule here is rewritten, and
-//! a reader adding a rule to a table whose entries have two different
-//! consequences would have to guess which they were adding.
+//! The other axis.
+//! [`ScanOptions::allow`](crate::ScanOptions::allow) decides whether a comment stays; this decides how it reads once it has.
+//! The two are deliberately not the same table: a comment that fails a condition of survival is removed, and a comment that fails a rule here is rewritten, and a reader adding a rule to a table whose entries have two different consequences would have to guess which they were adding.
 //!
 //! # What a rewrite may touch
 //!
-//! Only the bytes inside the comment. The crate promises that "the only bytes
-//! that move are the ones a comment occupied", and a rewrite keeps that
-//! promise literally: the edit it plans replaces the comment's span and
-//! nothing else, so the code around it, its indentation, and the line ending
-//! after it are the same bytes afterwards.
+//! Only the bytes inside the comment.
+//! The crate promises that "the only bytes that move are the ones a comment occupied", and a rewrite keeps that promise literally: the edit it plans replaces the comment's span and nothing else, so the code around it, its indentation, and the line ending after it are the same bytes afterwards.
 //!
-//! A comment whose bytes are not valid UTF-8 is never rewritten. The engine
-//! does not decode the whole source, but it cannot reason about words without
-//! decoding the comment, and guessing at a boundary inside bytes it could not
-//! read is how a formatter corrupts a file it was asked to tidy.
+//! A comment whose bytes are not valid UTF-8 is never rewritten.
+//! The engine does not decode the whole source, but it cannot reason about words without decoding the comment, and guessing at a boundary inside bytes it could not read is how a formatter corrupts a file it was asked to tidy.
 //!
 //! # The rules compose, and the first one recorded is the one that found
 //! something
 //!
-//! [`restyle`] applies every rule the configuration asks for and returns the
-//! bytes with all of them applied, together with the first rule that had
-//! anything to do. That rule is what the comment records and what `--explain`
-//! names: a reader is being told why the comment is in the report at all, and
-//! the answer is the rule that put it there.
+//! [`restyle`] applies every rule the configuration asks for and returns the bytes with all of them applied, together with the first rule that had anything to do.
+//! That rule is what the comment records and what `--explain` names: a reader is being told why the comment is in the report at all, and the answer is the rule that put it there.
 
 use crate::scanner::marker_bounds_with;
 use crate::types::{StyleRule, StyleRules};
 
 /// The delimiters a comment in this file opens and closes with.
 ///
-/// Carried rather than guessed at. A file read under a declarative profile
-/// opens its comments with the tokens the profile declares, and the built-in
-/// list knows `--` but not Haddock's `-- |`: a rule about the text written
-/// against the marker would have judged the space that belongs to the marker.
+/// Carried rather than guessed at.
+/// A file read under a declarative profile opens its comments with the tokens the profile declares, and the built-in list knows `--` but not Haddock's `-- |`: a rule about the text written against the marker would have judged the space that belongs to the marker.
 #[derive(Clone, Copy, Debug)]
 pub struct Markers<'a> {
     /// Every token that may open a comment here, in any order.
@@ -56,10 +43,8 @@ impl Markers<'static> {
 
 /// Rewrite one comment's bytes under `rules`.
 ///
-/// `raw` is the comment's complete bytes, delimiters included, exactly as
-/// [`Comment::span`](crate::Comment::span) delimits them. The answer is `None`
-/// when the rules find nothing to change — which is the ordinary case, and the
-/// case a scan must be cheap in.
+/// `raw` is the comment's complete bytes, delimiters included, exactly as [`Comment::span`](crate::Comment::span) delimits them.
+/// The answer is `None` when the rules find nothing to change — which is the ordinary case, and the case a scan must be cheap in.
 ///
 /// # Examples
 ///
@@ -93,6 +78,9 @@ pub fn restyle(
             continue;
         }
         let next = match rule {
+            /* NOTE: Decided over a run rather than over a comment, because joining two comment lines moves the bytes between them and those belong to neither.
+             * `reflow_run` is where it is applied, and a comment inside a run a rewrite reached is not asked these questions again. */
+            StyleRule::Wrap => None,
             StyleRule::SpaceAfterMarker => space_after_marker(&bytes, markers),
             StyleRule::TrailingWhitespace => trailing_whitespace(&bytes),
         };
@@ -104,15 +92,322 @@ pub fn restyle(
     first.map(|rule| (rule, bytes))
 }
 
+/// Reflow a run of comments on consecutive lines, or `None` when the rule leaves it as written.
+///
+/// `comments` are the run's tokens in order and `source` the bytes they came from.
+/// The answer replaces everything from the first token's first byte to the last one's last byte, the white space between them included: that white space is what a join has to be allowed to move, and nothing before the first byte is touched, so the indentation the run sits at is read rather than written and the code around it cannot be reached.
+///
+/// A run this cannot take apart is left alone rather than guessed at.
+/// Every token has to be a line comment, every one of them has to open with the same token, and nothing but white space may sit in front of any of them.
+/// A block comment carries its own interior line structure — a continuation prefix that has to be inferred rather than read — and is not reflowed here.
+#[must_use]
+pub(crate) fn reflow_run(
+    source: &[u8],
+    comments: &[crate::Comment],
+    rules: &StyleRules,
+    markers: Markers<'_>,
+    tags: &[&str],
+) -> Option<Vec<u8>> {
+    if !rules.wrap.rewrites() {
+        return None;
+    }
+    if let [only] = comments {
+        let raw = source.get(only.span.start..only.span.end)?;
+        if is_block(raw, markers) {
+            return reflow_block(source, only, rules, markers);
+        }
+    }
+    let (opener, mut lines) = take_apart(source, comments, markers)?;
+    let opener = opener.as_slice();
+    let tag = shared_tag(&lines, tags)?;
+    for line in &mut lines {
+        line.body = line.body.get(tag.len()..)?;
+    }
+    let bodies: Vec<&str> = lines.iter().map(|line| line.body).collect();
+    let reflowed = crate::reflow::reflow(&bodies, rules.wrap)?;
+    let indent = lines.first()?.indent;
+    let terminator = run_terminator(source, comments);
+    let mut bytes = Vec::with_capacity(source.len());
+    for (index, body) in reflowed.iter().enumerate() {
+        if index > 0 {
+            bytes.extend_from_slice(terminator);
+        }
+        bytes.extend_from_slice(indent);
+        bytes.extend_from_slice(opener);
+        /* NOTE: One space, or none where there is nothing to separate.
+         * A reflow has to write the marker back, so it has to choose; choosing anything else would be a second opinion about the spacing rule. */
+        if !body.is_empty() || !tag.is_empty() {
+            bytes.push(b' ');
+        }
+        bytes.extend_from_slice(tag.as_bytes());
+        bytes.extend_from_slice(body.as_bytes());
+    }
+    let span = crate::ByteSpan::new(comments.first()?.span.start, comments.last()?.span.end);
+    (bytes != source.get(span.start..span.end)?).then_some(bytes)
+}
+
+/// Whether a token is a delimited comment rather than one running to the end of its line.
+///
+/// A token that spans a line ending is one, and so is a token that ends at a closing delimiter: `(* NOTE: ... *)` fits on a line and is still a block.
+pub(crate) fn is_block(raw: &[u8], markers: Markers<'_>) -> bool {
+    raw.contains(&b'\n') || markers.closers.iter().any(|closer| raw.ends_with(closer))
+}
+
+/// Reflow one block comment, keeping its delimiters and the prefix its continuation lines are written with.
+///
+/// The prefix is *learned* rather than assumed.
+/// A C-family block writes its continuation lines under a `*` and an OCaml one writes them aligned under the text, and a formatter that picked one would rewrite every comment in the other family into a shape nobody there writes.
+/// What is read is the longest prefix the interior lines share, truncated at the first character that is neither white space nor the opener's own last character — so it can never reach into the prose, which is the mistake a plain common prefix makes with `The cat` above `The dog`.
+///
+/// A block that fits on one line is left alone: there are no interior lines to learn from, and a guess would be a guess.
+fn reflow_block(
+    source: &[u8],
+    comment: &crate::Comment,
+    rules: &StyleRules,
+    markers: Markers<'_>,
+) -> Option<Vec<u8>> {
+    let raw = source.get(comment.span.start..comment.span.end)?;
+    let text = std::str::from_utf8(raw).ok()?;
+    if !text.contains('\n') {
+        return None;
+    }
+    let opener = markers
+        .openers
+        .iter()
+        .filter(|marker| raw.starts_with(marker))
+        .max_by_key(|marker| marker.len())?;
+    let closer = markers
+        .closers
+        .iter()
+        .filter(|marker| raw.ends_with(marker))
+        .max_by_key(|marker| marker.len())?;
+    let opener = std::str::from_utf8(opener).ok()?;
+    let closer = std::str::from_utf8(closer).ok()?;
+    let inner = text.get(opener.len()..text.len() - closer.len())?;
+    let mut rows: Vec<&str> = inner.split('\n').collect();
+    /* NOTE: A carriage return belongs to the line ending rather than to the prose, and is put back with it. */
+    for row in &mut rows {
+        *row = row.strip_suffix('\r').unwrap_or(row);
+    }
+    let (first, interior) = rows.split_first()?;
+    if interior.is_empty() {
+        return None;
+    }
+    /* NOTE: Whether the closing delimiter sits on a line of its own, which is read before the prefix is: a line holding nothing but white space and the star carries no body, and learning the prefix from it would cut the prefix down to the indentation and leave the star in the prose. */
+    let star = opener.chars().next_back()?;
+    let closer_alone = interior
+        .last()?
+        .trim()
+        .trim_start_matches(star)
+        .trim()
+        .is_empty();
+    let carrying = if closer_alone {
+        interior.get(..interior.len() - 1)?
+    } else {
+        interior
+    };
+    let prefix = continuation_prefix(carrying, opener)?;
+    let mut bodies = Vec::with_capacity(rows.len());
+    bodies.push(first.strip_prefix(' ').unwrap_or(first).trim_end());
+    for row in carrying {
+        let body = row.strip_prefix(prefix).unwrap_or(row.trim_start());
+        let body = body.strip_prefix(' ').unwrap_or(body).trim_end();
+        bodies.push(body);
+    }
+    let reflowed = crate::reflow::reflow(&bodies, rules.wrap)?;
+    let terminator = if text.contains("\r\n") { "\r\n" } else { "\n" };
+    let mut out = String::with_capacity(text.len() + 16);
+    for (index, body) in reflowed.iter().enumerate() {
+        if index == 0 {
+            out.push_str(opener);
+            if !body.is_empty() {
+                out.push(' ');
+            }
+        } else {
+            out.push_str(terminator);
+            if body.is_empty() {
+                out.push_str(prefix.trim_end());
+            } else {
+                out.push_str(prefix);
+                if !prefix.ends_with(' ') {
+                    out.push(' ');
+                }
+            }
+        }
+        out.push_str(body);
+    }
+    if closer_alone {
+        out.push_str(terminator);
+        /* NOTE: The indentation the prefix begins with, and not the prefix itself.
+         * A C-family prefix ends in the star the closer already begins with,
+         * and writing both leaves the star twice. */
+        let indent = prefix
+            .find(|character| character != ' ' && character != '\t')
+            .map_or(prefix, |at| &prefix[..at]);
+        out.push_str(indent);
+        out.push_str(closer);
+    } else {
+        out.push(' ');
+        out.push_str(closer);
+    }
+    (out.as_bytes() != raw).then(|| out.into_bytes())
+}
+
+/// The prefix this block's continuation lines are written with.
+///
+/// The longest one they all share, cut at the first character that is neither white space nor the opener's last character.
+fn continuation_prefix<'a>(interior: &[&'a str], opener: &str) -> Option<&'a str> {
+    let star = opener.chars().next_back()?;
+    /* NOTE: A blank line inside a block is a paragraph break and carries no prefix to learn from, so it is not asked. */
+    let carrying: Vec<&'a str> = interior
+        .iter()
+        .copied()
+        .filter(|row| !row.trim().is_empty())
+        .collect();
+    let mut shared = *carrying.first()?;
+    for row in carrying.iter().skip(1) {
+        let common = shared
+            .char_indices()
+            .zip(row.chars())
+            .take_while(|((_, left), right)| left == right)
+            .last()
+            .map_or(0, |((at, left), _)| at + left.len_utf8());
+        shared = shared.get(..common)?;
+    }
+    let cut = shared
+        .char_indices()
+        .find(|(_, character)| *character != ' ' && *character != '\t' && *character != star)
+        .map_or(shared.len(), |(at, _)| at);
+    shared.get(..cut)
+}
+
+/// The tag every line of this run opens with, which is part of its marker rather than part of its prose.
+///
+/// A project whose configuration names tags has to write one on every comment,
+/// and a run of line comments is a run of comments: the convention puts the tag on each of them.
+/// Read as prose those tags are words in the middle of a paragraph, and a join would leave `NOTE: one NOTE: two` behind; a split would leave lines the tag rule no longer keeps.
+///
+/// `None` refuses the run, which is what happens when some lines carry a tag and others do not.
+/// That is a paragraph whose lines the tag rule already disagrees about, and moving its breaks would settle the disagreement by accident.
+///
+/// A common prefix would be the general form of this and is deliberately not what is looked for: `# The cat sat` above `# The dog ran` shares one, and treating `The ` as a marker would join them into nonsense.
+/// Only a tag the configuration named is a marker.
+fn shared_tag<'a>(lines: &[Line<'a>], tags: &[&str]) -> Option<&'a str> {
+    let opening = |line: &Line<'a>| -> Option<&'a str> {
+        tags.iter()
+            .filter_map(|tag| {
+                let rest = line.body.get(..tag.len())?;
+                (rest.eq_ignore_ascii_case(tag)).then(|| {
+                    /* NOTE: The tag and the punctuation that introduces what follows it, and nothing past that.
+                     * Skipping every non-alphanumeric byte was greedy enough to swallow the opening backtick of the first word, which made one line's prefix differ from the next one's and refused the run. */
+                    let rest = line.body.get(tag.len()..)?;
+                    let rest = rest.strip_prefix('(').map_or(rest, |inner| {
+                        inner.find(')').map_or(rest, |at| &inner[at + 1..])
+                    });
+                    let rest = rest.strip_prefix([':', '-', '.']).unwrap_or(rest);
+                    let punctuation = line.body.len() - rest.len();
+                    let spaces = rest.len() - rest.trim_start_matches(' ').len();
+                    line.body.get(..punctuation + spaces)
+                })
+            })
+            .flatten()
+            .max_by_key(|found| found.len())
+    };
+    let first = lines.first()?;
+    let Some(tag) = opening(first) else {
+        // NOTE: No tag anywhere is the ordinary case, and the whole body is prose.
+        return lines
+            .iter()
+            .all(|line| opening(line).is_none())
+            .then_some("");
+    };
+    lines
+        .iter()
+        .all(|line| opening(line) == Some(tag))
+        .then_some(tag)
+}
+
+/// One line of a run, with its indentation, its marker and its ending taken off.
+struct Line<'a> {
+    /// The white space in front of the marker, which every line of the rewrite is written back at.
+    indent: &'a [u8],
+    /// The prose, which is what a reflow reads.
+    body: &'a str,
+}
+
+/// Take a run apart, or refuse it.
+///
+/// The opener is returned once rather than per line: a run whose lines open differently is not one paragraph, and a rewrite that normalised them would be changing what each line is rather than where it breaks.
+fn take_apart<'a>(
+    source: &'a [u8],
+    comments: &[crate::Comment],
+    markers: Markers<'_>,
+) -> Option<(Vec<u8>, Vec<Line<'a>>)> {
+    let mut opener: Option<&[u8]> = None;
+    let mut lines = Vec::with_capacity(comments.len());
+    for comment in comments {
+        let raw = source.get(comment.span.start..comment.span.end)?;
+        /* NOTE: A block comment, which this does not reflow.
+         * A token that spans a line ending is one, and so is a token that ends at a closing delimiter: `(* NOTE: ... *)` fits on a line and is still a block, and reading one as a line comment swallows its `*)` into the prose and then breaks the prose in half.
+         * That is the accident the gate this replaces shipped, met here in the source of the reference implementation. */
+        if raw.contains(&b'\n') || markers.closers.iter().any(|closer| raw.ends_with(closer)) {
+            return None;
+        }
+        let text = std::str::from_utf8(raw).ok()?;
+        let found = markers
+            .openers
+            .iter()
+            .filter(|marker| raw.starts_with(marker))
+            .max_by_key(|marker| marker.len())?;
+        if *opener.get_or_insert(found) != *found {
+            return None;
+        }
+        let start = line_start(source, comment.span.start);
+        let indent = source.get(start..comment.span.start)?;
+        if !indent.iter().all(u8::is_ascii_whitespace) {
+            return None;
+        }
+        /* NOTE: One space comes off, not all of them.
+         * The space after the marker separates the marker from the text; anything past it is the writer's own indentation, and it is what tells a list item's continuation from a new paragraph.
+         * Trimming it away is how the gate this replaces flattened a nested list. */
+        let rest = text.get(found.len()..)?;
+        lines.push(Line {
+            indent,
+            body: rest
+                .strip_prefix(' ')
+                .or_else(|| rest.strip_prefix('\t'))
+                .unwrap_or(rest)
+                .trim_end(),
+        });
+    }
+    Some((opener?.to_vec(), lines))
+}
+
+/// The byte the line holding `offset` begins at.
+fn line_start(source: &[u8], offset: usize) -> usize {
+    source[..offset.min(source.len())]
+        .iter()
+        .rposition(|byte| *byte == b'\n')
+        .map_or(0, |at| at + 1)
+}
+
+/// The line ending this run is written with.
+///
+/// Read from the run itself where it has one to read, so a file with CRLF endings keeps them, and from the source around it where the run is a single line a rewrite is about to split.
+fn run_terminator<'a>(source: &'a [u8], comments: &[crate::Comment]) -> &'a [u8] {
+    let after = comments.first().map_or(0, |comment| comment.span.end);
+    let carriage = source
+        .get(after..)
+        .and_then(|rest| rest.iter().position(|byte| *byte == b'\n'))
+        .is_some_and(|at| at > 0 && source[after + at - 1] == b'\r');
+    if carriage { b"\r\n" } else { b"\n" }
+}
+
 /// Put a space between the opening marker and the text written against it.
 ///
-/// Deliberately timid, in the way [`crate`] is timid everywhere it reads text
-/// rather than syntax: it acts only when the first character of the text is
-/// neither white space nor ASCII punctuation. That leaves `// "quoted"` alone,
-/// which is a small miss, and it leaves `////////`, `#####`, `//-----` and
-/// `/*!` alone, which is the point — a ruler is not a comment missing its
-/// space, and inserting one there turns a divider into a divider with a hole
-/// in it.
+/// Deliberately timid, in the way [`crate`] is timid everywhere it reads text rather than syntax: it acts only when the first character of the text is neither white space nor ASCII punctuation.
+/// That leaves `// "quoted"` alone,
+/// which is a small miss, and it leaves `////////`, `#####`, `//-----` and `/*!` alone, which is the point — a ruler is not a comment missing its space, and inserting one there turns a divider into a divider with a hole in it.
 fn space_after_marker(raw: &[u8], markers: Markers<'_>) -> Option<Vec<u8>> {
     let (start, end) = marker_bounds_with(raw, markers.openers, markers.closers);
     if start == 0 || start >= end {
@@ -131,10 +426,8 @@ fn space_after_marker(raw: &[u8], markers: Markers<'_>) -> Option<Vec<u8>> {
 
 /// Strip white space from the end of every line the comment covers.
 ///
-/// The last line included: a line comment's span ends where its text ends, so
-/// the spaces a `// note   ` trails are inside it. The space a *removal* would
-/// leave behind is not — that is the layout's business, and this rule has no
-/// opinion about it.
+/// The last line included: a line comment's span ends where its text ends, so the spaces a `// note   ` trails are inside it.
+/// The space a *removal* would leave behind is not — that is the layout's business, and this rule has no opinion about it.
 fn trailing_whitespace(raw: &[u8]) -> Option<Vec<u8>> {
     let mut bytes = Vec::with_capacity(raw.len());
     let mut changed = false;
@@ -144,9 +437,7 @@ fn trailing_whitespace(raw: &[u8]) -> Option<Vec<u8>> {
         if !terminator {
             continue;
         }
-        /* NOTE: `\r` is stripped with the rest and put back with the `\n`, so
-         * a CRLF source keeps its endings and a comment that trailed spaces
-         * before one loses only the spaces. */
+        /* NOTE: `\r` is stripped with the rest and put back with the `\n`, so a CRLF source keeps its endings and a comment that trailed spaces before one loses only the spaces. */
         let mut stop = index;
         if stop > line && raw[stop - 1] == b'\r' {
             stop -= 1;
@@ -181,6 +472,7 @@ mod tests {
 
     fn rules(space: bool, trailing: bool) -> StyleRules {
         StyleRules {
+            wrap: crate::Wrap::Preserve,
             space_after_marker: space.then_some(true),
             trailing_whitespace: trailing.then_some(false),
         }

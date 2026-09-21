@@ -12810,7 +12810,7 @@
       }
     },
     {
-      "id": "style-space-after-marker-leaves-ocaml-doc-opener",
+      "id": "style-space-after-marker-reaches-the-ocaml-doc-opener",
       "language": "ocaml",
       "operation": "transform",
       "options": {
@@ -12821,7 +12821,7 @@
         }
       },
       "source_utf8": "(**doc*)\nlet a = 1\n",
-      "note": "The opener list matches `(*`, which leaves the `*` of `(**` as the first character of the text. It is ASCII punctuation, so the timid rule declines rather than writing `(* *doc*)`.",
+      "note": "`(**` is a marker of its own, beside `(*`, and the longest one that matches is what the rule is asked about. Without it the extra star was the first character of the text, which is punctuation, and the timid rule declined — so an OCaml documentation comment was the one kind the spacing rule could not reach.",
       "expect": {
         "valid": true,
         "comments": [
@@ -12829,11 +12829,11 @@
             "start": 0,
             "end": 8,
             "kind": "doc-block",
-            "action": "keep"
+            "action": "rewrite"
           }
         ],
         "diagnostics": [],
-        "output_utf8": "(**doc*)\nlet a = 1\n"
+        "output_utf8": "(** doc*)\nlet a = 1\n"
       }
     },
     {
@@ -14035,6 +14035,1098 @@
         ],
         "diagnostics": [],
         "output_utf8": "-- | Documentation written against its marker.\nadd = 1\n"
+      }
+    },
+    {
+      "id": "wrap-joins-a-break-nobody-meant",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// A sentence that was broken\n/// to keep the line short.\nfn a() {}\n",
+      "note": "A line that does not end at a break somebody meant, followed by more of the same paragraph, was broken to fit a column. A column is not a unit of meaning, so the break is undone.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 56,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 57,
+            "end": 84,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// A sentence that was broken to keep the line short.\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-breaks-after-every-sentence",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// One sentence. And a second on the same line.\nfn a() {}\n",
+      "note": "The unit is the sentence: a diff then reviews one sentence at a time.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 74,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// One sentence.\n/// And a second on the same line.\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-keeps-a-break-after-a-clause",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// A clause ends here,\n/// and the break after it is kept.\nfn a() {}\n",
+      "note": "The rule allows a break after a clause, so a fixer that removed one would be removing a break its own checker accepts — and its output would not be its checker's fixed point. This is the failure the gate this replaces shipped.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 49,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 50,
+            "end": 85,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// A clause ends here,\n/// and the break after it is kept.\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-unwrap-joins-without-breaking-sentences",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "unwrap"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// One sentence. And a second.\n/// A third that was\n/// broken to fit.\nfn a() {}\n",
+      "note": "`unwrap` undoes the breaks nobody meant and puts none back, which is the rule for a project that wants no cosmetic wrapping and no opinion about sentences.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 57,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 58,
+            "end": 78,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 79,
+            "end": 97,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// One sentence. And a second.\n/// A third that was broken to fit.\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-leaves-a-fenced-code-block",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// Prose that wraps\n/// here.\n///\n/// ```\n/// let x = 1;\n/// let y = 2. Not prose.\n/// ```\nfn a() {}\n",
+      "note": "A doc comment is where an example lives, and a fence is how it is marked. Reflowing one would rewrite the code it holds.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 46,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 47,
+            "end": 56,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 57,
+            "end": 60,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 61,
+            "end": 68,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 69,
+            "end": 83,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 84,
+            "end": 109,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 110,
+            "end": 117,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// Prose that wraps here.\n///\n/// ```\n/// let x = 1;\n/// let y = 2. Not prose.\n/// ```\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-leaves-a-section-heading",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// # Errors\n/// The first line under the heading.\nfn a() {}\n",
+      "note": "A `#` line is a heading, and in a Rust doc comment it is a rustdoc section. Joining it into the paragraph under it deletes the section.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 38,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 39,
+            "end": 76,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// # Errors\n/// The first line under the heading.\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-leaves-a-link-reference-definition",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// [`Thing::fail`]: when it cannot be done.\n/// Ordinary prose.\nfn a() {}\n",
+      "note": "Joining a link reference definition into the line above it breaks every link that names it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 70,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 71,
+            "end": 90,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// [`Thing::fail`]: when it cannot be done.\n/// Ordinary prose.\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-reaches-a-list-item-and-keeps-its-indentation",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// - an item whose text wraps\n///   onto the next line. And a second sentence.\n/// - another\nfn a() {}\n",
+      "note": "An item's continuation belongs to the item, and the indentation that says so is written back at the marker's width. The gate this replaces rebuilt the item at the margin and flattened the list, which is the failure its own notes record.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 56,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 57,
+            "end": 105,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 106,
+            "end": 119,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// - an item whose text wraps onto the next line.\n///   And a second sentence.\n/// - another\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-leaves-a-table",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// | a | b |\n/// |---|---|\n/// | 1 | 2 |\nfn a() {}\n",
+      "note": "A table's line breaks are the table.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 39,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 40,
+            "end": 53,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 54,
+            "end": 67,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// | a | b |\n/// |---|---|\n/// | 1 | 2 |\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-does-not-break-inside-a-host-name",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// See https://example.com/a.b/c for details. Version 1.5 is fine.\nfn a() {}\n",
+      "note": "A full stop ends a sentence only when white space follows it, which is what tells a sentence from a host name, a path and a version number.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 93,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// See https://example.com/a.b/c for details.\n/// Version 1.5 is fine.\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-does-not-break-after-an-abbreviation",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// Abbreviations e.g. this one do not end a sentence. J. Smith neither.\nfn a() {}\n",
+      "note": "A word that always carries a full stop does not end a sentence with it, and a single letter is one of those: `J. Smith` is a name.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 98,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// Abbreviations e.g. this one do not end a sentence.\n/// J. Smith neither.\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-breaks-a-cjk-sentence-without-a-space",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// 日本語の文です。これは二文目。\nfn a() {}\n",
+      "note": "CJK convention puts no space after the ender, so any visible remainder is a second sentence.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 75,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// 日本語の文です。\n/// これは二文目。\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-joins-cjk-without-inserting-a-space",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// 日本語の文がここで\n/// 折り返されている。\nfn a() {}\n",
+      "note": "Japanese puts no space between the end of one line and the start of the next. A reflow that inserted one would be adding a character to the prose rather than moving a line break.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 57,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 58,
+            "end": 89,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// 日本語の文がここで折り返されている。\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-reaches-a-line-comment-run-too",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n// A remark that was broken\n// to keep the line short.\nfn a() {}\n",
+      "note": "The rule is about prose, not about which marker carries it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 53,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 54,
+            "end": 80,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n// A remark that was broken to keep the line short.\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-leaves-a-run-whose-lines-open-differently",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// Documentation that wraps\n//! and an inner doc line under it.\nfn a() {}\n",
+      "note": "A run whose lines open with different tokens is not one paragraph, and a rewrite that normalised them would be changing what each line is rather than where it breaks.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 54,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 55,
+            "end": 90,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// Documentation that wraps\n//! and an inner doc line under it.\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-reaches-a-block-comment",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/* A block that wraps\n * onto a second line. */\nfn a() {}\n",
+      "note": "A block comment carries its own interior line structure, and the prefix its continuation lines are written with is learned from them rather than assumed: a C-family block writes them under a star and an OCaml one aligns them under the text, and a formatter that picked one would rewrite every comment in the other family into a shape nobody there writes.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 73,
+            "kind": "block",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/* A block that wraps onto a second line. */\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-leaves-the-first-two-lines-alone",
+      "language": "python",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "# A remark that was broken\n# to keep the line short.\nx = 1\n",
+      "note": "Python takes a source-encoding declaration from the first two lines, so a rewrite up there that changes how many lines a run occupies changes whether the comment below it is a declaration at all. A run of prose in the first two lines of such a file is left alone.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 26,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 27,
+            "end": 52,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "# A remark that was broken\n# to keep the line short.\nx = 1\n"
+      }
+    },
+    {
+      "id": "wrap-keeps-crlf-endings",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\r\nfn also() {}\r\n/// A sentence that was broken\r\n/// to keep the line short.\r\nfn a() {}\r\n",
+      "note": "A file with CRLF endings keeps them. The ending is read from the run rather than assumed.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 28,
+            "end": 58,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 60,
+            "end": 87,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\r\nfn also() {}\r\n/// A sentence that was broken to keep the line short.\r\nfn a() {}\r\n"
+      }
+    },
+    {
+      "id": "wrap-and-removal-in-one-file",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "conservative",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// Documentation that wraps\n/// onto a second line.\nfn a() {}\n// a remark\nfn b() {}\n",
+      "note": "A run rewrite and a comment removal in one plan. The edits stay sorted and non-overlapping, and a run is only recorded over comments nothing else touched.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 54,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 55,
+            "end": 78,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 89,
+            "end": 100,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// Documentation that wraps onto a second line.\nfn a() {}\n\nfn b() {}\n"
+      }
+    },
+    {
+      "id": "wrap-leaves-a-comment-beside-code",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\nlet x = 1; // a remark that is long\nfn a() {}\n",
+      "note": "A comment beside code stands alone: a run ends at one, because what is above it is not the same paragraph.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 37,
+            "end": 61,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\nlet x = 1; // a remark that is long\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-reaches-the-first-line-where-no-preamble-is-read",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "//! Module documentation that was broken\n//! to keep the line short.\nfn a() {}\n",
+      "note": "The guard above is asked of the language rather than of every file. Rust reads no preamble, and the top of a Rust file is where a module's own documentation lives — refusing to reflow it would cost the rule the prose it is most for.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 40,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 41,
+            "end": 68,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "//! Module documentation that was broken to keep the line short.\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-keeps-a-block-closer-on-its-own-line",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/* A block that wraps\n * onto a second line.\n */\nfn a() {}\n",
+      "note": "Where the closing delimiter sits on a line of its own it stays there, and the line it sits on is the prefix's indentation rather than the prefix: a C-family prefix ends in the star the closer already begins with.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 74,
+            "kind": "block",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/* A block that wraps onto a second line.\n */\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-leaves-a-block-that-fits-on-one-line",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/* One sentence. And another. */\nfn a() {}\n",
+      "note": "There are no interior lines to learn a continuation prefix from, and a guess would be a guess. The block is left as written.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 58,
+            "kind": "block",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/* One sentence. And another. */\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-aligns-an-ocaml-block-under-its-text",
+      "language": "ocaml",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "let head = 1\nlet also = 2\n(* A block whose continuation lines\n   are aligned under the text. And a second sentence. *)\nlet a = 3\n",
+      "note": "The other family. The prefix learned here is white space alone, and the rewrite writes it back.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 118,
+            "kind": "block",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "let head = 1\nlet also = 2\n(* A block whose continuation lines are aligned under the text.\n   And a second sentence. *)\nlet a = 3\n"
+      }
+    },
+    {
+      "id": "wrap-reaches-an-ocaml-documentation-block",
+      "language": "ocaml",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "let head = 1\nlet also = 2\n(** Documentation that wraps\n   onto a second line. *)\nlet a = 3\n",
+      "note": "`(**` opens a documentation block, and the longest matching opener is what the rewrite puts back.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 80,
+            "kind": "doc-block",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "let head = 1\nlet also = 2\n(** Documentation that wraps onto a second line. *)\nlet a = 3\n"
+      }
+    },
+    {
+      "id": "wrap-keeps-a-blank-line-inside-a-block",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/* One paragraph that wraps\n * onto a line.\n *\n * A second paragraph. */\nfn a() {}\n",
+      "note": "A blank line inside a block is a paragraph break, and it carries no prefix to learn from either — a line holding nothing but the star is not asked.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 98,
+            "kind": "block",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/* One paragraph that wraps onto a line.\n *\n * A second paragraph. */\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-leaves-a-block-whose-interior-is-a-code-example",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/* An example:\n *\n * ```\n * let x = 1;\n * let y = 2. Not prose.\n * ```\n */\nfn a() {}\n",
+      "note": "A fence inside a block marks an example exactly as it does inside a run of line comments. The rule that reads one reads the other.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 100,
+            "kind": "block",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/* An example:\n *\n * ```\n * let x = 1;\n * let y = 2. Not prose.\n * ```\n */\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-leaves-an-example-indented-under-an-item",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// - an item that wraps\n///   onto a line:\n///\n///     let x = 1;\n///\n/// After.\nfn a() {}\n",
+      "note": "Four spaces past the marker is an indented code block, and a doc comment is where an example lives. A continuation reaches one space past the marker's width and no further.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 50,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 51,
+            "end": 69,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 70,
+            "end": 73,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 74,
+            "end": 92,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 93,
+            "end": 96,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 97,
+            "end": 107,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// - an item that wraps onto a line:\n///\n///     let x = 1;\n///\n/// After.\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-keeps-a-nested-list-nested",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// - outer item that wraps\n///   onto a line\n///   - inner item that wraps\n///     onto a line\nfn a() {}\n",
+      "note": "A line that opens an item of its own is a new item rather than the continuation of the one above it, however deeply it is indented.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 53,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 54,
+            "end": 71,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 72,
+            "end": 101,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 102,
+            "end": 121,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// - outer item that wraps onto a line\n///   - inner item that wraps onto a line\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-splits-an-item-into-sentences-under-its-marker",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// 1. One sentence. And a second.\n/// 2. Another.\nfn a() {}\n",
+      "note": "An ordered marker is as wide as it is spelled, and the sentences under it are written at that width.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 60,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 61,
+            "end": 76,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// 1. One sentence.\n///    And a second.\n/// 2. Another.\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-splits-a-run-at-a-line-a-style-rule-cannot-reach",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// Prose above that wraps\n/// onto a line.\n/// noqa is a word a linter reads.\n/// Prose below that wraps\n/// onto a line.\nfn a() {}\n",
+      "note": "A comment the style rules do not reach ends a stretch rather than refusing the run it sits in. One line of a doc comment classified as a directive used to cost the paragraphs above and below it their reflow, for a rule about a line they do not contain.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 52,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 53,
+            "end": 69,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 70,
+            "end": 104,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 105,
+            "end": 131,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 132,
+            "end": 148,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// Prose above that wraps onto a line.\n/// noqa is a word a linter reads.\n/// Prose below that wraps onto a line.\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-joins-a-sentence-that-opens-with-an-intra-doc-link",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// [`Thing::fail`]: removed with the run of comments it belongs\n/// to, because that run is longer than the limit.\nfn a() {}\n",
+      "note": "A link reference definition's destination is one token. A sentence that merely opens with an intra-doc link is prose and joins like any other, and reading the second as the first cost every such sentence its reflow.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 90,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 91,
+            "end": 141,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// [`Thing::fail`]: removed with the run of comments it belongs to, because that run is longer than the limit.\nfn a() {}\n"
       }
     }
   ]

@@ -1,33 +1,26 @@
 //! The explanation API mirrors `disposition()` branch for branch.
 //!
-//! Two claims are under test. The sweep checks that an explanation always
-//! reaches the same verdict as the scanner did for the very same comment, over
-//! every kind the classifier can produce crossed with every option that steers
-//! a branch. The targeted cases then pin which branch each explanation names,
-//! because agreeing on keep-or-remove is worthless if the stated reason is the
-//! wrong one.
+//! Two claims are under test.
+//! The sweep checks that an explanation always reaches the same verdict as the scanner did for the very same comment, over every kind the classifier can produce crossed with every option that steers a branch.
+//! The targeted cases then pin which branch each explanation names,
+//! because agreeing on keep-or-remove is worthless if the stated reason is the wrong one.
 //!
-//! The sweep asks `explain_comment`, not `explain_disposition`: one rule is
-//! decided by where a comment sits rather than by what it says, and the
-//! bytes-only entry point cannot see it. Every other comment gets the same
-//! answer from both, which `the_two_entry_points_agree_away_from_the_one_rule`
-//! is what states.
+//! The sweep asks `explain_comment`, not `explain_disposition`: one rule is decided by where a comment sits rather than by what it says, and the bytes-only entry point cannot see it.
+//! Every other comment gets the same answer from both, which `the_two_entry_points_agree_away_from_the_one_rule` is what states.
 
 use ocomment_core::{
     Action, Age, AllowRules, CommentKind, DispositionExplanation, DispositionPatterns, Language,
-    Policy, ProtectedPattern, ProtectionTier, ScanOptions, StyleRule, StyleRules, explain_comment,
-    explain_comment_with, explain_disposition, explain_disposition_with, scan,
+    Policy, ProtectedPattern, ProtectionTier, ScanOptions, StyleRule, StyleRules, Wrap,
+    explain_comment, explain_comment_with, explain_disposition, explain_disposition_with, scan,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Fixtures chosen so that between them the classifier emits every
-/// [`CommentKind`]; `every_kind_is_covered` keeps that promise honest.
+/// Fixtures chosen so that between them the classifier emits every [`CommentKind`]; `every_kind_is_covered` keeps that promise honest.
 fn fixtures() -> Vec<(Language, &'static [u8])> {
     vec![
         (
             Language::Rust,
-            /* NOTE: The last line is a comment beside code, which is the one
-             * shape rule no other fixture reaches. */
+            /* NOTE: The last line is a comment beside code, which is the one shape rule no other fixture reaches. */
             b"// plain\n/* block */\n/// doc line\n/** doc block */\n// Copyright 2024 Example\n// rustfmt::skip\nlet n = 1; // ordinary, and beside code\n"
                 .as_slice(),
         ),
@@ -36,10 +29,7 @@ fn fixtures() -> Vec<(Language, &'static [u8])> {
             b"// eslint-disable-next-line\n/* ordinary */\n".as_slice(),
         ),
         (Language::Html, b"<!-- observable -->\n".as_slice()),
-        /* NOTE: A build constraint, which is the kind no `remove` policy
-         * reaches: the tool tier above it is `// rustfmt::skip`, and what
-         * separates the two is that removing this one changes which files the
-         * compiler is given rather than what a linter says about them. */
+        /* NOTE: A build constraint, which is the kind no `remove` policy reaches: the tool tier above it is `// rustfmt::skip`, and what separates the two is that removing this one changes which files the compiler is given rather than what a linter says about them. */
         (
             Language::Go,
             b"//go:build linux\n// +build linux\n\npackage main\n// ordinary\n".as_slice(),
@@ -53,8 +43,7 @@ fn fixtures() -> Vec<(Language, &'static [u8])> {
             Language::Sql,
             b"/*+ INDEX(t idx) */\n/*!40000 ALTER TABLE t */\n-- ordinary\n".as_slice(),
         ),
-        /* NOTE: A block scalar leaning on the comment that ends it, which is
-         * the one verdict a comment's own bytes cannot reach. */
+        /* NOTE: A block scalar leaning on the comment that ends it, which is the one verdict a comment's own bytes cannot reach. */
         (
             Language::Yaml,
             b"k: |\n  a\n# ends the block\n  # yamllint disable\nz: 1\n".as_slice(),
@@ -62,14 +51,11 @@ fn fixtures() -> Vec<(Language, &'static [u8])> {
     ]
 }
 
-/// Every field of [`ScanOptions`], classified as either steered by the sweep
-/// below or out of its reach — by destructuring rather than by a list, so a
-/// field added later fails to compile here until somebody says which it is.
+/// Every field of [`ScanOptions`], classified as either steered by the sweep below or out of its reach — by destructuring rather than by a list, so a field added later fails to compile here until somebody says which it is.
 ///
-/// This is not decoration. `allow` was added without this, the sweep went on
-/// covering the fields it already knew, and `--explain` spent a release
-/// printing "removed: policy `conservative` removes ordinary comments" under
-/// a line reading `kept line comment`. The sweep was passing the whole time,
+/// This is not decoration.
+/// `allow` was added without this, the sweep went on covering the fields it already knew, and `--explain` spent a release printing "removed: policy `conservative` removes ordinary comments" under a line reading `kept line comment`.
+/// The sweep was passing the whole time,
 /// because nothing made it look.
 fn every_option_is_classified(options: ScanOptions) {
     let ScanOptions {
@@ -83,11 +69,8 @@ fn every_option_is_classified(options: ScanOptions) {
         allow: _,
         style: _,
         protected: _,
-        /* NOTE: Out of reach, and for the same reason in both cases: neither
-         * changes any verdict. `dialect` chooses which bytes lex as a comment
-         * and `force_invalid` chooses whether an edit is applied to a file
-         * that would not lex; the disposition of a comment that was found is
-         * the same either way. */
+        /* NOTE: Out of reach, and for the same reason in both cases: neither changes any verdict.
+         * `dialect` chooses which bytes lex as a comment and `force_invalid` chooses whether an edit is applied to a file that would not lex; the disposition of a comment that was found is the same either way. */
         dialect: _,
         force_invalid: _,
     } = options;
@@ -95,11 +78,11 @@ fn every_option_is_classified(options: ScanOptions) {
 
 /// The same classification one level down, for the same reason.
 ///
-/// `style` is a table rather than a value, so covering "the `style` field" is
-/// not covering the rules in it.
+/// `style` is a table rather than a value, so covering "the `style` field" is not covering the rules in it.
 fn every_style_rule_is_classified(rules: StyleRules) {
     let StyleRules {
         // NOTE: Steered by `style_variants`.
+        wrap: _,
         space_after_marker: _,
         trailing_whitespace: _,
     } = rules;
@@ -107,27 +90,21 @@ fn every_style_rule_is_classified(rules: StyleRules) {
 
 /// The same classification one level down, for the same reason.
 ///
-/// `allow` is a table rather than a value, so covering "the `allow` field" is
-/// not covering the rules in it.
+/// `allow` is a table rather than a value, so covering "the `allow` field" is not covering the rules in it.
 fn every_allow_rule_is_classified(rules: AllowRules) {
     let AllowRules {
         // NOTE: Steered by `allow_variants`.
         tags: _,
         max_lines: _,
         trailing: _,
-        /* NOTE: Out of reach here, and out of reach of this crate: the verdict
-         * a deadline reaches needs the age of a line, which means reading a
-         * repository. `a_deadline_is_not_this_crates_to_reach` is what states
-         * that. The tag names still steer the tag rule, which is why the
-         * variants below set one. */
+        /* NOTE: Out of reach here, and out of reach of this crate: the verdict a deadline reaches needs the age of a line, which means reading a repository.
+         * `a_deadline_is_not_this_crates_to_reach` is what states that.
+         * The tag names still steer the tag rule, which is why the variants below set one. */
         expiry: _,
     } = rules;
 }
 
-/// Each variant steers at least one branch of the table: the policies, the
-/// preamble override, both kind lists and both regex lists, the overlap where
-/// a keep and a remove pattern match the same bytes, and each of the three
-/// shape rules on its own plus all three at once.
+/// Each variant steers at least one branch of the table: the policies, the preamble override, both kind lists and both regex lists, the overlap where a keep and a remove pattern match the same bytes, and each of the three shape rules on its own plus all three at once.
 fn option_variants() -> Vec<ScanOptions> {
     let mut variants = Vec::new();
     for policy in Policy::ALL {
@@ -204,12 +181,9 @@ fn option_variants() -> Vec<ScanOptions> {
     variants
 }
 
-/// One variant per style rule, and one with both, so that a fixture meets each
-/// rule alone and meets the order they are applied in.
+/// One variant per style rule, and one with both, so that a fixture meets each rule alone and meets the order they are applied in.
 ///
-/// The pair matters on its own: `restyle` records the first rule that found
-/// something, and a sweep that only ever set one rule could not tell a
-/// first-of-two from an only-one.
+/// The pair matters on its own: `restyle` records the first rule that found something, and a sweep that only ever set one rule could not tell a first-of-two from an only-one.
 fn style_variants() -> Vec<StyleRules> {
     vec![
         StyleRules {
@@ -221,14 +195,24 @@ fn style_variants() -> Vec<StyleRules> {
             ..Default::default()
         },
         StyleRules {
+            wrap: Wrap::Sentence,
+            ..Default::default()
+        },
+        /* NOTE: The wrap rule beside the others, because it is the one decided over a run: a sweep that only ever set one at a time could not tell a comment a run already answered for from one nothing reached. */
+        StyleRules {
+            wrap: Wrap::Sentence,
+            space_after_marker: Some(true),
+            trailing_whitespace: Some(false),
+        },
+        StyleRules {
+            wrap: Wrap::Preserve,
             space_after_marker: Some(true),
             trailing_whitespace: Some(false),
         },
     ]
 }
 
-/// One variant per shape rule, and one with all three, so that a fixture meets
-/// each rule alone and meets the order they are applied in.
+/// One variant per shape rule, and one with all three, so that a fixture meets each rule alone and meets the order they are applied in.
 fn allow_variants() -> Vec<AllowRules> {
     vec![
         AllowRules {
@@ -249,8 +233,7 @@ fn allow_variants() -> Vec<AllowRules> {
             trailing: Some(false),
             ..Default::default()
         },
-        /* NOTE: A tag with a deadline is an allowed tag until something with a
-         * clock says otherwise, and nothing in this crate has one. */
+        /* NOTE: A tag with a deadline is an allowed tag until something with a clock says otherwise, and nothing in this crate has one. */
         AllowRules {
             expiry: BTreeMap::from([("plain".to_owned(), Age::from_days(14))]),
             ..Default::default()
@@ -267,10 +250,8 @@ fn explain(
     explain_disposition(kind, raw.as_bytes(), language, options)
 }
 
-/// The pattern sets are the same for every comment scanned under one set of
-/// options, so a report that explains a whole file compiles them once and calls
-/// the precompiled form. That form has to be the very same answer, over the
-/// whole branch table, or the cheap path would quietly explain something else.
+/// The pattern sets are the same for every comment scanned under one set of options, so a report that explains a whole file compiles them once and calls the precompiled form.
+/// That form has to be the very same answer, over the whole branch table, or the cheap path would quietly explain something else.
 #[test]
 fn the_precompiled_explanation_equals_the_convenience_wrapper() {
     for options in option_variants() {
@@ -298,9 +279,7 @@ fn the_precompiled_explanation_equals_the_convenience_wrapper() {
     }
 }
 
-/// A pattern list that will not compile is ignored by the scanner, and both
-/// entry points ignore it the same way: the empty sets a caller compiles for
-/// the precompiled form are the fallback the wrapper builds for itself.
+/// A pattern list that will not compile is ignored by the scanner, and both entry points ignore it the same way: the empty sets a caller compiles for the precompiled form are the fallback the wrapper builds for itself.
 #[test]
 fn an_unparseable_pattern_list_falls_back_the_same_way() {
     let options = ScanOptions {
@@ -344,10 +323,7 @@ fn explanations_agree_with_the_scanner_over_the_whole_branch_table() {
                 let raw = &source[comment.span.start..comment.span.end];
                 let explanation = explain_comment(comment, raw, language, &options);
                 /* NOTE: The whole verdict, not `is_remove()` on both sides.
-                 * That comparison was written when there were two verdicts, and
-                 * it goes on passing once there are three: a rewrite and a keep
-                 * are both "not a removal", so an explanation that called a
-                 * rewritten comment kept agreed with it perfectly. */
+                 * That comparison was written when there were two verdicts, and it goes on passing once there are three: a rewrite and a keep are both "not a removal", so an explanation that called a rewritten comment kept agreed with it perfectly. */
                 assert_eq!(
                     explanation.action(),
                     comment.disposition().action(),
@@ -361,16 +337,11 @@ fn explanations_agree_with_the_scanner_over_the_whole_branch_table() {
     }
 }
 
-/// The bytes-only entry point is the whole answer for every comment but the
-/// ones the file around them decided, and this is what says which those are.
+/// The bytes-only entry point is the whole answer for every comment but the ones the file around them decided, and this is what says which those are.
 ///
-/// The match is exhaustive and the arms are the classification: a verdict a
-/// comment's own bytes can reach has to equal what the bytes alone reached,
-/// and a verdict that needs the file has to be one of the four named here and
-/// has to be counted. A rule added later lands in neither list and the test
-/// stops compiling, which is the point of writing it this way — this test
-/// previously claimed there was exactly one such rule, and went on claiming it
-/// while three more were added.
+/// The match is exhaustive and the arms are the classification: a verdict a comment's own bytes can reach has to equal what the bytes alone reached,
+/// and a verdict that needs the file has to be one of the four named here and has to be counted.
+/// A rule added later lands in neither list and the test stops compiling, which is the point of writing it this way — this test previously claimed there was exactly one such rule, and went on claiming it while three more were added.
 #[test]
 fn the_two_entry_points_agree_away_from_the_one_rule() {
     let mut from_the_file = BTreeSet::new();
@@ -391,13 +362,9 @@ fn the_two_entry_points_agree_away_from_the_one_rule() {
                             "the bytes alone would have removed it: {bytes_alone}"
                         );
                     }
-                    /* NOTE: The three shape rules. Each needs something outside
-                     * the comment -- the tag list, the line the comment sits
-                     * on, the run it belongs to -- so the bytes alone reaching
-                     * a different verdict is the expected outcome rather than
-                     * a disagreement. What is checked is that the scanner and
-                     * the comment agree, which `..._over_the_whole_branch_table`
-                     * states for every verdict and this one repeats for these. */
+                    /* NOTE: The three shape rules.
+                     * Each needs something outside the comment -- the tag list, the line the comment sits on, the run it belongs to -- so the bytes alone reaching a different verdict is the expected outcome rather than a disagreement.
+                     * What is checked is that the scanner and the comment agree, which `..._over_the_whole_branch_table` states for every verdict and this one repeats for these. */
                     DispositionExplanation::KeptByTag { .. } => {
                         from_the_file.insert("tag");
                         assert!(!comment.action().removes());
@@ -411,17 +378,11 @@ fn the_two_entry_points_agree_away_from_the_one_rule() {
                         assert!(comment.action().removes());
                         assert!(lines > limit, "{lines} lines is not over {limit}");
                     }
-                    /* NOTE: Unreachable by construction rather than by
-                     * omission: the scan cannot measure the age of a line, so
-                     * it never reaches this verdict, and an arm saying so is
-                     * what keeps that true as the enum grows. */
+                    /* NOTE: Unreachable by construction rather than by omission: the scan cannot measure the age of a line, so it never reaches this verdict, and an arm saying so is what keeps that true as the enum grows. */
                     DispositionExplanation::RemovedAsExpired { .. } => {
                         panic!("a scan reached a verdict that needs a repository to reach")
                     }
-                    /* NOTE: Both halves of this one are read off the comment's
-                     * own bytes -- the style rules are a pure function of them
-                     * -- so it belongs with the verdicts the two entry points
-                     * have to agree about, not with the ones the file decides. */
+                    /* NOTE: Both halves of this one are read off the comment's own bytes -- the style rules are a pure function of them -- so it belongs with the verdicts the two entry points have to agree about, not with the ones the file decides. */
                     other @ (DispositionExplanation::RewrittenByStyle { .. }
                     | DispositionExplanation::KeptByPolicy { .. }
                     | DispositionExplanation::KeptByKind(_)
@@ -454,8 +415,7 @@ fn the_two_entry_points_agree_away_from_the_one_rule() {
 }
 
 /// The sentence the new verdict writes, and the fact that no option reaches it:
-/// `all` removes the directive under the comment and the question with it, but
-/// an override that keeps that directive leaves this comment load-bearing.
+/// `all` removes the directive under the comment and the question with it, but an override that keeps that directive leaves this comment load-bearing.
 #[test]
 fn a_structural_keep_names_the_block_scalar_under_it() {
     let source = b"k: |\n  a\n# ends the block\n  # KEEPME\nz: 1\n";
@@ -794,12 +754,9 @@ fn a_kept_directive_names_the_matched_directive() {
 
 #[test]
 fn the_sql_comments_the_server_reads_are_out_of_reach_of_every_policy() {
-    // NOTE: Both of these are read by the server as part of the statement: a
-    // NOTE: version-gated comment is executed, and an optimizer hint decides
-    // NOTE: the plan. That makes them load-bearing rather than directives
-    // NOTE: addressed to a tool, so `all` does not reach them. It used to take
-    // NOTE: both, which left a dumped database restoring into a different one
-    // NOTE: with nothing failing.
+    // NOTE: Both of these are read by the server as part of the statement: a version-gated comment is executed, and an optimizer hint decides the plan.
+    // NOTE: That makes them load-bearing rather than directives addressed to a tool, so `all` does not reach them.
+    // NOTE: It used to take both, which left a dumped database restoring into a different one with nothing failing.
     for (kind, raw) in [
         (CommentKind::OptimizerHint, "/*+ INDEX(t idx) */"),
         (CommentKind::VersionComment, "/*!40000 ALTER TABLE t */"),
@@ -820,9 +777,7 @@ fn the_sql_comments_the_server_reads_are_out_of_reach_of_every_policy() {
             assert!(sentence.contains("language or its build"), "{sentence}");
         }
     }
-    // NOTE: The one way out, and the half of the claim that would otherwise
-    // NOTE: never be observed failing: a gate that only ever keeps has not
-    // NOTE: been shown to be a gate.
+    // NOTE: The one way out, and the half of the claim that would otherwise never be observed failing: a gate that only ever keeps has not been shown to be a gate.
     for (kind, raw) in [
         (CommentKind::OptimizerHint, "/*+ INDEX(t idx) */"),
         (CommentKind::VersionComment, "/*!40000 ALTER TABLE t */"),
@@ -906,8 +861,7 @@ fn ordinary_comments_fall_through_to_the_policy_default() {
     }
 }
 
-/// A documentation comment is the API documentation, so the two policies part
-/// company over it exactly as they do over a licence notice.
+/// A documentation comment is the API documentation, so the two policies part company over it exactly as they do over a licence notice.
 #[test]
 fn documentation_is_kept_by_the_conservative_policy_and_taken_by_the_standard_one() {
     for (kind, raw) in [
@@ -934,9 +888,8 @@ fn documentation_is_kept_by_the_conservative_policy_and_taken_by_the_standard_on
             "{conservative}"
         );
 
-        /* NOTE: The other half. A tier only ever observed keeping has not been
-         * shown to be a tier, and `standard` is the policy someone reaches for
-         * when they do mean to take the documentation. */
+        /* NOTE: The other half.
+         * A tier only ever observed keeping has not been shown to be a tier, and `standard` is the policy someone reaches for when they do mean to take the documentation. */
         let standard = explain(
             kind,
             raw,
@@ -987,10 +940,9 @@ fn explaining_a_report_leaves_the_report_alone() {
 
 /// The one verdict this crate owns the words for and never reaches.
 ///
-/// `[policy.allow.expiry]` gives a tag a deadline, and how old a line is takes
-/// a repository to answer. The scan therefore keeps such a comment exactly as
-/// it keeps any other tagged one, and a caller with a clock takes it back. The
-/// vocabulary lives here so both halves say the same thing.
+/// `[policy.allow.expiry]` gives a tag a deadline, and how old a line is takes a repository to answer.
+/// The scan therefore keeps such a comment exactly as it keeps any other tagged one, and a caller with a clock takes it back.
+/// The vocabulary lives here so both halves say the same thing.
 #[test]
 fn a_deadline_is_not_this_crates_to_reach() {
     let options = ScanOptions {
@@ -1027,27 +979,20 @@ fn an_age_reads_the_units_a_commit_date_can_answer() {
     assert_eq!("0d".parse::<Age>(), Ok(Age::ZERO));
     assert_eq!("30".parse::<Age>(), Ok(Age::from_days(30)));
     assert_eq!(Age::from_days(14).to_string(), "14d");
-    /* NOTE: An hour is not a meaningful deadline for a line of source and a
-     * month is not a fixed number of days, so neither is guessed at. */
+    /* NOTE: An hour is not a meaningful deadline for a line of source and a month is not a fixed number of days, so neither is guessed at. */
     assert!("12h".parse::<Age>().is_err());
     assert!("1m".parse::<Age>().is_err());
     assert!("soon".parse::<Age>().is_err());
 }
 
-/// Every field of every verdict, classified as either shown to a reader or
-/// deliberately not — by destructuring without `..`, so a field added later
-/// fails to compile here until somebody says which it is.
+/// Every field of every verdict, classified as either shown to a reader or deliberately not — by destructuring without `..`, so a field added later fails to compile here until somebody says which it is.
 ///
-/// `every_option_is_classified` does this for the inputs and the match in
-/// `explanation_rule` does it for the variants, and between them a new *reason*
-/// cannot slip through. A new *field on an existing reason* still can: every
-/// renderer in the CLI takes what it wants with `{ .. }`, so a reason that
-/// gained something to say would go on printing yesterday's sentence and
-/// nothing would fail. This is the one place that has to name the field.
+/// `every_option_is_classified` does this for the inputs and the match in `explanation_rule` does it for the variants, and between them a new *reason* cannot slip through.
+/// A new *field on an existing reason* still can: every renderer in the CLI takes what it wants with `{ .. }`, so a reason that gained something to say would go on printing yesterday's sentence and nothing would fail.
+/// This is the one place that has to name the field.
 ///
-/// The returned strings are what the rendering has to contain. A field that is
-/// deliberately silent contributes none, which is a decision written down
-/// rather than an omission nobody made.
+/// The returned strings are what the rendering has to contain.
+/// A field that is deliberately silent contributes none, which is a decision written down rather than an omission nobody made.
 fn shown_by(verdict: &DispositionExplanation) -> Vec<String> {
     match verdict {
         DispositionExplanation::KeptByKind(kind) => vec![kind.to_string()],
@@ -1062,31 +1007,24 @@ fn shown_by(verdict: &DispositionExplanation) -> Vec<String> {
         DispositionExplanation::ProtectedPreamble
         | DispositionExplanation::KeptHtml
         | DispositionExplanation::RemovedAsTrailing => Vec::new(),
-        /* NOTE: `name` and `marker` are `None` when the scanner kept the
-         * comment without a marker to point at, and a sentence cannot quote
-         * what is not there. When there is one, it is the whole point. */
+        /* NOTE: `name` and `marker` are `None` when the scanner kept the comment without a marker to point at, and a sentence cannot quote what is not there.
+         * When there is one, it is the whole point. */
         DispositionExplanation::KeptLoadBearing { name } => {
             name.map(str::to_owned).into_iter().collect()
         }
         DispositionExplanation::KeptLicense { marker } => {
             marker.map(str::to_owned).into_iter().collect()
         }
-        /* NOTE: The sentence names the directive and not the kind. The kind is
-         * not idle -- it is what the CLI's next-step clause turns into
-         * `--remove-kind <kind>` -- but that clause is a different rendering,
-         * and this one has nothing to say about whether a `rubocop:` arrived
-         * on a line or in a block. */
+        /* NOTE: The sentence names the directive and not the kind.
+         * The kind is not idle -- it is what the CLI's next-step clause turns into `--remove-kind <kind>` -- but that clause is a different rendering,
+         * and this one has nothing to say about whether a `rubocop:` arrived on a line or in a block. */
         DispositionExplanation::KeptDirective { kind: _, name } => {
             name.map(str::to_owned).into_iter().collect()
         }
         DispositionExplanation::KeptDocumentation { kind } => vec![kind.to_string()],
-        /* NOTE: The kind reaches the reader as the category it belongs to --
-         * "ordinary comments", "doc comments", "license comments" -- so it is
-         * not in the sentence as its own token and cannot be looked for here.
-         * `a_policy_removal_does_not_say_the_same_thing_about_every_kind` is
-         * what holds it: the sentence has to depend on the field. That is the
-         * property that was missing when every kind, license included, was
-         * reported as "removes ordinary comments". */
+        /* NOTE: The kind reaches the reader as the category it belongs to -- "ordinary comments", "doc comments", "license comments" -- so it is not in the sentence as its own token and cannot be looked for here.
+         * `a_policy_removal_does_not_say_the_same_thing_about_every_kind` is what holds it: the sentence has to depend on the field.
+         * That is the property that was missing when every kind, license included, was reported as "removes ordinary comments". */
         DispositionExplanation::RemovedByPolicy { policy, kind: _ } => {
             vec![policy.to_string()]
         }
@@ -1105,10 +1043,8 @@ fn shown_by(verdict: &DispositionExplanation) -> Vec<String> {
             vec![lines.to_string(), limit.to_string()]
         }
         DispositionExplanation::KeptStructural { language } => vec![language.to_string()],
-        /* NOTE: The rule's own sentence is the whole of what happened, and it
-         * is `detail()` rather than the rule's name: a reader is told what is
-         * wrong with the comment, not which identifier decided it. The name is
-         * what the machine formats carry. */
+        /* NOTE: The rule's own sentence is the whole of what happened, and it is `detail()` rather than the rule's name: a reader is told what is wrong with the comment, not which identifier decided it.
+         * The name is what the machine formats carry. */
         DispositionExplanation::RewrittenByStyle { rule } => {
             vec![rule.detail().to_owned()]
         }
@@ -1193,12 +1129,8 @@ fn every_field_a_verdict_carries_reaches_the_reader() {
 
 /// A policy removal names the kind it took, in the words a reader uses for it.
 ///
-/// The exact-substring guard above cannot ask this, because the sentence says
-/// "license comments" rather than `license`. What it can ask is that the
-/// sentence is not constant in the field -- which is exactly what failed
-/// before, when `RemovedByDefault` carried only the policy and every kind came
-/// out as "removes ordinary comments" under a line that said `kept license
-/// comment`.
+/// The exact-substring guard above cannot ask this, because the sentence says "license comments" rather than `license`.
+/// What it can ask is that the sentence is not constant in the field -- which is exactly what failed before, when `RemovedByDefault` carried only the policy and every kind came out as "removes ordinary comments" under a line that said `kept license comment`.
 #[test]
 fn a_policy_removal_does_not_say_the_same_thing_about_every_kind() {
     for build in [

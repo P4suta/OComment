@@ -8,26 +8,18 @@ use thiserror::Error;
 
 /// A deliberately limited scanner profile for unambiguous comment syntaxes.
 ///
-/// A profile describes a syntax whose comments and strings are literal
-/// delimiters and nothing more, so that one byte-oriented pass can find them
-/// with no grammar and no backtracking. That is the whole of what it can
-/// express, and the limits are enforced rather than assumed:
+/// A profile describes a syntax whose comments and strings are literal delimiters and nothing more, so that one byte-oriented pass can find them with no grammar and no backtracking.
+/// That is the whole of what it can express, and the limits are enforced rather than assumed:
 ///
-/// - Every delimiter is a literal token. It must not be empty and must not
-///   contain a line terminator.
-/// - No comment delimiter may be a prefix of another comment delimiter, no
-///   string delimiter of another string delimiter, and no comment delimiter of
-///   a string delimiter or the reverse. One position therefore never has two
-///   readings, which is what makes the single pass correct.
-/// - A nested block needs a start and an end that are distinct and neither
-///   contained in the other, so the depth count cannot be fooled.
-/// - A comment's [`CommentKind`] is whatever the delimiter declares. There is
-///   no classification by content the way a built-in scanner does it: a
-///   profile finds no shebang, no encoding line, and no license notice unless
-///   a [`ProtectedPattern`] says so.
+/// - Every delimiter is a literal token.
+///   It must not be empty and must not contain a line terminator.
+/// - No comment delimiter may be a prefix of another comment delimiter, no string delimiter of another string delimiter, and no comment delimiter of a string delimiter or the reverse.
+///   One position therefore never has two readings, which is what makes the single pass correct.
+/// - A nested block needs a start and an end that are distinct and neither contained in the other, so the depth count cannot be fooled.
+/// - A comment's [`CommentKind`] is whatever the delimiter declares.
+///   There is no classification by content the way a built-in scanner does it: a profile finds no shebang, no encoding line, and no license notice unless a [`ProtectedPattern`] says so.
 ///
-/// A syntax that needs more than this — a regex literal, a heredoc, an
-/// indentation rule — needs a scanner plugin instead.
+/// A syntax that needs more than this — a regex literal, a heredoc, an indentation rule — needs a scanner plugin instead.
 ///
 /// # Examples
 ///
@@ -61,23 +53,19 @@ use thiserror::Error;
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct DeclarativeProfile {
-    /// What to call the profile in a diagnostic. It must not be blank.
+    /// What to call the profile in a diagnostic.
+    /// It must not be blank.
     pub name: String,
-    /// The file extensions this profile claims, with or without the leading
-    /// dot and matched case-insensitively. The scanner never reads this; it
-    /// is for whoever picks a profile for a path.
+    /// The file extensions this profile claims, with or without the leading dot and matched case-insensitively.
+    /// The scanner never reads this; it is for whoever picks a profile for a path.
     #[serde(default)]
     pub extensions: Vec<String>,
     /// Whole file names this profile claims, matched case-sensitively.
     ///
-    /// Some of the files most worth reaching have no extension at all --
-    /// `dune`, `CODEOWNERS`, `Doxyfile` -- and a profile that could only be
-    /// selected by suffix could not describe them. Case-sensitive because
-    /// these names are conventions of the tools that read them, and those
-    /// tools are case-sensitive about them.
+    /// Some of the files most worth reaching have no extension at all -- `dune`, `CODEOWNERS`, `Doxyfile` -- and a profile that could only be selected by suffix could not describe them.
+    /// Case-sensitive because these names are conventions of the tools that read them, and those tools are case-sensitive about them.
     ///
-    /// Like [`Self::extensions`], the scanner never reads this; it is for
-    /// whoever picks a profile for a path.
+    /// Like [`Self::extensions`], the scanner never reads this; it is for whoever picks a profile for a path.
     #[serde(default)]
     pub filenames: Vec<String>,
     /// Tokens that open a comment running to the end of the line.
@@ -92,31 +80,24 @@ pub struct DeclarativeProfile {
     /// Substrings that turn a comment into a kept directive.
     #[serde(default)]
     pub protected_patterns: Vec<ProtectedPattern>,
-    /// Whether an ordinary line comment directly below a documentation one
-    /// continues it.
+    /// Whether an ordinary line comment directly below a documentation one continues it.
     ///
-    /// Some languages mark only the *first* line of a documentation comment
-    /// and continue it with the ordinary opener. Haddock is written
+    /// Some languages mark only the *first* line of a documentation comment and continue it with the ordinary opener.
+    /// Haddock is written
     ///
     /// ```text
     /// -- | The first line is marked.
     /// --   The rest is not.
     /// ```
     ///
-    /// and both lines are the documentation. Read one token at a time the
-    /// second is a remark, and a policy that removes remarks would take half a
-    /// published page away — which is the same loss removing a doc comment
-    /// outright would be, arrived at by a route nothing was watching.
+    /// and both lines are the documentation.
+    /// Read one token at a time the second is a remark, and a policy that removes remarks would take half a published page away — which is the same loss removing a doc comment outright would be, arrived at by a route nothing was watching.
     ///
-    /// A run is what continues: adjacent comment lines with no code and no
-    /// blank line between them, which is what
-    /// [`AllowRules::max_lines`](crate::AllowRules::max_lines) already
-    /// measures. A blank line ends it, because that is how a writer says the
-    /// next remark is a separate remark.
+    /// A run is what continues: adjacent comment lines with no code and no blank line between them, which is what [`AllowRules::max_lines`](crate::AllowRules::max_lines) already measures.
+    /// A blank line ends it, because that is how a writer says the next remark is a separate remark.
     ///
-    /// Off by default. A language whose documentation comment marks every line
-    /// — Rust's `///`, Gleam's — must leave it off: there a `//` under a `///`
-    /// is a remark the author wrote deliberately.
+    /// Off by default.
+    /// A language whose documentation comment marks every line — Rust's `///`, Gleam's — must leave it off: there a `//` under a `///` is a remark the author wrote deliberately.
     #[serde(default)]
     pub doc_continuation: bool,
 }
@@ -127,36 +108,24 @@ pub struct DeclarativeProfile {
 pub struct LineDelimiter {
     /// The opening token.
     pub start: String,
-    /// Only open a comment at the start of the source or after ASCII
-    /// whitespace, so a token that also occurs inside an identifier does not
-    /// swallow the rest of the line.
+    /// Only open a comment at the start of the source or after ASCII whitespace, so a token that also occurs inside an identifier does not swallow the rest of the line.
     #[serde(default)]
     pub requires_boundary: bool,
     /// Only open a comment when the token is the first byte of its line.
     ///
-    /// Several formats give `#` that rule and only that rule: a `.gitignore`
-    /// pattern may contain one -- `file#name` is a file called `file#name` --
-    /// and `\\#literal` is how a pattern that starts with one is written. A
-    /// profile that opened a comment at either wrote a shorter pattern back,
-    /// so a default `fix` quietly stopped ignoring what the line named. The
-    /// rule is the whole line's first byte and not "after whitespace", because
-    /// leading whitespace in such a file is part of the pattern too.
+    /// Several formats give `#` that rule and only that rule: a `.gitignore` pattern may contain one -- `file#name` is a file called `file#name` -- and `\\#literal` is how a pattern that starts with one is written.
+    /// A profile that opened a comment at either wrote a shorter pattern back,
+    /// so a default `fix` quietly stopped ignoring what the line named.
+    /// The rule is the whole line's first byte and not "after whitespace", because leading whitespace in such a file is part of the pattern too.
     #[serde(default)]
     pub requires_line_start: bool,
-    /// Characters that, coming directly after the token, mean it does not open
-    /// a comment after all.
+    /// Characters that, coming directly after the token, mean it does not open a comment after all.
     ///
-    /// The mirror of [`Self::requires_boundary`], which looks at the byte
-    /// before. Several languages build operators out of the same characters
-    /// their comment opens with, and the rule that tells the two apart is what
-    /// comes next: in Haskell `-->` and `<--` are operators while `-- x` is a
-    /// comment, and the clause that says so is Haskell 2010 §2.2.
+    /// The mirror of [`Self::requires_boundary`], which looks at the byte before.
+    /// Several languages build operators out of the same characters their comment opens with, and the rule that tells the two apart is what comes next: in Haskell `-->` and `<--` are operators while `-- x` is a comment, and the clause that says so is Haskell 2010 §2.2.
     ///
-    /// The token's final character may repeat before the test, because that is
-    /// how such a language spells the token: Haskell's opener is a *run* of
-    /// dashes, so `---x` is a comment and `---->` is an operator. A profile
-    /// that left this empty is one where the question does not arise, and
-    /// nothing repeats.
+    /// The token's final character may repeat before the test, because that is how such a language spells the token: Haskell's opener is a *run* of dashes, so `---x` is a comment and `---->` is an operator.
+    /// A profile that left this empty is one where the question does not arise, and nothing repeats.
     ///
     /// Compared by byte, so only ASCII characters belong here.
     #[serde(default)]
@@ -174,8 +143,8 @@ pub struct BlockDelimiter {
     pub start: String,
     /// The closing token.
     pub end: String,
-    /// Count nesting, so an inner `start` needs its own `end`. Requires a
-    /// `start` and `end` that are distinct and neither contained in the other.
+    /// Count nesting, so an inner `start` needs its own `end`.
+    /// Requires a `start` and `end` that are distinct and neither contained in the other.
     #[serde(default)]
     pub nested: bool,
     /// The kind to record, which is what the policy then judges.
@@ -194,57 +163,44 @@ pub struct StringDelimiter {
     /// A token that protects the byte after it, such as `\\`.
     #[serde(default)]
     pub escape: Option<String>,
-    /// Whether the string may cross a line terminator. When it may not, a
-    /// line terminator ends it and an `unterminated-profile-string`
-    /// diagnostic is raised.
+    /// Whether the string may cross a line terminator.
+    /// When it may not, a line terminator ends it and an `unterminated-profile-string` diagnostic is raised.
     #[serde(default)]
     pub multiline: bool,
 }
 
 /// A substring that makes a comment a kept directive.
 ///
-/// A comment whose text contains it is recorded under the kind its
-/// [`ProtectionTier`] names, and `reason` becomes the reason on its
-/// [`Disposition::Keep`](crate::Disposition::Keep).
+/// A comment whose text contains it is recorded under the kind its [`ProtectionTier`] names, and `reason` becomes the reason on its [`Disposition::Keep`](crate::Disposition::Keep).
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProtectedPattern {
-    /// The substring to look for, compared against the comment's text as
-    /// lossy UTF-8.
+    /// The substring to look for, compared against the comment's text as lossy UTF-8.
     pub contains: String,
-    /// Why such a comment is kept, phrased for a human. It must not be blank.
+    /// Why such a comment is kept, phrased for a human.
+    /// It must not be blank.
     pub reason: String,
-    /// How strongly it is kept. Defaults to [`ProtectionTier::Tool`], which is
-    /// what every profile written before this field existed asked for.
+    /// How strongly it is kept.
+    /// Defaults to [`ProtectionTier::Tool`], which is what every profile written before this field existed asked for.
     #[serde(default)]
     pub tier: ProtectionTier,
 }
 
 /// How strongly a [`ProtectedPattern`] asks for its comment to be kept.
 ///
-/// A profile describes a syntax this crate has no scanner for, and the person
-/// writing one knows something about that syntax that the policy cannot: a
-/// marker their toolchain reads is not the same as a marker their linter
-/// reads, and only one of the two is a choice a policy gets to make. Without
-/// the distinction every profile protection was the weaker one, so
-/// [`Policy::All`](crate::Policy::All) removed a marker a build depended on
-/// and the profile had no way to say otherwise.
+/// A profile describes a syntax this crate has no scanner for, and the person writing one knows something about that syntax that the policy cannot: a marker their toolchain reads is not the same as a marker their linter reads, and only one of the two is a choice a policy gets to make.
+/// Without the distinction every profile protection was the weaker one, so [`Policy::All`](crate::Policy::All) removed a marker a build depended on and the profile had no way to say otherwise.
 ///
-/// The default is the weaker tier because that is what a profile written
-/// without this field already meant, and because claiming the stronger one
-/// should be an act rather than an accident.
+/// The default is the weaker tier because that is what a profile written without this field already meant, and because claiming the stronger one should be an act rather than an accident.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ProtectionTier {
-    /// Addressed to a tool. Every policy but
-    /// [`Policy::All`](crate::Policy::All) keeps it, recorded as
-    /// [`CommentKind::Directive`].
+    /// Addressed to a tool.
+    /// Every policy but [`Policy::All`](crate::Policy::All) keeps it, recorded as [`CommentKind::Directive`].
     #[default]
     Tool,
-    /// Read by the language or its build as part of the program. No policy
-    /// removes it and only
-    /// [`ScanOptions::force_protected`](crate::ScanOptions::force_protected)
-    /// does, recorded as [`CommentKind::LoadBearing`].
+    /// Read by the language or its build as part of the program.
+    /// No policy removes it and only [`ScanOptions::force_protected`](crate::ScanOptions::force_protected) does, recorded as [`CommentKind::LoadBearing`].
     LoadBearing,
 }
 
@@ -260,8 +216,7 @@ impl ProtectionTier {
 
 /// Why a [`DeclarativeProfile`] cannot be interpreted.
 ///
-/// Every variant is a limit of the single-pass design rather than a passing
-/// problem with the input, so the same profile always fails the same way.
+/// Every variant is a limit of the single-pass design rather than a passing problem with the input, so the same profile always fails the same way.
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
 pub enum ProfileError {
     /// The profile has no name to put in a diagnostic.
@@ -279,12 +234,10 @@ pub enum ProfileError {
     /// Two string delimiters where one is a prefix of the other.
     #[error("ambiguous string delimiter prefix: `{0}` and `{1}`")]
     AmbiguousStringDelimiter(String, String),
-    /// A comment delimiter and a string delimiter where one is a prefix of
-    /// the other, so one position could open either.
+    /// A comment delimiter and a string delimiter where one is a prefix of the other, so one position could open either.
     #[error("ambiguous comment/string delimiter prefix: `{0}` and `{1}`")]
     CommentStringCollision(String, String),
-    /// A nested block whose start and end are equal or overlap, which no
-    /// depth count can read.
+    /// A nested block whose start and end are equal or overlap, which no depth count can read.
     #[error("nested block delimiters require distinct non-overlapping start and end tokens")]
     InvalidNesting,
     /// A delimiter spanning a line terminator, which a one-line token cannot.
@@ -293,22 +246,19 @@ pub enum ProfileError {
     /// A [`ProtectedPattern`] with nothing to look for or no reason to give.
     #[error("protected patterns need non-empty `contains` and `reason` values")]
     EmptyProtectedPattern,
-    /// A `keep_regex` or `remove_regex` entry of the [`ScanOptions`] would not
-    /// compile.
+    /// A `keep_regex` or `remove_regex` entry of the [`ScanOptions`] would not compile.
     #[error("invalid policy regex: {0}")]
     InvalidPolicyRegex(String),
 }
 
 /// Check that a profile is one the single-pass interpreter can read.
 ///
-/// [`scan_profile`] calls this first, so validating separately is only worth
-/// it to report a bad configuration before any file is opened.
+/// [`scan_profile`] calls this first, so validating separately is only worth it to report a bad configuration before any file is opened.
 ///
 /// # Errors
 ///
-/// Returns the first [`ProfileError`] the profile runs into. The checks are
-/// on the profile alone and never on a source, so the answer is the same
-/// every time.
+/// Returns the first [`ProfileError`] the profile runs into.
+/// The checks are on the profile alone and never on a source, so the answer is the same every time.
 pub fn validate_profile(profile: &DeclarativeProfile) -> Result<(), ProfileError> {
     if profile.name.trim().is_empty() {
         return Err(ProfileError::EmptyName);
@@ -344,13 +294,9 @@ pub fn validate_profile(profile: &DeclarativeProfile) -> Result<(), ProfileError
     }
     for (index, left) in comments.iter().enumerate() {
         for right in comments.iter().skip(index + 1) {
-            /* NOTE: Equal, not "a prefix of". One comment token being the
-             * start of another is how a language spells a documentation
-             * comment -- Gleam's `//`, `///` and `////`, Haskell's `--` and
-             * `-- |` -- and the scan resolves it by taking the longest token
-             * that matches, so the relationship carries no ambiguity. Two
-             * delimiters spelled the same way do: nothing could choose between
-             * them, and they would differ only in the kind they record. */
+            /* NOTE: Equal, not "a prefix of".
+             * One comment token being the start of another is how a language spells a documentation comment -- Gleam's `//`, `///` and `////`, Haskell's `--` and `-- |` -- and the scan resolves it by taking the longest token that matches, so the relationship carries no ambiguity.
+             * Two delimiters spelled the same way do: nothing could choose between them, and they would differ only in the kind they record. */
             if left == right {
                 return Err(ProfileError::AmbiguousDelimiter(
                     (*left).into(),
@@ -390,17 +336,13 @@ pub fn validate_profile(profile: &DeclarativeProfile) -> Result<(), ProfileError
 
 /// Interpret a validated declarative profile with a single byte-oriented pass.
 ///
-/// Strings are matched first, then line comments, then block comments, so a
-/// comment token inside a string is never a comment. The report names
-/// [`Language::Unknown`] — a profile is not one of the built-in languages —
-/// and an unterminated string or block raises an
-/// `unterminated-profile-string` or `unterminated-profile-comment`
-/// diagnostic, which makes the report invalid.
+/// Strings are matched first, then line comments, then block comments, so a comment token inside a string is never a comment.
+/// The report names [`Language::Unknown`] — a profile is not one of the built-in languages —
+/// and an unterminated string or block raises an `unterminated-profile-string` or `unterminated-profile-comment` diagnostic, which makes the report invalid.
 ///
 /// # Errors
 ///
-/// Returns a [`ProfileError`] when the profile itself is unreadable, which
-/// is checked before the source is touched.
+/// Returns a [`ProfileError`] when the profile itself is unreadable, which is checked before the source is touched.
 pub fn scan_profile(
     source: &[u8],
     profile: &DeclarativeProfile,
@@ -421,8 +363,7 @@ impl PreparedScanner {
         scan_profile_with(source, profile, self.options(), &self.patterns)
     }
 
-    /// Plan a declarative-profile transformation without materializing its
-    /// output bytes or source map.
+    /// Plan a declarative-profile transformation without materializing its output bytes or source map.
     pub fn transform_profile_plan(
         &self,
         source: &[u8],
@@ -439,12 +380,10 @@ impl PreparedScanner {
     }
 }
 
-/// Whether what follows the token — past any repetition of its final
-/// character — leaves it opening a comment.
+/// Whether what follows the token — past any repetition of its final character — leaves it opening a comment.
 ///
-/// See [`LineDelimiter::forbidden_after`]. A delimiter that names no such
-/// characters answers yes without reading anything, which is every profile
-/// written before the field existed.
+/// See [`LineDelimiter::forbidden_after`].
+/// A delimiter that names no such characters answers yes without reading anything, which is every profile written before the field existed.
 fn opens_past_its_run(source: &[u8], index: usize, delimiter: &LineDelimiter) -> bool {
     if delimiter.forbidden_after.is_empty() {
         return true;
@@ -455,9 +394,7 @@ fn opens_past_its_run(source: &[u8], index: usize, delimiter: &LineDelimiter) ->
             cursor += 1;
         }
     }
-    /* NOTE: The end of the source, and the end of the line, both open a
-     * comment: an empty one is still one, and a token with nothing after it is
-     * not a token somebody built an operator out of. */
+    /* NOTE: The end of the source, and the end of the line, both open a comment: an empty one is still one, and a token with nothing after it is not a token somebody built an operator out of. */
     source
         .get(cursor)
         .is_none_or(|byte| !delimiter.forbidden_after.as_bytes().contains(byte))
@@ -478,8 +415,8 @@ fn profile_openers(profile: &DeclarativeProfile) -> Vec<&[u8]> {
         .collect()
 }
 
-/// Every token this profile closes one with. A line comment closes at the end
-/// of its line and contributes none.
+/// Every token this profile closes one with.
+/// A line comment closes at the end of its line and contributes none.
 fn profile_closers(profile: &DeclarativeProfile) -> Vec<&[u8]> {
     profile
         .block_comments
@@ -490,10 +427,8 @@ fn profile_closers(profile: &DeclarativeProfile) -> Vec<&[u8]> {
 
 /// Carry a documentation kind down the run it opens.
 ///
-/// See [`DeclarativeProfile::doc_continuation`]. Applied before any policy or
-/// rule reads a kind, so every later question — what the policy keeps, what
-/// the shape rules skip, what the style rules reach — is asked about the kind
-/// the language actually gives the line.
+/// See [`DeclarativeProfile::doc_continuation`].
+/// Applied before any policy or rule reads a kind, so every later question — what the policy keeps, what the shape rules skip, what the style rules reach — is asked about the kind the language actually gives the line.
 fn continue_documentation(
     source: &[u8],
     comments: &mut [Comment],
@@ -507,11 +442,9 @@ fn continue_documentation(
             match comment.kind {
                 CommentKind::DocLine => carrying = true,
                 CommentKind::Line if carrying => {
-                    /* NOTE: Rebuilt rather than relabelled. The verdict was
-                     * read off the kind, so a kind written over the top of it
-                     * would leave a comment whose disposition answers for the
-                     * kind it used to be. There is one place that knows how to
-                     * make a comment under a profile, and this is it. */
+                    /* NOTE: Rebuilt rather than relabelled.
+                     * The verdict was read off the kind, so a kind written over the top of it would leave a comment whose disposition answers for the kind it used to be.
+                     * There is one place that knows how to make a comment under a profile, and this is it. */
                     *comment = profile_comment(
                         source,
                         comment.span.start,
@@ -522,13 +455,9 @@ fn continue_documentation(
                         patterns,
                     );
                 }
-                /* NOTE: Anything else ends the carry rather than passing
-                 * through it. A licence notice or a directive between two
-                 * documentation lines is not documentation, and the line under
-                 * it is not a continuation of the one above it either. A plain
-                 * line comment reaches here only when nothing was being
-                 * carried, where ending the carry is what has already
-                 * happened. */
+                /* NOTE: Anything else ends the carry rather than passing through it.
+                 * A licence notice or a directive between two documentation lines is not documentation, and the line under it is not a continuation of the one above it either.
+                 * A plain line comment reaches here only when nothing was being carried, where ending the carry is what has already happened. */
                 CommentKind::Line
                 | CommentKind::Block
                 | CommentKind::DocBlock
@@ -547,13 +476,13 @@ fn continue_documentation(
 
 /// Whether a block comment that closes with `end` opens again at `index`.
 ///
-/// Every declared opener that pairs with the same closer counts, because they
-/// all have to be got past before that closer ends anything.
+/// Every declared opener that pairs with the same closer counts, because they all have to be got past before that closer ends anything.
 fn nested_opener(source: &[u8], index: usize, profile: &DeclarativeProfile, end: &str) -> bool {
     nested_opener_len(source, index, profile, end) > 0
 }
 
-/// How long that opener is, or zero when none opens here. The longest wins,
+/// How long that opener is, or zero when none opens here.
+/// The longest wins,
 /// for the reason [`opener_at`] gives.
 fn nested_opener_len(
     source: &[u8],
@@ -576,19 +505,12 @@ enum Opener<'a> {
     Block(&'a BlockDelimiter),
 }
 
-/// The comment delimiter that opens at `index`, taking the longest token that
-/// matches.
+/// The comment delimiter that opens at `index`, taking the longest token that matches.
 ///
-/// Longest rather than first-declared, which is the whole of what lets a
-/// profile describe a language that spells its documentation comment as a
-/// longer form of its ordinary one. First-declared would work too, for an
-/// author who happened to list `////` above `//`; it would silently do
-/// something else for one who did not, and an order that has to be right is a
-/// way to be wrong.
+/// Longest rather than first-declared, which is the whole of what lets a profile describe a language that spells its documentation comment as a longer form of its ordinary one.
+/// First-declared would work too, for an author who happened to list `////` above `//`; it would silently do something else for one who did not, and an order that has to be right is a way to be wrong.
 ///
-/// A tie is impossible rather than broken: two matching tokens of the same
-/// length would have to be the same token, and [`validate_profile`] refuses a
-/// profile that declares one twice.
+/// A tie is impossible rather than broken: two matching tokens of the same length would have to be the same token, and [`validate_profile`] refuses a profile that declares one twice.
 fn opener_at<'a>(
     source: &[u8],
     index: usize,
@@ -605,8 +527,7 @@ fn opener_at<'a>(
             && (!delimiter.requires_boundary
                 || index == 0
                 || source[index - 1].is_ascii_whitespace())
-            /* NOTE: The byte before is the line feed, which is also true of a
-             * CRLF ending: the `\r` belongs to the line before it. */
+            /* NOTE: The byte before is the line feed, which is also true of a CRLF ending: the `\r` belongs to the line before it. */
             && (!delimiter.requires_line_start || index == 0 || source[index - 1] == b'\n')
             && opens_past_its_run(source, index, delimiter)
         {
@@ -689,14 +610,9 @@ fn scan_profile_with(
                 index += delimiter.start.len();
                 let mut depth = 1usize;
                 while index < source.len() {
-                    /* NOTE: Any opener that closes with this delimiter's `end`
-                     * counts, not just the one that began the comment. Nesting is
-                     * a property of the pairing: Haskell writes a documentation
-                     * comment `{-| ... -}` and a remark `{- ... -}`, and a remark
-                     * nested inside the documentation is still something the
-                     * `-}` has to get past. Counting only the opener that began
-                     * the comment let the inner `-}` close the outer comment and
-                     * left the outer one dangling as code. */
+                    /* NOTE: Any opener that closes with this delimiter's `end` counts, not just the one that began the comment.
+                     * Nesting is a property of the pairing: Haskell writes a documentation comment `{-| ... -}` and a remark `{- ... -}`, and a remark nested inside the documentation is still something the `-}` has to get past.
+                     * Counting only the opener that began the comment let the inner `-}` close the outer comment and left the outer one dangling as code. */
                     if delimiter.nested && nested_opener(source, index, profile, &delimiter.end) {
                         depth += 1;
                         index += nested_opener_len(source, index, profile, &delimiter.end);
@@ -735,23 +651,19 @@ fn scan_profile_with(
         }
     }
     let valid = diagnostics.is_empty();
-    /* NOTE: The same rules the built-in scanners apply, for the same reason. A
-     * profile describes a file format rather than a policy, so a project's tag
-     * convention and length limit have to reach a `.gitignore` exactly as they
-     * reach a `.rs` -- and they did not, which showed up as this repository's
-     * own tagged comments surviving in Rust and vanishing in a profile file. */
+    /* NOTE: The same rules the built-in scanners apply, for the same reason.
+     * A profile describes a file format rather than a policy, so a project's tag convention and length limit have to reach a `.gitignore` exactly as they reach a `.rs` -- and they did not, which showed up as this repository's own tagged comments surviving in Rust and vanishing in a profile file. */
     if profile.doc_continuation {
         continue_documentation(source, &mut comments, profile, options, patterns);
     }
     crate::scanner::apply_allow_rules(source, &mut comments, options, patterns);
-    /* NOTE: And the other axis, for the same reason: a project's spelling
-     * convention reaches a `.gitignore` exactly as it reaches a `.rs`. The
-     * profile's own delimiters are what it is asked about, because they are
-     * what the file opens its comments with. */
+    /* NOTE: And the other axis, for the same reason: a project's spelling convention reaches a `.gitignore` exactly as it reaches a `.rs`.
+     * The profile's own delimiters are what it is asked about, because they are what the file opens its comments with. */
     let openers = profile_openers(profile);
     let closers = profile_closers(profile);
     crate::scanner::apply_style_rules_with(
         source,
+        Language::Unknown,
         &mut comments,
         options,
         crate::Markers {
@@ -762,6 +674,7 @@ fn scan_profile_with(
     Ok(ScanReport {
         language: Language::Unknown,
         comments,
+        runs: Vec::new(),
         diagnostics,
         valid,
     })
@@ -769,9 +682,7 @@ fn scan_profile_with(
 
 /// Scan under a profile and produce the bytes a removal would write.
 ///
-/// [`scan_profile`] followed by the same layout, edit validation, and
-/// source-map engine the built-in languages go through, so the guarantees
-/// of [`transform`](crate::transform) hold here too.
+/// [`scan_profile`] followed by the same layout, edit validation, and source-map engine the built-in languages go through, so the guarantees of [`transform`](crate::transform) hold here too.
 ///
 /// # Errors
 ///
@@ -865,14 +776,12 @@ mod tests {
         ));
     }
 
-    /// One token being the start of another is how a language spells a
-    /// documentation comment. It was refused as ambiguous, which made such a
-    /// language inexpressible; the scan resolves it by taking the longest
-    /// token that matches.
+    /// One token being the start of another is how a language spells a documentation comment.
+    /// It was refused as ambiguous, which made such a language inexpressible; the scan resolves it by taking the longest token that matches.
     #[test]
     fn a_prefix_is_resolved_by_length_rather_than_refused() {
-        /* NOTE: Declared shortest first, which is the order that used to be
-         * wrong. Nothing about the answer depends on it. */
+        /* NOTE: Declared shortest first, which is the order that used to be wrong.
+         * Nothing about the answer depends on it. */
         let profile = DeclarativeProfile {
             name: "gleam-like".into(),
             line_comments: vec![
@@ -912,8 +821,7 @@ mod tests {
         );
     }
 
-    /// The clause that tells a Haskell comment from a Haskell operator, which
-    /// is the one thing a delimiter list could not say.
+    /// The clause that tells a Haskell comment from a Haskell operator, which is the one thing a delimiter list could not say.
     #[test]
     fn a_forbidden_character_after_the_run_closes_the_opener() {
         let profile = DeclarativeProfile {
@@ -948,10 +856,7 @@ mod tests {
 
     /// A profile says how strongly each protection asks, and `all` honours it.
     ///
-    /// Both halves are checked, because a tier that is only ever observed
-    /// keeping has not been shown to be a tier: the tool-tier pattern must be
-    /// taken by `all`, and the load-bearing one must survive it and then go
-    /// when `force_protected` says so.
+    /// Both halves are checked, because a tier that is only ever observed keeping has not been shown to be a tier: the tool-tier pattern must be taken by `all`, and the load-bearing one must survive it and then go when `force_protected` says so.
     #[test]
     fn a_profile_protection_states_which_tier_it_claims() {
         let profile = DeclarativeProfile {

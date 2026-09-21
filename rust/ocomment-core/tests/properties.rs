@@ -1,7 +1,6 @@
 //! Randomised properties the engine holds for every input.
 //!
-//! The generators favour the bytes that open and close lexical states, so
-//! the cases are unlikely rather than merely random.
+//! The generators favour the bytes that open and close lexical states, so the cases are unlikely rather than merely random.
 
 use ocomment_core::{
     ByteSpan, DocumentChange, IncrementalDocument, Language, Layout, ScanOptions, TransformOptions,
@@ -9,19 +8,15 @@ use ocomment_core::{
 };
 use proptest::{prelude::*, sample::select};
 
-/// A pool length as a `prop_oneof!` weight, so that drawing uniformly from a
-/// pool of `n` gives each of its members the weight one arm would have.
+/// A pool length as a `prop_oneof!` weight, so that drawing uniformly from a pool of `n` gives each of its members the weight one arm would have.
 fn weight(length: usize) -> u32 {
     u32::try_from(length).expect("the pool is far smaller than a weight")
 }
 
 /// One byte of the shared pool, or a uniformly random one.
 ///
-/// The pool is `ocomment_core::lexical_pool::BYTES`, and the checkpoint
-/// properties in `src/incremental.rs` draw from the same one: a fragment worth
-/// generating against the whole-file scanner is worth generating against the
-/// incremental one. The extra `\n` arm doubles that byte's weight, because a
-/// line boundary is where most of the interesting lexical states begin and end.
+/// The pool is `ocomment_core::lexical_pool::BYTES`, and the checkpoint properties in `src/incremental.rs` draw from the same one: a fragment worth generating against the whole-file scanner is worth generating against the incremental one.
+/// The extra `\n` arm doubles that byte's weight, because a line boundary is where most of the interesting lexical states begin and end.
 fn lexical_byte() -> impl Strategy<Value = u8> {
     prop_oneof![
         4 => any::<u8>(),
@@ -32,11 +27,9 @@ fn lexical_byte() -> impl Strategy<Value = u8> {
 
 /// A fragment: one byte of the pool, or one whole token from it.
 ///
-/// The tokens are `ocomment_core::lexical_pool::TOKENS` — multi-byte openers a
-/// single-byte alphabet can never synthesise, and the reason each of them is
-/// there is written out beside the list. Each is drawn as often as one byte is,
-/// which is what the eight-to-one weight in front of the byte arm keeps in
-/// proportion.
+/// The tokens are `ocomment_core::lexical_pool::TOKENS` — multi-byte openers a single-byte alphabet can never synthesise, and the reason each of them is there is written out beside the list.
+/// Each is drawn as often as one byte is,
+/// which is what the eight-to-one weight in front of the byte arm keeps in proportion.
 fn lexical_fragment() -> impl Strategy<Value = Vec<u8>> {
     prop_oneof![
         8 => lexical_byte().prop_map(|byte| vec![byte]),
@@ -65,9 +58,8 @@ proptest! {
         let source = format!("left/*{body}*/right").into_bytes();
         let result = transform(&source, Language::C, TransformOptions::default());
         prop_assert!(result.report.valid);
-        /* NOTE: The witness. A property about what a removal preserves is
-         * vacuously true of a run that removed nothing, so a scanner that
-         * stopped finding this comment would pass this test forever. */
+        /* NOTE: The witness.
+         * A property about what a removal preserves is vacuously true of a run that removed nothing, so a scanner that stopped finding this comment would pass this test forever. */
         prop_assert_eq!(result.report.comments.len(), 1);
         prop_assert_eq!(newlines(&source), newlines(&result.output));
     }
@@ -101,11 +93,8 @@ proptest! {
         let source = format!("const char *s = \"{escaped}\";").into_bytes();
         let report = scan(&source, Language::C, ScanOptions::default());
         prop_assert!(report.comments.is_empty());
-        /* NOTE: The negative control, and this property needs one more than
-         * most: "nothing was found" is what a scanner that found nothing
-         * anywhere would also say. The same bytes outside the string have to
-         * be found whenever they spell a comment, so the silence above is the
-         * string doing its job rather than the scanner having stopped. */
+        /* NOTE: The negative control, and this property needs one more than most: "nothing was found" is what a scanner that found nothing anywhere would also say.
+         * The same bytes outside the string have to be found whenever they spell a comment, so the silence above is the string doing its job rather than the scanner having stopped. */
         if content.contains("//") || content.contains("/*") {
             let bare = format!("int x = 1; {content}\n").into_bytes();
             let outside = scan(&bare, Language::C, ScanOptions::default());
@@ -208,11 +197,8 @@ proptest! {
     }
 }
 
-/// The two counterexamples recorded in `properties.proptest-regressions` were
-/// drawn from the single-byte alphabet this file's generator no longer uses on
-/// its own, so proptest can no longer replay them from their seeds. They are
-/// kept here verbatim instead: both are unterminated Rust character literals
-/// whose six-byte lookahead straddles the rescan window.
+/// The two counterexamples recorded in `properties.proptest-regressions` were drawn from the single-byte alphabet this file's generator no longer uses on its own, so proptest can no longer replay them from their seeds.
+/// They are kept here verbatim instead: both are unterminated Rust character literals whose six-byte lookahead straddles the rescan window.
 #[test]
 fn recorded_counterexamples_still_match_a_full_scan_for_every_builtin() {
     let cases: [(&[u8], ByteSpan, &[u8]); 2] = [
@@ -255,8 +241,7 @@ fn recorded_counterexamples_still_match_a_full_scan_for_every_builtin() {
     }
 }
 
-/// The style rules under a policy that removes nothing, which is the only way
-/// to watch them on their own.
+/// The style rules under a policy that removes nothing, which is the only way to watch them on their own.
 fn style_only(rules: ocomment_core::StyleRules) -> TransformOptions {
     TransformOptions {
         scan: ScanOptions {
@@ -268,10 +253,10 @@ fn style_only(rules: ocomment_core::StyleRules) -> TransformOptions {
     }
 }
 
-/// Every style rule at once, which is the hardest case: the rules compose, and
-/// a property that held for each alone could still fail for the pair.
+/// Every style rule at once, which is the hardest case: the rules compose, and a property that held for each alone could still fail for the pair.
 fn every_style_rule() -> ocomment_core::StyleRules {
     ocomment_core::StyleRules {
+        wrap: ocomment_core::Wrap::Sentence,
         space_after_marker: Some(true),
         trailing_whitespace: Some(false),
     }
@@ -279,8 +264,7 @@ fn every_style_rule() -> ocomment_core::StyleRules {
 
 /// `bytes` with every ASCII space, tab and line break taken out.
 ///
-/// What a rewrite is allowed to move, and therefore what a comparison of the
-/// two sides has to ignore to be a comparison of the words.
+/// What a rewrite is allowed to move, and therefore what a comparison of the two sides has to ignore to be a comparison of the words.
 fn without_spacing(bytes: &[u8]) -> Vec<u8> {
     bytes
         .iter()
@@ -290,12 +274,9 @@ fn without_spacing(bytes: &[u8]) -> Vec<u8> {
 }
 
 proptest! {
-    /// Rewriting twice is rewriting once.
+        /// Rewriting twice is rewriting once.
     ///
-    /// The property a formatter is worth nothing without, and the one the
-    /// prose gate this replaces did not have: its checker accepted line breaks
-    /// its fixer would go on to remove, so running the fixer produced a file
-    /// the checker liked and the fixer would change again.
+    /// The property a formatter is worth nothing without, and the one the prose gate this replaces did not have: its checker accepted line breaks its fixer would go on to remove, so running the fixer produced a file the checker liked and the fixer would change again.
     #[test]
     fn restyling_a_restyled_source_changes_nothing(source in lexical_source(0..48)) {
         for language in [Language::Rust, Language::Python, Language::Html, Language::Ocaml] {
@@ -312,12 +293,11 @@ proptest! {
         }
     }
 
-    /// What `fix` writes, `check` has nothing left to say about.
+        /// What `fix` writes, `check` has nothing left to say about.
     ///
-    /// Idempotence says the bytes settle; this says the *report* settles. The
-    /// two are not the same claim, and it is the second one a gate depends on:
-    /// a run whose output still holds findings is a run that fails the commit
-    /// it was asked to clean.
+    /// Idempotence says the bytes settle; this says the *report* settles.
+    /// The two are not the same claim, and it is the second one a gate depends on:
+    /// a run whose output still holds findings is a run that fails the commit it was asked to clean.
     #[test]
     fn a_restyled_source_holds_no_findings(source in lexical_source(0..48)) {
         for language in [Language::Rust, Language::Python, Language::Html, Language::Ocaml] {
@@ -341,18 +321,21 @@ proptest! {
         }
     }
 
-    /// A rewritten comment is still one comment, and still the same kind of
-    /// comment.
+        /// A rewrite that touches one comment leaves one comment of the same kind.
     ///
-    /// The failure this rules out is the one the prose gate shipped: it
-    /// rebuilt `/* One. Two. */` as two lines each opening `/*` and closing
-    /// neither, so a formatter asked to tidy a file wrote a file that did not
-    /// compile. Nothing about that is specific to block comments — it is what
-    /// happens whenever a rewrite forgets a delimiter.
+    /// The failure this rules out is the one the prose gate shipped: it rebuilt `/* One. Two. */` as two lines each opening `/*` and closing neither, so a formatter asked to tidy a file wrote a file that did not compile.
+    /// Nothing about that is specific to block comments — it is what happens whenever a rewrite forgets a delimiter.
+    ///
+    /// The wrap rule is deliberately out of this one.
+    /// Moving a line break between two comments is *meant* to change how many comments there are,
+    /// and `a_reflowed_source_is_still_the_same_comments` is what holds that.
     #[test]
-    fn a_rewrite_leaves_one_comment_of_the_same_kind(source in lexical_source(0..48)) {
+    fn a_comment_rewrite_leaves_one_comment_of_the_same_kind(source in lexical_source(0..48)) {
         for language in [Language::Rust, Language::Python, Language::Html, Language::Ocaml] {
-            let options = style_only(every_style_rule());
+            let options = style_only(ocomment_core::StyleRules {
+                wrap: ocomment_core::Wrap::Preserve,
+                ..every_style_rule()
+            });
             let result = transform(&source, language, options.clone());
             if !result.report.valid {
                 continue;
@@ -378,12 +361,43 @@ proptest! {
         }
     }
 
-    /// A rewrite moves white space and nothing else.
+        /// A reflow may change how many comments there are.
+    /// It may not change what any of them is.
     ///
-    /// The last wall between a formatter and the accusation that it ate
-    /// somebody's sentence. Every rule this axis holds today is about spacing,
-    /// and a rule that is not would have to be exempted here deliberately
-    /// rather than by this test quietly not covering it.
+    /// A kind is read from a comment's bytes and, for two of them, from where the comment sits.
+    /// A reflow moves what sits where, so it can turn a remark into something a toolchain reads without touching a byte of it: joining two lines above a Python encoding declaration carries that declaration up into the first two lines, which is where it starts meaning something.
+    /// This property is what found that.
+    #[test]
+    fn a_reflowed_source_is_still_the_same_comments(source in lexical_source(0..48)) {
+        for language in [Language::Rust, Language::Python, Language::Html, Language::Ocaml] {
+            let options = style_only(every_style_rule());
+            let result = transform(&source, language, options.clone());
+            if !result.report.valid {
+                continue;
+            }
+            let after = scan(&result.output, language, options.scan.clone());
+            prop_assert!(
+                after.valid,
+                "{} wrote a source that no longer lexes: {:?}",
+                language, String::from_utf8_lossy(&result.output)
+            );
+            let before: Vec<_> =
+                result.report.comments.iter().map(|comment| comment.kind).collect();
+            for comment in &after.comments {
+                prop_assert!(
+                    before.contains(&comment.kind),
+                    "{} invented a {} comment: {:?}",
+                    language, comment.kind, String::from_utf8_lossy(&result.output)
+                );
+            }
+        }
+    }
+
+        /// A rewrite moves white space and nothing else.
+    ///
+    /// The last wall between a formatter and the accusation that it ate somebody's sentence.
+    /// Every rule this axis holds today is about spacing,
+    /// and a rule that is not would have to be exempted here deliberately rather than by this test quietly not covering it.
     #[test]
     fn a_rewrite_moves_only_white_space(source in lexical_source(0..48)) {
         for language in [Language::Rust, Language::Python, Language::Html, Language::Ocaml] {
