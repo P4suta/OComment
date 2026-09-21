@@ -99,11 +99,9 @@ LANGUAGES = ROOT / "spec/languages.toml"
 
 DEFAULT_CASES = 2000
 
-# NOTE: One pool for every language rather than a pool per language. A scanner
-# NOTE: is most likely to go wrong on a delimiter it does not own -- a Lua long
-# NOTE: bracket in a TOML file, a heredoc in Kotlin -- and mixing the alphabets
-# NOTE: is what puts those in front of it. The groups are named rather than
-# NOTE: labelled in comments, so a token added to one lands where it belongs.
+# NOTE: One pool for every language rather than a pool per language.
+# NOTE: A scanner is most likely to go wrong on a delimiter it does not own -- a Lua long bracket in a TOML file, a heredoc in Kotlin -- and mixing the alphabets is what puts those in front of it.
+# NOTE: The groups are named rather than labelled in comments, so a token added to one lands where it belongs.
 COMMENT_MARKERS = [
     "//", "///", "//!", "/*", "*/", "/**", "/*!", "(*", "*)", "<!--", "-->",
     "--", "---", "#", "#!", "--[[", "]]", "--[=[", "]=]", "[[", "[=[",
@@ -140,10 +138,8 @@ YAML_STRUCTURE = [
     "key:\n", "\n-\n", "!!str ", "&a ",
 ]
 
-# NOTE: The shapes that reach PHP mode at all. Nothing but a whole `<?php` with
-# NOTE: white space behind it opens one, so a per-byte pool would leave every
-# NOTE: generated PHP source inline HTML and scan nothing; the heredoc header
-# NOTE: and its terminator are here for the same reason the YAML ones are.
+# NOTE: The shapes that reach PHP mode at all.
+# NOTE: Nothing but a whole `<?php` with white space behind it opens one, so a per-byte pool would leave every generated PHP source inline HTML and scan nothing; the heredoc header and its terminator are here for the same reason the YAML ones are.
 PHP_STRUCTURE = [
     "<?php ", "<?=", "?>", "<?xml ", "#[", "<<<EOT", "<<<'NOW'", "EOT;", "NOW;",
     "{$a}", "${a}", "phpcs:ignore", "@phpstan-ignore-next-line",
@@ -156,37 +152,25 @@ RUBY_STRUCTURE = [
     "\"#{", "}\"", "#{ <<EOS }",
 ]
 
-# NOTE: The shapes Zig needs. It is the one built-in language whose multiline
-# NOTE: string has no quote in it at all: a `\\` wherever a token may begin runs
-# NOTE: to the end of that line as content, so a per-byte pool would open one
-# NOTE: about as often as it opens a Lua long bracket. The slash runs are the
-# NOTE: three comment markers and the fourth slash that takes the doc marker
-# NOTE: back, `@"` the quoted identifier that is lexed as a string, and the two
-# NOTE: `zig fmt` phrases the only directive it has.
+# NOTE: The shapes Zig needs.
+# NOTE: It is the one built-in language whose multiline string has no quote in it at all: a `\\` wherever a token may begin runs to the end of that line as content, so a per-byte pool would open one about as often as it opens a Lua long bracket.
+# NOTE: The slash runs are the three comment markers and the fourth slash that takes the doc marker back, `@"` the quoted identifier that is lexed as a string, and the two `zig fmt` phrases the only directive it has.
 ZIG_STRUCTURE = [
     "\\\\", "////", "///", "//!", "@\"", "zig fmt: off", "zig fmt: on", "'\\''",
 ]
 
-# NOTE: The shapes R needs. Its raw string opens on a letter no other language
-# NOTE: uses as a delimiter, so a pool without `r"(` never reaches the one
-# NOTE: literal in the language that takes no escapes; the dashed pair is here
-# NOTE: for the reason Lua's levelled brackets are, since a closing run of the
-# NOTE: wrong length is content. `%in%` and the bare `%` are the operator whose
-# NOTE: name may hold a `#`, `#'` is roxygen2's marker, and the two markers
-# NOTE: after them are the directives styler and covr read.
+# NOTE: The shapes R needs.
+# NOTE: Its raw string opens on a letter no other language uses as a delimiter, so a pool without `r"(` never reaches the one literal in the language that takes no escapes; the dashed pair is here for the reason Lua's levelled brackets are, since a closing run of the wrong length is content.
+# NOTE: `%in%` and the bare `%` are the operator whose name may hold a `#`, `#'` is roxygen2's marker, and the two markers after them are the directives styler and covr read.
 R_STRUCTURE = [
     "r\"(", ")\"", "r\"--(", ")--\"", "R\"[", "]\"", "r\"{", "}\"", "R'(", ")'",
     "#'", "%in%", "%", "`", "styler: off", "nocov start", "xr\"(",
 ]
 
-# NOTE: The shapes Dart needs. Its raw string opens on a letter, and only
-# NOTE: where that letter begins a token, so the pool carries the two near
-# NOTE: misses `xr'` and `1r'` beside the opener itself. `${` is what turns
-# NOTE: the inside of a string back into code, `'''` is the multiline form a
-# NOTE: per-byte alphabet reaches only by coincidence, and the slash runs are
-# NOTE: the two doc markers Dart honours and the two it does not. The last
-# NOTE: three are the instructions a Dart tool reads, two of them matched as
-# NOTE: whole phrases rather than as prefixes.
+# NOTE: The shapes Dart needs.
+# NOTE: Its raw string opens on a letter, and only where that letter begins a token, so the pool carries the two near misses `xr'` and `1r'` beside the opener itself.
+# NOTE: `${` is what turns the inside of a string back into code, `'''` is the multiline form a per-byte alphabet reaches only by coincidence, and the slash runs are the two doc markers Dart honours and the two it does not.
+# NOTE: The last three are the instructions a Dart tool reads, two of them matched as whole phrases rather than as prefixes.
 DART_STRUCTURE = [
     "r'", "r\"", "xr'", "1r'", "${", "$a", "#foo", "//!", "/*!", "////",
     "'''", "// @dart = 2.12", "// dart format off", "ignore_for_file:",
@@ -239,9 +223,7 @@ PERL_STRUCTURE = [
     "$x", "@y", "%h", "# not", "#c", "\\", "(" , ")", "{", "}", "[", "]",
 ]
 
-# NOTE: The bytes a lexer is liable to mishandle: NUL, DEL, a byte order mark, a
-# NOTE: no-break space, the two Unicode line terminators, and two characters
-# NOTE: wider than one byte.
+# NOTE: The bytes a lexer is liable to mishandle: NUL, DEL, a byte order mark, a no-break space, the two Unicode line terminators, and two characters wider than one byte.
 AWKWARD_BYTES = [
     "\x00", "\x7f", "﻿", " ", " ", " ", "é", "中",
 ]
@@ -434,8 +416,7 @@ def shrink(item, tokens, language, budget):
                 changed = True
             else:
                 index += 1
-    # NOTE: The two answers are read back from the shrunken source, so what the
-    # NOTE: report prints is what the source it prints really produces.
+    # NOTE: The two answers are read back from the shrunken source, so what the report prints is what the source it prints really produces.
     probe = request(item["id"], language, assemble(current), item["options"],
                     item["operation"])
     _, left, right = compare([probe])[0]

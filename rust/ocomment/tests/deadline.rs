@@ -1,10 +1,7 @@
 //! Deadlines on the tags that are promises.
 //!
-//! `[policy.allow] tags` and `[policy.allow.expiry]` differ in one thing and
-//! it is the thing that needs a repository: whether the tag runs out. These
-//! tests build one, commit at a date of their choosing, and check that the run
-//! reaches the verdict the dates call for — and, just as importantly, that it
-//! leaves a comment alone when it cannot read them.
+//! `[policy.allow] tags` and `[policy.allow.expiry]` differ in one thing and it is the thing that needs a repository: whether the tag runs out.
+//! These tests build one, commit at a date of their choosing, and check that the run reaches the verdict the dates call for — and, just as importantly, that it leaves a comment alone when it cannot read them.
 
 use std::{
     fs,
@@ -15,6 +12,17 @@ use tempfile::TempDir;
 
 fn binary() -> &'static str {
     env!("CARGO_BIN_EXE_ocomment")
+}
+
+/// A scratch directory with no `ocomment/config.toml` in it.
+///
+/// `ocomment` reads `$XDG_CONFIG_HOME/ocomment/config.toml`, which is a real setting on a real machine and is meant to reach every run.
+/// A suite that let it through is a suite whose answers depend on whose machine it ran on.
+fn no_user_config() -> &'static std::path::Path {
+    static EMPTY: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
+    EMPTY
+        .get_or_init(|| tempfile::tempdir().expect("a temporary directory"))
+        .path()
 }
 
 fn git(directory: &Path, arguments: &[&str], date: Option<&str>) {
@@ -35,8 +43,7 @@ fn git(directory: &Path, arguments: &[&str], date: Option<&str>) {
 
 /// Run the binary, naming `--format human` unless the test names a format.
 ///
-/// These assert on the one-line-per-finding stream, which is `human`; `review`
-/// became the default while they were written against the other one.
+/// These assert on the one-line-per-finding stream, which is `human`; `review` became the default while they were written against the other one.
 fn run(directory: &Path, arguments: &[&str]) -> Output {
     let mut arguments: Vec<&str> = arguments.to_vec();
     if !arguments.contains(&"--format") {
@@ -44,14 +51,14 @@ fn run(directory: &Path, arguments: &[&str]) -> Output {
         arguments.push("human");
     }
     Command::new(binary())
+        .env("XDG_CONFIG_HOME", no_user_config())
         .current_dir(directory)
         .args(&arguments)
         .output()
         .expect("the binary runs")
 }
 
-/// A repository whose configuration gives `TODO` a fortnight and lets `NOTE`
-/// stand indefinitely.
+/// A repository whose configuration gives `TODO` a fortnight and lets `NOTE` stand indefinitely.
 fn repository() -> TempDir {
     let directory = tempfile::tempdir().expect("a temporary directory");
     let path = directory.path();
@@ -110,9 +117,8 @@ fn a_promise_is_fine_until_its_time_is_up() {
     );
 }
 
-/// Writing one costs nothing. The deadline starts at the commit that adds the
-/// line, so a `TODO` written a moment ago is attributed to no commit and has
-/// not started counting.
+/// Writing one costs nothing.
+/// The deadline starts at the commit that adds the line, so a `TODO` written a moment ago is attributed to no commit and has not started counting.
 #[test]
 fn a_promise_written_just_now_has_not_started_counting() {
     let directory = repository();
@@ -140,8 +146,8 @@ fn a_promise_written_just_now_has_not_started_counting() {
     );
 }
 
-/// No repository, no clock. A deadline nobody can measure has not passed, and
-/// the run says nothing rather than removing a comment on a guess.
+/// No repository, no clock.
+/// A deadline nobody can measure has not passed, and the run says nothing rather than removing a comment on a guess.
 #[test]
 fn a_tree_that_is_not_a_repository_leaves_every_promise_alone() {
     let directory = tempfile::tempdir().expect("a temporary directory");
@@ -160,8 +166,8 @@ fn a_tree_that_is_not_a_repository_leaves_every_promise_alone() {
     assert_eq!(output.status.code(), Some(0), "{stdout}{stderr}");
 }
 
-/// `fix` removes one, because the rule is the same rule and `fix` applies the
-/// rules. That is the half of "do it or delete it" a machine can do.
+/// `fix` removes one, because the rule is the same rule and `fix` applies the rules.
+/// That is the half of "do it or delete it" a machine can do.
 #[test]
 fn fix_deletes_a_promise_whose_time_is_up() {
     let directory = repository();
@@ -192,9 +198,7 @@ fn fix_deletes_a_promise_whose_time_is_up() {
     );
 }
 
-/// The age is read from the bytes under judgement rather than from the file on
-/// disk, so an editing hook asked about an edit that has not happened yet gets
-/// the same answer a check would give once it had.
+/// The age is read from the bytes under judgement rather than from the file on disk, so an editing hook asked about an edit that has not happened yet gets the same answer a check would give once it had.
 #[test]
 fn a_proposed_edit_is_judged_against_the_history_of_the_file_it_would_change() {
     let directory = repository();
@@ -220,6 +224,7 @@ fn a_proposed_edit_is_judged_against_the_history_of_the_file_it_would_change() {
     })
     .to_string();
     let mut child = Command::new(binary())
+        .env("XDG_CONFIG_HOME", no_user_config())
         .current_dir(path)
         .args(["hook", "claude-code"])
         .stdin(std::process::Stdio::piped())
@@ -243,9 +248,8 @@ fn a_proposed_edit_is_judged_against_the_history_of_the_file_it_would_change() {
     let reason = decision["hookSpecificOutput"]["permissionDecisionReason"]
         .as_str()
         .expect("a reason the model can read");
-    /* NOTE: The edit adds no comment. The one already in the file is over its
-     * deadline, and the line it sits on is unchanged by the edit, so the
-     * history still answers for it. */
+    /* NOTE: The edit adds no comment.
+     * The one already in the file is over its deadline, and the line it sits on is unchanged by the edit, so the history still answers for it. */
     assert!(
         reason.contains("do it or drop it"),
         "a promise the edit left in place stopped being overdue:\n{reason}"

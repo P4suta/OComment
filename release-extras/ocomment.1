@@ -30,6 +30,8 @@ Which classes of comment the run is allowed to remove
 \fIPossible values:\fR
 .RS 14
 .IP \(bu 2
+none: Remove nothing. Every comment is kept, which is the mode for a repository that wants the style rules and not the removals
+.IP \(bu 2
 conservative: Remove ordinary comments; keep documentation, licence notices, directives, shebangs and encoding lines (was `legal`)
 .IP \(bu 2
 standard: Like conservative, and remove documentation, licence and copyright comments too (was `safe`)
@@ -468,6 +470,11 @@ Check only the working\-tree files that differ from this revision\*(Aqs merge ba
 \fB\-\-dry\-run\fR
 Print the patch `fix` would apply and write nothing
 .TP
+\fB\-\-tidy\fR
+Apply what the style rules rewrote and leave every removal to you.
+
+The removals are still reported and the run still exits 1 for them; what changes is that none of them reaches the file. This is the half a machine can finish on its own, which is what makes it the half a commit hook may run unattended.
+.TP
 \fB\-i\fR, \fB\-\-interactive\fR
 Ask about each comment in turn and remove only the accepted ones.
 
@@ -503,8 +510,15 @@ Check only the working\-tree files that differ from this revision\*(Aqs merge ba
 Files or directories to process; `\-` reads standard input (default: current directory)
 .SS ocomment init
 .TP
+\fB\-\-tidy\fR
+For the Lefthook hook, run `fix \-\-tidy` instead of `check`.
+
+The hook writes what the style rules settle and leaves every removal reported and unapplied, which is the shape a gate on every commit wants.
+.TP
 \fB\-\-fix\fR
-For the Lefthook hook, run `fix` instead of `check`
+For the Lefthook hook, run `fix` instead of `check`.
+
+The removals too, including the comments above them that were worth keeping. `\-\-tidy` is the one that writes nothing a reader would have wanted back.
 .TP
 \fB\-\-force\fR
 Replace the file if it already exists
@@ -653,7 +667,7 @@ v0.1.0
 Nothing removable was found and every requested change was applied.
 .TP
 .B 1
-Removable comments were reported, or a diff was printed.
+Removable comments were reported, a diff was printed, \fB--tidy\fR left a removal for you, or a staged fix rewrote the index.
 .TP
 .B 2
 Invalid source, configuration, plugin, or I/O failure.

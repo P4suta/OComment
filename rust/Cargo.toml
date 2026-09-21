@@ -45,10 +45,8 @@ wit-parser = { version = "0.13.0", default-features = false }
 missing_docs = "warn"
 
 [workspace.lints.clippy]
-# NOTE: A `_ =>` over an enum is a variant added later landing silently in an
-# NOTE: arm nobody wrote for it. Every decision this program makes is a match
-# NOTE: over a closed vocabulary, so the wildcard is the one shortcut that
-# NOTE: turns adding a kind into a wrong answer rather than a build failure.
+# NOTE: A `_ =>` over an enum is a variant added later landing silently in an arm nobody wrote for it.
+# NOTE: Every decision this program makes is a match over a closed vocabulary, so the wildcard is the one shortcut that turns adding a kind into a wrong answer rather than a build failure.
 wildcard_enum_match_arm = "deny"
 
 [profile.release]

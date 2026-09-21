@@ -1,28 +1,22 @@
 # Hooks and CI
 
-OComment ships two integrations: a [pre-commit](https://pre-commit.com) hook
-manifest at `.pre-commit-hooks.yaml`, and a composite GitHub Action at
-`action.yml`. Both drive the same CLI and the same exit codes: `0` clean, `1`
-removable comments exist, `2` an invalid source, configuration, plugin, or I/O
-failure.
+OComment ships two integrations: a [pre-commit](https://pre-commit.com) hook manifest at `.pre-commit-hooks.yaml`, and a composite GitHub Action at `action.yml`.
+Both drive the same CLI and the same exit codes: `0` clean, `1` something is outstanding — a removable comment, a printed diff, a removal a `--tidy` run left alone, or an index a staged fix rewrote — and `2` an invalid source, configuration, plugin, or I/O failure.
 
 ## pre-commit
 
 ### Install the CLI first
 
-The hooks declare `language: system`, so `ocomment` must already be on `PATH`
-when pre-commit runs them. pre-commit's `language: rust` runs
-`cargo install --path .` at the checkout root, and this repository's manifest
-lives in `rust/`, so it cannot build these hooks. Install the CLI once per
-machine and CI image:
+The hooks declare `language: system`, so `ocomment` must already be on `PATH` when pre-commit runs them.
+pre-commit's `language: rust` runs `cargo install --path .` at the checkout root, and this repository's manifest lives in `rust/`, so it cannot build these hooks.
+Install the CLI once per machine and CI image:
 
 ```sh
 cargo install ocomment --locked
 ```
 
-A future release may publish a wheel so `language: python` can install the
-binary itself. Until then, a missing `ocomment` fails the hook with a "command
-not found" error rather than silently passing.
+A future release may publish a wheel so `language: python` can install the binary itself.
+Until then, a missing `ocomment` fails the hook with a "command not found" error rather than silently passing.
 
 ### Recommended configuration
 
@@ -34,12 +28,26 @@ repos:
       - id: ocomment-check
 ```
 
-`ocomment-check` reports removable comments in the staged source files and
-exits 1, which blocks the commit and leaves the fix to you. That is the safe
-default: nothing is rewritten behind your back.
+`ocomment-check` reports removable comments in the staged source files and exits 1, which blocks the commit and leaves the fix to you.
+That is the safe default: nothing is rewritten behind your back.
 
-To rewrite instead of reporting, use `ocomment-fix`. Run it *before*
-`ocomment-check` so the check confirms the result:
+To let the hook write what a machine can settle, add `ocomment-tidy` in front of it:
+
+```yaml
+repos:
+  - repo: https://github.com/P4suta/OComment
+    rev: v0.1.0
+    hooks:
+      - id: ocomment-tidy
+      - id: ocomment-check
+```
+
+`ocomment-tidy` runs `ocomment fix --tidy`, which applies the style axis — a paragraph reflowed to one sentence per line, a missing space after a marker — and takes no comment away.
+Every removal it found is still reported by the `ocomment-check` behind it, so the gate is no weaker for the rewrite.
+It is the pairing to reach for when OComment runs on every commit: the half nobody has to think about is written, and the half only its author can answer is left to them.
+
+`ocomment-fix` is the blunt one.
+It applies the removals too, including the comments above that were worth keeping, so run it when that is what you mean:
 
 ```yaml
 repos:
@@ -50,23 +58,19 @@ repos:
       - id: ocomment-check
 ```
 
-Both hooks accept the full CLI surface through `args`, for example
-`args: ["--policy", "standard"]` or `args: ["--config", "ci/.ocomment.toml"]`.
+Both hooks accept the full CLI surface through `args`, for example `args: ["--policy", "standard"]` or `args: ["--config", "ci/.ocomment.toml"]`.
 
 ### Judging the commit rather than the disk
 
-pre-commit passes the staged file names to the hook and stashes unstaged
-changes before running it, so by default OComment reads the working tree that
-pre-commit has already reduced to the staged content. Add `--staged` to read
-the Git index blobs directly — the exact bytes the commit will contain:
+pre-commit passes the staged file names to the hook and stashes unstaged changes before running it, so by default OComment reads the working tree that pre-commit has already reduced to the staged content.
+Add `--staged` to read the Git index blobs directly — the exact bytes the commit will contain:
 
 ```yaml
       - id: ocomment-check
         args: ["--staged"]
 ```
 
-For a partially staged file the difference is visible: the working tree shows
-every comment, the index shows only the ones being committed.
+For a partially staged file the difference is visible: the working tree shows every comment, the index shows only the ones being committed.
 
 ```console
 $ ocomment check a.rs
@@ -79,29 +83,21 @@ a.rs:2:16: removable line comment: // staged comment
 Found 1 removable comment in 1 file (1 file scanned). Run `ocomment fix` to remove it.
 ```
 
-Two caveats come with `--staged`, and both are worth knowing before you enable
-it.
+Two caveats come with `--staged`, and both are worth knowing before you enable it.
 
-**`fix --staged` rewrites the index and the working tree together, so
-pre-commit does not notice.** pre-commit decides that "files were modified by
-this hook" by comparing the unstaged diff before and after the hook. After
-pre-commit's stash the working tree already equals the index, and
-`ocomment fix --staged` moves both sides by the same edits, so the unstaged
-diff is empty both before and after:
+**pre-commit cannot see that `fix --staged` changed anything, so the exit code is what stops the commit.** pre-commit decides that "files were modified by this hook" by comparing the unstaged diff before and after the hook.
+After its stash the working tree already equals the index, and `ocomment fix --staged` moves both sides by the same edits, so the unstaged diff is empty both before and after:
 
 ```console
 $ git status --short
 M  a.rs                     # staged, working tree clean
 ```
 
-The detection therefore does not fire, and the commit proceeds with the
-removals already staged. If you want the commit stopped so you can look at the
-result, keep `ocomment-fix` without `--staged` — that rewrites only the working
-tree, leaves an unstaged diff, and pre-commit fails the commit — or follow it
-with `ocomment-check --staged`.
+That detection never fires.
+A staged fix therefore exits 1 whenever it rewrote the index: the bytes the commit will carry have stopped being the bytes their author staged, and with pre-commit's own check blind to it the exit code is the only place that can say so.
+The commit stops, `git diff --cached` shows what changed, and committing again records it.
 
-Outside pre-commit, where a file really is partially staged, `fix --staged`
-refuses rather than guessing:
+Outside pre-commit, where a file really is partially staged, `fix --staged` refuses rather than guessing:
 
 ```console
 $ ocomment fix --staged a.rs
@@ -110,28 +106,23 @@ modified (use --index-only): edit context does not have one unique working-tree
 mapping
 ```
 
-**`--staged` sees nothing outside the `pre-commit` stage.** Under
-`pre-commit run --all-files`, or in a `pre-push` or `manual` stage, there is no
-staged change set, so the run scans zero files and exits 0:
+**`--staged` sees nothing outside the `pre-commit` stage.** Under `pre-commit run --all-files`, or in a `pre-push` or `manual` stage, there is no staged change set, so the run scans zero files and exits 0:
 
 ```console
 $ ocomment check --staged
 No removable comments in 0 files.
 ```
 
-That is a hook which always passes, not a hook which found nothing. Use a
-separate entry without `--staged` for those stages, or gate the `--staged`
-entry with `stages: [pre-commit]`.
+That is a hook which always passes, not a hook which found nothing.
+Use a separate entry without `--staged` for those stages, or gate the `--staged` entry with `stages: [pre-commit]`.
 
 ### Keeping the hook manifest honest
 
-Both published hooks use `types: [text]` and intentionally have no `files:`
-regex. Pre-commit selects the text files and OComment's own detector decides
-which ones it understands. That keeps reserved names such as `Dockerfile` and
-extensionless shebang scripts on the same path as an ordinary CLI run.
-`tools/check_hooks.py` rejects any manifest-level `files:` filter, an unknown
-manifest key, or a hook missing `id`, `name`, `entry`, or `language`. CI runs it
-next to `tools/check_embedded_specs.py`.
+Both published hooks use `types: [text]` and intentionally have no `files:` regex.
+Pre-commit selects the text files and OComment's own detector decides which ones it understands.
+That keeps reserved names such as `Dockerfile` and extensionless shebang scripts on the same path as an ordinary CLI run.
+`tools/check_hooks.py` rejects any manifest-level `files:` filter, an unknown manifest key, or a hook missing `id`, `name`, `entry`, or `language`.
+CI runs it next to `tools/check_embedded_specs.py`.
 
 ```sh
 python3 tools/check_hooks.py
@@ -139,28 +130,19 @@ python3 tools/check_hooks.py
 
 ## GitHub Action
 
-`action.yml` at the repository root is a composite action. It resolves a
-release, downloads the archive for the runner, verifies its SHA-256 and its
-build provenance, runs `ocomment check` or `ocomment diff`, and turns the exit
-code into a verdict.
+`action.yml` at the repository root is a composite action.
+It resolves a release, downloads the archive for the runner, verifies its SHA-256 and its build provenance, runs `ocomment check` or `ocomment diff`, and turns the exit code into a verdict.
 
 ### Annotate a pull request
 
-`format: github` is the default and writes annotations that GitHub renders on
-the changed lines.
+`format: github` is the default and writes annotations that GitHub renders on the changed lines.
 
-The level of each one is the level its run's exit status justifies: `check`
-and `diff` answer a finding with exit 1, so what they report is an `::error`,
+The level of each one is the level its run's exit status justifies: `check` and `diff` answer a finding with exit 1, so what they report is an `::error`,
 while `scan` and `fix` end at 0 whatever they find and report a `::notice`.
-That way a job which fails on the 1 does not describe the comments it failed
-over as though nothing had gone wrong — and GitHub folds a notice away where
-it surfaces an error, so the annotation was easy to miss entirely.
+That way a job which fails on the 1 does not describe the comments it failed over as though nothing had gone wrong — and GitHub folds a notice away where it surfaces an error, so the annotation was easy to miss entirely.
 
-A job that posts annotations without gating on them, or gates without wanting
-the red, says so with `--annotation-level <error|warning|notice>` and is
-believed. A diagnostic — a file that would not scan at all — stays an
-`::error` whatever that flag says, because it is not a finding the run is
-offering an opinion about.
+A job that posts annotations without gating on them, or gates without wanting the red, says so with `--annotation-level <error|warning|notice>` and is believed.
+A diagnostic — a file that would not scan at all — stays an `::error` whatever that flag says, because it is not a finding the run is offering an opinion about.
 
 ```yaml
 name: Comments
@@ -197,9 +179,8 @@ jobs:
           fail-on-findings: "false" # NOTE: Let the code-scanning alerts carry the result.
 ```
 
-`upload-sarif: "true"` requires `format: sarif`; any other format is a usage
-error rather than a silent skip. The SARIF is uploaded under the `ocomment`
-category, so it does not collide with other tools' results.
+`upload-sarif: "true"` requires `format: sarif`; any other format is a usage error rather than a silent skip.
+The SARIF is uploaded under the `ocomment` category, so it does not collide with other tools' results.
 
 ### Inputs
 
@@ -219,9 +200,7 @@ category, so it does not collide with other tools' results.
 | `working-directory` | `.` | Directory the command runs in. |
 | `token` | `${{ github.token }}` | Used to resolve the latest release and verify attestations. |
 
-`paths` and `args` are split on whitespace with globbing disabled; quoting
-inside them is not interpreted, so a path containing a space needs a separate
-run or a `--config` file.
+`paths` and `args` are split on whitespace with globbing disabled; quoting inside them is not interpreted, so a path containing a space needs a separate run or a `--config` file.
 
 ### Outputs
 
@@ -231,8 +210,7 @@ run or a `--config` file.
 | `version` | Release tag downloaded, or the version the supplied binary reported. |
 | `sarif-file` | Absolute path of the SARIF file, empty when `format` is not `sarif`. |
 
-`fail-on-findings: "false"` keeps the step green on exit 1 so a later step can
-branch on `exit-code`:
+`fail-on-findings: "false"` keeps the step green on exit 1 so a later step can branch on `exit-code`:
 
 ```yaml
       - id: comments
@@ -245,19 +223,14 @@ branch on `exit-code`:
 
 ### What the action verifies
 
-Every downloaded archive is checked against the release `SHA256SUMS` before it
-is unpacked, and the run stops with exit 2 on a mismatch or on an archive that
-the checksum file does not list. With `verify-attestation: "true"` — the
-default — the archive is also checked against its GitHub build-provenance
-attestation with `gh attestation verify --repo P4suta/OComment`. A runner
-without the `gh` CLI fails closed; `verify-attestation: "false"` is the only
-explicit opt-out. The action also validates SARIF structure before invoking the
-upload action, and reports a CLI exit 2 before any upload failure can obscure
-it. Inputs and binary version output containing line breaks are rejected before
-they can become workflow outputs.
+Every downloaded archive is checked against the release `SHA256SUMS` before it is unpacked, and the run stops with exit 2 on a mismatch or on an archive that the checksum file does not list.
+With `verify-attestation: "true"` — the default — the archive is also checked against its GitHub build-provenance attestation with `gh attestation verify --repo P4suta/OComment`.
+A runner without the `gh` CLI fails closed; `verify-attestation: "false"` is the only explicit opt-out.
+The action also validates SARIF structure before invoking the upload action, and reports a CLI exit 2 before any upload failure can obscure it.
+Inputs and binary version output containing line breaks are rejected before they can become workflow outputs.
 
-Runner platforms map to the published targets as follows. Linux uses the
-statically linked musl archives, so no glibc version is required.
+Runner platforms map to the published targets as follows.
+Linux uses the statically linked musl archives, so no glibc version is required.
 
 | Runner | Target | Archive |
 | --- | --- | --- |
@@ -271,10 +244,9 @@ Any other combination fails with exit 2 and points at `binary-path`.
 
 ### Runners without a published archive
 
-`binary-path` skips resolution and download entirely and uses a binary you
-already have. A missing path is retried with an `.exe` suffix, so one value
-works across the runner matrix. This is how the repository's own
-`action-smoke` job tests the action against a freshly built CLI:
+`binary-path` skips resolution and download entirely and uses a binary you already have.
+A missing path is retried with an `.exe` suffix, so one value works across the runner matrix.
+This is how the repository's own `action-smoke` job tests the action against a freshly built CLI:
 
 ```yaml
       - run: cargo build --manifest-path rust/Cargo.toml --locked -p ocomment
@@ -286,26 +258,17 @@ works across the runner matrix. This is how the repository's own
 
 ### Pinning
 
-Version tags are immutable under the repository's release-tag ruleset, so
-`P4suta/OComment@v0.1.0` is a stable reference and there is no moving `v0` tag
-to follow. Pin to a full version, or to a commit SHA with a version comment if
-your policy requires it.
+Version tags are immutable under the repository's release-tag ruleset, so `P4suta/OComment@v0.1.0` is a stable reference and there is no moving `v0` tag to follow.
+Pin to a full version, or to a commit SHA with a version comment if your policy requires it.
 
 ## Keeping the protected directives honest
 
-`spec/directives.toml` publishes the markers that take a comment out of reach
-of a `remove` policy — `# syntax=`, `//go:build`, `# hadolint ignore=`, and the
-rest — so a consumer can read the contract without reading the scanner.
-`tools/check_directives.py` is what keeps the two the same thing. It feeds
-every name to the built binary as the comment a project would really write, and
-the answer has to be a `keep` with the reason that says why; a name in the spec
-with no sample fails, and so does a sample the spec does not list.
+`spec/directives.toml` publishes the markers that take a comment out of reach of a `remove` policy — `# syntax=`, `//go:build`, `# hadolint ignore=`, and the rest — so a consumer can read the contract without reading the scanner.
+`tools/check_directives.py` is what keeps the two the same thing.
+It feeds every name to the built binary as the comment a project would really write, and the answer has to be a `keep` with the reason that says why; a name in the spec with no sample fails, and so does a sample the spec does not list.
 
 Each sample carries two comments the scanner has to remove: an ordinary one,
-which catches a run that protected the whole file, and a near-miss derived from
-the name — `hadolint` against `hadolintish note` — which catches a marker
-matched so loosely that prose merely opening with those letters is protected
-too.
+which catches a run that protected the whole file, and a near-miss derived from the name — `hadolint` against `hadolintish note` — which catches a marker matched so loosely that prose merely opening with those letters is protected too.
 
 ```sh
 cargo build --manifest-path rust/Cargo.toml --locked -p ocomment
@@ -313,47 +276,32 @@ python3 tools/check_directives.py
 python3 tools/check_directives.py --binary rust/target/release/ocomment
 ```
 
-The `rust` CI job runs it next to `tools/check_hooks.py` and
-`tools/check_embedded_specs.py`, and `cargo xtask release-check` runs it again
-against the release binary before a tag is pushed.
+The `rust` CI job runs it next to `tools/check_hooks.py` and `tools/check_embedded_specs.py`, and `cargo xtask release-check` runs it again against the release binary before a tag is pushed.
 
 ## Putting this on a repository that already exists
 
-A repository with eleven thousand comments cannot turn the rule it wants on
-today. The order below tightens one axis at a time, and each step leaves a gate
-that passes.
+A repository with eleven thousand comments cannot turn the rule it wants on today.
+The order below tightens one axis at a time, and each step leaves a gate that passes.
 
-**1. Find out what is there.** `ocomment coverage` says which files were read
-and which were passed over; a gate over 85% of a tree is not the gate you
-think it is, so close that first with `[files]` and, where a format has no
-built-in scanner, a `[profiles.<name>]` entry. `ocomment tags` says which tags
-your comments already open with — that list, not a list you invent, is the one
-to start `[policy.allow] tags` from.
+**1. Find out what is there.** `ocomment coverage` says which files were read and which were passed over; a gate over 85% of a tree is not the gate you think it is, so close that first with `[files]` and, where a format has no built-in scanner, a `[profiles.<name>]` entry.
+`ocomment tags` says which tags your comments already open with — that list, not a list you invent, is the one to start `[policy.allow] tags` from.
 
-**2. Protect what your own tools read.** `[policy] protected` names the markers
-your build, your linter or your test runner reads. This is the step that has to
-come before any removal, because it is the only one whose omission changes what
-the code *does*. `ocomment scan --policy all --explain` over a directory you
-know well is a quick way to find what you have been relying on.
+**2. Protect what your own tools read.** `[policy] protected` names the markers your build, your linter or your test runner reads.
+This is the step that has to come before any removal, because it is the only one whose omission changes what the code *does*. `ocomment scan --policy all --explain` over a directory you know well is a quick way to find what you have been relying on.
 
-**3. Gate the new work, not the old.** `ocomment check --base main` in a pull
-request checks only what the branch changed. The tree stays as it is and
-nothing new is added to it, which is most of the value and costs no cleanup at
-all.
+**3. Gate the new work, not the old.** `ocomment check --base main` in a pull request checks only what the branch changed.
+The tree stays as it is and nothing new is added to it, which is most of the value and costs no cleanup at all.
 
-**4. Record the distance, and close it.** `[ratchet] ledger` counts what each
-file holds today and fails when a file holds more — and when it holds fewer,
-asking to be updated, so the number in the file is always the number in the
-tree. See [the configuration guide](configuration.md#getting-to-a-rule-you-cannot-turn-on-today).
+**4. Record the distance, and close it.** `[ratchet] ledger` counts what each file holds today and fails when a file holds more — and when it holds fewer,
+asking to be updated, so the number in the file is always the number in the tree.
+See [the configuration guide](configuration.md#getting-to-a-rule-you-cannot-turn-on-today).
 
-**5. Tighten one axis.** `max_lines`, then `trailing = false`, then deadlines on
-the tags that are promises. Each is a separate number the ledger can carry to
-zero. `ocomment check --format agent` is the report to hand somebody — or
-something — that is going to do the editing.
+**5. Tighten one axis.** `max_lines`, then `trailing = false`, then deadlines on the tags that are promises.
+Each is a separate number the ledger can carry to zero.
+`ocomment check --format agent` is the report to hand somebody — or something — that is going to do the editing.
 
-**6. Drop the ledger.** When it reaches zero, delete it and make the bare run
-the gate. A ledger that has nothing left to say is a file that describes a
-repository that no longer exists.
+**6. Drop the ledger.** When it reaches zero, delete it and make the bare run the gate.
+A ledger that has nothing left to say is a file that describes a repository that no longer exists.
 
 ## What the gate never looked at
 
@@ -365,21 +313,14 @@ $ ocomment coverage
        1  .toml
 ```
 
-The percentage is of the tree and not of the walk. A file the walk *reached*
-and passed over is a skip and has always been reported; a file the walk's own
-limits kept out was met by nothing, so nothing reported it — and `hidden =
-false` is the default, which means every `.github/workflows/*.yml` a project
-has. A run that read one of three files used to say `100.0%`, which was a true
-sentence about the walk and a false assurance about the repository.
+The percentage is of the tree and not of the walk.
+A file the walk *reached* and passed over is a skip and has always been reported; a file the walk's own limits kept out was met by nothing, so nothing reported it — and `hidden = false` is the default, which means every `.github/workflows/*.yml` a project has.
+A run that read one of three files used to say `100.0%`, which was a true sentence about the walk and a false assurance about the repository.
 
-Three settings can keep a file out, and each is named with the line a reader
-would change: `[files] hidden`, `[files] include`/`exclude`, and
-`[files] max_size`. A file a `.gitignore` excludes is deliberately not counted
-— that is build output, and a percentage taken over a hundred thousand object
-files would mean nothing.
+Three settings can keep a file out, and each is named with the line a reader would change: `[files] hidden`, `[files] include`/`exclude`, and `[files] max_size`.
+A file a `.gitignore` excludes is deliberately not counted — that is build output, and a percentage taken over a hundred thousand object files would mean nothing.
 
-When more than one kind of reader answered, the scanned share is split by which
-one did:
+When more than one kind of reader answered, the scanned share is split by which one did:
 
 ```console
 $ ocomment coverage .
@@ -391,35 +332,25 @@ $ ocomment coverage .
        1  CODEOWNERS
 ```
 
-This is what makes an upgrade legible. A release that adds a profile reads
-files the previous one passed over, and those files move out of a skip reason
-and into a named reader — so the gate covers more than it did, and the size of
-the change is a number rather than a wall of findings nobody asked for. The
-verdict on a comment does not depend on which reader found it: a line of prose
-is prose in a `.gitignore` as much as in a `.py`, and a rule that softened for
-one would mean the same bytes getting different answers from different readers.
-A project that wants the prose in those files kept says so the way it says
-everything else, with a
-[path override](configuration.md#the-profiles-ocomment-ships-with).
+This is what makes an upgrade legible.
+A release that adds a profile reads files the previous one passed over, and those files move out of a skip reason and into a named reader — so the gate covers more than it did, and the size of the change is a number rather than a wall of findings nobody asked for.
+The verdict on a comment does not depend on which reader found it: a line of prose is prose in a `.gitignore` as much as in a `.py`, and a rule that softened for one would mean the same bytes getting different answers from different readers.
+A project that wants the prose in those files kept says so the way it says everything else, with a [path override](configuration.md#the-profiles-ocomment-ships-with).
 
 ## A cached gate is not a gate
 
-A test that runs `ocomment` is a test whose answer depends on a program the
-test runner did not build. Most runners cache on what a test *read*, and a
-process a test *started* is not a file it read — so the gate keeps returning
-its last answer after the tool underneath it has changed, or broken.
+A test that runs `ocomment` is a test whose answer depends on a program the test runner did not build.
+Most runners cache on what a test *read*, and a process a test *started* is not a file it read — so the gate keeps returning its last answer after the tool underneath it has changed, or broken.
 
-The shape is worth stating on its own, because the tool is rarely the thing
-anyone suspects:
+The shape is worth stating on its own, because the tool is rarely the thing anyone suspects:
 
 > A gate that only execs an external program can go on passing after that
 > program starts giving wrong answers. Nothing in the gate's inputs changed, so
 > nothing invalidates its result — and a cached pass is printed in the same
 > words as a real one.
 
-The fix is to make the tool part of what the gate reads. Reading the binary is
-enough, because that is the thing that changed — Go invalidates a cached result
-on the files a test read, so opening the binary puts it in the key:
+The fix is to make the tool part of what the gate reads.
+Reading the binary is enough, because that is the thing that changed — Go invalidates a cached result on the files a test read, so opening the binary puts it in the key:
 
 ```go
 binary, err := exec.LookPath("ocomment")
@@ -431,8 +362,8 @@ if _, err := os.ReadFile(binary); err != nil {
 }
 ```
 
-Read the binary rather than recording `ocomment --version`. Two builds can
-answer `ocomment 0.1.0` and disagree about the same file — one from a release,
+Read the binary rather than recording `ocomment --version`.
+Two builds can answer `ocomment 0.1.0` and disagree about the same file — one from a release,
 one from a working tree — and a version string cannot tell them apart.
 `ocomment doctor` says which one answered:
 
@@ -441,15 +372,11 @@ $ ocomment doctor
 ocomment 0.1.0
 binary: /usr/local/bin/ocomment (sha256:19010bf16aa8983d95a7f6d83b8aae9854369961ecd8dc1edff12c8a40a7208b)
 ``` This is
-not hypothetical: it is how the licence bug that `[policy] mode` fixed was
-reported as a failing gate in one shell and a passing one in another, on the
-same machine, on the same day, with `mise exec` and a bare `PATH` resolving to
-different `0.1.0`s.
+not hypothetical: it is how the licence bug that `[policy] mode` fixed was reported as a failing gate in one shell and a passing one in another, on the same machine, on the same day, with `mise exec` and a bare `PATH` resolving to different `0.1.0`s.
 
-The same hole is not Go's. Any runner that caches on declared inputs has it: a
-Cargo build script needs `cargo:rerun-if-changed` for a tool it shells out to,
-and a CI cache keyed on a lockfile is keyed on a lockfile rather than on the
-toolchain the job installed.
+The same hole is not Go's.
+Any runner that caches on declared inputs has it: a Cargo build script needs `cargo:rerun-if-changed` for a tool it shells out to,
+and a CI cache keyed on a lockfile is keyed on a lockfile rather than on the toolchain the job installed.
 
 ## Gating a branch on what it changed
 
@@ -457,18 +384,12 @@ toolchain the job installed.
 $ ocomment check --base main
 ```
 
-Only the working-tree files that differ from `git merge-base HEAD main`. The
-merge base and not the branch tip: on a branch several commits behind its
-trunk, a plain diff against the trunk reports every file the trunk changed as
-well, and a gate that reported those would be asking this branch to answer for
-somebody else's work. A deleted file is dropped rather than reported — there is
-nothing left to read, and failing on one would refuse the change that cleaned
-it up.
+Only the working-tree files that differ from `git merge-base HEAD main`.
+The merge base and not the branch tip: on a branch several commits behind its trunk, a plain diff against the trunk reports every file the trunk changed as well, and a gate that reported those would be asking this branch to answer for somebody else's work.
+A deleted file is dropped rather than reported — there is nothing left to read, and failing on one would refuse the change that cleaned it up.
 
-A path named beside it narrows it further: `--base main src` is the files under
-`src` that the branch changed. `--base` applies the ordinary walk limits, so a
-generated file the branch touched is still passed over; a path typed on the
-command line without `--base` is you saying *this one* and lifts them.
+A path named beside it narrows it further: `--base main src` is the files under `src` that the branch changed.
+`--base` applies the ordinary walk limits, so a generated file the branch touched is still passed over; a path typed on the command line without `--base` is you saying *this one* and lifts them.
 
 ### A gate that examined nothing says so
 
@@ -480,13 +401,12 @@ nothing of its own -- `pre-commit run --all-files`, say -- needs a run without
 ```
 
 Both runs are correct and both exit 0, which reads exactly like a clean branch.
-That is how `--staged` under `pre-commit run --all-files` becomes a gate that is
-green forever. The run stays right; the silence goes.
+That is how `--staged` under `pre-commit run --all-files` becomes a gate that is green forever.
+The run stays right; the silence goes.
 
 ## Numbers a later step can read
 
-`--summary <FILE>` writes the end-of-run counts as one JSON object, whatever
-`--format` the run wrote its product in:
+`--summary <FILE>` writes the end-of-run counts as one JSON object, whatever `--format` the run wrote its product in:
 
 ```console
 $ ocomment check --format sarif --summary counts.json > ocomment.sarif
@@ -494,15 +414,12 @@ $ jq .removable_comments counts.json
 14
 ```
 
-`spec/summary.schema.json` is the schema. The counts are the ones the run
-already made, so there is no second scan to pay for and no parsing of the
-product to get at them — and `comments_removed` is non-zero only for a `fix`
-that reached the disk.
+`spec/summary.schema.json` is the schema.
+The counts are the ones the run already made, so there is no second scan to pay for and no parsing of the product to get at them — and `comments_removed` is non-zero only for a `fix` that reached the disk.
 
-The GitHub Action uses it for its own outputs. `findings-count`,
-`files-with-findings`, `files-scanned`, `removed-count` and `summary-file` are
-available to later steps, and the job summary carries a table of the same
-numbers unless `step-summary: false`:
+The GitHub Action uses it for its own outputs.
+`findings-count`,
+`files-with-findings`, `files-scanned`, `removed-count` and `summary-file` are available to later steps, and the job summary carries a table of the same numbers unless `step-summary: false`:
 
 ```yaml
 - uses: P4suta/OComment@v0
@@ -511,46 +428,31 @@ numbers unless `step-summary: false`:
   run: echo "still ${{ steps.comments.outputs.findings-count }} to go"
 ```
 
-A run that failed before it finished reports those outputs as **empty** rather
-than as zero: "none found" and "never looked" are different answers, and a gate
-downstream must not read the second as the first.
+A run that failed before it finished reports those outputs as **empty** rather than as zero: "none found" and "never looked" are different answers, and a gate downstream must not read the second as the first.
 
 ## Threads
 
-`--jobs <N>` sets how many threads the run uses to walk, read and scan; `0`
-chooses one per core, which is the default. The walk, the reads and the scans
-all take it from the same place, so one flag is the whole knob. It was
-previously settable only through `RAYON_NUM_THREADS`, which is an
-implementation detail leaking as a user interface.
+`--jobs <N>` sets how many threads the run uses to walk, read and scan; `0` chooses one per core, which is the default.
+The walk, the reads and the scans all take it from the same place, so one flag is the whole knob.
+It was previously settable only through `RAYON_NUM_THREADS`, which is an implementation detail leaking as a user interface.
 
-Output order does not depend on it. The candidates a walk finds are sorted
-before any of them is opened, so two runs over the same tree write the same
-bytes however many threads they used.
+Output order does not depend on it.
+The candidates a walk finds are sorted before any of them is opened, so two runs over the same tree write the same bytes however many threads they used.
 
 ## The published pre-commit hooks
 
-`.pre-commit-hooks.yaml` is what pre-commit reads when this repository is used
-as a `repo:` entry. Both hooks deliberately receive every text file pre-commit
-selects: OComment's detector, not a second extension list, decides which files
-are supported, and that is what lets reserved names and extensionless shebang
-scripts reach the same detector an ordinary CLI run uses.
+`.pre-commit-hooks.yaml` is what pre-commit reads when this repository is used as a `repo:` entry.
+Both hooks deliberately receive every text file pre-commit selects: OComment's detector, not a second extension list, decides which files are supported, and that is what lets reserved names and extensionless shebang scripts reach the same detector an ordinary CLI run uses.
 `tools/check_hooks.py` rejects a manifest-level filter that would undo it.
 
-`language: system` requires `ocomment` to already be on `PATH`. pre-commit's
-`language: rust` runs `cargo install --path .` at the checkout root, and this
-repository's manifest lives in `rust/`, so it cannot build these hooks.
+`language: system` requires `ocomment` to already be on `PATH`.
+pre-commit's `language: rust` runs `cargo install --path .` at the checkout root, and this repository's manifest lives in `rust/`, so it cannot build these hooks.
 
 ## The YAML round trip
 
-The one invariant no byte-level fixture can state: a YAML block scalar reads
-the lines below it, so the hole a removal leaves on a comment's line can be
-read back as part of a value. `tools/yaml_roundtrip.py` strips thousands of
-generated documents under every layout and every policy and asks a real YAML
-parser whether they still mean the same thing.
+The one invariant no byte-level fixture can state: a YAML block scalar reads the lines below it, so the hole a removal leaves on a comment's line can be read back as part of a value.
+`tools/yaml_roundtrip.py` strips thousands of generated documents under every layout and every policy and asks a real YAML parser whether they still mean the same thing.
 
-The corpus and both enumerated sweeps run in full in CI: they are where the
-hazard lives, and they are the same documents on every run. Only the
-pseudo-random set is cut there, because its cost is linear and its value is
-not — `python3 tools/yaml_roundtrip.py` runs the whole 2400 on demand, and
-`--seed` moves it. Every pass is one `fsync` per rewritten file, so the tool
-overlaps them rather than waiting on them in turn.
+The corpus and both enumerated sweeps run in full in CI: they are where the hazard lives, and they are the same documents on every run.
+Only the pseudo-random set is cut there, because its cost is linear and its value is not — `python3 tools/yaml_roundtrip.py` runs the whole 2400 on demand, and `--seed` moves it.
+Every pass is one `fsync` per rewritten file, so the tool overlaps them rather than waiting on them in turn.

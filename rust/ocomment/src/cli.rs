@@ -3,7 +3,7 @@ use crate::{
     config, coverage, deadline, files, git, hook, interactive, lsp,
     output::{
         self, AnnotationLevel, Detail, Explanations, FileExplanation, Operation, OutputFormat,
-        Presentation, ProcessedFile, ProcessedResult, RenderOptions, Verbosity,
+        Presentation, ProcessedFile, ProcessedResult, RenderOptions, Verbosity, Writes,
     },
     plugin, ratchet, selftest, tags,
     trace::{TraceMode, trace_decisions, trace_discovery},
@@ -13,7 +13,7 @@ use anyhow::{Context, Result, bail, ensure};
 use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{Shell, generate};
 use ocomment_core::{
-    CommentKind, DeclarativeProfile, Dialect, Language, PreparedScanner, transform,
+    Action, CommentKind, DeclarativeProfile, Dialect, Language, PreparedScanner, transform,
 };
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -39,7 +39,8 @@ committed as one rollback-backed transaction.";
 const AFTER_LONG_HELP: &str = "\
 EXIT STATUS
   0  Nothing removable was found and every requested change was applied.
-  1  Removable comments were reported, or a diff was printed.
+  1  Removable comments were reported, a diff was printed, `--tidy` left a
+     removal for you, or a staged fix rewrote the index.
   2  Invalid source, configuration, plugin, or I/O failure.
 
 FILES
@@ -54,22 +55,23 @@ EXAMPLES
       Check the current directory and report removable comments.
   ocomment fix --policy all --layout compact src
       Remove every comment under src and close the gaps it leaves.
+  ocomment fix --tidy --staged
+      Reflow what the style rules decide and leave every removal to you.
   ocomment strip --language rust < before.rs > after.rs
       Strip one file from standard input to standard output.
 
 SEE ALSO
   The complete schemas and guides are available in the OComment repository.";
 
-/// The roff sections `clap_mangen` cannot derive, carrying the same content as
-/// the `--help` epilogue above. A line that would start with `.` is escaped
-/// with `\&` so roff reads a file name as text rather than as a macro.
+/// The roff sections `clap_mangen` cannot derive, carrying the same content as the `--help` epilogue above.
+/// A line that would start with `.` is escaped with `\&` so roff reads a file name as text rather than as a macro.
 const MAN_SECTIONS: &str = r#".SH EXIT STATUS
 .TP
 .B 0
 Nothing removable was found and every requested change was applied.
 .TP
 .B 1
-Removable comments were reported, or a diff was printed.
+Removable comments were reported, a diff was printed, \fB--tidy\fR left a removal for you, or a staged fix rewrote the index.
 .TP
 .B 2
 Invalid source, configuration, plugin, or I/O failure.
@@ -196,34 +198,28 @@ struct PolicyArgs {
     /// Scan files another tool writes: lock files, recorded seeds, generated output.
     #[arg(long, global = true)]
     include_generated: bool,
-    /// Fail when a file was passed over for one of these reasons, rather than
-    /// noting it. With no reason given, the two that are holes rather than
-    /// decisions: unknown-language and unreadable.
+    /// Fail when a file was passed over for one of these reasons, rather than noting it.
+    /// With no reason given, the two that are holes rather than decisions: unknown-language and unreadable.
     #[arg(
         long,
         global = true,
         value_name = "REASON",
         value_enum,
         value_delimiter = ',',
-        /* NOTE: One comma-separated argument, and only after an `=`. A flag
-         * whose value is optional and unanchored eats the path behind it:
-         * `--deny-skipped .` read `.` as a reason, and the run then walked the
-         * default target by luck rather than by request. The `=` is what lets
-         * the bare flag and a path coexist on one command line, which is how
-         * this flag is written in a CI file. */
+        /* NOTE: One comma-separated argument, and only after an `=`.
+         * A flag whose value is optional and unanchored eats the path behind it:
+         * `--deny-skipped .` read `.` as a reason, and the run then walked the default target by luck rather than by request.
+         * The `=` is what lets the bare flag and a path coexist on one command line, which is how this flag is written in a CI file. */
         require_equals = true,
         num_args = 0..=1,
         default_missing_value = "unknown-language,unreadable"
     )]
     deny_skipped: Option<Vec<output::SkipReason>>,
     /// Edit a file that failed to scan, outside the bytes the failure covers.
-    /// What the scanner calls a comment inside them is a guess: the code under
-    /// an unterminated block opener is reported as part of it and is not a
-    /// comment.
+    /// What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment.
     #[arg(long, global = true)]
     force_invalid: bool,
-    /// Remove protected comments: shebangs, encoding lines, and the
-    /// directives the language or its build reads.
+    /// Remove protected comments: shebangs, encoding lines, and the directives the language or its build reads.
     #[arg(long, global = true)]
     force_protected: bool,
 }
@@ -332,9 +328,7 @@ enum AutoChoice {
 
 /// Whether a run records what it did, and in which spelling.
 ///
-/// Off by default because the trace is for the run you are investigating
-/// rather than the run you are doing, and a diagnostic nobody asked for is
-/// noise on the stream the summary already uses.
+/// Off by default because the trace is for the run you are investigating rather than the run you are doing, and a diagnostic nobody asked for is noise on the stream the summary already uses.
 #[derive(Clone, Copy, Debug, Default, ValueEnum)]
 enum TraceChoice {
     /// Record nothing, and collect nothing to record.
@@ -427,9 +421,7 @@ struct GitArgs {
 
 #[derive(Args)]
 struct FixArgs {
-    /* NOTE: `fix` rewrites files in place and refuses the `-` that stands for
-     * standard input, so its PATH list is not the one every other command
-     * takes and does not borrow that command's help line. */
+    /* NOTE: `fix` rewrites files in place and refuses the `-` that stands for standard input, so its PATH list is not the one every other command takes and does not borrow that command's help line. */
     /// Files or directories to rewrite (default: current directory).
     #[arg(value_name = "PATH")]
     paths: Vec<PathBuf>,
@@ -439,16 +431,30 @@ struct FixArgs {
     /// Print the patch `fix` would apply and write nothing.
     #[arg(long)]
     dry_run: bool,
+    /// Apply what the style rules rewrote and leave every removal to you.
+    ///
+    /// The removals are still reported and the run still exits 1 for them; what changes is that none of them reaches the file.
+    /// This is the half a machine can finish on its own, which is what makes it the half a commit hook may run unattended.
+    #[arg(long, conflicts_with = "interactive")]
+    tidy: bool,
     /// Ask about each comment in turn and remove only the accepted ones.
     ///
-    /// The index has no working-tree line to show a hunk from, `--dry-run`
-    /// writes nothing whatever the answers were, and `-q` asks for a run with
-    /// no commentary at all. None of the three can also be a conversation.
+    /// The index has no working-tree line to show a hunk from, `--dry-run` writes nothing whatever the answers were, and `-q` asks for a run with no commentary at all.
+    /// None of the three can also be a conversation.
     #[arg(short = 'i', long, conflicts_with_all = ["staged", "dry_run", "quiet"])]
     interactive: bool,
 }
 
 impl FixArgs {
+    /// Which half of what the run found it is being asked to write.
+    const fn writes(&self) -> Writes {
+        if self.tidy {
+            Writes::RewritesOnly
+        } else {
+            Writes::Everything
+        }
+    }
+
     /// The same targets in the shape every other command hands to the run.
     fn target(self) -> TargetArgs {
         TargetArgs {
@@ -470,7 +476,15 @@ struct InitArgs {
     /// Which starter file to write.
     #[arg(value_enum, default_value_t)]
     kind: InitKind,
+    /// For the Lefthook hook, run `fix --tidy` instead of `check`.
+    ///
+    /// The hook writes what the style rules settle and leaves every removal reported and unapplied, which is the shape a gate on every commit wants.
+    #[arg(long, conflicts_with = "fix")]
+    tidy: bool,
     /// For the Lefthook hook, run `fix` instead of `check`.
+    ///
+    /// The removals too, including the comments above them that were worth keeping.
+    /// `--tidy` is the one that writes nothing a reader would have wanted back.
     #[arg(long)]
     fix: bool,
     /// Replace the file if it already exists.
@@ -551,8 +565,8 @@ enum PluginCommand {
     },
 }
 
-/// The `fix` variants that change what a run does with what it found. Every
-/// other command runs with neither.
+/// The `fix` variants that change what a run does with what it found.
+/// Every other command runs with neither.
 #[derive(Clone, Copy, Default)]
 struct RunFlags {
     /// The run produces the patch `fix` would apply and writes nothing.
@@ -579,11 +593,8 @@ impl RunFlags {
 pub fn run() -> Result<u8> {
     let cli = Cli::parse();
     let common = cli.common;
-    /* NOTE: One knob, set once, and every parallel part of the run reads it
-     * from here -- the file walk asks `rayon::current_num_threads()` rather
-     * than carrying a count of its own. Thread count was previously settable
-     * only through `RAYON_NUM_THREADS`, which is an implementation detail
-     * leaking as a user interface and was documented nowhere. */
+    /* NOTE: One knob, set once, and every parallel part of the run reads it from here -- the file walk asks `rayon::current_num_threads()` rather than carrying a count of its own.
+     * Thread count was previously settable only through `RAYON_NUM_THREADS`, which is an implementation detail leaking as a user interface and was documented nowhere. */
     if let Some(jobs) = common.output.jobs {
         rayon::ThreadPoolBuilder::new()
             .num_threads(jobs)
@@ -591,9 +602,7 @@ pub fn run() -> Result<u8> {
             .context("cannot use that many threads")?;
     }
     /* NOTE: `human`, `json` and `jsonl` all have somewhere to put a reason.
-     * SARIF and the GitHub workflow commands do not -- one is a fixed schema
-     * and the other is one line per annotation -- so the combination is
-     * refused rather than quietly doing nothing. */
+     * SARIF and the GitHub workflow commands do not -- one is a fixed schema and the other is one line per annotation -- so the combination is refused rather than quietly doing nothing. */
     if common.output.explain
         && !matches!(
             common.output.format,
@@ -602,13 +611,9 @@ pub fn run() -> Result<u8> {
     {
         bail!("--explain is only available with --format human, review, json or jsonl");
     }
-    /* NOTE: The flag annotates a report of comments, and only `check`, `scan` and
-     * the implicit command write one: `fix` reports the files it rewrote,
-     * `diff` writes a patch, `strip` writes the stripped source, and the rest
-     * of the commands answer a question that is not about comments at all.
-     * `--explain` is global, so it is named as an allow-list — a command added
-     * later has to opt in — and everything else is refused rather than
-     * quietly doing nothing. */
+    /* NOTE: The flag annotates a report of comments, and only `check`, `scan` and the implicit command write one: `fix` reports the files it rewrote,
+     * `diff` writes a patch, `strip` writes the stripped source, and the rest of the commands answer a question that is not about comments at all.
+     * `--explain` is global, so it is named as an allow-list — a command added later has to opt in — and everything else is refused rather than quietly doing nothing. */
     if common.output.explain
         && !matches!(
             cli.command,
@@ -628,37 +633,40 @@ pub fn run() -> Result<u8> {
             RunFlags::NONE,
         ),
         Some(Command::Check(args)) => run_target(Operation::Check, args, &common, RunFlags::NONE),
-        /* NOTE: `--dry-run` runs the diff and reports it in fix vocabulary: the two
-         * commands must agree on the patch, so only the wording differs. */
+        /* NOTE: `--dry-run` runs the diff and reports it in fix vocabulary: the two commands must agree on the patch, so only the wording differs. */
         Some(Command::Fix(args)) if args.dry_run => {
-            run_target(Operation::Diff, args.target(), &common, RunFlags::DRY_RUN)
+            let operation = Operation::Diff(args.writes());
+            run_target(operation, args.target(), &common, RunFlags::DRY_RUN)
         }
         Some(Command::Fix(args)) if args.interactive => {
-            /* NOTE: The prompt is prose on a terminal and the answers come back the
-             * same way; a machine format has nowhere to put either, so the
-             * combination is refused rather than one of the two flags being
-             * quietly dropped. It is refused before the terminal is looked at,
+            /* NOTE: The prompt is prose on a terminal and the answers come back the same way; a machine format has nowhere to put either, so the combination is refused rather than one of the two flags being quietly dropped.
+             * It is refused before the terminal is looked at,
              * because the pair is wrong however the run was started. */
             if !common.output.format.for_a_person() {
                 bail!("--interactive is only available with --format human or review");
             }
-            /* NOTE: Without somebody there to answer, the questions would be read out
-             * of whatever the pipe happened to carry and files would be
-             * rewritten from it. Nothing is scanned, let alone written. */
+            /* NOTE: Without somebody there to answer, the questions would be read out of whatever the pipe happened to carry and files would be rewritten from it.
+             * Nothing is scanned, let alone written. */
             if !io::stdin().is_terminal() || !io::stdout().is_terminal() {
                 bail!("--interactive needs a terminal; run without -i or use `ocomment diff`");
             }
             run_target(
-                Operation::Fix,
+                Operation::Fix(args.writes()),
                 args.target(),
                 &common,
                 RunFlags::INTERACTIVE,
             )
         }
         Some(Command::Fix(args)) => {
-            run_target(Operation::Fix, args.target(), &common, RunFlags::NONE)
+            let operation = Operation::Fix(args.writes());
+            run_target(operation, args.target(), &common, RunFlags::NONE)
         }
-        Some(Command::Diff(args)) => run_target(Operation::Diff, args, &common, RunFlags::NONE),
+        Some(Command::Diff(args)) => run_target(
+            Operation::Diff(Writes::Everything),
+            args,
+            &common,
+            RunFlags::NONE,
+        ),
         Some(Command::Scan(args)) => run_target(Operation::Scan, args, &common, RunFlags::NONE),
         Some(Command::Strip) => run_strip(&common),
         Some(Command::Lsp) => lsp::run(common.config.as_deref()),
@@ -678,15 +686,11 @@ pub fn run() -> Result<u8> {
     }
 }
 
-/// Scan `bytes` the way `file` would be scanned: through its plugin, through
-/// its declarative profile, or through the built-in scanner for its language.
+/// Scan `bytes` the way `file` would be scanned: through its plugin, through its declarative profile, or through the built-in scanner for its language.
 ///
-/// The three-way dispatch is here once. It was written out at each of the
-/// places that needed it, and the bytes are not always the file's own — a
-/// rewrite is verified by rescanning what it produced, and a hook judges bytes
-/// that are not on the disk at all — so each copy had to remember to route the
-/// same way. One that forgot would check a plugin's file with the wrong
-/// scanner and report on a language nobody selected.
+/// The three-way dispatch is here once.
+/// It was written out at each of the places that needed it, and the bytes are not always the file's own — a rewrite is verified by rescanning what it produced, and a hook judges bytes that are not on the disk at all — so each copy had to remember to route the same way.
+/// One that forgot would check a plugin's file with the wrong scanner and report on a language nobody selected.
 pub(crate) fn scan_bytes(
     bytes: &[u8],
     file: &files::SourceFile,
@@ -734,23 +738,19 @@ fn run_target(
     }
     let progress = progress_enabled(common);
     let staged = args.git.staged || resolved.config.git.staged;
-    if operation == Operation::Fix && !staged && args.paths.is_empty() {
+    if operation.writes() && !staged && args.paths.is_empty() {
         note_fix_scope(&resolved, common)?;
     }
-    /* NOTE: `git` names a staged path relative to the repository root rather than to
-     * the working directory, so a staged run measures its paths against the
-     * root from there. Every other run measures them from where it was typed. */
+    /* NOTE: `git` names a staged path relative to the repository root rather than to the working directory, so a staged run measures its paths against the root from there.
+     * Every other run measures them from where it was typed. */
     if staged && let Some(repository) = config::locate_repository(&resolved.cwd) {
         resolved.cwd = repository;
     }
-    /* NOTE: `fix --dry-run` writes nothing, but it is still the command whose job is
-     * to rewrite files in place, and standard input cannot be rewritten. */
-    let rewrites = operation == Operation::Fix || flags.dry_run;
+    /* NOTE: `fix --dry-run` writes nothing, but it is still the command whose job is to rewrite files in place, and standard input cannot be rewritten. */
+    let rewrites = operation.writes() || flags.dry_run;
     let (paths, stdin) = target_paths(&args.paths, rewrites, staged)?;
     if staged {
-        /* NOTE: A staged run reports index blobs through a path that carries no
-         * policy trace, so it says so rather than printing a listing with
-         * every explanation quietly missing. */
+        /* NOTE: A staged run reports index blobs through a path that carries no policy trace, so it says so rather than printing a listing with every explanation quietly missing. */
         if common.output.explain {
             bail!(
                 "--explain is not available with --staged; explain the working tree with \
@@ -778,36 +778,29 @@ fn run_target(
         Some(base) => base_targets(base, &paths, &mut resolved, common, verbosity)?,
         None => read_targets(&paths, stdin, &resolved, common)?,
     };
-    /* NOTE: One reading of the clock for the whole run, so that two files
-     * judged a second apart cannot disagree about what day it is. */
+    /* NOTE: One reading of the clock for the whole run, so that two files judged a second apart cannot disagree about what day it is. */
     let now = std::time::SystemTime::now();
     let total = discovery.files.len();
     let counter = Progress::default();
     let trace_mode = TraceMode::from(common.output.trace);
     let explain = common.output.explain;
-    /* NOTE: Two different questions about the same material. `--explain` asks
-     * for it to be printed under each finding on standard output; the trace
-     * asks for it to name the rule in each recorded decision on standard
-     * error. Either one needs it collected, and neither pays for it alone, but
-     * asking for a trace must not start annotating the product. */
-    /* NOTE: And the agent format, whose per-finding verb is the rule that
-     * decided the comment: telling a reader to delete one that only had to
-     * move is wrong advice however correct the verdict was. */
+    /* NOTE: Two different questions about the same material.
+     * `--explain` asks for it to be printed under each finding on standard output; the trace asks for it to name the rule in each recorded decision on standard error.
+     * Either one needs it collected, and neither pays for it alone, but asking for a trace must not start annotating the product. */
+    /* NOTE: And the agent format, whose per-finding verb is the rule that decided the comment: telling a reader to delete one that only had to move is wrong advice however correct the verdict was. */
     let needs_explanations =
         explain || trace_mode.is_on() || common.output.format == OutputFormat::Agent;
-    let materialize_output = operation == Operation::Fix
+    let materialize_output = operation.writes()
         || flags.interactive
-        || (operation == Operation::Diff && common.output.format.for_a_person());
-    /* NOTE: Built only for a run that will print it. It is one segment per
-     * unchanged run of bytes, which is the largest thing a report carries. */
+        || (matches!(operation, Operation::Diff(_)) && common.output.format.for_a_person());
+    /* NOTE: Built only for a run that will print it.
+     * It is one segment per unchanged run of bytes, which is the largest thing a report carries. */
     let materialize_source_map = common.output.source_map
         && matches!(
             common.output.format,
             OutputFormat::Json | OutputFormat::Jsonl
         );
-    /* NOTE: The JSON formats carry the edit list whether or not they carry the
-     * map, so they plan either way: `edits` is part of the report and the map
-     * is the thing `--source-map` is about. */
+    /* NOTE: The JSON formats carry the edit list whether or not they carry the map, so they plan either way: `edits` is part of the report and the map is the thing `--source-map` is about. */
     let needs_plan = materialize_output
         || materialize_source_map
         || matches!(
@@ -817,9 +810,8 @@ fn run_target(
     {
         let stderr = io::stderr();
         let mut sink = stderr.lock();
-        /* NOTE: First, because every later event is judged against the settings
-         * this one names, and a reader who is about to ask "why did it do
-         * that?" is usually asking about a layer they forgot was there. */
+        /* NOTE: First, because every later event is judged against the settings this one names, and a reader who is about to ask "why did it do that?"
+         * is usually asking about a layer they forgot was there. */
         let layers = config_trace(&resolved.trace);
         crate::trace::emit(
             &mut sink,
@@ -843,8 +835,7 @@ fn run_target(
         .files
         .into_par_iter()
         .map(|file| {
-            /* NOTE: Only an explaining run pays for the trace; every other one takes
-             * the hot path it always took. */
+            /* NOTE: Only an explaining run pays for the trace; every other one takes the hot path it always took. */
             let trace = if needs_explanations {
                 let (traced_language, traced_options, trace) =
                     resolved.for_path_traced(&file.path, file.language, file.dialect)?;
@@ -860,17 +851,12 @@ fn run_target(
             let scanner = scanners
                 .get(&options.scan)
                 .expect("every discovered policy was prepared");
-            /* NOTE: Recorded as the scan is about to run with them, `--language` and
-             * `--dialect` included, so an explanation accounts for the run that
-             * actually happened. */
+            /* NOTE: Recorded as the scan is about to run with them, `--language` and `--dialect` included, so an explanation accounts for the run that actually happened. */
             let material = trace.map(|trace| FileExplanation {
                 options: options.scan.clone(),
                 trace,
             });
-            /* NOTE: Scanned once and planned from what the scan decided, rather
-             * than planned by a call that scans again inside itself: a
-             * deadline is settled here, between the two, and a plan built from
-             * a fresh scan would not have heard about it. */
+            /* NOTE: Scanned once and planned from what the scan decided, rather than planned by a call that scans again inside itself: a deadline is settled here, between the two, and a plan built from a fresh scan would not have heard about it. */
             let mut report = scan_bytes(&file.source, &file, scanner, &plugin_host)?;
             let overdue = deadline::apply(
                 &resolved.root,
@@ -881,37 +867,41 @@ fn run_target(
                 now,
             )?;
             let result = if needs_plan {
-                let plan = ocomment_core::plan_report(
-                    &file.source,
-                    report,
-                    options.layout,
-                    options.scan.force_invalid,
-                );
+                /* NOTE: A tidying run plans one axis and reports both.
+                 * The removals stay in the report so that the run still names them and still exits 1 for them; what they do not get is an edit. */
+                let plan = match operation.half() {
+                    Some(Writes::RewritesOnly) => ocomment_core::plan_rewrites(
+                        &file.source,
+                        report,
+                        options.scan.force_invalid,
+                    ),
+                    Some(Writes::Everything) | None => ocomment_core::plan_report(
+                        &file.source,
+                        report,
+                        options.layout,
+                        options.scan.force_invalid,
+                    ),
+                };
                 let result = ProcessedResult::plan(
                     &file.source,
                     plan,
                     materialize_output,
                     materialize_source_map,
                 );
-                /* NOTE: Only a run that is going to write checks what it
-                 * would write; `diff` and `check` show a person the same bytes.
-                 * A file already reported broken is exempt and has to be, since
-                 * its result cannot scan cleanly either. The flag is not the
-                 * exemption: a valid file in a forced run is still checked. */
-                if operation == Operation::Fix
+                /* NOTE: Only a run that is going to write checks what it would write; `diff` and `check` show a person the same bytes.
+                 * A file already reported broken is exempt and has to be, since its result cannot scan cleanly either.
+                 * The flag is not the exemption: a valid file in a forced run is still checked. */
+                if operation.writes()
                     && result.changed()
                     && (result.report.valid || !options.scan.force_invalid)
                 {
                     let rescan = scan_bytes(result.output(), &file, scanner, &plugin_host)?;
-                    verify_rewrite(&file.path, &rescan)?;
+                    verify_rewrite(&file.path, &rescan, operation)?;
                 }
                 result
             } else {
-                let changed = (report.valid || scanner.options().force_invalid)
-                    && report
-                        .comments
-                        .iter()
-                        .any(|comment| comment.disposition.is_remove());
+                let changed =
+                    (report.valid || scanner.options().force_invalid) && report.changes_bytes();
                 ProcessedResult::report(report, changed)
             };
             if progress {
@@ -933,9 +923,7 @@ fn run_target(
     if progress {
         counter.clear();
     }
-    /* NOTE: The explanations travel beside the files rather than inside them: a
-     * staged run reports the same `ProcessedFile` and has no trace to put in
-     * one, and the path is what the renderer looks each file up by anyway. */
+    /* NOTE: The explanations travel beside the files rather than inside them: a staged run reports the same `ProcessedFile` and has no trace to put in one, and the path is what the renderer looks each file up by anyway. */
     let processed = processed?;
     let mut explanations = Explanations::new();
     let mut files = Vec::with_capacity(processed.len());
@@ -952,14 +940,12 @@ fn run_target(
     let io_invalid = discovery.skipped.iter().any(|item| item.error);
     let invalid = report_invalid || io_invalid;
     let may_fix = !io_invalid && (!report_invalid || resolved.config.policy.force_invalid);
-    /* NOTE: An interactive run replaces the whole `fix` report: what it wrote is the
-     * answers it was given, and the ordinary summary counts what the run
-     * *could* have removed. A run the invalid-file gate has already stopped
-     * falls through instead, so that report says why nothing was written. */
+    /* NOTE: An interactive run replaces the whole `fix` report: what it wrote is the answers it was given, and the ordinary summary counts what the run *could* have removed.
+     * A run the invalid-file gate has already stopped falls through instead, so that report says why nothing was written. */
     if flags.interactive && may_fix {
         return run_interactive(&files, &discovery.skipped, invalid, presentation, verbosity);
     }
-    let applied = operation == Operation::Fix && may_fix;
+    let applied = operation.writes() && may_fix;
     if applied {
         let plans = files
             .iter()
@@ -996,17 +982,13 @@ fn run_target(
         },
         &explanations,
     )?;
-    /* NOTE: Written after the product and before the verdict, so a file that
-     * exists is a run that finished. `-q` does not reach it: a caller who
-     * named a path for the counts asked for the counts. */
+    /* NOTE: Written after the product and before the verdict, so a file that exists is a run that finished.
+     * `-q` does not reach it: a caller who named a path for the counts asked for the counts. */
     if let Some(path) = &common.output.summary {
         output::write_summary(path, &files, &discovery.skipped, operation)?;
     }
-    /* NOTE: Said on its own line rather than folded into the summary: a
-     * deadline that passed is not a statistic about the run, it is a thing
-     * somebody said they would do. Human runs only, like every other note --
-     * a machine format keeps standard error empty, and the agent report
-     * already carries the age on the finding's own line. */
+    /* NOTE: Said on its own line rather than folded into the summary: a deadline that passed is not a statistic about the run, it is a thing somebody said they would do.
+     * Human runs only, like every other note -- a machine format keeps standard error empty, and the agent report already carries the age on the finding's own line. */
     if common.output.format.for_a_person()
         && let Some(line) = overdue.note()
     {
@@ -1014,10 +996,7 @@ fn run_target(
         let mut sink = stderr.lock();
         output::note(&mut sink, verbosity, Detail::Normal, &line)?;
     }
-    /* NOTE: Asked of a walk and not of a list: only a walk means "everything
-     * under here", and `--base` does not -- it is the caller saying what they
-     * changed, so a pattern with nothing to match in those files has not
-     * thereby failed. */
+    /* NOTE: Asked of a walk and not of a list: only a walk means "everything under here", and `--base` does not -- it is the caller saying what they changed, so a pattern with nothing to match in those files has not thereby failed. */
     let walked = !stdin
         && args.git.base.is_none()
         && (paths.is_empty() || paths.iter().any(|path| path.is_dir()));
@@ -1028,10 +1007,8 @@ fn run_target(
             Dialect::Standard,
         )?;
         output::report_unused_settings(&files, &root_options.scan, &root_trace, verbosity)?;
-        /* NOTE: Every path the walk reached, skips included. A file the walk
-         * passed over is still a file the glob was written for, and calling
-         * the glob unused because its language has no scanner here would send
-         * a reader to fix the wrong line. */
+        /* NOTE: Every path the walk reached, skips included.
+         * A file the walk passed over is still a file the glob was written for, and calling the glob unused because its language has no scanner here would send a reader to fix the wrong line. */
         let reached: Vec<&std::path::Path> = files
             .iter()
             .map(|file| file.path.as_path())
@@ -1046,66 +1023,71 @@ fn run_target(
     if invalid {
         return Ok(2);
     }
-    /* NOTE: A skip the caller refuses ranks with a finding rather than with a
-     * failure: the run worked, and what it found is a file the gate was meant
-     * to cover and did not. Exit 2 stays reserved for a run that could not do
-     * its job at all. */
+    /* NOTE: A skip the caller refuses ranks with a finding rather than with a failure: the run worked, and what it found is a file the gate was meant to cover and did not.
+     * Exit 2 stays reserved for a run that could not do its job at all. */
     let denied = deny_exit_code(
         &discovery.skipped,
         common.policy.deny_skipped.as_deref(),
         verbosity,
     )?;
-    match operation {
-        Operation::Check | Operation::Diff if output::changed(&files) => Ok(1),
-        Operation::Check | Operation::Scan | Operation::Diff | Operation::Fix => Ok(denied),
-    }
+    /* NOTE: A working-tree run rewrites files the author can still look at before committing them, so it has no index to have changed under anybody. */
+    Ok(output::exit_code(operation, &files, false).max(denied))
 }
 
 /// Re-scan what a rewrite produced, and refuse it if it is wrong.
 ///
-/// The tool's central claim is that a removal changes what a file says and not
-/// what it does, and until now that claim was asserted. It cannot be proved
-/// without a parser for every language -- which would cost the property that
-/// makes this one binary that runs anywhere -- but the failures that are
-/// actually reachable can be caught by asking the scanner about its own
-/// output:
+/// The tool's central claim is that a removal changes what a file says and not what it does, and until now that claim was asserted.
+/// It cannot be proved without a parser for every language -- which would cost the property that makes this one binary that runs anywhere -- but the failures that are actually reachable can be caught by asking the scanner about its own output:
 ///
 /// - the result still lexes, so a removal did not open or close a string;
-/// - nothing removable is left, so the rewrite reached a fixed point.
+/// - nothing the run planned for is left, so the rewrite reached a fixed point.
 ///
-/// Idempotence is the sharper of the two: it is what catches a removal that
-/// made a new comment token out of the bytes around the hole.
+/// Idempotence is the sharper of the two: it is what catches a removal that made a new comment token out of the bytes around the hole.
+/// Which verdicts count as "left" is the half of the report the run actually planned from.
+/// A tidying run leaves every removal where it found it and has to, so asking it for a report with none would fail every time it was asked to do exactly what it was told.
 ///
 /// This runs before anything reaches the disk, so a failure costs nothing.
-/// The transaction is still there for an I/O failure part-way through; this is
-/// for the failure a transaction cannot help with, which is having computed
-/// the wrong bytes in the first place.
-fn verify_rewrite(path: &std::path::Path, rewritten: &ocomment_core::ScanReport) -> Result<()> {
+/// The transaction is still there for an I/O failure part-way through; this is for the failure a transaction cannot help with, which is having computed the wrong bytes in the first place.
+fn verify_rewrite(
+    path: &std::path::Path,
+    rewritten: &ocomment_core::ScanReport,
+    operation: Operation,
+) -> Result<()> {
     let path = output::sanitize_path(&path.to_string_lossy());
     ensure!(
         rewritten.valid,
         "{path}: the rewrite does not scan cleanly, so nothing was written. \
          This is a defect in OComment; the file is unchanged."
     );
-    let left = rewritten
-        .comments
-        .iter()
-        .filter(|comment| comment.disposition.is_remove())
-        .count();
+    let (left, subject) = if operation.half() == Some(Writes::RewritesOnly) {
+        let comments = rewritten
+            .comments
+            .iter()
+            .filter(|comment| comment.action() == Action::Rewrite)
+            .count();
+        (
+            comments + rewritten.runs.len(),
+            "comment(s) left to rewrite",
+        )
+    } else {
+        let comments = rewritten
+            .comments
+            .iter()
+            .filter(|comment| comment.action().removes())
+            .count();
+        (comments, "removable comment(s)")
+    };
     ensure!(
         left == 0,
-        "{path}: the rewrite still holds {left} removable comment(s), so nothing \
+        "{path}: the rewrite still holds {left} {subject}, so nothing \
          was written. This is a defect in OComment; the file is unchanged."
     );
     Ok(())
 }
 
-/// Ask about each comment this run would remove, write the accepted removals
-/// through the same transaction a plain `fix` uses, and report what the answers
-/// came to.
+/// Ask about each comment this run would remove, write the accepted removals through the same transaction a plain `fix` uses, and report what the answers came to.
 ///
-/// A clean abort is not a failure of the run: `x` is the answer for a fix that
-/// should never have started, and it exits 0 having touched nothing.
+/// A clean abort is not a failure of the run: `x` is the answer for a fix that should never have started, and it exits 0 having touched nothing.
 fn run_interactive(
     files: &[ProcessedFile],
     skipped: &[files::SkippedFile],
@@ -1119,9 +1101,7 @@ fn run_interactive(
         let mut answers = stdin.lock();
         let mut questions = output::stdout();
         let selection = interactive::select(files, &mut answers, &mut questions, &presentation)?;
-        /* NOTE: The conversation is on standard output and the verdict that follows
-         * is on standard error; a terminal sees both, so the buffer is emptied
-         * first to keep them in the order they were written. */
+        /* NOTE: The conversation is on standard output and the verdict that follows is on standard error; a terminal sees both, so the buffer is emptied first to keep them in the order they were written. */
         output::finish(&mut questions)?;
         selection
     };
@@ -1147,9 +1127,7 @@ fn run_interactive(
         )?;
         return Ok(0);
     }
-    /* NOTE: A skipped path can be the whole answer to a run that was never asked a
-     * question, so the one command that writes no report of its own still says
-     * why it passed a file over. */
+    /* NOTE: A skipped path can be the whole answer to a run that was never asked a question, so the one command that writes no report of its own still says why it passed a file over. */
     for line in output::skip_lines(skipped, presentation, verbosity) {
         output::note(&mut report, verbosity, Detail::Normal, &line)?;
     }
@@ -1165,15 +1143,13 @@ fn run_interactive(
 /// How the PATH list names standard input.
 const STDIN_ARGUMENT: &str = "-";
 
-/// Split the requested targets into ordinary paths and the `-` that stands for
-/// standard input, refusing the combinations that cannot be honoured.
+/// Split the requested targets into ordinary paths and the `-` that stands for standard input, refusing the combinations that cannot be honoured.
 fn target_paths(paths: &[PathBuf], rewrites: bool, staged: bool) -> Result<(Vec<PathBuf>, bool)> {
     let is_stdin = |path: &PathBuf| path.as_os_str() == STDIN_ARGUMENT;
     match paths.iter().filter(|path| is_stdin(path)).count() {
         0 => return Ok((paths.to_vec(), false)),
         1 => {}
-        /* NOTE: A pipe is consumed once; a second `-` would silently report the same
-         * bytes twice or nothing at all. */
+        /* NOTE: A pipe is consumed once; a second `-` would silently report the same bytes twice or nothing at all. */
         _ => bail!("cannot read standard input twice; `-` may appear only once"),
     }
     if rewrites {
@@ -1192,18 +1168,13 @@ fn target_paths(paths: &[PathBuf], rewrites: bool, staged: bool) -> Result<(Vec<
     ))
 }
 
-/// Discover the working-tree files a branch changed, under the limits a walk
-/// applies.
+/// Discover the working-tree files a branch changed, under the limits a walk applies.
 ///
 /// A caller could already write `ocomment check $(git diff --name-only ...)`,
-/// and that run means something slightly different: a path named on the
-/// command line is the caller saying *this one*, so it lifts the hidden-file
-/// and size rules. `--base` is the caller saying *what I changed*, which is a
-/// walk narrowed rather than a list, so the limits stay on and a generated
-/// file the branch touched is still passed over.
+/// and that run means something slightly different: a path named on the command line is the caller saying *this one*, so it lifts the hidden-file and size rules.
+/// `--base` is the caller saying *what I changed*, which is a walk narrowed rather than a list, so the limits stay on and a generated file the branch touched is still passed over.
 ///
-/// The paths a caller *also* named narrow it further: `--base main src` is the
-/// files under `src` that the branch changed.
+/// The paths a caller *also* named narrow it further: `--base main src` is the files under `src` that the branch changed.
 fn base_targets(
     base: &str,
     paths: &[PathBuf],
@@ -1212,9 +1183,7 @@ fn base_targets(
     verbosity: Verbosity,
 ) -> Result<files::Discovery> {
     let (root, changed) = git::changed_since(base)?;
-    /* NOTE: `git` names a changed path from the repository root, so the globs
-     * and the report are measured from there too -- as a staged run already
-     * does, and for the same reason. */
+    /* NOTE: `git` names a changed path from the repository root, so the globs and the report are measured from there too -- as a staged run already does, and for the same reason. */
     resolved.cwd = root;
     let selected: Vec<PathBuf> = if paths.is_empty() {
         changed
@@ -1234,10 +1203,8 @@ fn base_targets(
             })
             .collect()
     };
-    /* NOTE: A branch that changed nothing this run can read is a run that will
-     * report nothing and exit 0, which reads exactly like a clean branch. The
-     * same footgun `--staged` has, and it is said out loud for the same
-     * reason. */
+    /* NOTE: A branch that changed nothing this run can read is a run that will report nothing and exit 0, which reads exactly like a clean branch.
+     * The same footgun `--staged` has, and it is said out loud for the same reason. */
     if selected.is_empty() {
         let stderr = io::stderr();
         let mut sink = stderr.lock();
@@ -1255,9 +1222,7 @@ fn base_targets(
     files::discover_workspace_with(&selected, resolved, common.language(), common.dialect())
 }
 
-/// Discover the named paths and, when `-` was among them, fold the bytes read
-/// from standard input in as one more file so a piped run takes exactly the
-/// same reporting path as a walked one.
+/// Discover the named paths and, when `-` was among them, fold the bytes read from standard input in as one more file so a piped run takes exactly the same reporting path as a walked one.
 fn read_targets(
     paths: &[PathBuf],
     stdin: bool,
@@ -1267,8 +1232,7 @@ fn read_targets(
     if !stdin {
         return files::discover(paths, resolved, common.language(), common.dialect());
     }
-    /* NOTE: An empty list means "the whole repository" only when no target was named
-     * at all; `-` on its own is a target, and walking would ignore it. */
+    /* NOTE: An empty list means "the whole repository" only when no target was named at all; `-` on its own is a target, and walking would ignore it. */
     let mut discovery = if paths.is_empty() {
         files::Discovery::default()
     } else {
@@ -1281,8 +1245,7 @@ fn read_targets(
         .context("cannot read standard input")?;
     match files::stdin_source(bytes, resolved, common.language(), common.dialect()) {
         Ok(file) => discovery.files.push(file),
-        /* NOTE: A skip that cannot be reported per file — nothing was named to skip
-         * — is a usage error the run must not swallow. */
+        /* NOTE: A skip that cannot be reported per file — nothing was named to skip — is a usage error the run must not swallow. */
         Err(skipped) if skipped.error => {
             let reason = skipped.reason;
             bail!("{reason}")
@@ -1300,15 +1263,10 @@ fn read_targets(
 
 /// Strip one file from standard input to standard output.
 ///
-/// The product is the stripped source itself — the bytes of the file, not a
-/// report about it — so there is no report for a machine format to encode.
-/// Writing the source under `--format sarif` would answer with something that
-/// is not SARIF, and wrapping it in one of the schemas would answer with
-/// something that is not the file, so the flag is refused the way
-/// `ocomment languages` refuses the formats that carry no language table.
+/// The product is the stripped source itself — the bytes of the file, not a report about it — so there is no report for a machine format to encode.
+/// Writing the source under `--format sarif` would answer with something that is not SARIF, and wrapping it in one of the schemas would answer with something that is not the file, so the flag is refused the way `ocomment languages` refuses the formats that carry no language table.
 fn run_strip(common: &CommonArgs) -> Result<u8> {
-    /* NOTE: `strip` writes bytes rather than a report, so the two formats that
-     * differ only in how a report is laid out are the same thing here. */
+    /* NOTE: `strip` writes bytes rather than a report, so the two formats that differ only in how a report is laid out are the same thing here. */
     ensure!(
         common.output.format.for_a_person(),
         "`ocomment strip` is only available with --format human or review"
@@ -1359,9 +1317,7 @@ fn run_strip(common: &CommonArgs) -> Result<u8> {
     Ok(if result.report.valid { 0 } else { 2 })
 }
 
-/// Layer the command line over the merged configuration, noting what it
-/// overrode so `--explain` can name the flag rather than a file that never
-/// mentioned the setting.
+/// Layer the command line over the merged configuration, noting what it overrode so `--explain` can name the flag rather than a file that never mentioned the setting.
 pub(crate) fn apply_cli_overrides(resolved: &mut config::ResolvedConfig, common: &CommonArgs) {
     let policy = &common.policy;
     let config = &mut resolved.config;
@@ -1377,8 +1333,7 @@ pub(crate) fn apply_cli_overrides(resolved: &mut config::ResolvedConfig, common:
         overrides.layout = true;
     }
     if !policy.keep_kind.is_empty() {
-        /* NOTE: The flag adds to the configured list rather than replacing it, so
-         * the boundary is what tells the two apart afterwards. */
+        /* NOTE: The flag adds to the configured list rather than replacing it, so the boundary is what tells the two apart afterwards. */
         overrides.keep_kind_from = Some(config.policy.keep_kind.len());
         config
             .policy
@@ -1398,18 +1353,16 @@ pub(crate) fn apply_cli_overrides(resolved: &mut config::ResolvedConfig, common:
     if policy.force_protected {
         config.policy.force_protected = true;
     }
-    /* NOTE: A `[files]` key set from the policy flags, because that is where the
-     * flag lives on the command line. The setting itself belongs to discovery:
-     * it decides which files are read at all, not what is decided about the
-     * comments in them. */
+    /* NOTE: A `[files]` key set from the policy flags, because that is where the flag lives on the command line.
+     * The setting itself belongs to discovery:
+     * it decides which files are read at all, not what is decided about the comments in them. */
     if policy.include_generated {
         config.files.include_generated = true;
     }
 }
 
-/// The apostrophe definition `roff` writes at the top of every fragment it
-/// renders. A page needs it once, so it is stripped from every fragment after
-/// the first.
+/// The apostrophe definition `roff` writes at the top of every fragment it renders.
+/// A page needs it once, so it is stripped from every fragment after the first.
 const ROFF_PREAMBLE: &str = concat!(r".ie \n(.g .ds Aq \(aq", "\n", r".el .ds Aq '", "\n");
 
 /// Append one rendered `roff` fragment to the page under construction.
@@ -1421,10 +1374,8 @@ fn append_fragment(page: &mut String, fragment: &[u8]) -> Result<()> {
 
 /// Render the arguments that belong to one command alone, as `.SS` subsections.
 ///
-/// `clap_mangen` renders a single page for the root command, so an argument
-/// declared on a subcommand — `fix --dry-run`, `init --force`, `plugin add
-/// --sha256` — would never reach the manual at all. Every command is walked
-/// and the arguments it does not inherit are written under its own heading.
+/// `clap_mangen` renders a single page for the root command, so an argument declared on a subcommand — `fix --dry-run`, `init --force`, `plugin add --sha256` — would never reach the manual at all.
+/// Every command is walked and the arguments it does not inherit are written under its own heading.
 fn command_options(command: &clap::Command, path: &str, page: &mut String) -> Result<()> {
     for subcommand in command.get_subcommands() {
         if subcommand.is_hide_set() || subcommand.get_name() == "help" {
@@ -1433,8 +1384,8 @@ fn command_options(command: &clap::Command, path: &str, page: &mut String) -> Re
         let name = format!("{path} {}", subcommand.get_name());
         /* NOTE: The global arguments already have one entry each under OPTIONS,
          * POLICY, and OUTPUT, and `--help` is on every command by definition.
-         * Repeating them here would bury the few arguments this section is
-         * for. Hiding is how `clap_mangen` is told to skip an argument. */
+         * Repeating them here would bury the few arguments this section is for.
+         * Hiding is how `clap_mangen` is told to skip an argument. */
         let mut own = subcommand.clone();
         let inherited: Vec<clap::Id> = own
             .get_arguments()
@@ -1454,8 +1405,7 @@ fn command_options(command: &clap::Command, path: &str, page: &mut String) -> Re
             .context("cannot render the manual page")?;
         let mut rendered = String::new();
         append_fragment(&mut rendered, &fragment)?;
-        /* NOTE: A command with nothing of its own renders an empty fragment, and an
-         * empty heading would claim otherwise. */
+        /* NOTE: A command with nothing of its own renders an empty fragment, and an empty heading would claim otherwise. */
         if let Some(body) = rendered.strip_prefix(".SH OPTIONS\n")
             && !body.is_empty()
         {
@@ -1469,13 +1419,10 @@ fn command_options(command: &clap::Command, path: &str, page: &mut String) -> Re
 /// Render the roff manual page from the parser definition itself.
 fn run_man() -> Result<u8> {
     /* NOTE: `clap_mangen` renders `after_long_help` as one opaque `.SH EXTRA` body,
-     * so the page is built without it and the same content is appended below
-     * as real roff sections. It is assembled section by section rather than
-     * through `render`, because the per-command options belong next to the
-     * command list and `render` puts VERSION after it.
+     * so the page is built without it and the same content is appended below as real roff sections.
+     * It is assembled section by section rather than through `render`, because the per-command options belong next to the command list and `render` puts VERSION after it.
      *
-     * The `.TH` date is left blank on purpose: stamping the build date would
-     * make two reproducible builds of the same source disagree. */
+     * The `.TH` date is left blank on purpose: stamping the build date would make two reproducible builds of the same source disagree. */
     let man = clap_mangen::Man::new(Cli::command().after_long_help(None))
         .title("OCOMMENT")
         .manual("User Commands");
@@ -1499,8 +1446,7 @@ fn run_man() -> Result<u8> {
     }
     let mut per_command = String::new();
     let mut root = Cli::command();
-    /* NOTE: Building propagates the global arguments into every subcommand, which is
-     * what makes them recognizable as inherited below. */
+    /* NOTE: Building propagates the global arguments into every subcommand, which is what makes them recognizable as inherited below. */
     root.build();
     command_options(&root, "ocomment", &mut per_command)?;
     if !per_command.is_empty() {
@@ -1523,9 +1469,7 @@ fn run_man() -> Result<u8> {
 
 /// Write the shell completion script.
 ///
-/// `clap_complete` writes straight into the handle it is given and panics if
-/// that write fails, so it is given a buffer in memory and the one write that
-/// can fail is made here.
+/// `clap_complete` writes straight into the handle it is given and panics if that write fails, so it is given a buffer in memory and the one write that can fail is made here.
 fn run_completions(shell: Shell) -> Result<u8> {
     let mut script = Vec::new();
     generate(shell, &mut Cli::command(), "ocomment", &mut script);
@@ -1536,8 +1480,7 @@ fn run_completions(shell: Shell) -> Result<u8> {
 }
 
 fn run_init(args: InitArgs, verbosity: Verbosity) -> Result<u8> {
-    /* NOTE: Writing the file is only the first half of the task, so each template
-     * carries the step that finishes it. */
+    /* NOTE: Writing the file is only the first half of the task, so each template carries the step that finishes it. */
     let (path, contents, next_step) = match args.kind {
         InitKind::Config => (
             config::CONFIG_FILE,
@@ -1545,7 +1488,9 @@ fn run_init(args: InitArgs, verbosity: Verbosity) -> Result<u8> {
             "edit [policy] and run `ocomment check`",
         ),
         InitKind::Lefthook => {
-            let command = if args.fix {
+            let command = if args.tidy {
+                "ocomment fix --tidy --staged"
+            } else if args.fix {
                 "ocomment fix --staged"
             } else {
                 "ocomment check --staged"
@@ -1559,33 +1504,25 @@ fn run_init(args: InitArgs, verbosity: Verbosity) -> Result<u8> {
     };
     let mut stdout = output::stdout();
     if args.stdout {
-        /* NOTE: Nothing is created, so nothing is said about creating it: the
-         * template alone is on standard output, ready to be redirected. */
+        /* NOTE: Nothing is created, so nothing is said about creating it: the template alone is on standard output, ready to be redirected. */
         output::wrote(write!(stdout, "{contents}"))?;
         output::finish(&mut stdout)?;
         return Ok(0);
     }
     write_template(&mut stdout, path, &contents, args.force, next_step)?;
-    /* NOTE: The note is advice about the file that now exists, so it follows the
-     * line that reports it — and a refused `init` never reaches it, because
-     * there is no new file for an inherited configuration to layer under.
-     * Standard output is flushed first so a terminal reading both streams sees
-     * the creation before the note about it. */
+    /* NOTE: The note is advice about the file that now exists, so it follows the line that reports it — and a refused `init` never reaches it, because there is no new file for an inherited configuration to layer under.
+     * Standard output is flushed first so a terminal reading both streams sees the creation before the note about it. */
     output::finish(&mut stdout)?;
     note_inherited_config(verbosity)?;
     Ok(0)
 }
 
-/// Say so when a project configuration from a parent directory already governs
-/// this directory.
+/// Say so when a project configuration from a parent directory already governs this directory.
 ///
-/// The starter file layers over it rather than starting from nothing, and the
-/// hook a `lefthook` run installs will read it — either way the reader is
-/// better off knowing before they start editing. It is a note and not a
-/// refusal: a nested per-crate configuration is a normal thing to want.
+/// The starter file layers over it rather than starting from nothing, and the hook a `lefthook` run installs will read it — either way the reader is better off knowing before they start editing.
+/// It is a note and not a refusal: a nested per-crate configuration is a normal thing to want.
 ///
-/// The search starts at the parent so that the file this very run is about to
-/// write — or the one `--force` is replacing — is never reported as inherited.
+/// The search starts at the parent so that the file this very run is about to write — or the one `--force` is replacing — is never reported as inherited.
 fn note_inherited_config(verbosity: Verbosity) -> Result<()> {
     let Ok(directory) = std::env::current_dir() else {
         return Ok(());
@@ -1606,12 +1543,9 @@ fn note_inherited_config(verbosity: Verbosity) -> Result<()> {
     )
 }
 
-/// Write one starter file, refusing an existing one unless `force` says
-/// otherwise.
+/// Write one starter file, refusing an existing one unless `force` says otherwise.
 ///
-/// The refusal is `create_new` rather than a prior `exists()` test: between
-/// such a test and the open the file could appear, and never writing over
-/// someone's edited configuration is the whole point of the check.
+/// The refusal is `create_new` rather than a prior `exists()` test: between such a test and the open the file could appear, and never writing over someone's edited configuration is the whole point of the check.
 fn write_template(
     output: &mut impl Write,
     path: &str,
@@ -1643,12 +1577,8 @@ fn write_template(
 
 /// Answer one question about the configuration.
 ///
-/// Every answer here is about settings rather than about comments: the merged
-/// file as TOML, where the files were found, how they were layered, and the
-/// schema they are checked against. None of the report schemas has a place to
-/// put any of that — `--format json` would name the report format, not the
-/// TOML `show` writes or the JSON Schema `schema` writes — so the flag is
-/// refused rather than accepted and ignored.
+/// Every answer here is about settings rather than about comments: the merged file as TOML, where the files were found, how they were layered, and the schema they are checked against.
+/// None of the report schemas has a place to put any of that — `--format json` would name the report format, not the TOML `show` writes or the JSON Schema `schema` writes — so the flag is refused rather than accepted and ignored.
 fn run_config(args: ConfigArgs, common: &CommonArgs) -> Result<u8> {
     ensure!(
         common.output.format.for_a_person(),
@@ -1717,11 +1647,8 @@ fn run_config(args: ConfigArgs, common: &CommonArgs) -> Result<u8> {
                         "policy: {}; layout: {}",
                         resolved.config.policy.mode, resolved.config.policy.layout
                     ))?;
-                    /* NOTE: The three lines above are the whole of what this
-                     * used to print, which left it explaining a configuration
-                     * without naming anything the configuration says. A
-                     * `keep_regex` is the setting most likely to be wrong and
-                     * was the one setting `explain` would not show. */
+                    /* NOTE: The three lines above are the whole of what this used to print, which left it explaining a configuration without naming anything the configuration says.
+                     * A `keep_regex` is the setting most likely to be wrong and was the one setting `explain` would not show. */
                     let (_, root_options, root_trace) = resolved.for_path_traced(
                         &resolved.root.clone(),
                         Language::Unknown,
@@ -1757,9 +1684,7 @@ fn run_config(args: ConfigArgs, common: &CommonArgs) -> Result<u8> {
                         }
                     }
                     if wrote_any {
-                        /* NOTE: This page lists the settings; only a run can say
-                         * which of them met anything, because that is a fact
-                         * about the files rather than about the table. */
+                        /* NOTE: This page lists the settings; only a run can say which of them met anything, because that is a fact about the files rather than about the table. */
                         output::wrote(writeln!(
                             stdout,
                             "a walk reports any of these that met no comment; \
@@ -1780,26 +1705,20 @@ fn run_config(args: ConfigArgs, common: &CommonArgs) -> Result<u8> {
     Ok(0)
 }
 
-/// ` ([policy] in .ocomment.toml)`, or nothing at all when the trace cannot
-/// place the setting.
+/// ` ([policy] in .ocomment.toml)`, or nothing at all when the trace cannot place the setting.
 fn setting_origin(trace: &config::PolicyTrace, key: &str, index: usize) -> String {
     trace
         .origin_at(key, index)
         .map_or_else(String::new, |origin| format!(" ({origin})"))
 }
 
-/// The shared language table, embedded from `spec/languages.toml` at build
-/// time so a released binary carries the same list the repository publishes.
-/// `tools/check_embedded_specs.py` and `spec_languages.rs` both fail when the
-/// copy under `assets/` stops being the canonical file.
+/// The shared language table, embedded from `spec/languages.toml` at build time so a released binary carries the same list the repository publishes.
+/// `tools/check_embedded_specs.py` and `spec_languages.rs` both fail when the copy under `assets/` stops being the canonical file.
 const LANGUAGE_TABLE: &str = include_str!("../assets/languages.toml");
 
 /// One language of the shared table.
 ///
-/// The field names are the keys of `spec/languages.toml` and the members of the
-/// objects `--format json` writes; the three that can be empty are left out of
-/// the JSON rather than written as an empty collection, so a reader can tell
-/// "no reserved names" from "reserved names not described".
+/// The field names are the keys of `spec/languages.toml` and the members of the objects `--format json` writes; the three that can be empty are left out of the JSON rather than written as an empty collection, so a reader can tell "no reserved names" from "reserved names not described".
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct LanguageRow {
@@ -1809,8 +1728,7 @@ struct LanguageRow {
     editor_ids: Vec<String>,
     /// Every file extension that selects the language, without the dot.
     extensions: Vec<String>,
-    /// Every dialect the language accepts, in the order `--dialect` names them
-    /// when it refuses one.
+    /// Every dialect the language accepts, in the order `--dialect` names them when it refuses one.
     dialects: Vec<String>,
     /// The extensions that select a dialect other than `standard`.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -1838,9 +1756,7 @@ struct LanguageTable {
 
 /// Read the embedded table.
 ///
-/// A failure here is a broken build rather than a broken run — the bytes are
-/// compiled in — so the error says which file is at fault instead of blaming
-/// the command line.
+/// A failure here is a broken build rather than a broken run — the bytes are compiled in — so the error says which file is at fault instead of blaming the command line.
 fn language_table() -> Result<Vec<LanguageRow>> {
     let table: LanguageTable = toml::from_str(LANGUAGE_TABLE)
         .context("the embedded spec/languages.toml is not a language table")?;
@@ -1855,16 +1771,13 @@ fn language_table() -> Result<Vec<LanguageRow>> {
 /// Print the shared language table.
 ///
 /// The human listing is one tab-separated row per language — name, extensions,
-/// dialects, and the spec's remark where it has one — and `--format json`
-/// writes the same rows as an array of objects. The other formats are report
-/// schemas with nowhere to put a language table, so they are refused rather
-/// than quietly answered with the human one.
+/// dialects, and the spec's remark where it has one — and `--format json` writes the same rows as an array of objects.
+/// The other formats are report schemas with nowhere to put a language table, so they are refused rather than quietly answered with the human one.
 fn print_languages(common: &CommonArgs) -> Result<u8> {
     let rows = language_table()?;
     let mut stdout = output::stdout();
     match common.output.format {
-        /* NOTE: A language table has no findings to group, so the terminal
-         * format and the pipe format are the same table. */
+        /* NOTE: A language table has no findings to group, so the terminal format and the pipe format are the same table. */
         OutputFormat::Human | OutputFormat::Review => {
             output::wrote(writeln!(stdout, "language\textensions\tdialects\tnotes"))?;
             for row in &rows {
@@ -1877,9 +1790,7 @@ fn print_languages(common: &CommonArgs) -> Result<u8> {
                 output::wrote(writeln!(stdout, "{line}"))?;
             }
         }
-        /* NOTE: Rendered into a string rather than straight into the writer, so the
-         * one write is raised through `output::wrote` and a reader that closed
-         * the pipe still ends the run quietly. */
+        /* NOTE: Rendered into a string rather than straight into the writer, so the one write is raised through `output::wrote` and a reader that closed the pipe still ends the run quietly. */
         OutputFormat::Json => {
             let json = serde_json::to_string_pretty(&rows)
                 .context("cannot render the language table as JSON")?;
@@ -1896,12 +1807,10 @@ fn print_languages(common: &CommonArgs) -> Result<u8> {
 /// One declarative profile as the listing reports it.
 #[derive(Serialize)]
 struct ProfileRow {
-    /// What the profile is called, which is also what a `[[overrides]]` or a
-    /// `[profiles.<name>]` in the configuration refers to.
+    /// What the profile is called, which is also what a `[[overrides]]` or a `[profiles.<name>]` in the configuration refers to.
     name: String,
     /// Where it came from: `bundled` when it is the one this build ships,
-    /// `configured` when the project declared it or replaced a shipped one of
-    /// the same name.
+    /// `configured` when the project declared it or replaced a shipped one of the same name.
     source: &'static str,
     /// Whole file names the profile claims.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -1915,19 +1824,13 @@ struct ProfileRow {
 
 /// What this build and this project can read beyond the built-in languages.
 ///
-/// `ocomment languages` is the built-in scanner table and nothing else, which
-/// is the right contract for it -- it is `spec/languages.toml`, rendered. It is
-/// also, on its own, an incomplete answer to "can it read this file": a
-/// declarative profile reads files no language claims, and a release that adds
-/// one changes what a gate covers without changing a single policy. Before
-/// this listing existed that change was unannounced, and a project met it as
-/// findings in files the previous version had passed over in silence.
+/// `ocomment languages` is the built-in scanner table and nothing else, which is the right contract for it -- it is `spec/languages.toml`, rendered.
+/// It is also, on its own, an incomplete answer to "can it read this file": a declarative profile reads files no language claims, and a release that adds one changes what a gate covers without changing a single policy.
+/// Before this listing existed that change was unannounced, and a project met it as findings in files the previous version had passed over in silence.
 fn profile_table(common: &CommonArgs) -> Result<Vec<ProfileRow>> {
     let resolved = config::load(common.config.as_deref())?;
-    /* NOTE: Normalized the way configuration loading normalizes them. A
-     * shipped profile that left `name` implicit would otherwise differ from
-     * the resolved copy in that one field and be reported as one the project
-     * declared -- a listing wrong about exactly the thing it is for. */
+    /* NOTE: Normalized the way configuration loading normalizes them.
+     * A shipped profile that left `name` implicit would otherwise differ from the resolved copy in that one field and be reported as one the project declared -- a listing wrong about exactly the thing it is for. */
     let bundled: BTreeMap<String, DeclarativeProfile> = config::bundled_profiles()?
         .into_iter()
         .map(|(name, mut profile)| {
@@ -1943,10 +1846,7 @@ fn profile_table(common: &CommonArgs) -> Result<Vec<ProfileRow>> {
         .iter()
         .map(|(name, profile)| ProfileRow {
             name: name.clone(),
-            /* NOTE: Compared by value rather than by name: a project replaces a
-             * shipped profile by declaring one of the same name, and a listing
-             * that keyed on the name alone would call the replacement bundled
-             * and send a reader to the wrong file to change it. */
+            /* NOTE: Compared by value rather than by name: a project replaces a shipped profile by declaring one of the same name, and a listing that keyed on the name alone would call the replacement bundled and send a reader to the wrong file to change it. */
             source: if bundled.get(name) == Some(profile) {
                 "bundled"
             } else {
@@ -1974,14 +1874,11 @@ fn print_profiles(common: &CommonArgs) -> Result<u8> {
     let rows = profile_table(common)?;
     let mut stdout = output::stdout();
     match common.output.format {
-        /* NOTE: As with the language table, there are no findings to group, so
-         * the terminal format and the pipe format are the same table. */
+        /* NOTE: As with the language table, there are no findings to group, so the terminal format and the pipe format are the same table. */
         OutputFormat::Human | OutputFormat::Review => {
             output::wrote(writeln!(stdout, "profile\tsource\tfiles\tcomments"))?;
             for row in &rows {
-                /* NOTE: Extensions carry their dot here, so that a reader can
-                 * tell `.opam` the suffix from `dune` the whole file name in a
-                 * column that holds both. */
+                /* NOTE: Extensions carry their dot here, so that a reader can tell `.opam` the suffix from `dune` the whole file name in a column that holds both. */
                 let files = row
                     .filenames
                     .iter()
@@ -2046,16 +1943,12 @@ fn run_plugin(args: PluginArgs, common: &CommonArgs) -> Result<u8> {
     Ok(0)
 }
 
-/// What `git` is needed for. The four plugin purposes are declared beside the
-/// spawn sites that name them in a failure; this one belongs to the flag it
-/// serves, and is worded the same way so the rows read alike.
+/// What `git` is needed for.
+/// The four plugin purposes are declared beside the spawn sites that name them in a failure; this one belongs to the flag it serves, and is worded the same way so the rows read alike.
 const STAGED_READS: &str = "--staged";
 
-/// The optional external tools OComment shells out to, in the order `doctor`
-/// reports them: the binary, the arguments that make it identify itself, and
-/// the part of a run that stops working without it. Not one of them is needed
-/// to check or fix a file, so a missing tool is a row in the report and never
-/// a failing run.
+/// The optional external tools OComment shells out to, in the order `doctor` reports them: the binary, the arguments that make it identify itself, and the part of a run that stops working without it.
+/// Not one of them is needed to check or fix a file, so a missing tool is a row in the report and never a failing run.
 const PROBED_TOOLS: [(&str, &[&str], &str); 5] = [
     ("git", &["--version"], STAGED_READS),
     ("curl", &["--version"], plugin::HTTPS_SOURCES),
@@ -2076,10 +1969,8 @@ enum Probe {
 
 /// Ask one external tool for its version.
 ///
-/// The answer is read from standard output, or from standard error for the
-/// tools that put their banner there, and it is the line the tool chose:
-/// `doctor` reports what a tool says about itself rather than parsing it into
-/// fields that the next release would rename.
+/// The answer is read from standard output, or from standard error for the tools that put their banner there, and it is the line the tool chose:
+/// `doctor` reports what a tool says about itself rather than parsing it into fields that the next release would rename.
 fn probe(tool: &str, args: &[&str]) -> Probe {
     let output = match std::process::Command::new(tool).args(args).output() {
         Ok(output) => output,
@@ -2097,19 +1988,12 @@ fn probe(tool: &str, args: &[&str]) -> Probe {
 
 /// The line a tool identifies itself by, out of everything it printed.
 ///
-/// Usually that is the first line carrying anything, but `cosign version`
-/// draws six lines of ASCII art before it mentions a version, and a row
-/// showing the top of that banner would tell the reader nothing. A version has
-/// a number in it, so the first line with a digit wins and the first non-empty
-/// line is the fallback for a tool that names no number at all.
+/// Usually that is the first line carrying anything, but `cosign version` draws six lines of ASCII art before it mentions a version, and a row showing the top of that banner would tell the reader nothing.
+/// A version has a number in it, so the first line with a digit wins and the first non-empty line is the fallback for a tool that names no number at all.
 ///
-/// A banner that is not UTF-8 is still worth showing, so the bytes are read
-/// lossily rather than dropped, and one line of it is kept: a row of the
-/// report stays one line whatever the tool decided to print.
+/// A banner that is not UTF-8 is still worth showing, so the bytes are read lossily rather than dropped, and one line of it is kept: a row of the report stays one line whatever the tool decided to print.
 ///
-/// The tool chose those bytes, so the line it identifies itself by is
-/// untrusted input on its way to a terminal, and it is sanitised exactly like
-/// a comment preview before it becomes a row.
+/// The tool chose those bytes, so the line it identifies itself by is untrusted input on its way to a terminal, and it is sanitised exactly like a comment preview before it becomes a row.
 fn version_line(bytes: &[u8]) -> Option<String> {
     let text = String::from_utf8_lossy(bytes);
     let mut fallback = None;
@@ -2124,10 +2008,8 @@ fn version_line(bytes: &[u8]) -> Option<String> {
 
 /// Report what a walk over `target` would and would not look at.
 ///
-/// It reads the same discovery every other command starts from, so the answer
-/// is about the run the reader is actually making: the same configuration, the
-/// same includes and excludes, the same size limit. A coverage report computed
-/// any other way would be about a different walk.
+/// It reads the same discovery every other command starts from, so the answer is about the run the reader is actually making: the same configuration, the same includes and excludes, the same size limit.
+/// A coverage report computed any other way would be about a different walk.
 /// `ratchet`, which checks a tree against its ledger or records one.
 #[derive(Clone, Debug, Args)]
 struct RatchetArgs {
@@ -2140,10 +2022,8 @@ struct RatchetArgs {
 
 /// Hold a tree to the ledger recorded beside it, or record one.
 ///
-/// The ledger only falls: a file holding more than it allows fails, and a file
-/// holding fewer fails too, asking to be recorded. A ledger that only noticed
-/// growth would eventually describe a repository that no longer exists, and
-/// the distance left to go would stop being readable from the file.
+/// The ledger only falls: a file holding more than it allows fails, and a file holding fewer fails too, asking to be recorded.
+/// A ledger that only noticed growth would eventually describe a repository that no longer exists, and the distance left to go would stop being readable from the file.
 fn run_ratchet(args: &RatchetArgs, common: &CommonArgs) -> Result<u8> {
     let resolved = config::load(common.config.as_deref())?;
     let configured = resolved.config.ratchet.ledger.clone();
@@ -2172,9 +2052,7 @@ fn run_ratchet(args: &RatchetArgs, common: &CommonArgs) -> Result<u8> {
 
 /// Scan a walk and hand back the processed files, with no report written.
 ///
-/// `ratchet` needs the counts and nothing else, so it takes the shortest path
-/// that still resolves the same configuration and the same policy every other
-/// command would have used.
+/// `ratchet` needs the counts and nothing else, so it takes the shortest path that still resolves the same configuration and the same policy every other command would have used.
 fn scan_for_counts(
     paths: &[PathBuf],
     resolved: &config::ResolvedConfig,
@@ -2202,10 +2080,7 @@ fn scan_for_counts(
         } else {
             scanner.scan(&file.source, file.language)
         };
-        let changed = report
-            .comments
-            .iter()
-            .any(|comment| comment.disposition.is_remove());
+        let changed = report.changes_bytes();
         let read_by = file.read_by();
         files.push(ProcessedFile {
             path: file.path,
@@ -2226,9 +2101,8 @@ fn run_coverage(target: &TargetArgs, common: &CommonArgs) -> Result<u8> {
         "coverage reports on a walk; standard input is one source with no walk around it"
     );
     let discovery = read_targets(&paths, stdin, &resolved, common)?;
-    /* NOTE: What the walk's own limits kept out, which nothing met and so
-     * nothing reported. Without it the percentage is of the walk rather than
-     * of the tree, and a run that read three of seven files says `100.0%`. */
+    /* NOTE: What the walk's own limits kept out, which nothing met and so nothing reported.
+     * Without it the percentage is of the walk rather than of the tree, and a run that read three of seven files says `100.0%`. */
     let reached: Vec<PathBuf> = discovery
         .files
         .iter()
@@ -2238,9 +2112,7 @@ fn run_coverage(target: &TargetArgs, common: &CommonArgs) -> Result<u8> {
     let not_walked = files::not_walked(&paths, &resolved, &reached)?;
     let coverage = coverage::Coverage::compute(&discovery.files, &discovery.skipped, &not_walked);
     coverage::render(&coverage, common.output.format)?;
-    /* NOTE: `--deny-skipped` turns the report into a gate here too, so that the
-     * command that measures the hole and the command that refuses it agree
-     * about which skips count. */
+    /* NOTE: `--deny-skipped` turns the report into a gate here too, so that the command that measures the hole and the command that refuses it agree about which skips count. */
     deny_exit_code(
         &discovery.skipped,
         common.policy.deny_skipped.as_deref(),
@@ -2248,12 +2120,9 @@ fn run_coverage(target: &TargetArgs, common: &CommonArgs) -> Result<u8> {
     )
 }
 
-/// Count the tags this tree writes, and say which way the convention has
-/// drifted.
+/// Count the tags this tree writes, and say which way the convention has drifted.
 ///
-/// Reports rather than gates, as `coverage` does: what to do about a tag
-/// nobody configured is a decision about that tag, and a run that failed would
-/// be making it.
+/// Reports rather than gates, as `coverage` does: what to do about a tag nobody configured is a decision about that tag, and a run that failed would be making it.
 fn run_tags(target: &TargetArgs, common: &CommonArgs) -> Result<u8> {
     let mut resolved = config::load(common.config.as_deref())?;
     apply_cli_overrides(&mut resolved, common);
@@ -2284,10 +2153,7 @@ fn run_tags(target: &TargetArgs, common: &CommonArgs) -> Result<u8> {
 
 /// `1` when a skip the run refuses to pass over happened, `0` otherwise.
 ///
-/// The refused paths are named on standard error rather than counted, because
-/// the answer to this failure is a decision about particular files -- teach
-/// the language, exclude the path, or accept the gap -- and a count does not
-/// say which files to decide about.
+/// The refused paths are named on standard error rather than counted, because the answer to this failure is a decision about particular files -- teach the language, exclude the path, or accept the gap -- and a count does not say which files to decide about.
 fn deny_exit_code(
     skipped: &[files::SkippedFile],
     reasons: Option<&[output::SkipReason]>,
@@ -2329,18 +2195,12 @@ fn deny_exit_code(
 
 /// Which binary is answering, by path and by what it is made of.
 ///
-/// A version string cannot tell two builds apart, and two that cannot be told
-/// apart is not a hypothetical: a release `ocomment 0.1.0` and a working-tree
-/// `ocomment 0.1.0` disagreed about the same file on one machine on one day,
-/// because `mise exec` and a bare `PATH` resolved to different ones. The
-/// session that hit it spent the afternoon reporting a gate as broken that was
-/// not, and the only thing that would have answered it in one command is this.
+/// A version string cannot tell two builds apart, and two that cannot be told apart is not a hypothetical: a release `ocomment 0.1.0` and a working-tree `ocomment 0.1.0` disagreed about the same file on one machine on one day,
+/// because `mise exec` and a bare `PATH` resolved to different ones.
+/// The session that hit it spent the afternoon reporting a gate as broken that was not, and the only thing that would have answered it in one command is this.
 ///
-/// The digest is taken at run time from the file on disk rather than stamped in
-/// at build time. A commit hash baked into the binary would make every build
-/// differ from every other, which is the opposite of what the signed release
-/// archives are for; this asks the same question of the bytes that are actually
-/// running and costs a build nothing.
+/// The digest is taken at run time from the file on disk rather than stamped in at build time.
+/// A commit hash baked into the binary would make every build differ from every other, which is the opposite of what the signed release archives are for; this asks the same question of the bytes that are actually running and costs a build nothing.
 fn running_binary() -> String {
     let Ok(path) = std::env::current_exe() else {
         return "unavailable".to_owned();
@@ -2356,8 +2216,7 @@ fn running_binary() -> String {
 }
 
 fn run_doctor(common: &CommonArgs) -> Result<u8> {
-    /* NOTE: Asked before standard output is locked for the report, so the answer is
-     * about the same handle the report is written to. */
+    /* NOTE: Asked before standard output is locked for the report, so the answer is about the same handle the report is written to. */
     let stdout_tty = io::stdout().is_terminal();
     let mut stdout = output::stdout();
     output::wrote(writeln!(stdout, "ocomment {}", env!("CARGO_PKG_VERSION")))?;
@@ -2381,8 +2240,7 @@ fn run_doctor(common: &CommonArgs) -> Result<u8> {
         "languages: {} built in",
         Language::ALL.len()
     ))?;
-    /* NOTE: Whether the report is decorated is the first thing a reader piping it
-     * somewhere wants explained, and both halves of that answer are here. */
+    /* NOTE: Whether the report is decorated is the first thing a reader piping it somewhere wants explained, and both halves of that answer are here. */
     output::wrote(writeln!(
         stdout,
         "stdout: {}",
@@ -2422,8 +2280,8 @@ fn run_doctor(common: &CommonArgs) -> Result<u8> {
 /// How many files may be processed between two redraws of the counter.
 const PROGRESS_STEP: usize = 50;
 
-/// Whether this run draws the live scanning counter. The counter is terminal
-/// decoration: it never belongs in a machine format, and `-q` silences it.
+/// Whether this run draws the live scanning counter.
+/// The counter is terminal decoration: it never belongs in a machine format, and `-q` silences it.
 fn progress_enabled(common: &CommonArgs) -> bool {
     // NOTE: Decoration rather than a line of the report, so it asks directly.
     common.output.format.for_a_person()
@@ -2435,8 +2293,7 @@ fn progress_enabled(common: &CommonArgs) -> bool {
         }
 }
 
-/// The live scanning counter: how many files it has seen, and whether it ever
-/// put a line on the screen.
+/// The live scanning counter: how many files it has seen, and whether it ever put a line on the screen.
 #[derive(Default)]
 struct Progress {
     scanned: AtomicUsize,
@@ -2444,8 +2301,7 @@ struct Progress {
 }
 
 impl Progress {
-    /// Advance the live `n/total` counter, rewriting one line on standard
-    /// error rather than scrolling a line for every file.
+    /// Advance the live `n/total` counter, rewriting one line on standard error rather than scrolling a line for every file.
     fn report(&self, total: usize) {
         let seen = self.scanned.fetch_add(1, Ordering::Relaxed) + 1;
         if !seen.is_multiple_of(PROGRESS_STEP) && seen != total {
@@ -2459,9 +2315,7 @@ impl Progress {
 
     /// Erase the counter so the report that follows starts on a clean line.
     ///
-    /// A run with nothing to scan draws no counter, and erasing a line it
-    /// never wrote would put an escape sequence on a standard error whose
-    /// reader was promised only the summary.
+    /// A run with nothing to scan draws no counter, and erasing a line it never wrote would put an escape sequence on a standard error whose reader was promised only the summary.
     fn clear(&self) {
         if !self.drawn.load(Ordering::Relaxed) {
             return;
@@ -2493,15 +2347,12 @@ fn presentation(common: &CommonArgs) -> Presentation {
 /// The project root, as a report names it.
 ///
 /// A directory name is chosen by whoever made the directory, not by OComment,
-/// so a row carrying one is untrusted text on its way to a terminal for the
-/// same reason a probed tool's version line is — and, unlike one, it must not
-/// be cut short: a path that ends in an ellipsis names no directory at all.
+/// so a row carrying one is untrusted text on its way to a terminal for the same reason a probed tool's version line is — and, unlike one, it must not be cut short: a path that ends in an ellipsis names no directory at all.
 fn root_row(resolved: &config::ResolvedConfig) -> String {
     output::sanitize_path(&resolved.root.to_string_lossy())
 }
 
-/// What the run was pointed at, in the words the caller used, or the implicit
-/// target that stands in when they named nothing.
+/// What the run was pointed at, in the words the caller used, or the implicit target that stands in when they named nothing.
 fn target_label(paths: &[PathBuf]) -> String {
     if paths.is_empty() {
         return files::DEFAULT_TARGET.to_owned();
@@ -2513,16 +2364,12 @@ fn target_label(paths: &[PathBuf]) -> String {
         .join(" ")
 }
 
-/// Say where a bare `fix` is pointed when that is not where the project
-/// starts.
+/// Say where a bare `fix` is pointed when that is not where the project starts.
 ///
-/// A reader who has only ever run `ocomment fix` from the top of a repository
-/// can read the bare command as "fix the project", and it is the one command
-/// that writes. So the run that was told nothing about where to write names
-/// both the target it chose and the root the configuration came from, once,
-/// before it starts. A caller who named a path has already said what they
-/// meant, and from the root itself the two are the same directory: either way
-/// the line would be noise.
+/// A reader who has only ever run `ocomment fix` from the top of a repository can read the bare command as "fix the project", and it is the one command that writes.
+/// So the run that was told nothing about where to write names both the target it chose and the root the configuration came from, once,
+/// before it starts.
+/// A caller who named a path has already said what they meant, and from the root itself the two are the same directory: either way the line would be noise.
 fn note_fix_scope(resolved: &config::ResolvedConfig, common: &CommonArgs) -> Result<()> {
     if resolved.cwd == resolved.root || !common.output.format.for_a_person() {
         return Ok(());
@@ -2542,19 +2389,13 @@ fn note_fix_scope(resolved: &config::ResolvedConfig, common: &CommonArgs) -> Res
 }
 
 /// The `--verbose` header: where the run is rooted, what it was pointed at,
-/// The value a flag was given on the command line, or `None` when the flag was
-/// not named at all.
+/// The value a flag was given on the command line, or `None` when the flag was not named at all.
 ///
-/// Clap resolves a default and an alias into the same parsed value and keeps no
-/// record of which arrived, so the two questions that need the difference are
-/// answered from the arguments themselves: whether a format was chosen or
-/// defaulted, and whether a policy was named under a spelling that has moved.
+/// Clap resolves a default and an alias into the same parsed value and keeps no record of which arrived, so the two questions that need the difference are answered from the arguments themselves: whether a format was chosen or defaulted, and whether a policy was named under a spelling that has moved.
 fn named_flag(flag: &str) -> Option<String> {
-    /* NOTE: `args_os`, not `args`. The second panics on an argument that is not
-     * UTF-8, and this tool is given paths -- which on a Unix filesystem are
-     * bytes and are not obliged to be text. A flag's value is a flag's value in
-     * any encoding, and a path that cannot be read as one is simply not the
-     * spelling being looked for. */
+    /* NOTE: `args_os`, not `args`.
+     * The second panics on an argument that is not UTF-8, and this tool is given paths -- which on a Unix filesystem are bytes and are not obliged to be text.
+     * A flag's value is a flag's value in any encoding, and a path that cannot be read as one is simply not the spelling being looked for. */
     let arguments: Vec<String> = std::env::args_os()
         .map(|argument| argument.to_string_lossy().into_owned())
         .collect();
@@ -2568,14 +2409,10 @@ fn named_flag(flag: &str) -> Option<String> {
     })
 }
 
-/// The policy named on the command line under a name that has moved, and the
-/// name it moved to.
+/// The policy named on the command line under a name that has moved, and the name it moved to.
 ///
-/// `legal` and `safe` still resolve, to `conservative` and `standard`, so that
-/// a repository which pinned one of them does not break on an upgrade. That
-/// bargain has two halves and only one of them was kept: a name that goes on
-/// working while nobody is told it changed is a bridge the reader does not know
-/// they are standing on, and the day it is taken away is the day they find out.
+/// `legal` and `safe` still resolve, to `conservative` and `standard`, so that a repository which pinned one of them does not break on an upgrade.
+/// That bargain has two halves and only one of them was kept: a name that goes on working while nobody is told it changed is a bridge the reader does not know they are standing on, and the day it is taken away is the day they find out.
 fn renamed_policy() -> Option<(String, &'static str)> {
     let spelling = named_flag("policy")?;
     ocomment_core::Policy::ALL
@@ -2586,9 +2423,7 @@ fn renamed_policy() -> Option<(String, &'static str)> {
 
 /// and which configuration files it merged.
 ///
-/// The one line here that is not `-v` material is the renaming notice: a run
-/// steered by a name that has moved has to say so at the volume of an ordinary
-/// note, because the reader of that line is the one who has not noticed.
+/// The one line here that is not `-v` material is the renaming notice: a run steered by a name that has moved has to say so at the volume of an ordinary note, because the reader of that line is the one who has not noticed.
 fn trace_run(
     resolved: &config::ResolvedConfig,
     paths: &[PathBuf],
@@ -2630,11 +2465,9 @@ fn trace_run(
     Ok(())
 }
 
-/// Which configuration files a run merged, one line each in the order they
-/// were layered, or the single line that says there were none.
+/// Which configuration files a run merged, one line each in the order they were layered, or the single line that says there were none.
 ///
-/// `doctor` and the `-v` trace both report this, and a reader comparing the
-/// two is entitled to read the same answer twice, so they read it from here.
+/// `doctor` and the `-v` trace both report this, and a reader comparing the two is entitled to read the same answer twice, so they read it from here.
 fn config_trace(trace: &config::ConfigTrace) -> Vec<String> {
     let sources: Vec<String> = [
         ("user", &trace.user),
@@ -2643,8 +2476,7 @@ fn config_trace(trace: &config::ConfigTrace) -> Vec<String> {
     ]
     .into_iter()
     .filter_map(|(label, path)| {
-        /* INVARIANT: The row carries a directory name OComment did not choose, so it is
-         * sanitised for the same reason a `root` row is. */
+        /* INVARIANT: The row carries a directory name OComment did not choose, so it is sanitised for the same reason a `root` row is. */
         path.as_ref()
             .map(|path| format!("{label} {}", output::sanitize_path(&path.to_string_lossy())))
     })

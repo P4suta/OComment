@@ -30,9 +30,9 @@ CORPUS = ROOT / "spec/fixtures/v1"
 FLOOR = CORPUS / "floor.txt"
 TARGET = ROOT / "rust/ocomment/assets/selftest-corpus.json"
 
-# NOTE: The keys the self-test reads. `operation` decides which entry point runs,
-# NOTE: `profile` is needed by the two profile operations, and a case carries its
-# NOTE: source as one of the two spellings.
+# NOTE: The keys the self-test reads.
+# NOTE: `operation` decides which entry point runs,
+# NOTE: `profile` is needed by the two profile operations, and a case carries its source as one of the two spellings.
 CASE_KEYS = (
     "id",
     "language",
@@ -44,10 +44,8 @@ CASE_KEYS = (
     "source_base64",
 )
 
-# NOTE: What it compares against. `diagnostics` is deliberately absent: the
-# NOTE: self-test asks whether this binary classifies and rewrites the way the
-# NOTE: corpus records, and the diagnostic codes are checked by the library test
-# NOTE: and the differential run, which both have the whole file.
+# NOTE: What it compares against.
+# NOTE: `diagnostics` is deliberately absent: the self-test asks whether this binary classifies and rewrites the way the corpus records, and the diagnostic codes are checked by the library test and the differential run, which both have the whole file.
 EXPECT_KEYS = ("valid", "comments", "output_utf8", "output_base64")
 
 

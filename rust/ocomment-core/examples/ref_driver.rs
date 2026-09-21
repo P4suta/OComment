@@ -1,8 +1,7 @@
 //! Test tooling: the driver `tools/differential.py` speaks to.
 //!
-//! It reads one JSON request per line on standard input and answers on
-//! standard output, so the OCaml reference implementation and this one can be
-//! compared byte for byte. It is not an example of how to use the library;
+//! It reads one JSON request per line on standard input and answers on standard output, so the OCaml reference implementation and this one can be compared byte for byte.
+//! It is not an example of how to use the library;
 //! `strip.rs` is.
 
 use ocomment_core::{
@@ -66,9 +65,7 @@ fn handle(request: &Value) -> Result<Value, String> {
     )?;
     let options_value = request.get("options").unwrap_or(&Value::Null);
     /* NOTE: Read through the enums' own deserializers rather than matched here.
-     * The hand-written match had a `_` arm, so a spelling it did not list
-     * became the default instead of an error, and the driver went on to
-     * compare the reference against a policy the fixture never asked for. */
+     * The hand-written match had a `_` arm, so a spelling it did not list became the default instead of an error, and the driver went on to compare the reference against a policy the fixture never asked for. */
     let policy = option_enum::<Policy>(options_value, "policy")?.unwrap_or_default();
     let layout = option_enum::<Layout>(options_value, "layout")?.unwrap_or_default();
     let dialect = option_enum::<Dialect>(options_value, "dialect")?.unwrap_or_default();
@@ -91,9 +88,9 @@ fn handle(request: &Value) -> Result<Value, String> {
         remove_kinds,
         keep_regex,
         remove_regex,
-        /* NOTE: Read through the type's own deserializer, so a fixture can ask
-         * for these and the OCaml reference is held to the same answer. */
+        /* NOTE: Read through the type's own deserializer, so a fixture can ask for these and the OCaml reference is held to the same answer. */
         allow: option_enum(options_value, "allow")?.unwrap_or_default(),
+        style: option_enum(options_value, "style")?.unwrap_or_default(),
         protected: option_enum(options_value, "protected")?.unwrap_or_default(),
     };
     match operation {

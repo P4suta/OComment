@@ -7,9 +7,9 @@ use clap::ValueEnum;
 #[cfg(test)]
 use ocomment_core::TransformResult;
 use ocomment_core::{
-    ByteSpan, Comment, CommentKind, Diagnostic, Disposition, DispositionExplanation,
-    DispositionPatterns, Edit, Language, Policy, Protection, ScanOptions, ScanReport, Severity,
-    SourceMap, TransformPlan, explain_comment_with,
+    Action, ByteSpan, Comment, CommentKind, Diagnostic, Disposition, DispositionExplanation,
+    DispositionPatterns, Edit, Language, Policy, ProseOrigin, ProseRun, Protection, ScanOptions,
+    ScanReport, Severity, SourceMap, StyleRule, TransformPlan, explain_comment_with,
 };
 use serde::{Serialize, Serializer, ser::SerializeSeq};
 use serde_json::{Value, json};
@@ -24,19 +24,15 @@ use unicode_width::UnicodeWidthChar;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
 pub enum OutputFormat {
-    /// Every finding on one line, in the `path:line:column:` stream a pipeline
-    /// greps. Kept because a pipeline written against it should not have to be
-    /// rewritten, and because one line per finding is the right shape for
-    /// counting even when it is the wrong shape for deciding.
+    /// Every finding on one line, in the `path:line:column:` stream a pipeline greps.
+    /// Kept because a pipeline written against it should not have to be rewritten, and because one line per finding is the right shape for counting even when it is the wrong shape for deciding.
     Human,
-    /// The findings grouped by the decision each one asks for, with the edit
-    /// beside it. The default everywhere, terminal or pipe.
+    /// The findings grouped by the decision each one asks for, with the edit beside it.
+    /// The default everywhere, terminal or pipe.
     ///
-    /// Not switched on by a terminal, which is what every neighbouring tool
-    /// does and is wrong here. An agent reads this through a pipe and a person
-    /// reads it on a screen, and the two are in the same conversation about the
-    /// same run: a format that changes shape between them leaves each arguing
-    /// from something the other cannot see. Colour still follows the terminal,
+    /// Not switched on by a terminal, which is what every neighbouring tool does and is wrong here.
+    /// An agent reads this through a pipe and a person reads it on a screen, and the two are in the same conversation about the same run: a format that changes shape between them leaves each arguing from something the other cannot see.
+    /// Colour still follows the terminal,
     /// because colour is the one thing that carries no meaning of its own.
     #[default]
     Review,
@@ -49,15 +45,11 @@ pub enum OutputFormat {
 }
 
 impl OutputFormat {
-    /// Whether this is a report a person reads, as opposed to one a program
-    /// parses.
+    /// Whether this is a report a person reads, as opposed to one a program parses.
     ///
     /// The two differ in layout and in nothing else that decides anything here:
-    /// both carry their notes on standard error, both may show progress, and
-    /// both are what `config` and `strip` write. Asked as one question so that
-    /// a format added beside them is answered once -- which is how `review`
-    /// reached CI having been taught about seven of the nine places that spell
-    /// out `== Human` and not the other two.
+    /// both carry their notes on standard error, both may show progress, and both are what `config` and `strip` write.
+    /// Asked as one question so that a format added beside them is answered once -- which is how `review` reached CI having been taught about seven of the nine places that spell out `== Human` and not the other two.
     #[must_use]
     pub const fn for_a_person(self) -> bool {
         matches!(self, Self::Human | Self::Review)
@@ -68,8 +60,51 @@ impl OutputFormat {
 pub enum Operation {
     Check,
     Scan,
-    Diff,
-    Fix,
+    /// The patch a writing run would apply, carrying which half it would apply.
+    Diff(Writes),
+    /// A run that writes, carrying which half of the report it writes.
+    ///
+    /// The half is inside the variant rather than beside it so that the places that asked `== Operation::Fix` have to be read again.
+    /// Most of them mean "this run writes" and a few mean "this run removes", and the two were the same question until a tidying run existed; a new variant beside `Fix` would have left every one of them answering the old one.
+    Fix(Writes),
+}
+
+/// Which of the two axes a writing run puts on the disk.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Writes {
+    /// Every edit the report called for, removals included.
+    Everything,
+    /// What the style rules rewrote, and no removal.
+    /// The removals are still reported and still decide the exit code; they simply do not reach the file.
+    RewritesOnly,
+}
+
+impl Operation {
+    /// Whether this run puts bytes on the disk at all.
+    #[must_use]
+    pub const fn writes(self) -> bool {
+        matches!(self, Self::Fix(_))
+    }
+
+    /// Whether this run is one that takes comments away.
+    ///
+    /// Separate from [`Self::writes`] because a tidying run does the first and not the second, and the reports differ in every word that names what happened.
+    #[must_use]
+    pub const fn removes(self) -> bool {
+        matches!(
+            self,
+            Self::Fix(Writes::Everything) | Self::Diff(Writes::Everything)
+        )
+    }
+
+    /// Which half of the report this run acts on, for the two that act on one.
+    #[must_use]
+    pub const fn half(self) -> Option<Writes> {
+        match self {
+            Self::Diff(writes) | Self::Fix(writes) => Some(writes),
+            Self::Check | Self::Scan => None,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -80,21 +115,14 @@ pub struct Presentation {
 
 /// How much of the human report a run is allowed to write.
 ///
-/// Deliberately opaque, and deliberately not comparable. The convention in
-/// CONTRIBUTING.md is that standard output carries the command's product and
-/// standard error carries the summary and the notes, and that `-q` drops the
-/// second — and that was a convention rather than a mechanism, so three
-/// separate tests of the quiet level grew on the product side. One of them
-/// left `ocomment check -q` exiting 1 having printed nothing at all, which is
-/// exactly the shape a pre-commit hook wants and the one thing it could not
-/// get.
+/// Deliberately opaque, and deliberately not comparable.
+/// The convention in CONTRIBUTING.md is that standard output carries the command's product and standard error carries the summary and the notes, and that `-q` drops the second — and that was a convention rather than a mechanism, so three separate tests of the quiet level grew on the product side.
+/// One of them left `ocomment check -q` exiting 1 having printed nothing at all, which is exactly the shape a pre-commit hook wants and the one thing it could not get.
 ///
-/// Every one of those was written by somebody asking "is this run quiet?" and
-/// deciding for themselves. There is now no way to ask. [`Level`] is private
-/// and this type has no `PartialEq`, so `verbosity == Verbosity::Quiet` does
-/// not compile; the only question available is [`Self::shows`], which answers
-/// for a [`Detail`] rather than for a level, and the only writer that consults
-/// it is [`note`].
+/// Every one of those was written by somebody asking "is this run quiet?"
+/// and deciding for themselves.
+/// There is now no way to ask.
+/// [`Level`] is private and this type has no `PartialEq`, so `verbosity == Verbosity::Quiet` does not compile; the only question available is [`Self::shows`], which answers for a [`Detail`] rather than for a level, and the only writer that consults it is [`note`].
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Verbosity(Level);
 
@@ -112,8 +140,8 @@ enum Level {
 /// How much a line of commentary is worth saying.
 ///
 /// A note is `Normal` unless it is the kind of thing only a `-v` run wants,
-/// and saying which is the whole of what a caller has to decide. Whether the
-/// run is quiet is not their business.
+/// and saying which is the whole of what a caller has to decide.
+/// Whether the run is quiet is not their business.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Detail {
     /// Said unless the run asked for quiet.
@@ -142,10 +170,7 @@ impl Verbosity {
 
     /// This verbosity with quiet raised to normal.
     ///
-    /// One caller: an editor asking for diagnostics is asking for the report
-    /// in a machine format, not for commentary about it, and a client told to
-    /// work quietly is still owed the notice for a path it named and the error
-    /// for a file it could not read.
+    /// One caller: an editor asking for diagnostics is asking for the report in a machine format, not for commentary about it, and a client told to work quietly is still owed the notice for a path it named and the error for a file it could not read.
     pub const fn at_least_normal(self) -> Self {
         match self.0 {
             Level::Quiet => Self(Level::Normal),
@@ -168,29 +193,23 @@ pub struct RenderOptions {
     /// Human `check` and `scan` lines carry every comment, kept ones included,
     /// each under an indented line naming the rule that decided it.
     pub explain: bool,
-    /// The run is `fix --dry-run`: it produces the diff but speaks the
-    /// vocabulary of the `fix` it is standing in for.
+    /// The run is `fix --dry-run`: it produces the diff but speaks the vocabulary of the `fix` it is standing in for.
     pub dry_run: bool,
-    /// `--force-invalid` was in effect, so a file that fails to scan still had
-    /// the edits of the part that scanned applied.
+    /// `--force-invalid` was in effect, so a file that fails to scan still had the edits of the part that scanned applied.
     pub force_invalid: bool,
-    /// The run reached the disk. A `fix` blocked by invalid syntax or an I/O
-    /// error leaves this false and must not claim any removal.
+    /// The run reached the disk.
+    /// A `fix` blocked by invalid syntax or an I/O error leaves this false and must not claim any removal.
     pub applied: bool,
-    /// The policy the run was asked for. Only `all` promises to take every
-    /// comment out, so only `all` owes an explanation for the ones it keeps.
+    /// The policy the run was asked for.
+    /// Only `all` promises to take every comment out, so only `all` owes an explanation for the ones it keeps.
     pub policy: Policy,
-    /// `--annotation-level`: the `::` level `--format github` reports a
-    /// removable comment at, or `None` to take it from the exit status the
-    /// operation will produce.
+    /// `--annotation-level`: the `::` level `--format github` reports a removable comment at, or `None` to take it from the exit status the operation will produce.
     pub annotation_level: Option<AnnotationLevel>,
 }
 
 /// The three levels a GitHub Actions workflow command can carry.
 ///
-/// A diagnostic is always `::error` whatever this says: a file that would not
-/// scan is not a finding the run is offering an opinion about, it is a file
-/// the run could not read.
+/// A diagnostic is always `::error` whatever this says: a file that would not scan is not a finding the run is offering an opinion about, it is a file the run could not read.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AnnotationLevel {
     Error,
@@ -199,8 +218,7 @@ pub enum AnnotationLevel {
 }
 
 impl AnnotationLevel {
-    /// Every CLI-visible level, loudest first, which is the order a reader
-    /// choosing one is deciding in.
+    /// Every CLI-visible level, loudest first, which is the order a reader choosing one is deciding in.
     pub const ALL: [Self; 3] = [Self::Error, Self::Warning, Self::Notice];
 
     /// The canonical name, which is also the workflow command GitHub reads.
@@ -212,9 +230,8 @@ impl AnnotationLevel {
         }
     }
 
-    /// Accepted spellings besides [`Self::as_str`]. There are none: these three
-    /// are GitHub's own words and renaming them would only invite a value that
-    /// does not reach the log.
+    /// Accepted spellings besides [`Self::as_str`].
+    /// There are none: these three are GitHub's own words and renaming them would only invite a value that does not reach the log.
     pub const fn aliases(self) -> &'static [&'static str] {
         &[]
     }
@@ -224,23 +241,27 @@ impl AnnotationLevel {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Summary {
     pub files_scanned: usize,
-    pub files_with_removable: usize,
+    /// Files holding at least one comment this run would change, whether by removing it or by rewriting it.
+    ///
+    /// Was `files_with_removable`, which was already serialised under the name it has now: the report had been counting findings and calling them removals since before there was anything else to count.
+    pub files_with_findings: usize,
     pub removable_comments: usize,
+    /// Comments a style rule would rewrite on their own.
+    /// Counted apart from the removals because the two ask a reader for different things: a removal is a decision they have to make, and a rewrite is one the tool has already made and is offering to apply.
+    pub rewritable_comments: usize,
+    /// Paragraphs a style rule would rewrite, which is a run of comments or a paragraph of a document.
+    /// Counted apart from the comments because it is not one of them: a paragraph of a Markdown document is prose the same rule reaches, and calling it a comment in a report would tell a reader something about their file that is not so.
+    pub rewritable_paragraphs: usize,
     pub kept_comments: usize,
     pub files_changed: usize,
     pub comments_removed: usize,
     pub invalid_files: usize,
-    /// Files written from a scan that had failed, which only `--force-invalid`
-    /// can reach. These are the writes no re-scan covered: the result of
-    /// editing a file that does not lex does not lex either, so the check every
-    /// other write passes has nothing to say about them. The summary has to
-    /// name them, because the sentence it prints otherwise is a claim about
-    /// evidence that was never collected.
+    /// Files written from a scan that had failed, which only `--force-invalid` can reach.
+    /// These are the writes no re-scan covered: the result of editing a file that does not lex does not lex either, so the check every other write passes has nothing to say about them.
+    /// The summary has to name them, because the sentence it prints otherwise is a claim about evidence that was never collected.
     pub forced_files: usize,
-    /// Non-error skips met while walking, counted under a short stable label
-    /// rather than the raw reason, which can carry a configured byte limit.
-    /// A path named on the command line is deliberately absent: it already has
-    /// its own line on standard output and must not be counted twice.
+    /// Non-error skips met while walking, counted under a short stable label rather than the raw reason, which can carry a configured byte limit.
+    /// A path named on the command line is deliberately absent: it already has its own line on standard output and must not be counted twice.
     pub skipped_by_reason: BTreeMap<String, usize>,
     /// Non-error skips whose path was named on the command line.
     pub named_skips: usize,
@@ -248,6 +269,30 @@ pub struct Summary {
 }
 
 impl Summary {
+    /// Every comment this run would change: the removals and the rewrites.
+    ///
+    /// The number every "is there anything to do" question wants, and the one that has to be asked rather than reading `removable_comments` — which is how a run with nothing but rewrites to its name came to report itself clean while exiting 1.
+    pub const fn findings(&self) -> usize {
+        self.removable_comments + self.rewritten()
+    }
+
+    /// Everything a style rule would rewrite, however it is counted.
+    pub const fn rewritten(&self) -> usize {
+        self.rewritable_comments + self.rewritable_paragraphs
+    }
+
+    /// What to call the things this run would rewrite.
+    ///
+    /// A run of comments and a paragraph of a document are both paragraphs; a comment a spacing rule reached on its own is a comment.
+    /// Where a run met both, the noun that covers them is the wider one.
+    pub const fn rewritten_noun(&self) -> &'static str {
+        if self.rewritable_paragraphs > 0 {
+            "paragraph"
+        } else {
+            "comment"
+        }
+    }
+
     pub fn compute(files: &[ProcessedFile], skipped: &[SkippedFile], operation: Operation) -> Self {
         let mut summary = Self {
             files_scanned: files.len(),
@@ -255,10 +300,21 @@ impl Summary {
         };
         for file in files {
             let removable = removable_count(file);
+            let rewritable = rewritable_count(file);
             summary.removable_comments += removable;
-            summary.kept_comments += file.result.report.comments.len() - removable;
-            if removable > 0 {
-                summary.files_with_removable += 1;
+            summary.rewritable_comments += rewritable_comments(file);
+            summary.rewritable_paragraphs += rewritable_paragraphs(file);
+            /* NOTE: Counted rather than subtracted.
+             * A rewritten run is a finding and is not a comment, so taking the findings away from the comments underflowed the moment a document's paragraph became one. */
+            summary.kept_comments += file
+                .result
+                .report
+                .comments
+                .iter()
+                .filter(|comment| !reported(comment))
+                .count();
+            if removable > 0 || rewritable > 0 {
+                summary.files_with_findings += 1;
             }
             if !file.result.report.valid {
                 summary.invalid_files += 1;
@@ -268,7 +324,7 @@ impl Summary {
                 if !file.result.report.valid {
                     summary.forced_files += 1;
                 }
-                if operation == Operation::Fix {
+                if operation.removes() {
                     summary.comments_removed += removed_count(file);
                 }
             }
@@ -298,55 +354,103 @@ fn removable_count(file: &ProcessedFile) -> usize {
         .report
         .comments
         .iter()
-        .filter(|comment| comment.disposition.is_remove())
+        .filter(|comment| comment.action().removes())
         .count()
+}
+
+/// Whether a comment is one this run has something to say about.
+///
+/// The question nearly every predicate in this file is really asking, and the question that used to be spelled `is_remove()` because removal was the only answer.
+/// A rewrite is a finding too: it appears in the report, it changes the bytes on disk, and it makes `check` exit non-zero.
+/// What it is not is a removal, and the handful of places that genuinely mean removal still say so.
+fn reported(comment: &Comment) -> bool {
+    comment.disposition().action().changes_bytes()
+}
+
+/// How many comments this run would rewrite on their own.
+fn rewritable_comments(file: &ProcessedFile) -> usize {
+    file.result
+        .report
+        .comments
+        .iter()
+        .filter(|comment| comment.action() == Action::Rewrite)
+        .count()
+}
+
+/// How many paragraphs this run would rewrite.
+///
+/// A rewritten run counts once.
+/// It covers several comments — or several lines of a document — and asks one question about them, which is where the paragraph breaks, and counting it per line would report a number nobody could act on one line at a time.
+fn rewritable_paragraphs(file: &ProcessedFile) -> usize {
+    file.result.report.runs.len()
+}
+
+/// Everything this run would rewrite rather than remove.
+fn rewritable_count(file: &ProcessedFile) -> usize {
+    rewritable_comments(file) + rewritable_paragraphs(file)
+}
+
+/// Whether a paragraph rule's verdict covers this comment.
+///
+/// A [`ProseRun`] spans the comments it reflows and records nothing on any of them, so a caller asking a comment what happened to it would be told "nothing" about a line the run is about to rewrite.
+fn covered_by_a_run(report: &ScanReport, comment: &Comment) -> bool {
+    report
+        .runs
+        .iter()
+        .any(|run| run.span.start <= comment.span.start && comment.span.end <= run.span.end)
+}
+
+/// How many of this file's comments and paragraphs a tidying run actually rewrote.
+///
+/// [`rewritable_count`] with the establishment filter [`removed_count`] carries, and for the same reason: a scan that failed part-way leaves the rest of the file unplanned,
+/// and a count that ignored that would report rewrites that did not happen.
+fn rewritten_count(file: &ProcessedFile) -> usize {
+    let report = &file.result.report;
+    let comments = report
+        .comments
+        .iter()
+        .filter(|comment| comment.action() == Action::Rewrite && report.established(comment.span))
+        .count();
+    let paragraphs = report
+        .runs
+        .iter()
+        .filter(|run| report.established(run.span))
+        .count();
+    comments + paragraphs
 }
 
 /// How many comments a `fix` over this file actually took out.
 ///
-/// The same as [`removable_count`] whenever the scan succeeded, and smaller
-/// when it did not: a failed scan establishes only the part before the failure,
-/// `plan_report` edits only that part, and the removable comments past it are
-/// still removable and still in the file. Reporting what was removable would
-/// report removals that did not happen, which is the one number a deletion tool
-/// must not get wrong in the reassuring direction.
+/// The same as [`removable_count`] whenever the scan succeeded, and smaller when it did not: a failed scan establishes only the part before the failure,
+/// `plan_report` edits only that part, and the removable comments past it are still removable and still in the file.
+/// Reporting what was removable would report removals that did not happen, which is the one number a deletion tool must not get wrong in the reassuring direction.
 fn removed_count(file: &ProcessedFile) -> usize {
     let report = &file.result.report;
     report
         .comments
         .iter()
-        .filter(|comment| comment.disposition.is_remove() && report.established(comment.span))
+        .filter(|comment| comment.action().removes() && report.established(comment.span))
         .count()
 }
 
 /// Say which keep or remove settings this run never used.
 ///
-/// A setting that does nothing is the one failure a protection tool must not
-/// keep to itself, because it fails in the direction that looks like success:
-/// a `keep_regex` you believe is holding a comment back, which is not, and
-/// which `fix` therefore removes. The pattern in this project's own reports
-/// was `^\s*swiftlint:` — written against the text of the comment, matched
-/// against the whole token, and so anchored in front of a `//` that is always
-/// there. Nothing said a word about it.
+/// A setting that does nothing is the one failure a protection tool must not keep to itself, because it fails in the direction that looks like success:
+/// a `keep_regex` you believe is holding a comment back, which is not, and which `fix` therefore removes.
+/// The pattern in this project's own reports was `^\s*swiftlint:` — written against the text of the comment, matched against the whole token, and so anchored in front of a `//` that is always there.
+/// Nothing said a word about it.
 ///
-/// So the rule is that no setting is silently ignored: it works, or the run
-/// says it did not. The report goes to standard error beside the summary,
-/// because it is commentary about the run rather than the run's product, and
-/// `-q` drops it with the rest of the commentary.
+/// So the rule is that no setting is silently ignored: it works, or the run says it did not.
+/// The report goes to standard error beside the summary,
+/// because it is commentary about the run rather than the run's product, and `-q` drops it with the rest of the commentary.
 ///
 /// Report the `[[overrides]]` blocks that did nothing.
 ///
-/// The report beside this one catches a `keep_regex` written against text the
-/// comment does not hold. A path glob written against a path no file has is
-/// the same mistake one level up, and a worse one to make quietly: an override
-/// is how a project exempts files from a rule it keeps everywhere else, so a
-/// glob that matches nothing leaves that rule in force over exactly the files
-/// somebody had decided it should not apply to. The settings look present and
-/// the behaviour is as though they were never written.
+/// The report beside this one catches a `keep_regex` written against text the comment does not hold.
+/// A path glob written against a path no file has is the same mistake one level up, and a worse one to make quietly: an override is how a project exempts files from a rule it keeps everywhere else, so a glob that matches nothing leaves that rule in force over exactly the files somebody had decided it should not apply to.
+/// The settings look present and the behaviour is as though they were never written.
 ///
-/// Said with the count it was measured against, because it is a statement
-/// about this run and not about the repository: a glob for `.gitignore` is
-/// right to match nothing in a walk that met no `.gitignore`.
+/// Said with the count it was measured against, because it is a statement about this run and not about the repository: a glob for `.gitignore` is right to match nothing in a walk that met no `.gitignore`.
 pub fn report_unused_overrides(
     unused: &[(usize, &[String])],
     reached: usize,
@@ -377,10 +481,8 @@ pub fn report_unused_overrides(
     Ok(())
 }
 
-/// It is written from the comments the run actually scanned, so it says "this
-/// run" and means it. A run narrowed to a handful of paths is expected to meet
-/// fewer patterns than a walk of the repository, which is why the caller only
-/// asks for this where the run walked a directory.
+/// It is written from the comments the run actually scanned, so it says "this run" and means it.
+/// A run narrowed to a handful of paths is expected to meet fewer patterns than a walk of the repository, which is why the caller only asks for this where the run walked a directory.
 pub fn report_unused_settings(
     files: &[ProcessedFile],
     options: &ScanOptions,
@@ -394,10 +496,8 @@ pub fn report_unused_settings(
     {
         return Ok(());
     }
-    /* NOTE: A pattern list that will not compile is already a diagnostic, and
-     * the scanner went on as though the list were empty. Reporting every
-     * pattern in it as unused would bury that diagnostic under its own
-     * consequences. */
+    /* NOTE: A pattern list that will not compile is already a diagnostic, and the scanner went on as though the list were empty.
+     * Reporting every pattern in it as unused would bury that diagnostic under its own consequences. */
     let Ok(patterns) = DispositionPatterns::compile(options) else {
         return Ok(());
     };
@@ -471,10 +571,8 @@ pub fn report_unused_settings(
             )?;
         }
     }
-    /* NOTE: The one sentence that turns the report into a fix. Every pattern is
-     * tried against the comment as it is written, opener and all, and a
-     * pattern written against the text inside it is the mistake this whole
-     * report exists to catch. */
+    /* NOTE: The one sentence that turns the report into a fix.
+     * Every pattern is tried against the comment as it is written, opener and all, and a pattern written against the text inside it is the mistake this whole report exists to catch. */
     if unmatched_pattern {
         note(
             &mut report,
@@ -487,8 +585,7 @@ pub fn report_unused_settings(
     Ok(())
 }
 
-/// `([policy] in .ocomment.toml)`, or the shorter phrasing for a setting the
-/// trace cannot place.
+/// `([policy] in .ocomment.toml)`, or the shorter phrasing for a setting the trace cannot place.
 fn origin_clause(trace: &PolicyTrace, key: &str, index: usize) -> String {
     match trace.origin_at(key, index) {
         Some(origin) => format!("it is set in {origin}"),
@@ -501,22 +598,18 @@ fn origin_clause(trace: &PolicyTrace, key: &str, index: usize) -> String {
 /// The per-file line says what to do about one file; the summary counts many,
 /// so it trades the sentence for a key short enough to sit in a list of them.
 ///
-/// Visible to the crate so the modules that *produce* the reasons — `files`
-/// and `git` — can name this function in their own documentation rather than
-/// describing a rule they do not own.
+/// Visible to the crate so the modules that *produce* the reasons — `files` and `git` — can name this function in their own documentation rather than describing a rule they do not own.
 /// A reason a caller can refuse with `--deny-skipped`.
 ///
 /// Closed, and spelled the way every other value this tool takes is spelled.
-/// The flag used to accept free text, matched against the label
-/// [`skip_label`] produces — which contains a space. So `unknown-language`,
-/// the spelling anyone would type and the one the help implies, matched
-/// nothing, was accepted without a word, and left the gate open. A gate that
-/// is off because of a typo is the exact failure this flag exists to prevent,
+/// The flag used to accept free text, matched against the label [`skip_label`] produces — which contains a space.
+/// So `unknown-language`,
+/// the spelling anyone would type and the one the help implies, matched nothing, was accepted without a word, and left the gate open.
+/// A gate that is off because of a typo is the exact failure this flag exists to prevent,
 /// one level up from where it prevents it.
 ///
-/// A generated file is deliberately absent. Being passed over is what should
-/// happen to one, which `docs/configuration.md` says in as many words; this
-/// list is where that sentence is enforced rather than merely written.
+/// A generated file is deliberately absent.
+/// Being passed over is what should happen to one, which `docs/configuration.md` says in as many words; this list is where that sentence is enforced rather than merely written.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
 pub enum SkipReason {
     /// Nothing here reads this kind of file: no built-in language claimed it,
@@ -535,8 +628,7 @@ pub enum SkipReason {
 impl SkipReason {
     /// The label [`skip_label`] gives the same skip.
     ///
-    /// The two spellings have to agree, and they are in one file so that a
-    /// change to either is a change a reader sees beside the other.
+    /// The two spellings have to agree, and they are in one file so that a change to either is a change a reader sees beside the other.
     #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
@@ -563,48 +655,34 @@ pub(crate) fn skip_label(reason: &str) -> &str {
     }
 }
 
-/// The `Keep` reason the core scanner gives a shebang or encoding line that
-/// `--force-protected` would have removed. It is one of the six reasons the
-/// differential protocol freezes, so matching on it is stable; the end-to-end
-/// test `policy_all_says_how_to_remove_a_kept_preamble` is what would catch it
-/// drifting apart from the scanner.
+/// The `Keep` reason the core scanner gives a shebang or encoding line that `--force-protected` would have removed.
+/// It is one of the six reasons the differential protocol freezes, so matching on it is stable; the end-to-end test `policy_all_says_how_to_remove_a_kept_preamble` is what would catch it drifting apart from the scanner.
 const PROTECTED_PREAMBLE: &str = "required source preamble";
 
-/// The `Keep` reason the core scanner gives a directive the language or its
-/// build reads, which `--force-protected` would likewise have removed. It is
-/// frozen by the differential protocol beside [`PROTECTED_PREAMBLE`], and for
-/// the same reason: the summary matches on it to name what `all` left behind.
+/// The `Keep` reason the core scanner gives a directive the language or its build reads, which `--force-protected` would likewise have removed.
+/// It is frozen by the differential protocol beside [`PROTECTED_PREAMBLE`], and for the same reason: the summary matches on it to name what `all` left behind.
 const LOAD_BEARING: &str = "required by the language or its build";
 
-/// How many comments carry `protection`, the `Keep` reason of one of the two
-/// tiers `--force-protected` would have given up.
+/// How many comments carry `protection`, the `Keep` reason of one of the two tiers `--force-protected` would have given up.
 ///
-/// Counted from the disposition rather than from the comment kind: a shebang
-/// held back by `--keep-kind shebang` stays kept whatever `--force-protected`
-/// says, and advertising the flag for it would be a lie.
+/// Counted from the disposition rather than from the comment kind: a shebang held back by `--keep-kind shebang` stays kept whatever `--force-protected` says, and advertising the flag for it would be a lie.
 fn kept_for(files: &[ProcessedFile], protection: &str) -> usize {
     files
         .iter()
         .flat_map(|file| &file.result.report.comments)
         .filter(|comment| {
-            matches!(&comment.disposition, Disposition::Keep { reason } if reason == protection)
+            matches!(comment.disposition(), Disposition::Keep { reason } if reason == protection)
         })
         .count()
 }
 
 /// The headline's coverage clause: how much of what the walk reached was read.
 ///
-/// A skipped file was reached and *not* read, so adding the skips to the files
-/// that were scanned and calling the sum `scanned` says the opposite of what
-/// happened — and says it in the one direction that matters, making a gate
-/// look wider than it is. A run over seven files that could read two of them
-/// headlined `7 scanned` while `ocomment coverage` said `28.5%`, with the
-/// honest number in a clause at the end of the run that the headline
-/// contradicted three lines above it.
+/// A skipped file was reached and *not* read, so adding the skips to the files that were scanned and calling the sum `scanned` says the opposite of what happened — and says it in the one direction that matters, making a gate look wider than it is.
+/// A run over seven files that could read two of them headlined `7 scanned` while `ocomment coverage` said `28.5%`, with the honest number in a clause at the end of the run that the headline contradicted three lines above it.
 ///
 /// When nothing was skipped the two numbers are equal and only one is printed:
-/// a denominator that always matches the numerator teaches a reader to stop
-/// reading it, which is exactly when it stops working.
+/// a denominator that always matches the numerator teaches a reader to stop reading it, which is exactly when it stops working.
 fn scanned_clause(scanned: usize, skipped: usize) -> String {
     let reached = scanned + skipped;
     if skipped == 0 {
@@ -614,14 +692,13 @@ fn scanned_clause(scanned: usize, skipped: usize) -> String {
     }
 }
 
-/// `1 file` / `2 files`: the count and its noun, pluralized by the regular
-/// rule. Every noun the summary counts goes through this.
+/// `1 file` / `2 files`: the count and its noun, pluralized by the regular rule.
+/// Every noun the summary counts goes through this.
 pub(crate) fn plural(count: usize, noun: &str) -> String {
     format!("{count} {noun}{}", if count == 1 { "" } else { "s" })
 }
 
-/// `1 comment` / `2 removable comments`: the noun is pluralized and an
-/// optional adjective is placed in front of it.
+/// `1 comment` / `2 removable comments`: the noun is pluralized and an optional adjective is placed in front of it.
 fn comments(count: usize, adjective: &str) -> String {
     let space = if adjective.is_empty() { "" } else { " " };
     plural(count, &format!("{adjective}{space}comment"))
@@ -629,14 +706,8 @@ fn comments(count: usize, adjective: &str) -> String {
 
 /// What read the file.
 ///
-/// `Language` answers "which built-in language is this", and for a file a
-/// profile or a plugin read, that question has no answer: `Language::Unknown`
-/// is what detection returns, and every report that carried only the language
-/// said `unknown` about a file the run had just read completely and on
-/// purpose. A count of what was scanned that cannot name the reader also
-/// cannot tell a release that taught the tool a new format from a repository
-/// that grew one, which is the difference between an upgrade a reader can
-/// follow and a wall of findings that appeared overnight.
+/// `Language` answers "which built-in language is this", and for a file a profile or a plugin read, that question has no answer: `Language::Unknown` is what detection returns, and every report that carried only the language said `unknown` about a file the run had just read completely and on purpose.
+/// A count of what was scanned that cannot name the reader also cannot tell a release that taught the tool a new format from a repository that grew one, which is the difference between an upgrade a reader can follow and a wall of findings that appeared overnight.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ReadBy {
     /// A built-in language, which the file's `language` names.
@@ -648,8 +719,7 @@ pub enum ReadBy {
 }
 
 impl ReadBy {
-    /// The reader as a machine format carries it: what kind of reader, and
-    /// which one.
+    /// The reader as a machine format carries it: what kind of reader, and which one.
     #[must_use]
     pub fn as_json(&self, language: Language) -> Value {
         match *self {
@@ -665,16 +735,16 @@ pub struct ProcessedFile {
     pub path: PathBuf,
     pub source: Vec<u8>,
     pub language: Language,
-    /// What read this file. Dropped for long enough that `--format json`
-    /// reported `"language": "unknown"` for files a profile had read in full.
+    /// What read this file.
+    /// Dropped for long enough that `--format json` reported `"language": "unknown"` for files a profile had read in full.
     pub read_by: ReadBy,
     pub result: ProcessedResult,
 }
 
 /// The stages of a core transformation retained by the CLI.
 ///
-/// Reports are always present. Edits, a source map, and transformed bytes are
-/// materialized only for the commands and output formats that consume them.
+/// Reports are always present.
+/// Edits, a source map, and transformed bytes are materialized only for the commands and output formats that consume them.
 #[derive(Clone, Debug)]
 pub struct ProcessedResult {
     pub report: ScanReport,
@@ -750,11 +820,9 @@ struct JsonFile<'a> {
     language: Language,
     /// Which reader answered for this file.
     ///
-    /// `language` alone cannot say. A file a declarative profile read carries
-    /// `Language::Unknown`, because no built-in language claimed it, and a
-    /// reader given only that field was told `unknown` about a file the run
-    /// had read from end to end. The two fields answer different questions and
-    /// both are kept: `language` is which scanner's grammar applied,
+    /// `language` alone cannot say.
+    /// A file a declarative profile read carries `Language::Unknown`, because no built-in language claimed it, and a reader given only that field was told `unknown` about a file the run had read from end to end.
+    /// The two fields answer different questions and both are kept: `language` is which scanner's grammar applied,
     /// `read_by` is what did the reading.
     read_by: Value,
     changed: bool,
@@ -762,42 +830,49 @@ struct JsonFile<'a> {
     edits: &'a [ocomment_core::Edit],
     /// The byte-for-byte mapping from the output back to the source.
     ///
-    /// Left out unless `--source-map` asks for it. It is one segment per
-    /// unchanged run, so a file with twenty-five comments in it produced
-    /// several hundred lines of a report the caller had asked for because it
-    /// was the machine format — and the thing a machine format is for is being
-    /// read, not scrolled past.
+    /// Left out unless `--source-map` asks for it.
+    /// It is one segment per unchanged run, so a file with twenty-five comments in it produced several hundred lines of a report the caller had asked for because it was the machine format — and the thing a machine format is for is being read, not scrolled past.
     #[serde(skip_serializing_if = "Option::is_none")]
     source_map: Option<&'a SourceMap>,
 }
 
-/// The scan report as a machine format writes it: everything
-/// [`ScanReport`] holds, and where each comment and diagnostic *is* besides.
+/// The scan report as a machine format writes it: everything [`ScanReport`] holds, and where each comment and diagnostic *is* besides.
 ///
-/// A byte span is the right primitive for a patcher and the wrong one for a
-/// reporter. Turning `0..27` into `1:1` means reopening the file and counting
-/// line breaks, and that is work this run has already done — the human report
-/// has printed `path:line:column` and the comment text since the beginning, so
-/// a caller that chose JSON because it was the machine format was handed less
-/// than the caller that chose prose. Every position here is derived from the
-/// span beside it, so the two cannot come apart.
+/// A byte span is the right primitive for a patcher and the wrong one for a reporter.
+/// Turning `0..27` into `1:1` means reopening the file and counting line breaks, and that is work this run has already done — the human report has printed `path:line:column` and the comment text since the beginning, so a caller that chose JSON because it was the machine format was handed less than the caller that chose prose.
+/// Every position here is derived from the span beside it, so the two cannot come apart.
 #[derive(Serialize)]
 struct JsonReport<'a> {
     language: Language,
     comments: Vec<JsonComment<'a>>,
+    /// The paragraphs a style rule would write differently, in source order.
+    ///
+    /// Beside the comments rather than among them: a run's bytes belong to no single comment, and a caller that read only `comments` would find every removal and no reflow while the exit code said there was something to do.
+    /// Absent where a run asked for no rule about how a paragraph is broken, which is every run that set none.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    runs: Vec<JsonRun<'a>>,
     diagnostics: Vec<JsonDiagnostic<'a>>,
     valid: bool,
 }
 
-/// Where something the scanner reported sits, in the spelling every other
-/// OComment report uses.
+/// One rewritten paragraph, in the spelling the rest of this format uses.
+#[derive(Serialize)]
+struct JsonRun<'a> {
+    span: ByteSpan,
+    /* NOTE: Flattened, as it is on a comment and on a diagnostic.
+     * This was the one place in the format that nested it, which left a caller reading positions one way for two thirds of a report and another way for the rest. */
+    #[serde(flatten)]
+    position: JsonPosition,
+    origin: ProseOrigin,
+    rule: StyleRule,
+    /// What would replace the span, as text.
+    replacement: std::borrow::Cow<'a, str>,
+}
+
+/// Where something the scanner reported sits, in the spelling every other OComment report uses.
 ///
-/// Lines and columns are one-based and columns are counted in bytes, which is
-/// what the human report prints and what `--format github` puts in an
-/// annotation. `end_line` and `end_column` address the byte *after* the last
-/// one, matching the half-open [`ByteSpan`] they come from: a comment that
-/// ends at the end of its line has an `end_column` one past its last byte
-/// rather than a position on the next line.
+/// Lines and columns are one-based and columns are counted in bytes, which is what the human report prints and what `--format github` puts in an annotation.
+/// `end_line` and `end_column` address the byte *after* the last one, matching the half-open [`ByteSpan`] they come from: a comment that ends at the end of its line has an `end_column` one past its last byte rather than a position on the next line.
 #[derive(Serialize)]
 struct JsonPosition {
     line: usize,
@@ -827,30 +902,22 @@ struct JsonComment<'a> {
     kind: CommentKind,
     /// `false` on a comment the scan did not establish, and absent otherwise.
     ///
-    /// `valid` says whether the lex failed; it cannot say where, and a caller
-    /// acting on a verdict needs that. A scanner that cannot find the end of a
-    /// token does not know where the next one starts, so an unterminated block
-    /// opener is reported as a comment running to the end of the file — and the
-    /// code under it is not a comment. The verdict is here because it is what
-    /// the scanner concluded; this field is here because acting on it would
-    /// delete code. `fix --force-invalid` skips exactly these.
+    /// `valid` says whether the lex failed; it cannot say where, and a caller acting on a verdict needs that.
+    /// A scanner that cannot find the end of a token does not know where the next one starts, so an unterminated block opener is reported as a comment running to the end of the file — and the code under it is not a comment.
+    /// The verdict is here because it is what the scanner concluded; this field is here because acting on it would delete code.
+    /// `fix --force-invalid` skips exactly these.
     ///
-    /// Written only when it is `false`, so a report from a source that lexed is
-    /// the same bytes it has always been.
+    /// Written only when it is `false`, so a report from a source that lexed is the same bytes it has always been.
     #[serde(skip_serializing_if = "Option::is_none")]
     established: Option<bool>,
     /// Which rule decided it, and where that rule was written.
     ///
-    /// Present when `--explain` asked for it. The human report has printed
-    /// this under each finding since the rule table was written down, and a
-    /// caller that chose a machine format was handed the verdict without the
-    /// reason — so the reason arrives here in fields rather than in the
-    /// sentence the human report composes from them.
+    /// Present when `--explain` asked for it.
+    /// The human report has printed this under each finding since the rule table was written down, and a caller that chose a machine format was handed the verdict without the reason — so the reason arrives here in fields rather than in the sentence the human report composes from them.
     #[serde(skip_serializing_if = "Option::is_none")]
     explanation: Option<JsonExplanation>,
-    /// The comment's own bytes, decoded lossily the way every other text this
-    /// tool serialises is. `--no-preview` leaves it out, which is the way to
-    /// keep a report over a large tree small.
+    /// The comment's own bytes, decoded lossily the way every other text this tool serialises is.
+    /// `--no-preview` leaves it out, which is the way to keep a report over a large tree small.
     #[serde(skip_serializing_if = "Option::is_none")]
     text: Option<Cow<'a, str>>,
     disposition: &'a Disposition,
@@ -864,8 +931,7 @@ struct JsonExplanation {
     rule: String,
     /// The same rule as the human report words it.
     detail: String,
-    /// Where the setting behind it was written — a table and a file — or
-    /// absent when a built-in rule decided and there is no table to point at.
+    /// Where the setting behind it was written — a table and a file — or absent when a built-in rule decided and there is no table to point at.
     #[serde(skip_serializing_if = "Option::is_none")]
     setting: Option<String>,
     /// The flag that would overrule it, when one would.
@@ -906,7 +972,18 @@ fn json_report<'a>(
                 explanation: explainer
                     .map(|explainer| json_explanation(explainer, comment, source, language)),
                 text: preview.then(|| slice_text(source, comment.span)),
-                disposition: &comment.disposition,
+                disposition: comment.disposition(),
+            })
+            .collect(),
+        runs: report
+            .runs
+            .iter()
+            .map(|run| JsonRun {
+                span: run.span,
+                position: JsonPosition::of(&lines, run.span),
+                origin: run.origin,
+                rule: run.rule,
+                replacement: String::from_utf8_lossy(&run.replacement),
             })
             .collect(),
         diagnostics: report
@@ -953,8 +1030,7 @@ fn json_explanation(
 
 /// The rule's own name, as a machine reads it.
 ///
-/// Exhaustive, so a verdict added later has to be named rather than falling
-/// into a bucket a caller would then be matching against forever.
+/// Exhaustive, so a verdict added later has to be named rather than falling into a bucket a caller would then be matching against forever.
 fn explanation_rule(verdict: &DispositionExplanation) -> String {
     match verdict {
         DispositionExplanation::KeptByKind(_) => "kept-by-kind",
@@ -974,16 +1050,21 @@ fn explanation_rule(verdict: &DispositionExplanation) -> String {
         DispositionExplanation::RemovedAsTrailing => "removed-as-trailing",
         DispositionExplanation::RemovedAsExpired { .. } => "removed-as-expired",
         DispositionExplanation::RemovedByLength { .. } => "removed-by-length",
+        DispositionExplanation::KeptByPolicy { .. } => "kept-by-policy",
+        /* NOTE: The rule's own name is part of the answer here, and not for symmetry: a caller matching on `rewritten-by-style` would be told that a comment is being rewritten without being told what about it was wrong, which is the only thing they could act on.
+         * The other verdicts carry that in a field; this one carries it in the name,
+         * because the rule *is* the verdict. */
+        DispositionExplanation::RewrittenByStyle { rule } => {
+            return format!("rewritten-by-{rule}");
+        }
     }
     .to_owned()
 }
 
 /// The bytes of `span`, decoded lossily and left whole.
 ///
-/// The human preview folds a comment onto one line and cuts it to a terminal
-/// width; neither is done here. A machine format that truncated would be
-/// handing its caller a comment that is not the comment in the file, and a
-/// caller that wants it shorter can cut it itself.
+/// The human preview folds a comment onto one line and cuts it to a terminal width; neither is done here.
+/// A machine format that truncated would be handing its caller a comment that is not the comment in the file, and a caller that wants it shorter can cut it itself.
 fn slice_text(source: &[u8], span: ByteSpan) -> Cow<'_, str> {
     let start = span.start.min(source.len());
     let end = span.end.clamp(start, source.len());
@@ -995,33 +1076,79 @@ pub fn removable_label(kind: CommentKind) -> String {
     format!("removable {kind} comment")
 }
 
+/// The one-line label for a comment a report names, whichever answer it reached.
+///
+/// A rewrite is not a removal and a format that called it one would be telling a reader their comment is about to be deleted.
+pub fn finding_label(comment: &Comment) -> String {
+    match comment.disposition() {
+        Disposition::Rewrite { rule, .. } => format!("{} {}", rewrite_label(*rule), comment.kind),
+        Disposition::Remove | Disposition::Keep { .. } => removable_label(comment.kind),
+    }
+}
+
+/// What a style rule would do, as the opening of a label.
+fn rewrite_label(rule: StyleRule) -> &'static str {
+    match rule {
+        StyleRule::Wrap => "reflowed",
+        StyleRule::SpaceAfterMarker => "respaced",
+        StyleRule::TrailingWhitespace => "trimmed",
+    }
+}
+
+/// The one-line label for a paragraph a style rule would write differently.
+pub fn run_label(run: &ProseRun) -> String {
+    let what = match run.origin {
+        ProseOrigin::Comments => "comment paragraph",
+        ProseOrigin::Document => "paragraph",
+    };
+    format!("{} {what}", rewrite_label(run.rule))
+}
+
+/// The SARIF rule identifier for a paragraph a style rule would write differently.
+fn run_rule_id(run: &ProseRun) -> String {
+    let origin = match run.origin {
+        ProseOrigin::Comments => "comments",
+        ProseOrigin::Document => "document",
+    };
+    format!("restyle-{origin}-{}", run.rule)
+}
+
 /// The one-line label for a comment OComment deliberately protects.
 pub fn kept_label(kind: CommentKind, reason: &str) -> String {
     format!("{}: {reason}", kept_prefix(kind))
 }
 
-/// The same label without a reason, for a report that gives the reason on a
-/// line of its own.
+/// The same label without a reason, for a report that gives the reason on a line of its own.
 fn kept_prefix(kind: CommentKind) -> String {
     format!("kept {kind} comment")
 }
 
-/// What `--explain` needs to account for one file's comments: the options its
-/// scan actually ran with, and where each of their settings came from.
+/// The one-line label for a comment OComment would rewrite.
+///
+/// Worded as what is wrong rather than as what will happen, the way a kept comment's label is: "rewritable" would be a word about the tool, and the reader is being told something about their comment.
+pub fn rewritten_label(kind: CommentKind, reason: &str) -> String {
+    format!("{}: {reason}", rewritten_prefix(kind))
+}
+
+/// The same label without a reason, for a report that gives the reason on a line of its own.
+fn rewritten_prefix(kind: CommentKind) -> String {
+    format!("rewritten {kind} comment")
+}
+
+/// What `--explain` needs to account for one file's comments: the options its scan actually ran with, and where each of their settings came from.
 #[derive(Clone, Debug)]
 pub struct FileExplanation {
     pub options: ScanOptions,
     pub trace: PolicyTrace,
 }
 
-/// That material for the files of one run, under the path the run reports each
-/// file by. A run that was not asked to explain anything carries none.
+/// That material for the files of one run, under the path the run reports each file by.
+/// A run that was not asked to explain anything carries none.
 pub type Explanations = BTreeMap<PathBuf, FileExplanation>;
 
 /// One file's explanation material with its policy patterns already compiled.
 ///
-/// The two regex sets are the same for every comment in the file, so they are
-/// built once when the file is reached rather than once per reported line.
+/// The two regex sets are the same for every comment in the file, so they are built once when the file is reached rather than once per reported line.
 struct Explainer<'a> {
     material: &'a FileExplanation,
     patterns: DispositionPatterns,
@@ -1039,15 +1166,10 @@ impl<'a> Explainer<'a> {
     }
 }
 
-/// The indented line under one reported comment: the rule that decided its
-/// fate, and either the setting behind that rule or the flag that would
-/// overrule it.
+/// The indented line under one reported comment: the rule that decided its fate, and either the setting behind that rule or the flag that would overrule it.
 ///
-/// The pattern a regex explanation quotes and the globs a source names were
-/// both written by whoever wrote the configuration, so the composed line gets a
-/// comment preview's treatment before it reaches a terminal: one line, no
-/// control sequences. The width is not capped — a line that ends in an ellipsis
-/// where the pattern was answers nothing.
+/// The pattern a regex explanation quotes and the globs a source names were both written by whoever wrote the configuration, so the composed line gets a comment preview's treatment before it reaches a terminal: one line, no control sequences.
+/// The width is not capped — a line that ends in an ellipsis where the pattern was answers nothing.
 fn explanation_line(
     file: &ProcessedFile,
     comment: &Comment,
@@ -1064,10 +1186,8 @@ fn explanation_line(
         file.language,
         &material.options,
     );
-    /* NOTE: These were exclusive, which left a removal saying which setting
-     * took the comment out and never saying how to get it back. The setting
-     * and the way back answer different questions, so a verdict that has both
-     * gets both. */
+    /* NOTE: These were exclusive, which left a removal saying which setting took the comment out and never saying how to get it back.
+     * The setting and the way back answer different questions, so a verdict that has both gets both. */
     let step = next_step(&verdict);
     let tail = match material.trace.origin_of(&verdict, &material.options) {
         Some(origin) => format!(" ({origin}){step}"),
@@ -1081,8 +1201,7 @@ fn explanation_line(
     )
 }
 
-/// Write that line under the comment it is about, when the run has the
-/// material to account for it.
+/// Write that line under the comment it is about, when the run has the material to account for it.
 fn write_explanation(
     output: &mut impl Write,
     file: &ProcessedFile,
@@ -1102,23 +1221,18 @@ fn write_explanation(
 
 /// The flag that would overrule this verdict, for the verdicts a flag can.
 ///
-/// A keep needs this when no setting decided it and no table can be pointed
-/// at. A removal needs it for a different reason: naming the setting that took
-/// a comment out does not tell a reader how to get it back, and the removals
-/// worth getting back — a license notice, a doc comment — each have a
-/// different answer. The policy is spelled through [`Policy`] rather than
-/// written out, so renaming a policy renames it here too.
+/// A keep needs this when no setting decided it and no table can be pointed at.
+/// A removal needs it for a different reason: naming the setting that took a comment out does not tell a reader how to get it back, and the removals worth getting back — a license notice, a doc comment — each have a different answer.
+/// The policy is spelled through [`Policy`] rather than written out, so renaming a policy renames it here too.
 fn next_step(verdict: &DispositionExplanation) -> String {
     match verdict {
         DispositionExplanation::ProtectedPreamble
         | DispositionExplanation::KeptLoadBearing { .. } => {
             "; add --force-protected to remove it".to_owned()
         }
-        /* NOTE: The removals a reader is most likely to have wanted kept. A
-         * license notice is the one with a legal cost to losing, and a doc
-         * comment is the one a policy takes wholesale from a repository that
-         * publishes documentation. Both are recoverable, and neither is
-         * recoverable by the same flag. */
+        /* NOTE: The removals a reader is most likely to have wanted kept.
+         * A license notice is the one with a legal cost to losing, and a doc comment is the one a policy takes wholesale from a repository that publishes documentation.
+         * Both are recoverable, and neither is recoverable by the same flag. */
         DispositionExplanation::RemovedByDefault {
             kind: CommentKind::License,
             ..
@@ -1134,9 +1248,7 @@ fn next_step(verdict: &DispositionExplanation) -> String {
         DispositionExplanation::KeptDirective { kind, .. } => {
             format!("; use --remove-kind {kind} or --policy all to remove it")
         }
-        /* NOTE: The two shape rules, and the only removals whose way out is an
-         * edit to the comment rather than a flag: both are satisfied by
-         * rewriting it, and neither has a flag that would keep it as it is. */
+        /* NOTE: The two shape rules, and the only removals whose way out is an edit to the comment rather than a flag: both are satisfied by rewriting it, and neither has a flag that would keep it as it is. */
         DispositionExplanation::RemovedAsTrailing => {
             "; move it onto a line of its own above the code".to_owned()
         }
@@ -1146,9 +1258,13 @@ fn next_step(verdict: &DispositionExplanation) -> String {
         DispositionExplanation::RemovedByLength { limit, .. } => {
             format!("; cut the run to {}", plural(*limit, "line"))
         }
-        /* NOTE: The one keep with no flag behind it. `--policy all` does not
-         * reach it either: what holds the body open is whatever comment is
-         * still standing under this one, so that is the line to take first. */
+        /* NOTE: The one verdict whose way out is to let the tool do it.
+         * Every other line here tells a reader what to change; this one tells them the change is already written and waiting. */
+        DispositionExplanation::RewrittenByStyle { .. } => {
+            "; run `ocomment fix` to apply it".to_owned()
+        }
+        /* NOTE: The one keep with no flag behind it.
+         * `--policy all` does not reach it either: what holds the body open is whatever comment is still standing under this one, so that is the line to take first. */
         DispositionExplanation::KeptStructural { .. } => {
             "; the comment under it has to go first".to_owned()
         }
@@ -1160,6 +1276,8 @@ fn next_step(verdict: &DispositionExplanation) -> String {
         | DispositionExplanation::RemovedByRegex { .. }
         | DispositionExplanation::RemovedByPolicy { .. }
         | DispositionExplanation::RemovedByDefault { .. }
+        /* NOTE: `none` is the mode somebody chose on purpose, so there is nothing to suggest: a reader who set it is not looking for the flag that would undo it. */
+        | DispositionExplanation::KeptByPolicy { .. }
         | DispositionExplanation::KeptByTag { .. } => String::new(),
     }
 }
@@ -1171,8 +1289,7 @@ const PREVIEW_COLUMNS: usize = 72;
 ///
 /// Comment text is untrusted input that is about to be written to a terminal,
 /// so the whole comment is folded onto one line, every control character —
-/// `ESC` above all — is replaced with U+FFFD instead of being forwarded, and
-/// the result is cut to `max_columns` display columns.
+/// `ESC` above all — is replaced with U+FFFD instead of being forwarded, and the result is cut to `max_columns` display columns.
 fn preview(source: &[u8], span: ByteSpan, max_columns: usize) -> String {
     let start = span.start.min(source.len());
     let end = span.end.clamp(start, source.len());
@@ -1184,41 +1301,28 @@ fn preview(source: &[u8], span: ByteSpan, max_columns: usize) -> String {
 
 /// The same treatment for a line that did not come out of a source file.
 ///
-/// What an external tool on `PATH` says about itself is untrusted for exactly
-/// the reason a comment is: `doctor` prints it to the same terminal, and a
-/// tool planted there could otherwise clear the screen or repaint the report
-/// from its own version line.
+/// What an external tool on `PATH` says about itself is untrusted for exactly the reason a comment is: `doctor` prints it to the same terminal, and a tool planted there could otherwise clear the screen or repaint the report from its own version line.
 pub(crate) fn sanitize_line(text: &str) -> String {
     truncate(fold(text), PREVIEW_COLUMNS)
 }
 
 /// The same treatment for a message that must not be cut short.
 ///
-/// A comment preview is commentary and can be trusted to a fixed width, but a
-/// diagnostic is the whole answer to a run that produced nothing else. The
-/// `regex` crate writes a parse error over several lines, with a caret under
-/// the byte it stopped at; the caret means nothing once the lines are joined,
-/// yet the sentence after it names what is actually wrong with the pattern. So
-/// this one folds — one line, no control characters — and keeps every word.
+/// A comment preview is commentary and can be trusted to a fixed width, but a diagnostic is the whole answer to a run that produced nothing else.
+/// The `regex` crate writes a parse error over several lines, with a caret under the byte it stopped at; the caret means nothing once the lines are joined,
+/// yet the sentence after it names what is actually wrong with the pattern.
+/// So this one folds — one line, no control characters — and keeps every word.
 pub(crate) fn sanitize_message(text: &str) -> String {
     fold(text)
 }
 
 /// The same treatment for a name that must not be cut short — or reworded.
 ///
-/// A directory name is chosen by whoever made the directory, so the rows
-/// `doctor` prints one on are untrusted for the same reason a version line is.
-/// What they are not is commentary: an absolute path is easily longer than a
-/// comment preview may be, and a row that ends in an ellipsis where the reader
-/// was looking for the rest of the path answers nothing.
+/// A directory name is chosen by whoever made the directory, so the rows `doctor` prints one on are untrusted for the same reason a version line is.
+/// What they are not is commentary: an absolute path is easily longer than a comment preview may be, and a row that ends in an ellipsis where the reader was looking for the rest of the path answers nothing.
 ///
-/// Neither is the whitespace in a path commentary, which is why this does not
-/// borrow [`fold`]: a name may begin with a space or carry a tab, and a reader
-/// who is shown neither cannot type the name back, nor find it in a checkout
-/// that has it. So the spacing is left exactly as it was given and every
-/// control character — the tab among them — is replaced with U+FFFD, which
-/// keeps the promise `fold` was borrowed for in the first place: whatever the
-/// name holds, the row stays one row.
+/// Neither is the whitespace in a path commentary, which is why this does not borrow [`fold`]: a name may begin with a space or carry a tab, and a reader who is shown neither cannot type the name back, nor find it in a checkout that has it.
+/// So the spacing is left exactly as it was given and every control character — the tab among them — is replaced with U+FFFD, which keeps the promise `fold` was borrowed for in the first place: whatever the name holds, the row stays one row.
 pub(crate) fn sanitize_path(text: &str) -> String {
     text.chars()
         .map(|character| {
@@ -1233,14 +1337,8 @@ pub(crate) fn sanitize_path(text: &str) -> String {
 
 /// The same treatment for a line of source a prompt has to show as code.
 ///
-/// A hunk is read for its shape as much as for its text — indentation says
-/// what a line belongs to — so unlike a comment preview this one keeps the
-/// spaces it was given and expands a tab onto the same eight-column stop the
-/// `columns` layout measures a replacement by. What it does not keep is
-/// anything that drives the terminal: every control character, `ESC` and the
-/// bidirectional overrides above all, still becomes U+FFFD, and the result is
-/// still one line cut to a fixed width, because the question underneath it has
-/// to stay on the screen with it.
+/// A hunk is read for its shape as much as for its text — indentation says what a line belongs to — so unlike a comment preview this one keeps the spaces it was given and expands a tab onto the same eight-column stop the `columns` layout measures a replacement by.
+/// What it does not keep is anything that drives the terminal: every control character, `ESC` and the bidirectional overrides above all, still becomes U+FFFD, and the result is still one line cut to a fixed width, because the question underneath it has to stay on the screen with it.
 pub(crate) fn sanitize_source_line(text: &str) -> String {
     let mut line = String::with_capacity(text.len());
     let mut column = 0usize;
@@ -1260,8 +1358,7 @@ pub(crate) fn sanitize_source_line(text: &str) -> String {
     truncate(line, PREVIEW_COLUMNS)
 }
 
-/// The tab stop `sanitize_source_line` expands to, the one the `columns`
-/// layout already measures a tab by.
+/// The tab stop `sanitize_source_line` expands to, the one the `columns` layout already measures a tab by.
 const TAB_WIDTH: usize = 8;
 
 /// Fold `text` onto one control-free line.
@@ -1270,8 +1367,7 @@ fn fold(text: &str) -> String {
     let mut pending_space = false;
     for character in text.chars() {
         if matches!(character, ' ' | '\t' | '\r' | '\n' | '\u{c}') {
-            /* NOTE: Leading whitespace is dropped, and a run only becomes a space
-             * once something else follows it, so the tail is trimmed too. */
+            /* NOTE: Leading whitespace is dropped, and a run only becomes a space once something else follows it, so the tail is trimmed too. */
             pending_space = !folded.is_empty();
             continue;
         }
@@ -1288,11 +1384,9 @@ fn fold(text: &str) -> String {
     folded
 }
 
-/// C0, DEL, C1, and the bidirectional and separator format controls. None of
-/// these may reach the terminal verbatim: C0 drives it, the bidi overrides and
-/// isolates can make a comment render as its own reverse, and U+2028/U+2029
-/// break the promise that a preview is one line. U+061C joins the marks it
-/// belongs with, and U+FEFF is invisible wherever it lands.
+/// C0, DEL, C1, and the bidirectional and separator format controls.
+/// None of these may reach the terminal verbatim: C0 drives it, the bidi overrides and isolates can make a comment render as its own reverse, and U+2028/U+2029 break the promise that a preview is one line.
+/// U+061C joins the marks it belongs with, and U+FEFF is invisible wherever it lands.
 fn is_control(character: char) -> bool {
     matches!(
         character,
@@ -1312,13 +1406,11 @@ fn columns(character: char) -> usize {
 }
 
 /// How many characters a preview may carry for each column it may occupy.
-/// Zero-width and combining characters cost no columns, so the width budget on
-/// its own cannot bound the line a terminal has to hold.
+/// Zero-width and combining characters cost no columns, so the width budget on its own cannot bound the line a terminal has to hold.
 const PREVIEW_CHARS_PER_COLUMN: usize = 4;
 
 /// Cut `text` to `max_columns` display columns and to a hard character cap,
-/// never inside a wide character, leaving room for the ellipsis that marks the
-/// cut.
+/// never inside a wide character, leaving room for the ellipsis that marks the cut.
 fn truncate(text: String, max_columns: usize) -> String {
     let max_chars = max_columns.saturating_mul(PREVIEW_CHARS_PER_COLUMN);
     if text.chars().map(columns).sum::<usize>() <= max_columns && text.chars().count() <= max_chars
@@ -1359,13 +1451,10 @@ fn preview_suffix(source: &[u8], span: ByteSpan, options: &RenderOptions) -> Str
     )
 }
 
-/// The handle every path that writes the product of a run takes: standard
-/// output, locked once for the whole run and buffered.
+/// The handle every path that writes the product of a run takes: standard output, locked once for the whole run and buffered.
 ///
-/// `println!` panics when its write fails, and the release profile aborts on
-/// panic, so a reader that stops early — `ocomment … | head` — would end the
-/// process with SIGABRT. Writing through a handle that returns its errors lets
-/// the caller decide instead, and `main` ends a closed pipe quietly.
+/// `println!` panics when its write fails, and the release profile aborts on panic, so a reader that stops early — `ocomment … | head` — would end the process with SIGABRT.
+/// Writing through a handle that returns its errors lets the caller decide instead, and `main` ends a closed pipe quietly.
 pub type Stdout = BufWriter<io::StdoutLock<'static>>;
 
 /// Lock standard output for the rest of the run and buffer it.
@@ -1375,12 +1464,8 @@ pub fn stdout() -> Stdout {
 
 /// The reader of the program's own output went away mid-run.
 ///
-/// A broken pipe is only benign when it is *our* report that could not be
-/// written; `ocomment … | head` is a reader that finished, not a run that
-/// failed. Every other broken pipe — writing a rewritten blob into
-/// `git hash-object`, for one — is a real failure, so the benign case is
-/// tagged with this marker at the write that raised it instead of being
-/// recognized by error kind anywhere in the chain.
+/// A broken pipe is only benign when it is *our* report that could not be written; `ocomment … | head` is a reader that finished, not a run that failed.
+/// Every other broken pipe — writing a rewritten blob into `git hash-object`, for one — is a real failure, so the benign case is tagged with this marker at the write that raised it instead of being recognized by error kind anywhere in the chain.
 #[derive(Debug)]
 pub struct OutputPipeClosed;
 
@@ -1400,8 +1485,7 @@ pub fn finish(writer: &mut impl Write) -> Result<()> {
     wrote(writer.flush())
 }
 
-/// Raise one write to the program's own output, tagging the reader that closed
-/// the pipe so `main` can end quietly for that case alone.
+/// Raise one write to the program's own output, tagging the reader that closed the pipe so `main` can end quietly for that case alone.
 pub fn wrote(result: io::Result<()>) -> Result<()> {
     result.map_err(output_failure)
 }
@@ -1416,11 +1500,9 @@ fn output_failure(error: io::Error) -> anyhow::Error {
 
 /// Write one line of commentary to standard error.
 ///
-/// Commentary — the `-v` trace, the end-of-run summary — is not the product of
-/// the run, so a reader that has already gone away is not a failure to report:
-/// a closed pipe is dropped and only a real write failure is raised. What must
-/// not happen is what `eprintln!` does, which is panic, and so abort under the
-/// release profile.
+/// Commentary — the `-v` trace, the end-of-run summary — is not the product of the run, so a reader that has already gone away is not a failure to report:
+/// a closed pipe is dropped and only a real write failure is raised.
+/// What must not happen is what `eprintln!` does, which is panic, and so abort under the release profile.
 pub fn note(
     writer: &mut impl Write,
     verbosity: Verbosity,
@@ -1440,10 +1522,8 @@ pub fn note(
 
 /// Turn a serialization failure back into the I/O error it usually is.
 ///
-/// `serde_json` reports a failed write as an error of its own whose `source`
-/// is the *source* of the I/O error rather than the I/O error itself, so a
-/// closed pipe would be invisible to anything walking the chain. Its `From`
-/// conversion hands the original error back.
+/// `serde_json` reports a failed write as an error of its own whose `source` is the *source* of the I/O error rather than the I/O error itself, so a closed pipe would be invisible to anything walking the chain.
+/// Its `From` conversion hands the original error back.
 fn write_error(error: serde_json::Error) -> anyhow::Error {
     output_failure(io::Error::from(error))
 }
@@ -1456,8 +1536,8 @@ pub fn render(
     render_explained(files, skipped, options, &Explanations::new())
 }
 
-/// The same report, with the material `--explain` needs for the files it has
-/// it for. A file with none is reported exactly as `render` reports it.
+/// The same report, with the material `--explain` needs for the files it has it for.
+/// A file with none is reported exactly as `render` reports it.
 pub fn render_explained(
     files: &[ProcessedFile],
     skipped: &[SkippedFile],
@@ -1486,28 +1566,19 @@ pub fn render_explained(
     finish(&mut output)
 }
 
-/// The report as the decisions it asks for, which is what a person reading it
-/// on a terminal is there to make.
+/// The report as the decisions it asks for, which is what a person reading it on a terminal is there to make.
 ///
-/// `human` answers "where are they", one grep-able line at a time, and that is
-/// the right answer for a pipe. It is the wrong shape for the question its
-/// reader actually has, which is "and then what": nine findings under one rule
-/// are not nine questions, they are one question asked nine times, and the
-/// answer to each is decided by the code the comment sits on -- which `human`
-/// does not show, so the reader opens the file.
+/// `human` answers "where are they", one grep-able line at a time, and that is the right answer for a pipe.
+/// It is the wrong shape for the question its reader actually has, which is "and then what": nine findings under one rule are not nine questions, they are one question asked nine times, and the answer to each is decided by the code the comment sits on -- which `human` does not show, so the reader opens the file.
 ///
-/// So: grouped by the decision rather than by the rule or the file, the edit
-/// shown beside each rather than its neighbourhood, the count on every group
-/// because a classification without counts cannot set an order, and the way to
-/// *keep* the comments as visible as the way to remove them. That last one is
-/// not symmetry for its own sake. A gate that can only say "delete it" is a
-/// gate somebody turns off the first time it is wrong about one comment.
+/// So: grouped by the decision rather than by the rule or the file, the edit shown beside each rather than its neighbourhood, the count on every group because a classification without counts cannot set an order, and the way to *keep* the comments as visible as the way to remove them.
+/// That last one is not symmetry for its own sake.
+/// A gate that can only say "delete it" is a gate somebody turns off the first time it is wrong about one comment.
 /// The file holding the most of what this run found, and how many.
 ///
 /// The one thing a reader of a large report wants that no count gives them:
-/// somewhere to start. `None` when the findings are spread evenly enough that
-/// naming one file would be arbitrary -- under a twentieth of the total is not
-/// a place to start, it is a place that happens to be first.
+/// somewhere to start.
+/// `None` when the findings are spread evenly enough that naming one file would be arbitrary -- under a twentieth of the total is not a place to start, it is a place that happens to be first.
 fn busiest(groups: &[crate::advice::Group]) -> Option<(String, usize)> {
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
     let mut total = 0usize;
@@ -1525,16 +1596,11 @@ fn busiest(groups: &[crate::advice::Group]) -> Option<(String, usize)> {
     (count * 20 >= total).then_some((path, count))
 }
 
-/// The comment one finding was built from, so that the engine's verdict can be
-/// asked for again.
+/// The comment one finding was built from, so that the engine's verdict can be asked for again.
 ///
-/// The verdict belongs to the first comment of the run, which is the one whose
-/// rule decided the rest, and the finding names it by the byte it starts at.
-/// A line does not name it: two removable comments share a line whenever one
-/// of them sits beside code, and matching on the line returned the first of
-/// them for both findings — so a plain comment beside a directive was
-/// explained as `this one a \`directive\``. Everything around that line was
-/// right, which is what kept it standing.
+/// The verdict belongs to the first comment of the run, which is the one whose rule decided the rest, and the finding names it by the byte it starts at.
+/// A line does not name it: two removable comments share a line whenever one of them sits beside code, and matching on the line returned the first of them for both findings — so a plain comment beside a directive was explained as `this one a \`directive\``.
+/// Everything around that line was right, which is what kept it standing.
 fn found_at<'a>(
     files: &'a [ProcessedFile],
     item: &crate::advice::Item,
@@ -1551,15 +1617,13 @@ fn found_at<'a>(
 
 /// How many findings a report shows in full before it starts summarising.
 ///
-/// Above this the report stops being something a reader reads and becomes
-/// something they scroll: this repository under `--policy all` produces 9,139
-/// findings and, printed in full, 17,902 lines. Nobody reads the ten thousandth
-/// one. At that size what is needed is the shape -- which decision, how many,
+/// Above this the report stops being something a reader reads and becomes something they scroll: this repository under `--policy all` produces 9,139 findings and, printed in full, 17,902 lines.
+/// Nobody reads the ten thousandth one.
+/// At that size what is needed is the shape -- which decision, how many,
 /// where they are concentrated -- and a way to narrow.
 const FINDINGS_SHOWN_IN_FULL: usize = 20;
 
-/// How many findings a summarised group still shows, so that the shape has an
-/// example under it rather than only a number.
+/// How many findings a summarised group still shows, so that the shape has an example under it rather than only a number.
 const FINDINGS_PER_SUMMARISED_GROUP: usize = 2;
 
 /// How many files a summarised group names before it counts the rest.
@@ -1568,9 +1632,7 @@ const FILES_PER_SUMMARISED_GROUP: usize = 5;
 /// Where a decision's comments are, most first.
 ///
 /// The table a reader writes by hand the first time they meet a large report,
-/// which is the reason to write it for them: a count with no location cannot
-/// set an order, and "1,204 of these are in one file" is the difference between
-/// a project-wide problem and an afternoon.
+/// which is the reason to write it for them: a count with no location cannot set an order, and "1,204 of these are in one file" is the difference between a project-wide problem and an afternoon.
 fn concentration_of(group: &crate::advice::Group) -> Vec<(String, usize)> {
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
     for item in &group.items {
@@ -1579,8 +1641,7 @@ fn concentration_of(group: &crate::advice::Group) -> Vec<(String, usize)> {
             .or_default() += item.comments;
     }
     let mut rows: Vec<(String, usize)> = counts.into_iter().collect();
-    /* NOTE: Most first, then by path, so two runs over one tree print the same
-     * table. */
+    /* NOTE: Most first, then by path, so two runs over one tree print the same table. */
     rows.sort_by(|left, right| right.1.cmp(&left.1).then(left.0.cmp(&right.0)));
     rows
 }
@@ -1589,8 +1650,8 @@ fn concentration_of(group: &crate::advice::Group) -> Vec<(String, usize)> {
 ///
 /// The count of what went is on standard error with the rest of the commentary.
 /// Here is what is still in the files: every comment the run decided to keep,
-/// so that a reader can check the keeping rather than take it on trust. A run
-/// that says only what it removed is a run whose judgement nobody can audit.
+/// so that a reader can check the keeping rather than take it on trust.
+/// A run that says only what it removed is a run whose judgement nobody can audit.
 fn render_fixed(
     output: &mut impl Write,
     files: &[ProcessedFile],
@@ -1603,28 +1664,84 @@ fn render_fixed(
         color("\x1b[1m", paint),
         color("\x1b[0m", paint),
     );
-    let (green, blue) = (
+    let (green, blue, yellow) = (
         color("\x1b[38;5;114m", paint),
         color("\x1b[38;5;75m", paint),
+        color("\x1b[38;5;179m", paint),
     );
-    let removed: usize = files.iter().map(removed_count).sum();
+    let summary = Summary::compute(files, skipped, options.operation);
     let changed = files.iter().filter(|file| file.result.changed()).count();
+    /* NOTE: The headline names what the run did, in the words for what it did.
+     * A tidying run took nothing away, and a line reading "removed" over one would be describing a different run than the one that just finished. */
+    let (headline, preposition) = if options.operation.removes() {
+        (
+            format!(
+                "{} removed",
+                comments(files.iter().map(removed_count).sum(), "")
+            ),
+            "from",
+        )
+    } else {
+        (
+            format!(
+                "{} rewritten",
+                plural(
+                    files.iter().map(rewritten_count).sum(),
+                    summary.rewritten_noun()
+                )
+            ),
+            "in",
+        )
+    };
     wrote(writeln!(output))?;
     wrote(writeln!(
         output,
-        "  {green}OK{reset}  {bold}{} removed{reset}{dim} from {} · {}{reset}",
-        comments(removed, ""),
+        "  {green}OK{reset}  {bold}{headline}{reset}{dim} {preposition} {} · {}{reset}",
         plural(changed, "file"),
         scanned_clause(files.len(), skipped.len()),
     ))?;
+    /* NOTE: What a tidying run was told not to touch, listed rather than counted.
+     * The run exits 1 for these, and a reader looking at why has to be able to see which comments they were without running a second command. */
+    if !options.operation.removes() {
+        let left: Vec<(&ProcessedFile, &Comment)> = files
+            .iter()
+            .flat_map(|file| {
+                file.result
+                    .report
+                    .comments
+                    .iter()
+                    .filter(|comment| comment.action().removes())
+                    .map(move |comment| (file, comment))
+            })
+            .collect();
+        if !left.is_empty() {
+            wrote(writeln!(output))?;
+            wrote(writeln!(
+                output,
+                "  {bold}{yellow}DECIDE{reset}  {}{dim}, left for you{reset}",
+                comments(left.len(), "")
+            ))?;
+            for (file, comment) in left {
+                let index = LineIndex::new(&file.source);
+                let (line, _) = index.line_column(comment.span.start);
+                wrote(writeln!(
+                    output,
+                    "    {blue}{}:{line}{reset}  {dim}{}{reset}",
+                    display_path(&file.path, options.presentation.hyperlinks),
+                    preview(&file.source, comment.span, PREVIEW_COLUMNS)
+                ))?;
+            }
+        }
+    }
+    /* NOTE: A comment a run rewrote is not one it kept, and the paragraph rules record their verdict beside the comments rather than on them -- so "untouched" has to ask the runs too, or every reflowed line would be listed here as one nothing happened to. */
     let kept: Vec<(&ProcessedFile, &Comment)> = files
         .iter()
         .flat_map(|file| {
-            file.result
-                .report
+            let report = &file.result.report;
+            report
                 .comments
                 .iter()
-                .filter(|comment| !comment.disposition.is_remove())
+                .filter(|comment| !reported(comment) && !covered_by_a_run(report, comment))
                 .map(move |comment| (file, comment))
         })
         .collect();
@@ -1657,18 +1774,14 @@ fn render_review(
     options: &RenderOptions,
     explanations: &Explanations,
 ) -> Result<()> {
-    /* NOTE: `diff` writes a patch, and a patch is the product rather than a
-     * report about one: a reader pipes it into `git apply`, and anything else
-     * on that stream is corruption. There is no decision view of a patch, so
-     * this is the one operation where the two person-facing formats are the
-     * same bytes. */
-    if options.operation == Operation::Diff {
+    /* NOTE: `diff` writes a patch, and a patch is the product rather than a report about one: a reader pipes it into `git apply`, and anything else on that stream is corruption.
+     * There is no decision view of a patch, so this is the one operation where the two person-facing formats are the same bytes. */
+    if matches!(options.operation, Operation::Diff(_)) {
         return render_human(output, files, skipped, options, explanations);
     }
-    if options.operation == Operation::Fix && options.applied {
-        /* NOTE: After a fix the decisions are answered and the comments are
-         * gone, so asking for them again would be a report about a file that no
-         * longer holds them. What a reader has not seen is the other half. */
+    if options.operation.writes() && options.applied {
+        /* NOTE: After a fix the decisions are answered and the comments are gone, so asking for them again would be a report about a file that no longer holds them.
+         * What a reader has not seen is the other half. */
         return render_fixed(output, files, skipped, options);
     }
     let paint = options.presentation.color;
@@ -1685,7 +1798,13 @@ fn render_review(
         color("\x1b[38;5;80m", paint),
     );
     let groups = crate::advice::plan(files, options.policy);
-    let removable: usize = groups.iter().map(crate::advice::Group::comments).sum();
+    /* NOTE: What a reader has to decide, which is not everything in the plan.
+     * A rewrite is in the plan so that a caller parsing the report finds every change in one place, and it is not counted here because the two halves of this report ask different things: the headline asks a reader for a decision, and a rewrite is the one answer the tool already has. */
+    let removable: usize = groups
+        .iter()
+        .filter(|group| !matches!(group.decision, crate::advice::Decision::Restyle { .. }))
+        .map(crate::advice::Group::comments)
+        .sum();
     let kept: usize = files
         .iter()
         .map(|file| {
@@ -1693,7 +1812,7 @@ fn render_review(
                 .report
                 .comments
                 .iter()
-                .filter(|comment| !comment.disposition.is_remove())
+                .filter(|comment| !reported(comment))
                 .count()
         })
         .sum();
@@ -1704,35 +1823,68 @@ fn render_review(
         .collect::<std::collections::BTreeSet<_>>()
         .len();
 
-    let mark = if removable == 0 {
-        format!("{green}OK{reset}")
+    let restyled: usize = files.iter().map(rewritable_count).sum();
+    /* NOTE: What to call them.
+     * A run of comments and a paragraph of a document are both paragraphs; a comment a spacing rule reached on its own is a comment.
+     * Where a run met both, the noun that covers them is the wider one. */
+    let restyled_noun = if files.iter().any(|file| rewritable_paragraphs(file) > 0) {
+        "paragraph"
     } else {
+        "comment"
+    };
+    /* NOTE: Three marks for three kinds of answer.
+     * A removal is a decision the reader has to make and the run is not clean until they make it; a rewrite is one the tool has already made and is offering to apply.
+     * A report that called both `NO` would be asking for a decision that has been taken. */
+    let mark = if removable > 0 {
         format!("{red}NO{reset}")
+    } else if restyled > 0 {
+        format!("{blue}TIDY{reset}")
+    } else {
+        format!("{green}OK{reset}")
     };
     wrote(writeln!(output))?;
     wrote(writeln!(
         output,
         "  {mark}  {bold}{}{reset}{dim} in {} · {} · policy {}{reset}",
-        comments(removable, ""),
-        plural(touched, "file"),
+        headline_count(removable, restyled, restyled_noun),
+        plural(
+            touched.max(
+                files
+                    .iter()
+                    .filter(|file| rewritable_count(file) > 0)
+                    .count()
+            ),
+            "file"
+        ),
         scanned_clause(files.len(), skipped.len()),
         options.policy,
     ))?;
 
-    /* NOTE: Decided once for the whole report rather than per group, so that a
-     * reader learns one layout: either every group shows its shape and then an
-     * example, or every group shows everything. A report where some groups are
-     * summarised and others are not reads as though the tool ran out of
-     * patience partway down. */
+    /* NOTE: Decided once for the whole report rather than per group, so that a reader learns one layout: either every group shows its shape and then an example, or every group shows everything.
+     * A report where some groups are summarised and others are not reads as though the tool ran out of patience partway down. */
     let findings: usize = groups.iter().map(|group| group.items.len()).sum();
     let summarise = findings > FINDINGS_SHOWN_IN_FULL;
     for group in &groups {
         let instruction = group.decision.instruction();
-        let count = comments(group.comments(), "");
+        /* NOTE: A paragraph, where the decision is about one.
+         * A reflow is decided over a run and a report that called it a comment would be counting a different thing from the line above it. */
+        /* NOTE: The marker says which kind of answer this group is.
+         * `DECIDE` asks the reader for one; `TIDY` says the tool has it, and the same word heads the status line above so the two agree about what the run found. */
+        let restyle = matches!(group.decision, crate::advice::Decision::Restyle { .. });
+        let count = if restyle {
+            plural(group.comments(), restyled_noun)
+        } else {
+            comments(group.comments(), "")
+        };
+        let marker = if restyle {
+            format!("{blue}TIDY{reset}  ")
+        } else {
+            format!("{yellow}DECIDE{reset}")
+        };
         wrote(writeln!(output))?;
         wrote(writeln!(
             output,
-            "  {bold}{yellow}DECIDE{reset}  {bold}{instruction}{reset}{dim}{}{count}{reset}",
+            "  {bold}{marker}{reset}  {bold}{instruction}{reset}{dim}{}{count}{reset}",
             " ".repeat(
                 58usize
                     .saturating_sub(instruction.chars().count() + count.chars().count())
@@ -1798,9 +1950,8 @@ fn render_review(
                 ))?;
             }
             /* NOTE: The decision above is read from where the comment sits;
-             * this is the rule the engine actually applied and the setting it
-             * came from. They answer different questions -- what to do, and why
-             * it is being asked -- and `--explain` is the second one. */
+             * this is the rule the engine actually applied and the setting it came from.
+             * They answer different questions -- what to do, and why it is being asked -- and `--explain` is the second one. */
             if let Some((file, comment)) = found_at(files, item) {
                 let explainer = explanations.get(&file.path).map(Explainer::new);
                 if let Some(explainer) = explainer.as_ref() {
@@ -1829,9 +1980,8 @@ fn render_review(
     if kept > 0 {
         wrote(writeln!(output))?;
         if options.explain {
-            /* NOTE: The count is a promise that somebody checked; the list is
-             * what lets a reader check the checker. A gate nobody can audit
-             * when it is green is a gate whose green means nothing. */
+            /* NOTE: The count is a promise that somebody checked; the list is what lets a reader check the checker.
+             * A gate nobody can audit when it is green is a gate whose green means nothing. */
             wrote(writeln!(
                 output,
                 "  {bold}{green}ALLOWED{reset} {dim}{} this run did not report{reset}",
@@ -1845,7 +1995,7 @@ fn render_review(
                     .report
                     .comments
                     .iter()
-                    .filter(|comment| !comment.disposition.is_remove())
+                    .filter(|comment| !reported(comment))
                 {
                     let (line, _) = index.line_column(comment.span.start);
                     wrote(writeln!(
@@ -1872,13 +2022,11 @@ fn render_review(
             ))?;
         }
     }
-    if removable > 0 && options.operation != Operation::Fix {
+    if removable > 0 && !options.operation.removes() {
         wrote(writeln!(output))?;
         wrote(writeln!(output, "  {dim}{}{reset}", "─".repeat(70)))?;
-        /* NOTE: Where to start, before what to run. A report this size is read
-         * by somebody deciding where an afternoon goes, and the answer to that
-         * is a path rather than a verb: the file holding the most of this is
-         * the one where the most of it stops. */
+        /* NOTE: Where to start, before what to run.
+         * A report this size is read by somebody deciding where an afternoon goes, and the answer to that is a path rather than a verb: the file holding the most of this is the one where the most of it stops. */
         if summarise && let Some((path, count)) = busiest(&groups) {
             wrote(writeln!(
                 output,
@@ -1904,9 +2052,8 @@ fn render_human(
     let operation = options.operation;
     let presentation = options.presentation;
     for file in files {
-        if operation == Operation::Diff && file.result.changed() {
-            /* NOTE: The patch is the product of `diff`, so `-q` keeps it and drops
-             * only the summary that follows on standard error. */
+        if matches!(operation, Operation::Diff(_)) && file.result.changed() {
+            /* NOTE: The patch is the product of `diff`, so `-q` keeps it and drops only the summary that follows on standard error. */
             wrote(output.write_all(&unified_diff(
                 &file.path,
                 &file.source,
@@ -1916,17 +2063,15 @@ fn render_human(
         }
         let reports_comments = match operation {
             Operation::Scan => !file.result.report.comments.is_empty(),
-            Operation::Fix => false,
+            Operation::Fix(_) => false,
             // NOTE: The findings are the product of `check`, as the patch is of `diff`.
-            Operation::Check | Operation::Diff if options.explain => {
+            Operation::Check | Operation::Diff(_) if options.explain => {
                 !file.result.report.comments.is_empty()
             }
-            Operation::Check | Operation::Diff => file
-                .result
-                .report
-                .comments
-                .iter()
-                .any(|comment| comment.disposition.is_remove()),
+            Operation::Check | Operation::Diff(_) => {
+                file.result.report.comments.iter().any(reported)
+                    || !file.result.report.runs.is_empty()
+            }
         };
         let lines = (!file.result.report.diagnostics.is_empty() || reports_comments)
             .then(|| LineIndex::new(&file.source));
@@ -1964,66 +2109,93 @@ fn render_human(
                     "{}:{line}:{column}: {} {} {}..{}{}",
                     display_path(&file.path, presentation.hyperlinks),
                     comment.kind,
-                    comment.disposition,
+                    comment.disposition(),
                     comment.span.start,
                     comment.span.end,
                     preview_suffix(&file.source, comment.span, options)
                 ))?;
                 write_explanation(output, file, comment, explainer, options)?;
             }
-        } else if operation == Operation::Fix {
+        } else if operation.writes() {
             if options.applied && file.result.changed() {
+                /* NOTE: A tidying run took nothing away, so it does not say it did.
+                 * The line names what reached the file, and for that run what reached it was the rewrites. */
+                let done = if operation.removes() {
+                    format!("removed {}", comments(removed_count(file), ""))
+                } else {
+                    format!("rewrote {}", comments(rewritten_count(file), ""))
+                };
                 wrote(writeln!(
                     output,
-                    "fixed {}: removed {}",
+                    "fixed {}: {done}",
                     display_path(&file.path, presentation.hyperlinks),
-                    comments(removed_count(file), "")
                 ))?;
             }
         } else {
-            /* NOTE: `check` reports what it would remove. Asked to explain itself it
-             * reports the rest too, because a comment it left alone is exactly
-             * the one the reader is asking about. */
+            /* NOTE: `check` reports what it would change, which is what it would remove and what it would rewrite.
+             * Asked to explain itself it reports the rest too, because a comment it left alone is exactly the one the reader is asking about. */
             for comment in &file.result.report.comments {
-                let removable = comment.disposition.is_remove();
-                if !options.explain && !removable {
+                let action = comment.disposition().action();
+                if !options.explain && !reported(comment) {
                     continue;
                 }
                 let (line, column) = lines
                     .as_ref()
                     .expect("a finding requested a line index")
                     .line_column(comment.span.start);
+                /* NOTE: Three colours for three verdicts.
+                 * A rewrite is blue rather than the removal's yellow because it is not a warning:
+                 * nothing is being taken away and the reader has nothing to decide. */
+                let (escape, label) = match action {
+                    Action::Remove => ("\x1b[33m", removable_label(comment.kind)),
+                    Action::Rewrite => ("\x1b[34m", rewritten_prefix(comment.kind)),
+                    Action::Keep => ("\x1b[32m", kept_prefix(comment.kind)),
+                };
                 wrote(writeln!(
                     output,
-                    "{}:{line}:{column}: {}{}{}{}",
+                    "{}:{line}:{column}: {}{label}{}{}",
                     display_path(&file.path, presentation.hyperlinks),
-                    color(
-                        if removable { "\x1b[33m" } else { "\x1b[32m" },
-                        presentation.color
-                    ),
-                    if removable {
-                        removable_label(comment.kind)
-                    } else {
-                        kept_prefix(comment.kind)
-                    },
+                    color(escape, presentation.color),
                     color("\x1b[0m", presentation.color),
                     preview_suffix(&file.source, comment.span, options)
                 ))?;
                 write_explanation(output, file, comment, explainer, options)?;
+            }
+            /* NOTE: A run is reported where it begins and as one finding.
+             * It covers several comments and asks one question about them -- where the paragraph breaks -- and a reader cannot answer that one comment at a time. */
+            for run in &file.result.report.runs {
+                let (line, column) = lines
+                    .as_ref()
+                    .expect("a finding requested a line index")
+                    .line_column(run.span.start);
+                /* NOTE: Named for where the prose was found.
+                 * A paragraph of a Markdown document is not a comment, and a report that called it one would be telling a reader something about their file that is not so. */
+                let what = match run.origin {
+                    ProseOrigin::Comments => "rewritten comment paragraph",
+                    ProseOrigin::Document => "rewritten paragraph",
+                };
+                wrote(writeln!(
+                    output,
+                    "{}:{line}:{column}: {}{what}{}{}",
+                    display_path(&file.path, presentation.hyperlinks),
+                    color("[34m", presentation.color),
+                    color("[0m", presentation.color),
+                    preview_suffix(&file.source, run.span, options)
+                ))?;
+                if options.explain {
+                    wrote(writeln!(output, "    rewritten: {}", run.rule.detail()))?;
+                }
             }
         }
     }
     write_commentary(output, files, skipped, options)
 }
 
-/// The commentary a run writes to standard error, whichever way it wrote its
-/// product.
+/// The commentary a run writes to standard error, whichever way it wrote its product.
 ///
-/// The count, the skips, where the findings are concentrated, the settings that
-/// matched nothing. None of it depends on the layout of the report above it,
-/// and it went missing from `review` for exactly as long as it lived inside
-/// `render_human` -- a summary a CI job greps for, gone because a second format
-/// was added beside the one that owned it.
+/// The count, the skips, where the findings are concentrated, the settings that matched nothing.
+/// None of it depends on the layout of the report above it,
+/// and it went missing from `review` for exactly as long as it lived inside `render_human` -- a summary a CI job greps for, gone because a second format was added beside the one that owned it.
 fn write_commentary(
     output: &mut impl Write,
     files: &[ProcessedFile],
@@ -2034,25 +2206,19 @@ fn write_commentary(
     let presentation = options.presentation;
     let verbose = options.verbosity.shows(Detail::Verbose);
     let skips = skip_lines(skipped, presentation, options.verbosity);
-    /* NOTE: `diff` keeps standard output for the patch alone, so the skips it met
-     * are left to standard error. `fix --dry-run` is that same `diff` speaking
-     * for the `fix` it stands in for: a skipped path can be the whole answer
-     * to the run, so the preview still owes the reader the reason — but beside
-     * the summary that counts it, because what the preview promises on
-     * standard output is a patch that has to survive being piped into `git
-     * apply`. A plain `fix` writes no patch and keeps its skips there. */
-    if operation != Operation::Diff {
+    /* NOTE: `diff` keeps standard output for the patch alone, so the skips it met are left to standard error.
+     * `fix --dry-run` is that same `diff` speaking for the `fix` it stands in for: a skipped path can be the whole answer to the run, so the preview still owes the reader the reason — but beside the summary that counts it, because what the preview promises on standard output is a patch that has to survive being piped into `git apply`.
+     * A plain `fix` writes no patch and keeps its skips there. */
+    if !matches!(operation, Operation::Diff(_)) {
         for line in &skips {
             wrote(writeln!(output, "{line}"))?;
         }
     }
-    /* NOTE: The findings are on standard output and the commentary that follows is
-     * on standard error; a terminal sees both, so the buffer is emptied first
-     * to keep the report in the order it was written. */
+    /* NOTE: The findings are on standard output and the commentary that follows is on standard error; a terminal sees both, so the buffer is emptied first to keep the report in the order it was written. */
     finish(output)?;
     let stderr = io::stderr();
     let mut report = stderr.lock();
-    if operation == Operation::Diff && options.dry_run {
+    if matches!(operation, Operation::Diff(_)) && options.dry_run {
         for line in &skips {
             note(&mut report, options.verbosity, Detail::Normal, line)?;
         }
@@ -2068,28 +2234,22 @@ fn write_commentary(
         Detail::Normal,
         &summary_report(&summary, options, folded),
     )?;
-    /* NOTE: After the verdict, because it is about the verdict: the count comes
-     * first and then where that count is and what would answer it. */
+    /* NOTE: After the verdict, because it is about the verdict: the count comes first and then where that count is and what would answer it. */
     for line in concentration(files, options) {
         note(&mut report, options.verbosity, Detail::Normal, &line)?;
     }
-    /* NOTE: Under any other policy a kept preamble is one of many deliberate keeps
-     * and saying so every run would be noise. `all` said it would take
-     * everything, so what it left behind is the surprise worth a line. */
+    /* NOTE: Under any other policy a kept preamble is one of many deliberate keeps and saying so every run would be noise.
+     * `all` said it would take everything, so what it left behind is the surprise worth a line. */
     if options.policy == Policy::All {
-        /* NOTE: Two protections and two lines, because the two are not the same
-         * surprise. A preamble was held back by the file's own syntax; a
-         * load-bearing directive was held back by what reads it, and a reader
-         * who asked for every comment to go is owed the difference rather than
-         * a count that runs them together. */
+        /* NOTE: Two protections and two lines, because the two are not the same surprise.
+         * A preamble was held back by the file's own syntax; a load-bearing directive was held back by what reads it, and a reader who asked for every comment to go is owed the difference rather than a count that runs them together. */
         for (protection, adjective) in [
             (PROTECTED_PREAMBLE, "protected preamble"),
             (LOAD_BEARING, "load-bearing"),
         ] {
             let protected = kept_for(files, protection);
             if protected > 0 {
-                /* NOTE: The line counts what it kept, so the pronoun that stands for it
-                 * has to agree with that count. */
+                /* NOTE: The line counts what it kept, so the pronoun that stands for it has to agree with that count. */
                 let pronoun = if protected == 1 { "it" } else { "them" };
                 note(
                     &mut report,
@@ -2123,20 +2283,17 @@ fn write_commentary(
     Ok(())
 }
 
-/// The skips one run has to name, in one wording for whichever stream ends up
-/// carrying them. An I/O error is named however quiet the run was asked to be:
+/// The skips one run has to name, in one wording for whichever stream ends up carrying them.
+/// An I/O error is named however quiet the run was asked to be:
 /// it is a failure, not commentary.
 ///
-/// Shared with `fix --interactive`, which writes no report of its own and would
-/// otherwise be the one command that never says why it passed a file over.
+/// Shared with `fix --interactive`, which writes no report of its own and would otherwise be the one command that never says why it passed a file over.
 /// Whether a skip is worth a line of the report, in human and in GitHub form.
 ///
-/// An I/O error decides the exit code, so it is said however quietly the run
-/// was asked to speak. A path the caller named is answered on a line of its
-/// own, because they asked about that path. What a walk merely wandered past
-/// is neither: one unscannable file is a skip, forty of them are noise, and
-/// the end-of-run summary counts those instead — `-v` is how a reader asks for
-/// the list. Both renderers share this so the two cannot drift apart.
+/// An I/O error decides the exit code, so it is said however quietly the run was asked to speak.
+/// A path the caller named is answered on a line of its own, because they asked about that path.
+/// What a walk merely wandered past is neither: one unscannable file is a skip, forty of them are noise, and the end-of-run summary counts those instead — `-v` is how a reader asks for the list.
+/// Both renderers share this so the two cannot drift apart.
 pub(crate) fn skip_is_visible(item: &SkippedFile, verbosity: Verbosity) -> bool {
     // NOTE: An I/O error decides the exit code, so it is named however quiet the run.
     item.error
@@ -2164,14 +2321,13 @@ pub(crate) fn skip_lines(
 
 /// The numbers an interactive run's verdict is built from.
 ///
-/// They count answers rather than findings, which is the one thing the ordinary
-/// summary cannot say: it counts what a run *could* have removed.
+/// They count answers rather than findings, which is the one thing the ordinary summary cannot say: it counts what a run *could* have removed.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct InteractiveOutcome {
     /// Comments the reader accepted for removal.
     pub removed: usize,
-    /// Questions the reader answered. `a` and `d` answer for every remaining
-    /// comment in their file, so those count here too.
+    /// Questions the reader answered.
+    /// `a` and `d` answer for every remaining comment in their file, so those count here too.
     pub reviewed: usize,
     /// Comments the run had to offer, whether or not it got as far as asking.
     pub offered: usize,
@@ -2183,17 +2339,11 @@ pub(crate) struct InteractiveOutcome {
 
 /// What an interactive run came to, in the vocabulary every other summary uses.
 ///
-/// A run with nothing to offer borrows the wording the plain `fix` summary
-/// gives the same answer, because the only number worth reporting there is how
-/// much was looked at. A run stopped by `q` is counted against the questions it
-/// actually asked, and says how many it never got to: measuring the acceptances
-/// against every comment the run *could* have offered would read as a pile of
-/// refusals nobody made.
+/// A run with nothing to offer borrows the wording the plain `fix` summary gives the same answer, because the only number worth reporting there is how much was looked at.
+/// A run stopped by `q` is counted against the questions it actually asked, and says how many it never got to: measuring the acceptances against every comment the run *could* have offered would read as a pile of refusals nobody made.
 ///
-/// Either way the verdict closes on the `(N files scanned)` every other summary
-/// ends with. Answering questions about three files says nothing about how many
-/// were opened to find them, and that is the number a reader checks a run
-/// against.
+/// Either way the verdict closes on the `(N files scanned)` every other summary ends with.
+/// Answering questions about three files says nothing about how many were opened to find them, and that is the number a reader checks a run against.
 pub(crate) fn interactive_summary(outcome: InteractiveOutcome) -> String {
     if outcome.offered == 0 {
         return format!("Nothing to fix in {}.", plural(outcome.scanned, "file"));
@@ -2217,38 +2367,30 @@ pub(crate) fn interactive_summary(outcome: InteractiveOutcome) -> String {
 /// and the I/O errors that were listed one by one above it.
 /// How many files a concentrated report names before it stops.
 ///
-/// Enough to see where the work is and short enough to read without
-/// scrolling. A caller who wants the whole distribution has `--format json`.
+/// Enough to see where the work is and short enough to read without scrolling.
+/// A caller who wants the whole distribution has `--format json`.
 const TOP_FILES: usize = 5;
 
 /// How many findings a run has to have before it is worth summarising.
 ///
-/// Under this a reader has already read every line by the time they reach the
-/// summary, and telling them where the findings are would be telling them what
-/// they just saw.
+/// Under this a reader has already read every line by the time they reach the summary, and telling them where the findings are would be telling them what they just saw.
 const CONCENTRATION_THRESHOLD: usize = 10;
 
 /// The lines that turn a wall of findings into something to act on.
 ///
-/// A run reporting twenty-one removable comments has told the reader what it
-/// found and nothing about what to do. Two things it already knows would
-/// answer that: which files hold the findings, and whether they are all of one
-/// kind -- because if they are, one flag makes the run clean, and the reader
-/// should not have to work that out from the list.
+/// A run reporting twenty-one removable comments has told the reader what it found and nothing about what to do.
+/// Two things it already knows would answer that: which files hold the findings, and whether they are all of one kind -- because if they are, one flag makes the run clean, and the reader should not have to work that out from the list.
 ///
-/// Both are held back below [`CONCENTRATION_THRESHOLD`] findings, where the
-/// list is short enough to have been read already.
+/// Both are held back below [`CONCENTRATION_THRESHOLD`] findings, where the list is short enough to have been read already.
 fn concentration(files: &[ProcessedFile], options: &RenderOptions) -> Vec<String> {
     let mut per_file: Vec<(&Path, usize)> = Vec::new();
-    /* NOTE: Counted into a slot per kind rather than a map, as `kind_breakdown`
-     * does, because `CommentKind` is an enum with a canonical order and
-     * `CommentKind::ALL` is that order. */
+    /* NOTE: Counted into a slot per kind rather than a map, as `kind_breakdown` does, because `CommentKind` is an enum with a canonical order and `CommentKind::ALL` is that order. */
     let mut kinds = [0usize; CommentKind::ALL.len()];
     let mut total = 0usize;
     for file in files {
         let mut count = 0usize;
         for comment in &file.result.report.comments {
-            if comment.disposition.is_remove() {
+            if comment.action().removes() {
                 count += 1;
                 let slot = CommentKind::ALL
                     .iter()
@@ -2267,8 +2409,7 @@ fn concentration(files: &[ProcessedFile], options: &RenderOptions) -> Vec<String
     }
 
     let mut lines = Vec::new();
-    /* NOTE: Most findings first, then by path, so two runs over the same tree
-     * print the same ranking. */
+    /* NOTE: Most findings first, then by path, so two runs over the same tree print the same ranking. */
     per_file.sort_by(|left, right| right.1.cmp(&left.1).then(left.0.cmp(right.0)));
     let named = per_file.len().min(TOP_FILES);
     lines.push(format!(
@@ -2293,7 +2434,7 @@ fn concentration(files: &[ProcessedFile], options: &RenderOptions) -> Vec<String
         .filter(|(slot, _)| kinds[*slot] > 0)
         .map(|(_, kind)| kind)
         .collect();
-    if options.operation != Operation::Fix
+    if !options.operation.removes()
         && let Some(advice) = advice_for(&present, options.policy)
     {
         lines.push(advice);
@@ -2303,22 +2444,15 @@ fn concentration(files: &[ProcessedFile], options: &RenderOptions) -> Vec<String
 
 /// The shortest change that would make a run clean, if one exists.
 ///
-/// A policy if a policy answers; otherwise the one `--keep-kind` that names
-/// every kind present. Both are computed from `Policy::keeps`, which is the
-/// table the scanner itself decides by — an earlier version guessed at that
-/// table here and guessed wrong.
+/// A policy if a policy answers; otherwise the one `--keep-kind` that names every kind present.
+/// Both are computed from `Policy::keeps`, which is the table the scanner itself decides by — an earlier version guessed at that table here and guessed wrong.
 ///
-/// One suggestion, and the best one available. The rule used to be "only when
-/// one kind accounts for everything", which read `--keep-kind` as taking one
-/// kind — it is variadic, so two kinds is still one flag. The case that got it
-/// wrong is not an edge: a Rust crate with both documentation and a licence
-/// header produces exactly two kinds and never one, which is every crate on
-/// crates.io.
+/// One suggestion, and the best one available.
+/// The rule used to be "only when one kind accounts for everything", which read `--keep-kind` as taking one kind — it is variadic, so two kinds is still one flag.
+/// The case that got it wrong is not an edge: a Rust crate with both documentation and a licence header produces exactly two kinds and never one, which is every crate on crates.io.
 ///
 /// Only a named policy, and only when one covers everything the run found.
-/// That is a statement about what the findings *are* -- they are all a kind
-/// some policy keeps -- rather than a way to make the run pass, and the
-/// difference matters at the moment a gate fires.
+/// That is a statement about what the findings *are* -- they are all a kind some policy keeps -- rather than a way to make the run pass, and the difference matters at the moment a gate fires.
 fn advice_for(present: &[CommentKind], current: Policy) -> Option<String> {
     if let Some(policy) = Policy::strongest_keeping(present)
         && policy != current
@@ -2327,13 +2461,9 @@ fn advice_for(present: &[CommentKind], current: Policy) -> Option<String> {
             "every one of these is a kind `--policy {policy}` keeps"
         ));
     }
-    /* NOTE: And nothing when no policy answers. `--keep-kind line` was offered
-     * here, and it is the shortest way to a green run and says nothing about
-     * whether the run should be green: a gate that names the flag which
-     * silences it, at the moment it fires, is arguing against its own finding.
-     * The kinds are still reported -- the line above this one says what they
-     * are and where -- and what to do about them is a decision rather than a
-     * flag. */
+    /* NOTE: And nothing when no policy answers.
+     * `--keep-kind line` was offered here, and it is the shortest way to a green run and says nothing about whether the run should be green: a gate that names the flag which silences it, at the moment it fires, is arguing against its own finding.
+     * The kinds are still reported -- the line above this one says what they are and where -- and what to do about them is a decision rather than a flag. */
     None
 }
 
@@ -2343,8 +2473,7 @@ fn summary_report(summary: &Summary, options: &RenderOptions, folded: bool) -> S
     let mut report = if summary.files_scanned > 0 {
         format!("{}{skips}", summary_line(summary, options))
     } else if !skips.is_empty() {
-        /* NOTE: Nothing was scanned, so the verdict would count zero files; what the
-         * run actually did was pass every candidate over. */
+        /* NOTE: Nothing was scanned, so the verdict would count zero files; what the run actually did was pass every candidate over. */
         format!("Nothing to {nothing}:{skips}")
     } else if summary.named_skips > 0 {
         format!("Nothing to {nothing}.")
@@ -2357,97 +2486,150 @@ fn summary_report(summary: &Summary, options: &RenderOptions, folded: bool) -> S
     report
 }
 
-/// The verb a run uses for the work it found nothing to do. `fix --dry-run`
-/// borrows the vocabulary of the `fix` it is standing in for, as it does
-/// everywhere else in the summary.
+/// The verb a run uses for the work it found nothing to do.
+/// `fix --dry-run` borrows the vocabulary of the `fix` it is standing in for, as it does everywhere else in the summary.
 fn nothing_to(options: &RenderOptions) -> &'static str {
     match options.operation {
         Operation::Check => "check",
-        Operation::Fix => "fix",
-        Operation::Diff if options.dry_run => "fix",
-        Operation::Diff => "diff",
+        Operation::Fix(Writes::Everything) => "fix",
+        Operation::Fix(Writes::RewritesOnly) => "tidy",
+        Operation::Diff(Writes::Everything) if options.dry_run => "fix",
+        Operation::Diff(Writes::RewritesOnly) if options.dry_run => "tidy",
+        Operation::Diff(_) => "diff",
         Operation::Scan => "scan",
     }
 }
 
+/// What the headline counts, under the noun that covers it.
+///
+/// A run that only removed comments says `comments`, as it always has.
+/// A run that rewrote a document's paragraphs has to say something else: a paragraph of Markdown is not a comment, and a headline that called it one would be the report's first line telling a reader something about their file that is not so.
+fn headline_count(removable: usize, restyled: usize, noun: &str) -> String {
+    if removable == 0 || noun == "comment" {
+        return plural(removable + restyled, noun);
+    }
+    format!(
+        "{} and {}",
+        comments(removable, "removable"),
+        plural(restyled, noun)
+    )
+}
+
 /// The one-line verdict for the run, without the skipped-file clause.
+///
+/// Every sentence here is unchanged when nothing would be rewritten, which is every run that has not asked for a style rule.
+/// That is deliberate: these lines are what a CI job greps for, and a report that reworded itself for every reader because a feature they do not use exists would be a report that broke their job to tell them nothing.
 fn summary_line(summary: &Summary, options: &RenderOptions) -> String {
     let scanned = plural(summary.files_scanned, "file");
+    let files = plural(summary.files_with_findings, "file");
     let found = || {
+        if summary.rewritten() == 0 {
+            return format!(
+                "Found {} in {files} ({scanned} scanned).",
+                comments(summary.removable_comments, "removable"),
+            );
+        }
+        if summary.removable_comments == 0 {
+            return format!(
+                "Found {} to rewrite in {files} ({scanned} scanned).",
+                plural(summary.rewritten(), summary.rewritten_noun()),
+            );
+        }
         format!(
-            "Found {} in {} ({scanned} scanned).",
+            "Found {} and {} to rewrite in {files} ({scanned} scanned).",
             comments(summary.removable_comments, "removable"),
-            plural(summary.files_with_removable, "file")
+            summary.rewritten(),
         )
     };
     match options.operation {
-        /* NOTE: `fix --dry-run` is the diff of a fix: it counts what a real run would
-         * take out and points back at the run that would write it. */
-        Operation::Diff if options.dry_run => {
-            if summary.removable_comments == 0 {
+        /* NOTE: `fix --dry-run` is the diff of a fix: it counts what a real run would take out and points back at the run that would write it. */
+        Operation::Diff(_) if options.dry_run => {
+            if summary.findings() == 0 {
                 return format!("Nothing to fix in {scanned}.");
             }
+            if summary.rewritten() == 0 {
+                return format!(
+                    "Would remove {} in {files}. Rerun without --dry-run to apply.",
+                    comments(summary.removable_comments, ""),
+                );
+            }
             format!(
-                "Would remove {} in {}. Rerun without --dry-run to apply.",
-                comments(summary.removable_comments, ""),
-                plural(summary.files_with_removable, "file")
+                "Would change {} in {files}. Rerun without --dry-run to apply.",
+                comments(summary.findings(), ""),
             )
         }
-        Operation::Check | Operation::Diff => {
-            if summary.removable_comments == 0 {
+        Operation::Check | Operation::Diff(_) => {
+            if summary.findings() == 0 {
                 return format!("No removable comments in {scanned}.");
             }
-            let next = if options.operation == Operation::Diff {
+            let next = if matches!(options.operation, Operation::Diff(_)) {
                 "apply the patch"
-            } else if summary.removable_comments == 1 {
+            } else if summary.removable_comments == 0 {
+                "apply the rewrites"
+            } else if summary.findings() == 1 {
                 "remove it"
             } else {
                 "remove them"
             };
             format!("{} Run `ocomment fix` to {next}.", found())
         }
-        Operation::Fix => {
+        Operation::Fix(writes) => {
             if options.applied && summary.files_changed > 0 {
-                /* NOTE: The evidence, not just the count -- what makes a tool
-                 * safe to wire into a hook is being able to say what was
-                 * checked. Which is why it cannot be printed unconditionally: a
-                 * file that did not scan produces a result that does not scan,
-                 * so a forced write skips that check, and claiming it anyway
-                 * would put the strongest sentence here prints on the one run
-                 * that did not earn it. */
-                let head = format!(
-                    "Removed {} in {} ({scanned} scanned)",
-                    comments(summary.comments_removed, ""),
-                    plural(summary.files_changed, "file")
-                );
+                /* NOTE: The evidence, not just the count -- what makes a tool safe to wire into a hook is being able to say what was checked.
+                 * Which is why it cannot be printed unconditionally: a file that did not scan produces a result that does not scan,
+                 * so a forced write skips that check, and claiming it anyway would put the strongest sentence here prints on the one run that did not earn it. */
+                let head = match writes {
+                    Writes::Everything => format!(
+                        "Removed {} in {} ({scanned} scanned)",
+                        comments(summary.comments_removed, ""),
+                        plural(summary.files_changed, "file")
+                    ),
+                    Writes::RewritesOnly => format!(
+                        "Rewrote {} in {} ({scanned} scanned)",
+                        plural(summary.rewritten(), summary.rewritten_noun()),
+                        plural(summary.files_changed, "file")
+                    ),
+                };
                 if summary.forced_files > 0 {
-                    format!(
+                    return format!(
                         "{head}; {} written from a scan that failed, edited only outside what the failure covers and re-scanned by nothing.",
                         plural(summary.forced_files, "file")
-                    )
-                } else {
-                    format!("{head}; each re-scanned clean and idempotent before writing.")
+                    );
                 }
-            } else if summary.removable_comments == 0 {
-                format!("Nothing to fix in {scanned}.")
+                /* NOTE: A tidying run ends with the half it was told not to touch still in the files.
+                 * Saying only what it wrote would read as "done" over a tree that still has the decisions in it, and the run exits 1 for exactly those. */
+                if writes == Writes::RewritesOnly && summary.removable_comments > 0 {
+                    return format!(
+                        "{head}; {} left to decide on. Run `ocomment check` to see them.",
+                        comments(summary.removable_comments, "removable")
+                    );
+                }
+                format!("{head}; each re-scanned clean and idempotent before writing.")
+            } else if summary.findings() == 0 {
+                format!("Nothing to {} in {scanned}.", nothing_to(options))
             } else {
-                /* NOTE: The transaction never reached the disk; report what is still
-                 * there rather than claiming a removal. */
+                /* NOTE: The transaction never reached the disk; report what is still there rather than claiming a removal. */
                 found()
             }
         }
-        Operation::Scan => format!(
+        Operation::Scan if summary.rewritten() == 0 => format!(
             "Scanned {scanned}: {} ({} removable, {} kept).",
             comments(summary.removable_comments + summary.kept_comments, ""),
             summary.removable_comments,
             summary.kept_comments
         ),
+        Operation::Scan => format!(
+            "Scanned {scanned}: {} ({} removable, {} to rewrite, {} kept).",
+            comments(summary.findings() + summary.kept_comments, ""),
+            summary.removable_comments,
+            summary.rewritten(),
+            summary.kept_comments
+        ),
     }
 }
 
-/// The skipped-file clause appended to the summary line. Only the skips met
-/// while walking are folded here; a named path was already reported on its own
-/// line.
+/// The skipped-file clause appended to the summary line.
+/// Only the skips met while walking are folded here; a named path was already reported on its own line.
 fn skip_clause(summary: &Summary, folded: bool) -> String {
     let total = summary.skipped_files();
     if total == 0 {
@@ -2468,7 +2650,7 @@ fn skip_clause(summary: &Summary, folded: bool) -> String {
 
 /// The `-v` breakdown of what each comment kind contributed.
 fn kind_breakdown(files: &[ProcessedFile], options: &RenderOptions) -> Option<String> {
-    let verb = if options.operation == Operation::Fix && options.applied {
+    let verb = if options.operation.removes() && options.applied {
         "removed"
     } else {
         "removable"
@@ -2481,7 +2663,7 @@ fn kind_breakdown(files: &[ProcessedFile], options: &RenderOptions) -> Option<St
                 .iter()
                 .position(|kind| *kind == comment.kind)
                 .expect("CommentKind::ALL lists every kind");
-            if comment.disposition.is_remove() {
+            if comment.action().removes() {
                 removable[slot] += 1;
             } else {
                 kept[slot] += 1;
@@ -2506,17 +2688,12 @@ pub(crate) fn color(code: &'static str, enabled: bool) -> &'static str {
 
 /// The path half of a report line, and the hyperlink wrapped around it.
 ///
-/// A file name is chosen by whoever made the file, so the shown half is
-/// untrusted input on its way to a terminal exactly like the preview beside
-/// it, and gets `sanitize_path`'s treatment: one line, no control characters,
+/// A file name is chosen by whoever made the file, so the shown half is untrusted input on its way to a terminal exactly like the preview beside it, and gets `sanitize_path`'s treatment: one line, no control characters,
 /// and no width cap, because a path cut to an ellipsis names no file.
 ///
 /// The link *target* is untrusted for the same reason and by the same route —
-/// the frame around it is written in escape bytes, so a name carrying one of
-/// its own would close the frame early and the rest of the name would be read
-/// as terminal instructions. A URL cannot carry a byte it has no spelling for
-/// anyway, so the target is encoded outright rather than patched up for the
-/// three characters somebody thought of first.
+/// the frame around it is written in escape bytes, so a name carrying one of its own would close the frame early and the rest of the name would be read as terminal instructions.
+/// A URL cannot carry a byte it has no spelling for anyway, so the target is encoded outright rather than patched up for the three characters somebody thought of first.
 fn display_path(path: &Path, hyperlinks: bool) -> String {
     let display = sanitize_path(&path.display().to_string());
     if !hyperlinks {
@@ -2533,16 +2710,10 @@ fn display_path(path: &Path, hyperlinks: bool) -> String {
     format!("\x1b]8;;file://{target}\x1b\\{display}\x1b]8;;\x1b\\")
 }
 
-/// The path half of a `file://` URL, with every byte a URL may not carry
-/// spelled as the `%XX` a reader of the URL puts back.
+/// The path half of a `file://` URL, with every byte a URL may not carry spelled as the `%XX` a reader of the URL puts back.
 ///
-/// The unreserved set of RFC 3986 is kept as it stands, and so is the `/` that
-/// separates one path segment from the next; everything else — the space and
-/// the `#` that used to be special-cased here, the `%` that makes an encoding
-/// an encoding, and every control byte — is encoded. A path is bytes rather
-/// than characters, so the encoding is done over the UTF-8 the name is spelled
-/// in: a `%XX` pair is defined as a byte, and half an encoded character is not
-/// a character a terminal can put back together.
+/// The unreserved set of RFC 3986 is kept as it stands, and so is the `/` that separates one path segment from the next; everything else — the space and the `#` that used to be special-cased here, the `%` that makes an encoding an encoding, and every control byte — is encoded.
+/// A path is bytes rather than characters, so the encoding is done over the UTF-8 the name is spelled in: a `%XX` pair is defined as a byte, and half an encoded character is not a character a terminal can put back together.
 fn percent_encode(path: impl AsRef<[u8]>) -> String {
     let path = path.as_ref();
     let mut encoded = String::with_capacity(path.len());
@@ -2562,8 +2733,8 @@ fn push_percent_encoded(output: &mut String, byte: u8) {
     output.push(HEX[usize::from(byte & 0xf)]);
 }
 
-/// The digits a percent-encoded byte is spelled with. RFC 3986 asks for the
-/// upper-case ones.
+/// The digits a percent-encoded byte is spelled with.
+/// RFC 3986 asks for the upper-case ones.
 const HEX: [char; 16] = [
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F',
 ];
@@ -2581,16 +2752,11 @@ fn render_json(
         version: u8,
         files: JsonFiles<'a>,
         skipped: JsonSkipped<'a>,
-        /// The same grouping the other two formats show, for a caller that
-        /// parses rather than reads.
+        /// The same grouping the other two formats show, for a caller that parses rather than reads.
         ///
         /// `files` says where every comment is and what was decided about it,
-        /// which is the report. This says what its author is being asked to do
-        /// about it, which is the part a caller acts on -- and it is here
-        /// rather than beside each comment because the unit of the answer is
-        /// the decision, not the finding: four comments under one question are
-        /// one edit to make four times, and a caller that reads them one at a
-        /// time has to rebuild that before it can start.
+        /// which is the report.
+        /// This says what its author is being asked to do about it, which is the part a caller acts on -- and it is here rather than beside each comment because the unit of the answer is the decision, not the finding: four comments under one question are one edit to make four times, and a caller that reads them one at a time has to rebuild that before it can start.
         #[serde(skip_serializing_if = "Vec::is_empty")]
         decisions: Vec<JsonDecision>,
     }
@@ -2617,8 +2783,7 @@ struct JsonDecision {
     instruction: String,
     comments: usize,
     findings: Vec<JsonFinding>,
-    /// The setting that would stop this being asked, as the lines to add and
-    /// the file to add them to.
+    /// The setting that would stop this being asked, as the lines to add and the file to add them to.
     #[serde(skip_serializing_if = "Option::is_none")]
     keep_instead: Option<JsonKeep>,
 }
@@ -2626,14 +2791,10 @@ struct JsonDecision {
 #[derive(Serialize)]
 struct JsonFinding {
     path: String,
-    /// The bytes the finding covers, from its first comment's first byte to
-    /// its last comment's last.
+    /// The bytes the finding covers, from its first comment's first byte to its last comment's last.
     ///
-    /// A path and a line do not identify it. Two removable comments share a
-    /// line whenever one sits beside code, and two findings then reached this
-    /// format identical in every field — so a reader could neither tell them
-    /// apart nor act on either without going back to the file to work out
-    /// which was which.
+    /// A path and a line do not identify it.
+    /// Two removable comments share a line whenever one sits beside code, and two findings then reached this format identical in every field — so a reader could neither tell them apart nor act on either without going back to the file to work out which was which.
     span: ByteSpan,
     line: usize,
     /// One-based, and the same column the text formats put after the line.
@@ -2641,8 +2802,8 @@ struct JsonFinding {
     end_line: usize,
     /// The lines as they are.
     old: Vec<String>,
-    /// What would replace them. Absent when the answer is to delete rather
-    /// than to rewrite, which is not the same as replacing them with nothing.
+    /// What would replace them.
+    /// Absent when the answer is to delete rather than to rewrite, which is not the same as replacing them with nothing.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     new: Vec<String>,
     /// The code the comment is about, when the decision turns on it.
@@ -2786,27 +2947,23 @@ pub struct JsonOptions {
 /// Where a SARIF reader is sent to learn what the tool itself is.
 const TOOL_INFORMATION_URI: &str = "https://github.com/P4suta/OComment";
 
-/// Where a rule about a comment sends a reader asking why that comment is
-/// reported — and why the one beside it is not.
+/// Where a rule about a comment sends a reader asking why that comment is reported — and why the one beside it is not.
 const KIND_HELP_URI: &str = "https://github.com/P4suta/OComment#why-was-this-comment-kept";
 
 /// The base id a path under the directory the run walked is reported against.
-/// SARIF readers, GitHub code scanning among them, resolve `%SRCROOT%` to the
-/// root of the checkout.
+/// SARIF readers, GitHub code scanning among them, resolve `%SRCROOT%` to the root of the checkout.
 const SRCROOT: &str = "%SRCROOT%";
 
-/// The one sentence every scan diagnostic is described by. The codes are as
-/// varied as the languages that raise them, and the result carries the message
-/// that says what was actually met.
+/// The one sentence every scan diagnostic is described by.
+/// The codes are as varied as the languages that raise them, and the result carries the message that says what was actually met.
 const DIAGNOSTIC_DESCRIPTION: &str =
     "A problem OComment met while scanning the file; the message on the result says what it was.";
 
 /// The repository spelling a machine format reports a path under.
 ///
 /// GitHub's `file=` property is a repository path, while SARIF wants a URI.
-/// Both start from this byte-preserving spelling: platform separators become
-/// `/`, and `.` segments left by a typed path are removed. Keeping this layer
-/// separate prevents URI escaping from being mistaken for a repository name.
+/// Both start from this byte-preserving spelling: platform separators become `/`, and `.` segments left by a typed path are removed.
+/// Keeping this layer separate prevents URI escaping from being mistaken for a repository name.
 fn report_path_bytes(path: &Path) -> Vec<u8> {
     #[cfg(unix)]
     let bytes = {
@@ -2821,8 +2978,7 @@ fn report_path_bytes(path: &Path) -> Vec<u8> {
         .filter(|segment| *segment != b".")
         .collect();
     if segments.is_empty() {
-        /* NOTE: The path was `.` (or `./`) and naming nothing at all would be worse
-         * than naming the directory. */
+        /* NOTE: The path was `.` (or `./`) and naming nothing at all would be worse than naming the directory. */
         return bytes;
     }
     let mut normalized = Vec::with_capacity(bytes.len());
@@ -2866,9 +3022,8 @@ fn lossless_text(mut bytes: &[u8]) -> String {
     text
 }
 
-/// The URI spelling SARIF requires. Unlike a GitHub annotation property it is
-/// an RFC 3986 reference, so spaces, controls, literal percent signs, and raw
-/// Unix filename bytes are percent-encoded exactly once.
+/// The URI spelling SARIF requires.
+/// Unlike a GitHub annotation property it is an RFC 3986 reference, so spaces, controls, literal percent signs, and raw Unix filename bytes are percent-encoded exactly once.
 fn sarif_uri(path: &Path) -> String {
     if path == Path::new(STDIN_PATH) {
         return STDIN_PATH.to_owned();
@@ -2884,11 +3039,9 @@ fn sarif_uri(path: &Path) -> String {
     encoded
 }
 
-/// Encode a GitHub workflow-command `file=` property from path bytes. This is
-/// not URI encoding: GitHub decodes its small `%25`/`%0D`/`%0A` command
-/// alphabet before matching the repository path. Invalid UTF-8 has no command
-/// representation, so it remains visible and non-lossy as `%XX` instead of
-/// silently becoming U+FFFD.
+/// Encode a GitHub workflow-command `file=` property from path bytes.
+/// This is not URI encoding: GitHub decodes its small `%25`/`%0D`/`%0A` command alphabet before matching the repository path.
+/// Invalid UTF-8 has no command representation, so it remains visible and non-lossy as `%XX` instead of silently becoming U+FFFD.
 fn github_path(path: &Path) -> String {
     let bytes = report_path_bytes(path);
     let mut escaped = String::with_capacity(bytes.len());
@@ -2918,13 +3071,8 @@ fn github_path(path: &Path) -> String {
 
 /// The SARIF `artifactLocation` for a reported path.
 ///
-/// A path under the directory the run started in is reported against
-/// `%SRCROOT%`: SARIF resolves a relative URI against a base id, and a reader
-/// given none has nothing to resolve it against, so the finding lands on no
-/// file. An absolute path is not under the checkout as far as the run can
-/// tell, one that climbs out through `..` has left it, and the pseudo-path
-/// standard input is reported under is not a file at all — each of those is
-/// reported as it stands, with no base id claiming otherwise.
+/// A path under the directory the run started in is reported against `%SRCROOT%`: SARIF resolves a relative URI against a base id, and a reader given none has nothing to resolve it against, so the finding lands on no file.
+/// An absolute path is not under the checkout as far as the run can tell, one that climbs out through `..` has left it, and the pseudo-path standard input is reported under is not a file at all — each of those is reported as it stands, with no base id claiming otherwise.
 fn artifact_location(path: &Path) -> Value {
     let repository_path = report_path(path);
     let uri = sarif_uri(path);
@@ -2940,22 +3088,15 @@ fn artifact_location(path: &Path) -> Value {
     }
 }
 
-/// Whether a repository-relative URI opens with a segment no reader will take
-/// for a directory name.
+/// Whether a repository-relative URI opens with a segment no reader will take for a directory name.
 ///
-/// A `uri` is read as a URI, and RFC 3986 hands a relative reference's first
-/// segment to the scheme as soon as it holds a colon: `c:/a.rs` parses as the
-/// scheme `c` over the path `/a.rs`, and a Windows reader sees a drive letter
-/// in it besides. A POSIX checkout is free to hold a directory named `c:`, so
-/// the path says which it meant with the one `.` segment the standard keeps
-/// for exactly this: `./c:/a.rs` is a relative reference whatever reads it,
+/// A `uri` is read as a URI, and RFC 3986 hands a relative reference's first segment to the scheme as soon as it holds a colon: `c:/a.rs` parses as the scheme `c` over the path `/a.rs`, and a Windows reader sees a drive letter in it besides.
+/// A POSIX checkout is free to hold a directory named `c:`, so the path says which it meant with the one `.` segment the standard keeps for exactly this: `./c:/a.rs` is a relative reference whatever reads it,
 /// and it still resolves against `%SRCROOT%`.
 ///
-/// Only a repository-relative path is treated this way. A GitHub annotation is
-/// matched against the paths the checkout uses rather than parsed as a URI, so
-/// [`report_path`] leaves the spelling alone and only this document adds to it;
-/// `tools/validate_schemas.py` is the other half of the rule and turns down
-/// the bare form.
+/// Only a repository-relative path is treated this way.
+/// A GitHub annotation is matched against the paths the checkout uses rather than parsed as a URI, so [`report_path`] leaves the spelling alone and only this document adds to it;
+/// `tools/validate_schemas.py` is the other half of the rule and turns down the bare form.
 fn reads_as_a_drive_letter(uri: &str) -> bool {
     let mut head = uri.split('/').next().unwrap_or_default().chars();
     matches!(
@@ -2976,15 +3117,11 @@ fn under_source_root(path: &Path) -> bool {
 
 /// The rules of one SARIF run, and the index each result points at.
 ///
-/// A result names its rule twice: by `ruleId`, and by the position of that
-/// rule's description in `tool.driver.rules`. A code-scanning UI shows a
-/// finding through that description — its title, the sentence under it, and
-/// the link it offers — so handing out the id and the index together is what
-/// keeps a result from pointing at a description that is not there.
+/// A result names its rule twice: by `ruleId`, and by the position of that rule's description in `tool.driver.rules`.
+/// A code-scanning UI shows a finding through that description — its title, the sentence under it, and the link it offers — so handing out the id and the index together is what keeps a result from pointing at a description that is not there.
 ///
-/// Every comment kind is described whether or not the run met one, because the
-/// rules a tool reports are also read as the list of what it can find. The
-/// rest — a scan diagnostic, a skipped file, a file that could not be read —
+/// Every comment kind is described whether or not the run met one, because the rules a tool reports are also read as the list of what it can find.
+/// The rest — a scan diagnostic, a skipped file, a file that could not be read —
 /// are described as the run meets them.
 struct SarifRules {
     entries: Vec<Value>,
@@ -3008,11 +3145,35 @@ impl SarifRules {
                 KIND_HELP_URI,
             );
         }
+        /* NOTE: Both origins of every rule, written out rather than described on first use.
+         * The table is the tool's declared vocabulary, and a consumer that reads it to build a filter should find every identifier this run can emit whether or not this run emitted it. */
+        for rule in StyleRule::ALL {
+            for (origin, what) in [
+                (ProseOrigin::Comments, "comment paragraph"),
+                (ProseOrigin::Document, "paragraph"),
+            ] {
+                let run = ProseRun {
+                    span: ocomment_core::ByteSpan::new(0, 0),
+                    origin,
+                    rule,
+                    replacement: Vec::new(),
+                };
+                rules.describe(
+                    &run_rule_id(&run),
+                    "note",
+                    &format!("{} {what}", sentence_case(rewrite_label(rule))),
+                    &format!(
+                        "A {what} OComment would write differently: {}.",
+                        rule.detail()
+                    ),
+                    KIND_HELP_URI,
+                );
+            }
+        }
         rules
     }
 
-    /// The index of the rule `id`, describing it first if this run has not
-    /// reported it before.
+    /// The index of the rule `id`, describing it first if this run has not reported it before.
     fn describe(&mut self, id: &str, level: &str, short: &str, full: &str, help: &str) -> usize {
         if let Some(&index) = self.indices.get(id) {
             return index;
@@ -3064,9 +3225,8 @@ fn sarif_level(severity: ocomment_core::Severity) -> &'static str {
     }
 }
 
-/// A SARIF result array serialized one finding at a time. Keeping the rule
-/// table separate lets the header be finalized first without retaining a
-/// `serde_json::Value` for every comment in the run.
+/// A SARIF result array serialized one finding at a time.
+/// Keeping the rule table separate lets the header be finalized first without retaining a `serde_json::Value` for every comment in the run.
 struct SarifResults<'a> {
     files: &'a [ProcessedFile],
     skipped: &'a [SkippedFile],
@@ -3081,24 +3241,14 @@ impl Serialize for SarifResults<'_> {
         let mut results = serializer.serialize_seq(None)?;
         for file in self.files {
             if file.result.report.diagnostics.is_empty()
-                && !file
-                    .result
-                    .report
-                    .comments
-                    .iter()
-                    .any(|comment| comment.disposition.is_remove())
+                && !file.result.report.comments.iter().any(reported)
+                && file.result.report.runs.is_empty()
             {
                 continue;
             }
             let location = artifact_location(&file.path);
             let lines = LineIndex::new(&file.source);
-            for comment in file
-                .result
-                .report
-                .comments
-                .iter()
-                .filter(|comment| comment.disposition.is_remove())
-            {
+            for comment in file.result.report.comments.iter().filter(|c| reported(c)) {
                 let (line, column) = lines.line_column(comment.span.start);
                 let (end_line, end_column) = lines.line_column(comment.span.end);
                 let (fix_span, replacement) = fix_for_span(file, comment.span);
@@ -3109,20 +3259,54 @@ impl Serialize for SarifResults<'_> {
                     "ruleId": format!("removable-{kind}"),
                     "ruleIndex": self.rules.kind(comment.kind),
                     "level": "note",
-                    "message": {"text": removable_label(comment.kind)},
+                    "message": {"text": finding_label(comment)},
                     "locations": [{"physicalLocation": {
                         "artifactLocation": location.clone(),
                         "region": {"startLine": line, "startColumn": column,
                             "endLine": end_line, "endColumn": end_column}
                     }}],
                     "fixes": [{
-                        "description": {"text": "Remove comment with OComment"},
+                        "description": {"text": if comment.action().removes() {
+                            "Remove comment with OComment"
+                        } else {
+                            "Rewrite comment with OComment"
+                        }},
                         "artifactChanges": [{
                             "artifactLocation": location.clone(),
                             "replacements": [{"deletedRegion": {
                                 "startLine": fix_line, "startColumn": fix_column,
                                 "endLine": fix_end_line, "endColumn": fix_end_column
                             }, "insertedContent": {"text": replacement}}]
+                        }]
+                    }]
+                }))?;
+            }
+            /* NOTE: And the paragraphs, which are not any one comment's.
+             * A run's replacement is the verdict itself rather than something derived from the file, so the fix here carries it directly instead of asking `fix_for_span`, which is about the lines a *removal* has to swallow. */
+            for run in &file.result.report.runs {
+                let (line, column) = lines.line_column(run.span.start);
+                let (end_line, end_column) = lines.line_column(run.span.end);
+                let id = run_rule_id(run);
+                results.serialize_element(&json!({
+                    "ruleId": id,
+                    "ruleIndex": self.rules.index(&id),
+                    "level": "note",
+                    "message": {"text": run_label(run)},
+                    "locations": [{"physicalLocation": {
+                        "artifactLocation": location.clone(),
+                        "region": {"startLine": line, "startColumn": column,
+                            "endLine": end_line, "endColumn": end_column}
+                    }}],
+                    "fixes": [{
+                        "description": {"text": "Rewrite paragraph with OComment"},
+                        "artifactChanges": [{
+                            "artifactLocation": location.clone(),
+                            "replacements": [{"deletedRegion": {
+                                "startLine": line, "startColumn": column,
+                                "endLine": end_line, "endColumn": end_column
+                            }, "insertedContent": {
+                                "text": String::from_utf8_lossy(&run.replacement)
+                            }}]
                         }]
                     }]
                 }))?;
@@ -3253,23 +3437,14 @@ fn render_sarif(
     Ok(())
 }
 
-/// The rewrite a removed comment's SARIF fix offers: the bytes it deletes and
-/// the bytes that go in their place.
+/// The rewrite a removed comment's SARIF fix offers: the bytes it deletes and the bytes that go in their place.
 ///
-/// A fix is an offer to rewrite the file, so what it deletes has to be what the
-/// run would have deleted. Under [`ocomment_core::Layout::Compact`] that is
-/// wider than the comment: a comment alone on its line takes the indentation
-/// before it and the terminator after it with it, and a fix cut back to the
-/// comment's own span would leave behind exactly the blank line that layout
-/// exists to close up. So the edit that *contains* the comment is what is
-/// reported, rather than one that starts and ends where the comment does.
+/// A fix is an offer to rewrite the file, so what it deletes has to be what the run would have deleted.
+/// Under [`ocomment_core::Layout::Compact`] that is wider than the comment: a comment alone on its line takes the indentation before it and the terminator after it with it, and a fix cut back to the comment's own span would leave behind exactly the blank line that layout exists to close up.
+/// So the edit that *contains* the comment is what is reported, rather than one that starts and ends where the comment does.
 ///
-/// Edits are sorted and non-overlapping and each one spans the comment it
-/// removes, so at most one of them can contain a given comment. A file whose
-/// report came back invalid has comments but no edits — nothing is rewritten
-/// from a source the scanner could not read to the end — and there the
-/// comment's own span, with nothing to put in its place, is all there is to
-/// offer.
+/// Edits are sorted and non-overlapping and each one spans the comment it removes, so at most one of them can contain a given comment.
+/// A file whose report came back invalid has comments but no edits — nothing is rewritten from a source the scanner could not read to the end — and there the comment's own span, with nothing to put in its place, is all there is to offer.
 fn fix_for_span(file: &ProcessedFile, span: ByteSpan) -> (ByteSpan, String) {
     file.result
         .edits
@@ -3288,22 +3463,17 @@ fn fix_for_span(file: &ProcessedFile, span: ByteSpan) -> (ByteSpan, String) {
 
 /// The `::` level a removable comment is annotated at.
 ///
-/// An annotation level is a claim about what the run means, and the run
-/// already makes that claim in its exit status: `check` and `diff` answer a
-/// finding with 1 and every other operation ends at 0 whatever it found. A
-/// gate that fails on the 1 was posting `::notice` about the very comments it
-/// failed over, which reads in the checks tab as though nothing was wrong --
-/// and GitHub folds notices away where it surfaces errors. So the level
-/// follows the status: what fails the run is an error, and what is offered for
-/// information is a notice. `--annotation-level` overrules it for a job that
-/// posts annotations without gating on them, or gates without wanting the red.
+/// An annotation level is a claim about what the run means, and the run already makes that claim in its exit status: `check` and `diff` answer a finding with 1 and every other operation ends at 0 whatever it found.
+/// A gate that fails on the 1 was posting `::notice` about the very comments it failed over, which reads in the checks tab as though nothing was wrong -- and GitHub folds notices away where it surfaces errors.
+/// So the level follows the status: what fails the run is an error, and what is offered for information is a notice.
+/// `--annotation-level` overrules it for a job that posts annotations without gating on them, or gates without wanting the red.
 fn annotation_level(options: &RenderOptions) -> &'static str {
     if let Some(level) = options.annotation_level {
         return level.as_str();
     }
     match options.operation {
-        Operation::Check | Operation::Diff => "error",
-        Operation::Scan | Operation::Fix => "notice",
+        Operation::Check | Operation::Diff(_) => "error",
+        Operation::Scan | Operation::Fix(_) => "notice",
     }
 }
 
@@ -3317,29 +3487,29 @@ fn render_github(
     let level = annotation_level(options);
     for file in files {
         if file.result.report.diagnostics.is_empty()
-            && !file
-                .result
-                .report
-                .comments
-                .iter()
-                .any(|comment| comment.disposition.is_remove())
+            && !file.result.report.comments.iter().any(reported)
+            && file.result.report.runs.is_empty()
         {
             continue;
         }
         let lines = LineIndex::new(&file.source);
-        for comment in file
-            .result
-            .report
-            .comments
-            .iter()
-            .filter(|comment| comment.disposition.is_remove())
-        {
+        for comment in file.result.report.comments.iter().filter(|c| reported(c)) {
             let (line, column) = lines.line_column(comment.span.start);
             wrote(writeln!(
                 output,
                 "::{level} file={},line={line},col={column}::{}",
                 github_path(&file.path),
-                removable_label(comment.kind)
+                finding_label(comment)
+            ))?;
+        }
+        // NOTE: And the paragraphs, which are not any one comment's and are annotated where they open.
+        for run in &file.result.report.runs {
+            let (line, column) = lines.line_column(run.span.start);
+            wrote(writeln!(
+                output,
+                "::{level} file={},line={line},col={column}::{}",
+                github_path(&file.path),
+                run_label(run)
             ))?;
         }
         for diagnostic in &file.result.report.diagnostics {
@@ -3353,17 +3523,10 @@ fn render_github(
             ))?;
         }
     }
-    /* INVARIANT: `-q` trims the human report down to what went wrong, and there is
-     * no such thing to trim here: an annotation is the *product* of this
-     * format, not commentary about it, and a hook told to work quietly is
-     * still owed the notice for the path its caller named and the error for
-     * the file it could not read. So the visibility rule below is asked at
-     * `Normal` however quiet the run was, and only `-v` widens it. */
+    /* INVARIANT: `-q` trims the human report down to what went wrong, and there is no such thing to trim here: an annotation is the *product* of this format, not commentary about it, and a hook told to work quietly is still owed the notice for the path its caller named and the error for the file it could not read.
+     * So the visibility rule below is asked at `Normal` however quiet the run was, and only `-v` widens it. */
     let visibility = verbosity.at_least_normal();
-    /* NOTE: An annotation costs the reader a line of the checks tab, so a walked
-     * skip is folded away here exactly as it is in the human report: a run
-     * over a repository with forty Markdown files in it must not post forty
-     * notices about them. */
+    /* NOTE: An annotation costs the reader a line of the checks tab, so a walked skip is folded away here exactly as it is in the human report: a run over a repository with forty Markdown files in it must not post forty notices about them. */
     for item in skipped
         .iter()
         .filter(|item| skip_is_visible(item, visibility))
@@ -3420,9 +3583,8 @@ pub fn unified_diff(path: &Path, original: &[u8], transformed: &[u8]) -> Vec<u8>
     output
 }
 
-/// Split on the byte Git treats as a line ending without decoding or replacing
-/// any other byte. The newline remains in each item so the resulting patch can
-/// reconstruct the source exactly.
+/// Split on the byte Git treats as a line ending without decoding or replacing any other byte.
+/// The newline remains in each item so the resulting patch can reconstruct the source exactly.
 fn byte_lines(bytes: &[u8]) -> Vec<&[u8]> {
     let mut lines = Vec::new();
     let mut start = 0;
@@ -3438,9 +3600,8 @@ fn byte_lines(bytes: &[u8]) -> Vec<&[u8]> {
     lines
 }
 
-/// Spell a patch header path the way Git's parser accepts it. Ordinary names
-/// stay readable; bytes that could terminate or corrupt the header use Git's
-/// C-style quoting, including three-digit octal escapes for non-UTF-8 bytes.
+/// Spell a patch header path the way Git's parser accepts it.
+/// Ordinary names stay readable; bytes that could terminate or corrupt the header use Git's C-style quoting, including three-digit octal escapes for non-UTF-8 bytes.
 fn git_patch_path(prefix: &[u8], path: &Path) -> Vec<u8> {
     #[cfg(unix)]
     let bytes = {
@@ -3478,17 +3639,13 @@ fn git_patch_path(prefix: &[u8], path: &Path) -> Vec<u8> {
     output
 }
 
-/// A reusable byte-offset index for the CLI's one-based line and column
-/// coordinates.
+/// A reusable byte-offset index for the CLI's one-based line and column coordinates.
 ///
-/// `after_first` preserves the established answer for an offset on the LF of
-/// a CRLF pair: that offset is already on the following line, while an offset
-/// after the pair begins its column after both bytes.
+/// `after_first` preserves the established answer for an offset on the LF of a CRLF pair: that offset is already on the following line, while an offset after the pair begins its column after both bytes.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct LineIndex {
-    /// `(after_first << 1) | is_crlf`. Packing the CRLF bit keeps the index to
-    /// one machine word per logical line break even though an offset on the
-    /// LF and an offset after it have different column starts.
+    /// `(after_first << 1) | is_crlf`.
+    /// Packing the CRLF bit keeps the index to one machine word per logical line break even though an offset on the LF and an offset after it have different column starts.
     breaks: Vec<usize>,
     source_len: usize,
 }
@@ -3552,6 +3709,25 @@ fn github_escape(text: &str) -> String {
 pub fn changed(files: &[ProcessedFile]) -> bool {
     files.iter().any(|file| file.result.changed())
 }
+
+/// The code a finished run answers with.
+///
+/// One function rather than the same `match` at each of the two places a run can finish -- over a working tree and over a Git index -- because they are one contract that had grown the same shape twice.
+/// Exit 2 is decided before this: a run that could not do its job at all does not reach here.
+///
+/// The last two clauses are the ones a commit hook depends on.
+/// A tidying run wrote one half of what it found and left the other where it was, and the half it left is a finding like any other.
+/// A staged write changed the bytes the commit will carry, so the run that did it cannot also report that there was nothing to see: what the author typed and what Git is about to record have stopped being the same thing, and the exit code is the only place that can say so.
+#[must_use]
+pub fn exit_code(operation: Operation, files: &[ProcessedFile], rewrote_the_index: bool) -> u8 {
+    let left_to_decide = files.iter().any(|file| removable_count(file) > 0);
+    match operation {
+        Operation::Check | Operation::Diff(_) if changed(files) => 1,
+        Operation::Fix(Writes::RewritesOnly) if left_to_decide => 1,
+        Operation::Fix(_) if rewrote_the_index => 1,
+        Operation::Check | Operation::Scan | Operation::Diff(_) | Operation::Fix(_) => 0,
+    }
+}
 pub fn invalid(files: &[ProcessedFile]) -> bool {
     files.iter().any(|file| !file.result.report.valid)
 }
@@ -3560,19 +3736,13 @@ pub fn invalid(files: &[ProcessedFile]) -> bool {
 mod tests {
     use super::*;
 
-    /// Every reason `--deny-skipped` accepts has to be a reason a skip is
-    /// actually reported under.
+    /// Every reason `--deny-skipped` accepts has to be a reason a skip is actually reported under.
     ///
-    /// The flag matches the caller's word against the label the report gives
-    /// the skip, so a reason with no skip behind it is a reason that turns the
-    /// gate off and says nothing — which is the failure the flag exists to
-    /// catch, one level up from where it catches it. The two spellings live in
-    /// one file so a change to either is visible beside the other; this is
-    /// what makes that arrangement a check rather than a convention.
+    /// The flag matches the caller's word against the label the report gives the skip, so a reason with no skip behind it is a reason that turns the gate off and says nothing — which is the failure the flag exists to catch, one level up from where it catches it.
+    /// The two spellings live in one file so a change to either is visible beside the other; this is what makes that arrangement a check rather than a convention.
     #[test]
     fn every_refusable_reason_is_one_a_skip_is_reported_under() {
-        /* NOTE: The reason strings as `files.rs` writes them, so this fails if
-         * a skip is reworded without its refusable name following. */
+        /* NOTE: The reason strings as `files.rs` writes them, so this fails if a skip is reworded without its refusable name following. */
         let reported = [
             (SkipReason::UnknownLanguage, crate::files::NO_LANGUAGE),
             (SkipReason::TooLarge, "larger than 1048576 bytes"),
@@ -3589,14 +3759,11 @@ mod tests {
                 "`{reason:?}` names no skip the report produces"
             );
         }
-        /* NOTE: The one that is not a `skip_label` answer. An unreadable file
-         * carries the I/O error as its reason, and `coverage::denied` labels
-         * it from this enum rather than from a literal of its own. */
+        /* NOTE: The one that is not a `skip_label` answer.
+         * An unreadable file carries the I/O error as its reason, and `coverage::denied` labels it from this enum rather than from a literal of its own. */
         let covered: Vec<SkipReason> = reported.iter().map(|(reason, _)| *reason).collect();
-        /* NOTE: Asked of clap's own variant list rather than of a second one
-         * written here. What the flag accepts is the set that has to be
-         * covered, and a hand-kept copy of it is one more place to add a
-         * reason to and forget. */
+        /* NOTE: Asked of clap's own variant list rather than of a second one written here.
+         * What the flag accepts is the set that has to be covered, and a hand-kept copy of it is one more place to add a reason to and forget. */
         for reason in SkipReason::value_variants() {
             assert!(
                 covered.contains(reason) || *reason == SkipReason::Unreadable,
@@ -3653,11 +3820,8 @@ mod tests {
         }
     }
 
-    /// The frame around a hyperlink target is written in escape bytes, so a
-    /// name carrying one of its own would close the frame early and be read as
-    /// terminal instructions from there on. Nor may a URL carry the `%` that
-    /// makes an encoding an encoding, the space that ends a URL, or the `#`
-    /// that starts a fragment.
+    /// The frame around a hyperlink target is written in escape bytes, so a name carrying one of its own would close the frame early and be read as terminal instructions from there on.
+    /// Nor may a URL carry the `%` that makes an encoding an encoding, the space that ends a URL, or the `#` that starts a fragment.
     #[test]
     fn a_hyperlink_target_encodes_every_byte_a_url_may_not_carry() {
         assert_eq!(
@@ -3669,13 +3833,11 @@ mod tests {
             percent_encode("/tmp/evil\u{1b}[2Jname.rs"),
             "/tmp/evil%1B%5B2Jname.rs"
         );
-        /* NOTE: A path is bytes, and one character is as many `%XX` pairs as it
-         * takes to spell it. */
+        /* NOTE: A path is bytes, and one character is as many `%XX` pairs as it takes to spell it. */
         assert_eq!(percent_encode("/tmp/\u{e9}.rs"), "/tmp/%C3%A9.rs");
     }
 
-    /// A name is shown to be typed back, so its own spacing survives; what
-    /// does not is anything that would drive the terminal or break the row.
+    /// A name is shown to be typed back, so its own spacing survives; what does not is anything that would drive the terminal or break the row.
     #[test]
     fn a_sanitized_path_keeps_its_spacing_and_loses_its_controls() {
         assert_eq!(sanitize_path(" lead.rs "), " lead.rs ");
@@ -3685,9 +3847,8 @@ mod tests {
     }
 
     /// The reported path is read by a machine that has to find the file again:
-    /// GitHub matches an annotation by `file=`, and a SARIF reader resolves
-    /// `artifactLocation.uri` against the checkout. A Windows separator and a
-    /// `.` segment both name a file no checkout has.
+    /// GitHub matches an annotation by `file=`, and a SARIF reader resolves `artifactLocation.uri` against the checkout.
+    /// A Windows separator and a `.` segment both name a file no checkout has.
     #[test]
     fn report_path_spells_a_path_the_way_a_repository_does() {
         assert_eq!(report_path(Path::new("./a.rs")), "a.rs");
@@ -3704,8 +3865,7 @@ mod tests {
             assert_eq!(report_path(Path::new(r"sub\doc.rs")), r"sub\doc.rs");
             assert_eq!(sarif_uri(Path::new(r"sub\doc.rs")), "sub%5Cdoc.rs");
         }
-        /* NOTE: A path that leaves the tree, an absolute one, and standard input are
-         * all left as they are; only the separators are normalised. */
+        /* NOTE: A path that leaves the tree, an absolute one, and standard input are all left as they are; only the separators are normalised. */
         assert_eq!(report_path(Path::new("../sibling/a.rs")), "../sibling/a.rs");
         assert_eq!(report_path(Path::new("/tmp/a.rs")), "/tmp/a.rs");
         assert_eq!(report_path(Path::new(STDIN_PATH)), STDIN_PATH);
@@ -3731,8 +3891,7 @@ mod tests {
         assert_ne!(github_path(literal_percent), github_path(&raw_invalid));
     }
 
-    /// `%SRCROOT%` says the path is measured from the root of the checkout, so
-    /// it is claimed only for the paths that are.
+    /// `%SRCROOT%` says the path is measured from the root of the checkout, so it is claimed only for the paths that are.
     #[test]
     fn only_a_path_inside_the_tree_is_reported_against_the_source_root() {
         for inside in ["a.rs", "sub/doc.rs", "./sub/doc.rs"] {
@@ -3752,16 +3911,29 @@ mod tests {
         }
     }
 
-    /// A relative reference whose first segment holds a colon is read as a
-    /// scheme, so a checkout that really does hold a directory named `c:` says
-    /// so with the one `.` segment a URI keeps for the purpose. Nothing else
-    /// gains one, and a path that is under no base is left exactly as it was.
+    /// A relative reference whose first segment holds a colon is read as a scheme, so a checkout that really does hold a directory named `c:` says so with the one `.` segment a URI keeps for the purpose.
+    /// Nothing else gains one, and a path that is under no base is left exactly as it was.
+    ///
+    /// The two spellings this is about are a different path on each system, so the case is asked once per system rather than assumed.
+    /// `c:/a.rs` names a directory called `c:` in a POSIX checkout and the root of a drive on Windows, and `std::path` says so: `components()` yields two `Normal`s there and a `Prefix` here.
+    /// Being under the source root and needing a `./` follows from that, so the answer differs and both are right.
     #[test]
     fn a_first_segment_that_reads_as_a_drive_letter_is_disambiguated() {
-        let location = artifact_location(Path::new("c:/a.rs"));
-        assert_eq!(location["uri"], json!("./c:/a.rs"));
-        assert_eq!(location["uriBaseId"], json!(SRCROOT));
-        assert_eq!(artifact_location(Path::new("c:"))["uri"], json!("./c:"));
+        #[cfg(unix)]
+        {
+            let location = artifact_location(Path::new("c:/a.rs"));
+            assert_eq!(location["uri"], json!("./c:/a.rs"));
+            assert_eq!(location["uriBaseId"], json!(SRCROOT));
+            assert_eq!(artifact_location(Path::new("c:"))["uri"], json!("./c:"));
+        }
+        #[cfg(windows)]
+        {
+            /* NOTE: An absolute path, so it is under no base and claims none.
+             * The `./` exists to stop a reader taking a relative reference for a scheme, and there is no relative reference here to mistake. */
+            let location = artifact_location(Path::new("c:/a.rs"));
+            assert_eq!(location["uri"], json!(sarif_uri(Path::new("c:/a.rs"))));
+            assert!(location.get("uriBaseId").is_none());
+        }
         for plain in ["a.rs", "sub/doc.rs", "cc:/a.rs", "sub/c:/a.rs"] {
             assert_eq!(
                 artifact_location(Path::new(plain))["uri"],
@@ -3776,22 +3948,84 @@ mod tests {
         );
     }
 
-    /// Every result points into the rules by index, so the two orders have to
-    /// be the same one.
+    /// The same question the case above asks, asked of the thing it turns on.
+    ///
+    /// Both halves of that test would pass if `under_source_root` simply stopped answering, so this names what each system is expected to say and why: a checkout holds `c:` as a directory only where `c:` can be a directory name.
+    #[test]
+    fn a_drive_letter_is_a_directory_name_on_one_system_and_a_root_on_the_other() {
+        assert_eq!(under_source_root(Path::new("c:/a.rs")), cfg!(unix));
+        for both in ["a.rs", "sub/doc.rs", "cc:/a.rs"] {
+            assert!(
+                under_source_root(Path::new(both)),
+                "`{both}` is a relative path on every system"
+            );
+        }
+        for neither in ["/tmp/a.rs", "../a.rs"] {
+            assert!(
+                !under_source_root(Path::new(neither)),
+                "`{neither}` is not under the checkout on any system"
+            );
+        }
+    }
+
+    /// Every identifier a result can carry, derived from the same lists the table is built from.
+    ///
+    /// Written this way rather than as a number, because a number is a gate that stops covering what it was written for the day a kind or a style rule is added.
+    fn prepared_rule_ids() -> Vec<String> {
+        let mut ids: Vec<String> = CommentKind::ALL
+            .iter()
+            .map(|kind| format!("removable-{kind}"))
+            .collect();
+        for rule in StyleRule::ALL {
+            for origin in [ProseOrigin::Comments, ProseOrigin::Document] {
+                ids.push(run_rule_id(&ProseRun {
+                    span: ByteSpan::new(0, 0),
+                    origin,
+                    rule,
+                    replacement: Vec::new(),
+                }));
+            }
+        }
+        ids
+    }
+
+    /// Every result points into the rules by index, so the two orders have to be the same one.
     #[test]
     fn a_rule_is_described_once_and_keeps_its_index() {
+        let prepared = prepared_rule_ids();
         let mut rules = SarifRules::new();
-        assert_eq!(rules.entries.len(), CommentKind::ALL.len());
+        assert_eq!(rules.entries.len(), prepared.len());
         assert_eq!(rules.kind(CommentKind::Line), 0);
         let first = rules.describe("io-error", "error", "short", "full", TOOL_INFORMATION_URI);
-        assert_eq!(first, CommentKind::ALL.len());
+        assert_eq!(first, prepared.len());
         let again = rules.describe("io-error", "note", "other", "other", TOOL_INFORMATION_URI);
         assert_eq!(first, again, "a second sighting described the rule twice");
         assert_eq!(
             rules.entries[first]["defaultConfiguration"]["level"],
             "error"
         );
-        assert_eq!(rules.entries.len(), CommentKind::ALL.len() + 1);
+        assert_eq!(rules.entries.len(), prepared.len() + 1);
+    }
+
+    /// The table is the tool's declared vocabulary, and `SarifRules::index` panics on an identifier it has not prepared.
+    ///
+    /// So the list is checked against the thing it is a list of, in both directions: every identifier a run can emit is described, and every description answers to an identifier a run can emit.
+    #[test]
+    fn every_rule_a_result_can_name_is_described() {
+        let rules = SarifRules::new();
+        let prepared = prepared_rule_ids();
+        for id in &prepared {
+            assert!(
+                rules.indices.contains_key(id),
+                "`{id}` can be emitted and is not in the rule table"
+            );
+        }
+        for id in rules.indices.keys() {
+            assert!(
+                prepared.contains(id),
+                "`{id}` is described and nothing can emit it"
+            );
+        }
     }
 
     #[test]
@@ -3849,8 +4083,7 @@ mod tests {
         );
     }
 
-    /// Bidi overrides and isolates can make a comment render as its own
-    /// reverse, and the line/paragraph separators break the one-line promise.
+    /// Bidi overrides and isolates can make a comment render as its own reverse, and the line/paragraph separators break the one-line promise.
     #[test]
     fn preview_replaces_bidirectional_and_separator_controls() {
         let source = "// \u{202e}reverse\u{202c} \u{200e}\u{200f} \u{2066}iso\u{2069} \
@@ -3873,8 +4106,7 @@ mod tests {
         }
     }
 
-    /// Zero-width characters cost no display columns, so the width budget alone
-    /// cannot bound the line; a hard character cap must.
+    /// Zero-width characters cost no display columns, so the width budget alone cannot bound the line; a hard character cap must.
     #[test]
     fn preview_caps_the_character_count_of_a_zero_width_run() {
         let source = format!("a{}", "\u{301}".repeat(1000));
@@ -3887,9 +4119,7 @@ mod tests {
         assert!(rendered.ends_with('\u{2026}'), "truncation is unmarked");
     }
 
-    /// A hunk is read as code, so the indentation that says what a line belongs
-    /// to survives — but nothing that drives the terminal does, because the
-    /// prompt asking about that line sits directly underneath it.
+    /// A hunk is read as code, so the indentation that says what a line belongs to survives — but nothing that drives the terminal does, because the prompt asking about that line sits directly underneath it.
     #[test]
     fn a_source_line_keeps_its_shape_and_loses_its_control_characters() {
         assert_eq!(
@@ -3918,10 +4148,8 @@ mod tests {
         );
     }
 
-    /// The interactive verdict counts answers, and every noun agrees with the
-    /// number in front of it. It closes on the same `(N files scanned)` the
-    /// plain `fix` summary ends with: the reader still has to be told how much
-    /// was looked at to reach the answers.
+    /// The interactive verdict counts answers, and every noun agrees with the number in front of it.
+    /// It closes on the same `(N files scanned)` the plain `fix` summary ends with: the reader still has to be told how much was looked at to reach the answers.
     #[test]
     fn the_interactive_summary_pluralizes_both_of_its_nouns() {
         assert_eq!(
@@ -3946,10 +4174,7 @@ mod tests {
         );
     }
 
-    /// A run that was never asked a question says so in the vocabulary the
-    /// plain `fix` summary uses for the same answer, and counts the files it
-    /// scanned — `Removed 0 of 0 comments in 0 files` named three numbers, none
-    /// of which was the one the reader wanted.
+    /// A run that was never asked a question says so in the vocabulary the plain `fix` summary uses for the same answer, and counts the files it scanned — `Removed 0 of 0 comments in 0 files` named three numbers, none of which was the one the reader wanted.
     #[test]
     fn an_interactive_run_with_nothing_to_offer_borrows_the_fix_wording() {
         assert_eq!(
@@ -3968,9 +4193,8 @@ mod tests {
         );
     }
 
-    /// `q` stops the questions, so the verdict counts the ones that were
-    /// answered and says how many were left unasked. Reporting `1 of 9` to a
-    /// reader who answered twice would read as seven refusals.
+    /// `q` stops the questions, so the verdict counts the ones that were answered and says how many were left unasked.
+    /// Reporting `1 of 9` to a reader who answered twice would read as seven refusals.
     #[test]
     fn a_stopped_interactive_run_counts_the_questions_it_asked() {
         assert_eq!(
@@ -3995,8 +4219,7 @@ mod tests {
         );
     }
 
-    /// What a probed tool says about itself gets the preview's treatment: one
-    /// line, no control sequences, and no more of it than a preview shows.
+    /// What a probed tool says about itself gets the preview's treatment: one line, no control sequences, and no more of it than a preview shows.
     #[test]
     fn sanitize_line_replaces_controls_and_caps_the_width() {
         assert_eq!(
@@ -4022,14 +4245,10 @@ mod tests {
     }
 }
 
-/// The one sentence that says what this project accepts, when every file with a
-/// finding was judged by the same rules.
+/// The one sentence that says what this project accepts, when every file with a finding was judged by the same rules.
 ///
-/// A report that lists what has to change and never says what would have been
-/// acceptable teaches nothing: the reader fixes these three comments and writes
-/// the fourth the same way. When the files disagree — a `[[overrides]]` table
-/// covering part of the tree — there is no one sentence to write, and none is
-/// written rather than one that is true of some of the findings.
+/// A report that lists what has to change and never says what would have been acceptable teaches nothing: the reader fixes these three comments and writes the fourth the same way.
+/// When the files disagree — a `[[overrides]]` table covering part of the tree — there is no one sentence to write, and none is written rather than one that is true of some of the findings.
 fn accepted_here(files: &[ProcessedFile], explanations: &Explanations) -> Option<String> {
     let mut rules: Option<&ScanOptions> = None;
     for file in files {
@@ -4083,8 +4302,8 @@ fn accepted_here(files: &[ProcessedFile], explanations: &Explanations) -> Option
 
 /// The kinds a policy takes out, named rather than counted.
 ///
-/// What a report of removals owes its reader is the set it is drawn from. The
-/// kinds no policy reaches are left out: they are not what this run is about,
+/// What a report of removals owes its reader is the set it is drawn from.
+/// The kinds no policy reaches are left out: they are not what this run is about,
 /// and naming them would suggest the reader could have to deal with one.
 fn removed_kinds(policy: Policy) -> Vec<String> {
     CommentKind::ALL
@@ -4118,18 +4337,15 @@ fn join_with(items: &[String], conjunction: &str) -> String {
 pub enum Subject {
     /// They are, so `ocomment fix` is a way to do what the report asks.
     OnDisk,
-    /// They are not: a hook judged an edit before it was written. There is no
-    /// file to fix, and telling a reader to run `fix` on one would send them
-    /// to bytes that do not exist yet.
+    /// They are not: a hook judged an edit before it was written.
+    /// There is no file to fix, and telling a reader to run `fix` on one would send them to bytes that do not exist yet.
     Proposed,
 }
 
-/// The whole agent report as one string, or `None` when there is nothing to
-/// say.
+/// The whole agent report as one string, or `None` when there is nothing to say.
 ///
-/// Silence is the pass. A caller embedding this in a hook decision needs to
-/// know whether there is a decision to make, and a report that says "nothing
-/// to do" is a report the caller has to parse to find that out.
+/// Silence is the pass.
+/// A caller embedding this in a hook decision needs to know whether there is a decision to make, and a report that says "nothing to do" is a report the caller has to parse to find that out.
 pub fn agent_report(
     files: &[ProcessedFile],
     skipped: &[SkippedFile],
@@ -4144,11 +4360,8 @@ pub fn agent_report(
 
 /// The report for a reader that is going to act on it rather than read it.
 ///
-/// Three parts, in the order they are needed: what has to change, one line per
-/// comment and the verb first; the rule that decided them, so the next comment
-/// is written differently; and the command that would do it instead. A clean
-/// run writes nothing at all, which is what makes this format usable as the
-/// body of a hook decision.
+/// Three parts, in the order they are needed: what has to change, one line per comment and the verb first; the rule that decided them, so the next comment is written differently; and the command that would do it instead.
+/// A clean run writes nothing at all, which is what makes this format usable as the body of a hook decision.
 fn render_agent(
     output: &mut impl Write,
     files: &[ProcessedFile],
@@ -4175,7 +4388,14 @@ fn write_agent(
     subject: Subject,
 ) -> Result<()> {
     let groups = crate::advice::plan(files, options.policy);
-    let removable: usize = groups.iter().map(crate::advice::Group::comments).sum();
+    /* NOTE: Two numbers, because they ask two different things of the reader.
+     * A removal is a judgement nobody but them can make; a rewrite is one this tool has already made and is offering to apply, and counting the two together told an agent it had twice as much to think about as it did. */
+    let (tidy, removable): (Vec<_>, Vec<_>) = groups
+        .iter()
+        .partition(|group| matches!(group.decision, crate::advice::Decision::Restyle { .. }));
+    let to_tidy: usize = tidy.iter().map(|group| group.comments()).sum();
+    let removable: usize = removable.iter().map(|group| group.comments()).sum();
+    let findings = to_tidy + removable;
     let broken: Vec<String> = files
         .iter()
         .flat_map(|file| {
@@ -4196,10 +4416,8 @@ fn write_agent(
         })
         .collect();
     let unreadable: Vec<&SkippedFile> = skipped.iter().filter(|item| item.error).collect();
-    if removable == 0 && broken.is_empty() && unreadable.is_empty() {
-        /* NOTE: Silence is the pass, and a caller embedding this in a hook
-         * decision reads emptiness rather than parsing a sentence to find out
-         * there was nothing to say. */
+    if findings == 0 && broken.is_empty() && unreadable.is_empty() {
+        /* NOTE: Silence is the pass, and a caller embedding this in a hook decision reads emptiness rather than parsing a sentence to find out there was nothing to say. */
         return Ok(());
     }
 
@@ -4208,11 +4426,9 @@ fn write_agent(
         .flat_map(|group| &group.items)
         .map(|item| item.path.as_path())
         .collect();
-    /* NOTE: The denominator is what was read, not what the walk reached. A
-     * reader that cannot re-run the scan has no way to catch a coverage
-     * figure that counts the files it skipped, and this is the format whose
-     * reader is a program. The skips are named beside it rather than folded
-     * into it. */
+    /* NOTE: The denominator is what was read, not what the walk reached.
+     * A reader that cannot re-run the scan has no way to catch a coverage figure that counts the files it skipped, and this is the format whose reader is a program.
+     * The skips are named beside it rather than folded into it. */
     let unread = if skipped.is_empty() {
         String::new()
     } else {
@@ -4221,9 +4437,15 @@ fn write_agent(
             plural(skipped.len(), "file")
         )
     };
+    /* NOTE: The tidy half is named only when there is one, so a report with nothing but removals reads exactly as it did. */
+    let tidy_clause = if to_tidy == 0 {
+        String::new()
+    } else {
+        format!(" and {} this tool can write for you", comments(to_tidy, ""))
+    };
     wrote(writeln!(
         output,
-        "# ocomment: {} to answer for in {} of {} scanned{unread}, policy {}.",
+        "# ocomment: {} to answer for{tidy_clause} in {} of {} scanned{unread}, policy {}.",
         comments(removable, ""),
         touched.len(),
         plural(files.len(), "file"),
@@ -4234,10 +4456,17 @@ fn write_agent(
     }
 
     for group in &groups {
+        /* NOTE: The same split the review format makes, in the marker rather than in colour.
+         * A reader told to DECIDE about a reflow would be asked for a judgement that was already made, and the obvious way to answer it is to delete the comment. */
+        let marker = if matches!(group.decision, crate::advice::Decision::Restyle { .. }) {
+            "TIDY"
+        } else {
+            "DECIDE"
+        };
         wrote(writeln!(output))?;
         wrote(writeln!(
             output,
-            "DECIDE {} | {}",
+            "{marker} {} | {}",
             group.decision.instruction(),
             comments(group.comments(), "")
         ))?;
@@ -4279,54 +4508,63 @@ fn write_agent(
     if let Some(rule) = accepted_here(files, explanations) {
         wrote(writeln!(output, "# {}", fold(&rule)))?;
     }
-    /* NOTE: `fix` is offered only for files it could open. Standard input has
-     * no name to hand it, and a proposal has no file yet, so the argv would
-     * name bytes that are not there. */
+    /* NOTE: `fix` is offered only for files it could open.
+     * Standard input has no name to hand it, and a proposal has no file yet, so the argv would name bytes that are not there. */
     let on_disk = subject == Subject::OnDisk
         && touched
             .iter()
             .all(|path| path.to_string_lossy() != crate::files::STDIN_PATH);
     if !on_disk && removable > 0 {
-        /* NOTE: A proposal has no file to point an argv at, and naming one
-         * would send the reader at bytes that are not there yet. */
+        /* NOTE: A proposal has no file to point an argv at, and naming one would send the reader at bytes that are not there yet. */
         wrote(writeln!(
             output,
             "# these bytes are not on disk yet: write it without them."
         ))?;
     }
-    if on_disk && options.operation != Operation::Fix {
+    if on_disk && !options.operation.removes() {
         wrote(writeln!(output, "RECHECK {}", argv(&["ocomment", "check"])))?;
-        wrote(writeln!(
-            output,
-            "REMOVE-ALL {} removes {}, including any above that were worth keeping",
-            argv(&["ocomment", "fix"]),
-            comments(removable, "")
-        ))?;
+        /* NOTE: Offered before the blunt one, and only when there is something for it to do.
+         * This is the command that applies every TIDY above and touches no DECIDE, which makes it the one an agent can run without reading the report first. */
+        if to_tidy > 0 {
+            wrote(writeln!(
+                output,
+                "TIDY-ALL {} writes {} and removes nothing",
+                argv(&["ocomment", "fix", "--tidy"]),
+                comments(to_tidy, "")
+            ))?;
+        }
+        if removable > 0 {
+            wrote(writeln!(
+                output,
+                "REMOVE-ALL {} removes {}, including any above that were worth keeping",
+                argv(&["ocomment", "fix"]),
+                comments(removable, "")
+            ))?;
+        }
     }
     Ok(())
 }
 
 /// What the markers in the agent report mean, carried in the report.
 ///
-/// A machine format that needs its schema fetched from somewhere else is a
-/// format its reader has to go and learn before it can act, and the reader this
-/// is for is one that would rather spend that round trip on the work. Six lines
-/// of preamble buy every one of them back.
-const AGENT_SCHEMA: [&str; 7] = [
+/// A machine format that needs its schema fetched from somewhere else is a format its reader has to go and learn before it can act, and the reader this is for is one that would rather spend that round trip on the work.
+/// Six lines of preamble buy every one of them back.
+const AGENT_SCHEMA: [&str; 9] = [
     "Every line starts with a marker. DECIDE opens one question, asked of each",
-    "FINDING under it. A FINDING names a path and the first and last line of one",
-    "comment, which may span several, and the column when the comment does not",
-    "open its line. `-` is what is there now, `+` what would replace it, `=` the",
-    "code the comment is about. KEEP names a file and `|` the setting that would",
-    "stop the question being asked. BROKEN is a file that did not parse. The",
-    "argv lines are commands, ready to run.",
+    "FINDING under it, and only you can answer it. TIDY opens one this tool has",
+    "already answered and is offering to write; TIDY-ALL applies every one of",
+    "them and removes nothing. A FINDING names a path and the first and last line",
+    "of one comment, which may span several, and the column when the comment does",
+    "not open its line. `-` is what is there now, `+` what would replace it, `=`",
+    "the code the comment is about. KEEP names a file and `|` the setting that",
+    "would stop the question being asked. BROKEN is a file that did not parse.",
+    "The argv lines are commands, ready to run.",
 ];
 
 /// A command as the argv a caller can run without retyping it.
 ///
-/// Prose loses to a copied array. A path with a space in it, a digest, a flag
-/// whose spelling matters -- each is a chance to get one character wrong, and
-/// the reader most likely to get it wrong is the one reading fastest.
+/// Prose loses to a copied array.
+/// A path with a space in it, a digest, a flag whose spelling matters -- each is a chance to get one character wrong, and the reader most likely to get it wrong is the one reading fastest.
 fn argv(words: &[&str]) -> String {
     let quoted: Vec<String> = words
         .iter()
@@ -4335,15 +4573,10 @@ fn argv(words: &[&str]) -> String {
     format!("[{}]", quoted.join(","))
 }
 
-/// The end-of-run summary as one JSON object, whatever `--format` the run
-/// wrote its product in.
+/// The end-of-run summary as one JSON object, whatever `--format` the run wrote its product in.
 ///
-/// The human summary goes to standard error and the machine formats carry no
-/// summary at all, so a caller that wants the *numbers* — a CI job setting an
-/// output, a dashboard, a script deciding whether to open a pull request — has
-/// had to re-derive them by parsing the product. This is the same count the
-/// run already made, written once, to a file the caller names so it cannot
-/// collide with the product on either stream.
+/// The human summary goes to standard error and the machine formats carry no summary at all, so a caller that wants the *numbers* — a CI job setting an output, a dashboard, a script deciding whether to open a pull request — has had to re-derive them by parsing the product.
+/// This is the same count the run already made, written once, to a file the caller names so it cannot collide with the product on either stream.
 pub fn write_summary(
     path: &Path,
     files: &[ProcessedFile],
@@ -4356,7 +4589,7 @@ pub fn write_summary(
     for file in files {
         let mut removable = 0usize;
         for comment in &file.result.report.comments {
-            if comment.disposition.is_remove() {
+            if comment.action().removes() {
                 removable += 1;
                 *kinds.entry(comment.kind.as_str()).or_default() += 1;
             }
@@ -4365,8 +4598,7 @@ pub fn write_summary(
             per_file.push((report_path(&file.path), removable));
         }
     }
-    /* NOTE: Most findings first, then by path, so two runs over the same tree
-     * write the same bytes. */
+    /* NOTE: Most findings first, then by path, so two runs over the same tree write the same bytes. */
     per_file.sort_by(|left, right| right.1.cmp(&left.1).then(left.0.cmp(&right.0)));
     per_file.truncate(TOP_FILES);
     let document = json!({
@@ -4374,11 +4606,12 @@ pub fn write_summary(
         "operation": match operation {
             Operation::Check => "check",
             Operation::Scan => "scan",
-            Operation::Diff => "diff",
-            Operation::Fix => "fix",
+            Operation::Diff(_) => "diff",
+            Operation::Fix(Writes::Everything) => "fix",
+            Operation::Fix(Writes::RewritesOnly) => "tidy",
         },
         "files_scanned": summary.files_scanned,
-        "files_with_findings": summary.files_with_removable,
+        "files_with_findings": summary.files_with_findings,
         "removable_comments": summary.removable_comments,
         "kept_comments": summary.kept_comments,
         "files_changed": summary.files_changed,

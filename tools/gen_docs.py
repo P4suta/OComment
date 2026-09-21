@@ -248,8 +248,7 @@ def commands_in(help_text: str) -> list[str]:
         if not line.strip():
             break
         match = re.match(r"^ {2}([a-z][a-z0-9-]*)(?:\s|$)", line)
-        # NOTE: `help` prints the same page as `--help` and takes no options of
-        # NOTE: its own, so documenting it would repeat every block on the page.
+        # NOTE: `help` prints the same page as `--help` and takes no options of its own, so documenting it would repeat every block on the page.
         if match is not None and match.group(1) != "help":
             names.append(match.group(1))
     return names
@@ -677,7 +676,7 @@ def languages_page() -> str:
     return "\n".join(lines) + "\n"
 
 
-POLICIES = ("conservative", "standard", "all")
+POLICIES = ("none", "conservative", "standard", "all")
 LAYOUTS = ("lines", "columns", "compact")
 
 
@@ -799,6 +798,8 @@ def policies_page(cli: Cli, workspace: pathlib.Path) -> str:
     lines.extend(
         [
             "",
+            "`none` is the mode for a repository that wants the style rules and not the",
+            "removals: it returns the sample unchanged.",
             "`conservative` and `standard` differ over the licence header alone, and `all`",
             "is the only one that takes the `// rustfmt::skip` directive out.",
             "`all` still refuses to touch a shebang or an encoding preamble until",
@@ -819,12 +820,8 @@ def policies_page(cli: Cli, workspace: pathlib.Path) -> str:
             cwd=workspace,
         )
         lines.extend(["", f"### `{layout}`", "", fence("text", outputs[layout])])
-    # INVARIANT: the paragraph below tells the reader that `lines` and `columns`
-    # INVARIANT: keep the line count of the file, which is the property that keeps
-    # INVARIANT: a line number in a stack trace pointing at the same statement, and
-    # INVARIANT: that `compact` is the one layout that gives it up. A layout that
-    # INVARIANT: stopped doing either has to fail here rather than ship a page that
-    # INVARIANT: says it still does.
+    # INVARIANT: the paragraph below tells the reader that `lines` and `columns` keep the line count of the file, which is the property that keeps a line number in a stack trace pointing at the same statement, and that `compact` is the one layout that gives it up.
+    # INVARIANT: A layout that stopped doing either has to fail here rather than ship a page that says it still does.
     expected_lines = POLICY_SAMPLE.count(chr(10))
     for layout, output in outputs.items():
         counted = output.count(chr(10))
@@ -1007,9 +1004,7 @@ def policy_matrix() -> list[str]:
             elif kind in policy.get("keep_without_force_protected", []):
                 cells.append("kept unless `--force-protected`")
             else:
-                # INVARIANT: a kind no policy mentions would render as an empty
-                # INVARIANT: cell that reads like "nothing happens to it", which
-                # INVARIANT: is a claim this table cannot make.
+                # INVARIANT: a kind no policy mentions would render as an empty cell that reads like "nothing happens to it", which is a claim this table cannot make.
                 raise SystemExit(
                     f"`{kind}` is in no list of policy `{name}` in"
                     f" {DIRECTIVES.relative_to(ROOT)}"
@@ -1075,8 +1070,7 @@ def why_kept_page(cli: Cli, workspace: pathlib.Path) -> str:
     completed = cli.run(["check", "--explain"], cwd=fixture, expected=(1,))
     transcript = completed.stdout.decode("utf-8") + completed.stderr.decode("utf-8")
     tree = "".join(f"{name}\n" for name in [".ocomment.toml", *WHY_FIXTURE])
-    # NOTE: a reported comment starts at the left margin and the rule under it is
-    # NOTE: indented, so the unindented lines are the comments the run met.
+    # NOTE: a reported comment starts at the left margin and the rule under it is indented, so the unindented lines are the comments the run met.
     reported = sum(
         1
         for line in completed.stdout.decode("utf-8").splitlines()
@@ -1384,9 +1378,7 @@ def main() -> int:
 
     if failures:
         print("\n".join(failures))
-        # NOTE: the manual page is checked here but written by another tool, so
-        # NOTE: naming this one would send a reader to a command that cannot fix
-        # NOTE: what they were just told about.
+        # NOTE: the manual page is checked here but written by another tool, so naming this one would send a reader to a command that cannot fix what they were just told about.
         if stale:
             print(f"Regenerate with: {REGENERATE}")
         return 1

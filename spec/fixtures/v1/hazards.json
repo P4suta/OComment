@@ -1003,7 +1003,7 @@
         "layout": "lines"
       },
       "source_utf8": "x = r\"abc\ny = rb\"def\nz = r\"\"\"ghi\n",
-      "note": "Python reference 2.4.1: a string prefix and the quote after it are one token, so an unterminated literal is reported from the prefix and not from the quote \u2014 the same anchor for `r\"`, `rb\"` and `r\"\"\"`.",
+      "note": "Python reference 2.4.1: a string prefix and the quote after it are one token, so an unterminated literal is reported from the prefix and not from the quote — the same anchor for `r\"`, `rb\"` and `r\"\"\"`.",
       "expect": {
         "valid": false,
         "comments": [],
@@ -1680,7 +1680,7 @@
         "policy": "standard",
         "layout": "columns"
       },
-      "source_utf8": "x\t/*\u4e2d\ud83d\ude00*/y\r\n",
+      "source_utf8": "x\t/*中😀*/y\r\n",
       "note": "Layout `columns` replaces a removed comment with spaces to the same display width; a tab, a wide CJK character, an emoji, and a CRLF ending must all survive unchanged.",
       "expect": {
         "valid": true,
@@ -3640,7 +3640,7 @@
         "policy": "standard",
         "layout": "lines"
       },
-      "source_utf8": "let c = '\u00e4\\';\n",
+      "source_utf8": "let c = 'ä\\';\n",
       "note": "Rust Reference, Tokens (character literals): a character literal holds one character and ends at the line, so this one is never closed -- the `\\` in front of the second apostrophe carries it into the literal as an escape, and no third one arrives before the line break. It is also the shape that tells a literal from a lifetime -- a non-ASCII character with an apostrophe close enough behind it to be the closing quote -- which is why the diagnostic here is `unterminated character literal` and `parity-rust-lifetime-is-not-a-literal` reports nothing at all. Both apostrophes stand on one line because that lookahead stops at a line terminator (`rust-char-literal-across-newline`). Ground truth, `rustc` 1.97: `error[E0762]: unterminated character literal` for this line.",
       "expect": {
         "valid": false,
@@ -3877,7 +3877,7 @@
           }
         ],
         "diagnostics": [],
-        "output_utf8": "//\u00a0region\n"
+        "output_utf8": "// region\n"
       }
     },
     {
@@ -7229,7 +7229,7 @@
         "layout": "lines"
       },
       "source_utf8": "puts \"#{ <<EOS }\"\n# not a comment\nEOS\n# remove\n",
-      "note": "Ruby 3.3 documentation, literals.rdoc: a here document header queues a body for the line under the physical line it stands on, and standing inside an interpolation does not change that. Ground truth, Ruby 3.3.12 Ripper.lex: on_heredoc_beg \"<<EOS\", on_embexpr_end \"}\", on_tstring_end \"\\\"\", on_nl, on_tstring_content \"# not a comment\\n\", on_heredoc_end \"EOS\\n\", on_comment \"# remove\\n\" \u2014 the body line is content, so its `#` opens nothing.",
+      "note": "Ruby 3.3 documentation, literals.rdoc: a here document header queues a body for the line under the physical line it stands on, and standing inside an interpolation does not change that. Ground truth, Ruby 3.3.12 Ripper.lex: on_heredoc_beg \"<<EOS\", on_embexpr_end \"}\", on_tstring_end \"\\\"\", on_nl, on_tstring_content \"# not a comment\\n\", on_heredoc_end \"EOS\\n\", on_comment \"# remove\\n\" — the body line is content, so its `#` opens nothing.",
       "expect": {
         "valid": true,
         "comments": [
@@ -7325,7 +7325,7 @@
         "layout": "lines"
       },
       "source_utf8": "puts <<A\nx #{<<B}\nA\nB\n# a body\nA\n# remove\n",
-      "note": "Ruby 3.3 documentation, literals.rdoc: a here document body line is a physical line like any other, so a header inside an interpolation on it queues for the line under that body line and is read before the outer body resumes. Ground truth, Ruby 3.3.12 Ripper.lex: on_heredoc_beg \"<<A\", on_nl, on_tstring_content \"x \", on_embexpr_beg, on_heredoc_beg \"<<B\", on_embexpr_end, on_tstring_content \"\\n\", on_tstring_content \"A\\n\" \u2014 line 3 is B's body, not A's terminator \u2014 on_heredoc_end \"B\\n\", on_tstring_content \"# a body\\n\", on_heredoc_end \"A\\n\", on_comment \"# remove\\n\".",
+      "note": "Ruby 3.3 documentation, literals.rdoc: a here document body line is a physical line like any other, so a header inside an interpolation on it queues for the line under that body line and is read before the outer body resumes. Ground truth, Ruby 3.3.12 Ripper.lex: on_heredoc_beg \"<<A\", on_nl, on_tstring_content \"x \", on_embexpr_beg, on_heredoc_beg \"<<B\", on_embexpr_end, on_tstring_content \"\\n\", on_tstring_content \"A\\n\" — line 3 is B's body, not A's terminator — on_heredoc_end \"B\\n\", on_tstring_content \"# a body\\n\", on_heredoc_end \"A\\n\", on_comment \"# remove\\n\".",
       "expect": {
         "valid": true,
         "comments": [
@@ -7349,7 +7349,7 @@
         "layout": "lines"
       },
       "source_utf8": "puts \"#{ <<~A } #{ <<-'B' } #{ <<C }\"\n  # not a comment\n  A\n  # not a comment either\n  B\n# nor this\nC\n# remove\n",
-      "note": "Ruby 3.3 documentation, literals.rdoc: the squiggly, dash and quoted header forms behave the same inside an interpolation as outside one \u2014 an indented terminator for the first two, and interpolation off under a single-quoted terminator. Ground truth, Ruby 3.3.12 Ripper.lex: on_heredoc_beg \"<<~A\", on_heredoc_beg \"<<-'B'\", on_heredoc_beg \"<<C\", then the three bodies in that order with on_heredoc_end \"  A\\n\", \"  B\\n\" and \"C\\n\", and on_comment \"# remove\\n\" last.",
+      "note": "Ruby 3.3 documentation, literals.rdoc: the squiggly, dash and quoted header forms behave the same inside an interpolation as outside one — an indented terminator for the first two, and interpolation off under a single-quoted terminator. Ground truth, Ruby 3.3.12 Ripper.lex: on_heredoc_beg \"<<~A\", on_heredoc_beg \"<<-'B'\", on_heredoc_beg \"<<C\", then the three bodies in that order with on_heredoc_end \"  A\\n\", \"  B\\n\" and \"C\\n\", and on_comment \"# remove\\n\" last.",
       "expect": {
         "valid": true,
         "comments": [
@@ -7397,7 +7397,7 @@
         "layout": "lines"
       },
       "source_utf8": "x(<<A, \"#{<<B\n})\n# not a comment\nA\n# nor this\nB\nputs 2 # a comment safe keeps\n",
-      "note": "Ruby 3.3 documentation, literals.rdoc: the drain happens wherever the lexer stands when it reaches the break, so a break inside an interpolation drains the whole queue and the interpolation resumes underneath the bodies. Ground truth, Ruby 3.3.12 Ripper.lex: on_heredoc_beg \"<<A\", on_heredoc_beg \"<<B\", on_nl, on_tstring_content \"})\\n# not a comment\\n\" \u2014 A's body swallows the `}` that would have closed the interpolation \u2014 on_heredoc_end \"A\\n\", on_tstring_content \"# nor this\\n\", on_heredoc_end \"B\\n\", on_ident \"puts\", on_int \"2\", on_comment \"# a comment safe keeps\\n\". The interpolation never closes, so `ruby -c` reports `unterminated string meets end of file`, the scan is invalid, and `safe` writes nothing.",
+      "note": "Ruby 3.3 documentation, literals.rdoc: the drain happens wherever the lexer stands when it reaches the break, so a break inside an interpolation drains the whole queue and the interpolation resumes underneath the bodies. Ground truth, Ruby 3.3.12 Ripper.lex: on_heredoc_beg \"<<A\", on_heredoc_beg \"<<B\", on_nl, on_tstring_content \"})\\n# not a comment\\n\" — A's body swallows the `}` that would have closed the interpolation — on_heredoc_end \"A\\n\", on_tstring_content \"# nor this\\n\", on_heredoc_end \"B\\n\", on_ident \"puts\", on_int \"2\", on_comment \"# a comment safe keeps\\n\". The interpolation never closes, so `ruby -c` reports `unterminated string meets end of file`, the scan is invalid, and `safe` writes nothing.",
       "expect": {
         "valid": false,
         "comments": [
@@ -7683,7 +7683,7 @@
         "layout": "lines"
       },
       "source_utf8": "//// divider\n/// doc\nconst x = 1;\n",
-      "note": "Zig Language Reference, Doc comments: exactly three slashes document anything, and a fourth takes the marker back \u2014 `.doc_comment_start` falls to `.line_comment` when it meets one. Ground truth, `std.zig.Tokenizer` 0.16.0: no token at all for `//// divider`, `doc_comment \"/// doc\"` at [13,20). `zig ast-check` accepts the file.",
+      "note": "Zig Language Reference, Doc comments: exactly three slashes document anything, and a fourth takes the marker back — `.doc_comment_start` falls to `.line_comment` when it meets one. Ground truth, `std.zig.Tokenizer` 0.16.0: no token at all for `//// divider`, `doc_comment \"/// doc\"` at [13,20). `zig ast-check` accepts the file.",
       "expect": {
         "valid": true,
         "comments": [
@@ -7713,7 +7713,7 @@
         "layout": "lines"
       },
       "source_utf8": "const a = 1 /* not a comment */ + 2; // remove\n",
-      "note": "Zig Language Reference, Comments: Zig has one comment form and it is `//`. Ground truth, `std.zig.Tokenizer` 0.16.0: `/*` is `slash` then `asterisk` and `*/` is `asterisk` then `slash`, seven ordinary tokens between the two operands and no comment, so only the `//` behind them is removed. (`zig ast-check` refuses this line for a reason of its own \u2014 a binary operator with white space on one side only \u2014 and the tokenizer is what decides whether a comment is there.)",
+      "note": "Zig Language Reference, Comments: Zig has one comment form and it is `//`. Ground truth, `std.zig.Tokenizer` 0.16.0: `/*` is `slash` then `asterisk` and `*/` is `asterisk` then `slash`, seven ordinary tokens between the two operands and no comment, so only the `//` behind them is removed. (`zig ast-check` refuses this line for a reason of its own — a binary operator with white space on one side only — and the tokenizer is what decides whether a comment is there.)",
       "expect": {
         "valid": true,
         "comments": [
@@ -7833,7 +7833,7 @@
         "layout": "lines"
       },
       "source_utf8": "// zig fmt: off\n// zig fmt: on\n// zig fmt: off please\n",
-      "note": "Zig standard library, `std/zig/Ast/Render.zig`: the formatter takes `\"//\".len` bytes off the trimmed comment, trims the white space behind them, and compares the remainder with `zig fmt: off` and `zig fmt: on` for equality \u2014 so the first two lines are instructions a removal keeps and the third, which merely opens with the phrase, is an ordinary comment. `zig ast-check` accepts the file.",
+      "note": "Zig standard library, `std/zig/Ast/Render.zig`: the formatter takes `\"//\".len` bytes off the trimmed comment, trims the white space behind them, and compares the remainder with `zig fmt: off` and `zig fmt: on` for equality — so the first two lines are instructions a removal keeps and the third, which merely opens with the phrase, is an ordinary comment. `zig ast-check` accepts the file.",
       "expect": {
         "valid": true,
         "comments": [
@@ -7915,7 +7915,7 @@
         "layout": "lines"
       },
       "source_utf8": "//! module\r\nconst a =\r\n    \\\\body // opaque\r\n;\r\n/// doc\r\nconst b = 1; // remove\r\n",
-      "note": "Zig Language Reference, Comments and String Literals: every Zig construct that runs to the end of a line ends at a CRLF pair as it ends at a bare newline \u2014 a documentation comment, a multiline string literal line, and an ordinary comment alike. Ground truth, `std.zig.Tokenizer` 0.16.0 ends each of those tokens before the `\\r`, and refuses a `\\r` that no `\\n` follows.",
+      "note": "Zig Language Reference, Comments and String Literals: every Zig construct that runs to the end of a line ends at a CRLF pair as it ends at a bare newline — a documentation comment, a multiline string literal line, and an ordinary comment alike. Ground truth, `std.zig.Tokenizer` 0.16.0 ends each of those tokens before the `\\r`, and refuses a `\\r` that no `\\n` follows.",
       "expect": {
         "valid": true,
         "comments": [
@@ -8101,7 +8101,7 @@
         "layout": "lines"
       },
       "source_utf8": "a <- r\"--(dashes ) # x)--\"\nb <- r\"---[deep ]-- # x]---\"\nc <- 1 # remove\n",
-      "note": "`?Quotes`: any number of dashes may stand between the quote and the opening bracket, and the literal closes only on the matching bracket with the same run of dashes and the same quote \u2014 which is what lets the closing bracket itself appear as content. R puts no limit on the run: 100 dashes were measured accepted on R 4.3.3. Ground truth, R 4.3.3 `utils::getParseData(parse(file =, keep.source = TRUE))`: `STR_CONST` at [5,26) and [32,55), with the only `COMMENT` at [63,71).",
+      "note": "`?Quotes`: any number of dashes may stand between the quote and the opening bracket, and the literal closes only on the matching bracket with the same run of dashes and the same quote — which is what lets the closing bracket itself appear as content. R puts no limit on the run: 100 dashes were measured accepted on R 4.3.3. Ground truth, R 4.3.3 `utils::getParseData(parse(file =, keep.source = TRUE))`: `STR_CONST` at [5,26) and [32,55), with the only `COMMENT` at [63,71).",
       "expect": {
         "valid": true,
         "comments": [
@@ -8148,7 +8148,7 @@
         "layout": "lines"
       },
       "source_utf8": "`odd # name` <- 1 # remove\n",
-      "note": "R Language Definition, 10.3.2: a name may be written between backquotes, and anything at all may go inside \u2014 a `#` included. Ground truth, R 4.3.3 `utils::getParseData(parse(file =, keep.source = TRUE))`: `SYMBOL` `` `odd # name` `` at [0,12), with the only `COMMENT` at [18,26).",
+      "note": "R Language Definition, 10.3.2: a name may be written between backquotes, and anything at all may go inside — a `#` included. Ground truth, R 4.3.3 `utils::getParseData(parse(file =, keep.source = TRUE))`: `SYMBOL` `` `odd # name` `` at [0,12), with the only `COMMENT` at [18,26).",
       "expect": {
         "valid": true,
         "comments": [
@@ -8248,7 +8248,7 @@
         "layout": "lines"
       },
       "source_utf8": "z <- xr\"(a \" b)\" # x\n",
-      "note": "`?Quotes` and R 4.3.3 `gram.y`: the `r` opens a raw string only where it begins a token, so a name in front of it leaves an ordinary string that closes at the second quote \u2014 and the quote after that opens one that never closes. Ground truth: R refuses the file with `unexpected string constant` at column 8, the `\"`, and echoes the line cut at `z <- xr\"(a \"`, which is the ordinary string its lexer read there.",
+      "note": "`?Quotes` and R 4.3.3 `gram.y`: the `r` opens a raw string only where it begins a token, so a name in front of it leaves an ordinary string that closes at the second quote — and the quote after that opens one that never closes. Ground truth: R refuses the file with `unexpected string constant` at column 8, the `\"`, and echoes the line cut at `z <- xr\"(a \"`, which is the ordinary string its lexer read there.",
       "expect": {
         "valid": false,
         "comments": [],
@@ -8408,7 +8408,7 @@
         "layout": "lines"
       },
       "source_utf8": "#!/usr/bin/env Rscript\n# ordinary\nx <- 1\n",
-      "note": "A `#!` line is an ordinary comment to R \u2014 `#` opens one and the `!` is content \u2014 so what makes the first one a preamble is its position. Ground truth, R 4.3.3 `utils::getParseData(parse(file =, keep.source = TRUE))`: `COMMENT` at [0,22) and [23,33), the same token for both.",
+      "note": "A `#!` line is an ordinary comment to R — `#` opens one and the `!` is content — so what makes the first one a preamble is its position. Ground truth, R 4.3.3 `utils::getParseData(parse(file =, keep.source = TRUE))`: `COMMENT` at [0,22) and [23,33), the same token for both.",
       "expect": {
         "valid": true,
         "comments": [
@@ -9139,8 +9139,8 @@
         "policy": "standard",
         "layout": "lines"
       },
-      "source_utf8": "let c = '\u00e4\n'; // remove\n",
-      "note": "Rust Reference, Tokens: the lookahead that tells a character literal from a lifetime reads up to six bytes past the apostrophe, and it stops at a line terminator. The scanner offers a restart point at the line start behind every terminator, and a restart point promises that nothing decided before it depends on bytes after it, so a window that read across one would let an edit on line 2 rewrite a token on line 1 while an incremental rescan reused it unchanged. What the stop costs is the reading and no report at all, because within line 1 nothing separates an unterminated character literal from a Unicode lifetime: a Rust identifier is `XID_Start XID_Continue*` (Rust Reference, Identifiers) and has been since 1.53, so `'\u00e4` opens a lifetime in `fn f<'\u00e4>() {}` and a loop label in `'\u00e4: loop { break '\u00e4 }` exactly as `'a` does, and each of those is a valid file whose trailing comment must still be found. Ground truth, `rustc` 1.97: this file is rejected with `error[E0762]: unterminated character literal`, pointed at the apostrophe on line 2 rather than this one -- but E0762 is a parser judgement, reached after the lexer has read `'\u00e4` as a lifetime and the parser has found that no lifetime may stand there. This scanner is a lexer with a line-bounded window and has no such judgement to make, so it reports nothing and holds the file valid: over-keeping on a file another tool will reject costs a rejected file one comment, and calling `fn f<'\u00e4>() {}` invalid would cost a valid one its transformation. The reading of line 2 is unchanged either way -- its apostrophe opens nothing, and the comment behind it is found and removed.",
+      "source_utf8": "let c = 'ä\n'; // remove\n",
+      "note": "Rust Reference, Tokens: the lookahead that tells a character literal from a lifetime reads up to six bytes past the apostrophe, and it stops at a line terminator. The scanner offers a restart point at the line start behind every terminator, and a restart point promises that nothing decided before it depends on bytes after it, so a window that read across one would let an edit on line 2 rewrite a token on line 1 while an incremental rescan reused it unchanged. What the stop costs is the reading and no report at all, because within line 1 nothing separates an unterminated character literal from a Unicode lifetime: a Rust identifier is `XID_Start XID_Continue*` (Rust Reference, Identifiers) and has been since 1.53, so `'ä` opens a lifetime in `fn f<'ä>() {}` and a loop label in `'ä: loop { break 'ä }` exactly as `'a` does, and each of those is a valid file whose trailing comment must still be found. Ground truth, `rustc` 1.97: this file is rejected with `error[E0762]: unterminated character literal`, pointed at the apostrophe on line 2 rather than this one -- but E0762 is a parser judgement, reached after the lexer has read `'ä` as a lifetime and the parser has found that no lifetime may stand there. This scanner is a lexer with a line-bounded window and has no such judgement to make, so it reports nothing and holds the file valid: over-keeping on a file another tool will reject costs a rejected file one comment, and calling `fn f<'ä>() {}` invalid would cost a valid one its transformation. The reading of line 2 is unchanged either way -- its apostrophe opens nothing, and the comment behind it is found and removed.",
       "expect": {
         "valid": true,
         "comments": [
@@ -9152,7 +9152,7 @@
           }
         ],
         "diagnostics": [],
-        "output_utf8": "let c = '\u00e4\n'; \n"
+        "output_utf8": "let c = 'ä\n'; \n"
       }
     },
     {
@@ -9163,8 +9163,8 @@
         "policy": "standard",
         "layout": "lines"
       },
-      "source_utf8": "fn f<'\u00e4>() {} // remove\n",
-      "note": "Rust Reference, Identifiers: an identifier is `XID_Start XID_Continue*` and has been since 1.53, so `'\u00e4` names a lifetime exactly as `'a` does. The line-bounded window that tells a character literal from a lifetime cannot tell those two apart -- within one line an unterminated non-ASCII character literal is spelled the same way -- so it reports neither, which is what leaves this file valid and its trailing comment removable. Ground truth, `rustc` 1.97.1: the file compiles, with `warning: function `f` is never used` and no error, so a scanner that called it invalid would refuse to transform a file the compiler accepts.",
+      "source_utf8": "fn f<'ä>() {} // remove\n",
+      "note": "Rust Reference, Identifiers: an identifier is `XID_Start XID_Continue*` and has been since 1.53, so `'ä` names a lifetime exactly as `'a` does. The line-bounded window that tells a character literal from a lifetime cannot tell those two apart -- within one line an unterminated non-ASCII character literal is spelled the same way -- so it reports neither, which is what leaves this file valid and its trailing comment removable. Ground truth, `rustc` 1.97.1: the file compiles, with `warning: function `f` is never used` and no error, so a scanner that called it invalid would refuse to transform a file the compiler accepts.",
       "expect": {
         "valid": true,
         "comments": [
@@ -9186,8 +9186,8 @@
         "policy": "standard",
         "layout": "lines"
       },
-      "source_utf8": "'\u00e4: loop { break '\u00e4 } // remove\n",
-      "note": "Rust Reference, Loop labels: a loop label is written with the lifetime-or-label token, so `'\u00e4` labels a loop and breaks out of it exactly as `'a` would. Two apostrophes on one line each open nothing here, for the reason `rust-unicode-lifetime-generic` gives, and the comment behind them is still found. Ground truth, `rustc` 1.97.1: `fn main() { '\u00e4: loop { break '\u00e4 } }` compiles with no error.",
+      "source_utf8": "'ä: loop { break 'ä } // remove\n",
+      "note": "Rust Reference, Loop labels: a loop label is written with the lifetime-or-label token, so `'ä` labels a loop and breaks out of it exactly as `'a` would. Two apostrophes on one line each open nothing here, for the reason `rust-unicode-lifetime-generic` gives, and the comment behind them is still found. Ground truth, `rustc` 1.97.1: `fn main() { 'ä: loop { break 'ä } }` compiles with no error.",
       "expect": {
         "valid": true,
         "comments": [
@@ -9540,7 +9540,7 @@
         "layout": "lines"
       },
       "source_utf8": "let a = \"x\"#/y // z/#\nlet b = 1 // remove\n",
-      "note": "The run of `#` that closes a string belongs to the string only when a run opened it: `Lexer.Cursor.advanceIfStringDelimiter` returns on `delimiterLength == 0` before it looks at a byte, so the `#` behind the closing quote of `\"x\"` opens the `#/ ... /#` that follows and the `//` inside that literal is pattern rather than a comment. Taking it for the string instead would report a comment over regular expression bytes and remove them. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): `stringQuote` at [10,11), `regexPoundDelimiter` at [11,12), `regexLiteralPattern(\"y // z\")` at [13,19), and the only `lineComment` at [32,41). The juxtaposition is a parse error there \u2014 `consecutive statements on a line must be separated by newline or ';'` \u2014 and the lexing of it is what this case pins.",
+      "note": "The run of `#` that closes a string belongs to the string only when a run opened it: `Lexer.Cursor.advanceIfStringDelimiter` returns on `delimiterLength == 0` before it looks at a byte, so the `#` behind the closing quote of `\"x\"` opens the `#/ ... /#` that follows and the `//` inside that literal is pattern rather than a comment. Taking it for the string instead would report a comment over regular expression bytes and remove them. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): `stringQuote` at [10,11), `regexPoundDelimiter` at [11,12), `regexLiteralPattern(\"y // z\")` at [13,19), and the only `lineComment` at [32,41). The juxtaposition is a parse error there — `consecutive statements on a line must be separated by newline or ';'` — and the lexing of it is what this case pins.",
       "expect": {
         "valid": true,
         "comments": [
@@ -9636,7 +9636,7 @@
         "layout": "lines"
       },
       "source_utf8": "let a = / b\\//\nlet c = 1\n",
-      "note": "The one rule of Swift's bare `/ ... /` literal that cannot be had from the bytes alone, recorded rather than hidden. Whether a `/` in an ambiguous position opens a literal is settled in Swift by the parser: where an expression is *required* the lexer takes the literal and diagnoses what is wrong with it, and where an operator would also parse it gives up instead. A scanner with no parser cannot tell the two apart, so this one reads a literal exactly where the book's own conditions hold \u2014 a prefix-operator position, no leading space or tab, no line terminator, a closing `/` that no unescaped blank precedes and no comment opener follows. Every source that decides differently is one `swiftc` rejects, and this is that source: Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets) lexes `/ b\\\\//` as a `regexLiteralPattern` at [9,13) and reports `bare slash regex literal may not start with space`, while the scan below reads the `//` at [12,14) as a line comment. A file that compiles never reaches the case; a file that does not can lose the two bytes of a comment opener that the compiler was going to reject anyway.",
+      "note": "The one rule of Swift's bare `/ ... /` literal that cannot be had from the bytes alone, recorded rather than hidden. Whether a `/` in an ambiguous position opens a literal is settled in Swift by the parser: where an expression is *required* the lexer takes the literal and diagnoses what is wrong with it, and where an operator would also parse it gives up instead. A scanner with no parser cannot tell the two apart, so this one reads a literal exactly where the book's own conditions hold — a prefix-operator position, no leading space or tab, no line terminator, a closing `/` that no unescaped blank precedes and no comment opener follows. Every source that decides differently is one `swiftc` rejects, and this is that source: Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets) lexes `/ b\\\\//` as a `regexLiteralPattern` at [9,13) and reports `bare slash regex literal may not start with space`, while the scan below reads the `//` at [12,14) as a line comment. A file that compiles never reaches the case; a file that does not can lose the two bytes of a comment opener that the compiler was going to reject anyway.",
       "expect": {
         "valid": true,
         "comments": [
@@ -9690,7 +9690,7 @@
         "layout": "lines"
       },
       "source_utf8": "let a = /x//y/\nlet b = 1\n",
-      "note": "When the closing delimiter of a bare literal would be the first byte of a comment, the comment wins outright rather than the literal ending one byte earlier: `RegexLiteralLexer.tryEatEnding` returns `.unterminated` on a `*` or `/` behind the closing slash, `\"We prefer to lex the comment as it's more likely than not that is what the user is expecting\"`. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): no regex token, and one `lineComment` at [10,14) \u2014 `//y/` \u2014 with no parser diagnostic.",
+      "note": "When the closing delimiter of a bare literal would be the first byte of a comment, the comment wins outright rather than the literal ending one byte earlier: `RegexLiteralLexer.tryEatEnding` returns `.unterminated` on a `*` or `/` behind the closing slash, `\"We prefer to lex the comment as it's more likely than not that is what the user is expecting\"`. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): no regex token, and one `lineComment` at [10,14) — `//y/` — with no parser diagnostic.",
       "expect": {
         "valid": true,
         "comments": [
@@ -9798,7 +9798,7 @@
         "layout": "lines"
       },
       "source_utf8": "// swift-format-ignore-file\n// control\n",
-      "note": "`swift-format` reads three spellings of its ignore comment \u2014 the bare marker, a `:` and a rule name, and the `-file` that widens it to the whole file. Measured on `swift-format` 6.3.3: `// swift-format-ignore` and `// swift-format-ignore-file` both leave `let    a     = 1` unformatted, while `// swift-format-ignoreish note` reformats it. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): `lineComment` at [0,27) and [28,38).",
+      "note": "`swift-format` reads three spellings of its ignore comment — the bare marker, a `:` and a rule name, and the `-file` that widens it to the whole file. Measured on `swift-format` 6.3.3: `// swift-format-ignore` and `// swift-format-ignore-file` both leave `let    a     = 1` unformatted, while `// swift-format-ignoreish note` reformats it. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): `lineComment` at [0,27) and [28,38).",
       "expect": {
         "valid": true,
         "comments": [
@@ -9941,7 +9941,7 @@
         "layout": "lines"
       },
       "source_utf8": "let a = 'x // not'\n// remove\n",
-      "note": "`'` is no delimiter of the language \u2014 the Swift book's Lexical Structure has no single-quoted literal and no character literal at all \u2014 but it is one in the compiler, which lexes `'...'` as a `singleQuote` string so that it can offer the fix-it that turns it into a `\"...\"` one. Following the lexer keeps the `//` inside such a literal from being removed out of a file that is already broken, and costs a valid file nothing, because no `'` can stand in Swift code outside a string, a comment or a regular expression literal. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): one `stringSegment` at [9,17) and the only `lineComment` at [19,28), with the diagnostic `Single-quoted string literal found, use '\\\"'`.",
+      "note": "`'` is no delimiter of the language — the Swift book's Lexical Structure has no single-quoted literal and no character literal at all — but it is one in the compiler, which lexes `'...'` as a `singleQuote` string so that it can offer the fix-it that turns it into a `\"...\"` one. Following the lexer keeps the `//` inside such a literal from being removed out of a file that is already broken, and costs a valid file nothing, because no `'` can stand in Swift code outside a string, a comment or a regular expression literal. Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain (`SwiftParser.Parser.parse`, read for comment trivia and their UTF-8 offsets): one `stringSegment` at [9,17) and the only `lineComment` at [19,28), with the diagnostic `Single-quoted string literal found, use '\\\"'`.",
       "expect": {
         "valid": true,
         "comments": [
@@ -11290,7 +11290,7 @@
         "layout": "lines"
       },
       "source_utf8": ".b { background: url(//cdn/x.png) no-repeat }\n// yes\n",
-      "note": "dart-sass 1.93: an unquoted `url( ... )` is a URL even when it opens with `//` \u2014 `url(//cdn/x.png)` is a protocol-relative URL, not a silent comment \u2014 so the URL bytes are protected and only the `// yes` after the rule is a comment.",
+      "note": "dart-sass 1.93: an unquoted `url( ... )` is a URL even when it opens with `//` — `url(//cdn/x.png)` is a protocol-relative URL, not a silent comment — so the URL bytes are protected and only the `// yes` after the rule is a comment.",
       "expect": {
         "valid": true,
         "comments": [
@@ -11337,7 +11337,7 @@
         "layout": "lines"
       },
       "source_utf8": "<style lang=\"less\">\n// not a comment\n</style>\n<template>\n<!-- note -->\n</template>\n",
-      "note": "@vue/compiler-sfc 3.5 accepts a `<style lang=\"less\">` block, and this scanner has no rules for Less, so the block is opaque \u2014 a `//` that Less would read as a comment is protected \u2014 while the `<!-- note -->` in the template is an HTML comment.",
+      "note": "@vue/compiler-sfc 3.5 accepts a `<style lang=\"less\">` block, and this scanner has no rules for Less, so the block is opaque — a `//` that Less would read as a comment is protected — while the `<!-- note -->` in the template is an HTML comment.",
       "expect": {
         "valid": true,
         "comments": [
@@ -11390,7 +11390,7 @@
         "layout": "lines"
       },
       "source_utf8": "```nope\n// not a comment\n```\n`// not either`\n    /* nor this */\n",
-      "note": "CommonMark 0.31: a fence whose info string names no language, an inline code span and an indented code block are all opaque \u2014 the `//` and `/*` inside them are code text, not comments \u2014 while a fence that names a language is scanned as it.",
+      "note": "CommonMark 0.31: a fence whose info string names no language, an inline code span and an indented code block are all opaque — the `//` and `/*` inside them are code text, not comments — while a fence that names a language is scanned as it.",
       "expect": {
         "valid": true,
         "comments": [],
@@ -11406,7 +11406,7 @@
         "layout": "lines"
       },
       "source_utf8": "sub f { 1 }\nf() /a#b/;\nmy $x = (2) / 2; # division\n",
-      "note": "Perl 5.38: a `/` directly after a closing parenthesis is settled only by the parse context \u2014 `f() /a#b/` is a regex whose `#` is pattern content, and `(2) / 2` is a division whose `# division` is a comment \u2014 so this scanner reports it as lexically ambiguous, marks the file invalid and refuses to edit it. Ground truth, `perl -c`: both forms compile.",
+      "note": "Perl 5.38: a `/` directly after a closing parenthesis is settled only by the parse context — `f() /a#b/` is a regex whose `#` is pattern content, and `(2) / 2` is a division whose `# division` is a comment — so this scanner reports it as lexically ambiguous, marks the file invalid and refuses to edit it. Ground truth, `perl -c`: both forms compile.",
       "expect": {
         "valid": false,
         "comments": [],
@@ -12627,6 +12627,3390 @@
           }
         ],
         "diagnostics": []
+      }
+    },
+    {
+      "id": "policy-none-keeps-an-ordinary-comment",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines"
+      },
+      "source_utf8": "let x = 1; // note\n",
+      "note": "Policy `none` removes nothing: the mode exists for a repository that wants the style rules and not the removals, so an ordinary line comment the default policy would take is kept and the source comes back byte for byte.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 11,
+            "end": 18,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "let x = 1; // note\n"
+      }
+    },
+    {
+      "id": "policy-none-keeps-every-kind",
+      "language": "python",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines"
+      },
+      "source_utf8": "#!/usr/bin/env python\n# -*- coding: utf-8 -*-\n# SPDX-License-Identifier: MIT\n# noqa\n# plain\n",
+      "note": "Policy `none` answers before the kind table rather than inside it, so the preamble, the licence notice, the directive and the ordinary comment are all kept for the same reason.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 21,
+            "kind": "shebang",
+            "action": "keep"
+          },
+          {
+            "start": 22,
+            "end": 45,
+            "kind": "encoding",
+            "action": "keep"
+          },
+          {
+            "start": 46,
+            "end": 76,
+            "kind": "license",
+            "action": "keep"
+          },
+          {
+            "start": 77,
+            "end": 83,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 84,
+            "end": 91,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "#!/usr/bin/env python\n# -*- coding: utf-8 -*-\n# SPDX-License-Identifier: MIT\n# noqa\n# plain\n"
+      }
+    },
+    {
+      "id": "style-space-after-marker-line",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "space_after_marker": true
+        }
+      },
+      "source_utf8": "//note\nlet x = 1;\n",
+      "note": "`space_after_marker` puts one space between the opening marker and the text written against it. The comment is kept and rewritten, which is a third verdict: it neither goes nor stays as written.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 6,
+            "kind": "line",
+            "action": "rewrite"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "// note\nlet x = 1;\n"
+      }
+    },
+    {
+      "id": "style-space-after-marker-every-marker",
+      "language": "python",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "space_after_marker": true
+        }
+      },
+      "source_utf8": "#note\n",
+      "note": "The rule is read from the comment's opening marker, so it holds in every language rather than in the ones that open `//`.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 5,
+            "kind": "line",
+            "action": "rewrite"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "# note\n"
+      }
+    },
+    {
+      "id": "style-space-after-marker-doc-comment",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "space_after_marker": true
+        }
+      },
+      "source_utf8": "///doc\nfn a() {}\n",
+      "note": "A documentation comment is exempt from the length rule because it is documentation. It is not exempt from the style rules: it is the prose most readers actually read, and `///` is matched before `//`.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 6,
+            "kind": "doc-line",
+            "action": "rewrite"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "/// doc\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "style-space-after-marker-leaves-a-ruler",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "space_after_marker": true
+        }
+      },
+      "source_utf8": "////////\nlet x = 1;\n",
+      "note": "A run of markers is a divider, not a comment missing its space. The rule acts only when the first character of the text is neither white space nor ASCII punctuation, so a ruler comes back unchanged.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 8,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "////////\nlet x = 1;\n"
+      }
+    },
+    {
+      "id": "style-space-after-marker-reaches-the-ocaml-doc-opener",
+      "language": "ocaml",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "space_after_marker": true
+        }
+      },
+      "source_utf8": "(**doc*)\nlet a = 1\n",
+      "note": "`(**` is a marker of its own, beside `(*`, and the longest one that matches is what the rule is asked about. Without it the extra star was the first character of the text, which is punctuation, and the timid rule declined — so an OCaml documentation comment was the one kind the spacing rule could not reach.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 8,
+            "kind": "doc-block",
+            "action": "rewrite"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "(** doc*)\nlet a = 1\n"
+      }
+    },
+    {
+      "id": "style-space-after-marker-leaves-an-empty-comment",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "space_after_marker": true
+        }
+      },
+      "source_utf8": "//\nlet x = 1;\n",
+      "note": "A bare marker is a blank line in a paragraph, not a comment whose text is written against it. There is no text, so there is nothing to separate.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 2,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "//\nlet x = 1;\n"
+      }
+    },
+    {
+      "id": "style-trailing-whitespace-line",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "trailing_whitespace": false
+        }
+      },
+      "source_utf8": "let x = 1; // note   \n",
+      "note": "A line comment's span ends where its text ends, so the spaces it trails are inside it and the rule reaches them. The space between the code and the marker is outside the comment and is not touched.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 11,
+            "end": 21,
+            "kind": "line",
+            "action": "rewrite"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "let x = 1; // note\n"
+      }
+    },
+    {
+      "id": "style-trailing-whitespace-every-line-of-a-block",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "trailing_whitespace": false
+        }
+      },
+      "source_utf8": "/* one  \n * two\t\n */\nlet x = 1;\n",
+      "note": "The rule reaches every line the comment covers, the last one included, and the closing delimiter is left where it was: a rewrite that dropped it would write a source that no longer lexes.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 20,
+            "kind": "block",
+            "action": "rewrite"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "/* one\n * two\n */\nlet x = 1;\n"
+      }
+    },
+    {
+      "id": "style-trailing-whitespace-keeps-crlf",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "trailing_whitespace": false
+        }
+      },
+      "source_utf8": "/* one  \r\n * two  \r\n */\r\n",
+      "note": "CRLF endings survive a rewrite. The carriage return is not white space the rule may take: taking it would change the line endings of a file the run was asked to tidy.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 23,
+            "kind": "block",
+            "action": "rewrite"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "/* one\r\n * two\r\n */\r\n"
+      }
+    },
+    {
+      "id": "style-rules-compose-and-the-first-is-recorded",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "space_after_marker": true,
+          "trailing_whitespace": false
+        }
+      },
+      "source_utf8": "//note   \nlet x = 1;\n",
+      "note": "Both rules reach this comment. The bytes carry both changes and the rule recorded is the first one that found something, which is what tells a reader why the comment is in the report at all.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 9,
+            "kind": "line",
+            "action": "rewrite"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "// note\nlet x = 1;\n"
+      }
+    },
+    {
+      "id": "style-does-not-reach-a-licence-notice",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "space_after_marker": true
+        }
+      },
+      "source_utf8": "//SPDX-License-Identifier: MIT\nlet x = 1;\n",
+      "note": "A licence notice is a legal text quoted verbatim, and verbatim is the whole of its value. It is out of the style rules' reach more firmly than anything else.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 30,
+            "kind": "license",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "//SPDX-License-Identifier: MIT\nlet x = 1;\n"
+      }
+    },
+    {
+      "id": "style-does-not-reach-a-directive",
+      "language": "go",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "space_after_marker": true
+        }
+      },
+      "source_utf8": "//go:build linux\npackage main\n",
+      "note": "A directive is read by a tool, and a tool is not a reader. Rewriting bytes something parses is how a tidy-up changes what a build does.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 16,
+            "kind": "load-bearing",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "//go:build linux\npackage main\n"
+      }
+    },
+    {
+      "id": "style-does-not-reach-a-shebang",
+      "language": "shell",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "space_after_marker": true
+        }
+      },
+      "source_utf8": "#!/bin/sh\necho hi\n",
+      "note": "The preamble is out for the reason it is always out: the cost of losing a shebang is a broken file.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 9,
+            "kind": "shebang",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "#!/bin/sh\necho hi\n"
+      }
+    },
+    {
+      "id": "style-does-not-reach-a-removed-comment",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "conservative",
+        "layout": "lines",
+        "style": {
+          "space_after_marker": true,
+          "trailing_whitespace": false
+        }
+      },
+      "source_utf8": "//note   \nlet x = 1;\n",
+      "note": "The style rules are asked only about comments that are staying. Under `conservative` this comment goes, and a removal has no spelling to correct.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 9,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "\nlet x = 1;\n"
+      }
+    },
+    {
+      "id": "style-and-removal-in-one-file",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "conservative",
+        "layout": "lines",
+        "style": {
+          "space_after_marker": true
+        }
+      },
+      "source_utf8": "///doc\nfn a() {}\n//note\nlet x = 1;\n",
+      "note": "One run reaching two different verdicts. The documentation comment is kept and rewritten; the ordinary one is removed. The edits stay sorted and non-overlapping across both.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 6,
+            "kind": "doc-line",
+            "action": "rewrite"
+          },
+          {
+            "start": 17,
+            "end": 23,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "/// doc\nfn a() {}\n\nlet x = 1;\n"
+      }
+    },
+    {
+      "id": "style-under-compact-layout",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "compact",
+        "style": {
+          "trailing_whitespace": false
+        }
+      },
+      "source_utf8": "//note   \nlet x = 1;\n",
+      "note": "A rewrite is not a layout question: a layout decides what is left where a comment used to be, and a rewritten comment has not been anywhere. All three layouts write the same bytes for it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 9,
+            "kind": "line",
+            "action": "rewrite"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "//note\nlet x = 1;\n"
+      }
+    },
+    {
+      "id": "style-under-columns-layout",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "columns",
+        "style": {
+          "trailing_whitespace": false
+        }
+      },
+      "source_utf8": "//note   \nlet x = 1;\n",
+      "note": "`columns` promises that every column after an edit keeps its number, and a replacement of a different width cannot keep it. The promise is kept for removals, which is what the layout exists for; the rewrite is written as the other two layouts write it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 9,
+            "kind": "line",
+            "action": "rewrite"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "//note\nlet x = 1;\n"
+      }
+    },
+    {
+      "id": "style-leaves-an-html-comment-well-formed",
+      "language": "html",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "space_after_marker": true
+        }
+      },
+      "source_utf8": "<!--note-->\n<p>x</p>\n",
+      "note": "An HTML comment's closing delimiter is part of its span, so a rewrite that reached past the opener would leave a document the parser reads differently. Only the opener is touched.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 11,
+            "kind": "html-comment",
+            "action": "rewrite"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "<!-- note-->\n<p>x</p>\n"
+      }
+    },
+    {
+      "id": "profile-longest-token-wins-over-declaration-order",
+      "language": "c",
+      "operation": "scan-profile",
+      "options": {
+        "policy": "conservative"
+      },
+      "profile": {
+        "name": "gleam",
+        "extensions": [
+          "gleam"
+        ],
+        "line_comments": [
+          {
+            "start": "////",
+            "kind": "doc-line"
+          },
+          {
+            "start": "///",
+            "kind": "doc-line"
+          },
+          {
+            "start": "//",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [],
+        "strings": [
+          {
+            "start": "\"",
+            "end": "\"",
+            "escape": "\\",
+            "multiline": true
+          }
+        ],
+        "protected_patterns": []
+      },
+      "source_utf8": "//// module\n/// item\n// remark\n",
+      "note": "Gleam spells three comment forms as extensions of one another. The scan takes the longest token that matches rather than the first one declared, so the order the delimiters are written in carries no meaning and an author cannot get it wrong.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 11,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 12,
+            "end": 20,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 21,
+            "end": 30,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "profile-prefix-delimiters-are-not-ambiguous",
+      "language": "c",
+      "operation": "scan-profile",
+      "options": {
+        "policy": "conservative"
+      },
+      "profile": {
+        "name": "gleam",
+        "extensions": [
+          "gleam"
+        ],
+        "line_comments": [
+          {
+            "start": "////",
+            "kind": "doc-line"
+          },
+          {
+            "start": "///",
+            "kind": "doc-line"
+          },
+          {
+            "start": "//",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [],
+        "strings": [
+          {
+            "start": "\"",
+            "end": "\"",
+            "escape": "\\",
+            "multiline": true
+          }
+        ],
+        "protected_patterns": []
+      },
+      "source_utf8": "///doc\n//remark\n",
+      "note": "A comment token that is the start of another was refused as ambiguous, which made a language with a documentation comment inexpressible. Longest-match resolves it, so the pair is accepted and each opens what it spells.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 6,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 7,
+            "end": 15,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "profile-a-string-still-hides-a-comment-token",
+      "language": "c",
+      "operation": "scan-profile",
+      "options": {
+        "policy": "conservative"
+      },
+      "profile": {
+        "name": "gleam",
+        "extensions": [
+          "gleam"
+        ],
+        "line_comments": [
+          {
+            "start": "////",
+            "kind": "doc-line"
+          },
+          {
+            "start": "///",
+            "kind": "doc-line"
+          },
+          {
+            "start": "//",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [],
+        "strings": [
+          {
+            "start": "\"",
+            "end": "\"",
+            "escape": "\\",
+            "multiline": true
+          }
+        ],
+        "protected_patterns": []
+      },
+      "source_utf8": "pub const s = \"// not a comment\"\n// a comment\n",
+      "note": "Strings are matched before comments, so a token inside one is text. Adding longest-match among the comment delimiters must not disturb that.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 33,
+            "end": 45,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "profile-haskell-dashes-open-a-comment",
+      "language": "c",
+      "operation": "scan-profile",
+      "options": {
+        "policy": "conservative"
+      },
+      "profile": {
+        "name": "haskell",
+        "extensions": [
+          "hs"
+        ],
+        "doc_continuation": true,
+        "line_comments": [
+          {
+            "start": "-- |",
+            "kind": "doc-line"
+          },
+          {
+            "start": "-- ^",
+            "kind": "doc-line"
+          },
+          {
+            "start": "--",
+            "forbidden_after": "!#$%&*+./<=>?@\\^|~:-",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [
+          {
+            "start": "{-|",
+            "end": "-}",
+            "nested": true,
+            "kind": "doc-block"
+          },
+          {
+            "start": "{-",
+            "end": "-}",
+            "nested": true,
+            "kind": "block"
+          }
+        ],
+        "strings": [
+          {
+            "start": "\"",
+            "end": "\"",
+            "escape": "\\"
+          }
+        ],
+        "protected_patterns": []
+      },
+      "source_utf8": "-- a remark\nx = 1\n",
+      "note": "Haskell 2010 section 2.2: a comment is a run of dashes followed by something that is not a symbol character.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 11,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "profile-haskell-an-operator-is-not-a-comment",
+      "language": "c",
+      "operation": "transform-profile",
+      "options": {
+        "policy": "conservative"
+      },
+      "profile": {
+        "name": "haskell",
+        "extensions": [
+          "hs"
+        ],
+        "doc_continuation": true,
+        "line_comments": [
+          {
+            "start": "-- |",
+            "kind": "doc-line"
+          },
+          {
+            "start": "-- ^",
+            "kind": "doc-line"
+          },
+          {
+            "start": "--",
+            "forbidden_after": "!#$%&*+./<=>?@\\^|~:-",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [
+          {
+            "start": "{-|",
+            "end": "-}",
+            "nested": true,
+            "kind": "doc-block"
+          },
+          {
+            "start": "{-",
+            "end": "-}",
+            "nested": true,
+            "kind": "block"
+          }
+        ],
+        "strings": [
+          {
+            "start": "\"",
+            "end": "\"",
+            "escape": "\\"
+          }
+        ],
+        "protected_patterns": []
+      },
+      "source_utf8": "a --> b\nc <-- d\n",
+      "note": "The same clause the other way. `-->` is an operator because `>` is a symbol character, and a reader that opened a comment there would swallow the rest of the line and rewrite the program.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 11,
+            "end": 15,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "a --> b\nc <\n"
+      }
+    },
+    {
+      "id": "profile-haskell-a-longer-run-of-dashes-is-still-a-comment",
+      "language": "c",
+      "operation": "scan-profile",
+      "options": {
+        "policy": "conservative"
+      },
+      "profile": {
+        "name": "haskell",
+        "extensions": [
+          "hs"
+        ],
+        "doc_continuation": true,
+        "line_comments": [
+          {
+            "start": "-- |",
+            "kind": "doc-line"
+          },
+          {
+            "start": "-- ^",
+            "kind": "doc-line"
+          },
+          {
+            "start": "--",
+            "forbidden_after": "!#$%&*+./<=>?@\\^|~:-",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [
+          {
+            "start": "{-|",
+            "end": "-}",
+            "nested": true,
+            "kind": "doc-block"
+          },
+          {
+            "start": "{-",
+            "end": "-}",
+            "nested": true,
+            "kind": "block"
+          }
+        ],
+        "strings": [
+          {
+            "start": "\"",
+            "end": "\"",
+            "escape": "\\"
+          }
+        ],
+        "protected_patterns": []
+      },
+      "source_utf8": "---x is a comment\ny = 2\n",
+      "note": "The token's final character may repeat before the test: `dashes` in the grammar is two or more, so `---x` is a comment while `---->` is an operator.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 17,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "profile-haskell-a-longer-run-before-a-symbol-is-an-operator",
+      "language": "c",
+      "operation": "transform-profile",
+      "options": {
+        "policy": "conservative"
+      },
+      "profile": {
+        "name": "haskell",
+        "extensions": [
+          "hs"
+        ],
+        "doc_continuation": true,
+        "line_comments": [
+          {
+            "start": "-- |",
+            "kind": "doc-line"
+          },
+          {
+            "start": "-- ^",
+            "kind": "doc-line"
+          },
+          {
+            "start": "--",
+            "forbidden_after": "!#$%&*+./<=>?@\\^|~:-",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [
+          {
+            "start": "{-|",
+            "end": "-}",
+            "nested": true,
+            "kind": "doc-block"
+          },
+          {
+            "start": "{-",
+            "end": "-}",
+            "nested": true,
+            "kind": "block"
+          }
+        ],
+        "strings": [
+          {
+            "start": "\"",
+            "end": "\"",
+            "escape": "\\"
+          }
+        ],
+        "protected_patterns": []
+      },
+      "source_utf8": "a ----> b\n",
+      "note": "The repetition is consumed before the character after it is judged. Testing the byte directly after `--` would have read this as a comment.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "diagnostics": [],
+        "output_utf8": "a ----> b\n"
+      }
+    },
+    {
+      "id": "profile-haskell-haddock-continues-with-the-plain-opener",
+      "language": "c",
+      "operation": "scan-profile",
+      "options": {
+        "policy": "conservative"
+      },
+      "profile": {
+        "name": "haskell",
+        "extensions": [
+          "hs"
+        ],
+        "doc_continuation": true,
+        "line_comments": [
+          {
+            "start": "-- |",
+            "kind": "doc-line"
+          },
+          {
+            "start": "-- ^",
+            "kind": "doc-line"
+          },
+          {
+            "start": "--",
+            "forbidden_after": "!#$%&*+./<=>?@\\^|~:-",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [
+          {
+            "start": "{-|",
+            "end": "-}",
+            "nested": true,
+            "kind": "doc-block"
+          },
+          {
+            "start": "{-",
+            "end": "-}",
+            "nested": true,
+            "kind": "block"
+          }
+        ],
+        "strings": [
+          {
+            "start": "\"",
+            "end": "\"",
+            "escape": "\\"
+          }
+        ],
+        "protected_patterns": []
+      },
+      "source_utf8": "-- | The first line is marked.\n--   The rest is not.\nadd = 1\n",
+      "note": "Haddock marks only the first line of a documentation comment and continues it with the ordinary opener. Read one token at a time the second line is a remark, and the conservative policy would take half a published page away.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 30,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 31,
+            "end": 52,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "profile-haskell-a-blank-line-ends-the-continuation",
+      "language": "c",
+      "operation": "scan-profile",
+      "options": {
+        "policy": "conservative"
+      },
+      "profile": {
+        "name": "haskell",
+        "extensions": [
+          "hs"
+        ],
+        "doc_continuation": true,
+        "line_comments": [
+          {
+            "start": "-- |",
+            "kind": "doc-line"
+          },
+          {
+            "start": "-- ^",
+            "kind": "doc-line"
+          },
+          {
+            "start": "--",
+            "forbidden_after": "!#$%&*+./<=>?@\\^|~:-",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [
+          {
+            "start": "{-|",
+            "end": "-}",
+            "nested": true,
+            "kind": "doc-block"
+          },
+          {
+            "start": "{-",
+            "end": "-}",
+            "nested": true,
+            "kind": "block"
+          }
+        ],
+        "strings": [
+          {
+            "start": "\"",
+            "end": "\"",
+            "escape": "\\"
+          }
+        ],
+        "protected_patterns": []
+      },
+      "source_utf8": "-- | Documentation.\n\n-- an unrelated remark\nadd = 1\n",
+      "note": "A run ends at a blank line, which is how a writer says the next remark is a separate remark. The continuation must not reach across one.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 19,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 21,
+            "end": 43,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "profile-haskell-a-remark-below-code-is-not-documentation",
+      "language": "c",
+      "operation": "scan-profile",
+      "options": {
+        "policy": "conservative"
+      },
+      "profile": {
+        "name": "haskell",
+        "extensions": [
+          "hs"
+        ],
+        "doc_continuation": true,
+        "line_comments": [
+          {
+            "start": "-- |",
+            "kind": "doc-line"
+          },
+          {
+            "start": "-- ^",
+            "kind": "doc-line"
+          },
+          {
+            "start": "--",
+            "forbidden_after": "!#$%&*+./<=>?@\\^|~:-",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [
+          {
+            "start": "{-|",
+            "end": "-}",
+            "nested": true,
+            "kind": "doc-block"
+          },
+          {
+            "start": "{-",
+            "end": "-}",
+            "nested": true,
+            "kind": "block"
+          }
+        ],
+        "strings": [
+          {
+            "start": "\"",
+            "end": "\"",
+            "escape": "\\"
+          }
+        ],
+        "protected_patterns": []
+      },
+      "source_utf8": "-- | Documentation.\nadd = 1\n-- an unrelated remark\n",
+      "note": "Code between two comments ends the run as surely as a blank line does.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 19,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 28,
+            "end": 50,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "profile-haskell-nesting-counts-the-pairing",
+      "language": "c",
+      "operation": "transform-profile",
+      "options": {
+        "policy": "conservative"
+      },
+      "profile": {
+        "name": "haskell",
+        "extensions": [
+          "hs"
+        ],
+        "doc_continuation": true,
+        "line_comments": [
+          {
+            "start": "-- |",
+            "kind": "doc-line"
+          },
+          {
+            "start": "-- ^",
+            "kind": "doc-line"
+          },
+          {
+            "start": "--",
+            "forbidden_after": "!#$%&*+./<=>?@\\^|~:-",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [
+          {
+            "start": "{-|",
+            "end": "-}",
+            "nested": true,
+            "kind": "doc-block"
+          },
+          {
+            "start": "{-",
+            "end": "-}",
+            "nested": true,
+            "kind": "block"
+          }
+        ],
+        "strings": [
+          {
+            "start": "\"",
+            "end": "\"",
+            "escape": "\\"
+          }
+        ],
+        "protected_patterns": []
+      },
+      "source_utf8": "{-| Documentation.\n  It nests {- like this -} properly.\n-}\ndata T = T\n",
+      "note": "Nesting is a property of the closing token, not of the opener that began the comment. Counting only `{-|` let the inner `-}` close the outer comment and left the rest of it standing as code, which a removal would then have written out.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 58,
+            "kind": "doc-block",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "{-| Documentation.\n  It nests {- like this -} properly.\n-}\ndata T = T\n"
+      }
+    },
+    {
+      "id": "profile-haskell-a-string-hides-both-comment-forms",
+      "language": "c",
+      "operation": "scan-profile",
+      "options": {
+        "policy": "conservative"
+      },
+      "profile": {
+        "name": "haskell",
+        "extensions": [
+          "hs"
+        ],
+        "doc_continuation": true,
+        "line_comments": [
+          {
+            "start": "-- |",
+            "kind": "doc-line"
+          },
+          {
+            "start": "-- ^",
+            "kind": "doc-line"
+          },
+          {
+            "start": "--",
+            "forbidden_after": "!#$%&*+./<=>?@\\^|~:-",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [
+          {
+            "start": "{-|",
+            "end": "-}",
+            "nested": true,
+            "kind": "doc-block"
+          },
+          {
+            "start": "{-",
+            "end": "-}",
+            "nested": true,
+            "kind": "block"
+          }
+        ],
+        "strings": [
+          {
+            "start": "\"",
+            "end": "\"",
+            "escape": "\\"
+          }
+        ],
+        "protected_patterns": []
+      },
+      "source_utf8": "s = \"-- not a comment, {- nor this -}\"\n-- a comment\n",
+      "note": "The escape and the string delimiters are the profile's own, and a comment token inside a string is text in Haskell as in every other language.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 39,
+            "end": 51,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "profile-style-reads-the-profiles-own-marker",
+      "language": "c",
+      "operation": "transform-profile",
+      "options": {
+        "policy": "none",
+        "style": {
+          "space_after_marker": true
+        }
+      },
+      "profile": {
+        "name": "haskell",
+        "extensions": [
+          "hs"
+        ],
+        "doc_continuation": true,
+        "line_comments": [
+          {
+            "start": "-- |",
+            "kind": "doc-line"
+          },
+          {
+            "start": "--",
+            "forbidden_after": "!#$%&*+./<=>?@\\^|~:-",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [
+          {
+            "start": "{-",
+            "end": "-}",
+            "nested": true,
+            "kind": "block"
+          }
+        ],
+        "strings": [
+          {
+            "start": "\"",
+            "end": "\"",
+            "escape": "\\"
+          }
+        ],
+        "protected_patterns": []
+      },
+      "source_utf8": "-- |Documentation written against its marker.\nadd = 1\n",
+      "note": "The style rules are asked about the delimiters the profile declares, not about the built-in list. The built-in list knows `--` and not Haddock's `-- |`, so it would have found the space that belongs to the marker and left the text written against it alone.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 45,
+            "kind": "doc-line",
+            "action": "rewrite"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "-- | Documentation written against its marker.\nadd = 1\n"
+      }
+    },
+    {
+      "id": "wrap-joins-a-break-nobody-meant",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// A sentence that was broken\n/// to keep the line short.\nfn a() {}\n",
+      "note": "A line that does not end at a break somebody meant, followed by more of the same paragraph, was broken to fit a column. A column is not a unit of meaning, so the break is undone.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 56,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 57,
+            "end": 84,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 84,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// A sentence that was broken to keep the line short."
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// A sentence that was broken to keep the line short.\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-breaks-after-every-sentence",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// One sentence. And a second on the same line.\nfn a() {}\n",
+      "note": "The unit is the sentence: a diff then reviews one sentence at a time.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 74,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 74,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// One sentence.\n/// And a second on the same line."
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// One sentence.\n/// And a second on the same line.\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-keeps-a-break-after-a-clause",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// A clause ends here,\n/// and the break after it is kept.\nfn a() {}\n",
+      "note": "The rule allows a break after a clause, so a fixer that removed one would be removing a break its own checker accepts — and its output would not be its checker's fixed point. This is the failure the gate this replaces shipped.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 49,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 50,
+            "end": 85,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// A clause ends here,\n/// and the break after it is kept.\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-unwrap-joins-without-breaking-sentences",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "unwrap"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// One sentence. And a second.\n/// A third that was\n/// broken to fit.\nfn a() {}\n",
+      "note": "`unwrap` undoes the breaks nobody meant and puts none back, which is the rule for a project that wants no cosmetic wrapping and no opinion about sentences.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 57,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 58,
+            "end": 78,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 79,
+            "end": 97,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 97,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// One sentence. And a second.\n/// A third that was broken to fit."
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// One sentence. And a second.\n/// A third that was broken to fit.\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-leaves-a-fenced-code-block",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// Prose that wraps\n/// here.\n///\n/// ```\n/// let x = 1;\n/// let y = 2. Not prose.\n/// ```\nfn a() {}\n",
+      "note": "A doc comment is where an example lives, and a fence is how it is marked. Reflowing one would rewrite the code it holds.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 46,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 47,
+            "end": 56,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 57,
+            "end": 60,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 61,
+            "end": 68,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 69,
+            "end": 83,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 84,
+            "end": 109,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 110,
+            "end": 117,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 117,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// Prose that wraps here.\n///\n/// ```\n/// let x = 1;\n/// let y = 2. Not prose.\n/// ```"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// Prose that wraps here.\n///\n/// ```\n/// let x = 1;\n/// let y = 2. Not prose.\n/// ```\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-leaves-a-section-heading",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// # Errors\n/// The first line under the heading.\nfn a() {}\n",
+      "note": "A `#` line is a heading, and in a Rust doc comment it is a rustdoc section. Joining it into the paragraph under it deletes the section.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 38,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 39,
+            "end": 76,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// # Errors\n/// The first line under the heading.\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-leaves-a-link-reference-definition",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// [`Thing::fail`]: when it cannot be done.\n/// Ordinary prose.\nfn a() {}\n",
+      "note": "Joining a link reference definition into the line above it breaks every link that names it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 70,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 71,
+            "end": 90,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// [`Thing::fail`]: when it cannot be done.\n/// Ordinary prose.\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-reaches-a-list-item-and-keeps-its-indentation",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// - an item whose text wraps\n///   onto the next line. And a second sentence.\n/// - another\nfn a() {}\n",
+      "note": "An item's continuation belongs to the item, and the indentation that says so is written back at the marker's width. The gate this replaces rebuilt the item at the margin and flattened the list, which is the failure its own notes record.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 56,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 57,
+            "end": 105,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 106,
+            "end": 119,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 119,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// - an item whose text wraps onto the next line.\n///   And a second sentence.\n/// - another"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// - an item whose text wraps onto the next line.\n///   And a second sentence.\n/// - another\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-leaves-a-table",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// | a | b |\n/// |---|---|\n/// | 1 | 2 |\nfn a() {}\n",
+      "note": "A table's line breaks are the table.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 39,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 40,
+            "end": 53,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 54,
+            "end": 67,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// | a | b |\n/// |---|---|\n/// | 1 | 2 |\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-does-not-break-inside-a-host-name",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// See https://example.com/a.b/c for details. Version 1.5 is fine.\nfn a() {}\n",
+      "note": "A full stop ends a sentence only when white space follows it, which is what tells a sentence from a host name, a path and a version number.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 93,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 93,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// See https://example.com/a.b/c for details.\n/// Version 1.5 is fine."
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// See https://example.com/a.b/c for details.\n/// Version 1.5 is fine.\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-does-not-break-after-an-abbreviation",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// Abbreviations e.g. this one do not end a sentence. J. Smith neither.\nfn a() {}\n",
+      "note": "A word that always carries a full stop does not end a sentence with it, and a single letter is one of those: `J. Smith` is a name.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 98,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 98,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// Abbreviations e.g. this one do not end a sentence.\n/// J. Smith neither."
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// Abbreviations e.g. this one do not end a sentence.\n/// J. Smith neither.\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-breaks-a-cjk-sentence-without-a-space",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// 日本語の文です。これは二文目。\nfn a() {}\n",
+      "note": "CJK convention puts no space after the ender, so any visible remainder is a second sentence.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 75,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 75,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// 日本語の文です。\n/// これは二文目。"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// 日本語の文です。\n/// これは二文目。\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-joins-cjk-without-inserting-a-space",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// 日本語の文がここで\n/// 折り返されている。\nfn a() {}\n",
+      "note": "Japanese puts no space between the end of one line and the start of the next. A reflow that inserted one would be adding a character to the prose rather than moving a line break.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 57,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 58,
+            "end": 89,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 89,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// 日本語の文がここで折り返されている。"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// 日本語の文がここで折り返されている。\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-reaches-a-line-comment-run-too",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n// A remark that was broken\n// to keep the line short.\nfn a() {}\n",
+      "note": "The rule is about prose, not about which marker carries it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 53,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 54,
+            "end": 80,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 80,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "// A remark that was broken to keep the line short."
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n// A remark that was broken to keep the line short.\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-leaves-a-run-whose-lines-open-differently",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// Documentation that wraps\n//! and an inner doc line under it.\nfn a() {}\n",
+      "note": "A run whose lines open with different tokens is not one paragraph, and a rewrite that normalised them would be changing what each line is rather than where it breaks.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 54,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 55,
+            "end": 90,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// Documentation that wraps\n//! and an inner doc line under it.\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-reaches-a-block-comment",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/* A block that wraps\n * onto a second line. */\nfn a() {}\n",
+      "note": "A block comment carries its own interior line structure, and the prefix its continuation lines are written with is learned from them rather than assumed: a C-family block writes them under a star and an OCaml one aligns them under the text, and a formatter that picked one would rewrite every comment in the other family into a shape nobody there writes.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 73,
+            "kind": "block",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 73,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/* A block that wraps onto a second line. */"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/* A block that wraps onto a second line. */\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-leaves-the-first-two-lines-alone",
+      "language": "python",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "# A remark that was broken\n# to keep the line short.\nx = 1\n",
+      "note": "Python takes a source-encoding declaration from the first two lines, so a rewrite up there that changes how many lines a run occupies changes whether the comment below it is a declaration at all. A run of prose in the first two lines of such a file is left alone.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 26,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 27,
+            "end": 52,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "# A remark that was broken\n# to keep the line short.\nx = 1\n"
+      }
+    },
+    {
+      "id": "wrap-keeps-crlf-endings",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\r\nfn also() {}\r\n/// A sentence that was broken\r\n/// to keep the line short.\r\nfn a() {}\r\n",
+      "note": "A file with CRLF endings keeps them. The ending is read from the run rather than assumed.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 28,
+            "end": 58,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 60,
+            "end": 87,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 28,
+            "end": 87,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// A sentence that was broken to keep the line short."
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\r\nfn also() {}\r\n/// A sentence that was broken to keep the line short.\r\nfn a() {}\r\n"
+      }
+    },
+    {
+      "id": "wrap-and-removal-in-one-file",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "conservative",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// Documentation that wraps\n/// onto a second line.\nfn a() {}\n// a remark\nfn b() {}\n",
+      "note": "A run rewrite and a comment removal in one plan. The edits stay sorted and non-overlapping, and a run is only recorded over comments nothing else touched.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 54,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 55,
+            "end": 78,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 89,
+            "end": 100,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 78,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// Documentation that wraps onto a second line."
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// Documentation that wraps onto a second line.\nfn a() {}\n\nfn b() {}\n"
+      }
+    },
+    {
+      "id": "wrap-leaves-a-comment-beside-code",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\nlet x = 1; // a remark that is long\nfn a() {}\n",
+      "note": "A comment beside code stands alone: a run ends at one, because what is above it is not the same paragraph.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 37,
+            "end": 61,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\nlet x = 1; // a remark that is long\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-reaches-the-first-line-where-no-preamble-is-read",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "//! Module documentation that was broken\n//! to keep the line short.\nfn a() {}\n",
+      "note": "The guard above is asked of the language rather than of every file. Rust reads no preamble, and the top of a Rust file is where a module's own documentation lives — refusing to reflow it would cost the rule the prose it is most for.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 40,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 41,
+            "end": 68,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 0,
+            "end": 68,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "//! Module documentation that was broken to keep the line short."
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "//! Module documentation that was broken to keep the line short.\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-keeps-a-block-closer-on-its-own-line",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/* A block that wraps\n * onto a second line.\n */\nfn a() {}\n",
+      "note": "Where the closing delimiter sits on a line of its own it stays there, and the line it sits on is the prefix's indentation rather than the prefix: a C-family prefix ends in the star the closer already begins with.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 74,
+            "kind": "block",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 74,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/* A block that wraps onto a second line.\n */"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/* A block that wraps onto a second line.\n */\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-leaves-a-block-that-fits-on-one-line",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/* One sentence. And another. */\nfn a() {}\n",
+      "note": "There are no interior lines to learn a continuation prefix from, and a guess would be a guess. The block is left as written.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 58,
+            "kind": "block",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/* One sentence. And another. */\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-aligns-an-ocaml-block-under-its-text",
+      "language": "ocaml",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "let head = 1\nlet also = 2\n(* A block whose continuation lines\n   are aligned under the text. And a second sentence. *)\nlet a = 3\n",
+      "note": "The other family. The prefix learned here is white space alone, and the rewrite writes it back.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 118,
+            "kind": "block",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 118,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "(* A block whose continuation lines are aligned under the text.\n   And a second sentence. *)"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "let head = 1\nlet also = 2\n(* A block whose continuation lines are aligned under the text.\n   And a second sentence. *)\nlet a = 3\n"
+      }
+    },
+    {
+      "id": "wrap-reaches-an-ocaml-documentation-block",
+      "language": "ocaml",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "let head = 1\nlet also = 2\n(** Documentation that wraps\n   onto a second line. *)\nlet a = 3\n",
+      "note": "`(**` opens a documentation block, and the longest matching opener is what the rewrite puts back.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 80,
+            "kind": "doc-block",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 80,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "(** Documentation that wraps onto a second line. *)"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "let head = 1\nlet also = 2\n(** Documentation that wraps onto a second line. *)\nlet a = 3\n"
+      }
+    },
+    {
+      "id": "wrap-keeps-a-blank-line-inside-a-block",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/* One paragraph that wraps\n * onto a line.\n *\n * A second paragraph. */\nfn a() {}\n",
+      "note": "A blank line inside a block is a paragraph break, and it carries no prefix to learn from either — a line holding nothing but the star is not asked.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 98,
+            "kind": "block",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 98,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/* One paragraph that wraps onto a line.\n *\n * A second paragraph. */"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/* One paragraph that wraps onto a line.\n *\n * A second paragraph. */\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-leaves-a-block-whose-interior-is-a-code-example",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/* An example:\n *\n * ```\n * let x = 1;\n * let y = 2. Not prose.\n * ```\n */\nfn a() {}\n",
+      "note": "A fence inside a block marks an example exactly as it does inside a run of line comments. The rule that reads one reads the other.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 100,
+            "kind": "block",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/* An example:\n *\n * ```\n * let x = 1;\n * let y = 2. Not prose.\n * ```\n */\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-leaves-an-example-indented-under-an-item",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// - an item that wraps\n///   onto a line:\n///\n///     let x = 1;\n///\n/// After.\nfn a() {}\n",
+      "note": "Four spaces past the marker is an indented code block, and a doc comment is where an example lives. A continuation reaches one space past the marker's width and no further.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 50,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 51,
+            "end": 69,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 70,
+            "end": 73,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 74,
+            "end": 92,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 93,
+            "end": 96,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 97,
+            "end": 107,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 107,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// - an item that wraps onto a line:\n///\n///     let x = 1;\n///\n/// After."
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// - an item that wraps onto a line:\n///\n///     let x = 1;\n///\n/// After.\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-keeps-a-nested-list-nested",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// - outer item that wraps\n///   onto a line\n///   - inner item that wraps\n///     onto a line\nfn a() {}\n",
+      "note": "A line that opens an item of its own is a new item rather than the continuation of the one above it, however deeply it is indented.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 53,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 54,
+            "end": 71,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 72,
+            "end": 101,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 102,
+            "end": 121,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 121,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// - outer item that wraps onto a line\n///   - inner item that wraps onto a line"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// - outer item that wraps onto a line\n///   - inner item that wraps onto a line\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-splits-an-item-into-sentences-under-its-marker",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// 1. One sentence. And a second.\n/// 2. Another.\nfn a() {}\n",
+      "note": "An ordered marker is as wide as it is spelled, and the sentences under it are written at that width.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 60,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 61,
+            "end": 76,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 76,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// 1. One sentence.\n///    And a second.\n/// 2. Another."
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// 1. One sentence.\n///    And a second.\n/// 2. Another.\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-splits-a-run-at-a-line-a-style-rule-cannot-reach",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// Prose above that wraps\n/// onto a line.\n/// noqa is a word a linter reads.\n/// Prose below that wraps\n/// onto a line.\nfn a() {}\n",
+      "note": "A comment the style rules do not reach ends a stretch rather than refusing the run it sits in. One line of a doc comment classified as a directive used to cost the paragraphs above and below it their reflow, for a rule about a line they do not contain.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 52,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 53,
+            "end": 69,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 70,
+            "end": 104,
+            "kind": "directive",
+            "action": "keep"
+          },
+          {
+            "start": 105,
+            "end": 131,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 132,
+            "end": 148,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 69,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// Prose above that wraps onto a line."
+          },
+          {
+            "start": 105,
+            "end": 148,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// Prose below that wraps onto a line."
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// Prose above that wraps onto a line.\n/// noqa is a word a linter reads.\n/// Prose below that wraps onto a line.\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-joins-a-sentence-that-opens-with-an-intra-doc-link",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\nfn also() {}\n/// [`Thing::fail`]: removed with the run of comments it belongs\n/// to, because that run is longer than the limit.\nfn a() {}\n",
+      "note": "A link reference definition's destination is one token. A sentence that merely opens with an intra-doc link is prose and joins like any other, and reading the second as the first cost every such sentence its reflow.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 26,
+            "end": 90,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 91,
+            "end": 141,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 141,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// [`Thing::fail`]: removed with the run of comments it belongs to, because that run is longer than the limit."
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "fn head() {}\nfn also() {}\n/// [`Thing::fail`]: removed with the run of comments it belongs to, because that run is longer than the limit.\nfn a() {}\n"
+      }
+    },
+    {
+      "id": "wrap-reaches-a-markdown-paragraph",
+      "language": "markdown",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "A paragraph that wraps\nacross two lines. And a second sentence.\n",
+      "note": "A source file keeps its prose in comments and a Markdown document is prose. The rule about where a paragraph breaks is the same rule for both, and the unit it is written back under is the paragraph either way.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "runs": [
+          {
+            "start": 0,
+            "end": 63,
+            "origin": "document",
+            "rule": "wrap",
+            "replacement": "A paragraph that wraps across two lines.\nAnd a second sentence."
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "A paragraph that wraps across two lines.\nAnd a second sentence.\n"
+      }
+    },
+    {
+      "id": "wrap-leaves-a-markdown-fence",
+      "language": "markdown",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "Prose that wraps\nacross lines.\n\n```\ncode that wraps\nshould not join.\n```\n",
+      "note": "A fenced block runs across the blank lines that would otherwise end a paragraph, so the fence is tracked over the document rather than inside one paragraph.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "runs": [
+          {
+            "start": 0,
+            "end": 30,
+            "origin": "document",
+            "rule": "wrap",
+            "replacement": "Prose that wraps across lines."
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "Prose that wraps across lines.\n\n```\ncode that wraps\nshould not join.\n```\n"
+      }
+    },
+    {
+      "id": "wrap-leaves-markdown-front-matter",
+      "language": "markdown",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "---\ntitle: a document\nsummary: two lines\n---\n\nProse that wraps\nacross lines.\n",
+      "note": "The front matter is a document's metadata rather than its prose, and it too runs across blank lines.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "runs": [
+          {
+            "start": 46,
+            "end": 76,
+            "origin": "document",
+            "rule": "wrap",
+            "replacement": "Prose that wraps across lines."
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "---\ntitle: a document\nsummary: two lines\n---\n\nProse that wraps across lines.\n"
+      }
+    },
+    {
+      "id": "wrap-leaves-a-markdown-heading-and-table",
+      "language": "markdown",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "# A heading that is long\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\nProse that wraps\nacross lines.\n",
+      "note": "A heading is a heading and a table's line breaks are the table.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "runs": [
+          {
+            "start": 57,
+            "end": 87,
+            "origin": "document",
+            "rule": "wrap",
+            "replacement": "Prose that wraps across lines."
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "# A heading that is long\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\nProse that wraps across lines.\n"
+      }
+    },
+    {
+      "id": "wrap-leaves-a-markdown-html-comment-to-the-comment-path",
+      "language": "markdown",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "Prose that wraps\nacross lines.\n\n<!-- a comment that wraps\n     across lines. -->\n",
+      "note": "An HTML comment in a Markdown document is prose too, and the comment path has already answered for it. Reading it again as part of a paragraph would plan two edits over the same bytes.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 32,
+            "end": 80,
+            "kind": "html-comment",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 0,
+            "end": 30,
+            "origin": "document",
+            "rule": "wrap",
+            "replacement": "Prose that wraps across lines."
+          },
+          {
+            "start": 32,
+            "end": 80,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "<!-- a comment that wraps across lines. -->"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "Prose that wraps across lines.\n\n<!-- a comment that wraps across lines. -->\n"
+      }
+    },
+    {
+      "id": "wrap-reaches-a-markdown-list-item",
+      "language": "markdown",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "- an item that wraps\n  onto the next line. And a second sentence.\n- another\n",
+      "note": "A list item's continuation belongs to the item in a document exactly as it does in a comment, and is written back at the marker's width.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "runs": [
+          {
+            "start": 0,
+            "end": 75,
+            "origin": "document",
+            "rule": "wrap",
+            "replacement": "- an item that wraps onto the next line.\n  And a second sentence.\n- another"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "- an item that wraps onto the next line.\n  And a second sentence.\n- another\n"
+      }
+    },
+    {
+      "id": "wrap-keeps-an-item-open-across-a-clause-break",
+      "language": "markdown",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "- An item whose first line ends at a clause:\n  the rest of it wraps\n  onto two more lines.\n- another\n",
+      "note": "A break the writer meant ends the paragraph being held, and it does not end the item that paragraph belongs to. Forgetting the marker there left every line under the first break unreachable — indented, so read as something the structure is made of rather than as the item's own prose.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "runs": [
+          {
+            "start": 0,
+            "end": 100,
+            "origin": "document",
+            "rule": "wrap",
+            "replacement": "- An item whose first line ends at a clause:\n  the rest of it wraps onto two more lines.\n- another"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "- An item whose first line ends at a clause:\n  the rest of it wraps onto two more lines.\n- another\n"
+      }
+    },
+    {
+      "id": "wrap-writes-a-continued-item-under-its-marker",
+      "language": "markdown",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "- An item whose first line ends at a clause:\n  a second sentence. And a third.\n",
+      "note": "Only the first line of an item carries the marker. What every group after it is written under is the marker's width, which is what says the line still belongs to the item.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "runs": [
+          {
+            "start": 0,
+            "end": 78,
+            "origin": "document",
+            "rule": "wrap",
+            "replacement": "- An item whose first line ends at a clause:\n  a second sentence.\n  And a third."
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "- An item whose first line ends at a clause:\n  a second sentence.\n  And a third.\n"
+      }
+    },
+    {
+      "id": "wrap-keeps-the-indentation-the-source-wrote",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "impl T {\n    /// A sentence that was broken\n    /// to keep the line short.\n    fn a() {}\n}\n",
+      "note": "The replacement covers the run from its first comment's opener, so the white space in front of that opener is source it does not cover. A rewrite that writes the indentation back in front of its first line writes it twice, and the paragraph walks right by its own indentation every time it is reflowed.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 13,
+            "end": 43,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 48,
+            "end": 75,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 13,
+            "end": 75,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// A sentence that was broken to keep the line short."
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "impl T {\n    /// A sentence that was broken to keep the line short.\n    fn a() {}\n}\n"
+      }
+    },
+    {
+      "id": "wrap-indents-the-lines-a-split-opens",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "impl T {\n    /// One sentence. Another one.\n    fn a() {}\n}\n",
+      "note": "The other direction of the same rule: a line the rewrite opens is a line the rewrite has to indent, because no source sits in front of it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 13,
+            "end": 43,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 13,
+            "end": 43,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// One sentence.\n    /// Another one."
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "impl T {\n    /// One sentence.\n    /// Another one.\n    fn a() {}\n}\n"
+      }
+    },
+    {
+      "id": "wrap-refuses-a-run-whose-lines-sit-at-different-columns",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "a: 1\n\n# - script: |\n    # echo building the image\n    # docker build --rm .\n\nb: 2\n",
+      "note": "A commented-out block of shell holds its structure in its indentation. Its lines are consecutive comments and so they are one run, but they are not one paragraph, and a rewrite that gave them all the first line's column would flatten the structure into a sentence and move the rest of the block left. One indentation per run, as there is one opener per run.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 6,
+            "end": 19,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 24,
+            "end": 49,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 54,
+            "end": 75,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "a: 1\n\n# - script: |\n    # echo building the image\n    # docker build --rm .\n\nb: 2\n"
+      }
+    },
+    {
+      "id": "declarative-profile-reaches-the-style-axis-too",
+      "language": "c",
+      "operation": "transform-profile",
+      "options": {
+        "policy": "none",
+        "style": {
+          "wrap": "sentence"
+        },
+        "layout": "lines"
+      },
+      "profile": {
+        "name": "demo",
+        "extensions": [
+          "demo"
+        ],
+        "line_comments": [
+          {
+            "start": "//",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [],
+        "strings": [],
+        "protected_patterns": []
+      },
+      "source_utf8": "call()\n// A remark. Another one.\ncall()\n",
+      "note": "Both axes reach a file read under a profile, and a reflow is the one the run carries rather than the one a comment carries. The Rust side dropped the runs the style pass returned and kept only the per-comment rules, so a `.gleam` file was checked for the space after its marker and never for where its sentences end. A transformation and not a scan, because a scan's recorded block compares comments and diagnostics and would have agreed with the bug.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 7,
+            "end": 32,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 7,
+            "end": 32,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "// A remark.\n// Another one."
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "call()\n// A remark.\n// Another one.\ncall()\n"
+      }
+    },
+    {
+      "id": "a-scan-records-the-run-it-rewrote",
+      "language": "rust",
+      "operation": "scan",
+      "options": {
+        "policy": "none",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\n// A remark. Another one.\nfn also() {}\n",
+      "note": "The span a rewrite replaces, where it came from, the rule that asked for it, and the bytes it writes are all reported, and nothing in this corpus compared any of them: every wrap case was a transformation, which compares the output and never the report. A library caller reads the report.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 13,
+            "end": 38,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 13,
+            "end": 38,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "// A remark.\n// Another one."
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "wrap-leaves-a-labelled-divider-alone",
+      "language": "shell",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "x=1\n# --- keybindings ------------------------------------\n# Splits, mapped the same way the other machine maps them.\ny=2\n",
+      "note": "A section divider with its name written into it is a thing drawn, not a sentence, and joining the line under it onto it deletes the heading. A plain rule of nothing but dashes was already read as one; a labelled one is recognised by the run it ends with, because prose does not end in four dashes.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 4,
+            "end": 58,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 59,
+            "end": 117,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "x=1\n# --- keybindings ------------------------------------\n# Splits, mapped the same way the other machine maps them.\ny=2\n"
+      }
+    },
+    {
+      "id": "wrap-reads-a-label-as-a-marker-with-no-tag-list",
+      "language": "toml",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "# NOTE: The policy this machine holds every commit to, as a setting\n# NOTE: rather than as a gate's own opinion. It merges under a project's.\nversion = 1\n",
+      "note": "A configuration's tag list says which tags keep a comment alive, which is a question a project answers. Whether a word in capitals with a colon after it is a label is a question about the text, and a machine-wide rule that removes nothing has no tag list to answer it with -- so reflowing this wrote `as a setting NOTE: rather than` into the middle of a sentence.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 67,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 68,
+            "end": 141,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 0,
+            "end": 141,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "# NOTE: The policy this machine holds every commit to, as a setting rather than as a gate's own opinion.\n# NOTE: It merges under a project's."
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "# NOTE: The policy this machine holds every commit to, as a setting rather than as a gate's own opinion.\n# NOTE: It merges under a project's.\nversion = 1\n"
+      }
+    },
+    {
+      "id": "wrap-does-not-read-an-ordinary-word-as-a-marker",
+      "language": "toml",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "# The cat sat on the mat and then\n# the dog ran away. A second sentence.\nversion = 1\n",
+      "note": "The other half of the rule, and why it is narrow. A shared prefix is not a marker: these two lines share one, and reading it as a marker would join them into nonsense. Capitals and a colon and a space are all required.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 33,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 34,
+            "end": 72,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 0,
+            "end": 72,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "# The cat sat on the mat and then the dog ran away.\n# A second sentence."
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "# The cat sat on the mat and then the dog ran away.\n# A second sentence.\nversion = 1\n"
+      }
+    },
+    {
+      "id": "allow-rules-do-not-reach-policy-none",
+      "language": "rust",
+      "operation": "scan",
+      "options": {
+        "policy": "none",
+        "allow": {
+          "tags": [
+            "NOTE"
+          ],
+          "max_lines": 1,
+          "trailing": false
+        }
+      },
+      "source_utf8": "// NOTE: one line.\npub fn a() {}\n\n// NOTE: goes on\n// NOTE: and on.\npub fn b() {}\n\npub fn c() {} // NOTE: beside code\n\n// plain\npub fn d() {}\n",
+      "note": "The same source as `allow-rules-tag-length-and-trailing`, under the mode whose whole meaning is that it removes nothing. `max_lines` and `trailing` name removals, so neither reaches a comment here: `mode = \"none\"` is documented as the mode for a repository that wants the style rules and not the removals, and a shape rule firing under it would be the one way such a run could still delete something.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 18,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 34,
+            "end": 50,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 51,
+            "end": 67,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 97,
+            "end": 117,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 119,
+            "end": 127,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "policy-none-restyles-what-it-refuses-to-remove",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "allow": {
+          "max_lines": 1,
+          "trailing": false
+        },
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "// A first sentence wrapped to a\n// column. A second sentence.\npub fn a() {}\n\npub fn b() {} // beside code\n",
+      "note": "Both axes at once under `none`. The paragraph is reflowed because that is what the style rules are for; the trailing comment and the two-line paragraph are left alone, because `max_lines` and `trailing` are removals and this mode has none. This is the pairing a machine-wide commit hook runs on: free to rewrite what a machine can settle, and never to take a comment away.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 32,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 33,
+            "end": 62,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 92,
+            "end": 106,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 0,
+            "end": 62,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "// A first sentence wrapped to a column.\n// A second sentence."
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "// A first sentence wrapped to a column.\n// A second sentence.\npub fn a() {}\n\npub fn b() {} // beside code\n"
       }
     }
   ]

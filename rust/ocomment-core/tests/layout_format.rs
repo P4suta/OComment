@@ -1,20 +1,15 @@
 //! What a removal leaves behind, measured against a real formatter.
 //!
-//! The claim a layout makes is about bytes, and every other test here checks
-//! it against bytes this repository wrote down. That leaves one question open:
-//! whether the bytes a removal leaves are bytes the language's own formatter
-//! would accept. A `compact` run that left a stray blank line is correct by
-//! this crate's rules and fails `gofmt -l` in the caller's pipeline, and no
-//! fixture of ours would have said so.
+//! The claim a layout makes is about bytes, and every other test here checks it against bytes this repository wrote down.
+//! That leaves one question open:
+//! whether the bytes a removal leaves are bytes the language's own formatter would accept.
+//! A `compact` run that left a stray blank line is correct by this crate's rules and fails `gofmt -l` in the caller's pipeline, and no fixture of ours would have said so.
 //!
-//! So these ask the formatter. A source that the formatter already accepts is
-//! stripped, and what comes out has to be accepted too — the removal took a
-//! comment out, and taking a comment out is not a reformatting.
+//! So these ask the formatter.
+//! A source that the formatter already accepts is stripped, and what comes out has to be accepted too — the removal took a comment out, and taking a comment out is not a reformatting.
 //!
-//! A formatter that is not installed makes the case skip rather than fail, so
-//! the suite still runs on a machine with one toolchain. `OCOMMENT_REQUIRE_FORMATTERS`
-//! turns every skip into a failure, and CI sets it: a skip that can become
-//! permanent is a test that quietly stopped running.
+//! A formatter that is not installed makes the case skip rather than fail, so the suite still runs on a machine with one toolchain.
+//! `OCOMMENT_REQUIRE_FORMATTERS` turns every skip into a failure, and CI sets it: a skip that can become permanent is a test that quietly stopped running.
 
 use ocomment_core::{Language, Layout, Policy, ScanOptions, TransformOptions, transform};
 use std::{
@@ -22,24 +17,17 @@ use std::{
     process::{Command, Stdio},
 };
 
-/// One formatter, and how to ask it whether bytes are already in its normal
-/// form.
+/// One formatter, and how to ask it whether bytes are already in its normal form.
 struct Formatter {
     /// What the case is reported as.
     name: &'static str,
-    /// The program, and the arguments that make it read standard input and
-    /// write the normalized form to standard output.
+    /// The program, and the arguments that make it read standard input and write the normalized form to standard output.
     program: &'static str,
     arguments: &'static [&'static str],
     language: Language,
-    /// Sources the formatter already accepts, chosen so that a removal leaves
-    /// a hole in every position one can be left in: above an item, beside
-    /// code, between two items, inside a block, over a run, and in a block
-    /// comment.
+    /// Sources the formatter already accepts, chosen so that a removal leaves a hole in every position one can be left in: above an item, beside code, between two items, inside a block, over a run, and in a block comment.
     ///
-    /// Carried on the formatter rather than looked up by language, so that a
-    /// formatter added later comes with its own and there is no arm for one to
-    /// fall into without.
+    /// Carried on the formatter rather than looked up by language, so that a formatter added later comes with its own and there is no arm for one to fall into without.
     fixtures: &'static [(&'static str, &'static str)],
 }
 
@@ -76,9 +64,7 @@ const FORMATTERS: [Formatter; 2] = [
             ),
         ],
     },
-    /* NOTE: `--emit stdout` writes the formatted source; the edition is named
-     * because rustfmt's default differs between toolchains and a fixture that
-     * lexes under one and not another would fail for the wrong reason. */
+    /* NOTE: `--emit stdout` writes the formatted source; the edition is named because rustfmt's default differs between toolchains and a fixture that lexes under one and not another would fail for the wrong reason. */
     Formatter {
         name: "rustfmt",
         program: "rustfmt",
@@ -104,8 +90,7 @@ const FORMATTERS: [Formatter; 2] = [
     },
 ];
 
-/// The formatter's normal form for `source`, or `None` when it refused the
-/// bytes.
+/// The formatter's normal form for `source`, or `None` when it refused the bytes.
 fn formatted(formatter: &Formatter, source: &str) -> Option<String> {
     let mut child = Command::new(formatter.program)
         .args(formatter.arguments)
@@ -136,20 +121,15 @@ fn available(formatter: &Formatter) -> bool {
         .is_ok()
 }
 
-/// Which layouts leave bytes a formatter still calls normal, measured rather
-/// than assumed.
+/// Which layouts leave bytes a formatter still calls normal, measured rather than assumed.
 ///
-/// The answer is a table and not a rule, because the three layouts promise
-/// different things and only one of them is compatible with being normal:
-/// `lines` keeps every line number, so a removed comment leaves an empty line
-/// where a formatter wants none, and `columns` keeps every column, so it
-/// leaves the spaces the comment occupied. Those are the promises, not
-/// defects — a caller who is diffing against a formatted tree wants `compact`,
+/// The answer is a table and not a rule, because the three layouts promise different things and only one of them is compatible with being normal:
+/// `lines` keeps every line number, so a removed comment leaves an empty line where a formatter wants none, and `columns` keeps every column, so it leaves the spaces the comment occupied.
+/// Those are the promises, not defects — a caller who is diffing against a formatted tree wants `compact`,
 /// and this is what says so with evidence.
 ///
-/// Written as an exact expectation in both directions. A layout that stopped
-/// conforming fails, and so does one that started: the second is a layout that
-/// has quietly changed what it promises.
+/// Written as an exact expectation in both directions.
+/// A layout that stopped conforming fails, and so does one that started: the second is a layout that has quietly changed what it promises.
 #[test]
 fn only_compact_leaves_a_formatter_nothing_to_do() {
     let required = std::env::var_os("OCOMMENT_REQUIRE_FORMATTERS").is_some();

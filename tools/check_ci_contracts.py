@@ -54,9 +54,7 @@ PINS = {
     "github/codeql-action": ("b96794f015dfd88f77b49b1c93e0fa7110f94c63",
         "v4.38.0"),
     # NOTE: The exact release and not the `v3` this action's own README shows.
-    # NOTE: A moving major names whatever its publisher last pointed it at, so
-    # NOTE: a table carrying one records nothing a reader or
-    # NOTE: `check_action_pins.py` can hold the pin to.
+    # NOTE: A moving major names whatever its publisher last pointed it at, so a table carrying one records nothing a reader or `check_action_pins.py` can hold the pin to.
     "ocaml/setup-ocaml": ("e89b2ded52a6e13f50162220cf5fe47290162032",
         "v3.8.0"),
     "rust-lang/crates-io-auth-action": (
@@ -276,9 +274,8 @@ def self_test_pipefail_rule() -> int:
 
 
 def main() -> int:
-    # NOTE: Asked of every run rather than behind a flag. A negative control
-    # NOTE: nobody remembers to ask for is a negative control that stops
-    # NOTE: happening, and this one costs nothing.
+    # NOTE: Asked of every run rather than behind a flag.
+    # NOTE: A negative control nobody remembers to ask for is a negative control that stops happening, and this one costs nothing.
     self_tests = (
         self_test_shell_rule,
         self_test_lint_rule,
@@ -315,10 +312,8 @@ def main() -> int:
                 failures.append(
                     f"{path.relative_to(ROOT)}:{line_number}: {action} is {revision}, expected {expected[0]}"
                 )
-            # NOTE: Beside the line or on the line above it. This repository's
-            # NOTE: own `[policy.allow] trailing = false` forbids the first
-            # NOTE: spelling, so the annotation moved; what has to hold is that
-            # NOTE: the pin carries the note, not where the note sits.
+            # NOTE: Beside the line or on the line above it.
+            # NOTE: This repository's own `[policy.allow] trailing = false` forbids the first spelling, so the annotation moved; what has to hold is that the pin carries the note, not where the note sits.
             above = lines[line_number - 2].strip() if line_number >= 2 else ""
             annotation = comment or (above[1:].strip() if above.startswith("#") else "")
             if expected[1] not in annotation:
@@ -329,13 +324,10 @@ def main() -> int:
     if unused:
         failures.append(f"reviewed action pin table has unused entries: {', '.join(unused)}")
 
-    # NOTE: Every chapter the book lists has to be a file Git tracks. A page
-    # NOTE: that exists only in a working tree builds here and fails in CI,
-    # NOTE: which is what happened: a global ignore hid `docs/agents.md` --
-    # NOTE: most repositories keep an agent instruction file as private
-    # NOTE: scratch -- so `git add` never saw it and `mdbook build` could not
-    # NOTE: read the chapter. `.gitignore` un-ignores it now; this is what
-    # NOTE: notices the next one before it is pushed.
+    # NOTE: Every chapter the book lists has to be a file Git tracks.
+    # NOTE: A page that exists only in a working tree builds here and fails in CI,
+    # NOTE: which is what happened: a global ignore hid `docs/agents.md` -- most repositories keep an agent instruction file as private scratch -- so `git add` never saw it and `mdbook build` could not read the chapter.
+    # NOTE: `.gitignore` un-ignores it now; this is what notices the next one before it is pushed.
     summary = (ROOT / "docs/SUMMARY.md").read_text(encoding="utf-8")
     tracked = set(
         subprocess.run(
@@ -355,11 +347,8 @@ def main() -> int:
             )
 
     # NOTE: Every `tools/*.py` gate CI runs also runs in `cargo xtask preflight`.
-    # NOTE: A push that has to wait eight minutes to hear about a stale manual
-    # NOTE: page is not a review cycle, and the only way the local sweep stays
-    # NOTE: worth trusting is if adding a gate to CI and not to it fails here.
-    # NOTE: A job a laptop cannot run -- the OS matrices, Docker, CodeQL, npm --
-    # NOTE: is named in `LOCALLY_UNREACHABLE` rather than silently skipped.
+    # NOTE: A push that has to wait eight minutes to hear about a stale manual page is not a review cycle, and the only way the local sweep stays worth trusting is if adding a gate to CI and not to it fails here.
+    # NOTE: A job a laptop cannot run -- the OS matrices, Docker, CodeQL, npm -- is named in `LOCALLY_UNREACHABLE` rather than silently skipped.
     LOCALLY_UNREACHABLE = frozenset({"tools/package_artifacts.py"})
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     preflight = (ROOT / "rust/xtask/src/main.rs").read_text(encoding="utf-8")
@@ -373,10 +362,8 @@ def main() -> int:
             )
 
     # NOTE: No standalone shell script but the one the release workflow runs.
-    # NOTE: A task runner is code, and the code that decides what a gate does
-    # NOTE: should be read and typed by the same toolchain as what it gates --
-    # NOTE: and a shell step is the one thing here that does not survive the
-    # NOTE: Windows job it stands in for. `cargo xtask` is where a new one goes.
+    # NOTE: A task runner is code, and the code that decides what a gate does should be read and typed by the same toolchain as what it gates -- and a shell step is the one thing here that does not survive the Windows job it stands in for.
+    # NOTE: `cargo xtask` is where a new one goes.
     failures.extend(refuse_shell_scripts(shell_scripts_here()))
     failures.extend(members_missing_workspace_lints(member_manifests()))
     for workflow_path in sorted(ROOT.glob(".github/workflows/*.yml")) + [ROOT / "action.yml"]:

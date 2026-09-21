@@ -13,10 +13,8 @@ async function main(): Promise<void> {
 	await runTests({
 		extensionDevelopmentPath,
 		extensionTestsPath,
-		/* NOTE: The manifest declares no untrusted-workspace support, so the
-		 * test instance has to be told to trust the fixture; without this the
-		 * extension is loaded restricted and never activates. `--no-sandbox`
-		 * is what lets Electron start as root inside a container. */
+		/* NOTE: The manifest declares no untrusted-workspace support, so the test instance has to be told to trust the fixture; without this the extension is loaded restricted and never activates.
+		 * `--no-sandbox` is what lets Electron start as root inside a container. */
 		launchArgs: [
 			workspace,
 			"--disable-extensions",

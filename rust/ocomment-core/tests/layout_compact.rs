@@ -1,12 +1,7 @@
 //! What [`Layout::Compact`] leaves behind, line by line.
 //!
-//! `compact` is `lines` plus two promises: a line that held nothing but a
-//! removed comment goes away instead of staying behind as a blank one, and a
-//! removal never leaves a longer run of blank lines than the one it was
-//! already standing next to. Every case here is a source where one of those is
-//! visible, and each is checked against `lines` as well, because the two
-//! layouts have to differ exactly where the promises say they do and nowhere
-//! else.
+//! `compact` is `lines` plus two promises: a line that held nothing but a removed comment goes away instead of staying behind as a blank one, and a removal never leaves a longer run of blank lines than the one it was already standing next to.
+//! Every case here is a source where one of those is visible, and each is checked against `lines` as well, because the two layouts have to differ exactly where the promises say they do and nowhere else.
 
 use ocomment_core::{
     ByteSpan, CommentKind, Disposition, Language, Layout, Policy, ScanOptions, TransformOptions,
@@ -15,8 +10,7 @@ use ocomment_core::{
 use proptest::prelude::*;
 
 /// One transformation, with every structural promise checked on the way out:
-/// edits sorted, non-overlapping, inside the source, reproducing the output in
-/// one pass, and a source map that still maps both ends.
+/// edits sorted, non-overlapping, inside the source, reproducing the output in one pass, and a source map that still maps both ends.
 fn transformed(source: &[u8], language: Language, policy: Policy, layout: Layout) -> Vec<u8> {
     let result = transform(
         source,
@@ -59,7 +53,7 @@ fn transformed(source: &[u8], language: Language, policy: Policy, layout: Layout
             .report
             .comments
             .iter()
-            .filter(|comment| comment.disposition.is_remove())
+            .filter(|comment| comment.action().removes())
             .count(),
         result.edits.len(),
         "one edit per removed comment"
@@ -118,35 +112,28 @@ fn indentation_of_a_removed_line_goes_with_it() {
     assert_eq!(lines(source), "fn main() {\n    \n    let x = 1;\n}\n");
 }
 
-/// A removal never leaves a longer run of blank lines than the file already
-/// had beside it.
+/// A removal never leaves a longer run of blank lines than the file already had beside it.
 ///
-/// A comment set off by a blank line above and another below is three lines of
-/// file for one comment. Taking only the middle one leaves the two blanks
-/// touching, which is a run one line longer than the file ever had, in a place
-/// where the file had never put one -- and it is what made `ocomment fix`
-/// something a formatter had to be run after. `swift-format` calls it
-/// `[RemoveLine]`, `gofmt` closes it, `rustfmt` collapses it.
+/// A comment set off by a blank line above and another below is three lines of file for one comment.
+/// Taking only the middle one leaves the two blanks touching, which is a run one line longer than the file ever had, in a place where the file had never put one -- and it is what made `ocomment fix` something a formatter had to be run after.
+/// `swift-format` calls it `[RemoveLine]`, `gofmt` closes it, `rustfmt` collapses it.
 #[test]
 fn a_removal_does_not_lengthen_the_blank_run_it_stood_in() {
     let source = "use std::io;\n\n// what this is for\n// and what it is not\n\npub struct P;\n";
     assert_eq!(compact(source), "use std::io;\n\npub struct P;\n");
-    /* NOTE: `lines` keeps every line it finds, blank or not, which is the whole
-     * of the difference between the two layouts here. */
+    /* NOTE: `lines` keeps every line it finds, blank or not, which is the whole of the difference between the two layouts here. */
     assert_eq!(lines(source), "use std::io;\n\n\n\n\npub struct P;\n");
 }
 
-/// What is left is the longer of the two runs the comment stood between, so a
-/// file that separated two sections by two blank lines still does.
+/// What is left is the longer of the two runs the comment stood between, so a file that separated two sections by two blank lines still does.
 #[test]
 fn the_longer_of_the_two_blank_runs_survives() {
     assert_eq!(compact("a\n\n\n// note\n\nb\n"), "a\n\n\nb\n");
     assert_eq!(compact("a\n\n// note\n\n\nb\n"), "a\n\n\nb\n");
 }
 
-/// Blank lines above a removal are never taken, and no more are taken than
-/// followed the comment. So a removal can never join two lines of code that
-/// had a blank line between them, whichever side that blank line was on.
+/// Blank lines above a removal are never taken, and no more are taken than followed the comment.
+/// So a removal can never join two lines of code that had a blank line between them, whichever side that blank line was on.
 #[test]
 fn a_one_sided_blank_run_is_left_alone() {
     assert_eq!(compact("a\n// note\n\nb\n"), "a\n\nb\n");
@@ -154,17 +141,15 @@ fn a_one_sided_blank_run_is_left_alone() {
     assert_eq!(compact("a\n// note\nb\n"), "a\nb\n");
 }
 
-/// Comments on consecutive lines are separate comments and separate edits, and
-/// the blank runs either side belong to the block they make together. Counting
-/// them one comment at a time would leave the run behind.
+/// Comments on consecutive lines are separate comments and separate edits, and the blank runs either side belong to the block they make together.
+/// Counting them one comment at a time would leave the run behind.
 #[test]
 fn comments_separated_by_blanks_collapse_as_one_block() {
     assert_eq!(compact("a\n\n// one\n\n// two\n\nb\n"), "a\n\nb\n");
     assert_eq!(compact("a\n\n// one\n// two\n\nb\n"), "a\n\nb\n");
 }
 
-/// A comment with code beside it is not holding a line of its own, so nothing
-/// about the blank lines around that line is the comment's to give up.
+/// A comment with code beside it is not holding a line of its own, so nothing about the blank lines around that line is the comment's to give up.
 #[test]
 fn a_comment_sharing_a_line_with_code_takes_no_blank_lines() {
     assert_eq!(
@@ -195,12 +180,10 @@ fn the_first_line_of_a_file_goes_like_any_other() {
 fn a_surviving_line_keeps_the_ending_it_had_or_its_absence() {
     assert_eq!(compact("let x = 1; // note"), "let x = 1;");
     assert_eq!(lines("let x = 1; // note"), "let x = 1; ");
-    // NOTE: The last line held nothing else, so it goes; the line before it
-    // NOTE: keeps the terminator it always had.
+    // NOTE: The last line held nothing else, so it goes; the line before it keeps the terminator it always had.
     assert_eq!(compact("let x = 1;\n// note"), "let x = 1;\n");
     assert_eq!(compact("let x = 1;\n// one\n// two"), "let x = 1;\n");
-    // NOTE: Here the terminator that ended the surviving line was inside the
-    // NOTE: comment, so it comes back even though the file ended without one.
+    // NOTE: Here the terminator that ended the surviving line was inside the comment, so it comes back even though the file ended without one.
     assert_eq!(compact("let x = 1; /* one\ntwo */"), "let x = 1;\n");
     assert_eq!(lines("let x = 1; /* one\ntwo */"), "let x = 1; \n");
 }
@@ -313,8 +296,7 @@ fn an_html_comment_still_closes_up_completely() {
 
 #[test]
 fn a_unicode_line_terminator_ends_a_line_like_any_other() {
-    // NOTE: ECMA-262 12.3: U+2028 LINE SEPARATOR is a LineTerminator, so it
-    // NOTE: ends the comment, and the line it ended goes with the comment.
+    // NOTE: ECMA-262 12.3: U+2028 LINE SEPARATOR is a LineTerminator, so it ends the comment, and the line it ended goes with the comment.
     let source = "let a = 1;\u{2028}// note\u{2028}let b = 2;\n";
     assert_eq!(
         String::from_utf8(transformed(
@@ -326,8 +308,7 @@ fn a_unicode_line_terminator_ends_a_line_like_any_other() {
         .unwrap(),
         "let a = 1;\u{2028}let b = 2;\n"
     );
-    // NOTE: `lines` keeps the emptied line and the space that kept the two
-    // NOTE: terminators from meeting.
+    // NOTE: `lines` keeps the emptied line and the space that kept the two terminators from meeting.
     assert_eq!(
         String::from_utf8(transformed(
             source.as_bytes(),
@@ -350,9 +331,7 @@ fn a_kept_comment_holds_its_line_open() {
 
 #[test]
 fn external_spans_with_blanks_between_them_stay_non_overlapping() {
-    // NOTE: A plugin or a declarative profile may report any spans the
-    // NOTE: validator accepts, including two with nothing but blanks between
-    // NOTE: them, and the edits still have to be sorted and non-overlapping.
+    // NOTE: A plugin or a declarative profile may report any spans the validator accepts, including two with nothing but blanks between them, and the edits still have to be sorted and non-overlapping.
     let source = b"x\na  \nb";
     let result = transform_spans(
         source,
@@ -401,13 +380,9 @@ fn only_span(source: &[u8], needle: &[u8]) -> ByteSpan {
 
 /// The hand-off gets the positional keep a built-in scan gets.
 ///
-/// A YAML block scalar reads the lines below it, so the comment that ends one
-/// is not commentary: take its line and the kept directive under it is handed
-/// back to the body. The bytes of that comment say nothing about this, so an
-/// external scanner cannot classify it — `transform_spans` has to apply the
-/// rule itself. It has to under every layout, because the least any of them can
-/// leave in place of that line is a blank one, and a blank line is content of
-/// the body above it whatever its indentation.
+/// A YAML block scalar reads the lines below it, so the comment that ends one is not commentary: take its line and the kept directive under it is handed back to the body.
+/// The bytes of that comment say nothing about this, so an external scanner cannot classify it — `transform_spans` has to apply the rule itself.
+/// It has to under every layout, because the least any of them can leave in place of that line is a blank one, and a blank line is content of the body above it whatever its indentation.
 #[test]
 fn external_spans_keep_the_comment_a_yaml_block_scalar_leans_on() {
     let source =
@@ -415,9 +390,7 @@ fn external_spans_keep_the_comment_a_yaml_block_scalar_leans_on() {
     let trailing = only_span(source, b"# trailing note");
     let ends_block = only_span(source, b"# ends the block");
     let directive = only_span(source, b"# yamllint disable");
-    // NOTE: All three layouts agree about the structural comment and differ
-    // NOTE: only over the trailing note: `columns` pads its width back, `lines`
-    // NOTE: leaves the space in front of it, `compact` trims that space away.
+    // NOTE: All three layouts agree about the structural comment and differ only over the trailing note: `columns` pads its width back, `lines` leaves the space in front of it, `compact` trims that space away.
     let expected: [(Layout, &[u8]); 3] = [
         (
             Layout::Lines,
@@ -448,8 +421,8 @@ fn external_spans_keep_the_comment_a_yaml_block_scalar_leans_on() {
         )
         .expect("the spans are sorted, non-empty and inside the source");
         assert_eq!(
-            result.report.comments[1].disposition,
-            Disposition::Keep {
+            result.report.comments[1].disposition(),
+            &Disposition::Keep {
                 reason: "structural in a YAML block scalar trail".into()
             },
             "{layout:?} let the hand-off remove the comment the block scalar ends at"
@@ -459,8 +432,7 @@ fn external_spans_keep_the_comment_a_yaml_block_scalar_leans_on() {
             "{layout:?} emitted an edit for it anyway: {:?}",
             result.edits
         );
-        // NOTE: The trailing note leans on nothing, so it goes: the pass is the
-        // NOTE: one keep the shape asks for, not a blanket amnesty for YAML.
+        // NOTE: The trailing note leans on nothing, so it goes: the pass is the one keep the shape asks for, not a blanket amnesty for YAML.
         assert_eq!(
             result.edits.len(),
             1,
@@ -478,9 +450,7 @@ fn external_spans_keep_the_comment_a_yaml_block_scalar_leans_on() {
 }
 
 proptest! {
-    /// With every removed comment between two tokens on one line, `compact`
-    /// has no line to drop and no trailing whitespace to trim, so it must
-    /// leave exactly the bytes `lines` leaves.
+    /// With every removed comment between two tokens on one line, `compact` has no line to drop and no trailing whitespace to trim, so it must leave exactly the bytes `lines` leaves.
     #[test]
     fn compact_equals_lines_when_no_comment_ends_its_line(
         left in "[a-z]{1,8}", body in "[a-z ]{0,20}", right in "[a-z]{1,8}", tail in "[a-z]{1,8}")
@@ -489,8 +459,7 @@ proptest! {
         prop_assert_eq!(compact(&source), lines(&source));
     }
 
-    /// A comment alone on its line is the one case the two layouts differ
-    /// over, and they differ by exactly that line.
+    /// A comment alone on its line is the one case the two layouts differ over, and they differ by exactly that line.
     #[test]
     fn compact_drops_the_line_that_lines_leaves_blank(
         indent in " {0,6}", body in "[a-z ]{0,20}", head in "[a-z]{1,8}", tail in "[a-z]{1,8}")

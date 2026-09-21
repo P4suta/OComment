@@ -40,6 +40,19 @@ force_protected = false
 # TODO = "14d"
 # FIXME = "7d"
 
+# How the comments that survive are written. The other axis, and a table of its
+# own: `[policy.allow]` decides what stays and a comment that fails one of its
+# rules is removed, while a comment that fails one of these is rewritten. Every
+# rule here is off unless you turn it on.
+#
+# `mode = "none"` above is the mode for a repository that wants these and not
+# the removals.
+#
+# [style]
+# wrap = "sentence"            # one sentence per line, joining cosmetic wraps
+# space_after_marker = true    # `//text` becomes `// text`
+# trailing_whitespace = false  # strip it from every line of a comment
+
 # Markers your own tools read. A pattern here decides what the comment *is*:
 # `tier = "tool"` records it as a directive, which every policy but `all`
 # keeps, and `tier = "load-bearing"` records it as one no policy reaches. A

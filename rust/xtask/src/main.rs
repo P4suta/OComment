@@ -1,15 +1,12 @@
 //! This repository's own task runner.
 //!
 //! `cargo xtask preflight` runs everything CI checks that a laptop can check,
-//! in the order that fails soonest for the least money, and `lefthook install`
-//! wires it into `pre-push`. Waiting eight minutes to be told about a stale
-//! manual page is not a review cycle.
+//! in the order that fails soonest for the least money, and `lefthook install` wires it into `pre-push`.
+//! Waiting eight minutes to be told about a stale manual page is not a review cycle.
 //!
 //! It is Rust rather than a shell script for the reason the workspace is Rust:
-//! a task runner is code, and code that decides what a release gate does should
-//! be read, typed and tested by the same toolchain as everything else it gates.
-//! A shell script is also the one thing here that would not survive the Windows
-//! job it is supposed to stand in for.
+//! a task runner is code, and code that decides what a release gate does should be read, typed and tested by the same toolchain as everything else it gates.
+//! A shell script is also the one thing here that would not survive the Windows job it is supposed to stand in for.
 
 use anyhow::{Context, Result, bail};
 use std::{
@@ -66,8 +63,7 @@ const GREEN: &str = "\x1b[32m";
 const YELLOW: &str = "\x1b[33m";
 const RESET: &str = "\x1b[0m";
 
-/// Where the repository is, found from this crate rather than from the
-/// directory the caller happened to be in.
+/// Where the repository is, found from this crate rather than from the directory the caller happened to be in.
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -139,8 +135,7 @@ impl Sweep {
         Ok(())
     }
 
-    /// Note a step that could not run here, so that "it passed" never quietly
-    /// means "it was not asked".
+    /// Note a step that could not run here, so that "it passed" never quietly means "it was not asked".
     fn skip(&mut self, name: &str, why: &str) {
         println!("\n{YELLOW}[--] {name}: skipped, {why}{RESET}");
         self.skipped.push(name.to_owned());
@@ -177,16 +172,14 @@ fn available(program: &str) -> bool {
 
 /// A Python that can read a TOML file, which is 3.11 and up.
 ///
-/// Several checks are still Python and are being ported one at a time. Naming
-/// the interpreter here rather than assuming `python3` is what keeps the sweep
-/// runnable on a machine whose `python3` is older than the tools need.
+/// Several checks are still Python and are being ported one at a time.
+/// Naming the interpreter here rather than assuming `python3` is what keeps the sweep runnable on a machine whose `python3` is older than the tools need.
 fn python(root: &Path) -> Result<String> {
     let mut candidates: Vec<String> = std::env::var("OCOMMENT_PYTHON").ok().into_iter().collect();
     candidates.push("python3".to_owned());
     candidates.extend((11..=20).rev().map(|minor| format!("python3.{minor}")));
-    // NOTE: A version manager's interpreter is not on the path under its own
-    // NOTE: name unless it has been activated here, and the one it installed is
-    // NOTE: usually the only one new enough. Newest first.
+    // NOTE: A version manager's interpreter is not on the path under its own name unless it has been activated here, and the one it installed is usually the only one new enough.
+    // NOTE: Newest first.
     if let Some(home) = std::env::var_os("HOME") {
         let installs = Path::new(&home).join(".local/share/mise/installs/python");
         if let Ok(entries) = std::fs::read_dir(&installs) {
@@ -268,9 +261,7 @@ fn preflight(arguments: &[String]) -> Result<()> {
         ],
     )?;
 
-    // NOTE: The formatter-conformance cases skip where gofmt or rustfmt is
-    // NOTE: missing, and a skip that can become permanent is a test that
-    // NOTE: quietly stopped running -- so they are required where it is there.
+    // NOTE: The formatter-conformance cases skip where gofmt or rustfmt is missing, and a skip that can become permanent is a test that quietly stopped running -- so they are required where it is there.
     let formatters: &[(&str, &str)] = if available("gofmt") {
         &[("OCOMMENT_REQUIRE_FORMATTERS", "1")]
     } else {
@@ -302,8 +293,7 @@ fn preflight(arguments: &[String]) -> Result<()> {
         ],
     )?;
 
-    // NOTE: `docs/library.md` is hand-written prose the step above never
-    // NOTE: reads: `--doc` compiles what is in the crate sources and no more.
+    // NOTE: `docs/library.md` is hand-written prose the step above never reads: `--doc` compiles what is in the crate sources and no more.
     sweep.step(
         "Library page",
         "cargo",
@@ -424,8 +414,7 @@ fn preflight(arguments: &[String]) -> Result<()> {
 /// Build both drivers and run every shared fixture through them.
 ///
 /// Two implementations agreeing is the strongest claim this repository makes,
-/// and it takes a built OCaml tree to make it, so the build is part of the
-/// task rather than something a reader is expected to remember.
+/// and it takes a built OCaml tree to make it, so the build is part of the task rather than something a reader is expected to remember.
 fn differential(arguments: &[String]) -> Result<()> {
     let root = root();
     let python = python(&root)?;
@@ -456,8 +445,7 @@ fn differential(arguments: &[String]) -> Result<()> {
     Ok(())
 }
 
-/// The sweep a release is cut from: everything `preflight` checks, against a
-/// release build, plus the performance gate a debug build cannot answer for.
+/// The sweep a release is cut from: everything `preflight` checks, against a release build, plus the performance gate a debug build cannot answer for.
 fn release_check() -> Result<()> {
     preflight(&[])?;
     let root = root();
@@ -518,8 +506,7 @@ fn release_check() -> Result<()> {
     Ok(())
 }
 
-/// The release artefact manifest, which is `tools/package_artifacts.py` under
-/// a name the workflow can call without knowing that.
+/// The release artefact manifest, which is `tools/package_artifacts.py` under a name the workflow can call without knowing that.
 fn package_list(arguments: &[String]) -> Result<()> {
     let root = root();
     let python = python(&root)?;
@@ -539,10 +526,8 @@ fn package_list(arguments: &[String]) -> Result<()> {
 
 /// The checks that are still Python, with the arguments each one takes.
 ///
-/// `tools/check_ci_contracts.py` holds this list against
-/// `.github/workflows/ci.yml`, so a gate added to CI and not to this table
-/// fails rather than quietly stopping here. They are being ported to tasks one
-/// at a time; the table is what says how far that has got.
+/// `tools/check_ci_contracts.py` holds this list against `.github/workflows/ci.yml`, so a gate added to CI and not to this table fails rather than quietly stopping here.
+/// They are being ported to tasks one at a time; the table is what says how far that has got.
 const PYTHON_CHECKS: &[(&str, &str, &[&str])] = &[
     (
         "Schemas",
@@ -568,17 +553,14 @@ const PYTHON_CHECKS: &[(&str, &str, &[&str])] = &[
     ("Hooks", "tools/check_hooks.py", &[]),
     ("Editor ids", "tools/check_editor_ids.py", &[]),
     ("CI contracts", "tools/check_ci_contracts.py", &[]),
-    /* NOTE: The one check here that asks somebody else, so it is also the one
-     * a train tunnel or an exhausted rate limit can stop. It says which pin it
-     * did not read and passes; CI runs it without the flag, where neither
-     * excuse is available and a read it cannot make fails the run. */
+    /* NOTE: The one check here that asks somebody else, so it is also the one a train tunnel or an exhausted rate limit can stop.
+     * It says which pin it did not read and passes; CI runs it without the flag, where neither excuse is available and a read it cannot make fails the run. */
     (
         "Action pins",
         "tools/check_action_pins.py",
         &["--best-effort"],
     ),
-    /* NOTE: Beside it for the same reason and with the same escape: both ask
-     * somebody else, and CI asks without one. */
+    /* NOTE: Beside it for the same reason and with the same escape: both ask somebody else, and CI asks without one. */
     (
         "Advisories",
         "tools/check_advisories.py",

@@ -34,10 +34,15 @@ let base64_encode bytes =
   in loop 0; Buffer.contents output
 
 let span_json (span : byte_span) = `Assoc ["start", `Int span.start; "end", `Int span.finish]
-let disposition_json = function Remove -> `Assoc ["action", `String "remove"] | Keep reason -> `Assoc ["action", `String "keep"; "reason", `String reason]
+(* NOTE: The replacement is rendered as a string, exactly as the Rust field is: a rewrite only ever reaches a comment whose bytes decode, so there is nothing lossy about it on either side. *)
+let disposition_json = function
+  | Remove -> `Assoc ["action", `String "remove"]
+  | Keep reason -> `Assoc ["action", `String "keep"; "reason", `String reason]
+  | Rewrite (rule, replacement) ->
+    `Assoc ["action", `String "rewrite"; "rule", `String (style_rule_name rule);
+            "replacement", `String (Bytes.to_string replacement)]
 
-(** Absent when no shape rule settled the comment, exactly as the Rust
-   field is skipped when it is None, so the two encodings stay byte-comparable. *)
+(** Absent when no shape rule settled the comment, exactly as the Rust field is skipped when it is None, so the two encodings stay byte-comparable. *)
 let shape_json = function
   | Tagged tag -> `Assoc ["rule", `String "tagged"; "tag", `String tag]
   | Trailing -> `Assoc ["rule", `String "trailing"]
@@ -45,14 +50,23 @@ let shape_json = function
     `Assoc ["rule", `String "too-long"; "lines", `Int lines; "limit", `Int limit]
 
 let comment_json (comment : comment) = `Assoc (["span", span_json comment.span; "kind", `String (string_of_comment_kind comment.kind); "disposition", disposition_json comment.disposition] @ (match comment.shape with None -> [] | Some rule -> ["shape", shape_json rule]))
+
+(* NOTE: Absent when nothing rewrote a run, exactly as the Rust field is skipped when the list is empty, so the two encodings stay comparable. *)
+let run_json (run : prose_run) =
+  `Assoc ["span", span_json run.run_span;
+          "origin", `String (prose_origin_name run.run_origin);
+          "rule", `String (style_rule_name run.run_rule);
+          "replacement", `String (Bytes.to_string run.run_replacement)]
 let severity_string = function Error -> "error" | Warning -> "warning" | Info -> "info" | Hint -> "hint"
 let diagnostic_json (diagnostic : diagnostic) = `Assoc ["code", `String diagnostic.code; "message", `String diagnostic.message;
   "severity", `String (severity_string diagnostic.severity); "span", span_json diagnostic.span]
 let edit_json (edit : edit) = `Assoc ["span", span_json edit.span; "replacement_base64", `String (base64_encode edit.replacement)]
 let source_map_json (segment : source_map_segment) = `Assoc ["original", span_json segment.original; "output", span_json segment.output; "exact", `Bool segment.exact]
 
-let scan_json report = `Assoc ["language", `String (string_of_language report.language);
-  "comments", `List (List.map comment_json report.comments); "diagnostics", `List (List.map diagnostic_json report.diagnostics); "valid", `Bool report.valid]
+let scan_json report = `Assoc (["language", `String (string_of_language report.language);
+  "comments", `List (List.map comment_json report.comments)]
+  @ (if report.runs = [] then [] else ["runs", `List (List.map run_json report.runs)])
+  @ ["diagnostics", `List (List.map diagnostic_json report.diagnostics); "valid", `Bool report.valid])
 
 let transform_json result = `Assoc [
   "output_base64", `String (base64_encode result.output);
@@ -126,6 +140,7 @@ let profile_of_json json =
     ({ line_start = member_string "start" item;
        requires_boundary = bool_or false "requires_boundary" item;
        requires_line_start = bool_or false "requires_line_start" item;
+       forbidden_after = string_or "" "forbidden_after" item;
        line_kind = comment_kind_of_string (string_or "line" "kind" item) } : line_delimiter)) in
   let block_comments = list_or_empty "block_comments" json |> List.map (fun item ->
     ({ block_start = member_string "start" item;
@@ -144,7 +159,8 @@ let profile_of_json json =
          | `String "load-bearing" -> ProfileLoadBearing
          | _ -> Tool) }
       : protected_pattern)) in
-  ({ name = member_string "name" json; extensions = strings "extensions" json;
+  ({ doc_continuation = bool_or false "doc_continuation" json;
+     name = member_string "name" json; extensions = strings "extensions" json;
      line_comments; block_comments; strings = string_delimiters; protected_patterns }
     : declarative_profile)
 
@@ -152,6 +168,7 @@ let options json =
   let policy = match Yojson.Safe.Util.member "policy" json with
     | `String "all" -> All
     | `String ("standard" | "safe") -> (Standard : policy)
+    | `String "none" -> RemoveNothing
     | _ -> Conservative in
   let layout = match Yojson.Safe.Util.member "layout" json with `String "columns" -> Columns | `String "compact" -> Compact | _ -> Lines in
   let dialect = match Yojson.Safe.Util.member "dialect" json with `String value -> dialect_of_string value | _ -> Standard in
@@ -163,8 +180,7 @@ let options json =
   let remove_regex = strings "remove_regex" json in
   ({ scan = { policy; dialect; force_invalid; force_protected; keep_kinds;
       remove_kinds; keep_regex; remove_regex;
-      (* NOTE: Read from the same JSON the Rust driver reads, so a fixture can
-         ask for these and both sides are held to the same answer. *)
+      (* NOTE: Read from the same JSON the Rust driver reads, so a fixture can ask for these and both sides are held to the same answer. *)
       allow = (match Yojson.Safe.Util.member "allow" json with
         | `Assoc _ as allow ->
           { tags = (match Yojson.Safe.Util.member "tags" allow with
@@ -174,14 +190,25 @@ let options json =
               | `Int value -> Some value | _ -> None);
             trailing = (match Yojson.Safe.Util.member "trailing" allow with
               | `Bool value -> Some value | _ -> None);
-            (* NOTE: Only the names are read.  The deadline itself is measured
-               against a repository, which neither implementation touches. *)
+            (* NOTE: Only the names are read.
+               The deadline itself is measured against a repository, which neither implementation touches. *)
             expiring_tags = (match Yojson.Safe.Util.member "expiry" allow with
               | `Assoc entries -> List.map fst entries
               | _ -> []) }
         | _ -> { tags = []; max_lines = None; trailing = None; expiring_tags = [] });
-      (* NOTE: Read from the same JSON the Rust driver reads; `contains` is the
-         field name the shared schema uses. *)
+      (* NOTE: The other axis, read from the same JSON the Rust driver reads. *)
+      style = (match Yojson.Safe.Util.member "style" json with
+        | `Assoc _ as style ->
+          { wrap = (match Yojson.Safe.Util.member "wrap" style with
+              | `String "sentence" -> Sentence
+              | `String "unwrap" -> Unwrap
+              | _ -> Preserve);
+            space_after_marker = (match Yojson.Safe.Util.member "space_after_marker" style with
+              | `Bool value -> Some value | _ -> None);
+            trailing_whitespace = (match Yojson.Safe.Util.member "trailing_whitespace" style with
+              | `Bool value -> Some value | _ -> None) }
+        | _ -> { wrap = Preserve; space_after_marker = None; trailing_whitespace = None });
+      (* NOTE: Read from the same JSON the Rust driver reads; `contains` is the field name the shared schema uses. *)
       protected = list_or_empty "protected" json |> List.map (fun item ->
         ({ pattern = member_string "contains" item; reason = member_string "reason" item;
            tier = (match Yojson.Safe.Util.member "tier" item with

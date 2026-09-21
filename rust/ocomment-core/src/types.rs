@@ -23,7 +23,8 @@ impl ByteSpan {
     pub const fn is_empty(self) -> bool {
         self.start == self.end
     }
-    /// Whether `offset` falls inside the span. The `end` offset does not.
+    /// Whether `offset` falls inside the span.
+    /// The `end` offset does not.
     pub const fn contains(self, offset: usize) -> bool {
         self.start <= offset && offset < self.end
     }
@@ -65,8 +66,7 @@ fn lookup<T: Copy>(
 ///
 /// The serde representation is the canonical name [`Self::as_str`] returns.
 /// [`FromStr`] accepts that name and every spelling in [`Self::aliases`],
-/// case-folded and with `-` and `_` ignored, so `C++`, `cxx` and `cpp` all
-/// name [`Self::Cpp`].
+/// case-folded and with `-` and `_` ignored, so `C++`, `cxx` and `cpp` all name [`Self::Cpp`].
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Language {
@@ -76,101 +76,80 @@ pub enum Language {
     Ocaml,
     /// C, detected from `.c` and `.h`; `.m` selects [`Dialect::ObjectiveC`].
     C,
-    /// C++, detected from `.cpp` and its siblings; `.mm` and `.cu` select
-    /// [`Dialect::ObjectiveCpp`] and [`Dialect::Cuda`].
+    /// C++, detected from `.cpp` and its siblings; `.mm` and `.cu` select [`Dialect::ObjectiveCpp`] and [`Dialect::Cuda`].
     Cpp,
     /// Go, detected from `.go`.
     Go,
     /// Java, detected from `.java`.
     Java,
-    /// JavaScript, detected from `.js`, `.mjs` and `.cjs`; `.jsx` selects
-    /// [`Dialect::Jsx`].
+    /// JavaScript, detected from `.js`, `.mjs` and `.cjs`; `.jsx` selects [`Dialect::Jsx`].
     #[serde(rename = "javascript")]
     JavaScript,
-    /// TypeScript, detected from `.ts`, `.mts` and `.cts`; `.tsx` selects
-    /// [`Dialect::Tsx`].
+    /// TypeScript, detected from `.ts`, `.mts` and `.cts`; `.tsx` selects [`Dialect::Tsx`].
     #[serde(rename = "typescript")]
     TypeScript,
     /// Python, detected from `.py`, `.pyw` and `.pyi`.
     Python,
-    /// Shell, detected from `.sh`, `.bash` and `.zsh`, and from a `Dockerfile`
-    /// or `Makefile` name.
+    /// Shell, detected from `.sh`, `.bash` and `.zsh`, and from a `Dockerfile` or `Makefile` name.
     Shell,
-    /// HTML, detected from `.html` and its siblings. `<script>` and `<style>`
-    /// bodies are scanned as JavaScript and CSS.
+    /// HTML, detected from `.html` and its siblings.
+    /// `<script>` and `<style>` bodies are scanned as JavaScript and CSS.
     Html,
     /// CSS, detected from `.css`.
     Css,
-    /// JSON with comments, detected from `.jsonc`, `.json5`, and from a
-    /// `tsconfig.json` or `jsconfig.json` name.
+    /// JSON with comments, detected from `.jsonc`, `.json5`, and from a `tsconfig.json` or `jsconfig.json` name.
     Jsonc,
-    /// SQL, detected from `.sql`. The [`Dialect`] decides the string and
-    /// comment rules.
+    /// SQL, detected from `.sql`.
+    /// The [`Dialect`] decides the string and comment rules.
     Sql,
     /// Kotlin, detected from `.kt` and `.kts`.
     Kotlin,
-    /// TOML, detected from `.toml` and from the lock file names written in
-    /// it, such as `Cargo.lock`.
+    /// TOML, detected from `.toml` and from the lock file names written in it, such as `Cargo.lock`.
     Toml,
-    /// Lua, detected from `.lua` and `.rockspec`, and from a `lua` or
-    /// `luajit` `#!` line.
+    /// Lua, detected from `.lua` and `.rockspec`, and from a `lua` or `luajit` `#!` line.
     Lua,
-    /// YAML, detected from `.yml` and `.yaml`, and from the extensionless
-    /// configuration names written in it, such as `.clang-format`.
+    /// YAML, detected from `.yml` and `.yaml`, and from the extensionless configuration names written in it, such as `.clang-format`.
     Yaml,
-    /// PHP, detected from `.php`, `.phtml` and `.phpt`, and from a `php` `#!`
-    /// line. The inline HTML around the `<?php ... ?>` tags is content.
+    /// PHP, detected from `.php`, `.phtml` and `.phpt`, and from a `php` `#!` line.
+    /// The inline HTML around the `<?php ... ?>` tags is content.
     Php,
-    /// Ruby, detected from `.rb` and its siblings, from the extensionless
-    /// project files written in it, such as `Gemfile`, and from a `ruby` `#!`
-    /// line.
+    /// Ruby, detected from `.rb` and its siblings, from the extensionless project files written in it, such as `Gemfile`, and from a `ruby` `#!` line.
     Ruby,
     /// Zig, detected from `.zig` and from the `.zon` of Zig Object Notation.
     /// It has no block comment: `/*` is two operators.
     Zig,
-    /// R, detected from `.r` in either case, from a `.Rprofile` name, and from
-    /// an `Rscript` or `r` `#!` line.
+    /// R, detected from `.r` in either case, from a `.Rprofile` name, and from an `Rscript` or `r` `#!` line.
     R,
-    /// Dart, detected from `.dart` and from a `dart` `#!` line. Its block
-    /// comments nest.
+    /// Dart, detected from `.dart` and from a `dart` `#!` line.
+    /// Its block comments nest.
     Dart,
-    /// Swift, detected from `.swift` and from a `swift` `#!` line. Its block
-    /// comments nest and `#/ ... /#` is an opaque regular expression literal.
+    /// Swift, detected from `.swift` and from a `swift` `#!` line.
+    /// Its block comments nest and `#/ ... /#` is an opaque regular expression literal.
     Swift,
-    /// C#, detected from `.cs` and from the `.csx` of a script. A line whose
-    /// first non-blank byte is `#` is a preprocessor directive and carries at
-    /// most a `//` comment.
+    /// C#, detected from `.cs` and from the `.csx` of a script.
+    /// A line whose first non-blank byte is `#` is a preprocessor directive and carries at most a `//` comment.
     #[serde(rename = "csharp")]
     CSharp,
-    /// Scala, detected from `.scala` and from the `.sc` of a script, and from
-    /// a `scala` or `scala-cli` `#!` line. Its block comments nest, a string
-    /// is interpolated when an identifier stands directly before its quote,
+    /// Scala, detected from `.scala` and from the `.sc` of a script, and from a `scala` or `scala-cli` `#!` line.
+    /// Its block comments nest, a string is interpolated when an identifier stands directly before its quote,
     /// and a `<` with the shape of an XML literal opens one.
     Scala,
-    /// Vue, detected from the `.vue` of a single-file component. Its template
-    /// is HTML with `{{ ... }}` code, and its `<script>` and `<style>` bodies
-    /// are scanned as their own languages, the `lang` attribute choosing which.
+    /// Vue, detected from the `.vue` of a single-file component.
+    /// Its template is HTML with `{{ ... }}` code, and its `<script>` and `<style>` bodies are scanned as their own languages, the `lang` attribute choosing which.
     Vue,
-    /// Svelte, detected from the `.svelte` of a component. Its template is
-    /// HTML with `{ ... }` code, and its `<script>` and `<style>` bodies are
-    /// scanned as their own languages.
+    /// Svelte, detected from the `.svelte` of a component.
+    /// Its template is HTML with `{ ... }` code, and its `<script>` and `<style>` bodies are scanned as their own languages.
     Svelte,
-    /// Markdown, detected from `.md`, `.markdown` and the `.Rmd` of an R
-    /// Markdown document. HTML comments are comments, fenced code blocks are
-    /// scanned as the language their info string names, and inline and
-    /// indented code are opaque.
+    /// Markdown, detected from `.md`, `.markdown` and the `.Rmd` of an R Markdown document.
+    /// HTML comments are comments, fenced code blocks are scanned as the language their info string names, and inline and indented code are opaque.
     Markdown,
-    /// Perl, detected from `.pl`, `.pm` and `.t`, and from a `perl` `#!`
-    /// line. Its quote words, here-documents and regular expressions hide a
-    /// `#`, its POD blocks are opaque, and a `/` the parse context alone
-    /// settles is reported as lexically ambiguous.
+    /// Perl, detected from `.pl`, `.pm` and `.t`, and from a `perl` `#!` line.
+    /// Its quote words, here-documents and regular expressions hide a `#`, its POD blocks are opaque, and a `/` the parse context alone settles is reported as lexically ambiguous.
     Perl,
     /// No built-in scanner, and the default.
     ///
-    /// Scanning it yields no comments and one `unknown-language` error
-    /// diagnostic. A syntax with no built-in scanner is handled by a
-    /// [`DeclarativeProfile`](crate::DeclarativeProfile) or by
-    /// [`transform_spans`](crate::transform_spans) instead.
+    /// Scanning it yields no comments and one `unknown-language` error diagnostic.
+    /// A syntax with no built-in scanner is handled by a [`DeclarativeProfile`](crate::DeclarativeProfile) or by [`transform_spans`](crate::transform_spans) instead.
     #[default]
     Unknown,
 }
@@ -247,8 +226,7 @@ impl Language {
         }
     }
 
-    /// Accepted spellings besides [`Self::as_str`], already case- and
-    /// separator-folded.
+    /// Accepted spellings besides [`Self::as_str`], already case- and separator-folded.
     pub const fn aliases(self) -> &'static [&'static str] {
         match self {
             Self::Rust => &["rs"],
@@ -280,16 +258,11 @@ impl Language {
             Self::Kotlin => &["kt", "kts"],
             Self::Yaml => &["yml"],
             Self::Ruby => &["rb"],
-            /* NOTE: `Rscript` is the front end that runs an R script and the name
-             * a `#!` line carries, so someone naming the language after the
-             * command they type reaches the same scanner. GitHub Linguist
-             * publishes it as an alias of R for the same reason. */
+            /* NOTE: `Rscript` is the front end that runs an R script and the name a `#!` line carries, so someone naming the language after the command they type reaches the same scanner.
+             * GitHub Linguist publishes it as an alias of R for the same reason. */
             Self::R => &["rscript"],
-            /* NOTE: `c#` is the language's own name, and `cs` the suffix its
-             * files carry and the identifier every editor knows it by. The
-             * third spelling a project writes, `c-sharp`, needs no row of its
-             * own: [`FromStr`] folds `-` and `_` out of a spelling before it
-             * looks it up, so those letters already reach the canonical name. */
+            /* NOTE: `c#` is the language's own name, and `cs` the suffix its files carry and the identifier every editor knows it by.
+             * The third spelling a project writes, `c-sharp`, needs no row of its own: [`FromStr`] folds `-` and `_` out of a spelling before it looks it up, so those letters already reach the canonical name. */
             Self::CSharp => &["cs", "c#"],
         }
     }
@@ -316,34 +289,38 @@ impl FromStr for Language {
 
 /// A vendor or extension variant of a [`Language`]'s lexical rules.
 ///
-/// A dialect never changes the file type: [`Self::MySql`] is still
-/// [`Language::Sql`]. It changes what counts as a string, an identifier, or a
-/// comment while scanning. Naming one a language does not support is an error
-/// rather than a silent fallback.
+/// A dialect never changes the file type: [`Self::MySql`] is still [`Language::Sql`].
+/// It changes what counts as a string, an identifier, or a comment while scanning.
+/// Naming one a language does not support is an error rather than a silent fallback.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Dialect {
-    /// The language's own rules, with no vendor extension. The default.
+    /// The language's own rules, with no vendor extension.
+    /// The default.
     #[default]
     Standard,
     /// JavaScript with JSX syntax enabled.
     Jsx,
     /// TypeScript with TSX syntax enabled.
     Tsx,
-    /// Objective-C. The comment rules are C's; the dialect records the
-    /// flavour of the file.
+    /// Objective-C.
+    /// The comment rules are C's; the dialect records the flavour of the file.
     #[serde(rename = "objective-c")]
     ObjectiveC,
-    /// Objective-C++. The comment rules are C++'s.
+    /// Objective-C++.
+    /// The comment rules are C++'s.
     #[serde(rename = "objective-cpp")]
     ObjectiveCpp,
-    /// C with the GNU extensions. The comment rules are C's.
+    /// C with the GNU extensions.
+    /// The comment rules are C's.
     #[serde(rename = "gnu-c")]
     GnuC,
-    /// C++ with the GNU extensions. The comment rules are C++'s.
+    /// C++ with the GNU extensions.
+    /// The comment rules are C++'s.
     #[serde(rename = "gnu-cpp")]
     GnuCpp,
-    /// CUDA C++. The comment rules are C++'s.
+    /// CUDA C++.
+    /// The comment rules are C++'s.
     Cuda,
     /// POSIX `sh`, which has no `$'...'` ANSI-C quoted strings.
     #[serde(rename = "posix-sh")]
@@ -353,12 +330,10 @@ pub enum Dialect {
     Bash53,
     /// Zsh, which also has `$'...'` ANSI-C quoted strings.
     Zsh,
-    /// PostgreSQL: nested `/* ... */`, `$tag$ ... $tag$` dollar-quoted
-    /// strings, and backslash escapes inside `E'...'`.
+    /// PostgreSQL: nested `/* ... */`, `$tag$ ... $tag$` dollar-quoted strings, and backslash escapes inside `E'...'`.
     #[serde(rename = "postgresql")]
     PostgreSql,
-    /// MySQL: `#` line comments, `--` only when a boundary follows, strings
-    /// in double quotes, and backslash escapes.
+    /// MySQL: `#` line comments, `--` only when a boundary follows, strings in double quotes, and backslash escapes.
     #[serde(rename = "mysql")]
     MySql,
     /// SQLite, which uses the standard SQL rules.
@@ -370,8 +345,8 @@ pub enum Dialect {
     Oracle,
     /// SCSS: CSS with `//` line comments and `#{ ... }` interpolation.
     Scss,
-    /// The indentation-based Sass syntax. Silent comments also own their
-    /// more-deeply-indented body lines.
+    /// The indentation-based Sass syntax.
+    /// Silent comments also own their more-deeply-indented body lines.
     Sass,
 }
 
@@ -422,8 +397,7 @@ impl Dialect {
         }
     }
 
-    /// Accepted spellings besides [`Self::as_str`], already case- and
-    /// separator-folded.
+    /// Accepted spellings besides [`Self::as_str`], already case- and separator-folded.
     pub const fn aliases(self) -> &'static [&'static str] {
         match self {
             Self::Standard
@@ -464,10 +438,7 @@ impl FromStr for Dialect {
 
 /// What a comment is, which is what a [`Policy`] decides against.
 ///
-/// The kind is lexical to begin with and then refined by the comment's own
-/// bytes and position: a `//` token is [`Self::Line`] until it turns out to
-/// carry an SPDX identifier ([`Self::License`]) or a build tag
-/// ([`Self::Directive`]).
+/// The kind is lexical to begin with and then refined by the comment's own bytes and position: a `//` token is [`Self::Line`] until it turns out to carry an SPDX identifier ([`Self::License`]) or a build tag ([`Self::Directive`]).
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum CommentKind {
@@ -480,9 +451,8 @@ pub enum CommentKind {
     DocLine,
     /// A delimited documentation comment, such as `/** ... */`.
     DocBlock,
-    /// A comment addressed to a tool or to the compiler: a build tag, a
-    /// linter suppression, a type-checker pragma. `spec/directives.toml` is
-    /// the catalogue.
+    /// A comment addressed to a tool or to the compiler: a build tag, a linter suppression, a type-checker pragma.
+    /// `spec/directives.toml` is the catalogue.
     Directive,
     /// A license or copyright notice, such as an SPDX identifier. Only
     /// [`Policy::Conservative`] keeps one.
@@ -495,27 +465,23 @@ pub enum CommentKind {
     Encoding,
     /// A SQL optimizer hint, `/*+ ... */`, which the planner reads.
     OptimizerHint,
-    /// A SQL version-gated comment, `/*! ... */`, whose body the server
-    /// executes.
+    /// A SQL version-gated comment, `/*! ... */`, whose body the server executes.
     VersionComment,
     /// A directive the language or its build reads as part of the program:
     /// `//go:build`, `# frozen_string_literal:`, `// swift-tools-version:`.
-    /// Removing one changes what compiles or what the code does, rather than
-    /// what a tool reports about it, so a `remove` policy does not reach it
-    /// and only [`ScanOptions::force_protected`] gives it up.
+    /// Removing one changes what compiles or what the code does, rather than what a tool reports about it, so a `remove` policy does not reach it and only [`ScanOptions::force_protected`] gives it up.
     LoadBearing,
 }
 
 /// How strongly a [`CommentKind`] is held back from every policy.
 ///
-/// This is a property of the kind rather than a decision any run makes: a
-/// shebang is required by the file's own syntax whatever anyone configures,
-/// and a `//go:build` is read by the compiler whatever anyone configures. The
-/// only way past either is [`ScanOptions::force_protected`], which is a
-/// sentence someone types.
+/// This is a property of the kind rather than a decision any run makes: a shebang is required by the file's own syntax whatever anyone configures,
+/// and a `//go:build` is read by the compiler whatever anyone configures.
+/// The only way past either is [`ScanOptions::force_protected`], which is a sentence someone types.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Protection {
-    /// No protection. The policy has the last word.
+    /// No protection.
+    /// The policy has the last word.
     None,
     /// A line the source needs in order to be read at all.
     Preamble,
@@ -526,8 +492,7 @@ pub enum Protection {
 impl Protection {
     /// The reason a report gives for a comment held back at this tier.
     ///
-    /// Two of the strings the differential protocol freezes, which is why they
-    /// live beside the tier rather than beside the code that prints them.
+    /// Two of the strings the differential protocol freezes, which is why they live beside the tier rather than beside the code that prints them.
     pub const fn reason(self) -> Option<&'static str> {
         match self {
             Self::None => None,
@@ -556,15 +521,12 @@ impl CommentKind {
 
     /// Which protection this kind carries, before any policy is consulted.
     ///
-    /// Exhaustive on purpose: a new kind does not compile until somebody has
-    /// decided whether removing one changes what the toolchain produces. That
-    /// question is the whole of the distinction, and leaving it to be answered
-    /// later has meant, twice, that it was answered by accident.
+    /// Exhaustive on purpose: a new kind does not compile until somebody has decided whether removing one changes what the toolchain produces.
+    /// That question is the whole of the distinction, and leaving it to be answered later has meant, twice, that it was answered by accident.
     pub const fn protection(self) -> Protection {
         match self {
             Self::Shebang | Self::Encoding => Protection::Preamble,
-            // NOTE: The SQL pair is here because the server reads them as part
-            // NOTE: of the statement: one is executed and one decides the plan.
+            // NOTE: The SQL pair is here because the server reads them as part of the statement: one is executed and one decides the plan.
             Self::LoadBearing | Self::OptimizerHint | Self::VersionComment => {
                 Protection::LoadBearing
             }
@@ -596,8 +558,7 @@ impl CommentKind {
         }
     }
 
-    /// Accepted spellings besides [`Self::as_str`], already case- and
-    /// separator-folded.
+    /// Accepted spellings besides [`Self::as_str`], already case- and separator-folded.
     pub const fn aliases(self) -> &'static [&'static str] {
         match self {
             Self::Line
@@ -630,7 +591,10 @@ impl FromStr for CommentKind {
     }
 }
 
-/// What the policy decided about one comment.
+/// What the run decided about one comment.
+///
+/// Two of these are the policy's answer and the third is the style axis's.
+/// A comment is never both removed and rewritten: the style rules are asked only about comments something else decided to keep, so "write it differently" is an answer to a question that only arises once the comment is staying.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "action", rename_all = "kebab-case")]
 pub enum Disposition {
@@ -641,12 +605,40 @@ pub enum Disposition {
         /// Which rule protected the comment, phrased for a human.
         reason: String,
     },
+    /// The comment stays and its bytes are rewritten.
+    ///
+    /// The replacement travels with the verdict rather than being recomputed by whoever plans the edit.
+    /// It was a parameter, and a parameter is a second chance to answer a question that already had an answer: a caller that planned with different rules from the ones that decided would have written bytes the report did not describe, and nothing would have said so.
+    Rewrite {
+        /// The style rule that found something to change.
+        /// The first one that did, where several applied.
+        rule: StyleRule,
+        /// The bytes that replace the comment's span, delimiters included.
+        #[serde(with = "bytes_serde")]
+        replacement: Vec<u8>,
+    },
 }
 
 impl Disposition {
-    /// Whether this is [`Self::Remove`].
-    pub const fn is_remove(&self) -> bool {
-        matches!(self, Self::Remove)
+    /// The verdict alone.
+    /// See [`Action::changes_bytes`] for the question a caller planning an edit is actually asking.
+    pub const fn action(&self) -> Action {
+        match self {
+            Self::Remove => Action::Remove,
+            Self::Keep { .. } => Action::Keep,
+            Self::Rewrite { .. } => Action::Rewrite,
+        }
+    }
+
+    /// The bytes this verdict puts in the comment's place, when it puts any there.
+    ///
+    /// `None` for a keep and for a removal alike, and the two are not the same answer: a removal's replacement is the layout's to decide and is not carried here.
+    /// This is only ever the rewrite's own bytes.
+    pub fn replacement(&self) -> Option<&[u8]> {
+        match self {
+            Self::Rewrite { replacement, .. } => Some(replacement),
+            Self::Keep { .. } | Self::Remove => None,
+        }
     }
 }
 
@@ -655,19 +647,20 @@ impl fmt::Display for Disposition {
         match self {
             Self::Remove => f.write_str("remove"),
             Self::Keep { reason } => write!(f, "keep ({reason})"),
+            Self::Rewrite { rule, .. } => write!(f, "rewrite ({})", rule.detail()),
         }
     }
 }
 
-/// A rule about a comment's *shape* rather than its kind, and the verdict it
-/// reached.
+/// The reason a comment kept for where it sits carries.
 ///
-/// These are decided over the whole file — how many lines a run of adjacent
-/// comments covers, whether code sits before one on its line — so unlike every
-/// other rule they cannot be re-derived from a comment's own bytes. Recording
-/// the rule here is what lets an explanation state the one that actually
-/// applied instead of falling back to the policy and contradicting the
-/// verdict on the line above it.
+/// Part of the wire format: the differential compares keep reasons between the two implementations byte for byte, so this string is a shared contract and not a message.
+pub(crate) const STRUCTURAL_TRAIL: &str = "structural in a YAML block scalar trail";
+
+/// A rule about a comment's *shape* rather than its kind, and the verdict it reached.
+///
+/// These are decided over the whole file — how many lines a run of adjacent comments covers, whether code sits before one on its line — so unlike every other rule they cannot be re-derived from a comment's own bytes.
+/// Recording the rule here is what lets an explanation state the one that actually applied instead of falling back to the policy and contradicting the verdict on the line above it.
 ///
 /// [`ScanOptions::allow`] is the only thing that produces one.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -692,8 +685,7 @@ pub enum ShapeRule {
     },
     /// [`AllowRules::trailing`] is `false`: removed for sitting after code.
     Trailing,
-    /// [`AllowRules::max_lines`]: removed with the run of comments it belongs
-    /// to, because that run is longer than the limit.
+    /// [`AllowRules::max_lines`]: removed with the run of comments it belongs to, because that run is longer than the limit.
     TooLong {
         /// How many lines the run covers.
         lines: usize,
@@ -705,9 +697,7 @@ pub enum ShapeRule {
 impl ShapeRule {
     /// The verdict this rule reaches, which is fixed per rule.
     ///
-    /// A [`Comment`] carrying a rule always carries the matching
-    /// [`Disposition`]: both are written from this one value, so the two
-    /// cannot drift apart.
+    /// A [`Comment`] carrying a rule always carries the matching [`Disposition`]: both are written from this one value, so the two cannot drift apart.
     pub const fn action(&self) -> Action {
         match self {
             Self::Tagged { .. } => Action::Keep,
@@ -743,29 +733,45 @@ impl ShapeRule {
     }
 }
 
-/// A [`DispositionExplanation`] with the reasoning taken away: the
-/// keep-or-remove verdict on its own.
+/// A [`DispositionExplanation`] with the reasoning taken away: the verdict on its own.
+///
+/// Three-valued rather than two, because a run reaches three different outcomes about a comment and only two of them leave its bytes alone.
+/// The third is the whole of the style axis: a comment the policy keeps, written differently from how it was found.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Action {
-    /// The comment stays.
+    /// The comment stays, byte for byte.
     Keep,
+    /// The comment stays, and its bytes are rewritten.
+    Rewrite,
     /// The comment goes.
     Remove,
 }
 
 impl Action {
-    /// The canonical name, matching the `action` tag [`Disposition`]
-    /// serialises.
+    /// The canonical name, matching the `action` tag [`Disposition`] serialises.
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Keep => "keep",
+            Self::Rewrite => "rewrite",
             Self::Remove => "remove",
         }
     }
 
-    /// Whether this is [`Self::Remove`].
-    pub const fn is_remove(self) -> bool {
+    /// Whether this verdict takes the comment away.
+    ///
+    /// One of exactly two questions about a verdict, and the pair is the whole vocabulary on purpose.
+    /// It was spelled `is_remove` and it lived on [`Disposition`] as well, which is two names for one question on two types — and the one on `Disposition` was the one every caller reached for, including the callers that meant [`Self::changes_bytes`].
+    /// There is now one place to ask, and asking requires having said which question.
+    pub const fn removes(self) -> bool {
         matches!(self, Self::Remove)
+    }
+
+    /// Whether a comment this verdict decided has different bytes afterwards.
+    ///
+    /// Not `!= Keep`, and not `is_remove()` either, and the difference is the one this repository keeps finding: a comparison that names one variant while meaning a category answers wrongly the day the category gains a member.
+    /// Every caller planning an edit is asking this question — it had been spelled `is_remove()` because removal was the only way a byte moved, and that stopped being true here.
+    pub const fn changes_bytes(self) -> bool {
+        matches!(self, Self::Remove | Self::Rewrite)
     }
 }
 
@@ -777,20 +783,12 @@ impl fmt::Display for Action {
 
 /// Which rule decided one comment's fate.
 ///
-/// A [`Disposition`] says what happens and gives a short reason a machine
-/// cannot take apart; an explanation names the branch, so a caller can quote
-/// the pattern, kind or directive that actually applied. The variants are
-/// listed in the order the rules are tested, and the first rule that applies is
-/// the variant returned — `keep` overrides always win, and the policy default
-/// is the last word.
+/// A [`Disposition`] says what happens and gives a short reason a machine cannot take apart; an explanation names the branch, so a caller can quote the pattern, kind or directive that actually applied.
+/// The variants are listed in the order the rules are tested, and the first rule that applies is the variant returned — `keep` overrides always win, and the policy default is the last word.
 ///
-/// Regex indices are zero-based positions in [`ScanOptions::keep_regex`] and
-/// [`ScanOptions::remove_regex`], and `pattern` is that entry verbatim.
+/// Regex indices are zero-based positions in [`ScanOptions::keep_regex`] and [`ScanOptions::remove_regex`], and `pattern` is that entry verbatim.
 ///
-/// One rule is not about the comment's bytes at all and so is not a branch of
-/// that table: [`Self::KeptStructural`] is decided by where the comment sits in
-/// the file, is tested after every other rule, and is the answer only
-/// [`explain_comment`](crate::explain_comment) can give.
+/// One rule is not about the comment's bytes at all and so is not a branch of that table: [`Self::KeptStructural`] is decided by where the comment sits in the file, is tested after every other rule, and is the answer only [`explain_comment`](crate::explain_comment) can give.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DispositionExplanation {
     /// The kind is listed in [`ScanOptions::keep_kinds`].
@@ -808,9 +806,7 @@ pub enum DispositionExplanation {
     /// An HTML comment, which the DOM exposes to scripts.
     KeptHtml,
     /// A directive the language or its build reads as part of the program.
-    /// Removing it would change what compiles or what the code does, so no
-    /// `remove` policy reaches it and only [`ScanOptions::force_protected`]
-    /// gives it up.
+    /// Removing it would change what compiles or what the code does, so no `remove` policy reaches it and only [`ScanOptions::force_protected`] gives it up.
     KeptLoadBearing {
         /// The directive's name, when the catalogue could name it.
         name: Option<&'static str>,
@@ -824,9 +820,7 @@ pub enum DispositionExplanation {
     },
     /// A documentation comment under [`Policy::Conservative`].
     ///
-    /// It is the API documentation rather than a remark about the code, so
-    /// removing it takes something published: a page on docs.rs, an entry on
-    /// pkg.go.dev, a javadoc section.
+    /// It is the API documentation rather than a remark about the code, so removing it takes something published: a page on docs.rs, an entry on pkg.go.dev, a javadoc section.
     KeptDocumentation {
         /// Which of the two documentation kinds it is.
         kind: CommentKind,
@@ -852,12 +846,21 @@ pub enum DispositionExplanation {
         /// The kind it was removed as.
         kind: CommentKind,
     },
+    /// Nothing named the comment, so the policy default kept it.
+    ///
+    /// [`Policy::None`] is the only policy that answers this way, and it answers it for every kind that reaches this far.
+    /// It is the counterpart of [`Self::RemovedByDefault`] and carries the same two fields for the same reason: a reader is being told which setting decided, and the mode alone does not say what it decided *about*.
+    KeptByPolicy {
+        /// The policy that kept it.
+        policy: Policy,
+        /// The kind it was kept as.
+        kind: CommentKind,
+    },
     /// Nothing protected the comment, so the policy default removed it.
     ///
     /// A policy removes several kinds and removes them for different reasons,
-    /// so the kind is part of the answer: it is what tells a reader which
-    /// setting they would have to change to keep this one. Without it a
-    /// license notice and an ordinary line comment give the same explanation.
+    /// so the kind is part of the answer: it is what tells a reader which setting they would have to change to keep this one.
+    /// Without it a license notice and an ordinary line comment give the same explanation.
     RemovedByDefault {
         /// The policy whose default applied.
         policy: Policy,
@@ -869,11 +872,9 @@ pub enum DispositionExplanation {
         /// The configured tag it matched.
         tag: String,
     },
-    /// [`AllowRules::trailing`] is `false` and code sits before this comment
-    /// on its line.
+    /// [`AllowRules::trailing`] is `false` and code sits before this comment on its line.
     RemovedAsTrailing,
-    /// The tag allowed the comment, and [`AllowRules::expiry`] gave it a
-    /// deadline the line has now passed.
+    /// The tag allowed the comment, and [`AllowRules::expiry`] gave it a deadline the line has now passed.
     RemovedAsExpired {
         /// The configured tag it matched.
         tag: String,
@@ -882,31 +883,34 @@ pub enum DispositionExplanation {
         /// How old the configuration lets it get.
         limit: Age,
     },
-    /// The run of adjacent comments this one belongs to is longer than
-    /// [`AllowRules::max_lines`].
+    /// The run of adjacent comments this one belongs to is longer than [`AllowRules::max_lines`].
     RemovedByLength {
         /// How many lines the run covers.
         lines: usize,
         /// How many the configuration permits.
         limit: usize,
     },
-    /// A comment every rule above would have removed, kept because a block
-    /// scalar's body ends at it and a comment the run keeps sits below it,
+    /// A comment every rule above would have removed, kept because a block scalar's body ends at it and a comment the run keeps sits below it,
     /// deep enough that the body would take that comment back.
     ///
-    /// No option overrules this one: `--policy all` removes the comment below
-    /// it and the question with it, but a comment an override still keeps
-    /// leaves the value depending on this line.
+    /// No option overrules this one: `--policy all` removes the comment below it and the question with it, but a comment an override still keeps leaves the value depending on this line.
     KeptStructural {
-        /// The language whose layout rule decided it, which is
-        /// [`Language::Yaml`] wherever this is returned today.
+        /// The language whose layout rule decided it, which is [`Language::Yaml`] wherever this is returned today.
         language: Language,
+    },
+    /// A comment something else kept, which a style rule then rewrote.
+    ///
+    /// Tested after every rule above, and never in competition with one: those decide whether the comment stays, and this one is asked only about a comment that is staying.
+    /// It is the only verdict here that reports [`Action::Rewrite`].
+    RewrittenByStyle {
+        /// The style rule that found something to change.
+        rule: StyleRule,
     },
 }
 
 impl DispositionExplanation {
-    /// The verdict alone. Equal to the [`Disposition`] the scanner records for
-    /// the same comment under the same options.
+    /// The verdict alone.
+    /// Equal to the [`Disposition`] the scanner records for the same comment under the same options.
     pub const fn action(&self) -> Action {
         match self {
             Self::KeptByKind(_)
@@ -918,7 +922,9 @@ impl DispositionExplanation {
             | Self::KeptDocumentation { .. }
             | Self::KeptLicense { .. }
             | Self::KeptByTag { .. }
+            | Self::KeptByPolicy { .. }
             | Self::KeptStructural { .. } => Action::Keep,
+            Self::RewrittenByStyle { .. } => Action::Rewrite,
             Self::RemovedByKind(_)
             | Self::RemovedByRegex { .. }
             | Self::RemovedByPolicy { .. }
@@ -930,17 +936,16 @@ impl DispositionExplanation {
     }
 }
 
-/// What a policy removed, named as the kind rather than as "comments".
+/// What a policy decided about, named as the kind rather than as "comments".
 ///
-/// A policy default removes more than one kind, and a reader who is told only
-/// that "the policy removes ordinary comments" cannot tell whether the comment
-/// in front of them was ordinary. Naming the kind is what makes the sentence
-/// checkable against the kind the same line already reports.
+/// A policy default reaches more than one kind and reaches them for different reasons, and a reader who is told only that "the policy removes ordinary comments" cannot tell whether the comment in front of them was ordinary.
+/// Naming the kind is what makes the sentence checkable against the kind the same line already reports.
 ///
-/// The kinds a policy default cannot reach — a shebang, a load-bearing
-/// directive — are spelled generically rather than omitted, so that adding a
-/// kind cannot silently produce a sentence with a hole in it.
-const fn removed_noun(kind: CommentKind) -> &'static str {
+/// The kinds a policy default cannot reach — a shebang, a load-bearing directive — are spelled generically rather than omitted, so that adding a kind cannot silently produce a sentence with a hole in it.
+///
+/// Was `removed_noun`, which named the only verdict a policy default could reach at the time.
+/// [`Policy::None`] reaches the other one with the same nouns.
+const fn kind_noun(kind: CommentKind) -> &'static str {
     match kind {
         CommentKind::Line | CommentKind::Block => "ordinary comments",
         CommentKind::DocLine | CommentKind::DocBlock => "doc comments",
@@ -981,9 +986,7 @@ impl fmt::Display for DispositionExplanation {
                 Some(name) => write!(f, "kept: tool or language directive `{name}`"),
                 None => write!(f, "kept: `{kind}` is a tool or language directive"),
             },
-            /* NOTE: The policy is spelled through `Policy` rather than written
-             * out, so that renaming one cannot leave this sentence naming a
-             * policy the binary no longer accepts. */
+            /* NOTE: The policy is spelled through `Policy` rather than written out, so that renaming one cannot leave this sentence naming a policy the binary no longer accepts. */
             Self::KeptDocumentation { kind } => write!(
                 f,
                 "kept: policy {} protects documentation comments, and this is a `{kind}`",
@@ -1015,8 +1018,12 @@ impl fmt::Display for DispositionExplanation {
                 )
             }
             Self::RemovedByDefault { policy, kind } => {
-                write!(f, "removed: policy `{policy}` removes {}", removed_noun(*kind))
+                write!(f, "removed: policy `{policy}` removes {}", kind_noun(*kind))
             }
+            Self::KeptByPolicy { policy, kind } => {
+                write!(f, "kept: policy `{policy}` keeps {}", kind_noun(*kind))
+            }
+            Self::RewrittenByStyle { rule } => write!(f, "rewritten: {}", rule.detail()),
             Self::KeptByTag { tag } => {
                 write!(f, "kept: its text opens with the allowed tag `{tag}`")
             }
@@ -1047,27 +1054,118 @@ pub struct Comment {
     /// What the comment turned out to be.
     pub kind: CommentKind,
     /// Whether it is removed, and why if it is not.
-    pub disposition: Disposition,
+    ///
+    /// Private, with [`Self::disposition`] and [`Self::action`] to read it and [`Self::decide_by_shape`] and [`Self::restyle`] to write it.
+    /// A public field is a public invitation to set it without setting the rule that justifies it, and the two then serialise a comment whose verdict and whose explanation say different things.
+    disposition: Disposition,
     /// The shape rule that settled it, when one did.
     ///
-    /// `None` is the ordinary case: the policy, the kind lists and the pattern
-    /// lists decided, and all three can be read back off the comment's own
-    /// bytes. A [`ShapeRule`] cannot, so it is carried rather than guessed at.
+    /// `None` is the ordinary case: the policy, the kind lists and the pattern lists decided, and all three can be read back off the comment's own bytes.
+    /// A [`ShapeRule`] cannot, so it is carried rather than guessed at.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub shape: Option<ShapeRule>,
+    shape: Option<ShapeRule>,
+}
+
+impl Comment {
+    /// One comment as the scan first found it, before any rule about its shape or its spelling has been asked.
+    ///
+    /// Crate-private, because outside the crate there is no such thing as a comment somebody found: a [`Comment`] is what a scan produces, and one built by hand could carry a [`Disposition::Rewrite`] whose replacement nothing computed.
+    pub(crate) const fn new(span: ByteSpan, kind: CommentKind, disposition: Disposition) -> Self {
+        Self {
+            span,
+            kind,
+            disposition,
+            shape: None,
+        }
+    }
+
+    /// What the run decided.
+    pub const fn disposition(&self) -> &Disposition {
+        &self.disposition
+    }
+
+    /// The verdict alone, which is the question every caller planning an edit is asking.
+    pub const fn action(&self) -> Action {
+        self.disposition.action()
+    }
+
+    /// The shape rule that settled whether the comment stays, when one did.
+    pub const fn shape(&self) -> Option<&ShapeRule> {
+        self.shape.as_ref()
+    }
+
+    /// The style rule that asked for the rewrite, when the comment is being rewritten.
+    ///
+    /// Read out of the verdict rather than stored beside it.
+    /// It was a field,
+    /// and a field is a second place for the same fact: a comment could be recorded as rewritten by one rule while carrying a verdict written by another, and both halves would serialise happily.
+    pub const fn style(&self) -> Option<StyleRule> {
+        match &self.disposition {
+            Disposition::Rewrite { rule, .. } => Some(*rule),
+            Disposition::Keep { .. } | Disposition::Remove => None,
+        }
+    }
+
+    /// Settle this comment with a rule about its shape, verdict and all.
+    ///
+    /// The only way a shape rule reaches a comment, and the reason it is the only way: a caller that wrote the verdict by hand could write one the rule it recorded disagrees with, and then `--explain` would say "removed" under a line reading "kept".
+    /// Both come from the one value here, so a rule added later cannot reintroduce that.
+    pub fn decide_by_shape(&mut self, rule: ShapeRule) {
+        self.disposition = rule.disposition();
+        self.shape = Some(rule);
+    }
+
+    /// Keep a comment because of where it sits in a YAML block scalar trail.
+    ///
+    /// The one keep with no rule value behind it, and the one this type has to name itself.
+    /// It is recognised by its reason string — see [`Self::is_structural_keep`] — and a reason recognised by its spelling is a reason that must be spelled in exactly one place.
+    /// It was spelled in three.
+    pub fn keep_as_structural(&mut self) {
+        self.disposition = Disposition::Keep {
+            reason: STRUCTURAL_TRAIL.to_owned(),
+        };
+    }
+
+    /// Whether this is the keep [`Self::keep_as_structural`] records.
+    pub fn is_structural_keep(&self) -> bool {
+        matches!(&self.disposition, Disposition::Keep { reason } if reason == STRUCTURAL_TRAIL)
+    }
+
+    /// Settle a comment that is staying with the style rules, reading its own bytes out of the source it was found in.
+    ///
+    /// The replacement is not a parameter.
+    /// It was, and a parameter is a way to record a verdict whose bytes nothing computed: the rule would say one thing, the bytes another, and the file on disk would follow the bytes.
+    /// Given a source and a set of rules there is now exactly one verdict this can reach, and the span it reads is its own.
+    ///
+    /// Exhaustive on purpose, and the two arms that do nothing are the invariant: a comment that is going has no spelling to correct, and a comment already being rewritten has been through this once.
+    /// A style rule therefore cannot contradict the verdict the policy reached,
+    /// because it cannot reach a comment the policy took.
+    pub(crate) fn restyle(
+        &mut self,
+        source: &[u8],
+        rules: &StyleRules,
+        markers: crate::Markers<'_>,
+    ) {
+        match &self.disposition {
+            Disposition::Keep { .. } => {
+                let Some(raw) = source.get(self.span.start..self.span.end) else {
+                    return;
+                };
+                if let Some((rule, replacement)) = crate::style::restyle(raw, rules, markers) {
+                    self.disposition = Disposition::Rewrite { rule, replacement };
+                }
+            }
+            Disposition::Rewrite { .. } | Disposition::Remove => {}
+        }
+    }
 }
 
 /// How serious a [`Diagnostic`] is.
 ///
-/// Only [`Self::Error`] changes what a transformation writes: it makes
-/// [`ScanReport::valid`] false, and nothing is edited unless
-/// [`ScanOptions::force_invalid`] is set.
+/// Only [`Self::Error`] changes what a transformation writes: it makes [`ScanReport::valid`] false, and nothing is edited unless [`ScanOptions::force_invalid`] is set.
 ///
-/// The variants are declared from most to least severe and the ordering is
-/// derived from that, so `severity <= Severity::Error` reads as "at least as
-/// severe as an error" rather than "exactly an error". [`Self::ALL`] states the
-/// same order, and `the_severities_are_declared_most_severe_first` holds the
-/// two to each other.
+/// The variants are declared from most to least severe and the ordering is derived from that, so `severity <= Severity::Error` reads as "at least as severe as an error" rather than "exactly an error".
+/// [`Self::ALL`] states the same order, and `the_severities_are_declared_most_severe_first` holds the two to each other.
 #[derive(
     Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, Deserialize,
 )]
@@ -1090,11 +1188,8 @@ impl Severity {
 
     /// Whether a diagnostic of this severity means the scan did not succeed.
     ///
-    /// Not `== Error`, and the difference is the one this repository keeps
-    /// finding: a comparison that names one variant while meaning a category
-    /// answers wrongly the day the category gains a member. A severity added
-    /// above `Error` would make a source fail to lex and leave every
-    /// `== Error` saying it had not.
+    /// Not `== Error`, and the difference is the one this repository keeps finding: a comparison that names one variant while meaning a category answers wrongly the day the category gains a member.
+    /// A severity added above `Error` would make a source fail to lex and leave every `== Error` saying it had not.
     #[must_use]
     pub fn is_failure(self) -> bool {
         self <= Self::Error
@@ -1145,42 +1240,30 @@ pub struct Diagnostic {
 
 /// How far the damage from a diagnostic reaches.
 ///
-/// A scanner that reports an error has already decided how to carry on, and the
-/// two ways it can do that are not the same for anyone acting on what it found.
+/// A scanner that reports an error has already decided how to carry on, and the two ways it can do that are not the same for anyone acting on what it found.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Damage {
-    /// Confined to the bytes the diagnostic names. A C# string that never
-    /// closes ends at the newline, and line two is lexed by a scanner that
-    /// knows exactly where it is.
+    /// Confined to the bytes the diagnostic names.
+    /// A C# string that never closes ends at the newline, and line two is lexed by a scanner that knows exactly where it is.
     Span,
-    /// Everything from where the diagnostic starts. The scan stopped there, or
-    /// carried on from a position it guessed, and what it reports past that
-    /// point is a reading it cannot defend.
+    /// Everything from where the diagnostic starts.
+    /// The scan stopped there, or carried on from a position it guessed, and what it reports past that point is a reading it cannot defend.
     Rest,
 }
 
 /// Every error a scan can report, and how far each one reaches.
 ///
-/// Two lists in one, so that the check worth making is that no code is in
-/// neither: `error_codes_are_all_classified` reads the scanners' own source and
-/// fails on a code this does not name, which is the only way a rule about
-/// errors survives the next error being added. A code that reaches
-/// [`Diagnostic::damage`] without appearing here is treated as [`Damage::Rest`]
-/// -- the direction that declines to edit rather than the one that edits on a
-/// guess.
+/// Two lists in one, so that the check worth making is that no code is in neither: `error_codes_are_all_classified` reads the scanners' own source and fails on a code this does not name, which is the only way a rule about errors survives the next error being added.
+/// A code that reaches [`Diagnostic::damage`] without appearing here is treated as [`Damage::Rest`] -- the direction that declines to edit rather than the one that edits on a guess.
 ///
-/// Most errors are [`Damage::Span`], because most of them are a token that did
-/// not end: the scanner consumed as far as it was willing to, said so, and
-/// resumed after it. An unterminated block comment names bytes running to the
-/// end of the file and so covers all of them; an unterminated single-line
-/// string names bytes running to the newline and covers only those. Both fall
-/// out of the same rule, which is why neither needs an entry of its own.
+/// Most errors are [`Damage::Span`], because most of them are a token that did not end: the scanner consumed as far as it was willing to, said so, and resumed after it.
+/// An unterminated block comment names bytes running to the end of the file and so covers all of them; an unterminated single-line string names bytes running to the newline and covers only those.
+/// Both fall out of the same rule, which is why neither needs an entry of its own.
 ///
-/// The three exceptions are the scans that cannot say where they stopped being
-/// right. `lexical-ambiguity` is a `/` the scanner could not tell from a
-/// division and read as a regex; if that was the wrong reading, every token
-/// after it is wrong too. `nesting-limit` abandons the rest of the source and
-/// names no bytes at all. `unknown-language` scans nothing.
+/// The three exceptions are the scans that cannot say where they stopped being right.
+/// `lexical-ambiguity` is a `/` the scanner could not tell from a division and read as a regex; if that was the wrong reading, every token after it is wrong too.
+/// `nesting-limit` abandons the rest of the source and names no bytes at all.
+/// `unknown-language` scans nothing.
 pub const ERROR_CODES: [(&str, Damage); 19] = [
     ("invalid-unicode-escape", Damage::Span),
     ("lexical-ambiguity", Damage::Rest),
@@ -1206,8 +1289,7 @@ pub const ERROR_CODES: [(&str, Damage); 19] = [
 impl Diagnostic {
     /// How far this reaches, for a caller deciding what it may still act on.
     ///
-    /// Anything milder than an error damages nothing by construction: a warning
-    /// is something the caller should look at in a source that lexed.
+    /// Anything milder than an error damages nothing by construction: a warning is something the caller should look at in a source that lexed.
     #[must_use]
     pub fn damage(&self) -> Option<Damage> {
         if !self.severity.is_failure() {
@@ -1229,24 +1311,96 @@ pub struct ScanReport {
     pub language: Language,
     /// Every comment, in source order, non-overlapping.
     pub comments: Vec<Comment>,
+    /// The runs of adjacent comments a style rule rewrote, in source order.
+    ///
+    /// Empty unless a rule reached one, which is every scan that asked for no rule about how a paragraph is broken.
+    ///
+    /// A run is here and not on the comments because the bytes it replaces are not any one comment's.
+    /// Joining two comment lines moves the newline and the indentation between them, and those belong to neither.
+    /// The unit was already the run everywhere it mattered — a length limit counts one, a reader reads one — and this is the first rule that has to *write* one.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub runs: Vec<ProseRun>,
     /// Everything the scanner had to say about the source.
     pub diagnostics: Vec<Diagnostic>,
     /// False when any diagnostic is a [`Severity::Error`].
     pub valid: bool,
 }
 
+/// Where a stretch of prose was found.
+///
+/// A source file keeps its prose in comments and a Markdown document *is* prose, and the rule about where a paragraph breaks is the same rule for both.
+/// What differs is what a rewrite is allowed to move: in a source file it is the bytes the comments occupied, and in a document it is the bytes of the paragraph — never a fence, a table, a heading or anything else the document's own structure is made of.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ProseOrigin {
+    /// A run of comments on consecutive lines.
+    #[default]
+    Comments,
+    /// A paragraph of a document whose content is prose.
+    Document,
+}
+
+impl ProseOrigin {
+    /// The canonical name, identical to the serde representation.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Comments => "comments",
+            Self::Document => "document",
+        }
+    }
+}
+
+impl fmt::Display for ProseOrigin {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// A stretch of prose a style rule rewrote, and the bytes it makes of it.
+///
+/// Only a run something rewrote is recorded.
+/// A run with nothing to say about it is the ordinary case, and a report that listed every one of them would be a report of where the prose is, which is what the comments already are.
+///
+/// Was `CommentRun`, which named where every run came from at the time.
+/// A paragraph of a Markdown document is prose by the same rule and is not a comment.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ProseRun {
+    /// From the first comment's first byte to the last comment's last byte.
+    ///
+    /// The whitespace between them is inside this and is the point: it is what a rewrite has to be allowed to move.
+    /// Nothing before the first byte is, so the indentation the run sits at is read rather than written, and the code around it cannot be reached.
+    pub span: ByteSpan,
+    /// Where the prose was found.
+    pub origin: ProseOrigin,
+    /// The style rule that asked for it.
+    pub rule: StyleRule,
+    /// The bytes that replace [`Self::span`].
+    #[serde(with = "bytes_serde")]
+    pub replacement: Vec<u8>,
+}
+
 impl ScanReport {
+    /// Whether this run has anything to do to the source.
+    ///
+    /// The question every caller deciding whether a file changed is asking,
+    /// in one place rather than at each of them.
+    /// It was a fold over the comments, which was the whole answer until a rule arrived whose verdict is not any comment's.
+    pub fn changes_bytes(&self) -> bool {
+        self.comments
+            .iter()
+            .any(|comment| comment.action().changes_bytes())
+            || !self.runs.is_empty()
+    }
+
     /// Whether this scan established what it reported about `span`.
     ///
-    /// [`valid`](Self::valid) says whether the lex failed. It cannot say where,
-    /// and anyone acting on a verdict needs that: a comment the scanner
-    /// delimited away from the failure is worth exactly what a comment in a
-    /// clean file is worth, while one inside it rests on a guess about where
-    /// the token ends. An unterminated block opener is reported as a comment
-    /// running to the end of the file, and the code under it is not a comment.
+    /// [`valid`](Self::valid) says whether the lex failed.
+    /// It cannot say where,
+    /// and anyone acting on a verdict needs that: a comment the scanner delimited away from the failure is worth exactly what a comment in a clean file is worth, while one inside it rests on a guess about where the token ends.
+    /// An unterminated block opener is reported as a comment running to the end of the file, and the code under it is not a comment.
     ///
-    /// Removing the first is removing a comment. Removing the second is
-    /// removing bytes nobody established were one.
+    /// Removing the first is removing a comment.
+    /// Removing the second is removing bytes nobody established were one.
     #[must_use]
     pub fn established(&self, span: ByteSpan) -> bool {
         self.diagnostics
@@ -1262,9 +1416,7 @@ impl ScanReport {
 
     /// Whether every comment in this report is one the scan established.
     ///
-    /// The cheap answer for a caller that only wants to know whether the
-    /// distinction applies at all, so that a clean report costs nothing to ask
-    /// about and carries nothing extra when it is written out.
+    /// The cheap answer for a caller that only wants to know whether the distinction applies at all, so that a clean report costs nothing to ask about and carries nothing extra when it is written out.
     #[must_use]
     pub fn established_everything(&self) -> bool {
         self.diagnostics
@@ -1275,14 +1427,13 @@ impl ScanReport {
 
 /// One replacement of a byte range.
 ///
-/// The edits of a [`TransformResult`] are sorted and non-overlapping, so
-/// [`apply_edits`](crate::apply_edits) can walk them once.
+/// The edits of a [`TransformResult`] are sorted and non-overlapping, so [`apply_edits`](crate::apply_edits) can walk them once.
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Edit {
     /// The bytes to replace.
     pub span: ByteSpan,
-    /// The bytes to put there, empty to delete. Serde renders these as a
-    /// lossy UTF-8 string.
+    /// The bytes to put there, empty to delete.
+    /// Serde renders these as a lossy UTF-8 string.
     #[serde(with = "bytes_serde")]
     pub replacement: Vec<u8>,
 }
@@ -1318,50 +1469,49 @@ pub enum ExternalSpanError {
 /// Which comments survive by default.
 ///
 /// A policy is the last word, not the first: [`ScanOptions::keep_kinds`],
-/// [`ScanOptions::keep_regex`], [`ScanOptions::remove_kinds`] and
-/// [`ScanOptions::remove_regex`] are all tested before it. The full table of
-/// policy against [`CommentKind`] is in the crate documentation.
+/// [`ScanOptions::keep_regex`], [`ScanOptions::remove_kinds`] and [`ScanOptions::remove_regex`] are all tested before it.
+/// The full table of policy against [`CommentKind`] is in the crate documentation.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Policy {
-    /// The default. Removes ordinary and documentation comments; keeps
-    /// license notices, directives, HTML comments, SQL hints and version
-    /// comments, and the shebang or encoding preamble. A
-    /// [`CommentKind::LoadBearing`] directive is kept under every policy.
+    /// Removes nothing.
+    /// Every comment is kept, whatever its kind.
     ///
-    /// Was spelled `legal`, which named the one kind it adds rather than
-    /// where it sits, and which left the weaker-sounding `safe` as the
-    /// default that removed licence notices.
+    /// The mode for a repository that wants the style rules and not the removals.
+    /// Saying so used to mean listing every [`CommentKind`] under `keep_kind`, which is a configuration that has to be revisited each time a kind is added — the setting said "these twelve kinds" when what it meant was "all of them".
+    ///
+    /// It takes less than [`Self::Conservative`], so it sits at the weak end of the scale the other three already form.
+    None,
+    /// The default.
+    /// Removes ordinary and documentation comments; keeps license notices, directives, HTML comments, SQL hints and version comments, and the shebang or encoding preamble.
+    /// A [`CommentKind::LoadBearing`] directive is kept under every policy.
+    ///
+    /// Was spelled `legal`, which named the one kind it adds rather than where it sits, and which left the weaker-sounding `safe` as the default that removed licence notices.
     #[default]
     #[serde(alias = "legal")]
     Conservative,
     /// As [`Self::Conservative`], and license and copyright notices go too.
     ///
-    /// Was spelled `safe` and was the default. It is neither the safest
-    /// policy nor a safe default for a repository that states its licence in
-    /// its sources: REUSE compliance does not survive it.
+    /// Was spelled `safe` and was the default.
+    /// It is neither the safest policy nor a safe default for a repository that states its licence in its sources: REUSE compliance does not survive it.
     #[serde(alias = "safe")]
     Standard,
-    /// Removes every comment, directives and HTML comments included. The
-    /// shebang and encoding preamble survive, and so does a
-    /// [`CommentKind::LoadBearing`] directive the language or its build reads
-    /// as part of the program; all three go only when
-    /// [`ScanOptions::force_protected`] is set.
+    /// Removes every comment, directives and HTML comments included.
+    /// The shebang and encoding preamble survive, and so does a [`CommentKind::LoadBearing`] directive the language or its build reads as part of the program; all three go only when [`ScanOptions::force_protected`] is set.
     All,
 }
 
 impl Policy {
     /// Every CLI-visible policy, weakest first.
     ///
-    /// The order is the order of how much a policy takes, so that a list of
-    /// them reads as a scale. It is also the order help output uses, which is
-    /// where a reader forms the expectation that the names have an order at
-    /// all.
-    pub const ALL: [Self; 3] = [Self::Conservative, Self::Standard, Self::All];
+    /// The order is the order of how much a policy takes, so that a list of them reads as a scale.
+    /// It is also the order help output uses, which is where a reader forms the expectation that the names have an order at all.
+    pub const ALL: [Self; 4] = [Self::None, Self::Conservative, Self::Standard, Self::All];
 
     /// The canonical name, identical to the serde representation.
     pub const fn as_str(self) -> &'static str {
         match self {
+            Self::None => "none",
             Self::Conservative => "conservative",
             Self::Standard => "standard",
             Self::All => "all",
@@ -1370,11 +1520,11 @@ impl Policy {
 
     /// Accepted spellings besides [`Self::as_str`], already case-folded.
     ///
-    /// The former names are kept so that an existing configuration and an
-    /// existing command line both still resolve. They resolve to the same
-    /// behaviour they always named; what changed is which one is the default.
+    /// The former names are kept so that an existing configuration and an existing command line both still resolve.
+    /// They resolve to the same behaviour they always named; what changed is which one is the default.
     pub const fn aliases(self) -> &'static [&'static str] {
         match self {
+            Self::None => &[],
             Self::Conservative => &["legal"],
             Self::Standard => &["safe"],
             Self::All => &[],
@@ -1383,35 +1533,31 @@ impl Policy {
 
     /// Whether this policy keeps a comment of `kind`, absent every other rule.
     ///
-    /// This is the table in the crate documentation, as code. It was prose in
-    /// one place and a chain of `if`s in another, and a reader asking "would a
-    /// weaker policy have kept this?" had nothing to ask — so the CLI answered
-    /// with a hand-written guess about kinds, which was wrong in the only case
-    /// that occurs: a Rust crate with both documentation and a licence header.
+    /// This is the table in the crate documentation, as code.
+    /// It was prose in one place and a chain of `if`s in another, and a reader asking "would a weaker policy have kept this?"
+    /// had nothing to ask — so the CLI answered with a hand-written guess about kinds, which was wrong in the only case that occurs: a Rust crate with both documentation and a licence header.
     ///
-    /// This is the policy's own answer and not the last word. A shebang, an
-    /// encoding line, a load-bearing directive and the two SQL forms a server
-    /// reads are held back from every policy by [`CommentKind::protection`],
-    /// which is tested before this — and given up by
-    /// [`ScanOptions::force_protected`], which is what lets `all` reach them.
-    /// Answering `true` here for those kinds would close that door, and the
-    /// first version of this did.
+    /// This is the policy's own answer and not the last word.
+    /// A shebang, an encoding line, a load-bearing directive and the two SQL forms a server reads are held back from every policy by [`CommentKind::protection`],
+    /// which is tested before this — and given up by [`ScanOptions::force_protected`], which is what lets `all` reach them.
+    /// Answering `true` here for those kinds would close that door, and the first version of this did.
     ///
-    /// The match is exhaustive, which is the point: a new [`CommentKind`] does
-    /// not compile until every policy has an answer for it.
+    /// The match is exhaustive, which is the point: a new [`CommentKind`] does not compile until every policy has an answer for it.
     pub const fn keeps(self, kind: CommentKind) -> bool {
+        /* NOTE: `none` answers before the table rather than inside it.
+         * Every row would otherwise have to name it, and a row that forgot would be a policy that removes something under the mode whose whole meaning is that it removes nothing. */
+        if matches!(self, Self::None) {
+            return true;
+        }
         match kind {
             CommentKind::Line | CommentKind::Block => false,
             CommentKind::DocLine | CommentKind::DocBlock | CommentKind::License => {
                 matches!(self, Self::Conservative)
             }
             CommentKind::Directive | CommentKind::HtmlComment => !matches!(self, Self::All),
-            /* NOTE: False, and not "true because every policy keeps them". The
-             * protection keeps them and is tested first; this is what the
-             * policy would do if the protection were lifted, which is exactly
-             * what `--force-protected` asks for. Answering `true` closed that
-             * door, and the test comparing this table against the explanation
-             * branch table is what said so. */
+            /* NOTE: False, and not "true because every policy keeps them".
+             * The protection keeps them and is tested first; this is what the policy would do if the protection were lifted, which is exactly what `--force-protected` asks for.
+             * Answering `true` closed that door, and the test comparing this table against the explanation branch table is what said so. */
             CommentKind::Shebang
             | CommentKind::Encoding
             | CommentKind::LoadBearing
@@ -1420,21 +1566,22 @@ impl Policy {
         }
     }
 
-    /// The policy that keeps every one of `kinds` while taking the most, if
-    /// any does.
+    /// The policy that keeps every one of `kinds` while taking the most, if any does.
     ///
-    /// The strongest rather than the weakest, because the caller is someone
-    /// removing comments: of the policies that would make their run clean, the
-    /// one worth naming is the one that still takes everything else. Suggesting
-    /// the gentlest would answer "how do I stop seeing findings" instead of
-    /// "how do I keep the ones I meant to keep".
+    /// The strongest rather than the weakest, because the caller is someone removing comments: of the policies that would make their run clean, the one worth naming is the one that still takes everything else.
+    /// Suggesting the gentlest would answer "how do I stop seeing findings" instead of "how do I keep the ones I meant to keep".
     ///
-    /// `ALL` is ordered by how much each policy takes, weakest first, so this
-    /// walks it backwards.
+    /// `ALL` is ordered by how much each policy takes, weakest first, so this walks it backwards.
+    ///
+    /// [`Self::None`] is not among the answers, and leaving it out is the whole of what makes this advice.
+    /// It keeps every set, so including it would make "which gentler policy would keep this?"
+    /// answerable for every comment ever reported — with "switch the removals off".
+    /// That is a decision a project can certainly make, and it is not an answer to the question the caller asked, which is which comments they meant to keep.
     pub fn strongest_keeping(kinds: &[CommentKind]) -> Option<Self> {
         Self::ALL
             .into_iter()
             .rev()
+            .filter(|policy| !matches!(policy, Self::None))
             .find(|policy| kinds.iter().all(|kind| policy.keeps(*kind)))
     }
 
@@ -1443,7 +1590,7 @@ impl Policy {
         match self {
             Self::Conservative => Some("legal"),
             Self::Standard => Some("safe"),
-            Self::All => None,
+            Self::None | Self::All => None,
         }
     }
 }
@@ -1464,67 +1611,40 @@ impl FromStr for Policy {
 
 /// What a removal leaves behind in place of the comment.
 ///
-/// The choice is only about the hole: no layout moves a byte the comment did
-/// not cover, except where the hole itself would say something. That happens
-/// in one place, and it is YAML.
+/// The choice is only about the hole: no layout moves a byte the comment did not cover, except where the hole itself would say something.
+/// That happens in one place, and it is YAML.
 ///
-/// A block scalar decides where its body ends from the lines *below* it
-/// (YAML 1.2.2, 8.1.1), so a whole-line comment under a body is what
-/// terminates it — and the hole a removal would leave on that line is read
-/// back as content. A line of spaces as wide as the comment, which `columns`
-/// writes, is indented at least as deep as the body whenever the comment was
-/// wide enough; an empty line, which `lines` writes, is content under `|+` and
-/// `>+`, which keep every empty line trailing a body (8.1.1.2). So in YAML a
-/// whole-line comment sitting in the run of blank and comment lines under a
-/// block scalar body is removed by taking its whole line, terminator and all,
-/// under **every** layout: `lines` gives up that line's number and `columns`
-/// its columns, rather than give up the value. Under `|+` and `>+` the removal
-/// also takes the blank lines the comment was sheltering — they are content
-/// the moment it is gone — and never the blank lines above the first comment,
+/// A block scalar decides where its body ends from the lines *below* it (YAML 1.2.2, 8.1.1), so a whole-line comment under a body is what terminates it — and the hole a removal would leave on that line is read back as content.
+/// A line of spaces as wide as the comment, which `columns` writes, is indented at least as deep as the body whenever the comment was wide enough; an empty line, which `lines` writes, is content under `|+` and `>+`, which keep every empty line trailing a body (8.1.1.2).
+/// So in YAML a whole-line comment sitting in the run of blank and comment lines under a block scalar body is removed by taking its whole line, terminator and all,
+/// under **every** layout: `lines` gives up that line's number and `columns` its columns, rather than give up the value.
+/// Under `|+` and `>+` the removal also takes the blank lines the comment was sheltering — they are content the moment it is gone — and never the blank lines above the first comment,
 /// which were content already.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Layout {
-    /// The default. The line terminators inside the comment are kept, so
-    /// every following line keeps its number, and a comment with code on
-    /// both sides leaves a single space so the two tokens stay apart. The YAML
-    /// exception above is the one place a line does not keep its number.
+    /// The default.
+    /// The line terminators inside the comment are kept, so every following line keeps its number, and a comment with code on both sides leaves a single space so the two tokens stay apart.
+    /// The YAML exception above is the one place a line does not keep its number.
     #[default]
     Lines,
-    /// As [`Self::Lines`], but the comment is replaced by spaces of the same
-    /// display width, so every following column on the line keeps its number
-    /// as well. Tabs are expanded to the next multiple of eight. A line of
-    /// spaces under a YAML block scalar body is indented into it, so the YAML
-    /// exception above applies here too — and reaches further, because it
-    /// applies whatever the block scalar chomps.
+    /// As [`Self::Lines`], but the comment is replaced by spaces of the same display width, so every following column on the line keeps its number as well.
+    /// Tabs are expanded to the next multiple of eight.
+    /// A line of spaces under a YAML block scalar body is indented into it, so the YAML exception above applies here too — and reaches further, because it applies whatever the block scalar chomps.
     Columns,
-    /// As [`Self::Lines`], except that a line which held nothing but a
-    /// removed comment goes away instead of staying behind as a blank one,
-    /// and the whitespace a removal would leave at the end of a line is
-    /// trimmed away with it.
+    /// As [`Self::Lines`], except that a line which held nothing but a removed comment goes away instead of staying behind as a blank one,
+    /// and the whitespace a removal would leave at the end of a line is trimmed away with it.
     ///
-    /// Code keeps its own lines. A comment that shared a line with code
-    /// leaves that line, its terminator and its CRLF or LF style exactly as
-    /// they were, so a comment running across several lines with code before
-    /// or after it closes up to one line rather than joining two statements.
-    /// A surviving line keeps the ending it had in the source — the same LF
-    /// or CRLF, from inside the comment if that is where it was — or no
-    /// ending at all if the file stopped there without one.
+    /// Code keeps its own lines.
+    /// A comment that shared a line with code leaves that line, its terminator and its CRLF or LF style exactly as they were, so a comment running across several lines with code before or after it closes up to one line rather than joining two statements.
+    /// A surviving line keeps the ending it had in the source — the same LF or CRLF, from inside the comment if that is where it was — or no ending at all if the file stopped there without one.
     ///
-    /// Being alone on a line is judged from the original bytes, so a line
-    /// holding two comments and nothing else keeps its terminator: neither
-    /// comment was alone on it.
+    /// Being alone on a line is judged from the original bytes, so a line holding two comments and nothing else keeps its terminator: neither comment was alone on it.
     ///
-    /// A removal never leaves more consecutive blank lines than the longest
-    /// run it was already standing next to. A comment set off by a blank line
-    /// above and another below is three lines of file for one comment, and
-    /// taking only the middle one would leave the two blanks touching — a run
-    /// one line longer than the file ever had. So a removal with `before`
-    /// blanks above it and `after` below takes `min(before, after)` of the
-    /// ones below, leaving `max(before, after)` behind. Blank lines above a
-    /// removal are never touched and no more are taken than followed the
-    /// comment, so two lines of code that had a blank line between them still
-    /// do.
+    /// A removal never leaves more consecutive blank lines than the longest run it was already standing next to.
+    /// A comment set off by a blank line above and another below is three lines of file for one comment, and taking only the middle one would leave the two blanks touching — a run one line longer than the file ever had.
+    /// So a removal with `before` blanks above it and `after` below takes `min(before, after)` of the ones below, leaving `max(before, after)` behind.
+    /// Blank lines above a removal are never touched and no more are taken than followed the comment, so two lines of code that had a blank line between them still do.
     Compact,
 }
 
@@ -1569,15 +1689,17 @@ impl FromStr for Layout {
 pub struct ScanOptions {
     /// Which kinds survive by default.
     pub policy: Policy,
-    /// The vendor rules to lex with. It must be one the language supports.
+    /// The vendor rules to lex with.
+    /// It must be one the language supports.
     pub dialect: Dialect,
-    /// Edit even a source the scanner reported invalid. Without it a file
-    /// with an unterminated comment or string comes back byte for byte.
+    /// Edit even a source the scanner reported invalid.
+    /// Without it a file with an unterminated comment or string comes back byte for byte.
     pub force_invalid: bool,
-    /// Remove the shebang and encoding preamble as well. Nothing else
-    /// protects them.
+    /// Remove the shebang and encoding preamble as well.
+    /// Nothing else protects them.
     pub force_protected: bool,
-    /// Kinds kept whatever the policy says. Tested before everything else.
+    /// Kinds kept whatever the policy says.
+    /// Tested before everything else.
     pub keep_kinds: Vec<CommentKind>,
     /// Kinds removed unless a keep rule claimed them first.
     pub remove_kinds: Vec<CommentKind>,
@@ -1587,105 +1709,72 @@ pub struct ScanOptions {
     pub remove_regex: Vec<String>,
     /// What a comment has to be to survive, beyond what its kind decides.
     pub allow: AllowRules,
+    /// How a comment that survives is written.
+    pub style: StyleRules,
     /// Markers this project's own tools read, and how strongly each is held.
     ///
-    /// A directive is a comment addressed to a tool, and the catalogue of them
-    /// this crate ships knows the tools everybody uses. It cannot know yours.
-    /// A project whose mutation tester reads `// rust-mutants: skip` had only
-    /// `keep_regex` to protect it, and a pattern does not change what the
-    /// comment *is*: the comment stayed an ordinary line comment that
-    /// `--policy all` was entitled to remove, and the project's own build read
-    /// something the tool had decided was prose.
+    /// A directive is a comment addressed to a tool, and the catalogue of them this crate ships knows the tools everybody uses.
+    /// It cannot know yours.
+    /// A project whose mutation tester reads `// rust-mutants: skip` had only `keep_regex` to protect it, and a pattern does not change what the comment *is*: the comment stayed an ordinary line comment that `--policy all` was entitled to remove, and the project's own build read something the tool had decided was prose.
     ///
-    /// A pattern here decides the comment's kind. The weaker tier records it
-    /// as [`CommentKind::Directive`], which every policy but
-    /// [`Policy::All`] keeps; the stronger one records it as
-    /// [`CommentKind::LoadBearing`], which no policy reaches and only
-    /// [`Self::force_protected`] gives up. This is the same field a
-    /// [`DeclarativeProfile`](crate::DeclarativeProfile) carries, applied to
-    /// every file rather than to one format — the question a profile answers
-    /// about its own syntax is the question a project answers about its own
-    /// tooling.
+    /// A pattern here decides the comment's kind.
+    /// The weaker tier records it as [`CommentKind::Directive`], which every policy but [`Policy::All`] keeps; the stronger one records it as [`CommentKind::LoadBearing`], which no policy reaches and only [`Self::force_protected`] gives up.
+    /// This is the same field a [`DeclarativeProfile`](crate::DeclarativeProfile) carries, applied to every file rather than to one format — the question a profile answers about its own syntax is the question a project answers about its own tooling.
     pub protected: Vec<crate::ProtectedPattern>,
 }
 
 /// What a comment has to be, beyond being of a kind the policy keeps.
 ///
-/// The policy decides by kind, and a kind is a coarse thing to decide by: a
-/// one-line `// NOTE:` explaining a decision and a forty-line essay above a
-/// function are both `line`, and a project that wants the first and not the
-/// second cannot say so. These are the other axes, and they cut across the
-/// policy rather than under it — a comment that fails one of them is removed
-/// whatever kept it, short of the protections no policy reaches.
+/// The policy decides by kind, and a kind is a coarse thing to decide by: a one-line `// NOTE:` explaining a decision and a forty-line essay above a function are both `line`, and a project that wants the first and not the second cannot say so.
+/// These are the other axes, and they cut across the policy rather than under it — a comment that fails one of them is removed whatever kept it, short of the protections no policy reaches.
 ///
-/// Empty or `None` everywhere means "no opinion", which is what every
-/// configuration written before these existed meant.
+/// Empty or `None` everywhere means "no opinion", which is what every configuration written before these existed meant.
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct AllowRules {
     /// The tags a surviving comment may open with, without punctuation:
     /// `["NOTE", "SAFETY"]`.
     ///
-    /// Matched against the comment's *text* — its delimiters removed, and the
-    /// common prefix of a block comment's lines removed with them — so the
-    /// same convention holds in every language. A `keep_regex` cannot do this:
-    /// it is matched against the whole raw token, so `^#\s*NOTE` protects a
-    /// Python comment and silently fails to protect the identical rule written
-    /// in Lua, where the token opens `--`.
+    /// Matched against the comment's *text* — its delimiters removed, and the common prefix of a block comment's lines removed with them — so the same convention holds in every language.
+    /// A `keep_regex` cannot do this:
+    /// it is matched against the whole raw token, so `^#\s*NOTE` protects a Python comment and silently fails to protect the identical rule written in Lua, where the token opens `--`.
     ///
-    /// Empty means no tag rule at all. A non-empty list means a comment
-    /// carrying one of these tags is kept, and says nothing about the ones
-    /// that do not.
+    /// Empty means no tag rule at all.
+    /// A non-empty list means a comment carrying one of these tags is kept, and says nothing about the ones that do not.
     pub tags: Vec<String>,
-    /// How many lines a comment, or a run of comments with nothing between
-    /// them, may occupy.
+    /// How many lines a comment, or a run of comments with nothing between them, may occupy.
     ///
-    /// `Some(1)` is the strictest useful value: a comment may be one line and
-    /// no more. This is the axis a kind cannot express, and it is usually the
-    /// real complaint — not that a comment exists, but that it goes on.
+    /// `Some(1)` is the strictest useful value: a comment may be one line and no more.
+    /// This is the axis a kind cannot express, and it is usually the real complaint — not that a comment exists, but that it goes on.
     ///
-    /// A run is measured rather than a single token because four consecutive
-    /// `//` lines are four comments to a scanner and one paragraph to a
-    /// reader, and the reader is right.
+    /// A run is measured rather than a single token because four consecutive `//` lines are four comments to a scanner and one paragraph to a reader, and the reader is right.
     pub max_lines: Option<usize>,
     /// Whether a comment may sit after code on the same line.
     ///
-    /// `Some(false)` removes them. It closes the obvious way around a rule
-    /// about comments above code, which is to put the comment beside it
-    /// instead.
+    /// `Some(false)` removes them.
+    /// It closes the obvious way around a rule about comments above code, which is to put the comment beside it instead.
     pub trailing: Option<bool>,
     /// Tags that are a promise rather than a remark, and how long each has.
     ///
-    /// A `TODO` is not the same kind of thing as a `SAFETY`. One records why
-    /// the code is the way it is and is true for as long as the code is; the
-    /// other says somebody will do something, and saying so is not doing it.
+    /// A `TODO` is not the same kind of thing as a `SAFETY`.
+    /// One records why the code is the way it is and is true for as long as the code is; the other says somebody will do something, and saying so is not doing it.
     /// A rule that treats them alike either forbids writing a `TODO` at all —
     /// which nobody obeys, and which loses the note along with the nagging —
-    /// or permits one forever, which is how a repository ends up with a `TODO`
-    /// from four years ago that everybody has learned to read past.
+    /// or permits one forever, which is how a repository ends up with a `TODO` from four years ago that everybody has learned to read past.
     ///
-    /// A tag here is allowed exactly as one in [`Self::tags`] is, until the
-    /// line carrying it reaches this age; after that it is a finding. The age
-    /// is measured from the commit that introduced the line, so writing one
-    /// costs nothing and a deadline starts running only once the promise is
-    /// part of the repository. [`Age::ZERO`] therefore means "from the next
-    /// commit".
+    /// A tag here is allowed exactly as one in [`Self::tags`] is, until the line carrying it reaches this age; after that it is a finding.
+    /// The age is measured from the commit that introduced the line, so writing one costs nothing and a deadline starts running only once the promise is part of the repository.
+    /// [`Age::ZERO`] therefore means "from the next commit".
     ///
-    /// Nothing in this crate produces the resulting verdict: measuring the age
-    /// means reading a repository, and this crate performs no I/O. It owns the
-    /// vocabulary — [`ShapeRule::Expired`] — so that a caller with a clock
-    /// reports through the same channel every other rule reports through.
+    /// Nothing in this crate produces the resulting verdict: measuring the age means reading a repository, and this crate performs no I/O.
+    /// It owns the vocabulary — [`ShapeRule::Expired`] — so that a caller with a clock reports through the same channel every other rule reports through.
     pub expiry: BTreeMap<String, Age>,
 }
 
 impl AllowRules {
-    /// Every tag a comment may open with, whether or not it comes with a
-    /// deadline.
+    /// Every tag a comment may open with, whether or not it comes with a deadline.
     ///
-    /// A tag under [`Self::expiry`] does not have to be repeated in
-    /// [`Self::tags`]: it is allowed for as long as it is allowed, and a
-    /// configuration that had to list it twice would let the two lists
-    /// disagree.
+    /// A tag under [`Self::expiry`] does not have to be repeated in [`Self::tags`]: it is allowed for as long as it is allowed, and a configuration that had to list it twice would let the two lists disagree.
     pub fn every_tag(&self) -> Vec<&str> {
         self.tags
             .iter()
@@ -1703,20 +1792,180 @@ impl AllowRules {
     }
 }
 
+/// How a comment that survives is written.
+///
+/// The other axis, and deliberately not a field of [`AllowRules`].
+/// Those are the conditions of survival, and a comment that fails one of them is *removed*; these are about a comment that is staying, and a comment that fails one of them is *rewritten*.
+/// Filing the second under the first would mean one table whose entries have two different consequences, and the first reader to add a rule to it would have to guess which.
+///
+/// Every rule here is off by default.
+/// A formatter that starts reformatting a repository because it was installed is a formatter somebody uninstalls.
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct StyleRules {
+    /// Where the line breaks in a paragraph of comment prose go.
+    pub wrap: Wrap,
+    /// Whether a comment's text is separated from its marker by a space.
+    ///
+    /// `Some(true)` rewrites `//text` as `// text`.
+    /// It says nothing about a comment that already has one, and nothing about a marker with no text after it at all: a bare `//` is a blank line in a paragraph, not a comment missing its space.
+    pub space_after_marker: Option<bool>,
+    /// Whether a line of a comment may end in white space.
+    ///
+    /// `Some(false)` strips it.
+    /// It reaches inside the comment only: the space a removal would leave *after* a comment is the layout's business, and this rule does not have an opinion about it.
+    pub trailing_whitespace: Option<bool>,
+}
+
+impl StyleRules {
+    /// Whether any rule here is set at all.
+    pub const fn is_empty(&self) -> bool {
+        matches!(self.wrap, Wrap::Preserve)
+            && self.space_after_marker.is_none()
+            && self.trailing_whitespace.is_none()
+    }
+}
+
+/// Where the line breaks in a paragraph of comment prose go.
+///
+/// The rule is about a *run* of comments rather than about one of them.
+/// Four consecutive `///` lines are four comments to a scanner and one paragraph to a reader, and the reader is right — which is what [`AllowRules::max_lines`] already counts.
+/// This is the first rule that has to write one rather than measure it.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Wrap {
+    /// Leave every line break where it is.
+    /// The default.
+    #[default]
+    Preserve,
+    /// Undo a break that only exists to keep a line short.
+    ///
+    /// A line that does not end at a break somebody meant — the end of a sentence, the end of a clause — and is followed by more of the same paragraph was broken to fit a column, and a column is not a unit of meaning.
+    Unwrap,
+    /// Undo those breaks, and put one back after every sentence.
+    ///
+    /// The unit is the sentence: a diff then reviews one sentence at a time,
+    /// and a line break means something.
+    /// A break somebody put after a clause is left alone, because the rule that reads the prose and the rule that rewrites it have to agree — a fixer that removed breaks its own checker accepts is a fixer whose output is not its checker's fixed point.
+    Sentence,
+}
+
+impl Wrap {
+    /// Every setting, from the one that changes least.
+    pub const ALL: [Self; 3] = [Self::Preserve, Self::Unwrap, Self::Sentence];
+
+    /// The canonical name, identical to the serde representation.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Preserve => "preserve",
+            Self::Unwrap => "unwrap",
+            Self::Sentence => "sentence",
+        }
+    }
+
+    /// Whether this asks for a break after every sentence, as opposed to merely undoing the ones nobody meant.
+    pub const fn breaks_sentences(self) -> bool {
+        matches!(self, Self::Sentence)
+    }
+
+    /// Whether this rewrites anything at all.
+    pub const fn rewrites(self) -> bool {
+        !matches!(self, Self::Preserve)
+    }
+}
+
+impl fmt::Display for Wrap {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// A rule about how a comment is *written*, and the verdict it reached.
+///
+/// The style axis's counterpart to [`ShapeRule`], and written to the same discipline: the rule is the record, and the disposition and the explanation are both read off this one value so that the two cannot drift apart.
+///
+/// Every variant reaches the same verdict, which is why there is no `action()` returning anything else: a style rule never removes a comment and never leaves one alone.
+/// If it had nothing to change it was never recorded.
+///
+/// It serialises as a plain string rather than as an internally-tagged object, which is what every other fieldless enum in this crate does.
+/// [`ShapeRule`] carries fields and is tagged, and copying its attribute here produced `{"rule": "space-after-marker"}` where the OCaml reference wrote `"space-after-marker"`.
+/// The differential is what said so, before any expectation had been recorded.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum StyleRule {
+    /// [`StyleRules::wrap`]: the paragraph was broken somewhere nobody meant,
+    /// or not broken where the rule asks.
+    Wrap,
+    /// [`StyleRules::space_after_marker`]: the text was written against the marker.
+    SpaceAfterMarker,
+    /// [`StyleRules::trailing_whitespace`]: a line of it ended in white space.
+    TrailingWhitespace,
+}
+
+impl StyleRule {
+    /// Every style rule, in the order they are applied.
+    ///
+    /// Application order is the declaration order, and it matters: two rules that both reach a comment compose, and the recorded rule is the first one that found something to change.
+    /// A list written by hand would be a list that stops covering what it was written for, so `every_style_rule_is_applied` checks this against the pass itself.
+    pub const ALL: [Self; 3] = [Self::Wrap, Self::SpaceAfterMarker, Self::TrailingWhitespace];
+
+    /// The verdict this rule reaches, which is fixed for every style rule.
+    pub const fn action(self) -> Action {
+        Action::Rewrite
+    }
+
+    /// The canonical name, identical to the serde representation.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Wrap => "wrap",
+            Self::SpaceAfterMarker => "space-after-marker",
+            Self::TrailingWhitespace => "trailing-whitespace",
+        }
+    }
+
+    /// The explanation this rule writes for the comment it decided.
+    pub const fn explanation(self) -> DispositionExplanation {
+        DispositionExplanation::RewrittenByStyle { rule: self }
+    }
+
+    /// What the rule found, as the sentence an explanation puts under a finding.
+    ///
+    /// Written as what is *wrong* rather than as what will happen, because the verdict on the line above already says what will happen and a reader asking for an explanation is asking the other question.
+    pub const fn detail(self) -> &'static str {
+        match self {
+            Self::Wrap => "its lines are broken somewhere other than the end of a sentence",
+            Self::SpaceAfterMarker => "its text is written against the comment marker",
+            Self::TrailingWhitespace => "a line of it ends in white space",
+        }
+    }
+
+    /// Whether [`StyleRules`] asks for this rule.
+    pub const fn asked_for_by(self, rules: &StyleRules) -> bool {
+        match self {
+            Self::Wrap => rules.wrap.rewrites(),
+            Self::SpaceAfterMarker => matches!(rules.space_after_marker, Some(true)),
+            Self::TrailingWhitespace => matches!(rules.trailing_whitespace, Some(false)),
+        }
+    }
+}
+
+impl fmt::Display for StyleRule {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 /// How long a promise has, in days.
 ///
-/// Written `"14d"` or `"2w"` in a configuration, and `"0d"` for a deadline
-/// that starts at the next commit. Days are the smallest unit because the
-/// clock this is measured against is a commit date, and nobody writes a
-/// `TODO` with an afternoon in mind.
+/// Written `"14d"` or `"2w"` in a configuration, and `"0d"` for a deadline that starts at the next commit.
+/// Days are the smallest unit because the clock this is measured against is a commit date, and nobody writes a `TODO` with an afternoon in mind.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Age {
     days: u32,
 }
 
 impl Age {
-    /// Due at the next commit: the line is over its deadline the moment it has
-    /// one.
+    /// Due at the next commit: the line is over its deadline the moment it has one.
     pub const ZERO: Self = Self { days: 0 };
 
     /// This many days.
@@ -1741,10 +1990,8 @@ impl FromStr for Age {
 
     /// `14d`, `2w`, or a bare number of days.
     ///
-    /// The unit is required to be one a commit date can answer: an hour is not
-    /// a meaningful deadline for a line of source, and a month is not a fixed
-    /// number of days. Weeks are offered because that is how the deadline is
-    /// usually said out loud.
+    /// The unit is required to be one a commit date can answer: an hour is not a meaningful deadline for a line of source, and a month is not a fixed number of days.
+    /// Weeks are offered because that is how the deadline is usually said out loud.
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let trimmed = value.trim();
         let (digits, multiplier) = match trimmed.strip_suffix(['d', 'D']) {
@@ -1770,8 +2017,7 @@ impl Serialize for Age {
 }
 
 impl<'de> Deserialize<'de> for Age {
-    /// Read from a string, and from a bare integer for the configuration that
-    /// writes `TODO = 14`.
+    /// Read from a string, and from a bare integer for the configuration that writes `TODO = 14`.
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         #[derive(Deserialize)]
         #[serde(untagged)]
@@ -1798,6 +2044,7 @@ impl Default for ScanOptions {
             keep_regex: Vec::new(),
             remove_regex: Vec::new(),
             allow: AllowRules::default(),
+            style: StyleRules::default(),
             protected: Vec::new(),
         }
     }
@@ -1829,16 +2076,13 @@ pub struct SourceMapSegment {
     pub original: ByteSpan,
     /// The bytes they became in the output.
     pub output: ByteSpan,
-    /// True when the section is unchanged, so an offset maps through it
-    /// byte for byte; false for a replaced section, where every original
-    /// offset maps to the start of the replacement.
+    /// True when the section is unchanged, so an offset maps through it byte for byte; false for a replaced section, where every original offset maps to the start of the replacement.
     pub exact: bool,
 }
 
 /// Where each byte of the original source ended up in the output.
 ///
-/// This is what lets an editor keep a cursor, a diagnostic, or a breakpoint
-/// pointing at the right place after a removal.
+/// This is what lets an editor keep a cursor, a diagnostic, or a breakpoint pointing at the right place after a removal.
 ///
 /// # Examples
 ///
@@ -1866,10 +2110,7 @@ impl SourceMap {
     ///
     /// # Panics
     ///
-    /// Panics if an edit has `start > end`, starts before its predecessor
-    /// ends, or reaches past `source_len` — the same contract
-    /// [`apply_edits`](crate::apply_edits) enforces, so a map is never built
-    /// for edits that could not be applied.
+    /// Panics if an edit has `start > end`, starts before its predecessor ends, or reaches past `source_len` — the same contract [`apply_edits`](crate::apply_edits) enforces, so a map is never built for edits that could not be applied.
     pub fn from_edits(source_len: usize, edits: &[Edit]) -> Self {
         let mut original = 0;
         let mut output = 0;
@@ -1913,8 +2154,7 @@ impl SourceMap {
 
     /// Where an original offset landed in the output.
     ///
-    /// An offset inside a replaced section maps to the start of that
-    /// replacement, and the end of the source maps to the end of the output.
+    /// An offset inside a replaced section maps to the start of that replacement, and the end of the source maps to the end of the output.
     /// `None` when `offset` is past the end of the original.
     pub fn original_to_output(&self, offset: usize) -> Option<usize> {
         for segment in &self.segments {
@@ -1933,8 +2173,7 @@ impl SourceMap {
 
     /// Where an output offset came from in the original.
     ///
-    /// The mirror of [`Self::original_to_output`], with the same rule for
-    /// replaced sections and the same `None` past the end.
+    /// The mirror of [`Self::original_to_output`], with the same rule for replaced sections and the same `None` past the end.
     pub fn output_to_original(&self, offset: usize) -> Option<usize> {
         for segment in &self.segments {
             if segment.output.contains(offset) {
@@ -1953,10 +2192,9 @@ impl SourceMap {
 
 /// The scan and edits of a transformation, before output bytes are built.
 ///
-/// Planning is the useful half of a transformation for a checker, a report
-/// renderer, or a caller that wants to inspect or filter edits. It deliberately
-/// carries neither a copy of the transformed source nor a source map. Call
-/// [`Self::finish`] only when those materialized results are needed.
+/// Planning is the useful half of a transformation for a checker, a report renderer, or a caller that wants to inspect or filter edits.
+/// It deliberately carries neither a copy of the transformed source nor a source map.
+/// Call [`Self::finish`] only when those materialized results are needed.
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct TransformPlan {
     /// The edits selected by the scan, sorted and non-overlapping.
@@ -1968,11 +2206,11 @@ pub struct TransformPlan {
 /// The bytes a transformation would write, and the account of how.
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct TransformResult {
-    /// The transformed source. Serde renders it as a lossy UTF-8 string.
+    /// The transformed source.
+    /// Serde renders it as a lossy UTF-8 string.
     #[serde(with = "bytes_serde")]
     pub output: Vec<u8>,
-    /// The edits that turned the source into [`Self::output`], sorted and
-    /// non-overlapping.
+    /// The edits that turned the source into [`Self::output`], sorted and non-overlapping.
     pub edits: Vec<Edit>,
     /// The scan those edits were decided from.
     pub report: ScanReport,

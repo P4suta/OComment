@@ -1,27 +1,16 @@
 //! The record of how a run reached its verdicts.
 //!
-//! `--explain` answers *why* for one comment: the rule that applied and the
-//! setting behind it, printed beside the finding it is about. This answers a
-//! different question — what the run did, in the order it did it — and it
-//! answers it for the steps a finding never mentions: which evidence chose the
-//! language, which files were never scanned and why, which edits were planned
-//! from the comments that were found.
+//! `--explain` answers *why* for one comment: the rule that applied and the setting behind it, printed beside the finding it is about.
+//! This answers a different question — what the run did, in the order it did it — and it answers it for the steps a finding never mentions: which evidence chose the language, which files were never scanned and why, which edits were planned from the comments that were found.
 //!
-//! It is diagnostic rather than product, so it goes to standard error and
-//! leaves standard output to carry the findings, the patch, or the machine
-//! report. That is what lets `--trace json` be combined with `--format json`
-//! without either one having to know about the other.
+//! It is diagnostic rather than product, so it goes to standard error and leaves standard output to carry the findings, the patch, or the machine report.
+//! That is what lets `--trace json` be combined with `--format json` without either one having to know about the other.
 //!
 //! # What it does not see
 //!
-//! The scanner's recursion into an embedded language — an HTML `<script>` body
-//! read as JavaScript, a Markdown fence read as the language its info string
-//! names — happens inside `ocomment-core` and is not visible from the events a
-//! scan hands back. A comment found inside one is reported at its byte span in
-//! the outer file, as it is everywhere else. Surfacing the nesting would mean
-//! threading a sink through the scanner, and the scanner is the half of this
-//! repository that a second implementation is checked against; it is not worth
-//! disturbing for a diagnostic that can be had from the outside.
+//! The scanner's recursion into an embedded language — an HTML `<script>` body read as JavaScript, a Markdown fence read as the language its info string names — happens inside `ocomment-core` and is not visible from the events a scan hands back.
+//! A comment found inside one is reported at its byte span in the outer file, as it is everywhere else.
+//! Surfacing the nesting would mean threading a sink through the scanner, and the scanner is the half of this repository that a second implementation is checked against; it is not worth disturbing for a diagnostic that can be had from the outside.
 
 use crate::{
     files::{SkippedFile, SourceFile},
@@ -53,9 +42,7 @@ impl TraceMode {
 
 /// One step of a run, in the order the run took it.
 ///
-/// Serialized as a tagged object so that a reader can switch on `event`
-/// without positional knowledge, and so that adding a step cannot change the
-/// shape of the steps already being read.
+/// Serialized as a tagged object so that a reader can switch on `event` without positional knowledge, and so that adding a step cannot change the shape of the steps already being read.
 #[derive(Debug, Serialize)]
 #[serde(tag = "event", rename_all = "kebab-case")]
 pub enum TraceEvent<'a> {
@@ -74,8 +61,7 @@ pub enum TraceEvent<'a> {
         /// The evidence: `extension`, `reserved-filename`, `shebang`,
         /// `content`, `command-line`, or `configuration-routing`.
         how: &'static str,
-        /// Bytes read, which is what a size-based skip would have been
-        /// measured against.
+        /// Bytes read, which is what a size-based skip would have been measured against.
         bytes: usize,
     },
     /// A file was not scanned.
@@ -102,8 +88,7 @@ pub enum TraceEvent<'a> {
         path: String,
         start: usize,
         end: usize,
-        /// How many bytes the removal leaves behind, which is what the layout
-        /// decided.
+        /// How many bytes the removal leaves behind, which is what the layout decided.
         replacement_bytes: usize,
     },
     /// Everything the run did to one file.
@@ -133,11 +118,8 @@ impl TraceEvent<'_> {
 
     /// Every tag, so a test can require each one to have been observed.
     ///
-    /// A variant added without a fixture that reaches it is a step the trace
-    /// claims to record and has never been seen recording. The end-to-end test
-    /// in `tests/trace.rs` keeps its own copy of this list, because it runs the
-    /// binary rather than linking it; the unit test below is what holds the two
-    /// halves of that arrangement to the same enum.
+    /// A variant added without a fixture that reaches it is a step the trace claims to record and has never been seen recording.
+    /// The end-to-end test in `tests/trace.rs` keeps its own copy of this list, because it runs the binary rather than linking it; the unit test below is what holds the two halves of that arrangement to the same enum.
     #[cfg(test)]
     const ALL_NAMES: [&'static str; 6] = [
         "config-resolved",
@@ -164,8 +146,7 @@ pub fn emit(writer: &mut impl Write, mode: TraceMode, event: &TraceEvent<'_>) ->
 
 /// One line of the human rendering.
 ///
-/// Prefixed so that a reader who piped standard error somewhere can tell these
-/// from the summary lines they arrive beside.
+/// Prefixed so that a reader who piped standard error somewhere can tell these from the summary lines they arrive beside.
 fn human(event: &TraceEvent<'_>) -> String {
     let body = match event {
         TraceEvent::ConfigResolved { root, sources } => {
@@ -273,10 +254,7 @@ pub fn trace_decisions(
     }
     for file in files {
         let path = display(&file.path);
-        /* NOTE: Compiled once per file rather than once per comment, as the
-         * reporting side does it, because the pattern sets are the same for
-         * every comment in the file and compiling a regex set is the expensive
-         * half of answering the question. */
+        /* NOTE: Compiled once per file rather than once per comment, as the reporting side does it, because the pattern sets are the same for every comment in the file and compiling a regex set is the expensive half of answering the question. */
         let material = explanations.get(&file.path);
         let patterns = material.map(|material| {
             DispositionPatterns::compile(&material.options)
@@ -292,7 +270,7 @@ pub fn trace_decisions(
                     line,
                     column,
                     kind: comment.kind.as_str(),
-                    action: if comment.disposition.is_remove() {
+                    action: if comment.action().removes() {
                         "remove"
                     } else {
                         "keep"
@@ -324,7 +302,7 @@ pub fn trace_decisions(
                     .report
                     .comments
                     .iter()
-                    .filter(|comment| comment.disposition.is_remove())
+                    .filter(|comment| comment.action().removes())
                     .count(),
                 changed: file.result.changed(),
                 valid: file.result.report.valid,
@@ -336,9 +314,8 @@ pub fn trace_decisions(
 
 /// The rule that decided one comment, and where that rule was written.
 ///
-/// The verdict alone names the branch; the origin names the table the setting
-/// came from. A trace is read by someone who is about to change a setting, so
-/// it carries both, in the spelling `--explain` uses for the same pair.
+/// The verdict alone names the branch; the origin names the table the setting came from.
+/// A trace is read by someone who is about to change a setting, so it carries both, in the spelling `--explain` uses for the same pair.
 fn rule_for(
     file: &ProcessedFile,
     comment: &Comment,
@@ -372,13 +349,10 @@ fn display(path: &Path) -> String {
 mod tests {
     use super::*;
 
-    /// `ALL_NAMES` is the list a test can require every event to have been
-    /// seen under, so it has to be the same list `name` can produce.
+    /// `ALL_NAMES` is the list a test can require every event to have been seen under, so it has to be the same list `name` can produce.
     ///
-    /// Adding a variant without adding its tag here would leave the
-    /// end-to-end test asserting over a list that no longer describes the
-    /// enum, and it would pass. The `name` match is exhaustive, so the
-    /// compiler catches the other direction.
+    /// Adding a variant without adding its tag here would leave the end-to-end test asserting over a list that no longer describes the enum, and it would pass.
+    /// The `name` match is exhaustive, so the compiler catches the other direction.
     #[test]
     fn every_tag_is_listed() {
         let events = [
@@ -451,8 +425,7 @@ mod tests {
         assert_eq!(position(source, 0), (1, 1));
         assert_eq!(position(source, 4), (2, 1));
         assert_eq!(position(source, 6), (2, 3));
-        // NOTE: Past the end clamps rather than panicking, because a span from
-        // NOTE: a plugin is not this crate's to trust.
+        // NOTE: Past the end clamps rather than panicking, because a span from a plugin is not this crate's to trust.
         assert_eq!(position(source, 9_999), (3, 6));
     }
 }

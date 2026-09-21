@@ -40,15 +40,11 @@ test("every language the extension attaches to also activates it", () => {
 		"ocomment.languages"
 	].default as string[];
 	assert.deepEqual([...activated].sort(), [...configured].sort());
-	// NOTE: The literal is the count, so dropping an identifier fails here rather
-	// NOTE: than shrinking the set the extension attaches to in silence. Every
-	// NOTE: written-out count of it -- the extension description, the README,
-	// NOTE: docs/editors.md, both changelogs -- is checked against this same list
-	// NOTE: by `every_written_language_count_matches_what_it_counts` in
-	// NOTE: rust/ocomment/tests/spec_languages.rs.
+	// NOTE: The literal is the count, so dropping an identifier fails here rather than shrinking the set the extension attaches to in silence.
+	// NOTE: Every written-out count of it -- the extension description, the README,
+	// NOTE: docs/editors.md, both changelogs -- is checked against this same list by `every_written_language_count_matches_what_it_counts` in rust/ocomment/tests/spec_languages.rs.
 	assert.equal(configured.length, 35);
-	// NOTE: A workspace can hold a configuration file and no open editor, and
-	// NOTE: the status bar and the workspace fix have to work there too.
+	// NOTE: A workspace can hold a configuration file and no open editor, and the status bar and the workspace fix have to work there too.
 	assert.ok(
 		manifest.activationEvents.includes("workspaceContains:**/.ocomment.toml"),
 	);

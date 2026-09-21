@@ -1,13 +1,8 @@
 //! The shared language table, the detector, and the command that prints it.
 //!
-//! `spec/languages.toml` is what this repository publishes as the list of
-//! languages OComment understands: the `files:` pattern of the pre-commit
-//! hooks, the documentation page, and `ocomment languages` all come out of it.
-//! A table like that is only worth publishing while it is true, so every claim
-//! it makes is checked here against the code that would have to honour it —
-//! `ocomment_core::detect_language` for the file names, the binary itself for
-//! the dialects and for the listing — and the JSON listing is checked against
-//! the table byte for byte, so the two cannot drift apart quietly.
+//! `spec/languages.toml` is what this repository publishes as the list of languages OComment understands: the `files:` pattern of the pre-commit hooks, the documentation page, and `ocomment languages` all come out of it.
+//! A table like that is only worth publishing while it is true, so every claim it makes is checked here against the code that would have to honour it —
+//! `ocomment_core::detect_language` for the file names, the binary itself for the dialects and for the listing — and the JSON listing is checked against the table byte for byte, so the two cannot drift apart quietly.
 
 use ocomment_core::{Dialect, Language, detect_language};
 use serde::Deserialize;
@@ -26,17 +21,11 @@ const SPEC: &str = include_str!("../../../spec/languages.toml");
 /// `tools/check_embedded_specs.py` guards the same equality outside `cargo`.
 const EMBEDDED: &str = include_str!("../assets/languages.toml");
 
-/// The detector's own source, read as text so the table can be checked in the
-/// other direction as well: what the spec claims is checked by running the
-/// detector, and what the detector knows is read out of the file it is written
-/// in, since nothing enumerates it at run time.
+/// The detector's own source, read as text so the table can be checked in the other direction as well: what the spec claims is checked by running the detector, and what the detector knows is read out of the file it is written in, since nothing enumerates it at run time.
 const DETECT: &str = include_str!("../../ocomment-core/src/detect.rs");
 
-/// The prose that states, in words or in figures, how many languages OComment
-/// scans or how many editor language identifiers the extension attaches to.
-/// Nothing derives these sentences, so nothing but a test stops the next
-/// language from leaving them behind — and a description that undercounts is
-/// read by everyone who installs the extension.
+/// The prose that states, in words or in figures, how many languages OComment scans or how many editor language identifiers the extension attaches to.
+/// Nothing derives these sentences, so nothing but a test stops the next language from leaving them behind — and a description that undercounts is read by everyone who installs the extension.
 const COMPARISON: &str = include_str!("../../../docs/comparison.md");
 const EDITORS: &str = include_str!("../../../docs/editors.md");
 const CHANGELOG: &str = include_str!("../../../CHANGELOG.md");
@@ -44,22 +33,16 @@ const VSCODE_PACKAGE: &str = include_str!("../../../editors/vscode/package.json"
 const VSCODE_README: &str = include_str!("../../../editors/vscode/README.md");
 const VSCODE_CHANGELOG: &str = include_str!("../../../editors/vscode/CHANGELOG.md");
 
-/// The extensions `detect_language` knows that `spec/languages.toml` does not
-/// publish. There are none: an extension the detector answers to is one the
-/// hooks match, the documentation lists and `ocomment languages` prints.
+/// The extensions `detect_language` knows that `spec/languages.toml` does not publish.
+/// There are none: an extension the detector answers to is one the hooks match, the documentation lists and `ocomment languages` prints.
 ///
 /// The list stays here rather than the assertion being narrowed to "empty",
-/// because it is what an extension added to the detector alone lands in, and
-/// what it costs to put one here is the point: publishing one means
-/// regenerating the `files:` pattern of `.pre-commit-hooks.yaml` from the spec
-/// — `python3 tools/check_hooks.py --print-pattern` — and the languages page
-/// with it, so an extension left out is left out on purpose and in writing.
+/// because it is what an extension added to the detector alone lands in, and what it costs to put one here is the point: publishing one means regenerating the `files:` pattern of `.pre-commit-hooks.yaml` from the spec — `python3 tools/check_hooks.py --print-pattern` — and the languages page with it, so an extension left out is left out on purpose and in writing.
 const UNPUBLISHED_EXTENSIONS: [&str; 0] = [];
 
 /// One language of the shared table.
 ///
-/// `deny_unknown_fields` is what makes a typo in the spec a failing test rather
-/// than a key that silently claims nothing.
+/// `deny_unknown_fields` is what makes a typo in the spec a failing test rather than a key that silently claims nothing.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Entry {
@@ -95,14 +78,25 @@ struct Table {
     languages: Vec<Entry>,
 }
 
+/// The `PATH` a run under test is given.
+///
+/// Fixed on Unix, so the suite reads the system's own tools rather than whatever the machine it runs on puts in front of them -- the author of this one has a `git` shim earlier on PATH that refuses a force push, and a suite that inherited it would be testing that.
+/// Inherited on Windows, which has no such pair of fixed directories: a process needs the system ones on PATH to start at all, and Git is found through PATH or not found.
+fn test_path() -> std::ffi::OsString {
+    if cfg!(unix) {
+        std::ffi::OsString::from("/usr/bin:/bin")
+    } else {
+        std::env::var_os("PATH").unwrap_or_default()
+    }
+}
+
 fn table() -> Table {
     let parsed: Table = toml::from_str(SPEC).expect("spec/languages.toml is valid TOML");
     assert_eq!(parsed.version, 1, "unknown spec/languages.toml version");
     parsed
 }
 
-/// The dialect the spec claims for an extension: the one it names, or
-/// `standard` when it names none.
+/// The dialect the spec claims for an extension: the one it names, or `standard` when it names none.
 fn claimed_dialect(entry: &Entry, extension: &str) -> Dialect {
     let name = entry
         .extension_dialects
@@ -117,13 +111,12 @@ fn language(name: &str) -> Language {
         .unwrap_or_else(|error| panic!("`{name}` is not a language: {error}"))
 }
 
-/// Run the built binary somewhere no configuration file of this machine can
-/// reach it, with `input` on its standard input.
+/// Run the built binary somewhere no configuration file of this machine can reach it, with `input` on its standard input.
 fn run(arguments: &[&str], input: &[u8]) -> Output {
     let home = tempfile::tempdir().unwrap();
     let mut child = Command::new(env!("CARGO_BIN_EXE_ocomment"))
         .current_dir(home.path())
-        .env("PATH", "/usr/bin:/bin")
+        .env("PATH", test_path())
         .env("HOME", home.path())
         .env("XDG_CONFIG_HOME", home.path().join("config"))
         .env("NO_COLOR", "1")
@@ -142,9 +135,8 @@ fn run(arguments: &[&str], input: &[u8]) -> Output {
     child.wait_with_output().unwrap()
 }
 
-/// The spec lists every language the binary has, under the name the binary
-/// uses for it, in the same order. A language added to the core enum without a
-/// row here would ship undocumented and unhooked.
+/// The spec lists every language the binary has, under the name the binary uses for it, in the same order.
+/// A language added to the core enum without a row here would ship undocumented and unhooked.
 #[test]
 fn the_spec_lists_every_built_in_language() {
     let listed: Vec<String> = table()
@@ -163,8 +155,8 @@ fn the_spec_lists_every_built_in_language() {
 }
 
 /// Every extension in the spec really selects the language it is listed under,
-/// and the dialect the spec claims for it. `.m` is Objective-C and `.cu` is
-/// CUDA, and a table that says so has to be right about it.
+/// and the dialect the spec claims for it.
+/// `.m` is Objective-C and `.cu` is CUDA, and a table that says so has to be right about it.
 #[test]
 fn every_listed_extension_detects_its_language() {
     for entry in table().languages {
@@ -216,8 +208,7 @@ fn every_listed_reserved_name_detects_its_language() {
     assert!(checked > 0, "the spec claims no reserved file names");
 }
 
-/// Every interpreter name in the spec selects the language it is listed under
-/// when it turns up in a `#!` line, which is all a piped script has to go on.
+/// Every interpreter name in the spec selects the language it is listed under when it turns up in a `#!` line, which is all a piped script has to go on.
 #[test]
 fn every_listed_shebang_detects_its_language() {
     let mut checked = 0;
@@ -238,14 +229,9 @@ fn every_listed_shebang_detects_its_language() {
     assert!(checked > 0, "the spec claims no shebangs");
 }
 
-/// The dialects the spec lists for a language are exactly the ones the binary
-/// accepts for it, in the same order.
+/// The dialects the spec lists for a language are exactly the ones the binary accepts for it, in the same order.
 ///
-/// Both halves are read out of the binary rather than out of a second table in
-/// this file: naming a dialect the language does not have is refused with the
-/// list of the ones it does, which is `config::supported_dialects` verbatim, so
-/// one refused run per language proves the whole row — and every dialect the
-/// row lists is then run to prove the refusal was not lying about it.
+/// Both halves are read out of the binary rather than out of a second table in this file: naming a dialect the language does not have is refused with the list of the ones it does, which is `config::supported_dialects` verbatim, so one refused run per language proves the whole row — and every dialect the row lists is then run to prove the refusal was not lying about it.
 #[test]
 fn the_listed_dialects_are_the_dialects_the_binary_accepts() {
     for entry in table().languages {
@@ -299,9 +285,8 @@ fn the_listed_dialects_are_the_dialects_the_binary_accepts() {
     }
 }
 
-/// The language and dialect enumerations of the published JSON schemas are the
-/// same vocabulary as the spec table. `result.schema.json` describes what a run
-/// reports and so also carries `unknown`, which is the only difference allowed.
+/// The language and dialect enumerations of the published JSON schemas are the same vocabulary as the spec table.
+/// `result.schema.json` describes what a run reports and so also carries `unknown`, which is the only difference allowed.
 #[test]
 fn the_schemas_enumerate_the_same_vocabulary() {
     let config: Value = serde_json::from_str(include_str!("../../../spec/config.schema.json"))
@@ -356,8 +341,7 @@ fn the_schemas_enumerate_the_same_vocabulary() {
     );
 }
 
-/// Editor identifiers live in the shared spec; the VS Code activation and
-/// attachment lists are consumers of that canonical set, not parallel lists.
+/// Editor identifiers live in the shared spec; the VS Code activation and attachment lists are consumers of that canonical set, not parallel lists.
 #[test]
 fn editor_language_identifiers_match_the_vscode_manifest() {
     let identifiers: Vec<String> = table()
@@ -410,8 +394,7 @@ fn editor_language_identifiers_match_the_vscode_manifest() {
     );
 }
 
-/// The crate publishes and reads the spec table itself, so what a released
-/// binary prints cannot be a copy that was edited on its own.
+/// The crate publishes and reads the spec table itself, so what a released binary prints cannot be a copy that was edited on its own.
 #[test]
 fn the_embedded_table_is_the_spec_table() {
     assert_eq!(
@@ -420,9 +403,8 @@ fn the_embedded_table_is_the_spec_table() {
     );
 }
 
-/// `ocomment languages --format json` is the shared table, rendered. Every key
-/// the spec sets is in the JSON, and every key it leaves out is absent rather
-/// than empty.
+/// `ocomment languages --format json` is the shared table, rendered.
+/// Every key the spec sets is in the JSON, and every key it leaves out is absent rather than empty.
 #[test]
 fn the_json_listing_is_the_spec_table() {
     let listed = run(&["languages", "--format", "json"], b"");
@@ -468,8 +450,7 @@ fn the_json_listing_is_the_spec_table() {
     );
 }
 
-/// The human listing is the same table in columns: one row per language, in
-/// spec order, carrying the extensions and dialects the spec gives it.
+/// The human listing is the same table in columns: one row per language, in spec order, carrying the extensions and dialects the spec gives it.
 #[test]
 fn the_human_listing_is_the_spec_table() {
     let listed = run(&["languages"], b"");
@@ -509,12 +490,9 @@ fn the_human_listing_is_the_spec_table() {
     assert_eq!(rows.next(), None, "the listing has a row the spec does not");
 }
 
-/// Every string literal of one `match` block of the detector, which for the
-/// two blocks read here is exactly the set of names that block answers to.
+/// Every string literal of one `match` block of the detector, which for the two blocks read here is exactly the set of names that block answers to.
 ///
-/// The block is found by the line that opens it and ends at the first line
-/// that closes a `let` binding, so a rewrite of `detect.rs` that moves either
-/// one fails this loudly rather than passing on an empty set.
+/// The block is found by the line that opens it and ends at the first line that closes a `let` binding, so a rewrite of `detect.rs` that moves either one fails this loudly rather than passing on an empty set.
 fn match_keys(header: &str) -> BTreeSet<String> {
     let opened = DETECT
         .split_once(header)
@@ -541,10 +519,8 @@ fn match_keys(header: &str) -> BTreeSet<String> {
     keys
 }
 
-/// The published table is checked against the detector above; this checks the
-/// detector against the published table, which nothing else does. An extension
-/// the detector answers to is either in `spec/languages.toml` — and so in the
-/// hooks, the documentation, and the listing — or named as one that is not.
+/// The published table is checked against the detector above; this checks the detector against the published table, which nothing else does.
+/// An extension the detector answers to is either in `spec/languages.toml` — and so in the hooks, the documentation, and the listing — or named as one that is not.
 #[test]
 fn the_detector_knows_no_unrecorded_extension() {
     let published: BTreeSet<String> = table()
@@ -570,17 +546,11 @@ fn the_detector_knows_no_unrecorded_extension() {
     );
 }
 
-/// The same, for the interpreter names a `#!` line is read for. Unlike the
-/// extensions and the reserved names, this set is not read out of the
-/// detector's source: `ocomment_core::shebang_interpreters` publishes it, so
-/// what is compared here is the table the detector actually searches rather
-/// than a reading of the file it is written in.
+/// The same, for the interpreter names a `#!` line is read for.
+/// Unlike the extensions and the reserved names, this set is not read out of the detector's source: `ocomment_core::shebang_interpreters` publishes it, so what is compared here is the table the detector actually searches rather than a reading of the file it is written in.
 ///
-/// `every_listed_shebang_detects_its_language` runs the detector over every
-/// name the spec claims; this is the other direction, and it is the one that
-/// catches an interpreter taught to the detector and never written down —
-/// which would leave a piped script detected as a language `ocomment
-/// languages` says nothing about.
+/// `every_listed_shebang_detects_its_language` runs the detector over every name the spec claims; this is the other direction, and it is the one that catches an interpreter taught to the detector and never written down —
+/// which would leave a piped script detected as a language `ocomment languages` says nothing about.
 #[test]
 fn the_detector_knows_no_unrecorded_shebang() {
     let published: BTreeSet<String> = table()
@@ -597,9 +567,8 @@ fn the_detector_knows_no_unrecorded_shebang() {
     );
 }
 
-/// The same, for the whole file names that carry no extension. Every one the
-/// detector answers to is published, so this difference is empty in both
-/// directions.
+/// The same, for the whole file names that carry no extension.
+/// Every one the detector answers to is published, so this difference is empty in both directions.
 #[test]
 fn the_detector_knows_no_unrecorded_file_name() {
     let published: BTreeSet<String> = table()
@@ -615,9 +584,8 @@ fn the_detector_knows_no_unrecorded_file_name() {
     );
 }
 
-/// The English word for a small number, so a count written out in prose can be
-/// checked against the number it means. The list stops where the prose does: a
-/// repository with more than thirty-nine languages needs another entry here,
+/// The English word for a small number, so a count written out in prose can be checked against the number it means.
+/// The list stops where the prose does: a repository with more than thirty-nine languages needs another entry here,
 /// which is the same edit as the sentence it guards.
 fn number_word(value: usize) -> String {
     const UNITS: [&str; 20] = [
@@ -655,15 +623,12 @@ fn number_word(value: usize) -> String {
     }
 }
 
-/// One text with its runs of whitespace collapsed, so a claim can be searched
-/// for without the line wrapping of the file it lives in being part of the
-/// assertion.
+/// One text with its runs of whitespace collapsed, so a claim can be searched for without the line wrapping of the file it lives in being part of the assertion.
 fn unwrapped(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// The VS Code language identifiers the extension attaches to, taken from the
-/// default of its `ocomment.languages` setting.
+/// The VS Code language identifiers the extension attaches to, taken from the default of its `ocomment.languages` setting.
 fn vscode_language_identifiers() -> Vec<String> {
     let manifest: Value = serde_json::from_str(VSCODE_PACKAGE).expect("package.json parses");
     manifest["contributes"]["configuration"]["properties"]["ocomment.languages"]["default"]
@@ -679,11 +644,8 @@ fn vscode_language_identifiers() -> Vec<String> {
         .collect()
 }
 
-/// The extension activates on exactly the identifiers it attaches the server
-/// to, in the same order. The two lists sit in one file and are read by
-/// different parts of VS Code, so an identifier added to one alone is an
-/// extension that either never wakes up for a language or wakes up for one it
-/// then ignores.
+/// The extension activates on exactly the identifiers it attaches the server to, in the same order.
+/// The two lists sit in one file and are read by different parts of VS Code, so an identifier added to one alone is an extension that either never wakes up for a language or wakes up for one it then ignores.
 #[test]
 fn the_vscode_activation_events_are_the_languages_it_attaches_to() {
     let manifest: Value = serde_json::from_str(VSCODE_PACKAGE).expect("package.json parses");
@@ -701,10 +663,8 @@ fn the_vscode_activation_events_are_the_languages_it_attaches_to() {
     );
 }
 
-/// Every written-out count of languages or of editor language identifiers is
-/// the count it claims to be. `Language::ALL` and the extension's own selector
-/// are the two things being counted, so adding a language cannot leave a
-/// sentence, an extension description, or a changelog entry quietly wrong.
+/// Every written-out count of languages or of editor language identifiers is the count it claims to be.
+/// `Language::ALL` and the extension's own selector are the two things being counted, so adding a language cannot leave a sentence, an extension description, or a changelog entry quietly wrong.
 ///
 /// The claims are searched for in the file with its line wrapping collapsed,
 /// so re-flowing a paragraph is not a failure and changing what it says is.

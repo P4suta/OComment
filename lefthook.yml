@@ -1,23 +1,19 @@
 # NOTE: Git hooks for this repository. Install them once with `lefthook
 # NOTE: install`.
 # NOTE:
-# NOTE: `ocomment check --staged` reads the staged blobs rather than the working
-# NOTE: tree, so a partially staged file is judged by the bytes the commit will
-# NOTE: actually carry. It reports rather than rewrites: `fix --staged` would
-# NOTE: need Lefthook's `stage_fixed`, and that setting stages the whole
-# NOTE: working-tree file and destroys partial staging.
+# NOTE: `--staged` reads the staged blobs rather than the working tree, so a partially staged file is judged by the bytes the commit will actually carry.
+# NOTE: `fix --tidy` writes the half a machine can settle -- a paragraph reflowed to one sentence per line -- and leaves every removal reported and unapplied, so the gate is no weaker for it.
+# NOTE: Lefthook's `stage_fixed` is deliberately not set: `fix --staged` writes the index itself, and that setting would stage the whole working-tree file and destroy the partial staging.
+# NOTE: A run that rewrote the index exits 1, so the rewrite is reviewed before it is committed rather than after.
 pre-commit:
   parallel: true
   commands:
     ocomment:
-      # NOTE: Built from this workspace rather than taken from PATH. A tool that
-      # NOTE: gates its own repository has to be the version in that repository:
-      # NOTE: an installed copy is whatever was last `cargo install`ed, so a
-      # NOTE: commit that changes what OComment accepts gets judged by a build
-      # NOTE: that predates the change. That happened -- an installed 0.1.0
-      # NOTE: rejected this repository's own configuration for naming a policy
-      # NOTE: that the commit adding it had just introduced.
-      run: cargo run --quiet --manifest-path rust/Cargo.toml --locked -p ocomment -- check --staged
+      # NOTE: Built from this workspace rather than taken from PATH.
+      # NOTE: A tool that gates its own repository has to be the version in that repository:
+      # NOTE: an installed copy is whatever was last `cargo install`ed, so a commit that changes what OComment accepts gets judged by a build that predates the change.
+      # NOTE: That happened -- an installed 0.1.0 rejected this repository's own configuration for naming a policy that the commit adding it had just introduced.
+      run: cargo run --quiet --manifest-path rust/Cargo.toml --locked -p ocomment -- fix --tidy --staged
     rustfmt:
       glob: "rust/**/*.rs"
       run: cargo fmt --all --manifest-path rust/Cargo.toml -- --check
@@ -26,9 +22,8 @@ pre-commit:
     - merge
     - rebase
 
-# NOTE: Everything CI checks that a laptop can check; see "Before you push" in
-# NOTE: CONTRIBUTING.md. `--quick` is not used here on purpose: a push is the
-# NOTE: last moment the answer is still cheap.
+# NOTE: Everything CI checks that a laptop can check; see "Before you push" in CONTRIBUTING.md.
+# NOTE: `--quick` is not used here on purpose: a push is the last moment the answer is still cheap.
 pre-push:
   commands:
     preflight:

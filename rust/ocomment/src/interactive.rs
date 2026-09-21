@@ -1,17 +1,11 @@
 //! The comment-by-comment prompt behind `fix --interactive`.
 //!
-//! The run has already transformed every file by the time this module is
-//! reached, so what it asks about is a list of edits that were computed
-//! together. Applying only some of them is safe because a replacement is
-//! computed from the *source* alone: under `layout = "columns"` it is exactly
-//! as wide as the comment it stands for, so a removal moves nothing that comes
-//! after it, and under every other layout it depends only on the bytes either
-//! side of its own span. `partial_column_edits_keep_the_replacement_the_transform_computed`
-//! pins that.
+//! The run has already transformed every file by the time this module is reached, so what it asks about is a list of edits that were computed together.
+//! Applying only some of them is safe because a replacement is computed from the *source* alone: under `layout = "columns"` it is exactly as wide as the comment it stands for, so a removal moves nothing that comes after it, and under every other layout it depends only on the bytes either side of its own span.
+//! `partial_column_edits_keep_the_replacement_the_transform_computed` pins that.
 //!
-//! The prompt is line-based on purpose: no raw mode, no cursor addressing, no
-//! terminal library. One question, one line of answer, and a transcript that a
-//! test can read.
+//! The prompt is line-based on purpose: no raw mode, no cursor addressing, no terminal library.
+//! One question, one line of answer, and a transcript that a test can read.
 
 use crate::{
     atomic::WritePlan,
@@ -28,9 +22,7 @@ use std::{
 
 /// What the reader decided about the removable comments of one run.
 ///
-/// Deliberately not `Debug`: a plan carries the whole before-and-after text of
-/// a source file, and the one thing this type must never do is put it on a
-/// terminal by accident.
+/// Deliberately not `Debug`: a plan carries the whole before-and-after text of a source file, and the one thing this type must never do is put it on a terminal by accident.
 #[derive(Default)]
 pub struct Selection<'a> {
     /// One plan per file that keeps at least one accepted removal.
@@ -41,8 +33,7 @@ pub struct Selection<'a> {
     pub aborted: bool,
 }
 
-/// The question, ending in a space rather than a newline so the answer is typed
-/// on the same line.
+/// The question, ending in a space rather than a newline so the answer is typed on the same line.
 const PROMPT: &str = "Remove? [y,n,a,d,q,x,?] ";
 
 /// What each answer does, in the order the prompt lists them.
@@ -56,18 +47,16 @@ const HELP: [&str; 7] = [
     "? - show this help",
 ];
 
-/// What is said to an answer that is not one of them. A typo is never taken for
-/// a decision about somebody's source file.
+/// What is said to an answer that is not one of them.
+/// A typo is never taken for a decision about somebody's source file.
 const UNKNOWN: &str = "unknown answer; press ? for help";
 
 /// How many unchanged lines are shown either side of the change.
 const CONTEXT: usize = 3;
 
-/// Ask about every comment this run would remove and collect the answers into
-/// the writes they come to.
+/// Ask about every comment this run would remove and collect the answers into the writes they come to.
 ///
-/// `input` and `output` are the reader's terminal; they are parameters so the
-/// whole conversation can be driven from a script in a test.
+/// `input` and `output` are the reader's terminal; they are parameters so the whole conversation can be driven from a script in a test.
 pub fn select<'a>(
     files: &'a [ProcessedFile],
     input: &mut dyn BufRead,
@@ -115,8 +104,7 @@ pub fn select<'a>(
                             stopped = true;
                             break;
                         }
-                        /* NOTE: Everything accepted so far goes with it: `x` is the
-                         * answer for a run that should never have started. */
+                        /* NOTE: Everything accepted so far goes with it: `x` is the answer for a run that should never have started. */
                         Answer::Abort => {
                             return Ok(Selection {
                                 aborted: true,
@@ -154,15 +142,14 @@ pub fn select<'a>(
 /// The comments this run would remove, each with the edit that removes it.
 ///
 /// `transform` pushes exactly one edit per removable comment, in source order,
-/// so the two lists line up pairwise. A file whose source failed to scan has no
-/// edits at all, and nothing about it is offered — the same gate a
-/// non-interactive `fix` applies before it writes.
+/// so the two lists line up pairwise.
+/// A file whose source failed to scan has no edits at all, and nothing about it is offered — the same gate a non-interactive `fix` applies before it writes.
 fn offers(file: &ProcessedFile) -> Vec<(&Comment, &Edit)> {
     file.result
         .report
         .comments
         .iter()
-        .filter(|comment| comment.disposition.is_remove())
+        .filter(|comment| comment.disposition().action().changes_bytes())
         .zip(file.result.edits.iter())
         .collect()
 }
@@ -202,19 +189,15 @@ fn show(
     Ok(())
 }
 
-/// The lines the reader is answering for: the ones the comment sits on as they
-/// are, the same ones as this single edit would leave them, and `CONTEXT` lines
-/// of unchanged source either side.
+/// The lines the reader is answering for: the ones the comment sits on as they are, the same ones as this single edit would leave them, and `CONTEXT` lines of unchanged source either side.
 ///
-/// The "after" text is produced by applying this one edit and nothing else, so
-/// what is shown is what answering `y` to this question alone would do.
+/// The "after" text is produced by applying this one edit and nothing else, so what is shown is what answering `y` to this question alone would do.
 fn hunk(source: &[u8], edit: &Edit, presentation: &Presentation) -> Vec<String> {
     let length = source.len();
     let begin = edit.span.start.min(length);
     let finish = edit.span.end.clamp(begin, length);
     let start = line_start(source, begin);
-    /* NOTE: The last byte the span covers, so a span that ends exactly on a line
-     * break does not drag the following line into the hunk. */
+    /* NOTE: The last byte the span covers, so a span that ends exactly on a line break does not drag the following line into the hunk. */
     let inner = if finish > begin { finish - 1 } else { begin };
     let end = line_end(source, inner);
     let after = apply_edits(source, std::slice::from_ref(edit));
@@ -243,18 +226,12 @@ fn hunk(source: &[u8], edit: &Edit, presentation: &Presentation) -> Vec<String> 
     rows
 }
 
-/// How many lines of one changed side are shown before the rest are folded
-/// into a single marker: `CONTEXT` at each end, the same window the unchanged
-/// context gets.
+/// How many lines of one changed side are shown before the rest are folded into a single marker: `CONTEXT` at each end, the same window the unchanged context gets.
 const BLOCK: usize = 2 * CONTEXT;
 
-/// One side of the change, capped so a comment taller than the screen cannot
-/// push the question off it.
+/// One side of the change, capped so a comment taller than the screen cannot push the question off it.
 ///
-/// A block comment can run to any length, and the reader is answering about
-/// the comment, not reading it here: the first and last `CONTEXT` lines say
-/// which comment it is and where it ends, and the marker between them says how
-/// much was left out rather than pretending there was nothing.
+/// A block comment can run to any length, and the reader is answering about the comment, not reading it here: the first and last `CONTEXT` lines say which comment it is and where it ends, and the marker between them says how much was left out rather than pretending there was nothing.
 fn changed(rows: &mut Vec<String>, marker: char, lines: &[&[u8]], presentation: &Presentation) {
     let show = |rows: &mut Vec<String>, block: &[&[u8]]| {
         rows.extend(
@@ -272,9 +249,8 @@ fn changed(rows: &mut Vec<String>, marker: char, lines: &[&[u8]], presentation: 
     show(rows, &lines[lines.len() - CONTEXT..]);
 }
 
-/// What stands in for the lines a capped side folded away. It carries the
-/// marker of the side it belongs to so the two columns stay aligned, and is
-/// dimmed rather than tinted so it is never read as a line of the source.
+/// What stands in for the lines a capped side folded away.
+/// It carries the marker of the side it belongs to so the two columns stay aligned, and is dimmed rather than tinted so it is never read as a line of the source.
 fn elision(marker: char, hidden: usize, presentation: &Presentation) -> String {
     format!(
         "{}{marker}... {hidden} more line{} ...{}",
@@ -286,9 +262,7 @@ fn elision(marker: char, hidden: usize, presentation: &Presentation) -> String {
 
 /// Runs of the same blank line folded to one.
 ///
-/// Under `layout = "lines"` a removed block comment leaves exactly as many
-/// empty lines as it occupied, and the twenty-seventh of them tells the reader
-/// nothing the first did not.
+/// Under `layout = "lines"` a removed block comment leaves exactly as many empty lines as it occupied, and the twenty-seventh of them tells the reader nothing the first did not.
 fn collapse_blanks(lines: Vec<&[u8]>) -> Vec<&[u8]> {
     let mut kept: Vec<&[u8]> = Vec::with_capacity(lines.len());
     for line in lines {
@@ -301,8 +275,7 @@ fn collapse_blanks(lines: Vec<&[u8]>) -> Vec<&[u8]> {
     kept
 }
 
-/// One line of the hunk: its marker, its terminal-safe text, and the colour
-/// that says which of the three it is.
+/// One line of the hunk: its marker, its terminal-safe text, and the colour that says which of the three it is.
 fn rendered(marker: char, line: &[u8], presentation: &Presentation) -> String {
     let tint = match marker {
         '-' => "\x1b[31m",
@@ -317,8 +290,7 @@ fn rendered(marker: char, line: &[u8], presentation: &Presentation) -> String {
     )
 }
 
-/// One block of bytes as the lines it holds, with the carriage return of a
-/// CRLF file left out of the text rather than shown as a control character.
+/// One block of bytes as the lines it holds, with the carriage return of a CRLF file left out of the text rather than shown as a control character.
 fn rows_of(block: &[u8]) -> Vec<&[u8]> {
     block
         .split(|byte| *byte == b'\n')
@@ -347,8 +319,7 @@ fn preceding(source: &[u8], start: usize, count: usize) -> Vec<&[u8]> {
     let mut lines = Vec::new();
     let mut at = start;
     while lines.len() < count && at > 0 {
-        /* NOTE: `at` is a line start, so the byte before it is the terminator of the
-         * line being collected. */
+        /* NOTE: `at` is a line start, so the byte before it is the terminator of the line being collected. */
         let end = at - 1;
         let begin = line_start(source, end);
         lines.push(&source[begin..end]);
@@ -363,8 +334,8 @@ fn following(source: &[u8], end: usize, count: usize) -> Vec<&[u8]> {
     let mut lines = Vec::new();
     let mut at = end;
     while lines.len() < count && at < source.len() {
-        /* NOTE: Step over the terminator `end` stopped in front of. A file whose last
-         * line ends in one has nothing after it, and the loop ends here. */
+        /* NOTE: Step over the terminator `end` stopped in front of.
+         * A file whose last line ends in one has nothing after it, and the loop ends here. */
         at += 1;
         if at >= source.len() {
             break;
@@ -389,12 +360,9 @@ enum Answer {
     Help,
 }
 
-/// Put the question and read one answer, explaining itself and asking again
-/// until the reader gives one.
+/// Put the question and read one answer, explaining itself and asking again until the reader gives one.
 ///
-/// The answer is read as bytes rather than as a line of text: a terminal can
-/// deliver anything, and a stray byte is a typo to ask about again, not an I/O
-/// failure that ends a run somebody is in the middle of.
+/// The answer is read as bytes rather than as a line of text: a terminal can deliver anything, and a stray byte is a typo to ask about again, not an I/O failure that ends a run somebody is in the middle of.
 fn ask(
     input: &mut dyn BufRead,
     output: &mut dyn Write,
@@ -402,8 +370,7 @@ fn ask(
 ) -> Result<Answer> {
     loop {
         wrote(write!(output, "{PROMPT}"))?;
-        /* NOTE: The question ends without a newline, so it has to be pushed out by
-         * hand before the run blocks waiting for the answer to it. */
+        /* NOTE: The question ends without a newline, so it has to be pushed out by hand before the run blocks waiting for the answer to it. */
         wrote(output.flush())?;
         let mut line = Vec::new();
         /* NOTE: Nothing left to read is a reader who is no longer there to answer,
@@ -467,8 +434,7 @@ mod tests {
         }
     }
 
-    /// Drive `select` with a scripted answer per line and collect everything it
-    /// wrote to the terminal.
+    /// Drive `select` with a scripted answer per line and collect everything it wrote to the terminal.
     fn ask<'a>(files: &'a [ProcessedFile], script: &str) -> (Selection<'a>, String) {
         let mut input = Cursor::new(script.as_bytes().to_vec());
         let mut written: Vec<u8> = Vec::new();
@@ -481,8 +447,7 @@ mod tests {
         String::from_utf8(selection.plans[0].replacement.to_vec()).unwrap()
     }
 
-    /// The answers apply to one comment each: the accepted span is gone and the
-    /// declined one is still in the bytes that would be written.
+    /// The answers apply to one comment each: the accepted span is gone and the declined one is still in the bytes that would be written.
     #[test]
     fn yes_and_no_apply_only_the_accepted_comment() {
         let files = [file("a.c", TWO)];
@@ -494,9 +459,7 @@ mod tests {
         assert_eq!(selection.plans[0].original, TWO.as_bytes());
     }
 
-    /// The question says which comment it is about — where it starts, what kind
-    /// it is, and how far through the file and the run it sits — and shows the
-    /// line as it stands against the line the answer would leave behind.
+    /// The question says which comment it is about — where it starts, what kind it is, and how far through the file and the run it sits — and shows the line as it stands against the line the answer would leave behind.
     #[test]
     fn the_prompt_names_the_comment_and_shows_the_hunk() {
         let (_, transcript) = ask(&[file("a.c", TWO)], "y\nn\n");
@@ -523,8 +486,7 @@ mod tests {
         );
     }
 
-    /// Three lines either side of the comment are shown unprefixed, so the
-    /// reader can tell what the line is doing before answering for it.
+    /// Three lines either side of the comment are shown unprefixed, so the reader can tell what the line is doing before answering for it.
     #[test]
     fn the_hunk_carries_three_lines_of_context_on_each_side() {
         let source = "1\n2\n3\n4\n5\nx/* c */y\n6\n7\n8\n9\n10\n";
@@ -554,8 +516,7 @@ mod tests {
     }
 
     /// A comment tall enough to fill the screen would push the question off it.
-    /// Both sides of the change are capped at `CONTEXT` lines each end, with one
-    /// marker standing for everything folded away, so the prompt stays in view.
+    /// Both sides of the change are capped at `CONTEXT` lines each end, with one marker standing for everything folded away, so the prompt stays in view.
     #[test]
     fn a_tall_hunk_is_capped_on_both_sides() {
         let source = tall(27);
@@ -594,8 +555,7 @@ mod tests {
         );
     }
 
-    /// A change that fits is shown whole: nothing is folded and nothing says it
-    /// was.
+    /// A change that fits is shown whole: nothing is folded and nothing says it was.
     #[test]
     fn a_short_hunk_is_shown_whole() {
         let (_, transcript) = ask(&[file("a.c", TWO)], "n\nn\n");
@@ -609,8 +569,7 @@ mod tests {
         );
     }
 
-    /// `a` answers for the rest of the file at once and asks nothing more about
-    /// it; the next file starts asking again.
+    /// `a` answers for the rest of the file at once and asks nothing more about it; the next file starts asking again.
     #[test]
     fn a_removes_the_rest_of_the_file_without_asking() {
         let files = [file("a.c", TWO), file("b.c", TWO)];
@@ -632,8 +591,7 @@ mod tests {
         );
     }
 
-    /// `d` is the same for the other answer: nothing in the file is removed, so
-    /// the file has no plan at all.
+    /// `d` is the same for the other answer: nothing in the file is removed, so the file has no plan at all.
     #[test]
     fn d_keeps_the_rest_of_the_file_without_asking() {
         let files = [file("a.c", TWO), file("b.c", TWO)];
@@ -676,8 +634,7 @@ mod tests {
         );
     }
 
-    /// A closed input is a reader who is no longer there to answer, which is
-    /// the one answer that cannot be guessed at: it aborts.
+    /// A closed input is a reader who is no longer there to answer, which is the one answer that cannot be guessed at: it aborts.
     #[test]
     fn end_of_input_aborts_like_x() {
         let files = [file("a.c", TWO)];
@@ -721,18 +678,10 @@ mod tests {
         );
     }
 
-    /// Under `layout = "columns"` a removal is replaced by exactly as many
-    /// display columns as the comment occupied, and every such replacement is
-    /// measured from the *source*, not from whatever earlier removals left
-    /// behind. That is what lets this command apply a subset of the edits a
-    /// transform produced: a width-preserving replacement moves nothing, so
-    /// each remaining comment still begins at the display column its own
-    /// replacement was computed for.
+    /// Under `layout = "columns"` a removal is replaced by exactly as many display columns as the comment occupied, and every such replacement is measured from the *source*, not from whatever earlier removals left behind.
+    /// That is what lets this command apply a subset of the edits a transform produced: a width-preserving replacement moves nothing, so each remaining comment still begins at the display column its own replacement was computed for.
     ///
-    /// Pinned by transforming the partially edited bytes again and requiring
-    /// the replacement to come out byte-identical to the one the full transform
-    /// computed — the tab inside the second comment makes that replacement
-    /// depend on the column it starts at.
+    /// Pinned by transforming the partially edited bytes again and requiring the replacement to come out byte-identical to the one the full transform computed — the tab inside the second comment makes that replacement depend on the column it starts at.
     #[test]
     fn partial_column_edits_keep_the_replacement_the_transform_computed() {
         let source = b"x/* one */y/* a\tb */z\n";

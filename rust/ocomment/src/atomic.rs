@@ -46,8 +46,7 @@ pub fn apply_transaction(plans: Vec<WritePlan<'_>>) -> Result<()> {
         let permissions = fs::metadata(&plan.path)?.permissions();
         temporary.as_file().set_permissions(permissions)?;
         temporary.as_file_mut().sync_all()?;
-        /* NOTE: Holding every NamedTempFile handle until commit makes the
-         * prepare-before-commit guarantee consume one descriptor per file.
+        /* NOTE: Holding every NamedTempFile handle until commit makes the prepare-before-commit guarantee consume one descriptor per file.
          * TempPath retains cleanup ownership while closing the descriptor. */
         let temporary = temporary.into_temp_path();
         let name = plan
@@ -60,9 +59,7 @@ pub fn apply_transaction(plans: Vec<WritePlan<'_>>) -> Result<()> {
             std::process::id()
         ));
         if backup.symlink_metadata().is_ok() {
-            /* INVARIANT: The journal holds the file as it was before the interrupted
-             * run, so deleting it unread can be the loss the rollback existed
-             * to prevent. */
+            /* INVARIANT: The journal holds the file as it was before the interrupted run, so deleting it unread can be the loss the rollback existed to prevent. */
             bail!(
                 "rollback path {} already exists; a previous ocomment run may have been \
                  interrupted — inspect and delete it before retrying",
@@ -79,8 +76,7 @@ pub fn apply_transaction(plans: Vec<WritePlan<'_>>) -> Result<()> {
     for index in 0..prepared.len() {
         if let Err(error) = commit_one(&mut prepared[index]) {
             let failed_path = prepared[index].plan.path.clone();
-            /* INVARIANT: Include the failing item: a rename may have created its backup
-             * before installing or syncing the replacement failed. */
+            /* INVARIANT: Include the failing item: a rename may have created its backup before installing or syncing the replacement failed. */
             let rollback_error = rollback(&prepared[..=index]);
             return Err(match rollback_error {
                 Ok(()) => anyhow!(
@@ -144,10 +140,8 @@ fn rollback(items: &[Prepared<'_>]) -> Result<()> {
     Ok(())
 }
 
-/// Refuse to turn a symbolic link into an ordinary file. Reads may opt into
-/// following links, but an in-place rewrite would replace the directory entry
-/// rather than atomically update its target, which is neither interpretation a
-/// caller can safely assume.
+/// Refuse to turn a symbolic link into an ordinary file.
+/// Reads may opt into following links, but an in-place rewrite would replace the directory entry rather than atomically update its target, which is neither interpretation a caller can safely assume.
 fn reject_symlink(path: &Path, phase: &str) -> Result<()> {
     let metadata = path
         .symlink_metadata()
@@ -161,12 +155,19 @@ fn reject_symlink(path: &Path, phase: &str) -> Result<()> {
     Ok(())
 }
 
+/// Flush the directory entry, so a rename survives a power cut.
+///
+/// Split by system rather than guarded inside one body: the parameter is unused on the arm that does nothing, and a warning a platform emits and nobody reads is one more line of noise between a reader and the warning that matters.
+#[cfg(unix)]
 fn sync_parent(path: &Path) -> Result<()> {
-    #[cfg(unix)]
-    {
-        let directory = fs::File::open(parent_directory(path))?;
-        directory.sync_all()?;
-    }
+    let directory = fs::File::open(parent_directory(path))?;
+    directory.sync_all()?;
+    Ok(())
+}
+
+/// Windows has no directory handle to flush; the rename is durable on its own.
+#[cfg(not(unix))]
+fn sync_parent(_: &Path) -> Result<()> {
     Ok(())
 }
 
@@ -198,13 +199,10 @@ mod tests {
         );
     }
 
-    /// A journal left over from an interrupted run is the only thing standing
-    /// between the caller and a retry, and it holds the pre-run contents of a
-    /// file. The refusal has to say both: what the file is, and that reading
-    /// it before deleting it is the point.
+    /// A journal left over from an interrupted run is the only thing standing between the caller and a retry, and it holds the pre-run contents of a file.
+    /// The refusal has to say both: what the file is, and that reading it before deleting it is the point.
     ///
-    /// The name carries this process's own id, so the test can plant exactly
-    /// the journal the transaction is about to reach for.
+    /// The name carries this process's own id, so the test can plant exactly the journal the transaction is about to reach for.
     #[test]
     fn an_existing_rollback_journal_says_what_to_do_about_it() {
         let directory = tempfile::tempdir().unwrap();

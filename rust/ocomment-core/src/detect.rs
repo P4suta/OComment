@@ -6,11 +6,9 @@ use std::path::Path;
 pub struct Detection {
     /// The language to scan the file as.
     pub language: Language,
-    /// The dialect that goes with it, [`Dialect::Standard`] unless the
-    /// evidence named a more specific one.
+    /// The dialect that goes with it, [`Dialect::Standard`] unless the evidence named a more specific one.
     pub dialect: Dialect,
-    /// What decided it: `extension`, `reserved-filename`, `shebang`, or
-    /// `content`.
+    /// What decided it: `extension`, `reserved-filename`, `shebang`, or `content`.
     pub reason: &'static str,
 }
 
@@ -29,18 +27,16 @@ impl Detection {
 enum Spelling {
     /// The basename is the interpreter name, ignoring ASCII case.
     Exact,
-    /// The name, or that basename followed only by a numeric version such as
-    /// `python3.12` or `lua5.4`.
+    /// The name, or that basename followed only by a numeric version such as `python3.12` or `lua5.4`.
     NumericVersion,
 }
 
 /// The interpreter names a `#!` line is read for, in the order they are tried,
 /// with the language and dialect each one selects.
 ///
-/// Only the executable basename is compared. Interpreter-looking parent
-/// directories and arguments are data, not evidence. `env` is handled before
-/// this table: its options and assignments are consumed until the executable
-/// it will launch is reached.
+/// Only the executable basename is compared.
+/// Interpreter-looking parent directories and arguments are data, not evidence.
+/// `env` is handled before this table: its options and assignments are consumed until the executable it will launch is reached.
 const SHEBANGS: [(&str, Language, Dialect, Spelling); 20] = [
     (
         "python",
@@ -101,10 +97,9 @@ const SHEBANGS: [(&str, Language, Dialect, Spelling); 20] = [
 
 /// The executable one `#!` line actually launches.
 ///
-/// A direct shebang contributes only its first token. When that token is
-/// `env`, options and assignments are consumed according to `env`'s command
-/// line instead. This deliberately never searches parent directories, option
-/// values, assignments, or arguments for an interpreter-looking substring.
+/// A direct shebang contributes only its first token.
+/// When that token is `env`, options and assignments are consumed according to `env`'s command line instead.
+/// This deliberately never searches parent directories, option values, assignments, or arguments for an interpreter-looking substring.
 fn shebang_executable(line: &[u8]) -> Option<String> {
     let text = std::str::from_utf8(line.strip_prefix(b"#!")?).ok()?;
     let mut words: Vec<String> = text.split_ascii_whitespace().map(str::to_owned).collect();
@@ -180,9 +175,8 @@ fn env_executable(mut words: Vec<String>) -> Option<String> {
             continue;
         }
         if word.starts_with('-') {
-            /* NOTE: Guessing whether an unknown option consumes the next token can
-             * turn its value into an interpreter. Unknown syntax is therefore
-             * deliberately undetected. */
+            /* NOTE: Guessing whether an unknown option consumes the next token can turn its value into an interpreter.
+             * Unknown syntax is therefore deliberately undetected. */
             return None;
         }
         if is_env_assignment(word) {
@@ -194,10 +188,9 @@ fn env_executable(mut words: Vec<String>) -> Option<String> {
     None
 }
 
-/// Split the string accepted by `env -S`. This is the small shell-like part of
-/// `env`'s interface: ASCII whitespace separates words, quotes group it, and a
-/// backslash quotes the following character. An unfinished quote or escape is
-/// invalid and fails closed.
+/// Split the string accepted by `env -S`.
+/// This is the small shell-like part of `env`'s interface: ASCII whitespace separates words, quotes group it, and a backslash quotes the following character.
+/// An unfinished quote or escape is invalid and fails closed.
 fn split_env_string(text: &str) -> Option<Vec<String>> {
     let mut words = Vec::new();
     let mut word = String::new();
@@ -285,17 +278,12 @@ fn interpreter_matches(basename: &str, name: &str, spelling: Spelling) -> bool {
     }
 }
 
-/// Every interpreter name [`detect_language`] reads a `#!` line for, in the
-/// order it tries them.
+/// Every interpreter name [`detect_language`] reads a `#!` line for, in the order it tries them.
 ///
-/// This is the detector's own table rather than a copy of it, so a caller that
-/// documents or publishes the list — `spec/languages.toml` does, and
-/// `ocomment languages` prints it — can be checked against what the detector
-/// will actually answer to instead of against a second list that may have
-/// stopped agreeing.
+/// This is the detector's own table rather than a copy of it, so a caller that documents or publishes the list — `spec/languages.toml` does, and `ocomment languages` prints it — can be checked against what the detector will actually answer to instead of against a second list that may have stopped agreeing.
 ///
-/// These are executable basenames, not substrings to search for in an entire
-/// shebang. The Python and Lua entries also accept a numeric version suffix.
+/// These are executable basenames, not substrings to search for in an entire shebang.
+/// The Python and Lua entries also accept a numeric version suffix.
 ///
 /// # Examples
 ///
@@ -318,11 +306,8 @@ pub fn shebang_interpreters() -> impl Iterator<Item = &'static str> {
 
 /// Detect a built-in language from filename, shebang, then conservative content hints.
 ///
-/// The evidence is weighed in that order and the first answer wins, so a
-/// `.py` file whose first line says `#!/bin/sh` is still Python. `path` is
-/// optional because a buffer in an editor may have no name yet; with no path
-/// and no shebang, only a handful of unmistakable content hints are left, and
-/// `None` means the caller has to name the language itself.
+/// The evidence is weighed in that order and the first answer wins, so a `.py` file whose first line says `#!/bin/sh` is still Python.
+/// `path` is optional because a buffer in an editor may have no name yet; with no path and no shebang, only a handful of unmistakable content hints are left, and `None` means the caller has to name the language itself.
 ///
 /// # Examples
 ///
@@ -374,84 +359,51 @@ pub fn detect_language(path: Option<&Path>, source: &[u8]) -> Option<Detection> 
             "zsh" => Some((Language::Shell, Dialect::Zsh)),
             "html" | "htm" | "xhtml" | "shtml" => Some((Language::Html, Dialect::Standard)),
             "css" => Some((Language::Css, Dialect::Standard)),
-            /* NOTE: `.json` is here because a comment in one is common enough
-             * that this project already listed `tsconfig.json` and
-             * `jsconfig.json` as reserved names. Reading every `.json` as JSONC
-             * finds the comments the ones that carry them carry, and finds
-             * nothing in the ones that do not -- which is what a standard JSON
-             * file scans as. Leaving them out meant not looking. */
+            /* NOTE: `.json` is here because a comment in one is common enough that this project already listed `tsconfig.json` and `jsconfig.json` as reserved names.
+             * Reading every `.json` as JSONC finds the comments the ones that carry them carry, and finds nothing in the ones that do not -- which is what a standard JSON file scans as.
+             * Leaving them out meant not looking. */
             "jsonc" | "json5" | "json" => Some((Language::Jsonc, Dialect::Standard)),
             "sql" => Some((Language::Sql, Dialect::Standard)),
             "kt" | "kts" => Some((Language::Kotlin, Dialect::Standard)),
             "toml" => Some((Language::Toml, Dialect::Standard)),
             "lua" | "rockspec" => Some((Language::Lua, Dialect::Standard)),
             "yml" | "yaml" => Some((Language::Yaml, Dialect::Standard)),
-            /* NOTE: `.php5` and `.inc` are deliberately absent: the first is a
-             * migration-era suffix no supported PHP version installs a handler
-             * for, and the second names a file included by another language
-             * quite as often as by PHP. */
+            /* NOTE: `.php5` and `.inc` are deliberately absent: the first is a migration-era suffix no supported PHP version installs a handler for, and the second names a file included by another language quite as often as by PHP. */
             "php" | "phtml" | "phpt" => Some((Language::Php, Dialect::Standard)),
-            /* NOTE: Ruby owns more suffixes than any other language here, because
-             * a Ruby project writes so much of itself in Ruby: `.rake` for a
-             * Rake task file, `.gemspec` for a gem's own manifest, `.ru` for a
-             * Rack configuration, `.podspec` and `.jbuilder` and `.thor` for
-             * three more tools that read a Ruby script under a name of their
-             * own, and `.rbi` for a Sorbet interface. `.erb` is deliberately
-             * absent: an ERB template is text with Ruby in tags, which is a
-             * scanner of its own rather than this one. */
+            /* NOTE: Ruby owns more suffixes than any other language here, because a Ruby project writes so much of itself in Ruby: `.rake` for a Rake task file, `.gemspec` for a gem's own manifest, `.ru` for a Rack configuration, `.podspec` and `.jbuilder` and `.thor` for three more tools that read a Ruby script under a name of their own, and `.rbi` for a Sorbet interface.
+             * `.erb` is deliberately absent: an ERB template is text with Ruby in tags, which is a scanner of its own rather than this one. */
             "rb" | "rbw" | "rake" | "gemspec" | "ru" | "podspec" | "jbuilder" | "thor" | "rbi" => {
                 Some((Language::Ruby, Dialect::Standard))
             }
-            /* NOTE: `.zon` is Zig Object Notation, the data format `@import` and
-             * `build.zig.zon` are written in. It is the same lexer with the
-             * keywords taken away — the same comments, the same string and
-             * multiline string literals — so it is the same scanner, and a
-             * `build.zig.zon` is detected by that suffix rather than by name. */
+            /* NOTE: `.zon` is Zig Object Notation, the data format `@import` and `build.zig.zon` are written in.
+             * It is the same lexer with the keywords taken away — the same comments, the same string and multiline string literals — so it is the same scanner, and a `build.zig.zon` is detected by that suffix rather than by name. */
             "zig" | "zon" => Some((Language::Zig, Dialect::Standard)),
-            /* NOTE: R is written `.R` about as often as `.r`, and the suffix is
-             * folded before it is looked up here, so both reach the same
-             * scanner. `.Rmd` is R Markdown and is detected as Markdown, whose
-             * fenced-block scan reads its `{r}` chunks as R. */
+            /* NOTE: R is written `.R` about as often as `.r`, and the suffix is folded before it is looked up here, so both reach the same scanner.
+             * `.Rmd` is R Markdown and is detected as Markdown, whose fenced-block scan reads its `{r}` chunks as R. */
             "r" => Some((Language::R, Dialect::Standard)),
-            /* NOTE: `.dart` is the only suffix Dart owns. `.dart_tool` names the
-             * per-package build directory rather than a file, and a
-             * `pubspec.yaml` beside it is YAML and is detected as that. */
+            /* NOTE: `.dart` is the only suffix Dart owns.
+             * `.dart_tool` names the per-package build directory rather than a file, and a `pubspec.yaml` beside it is YAML and is detected as that. */
             "dart" => Some((Language::Dart, Dialect::Standard)),
-            /* NOTE: `.swift` is the only suffix Swift owns, and `Package.swift`
-             * carries it, so the one file name a Swift package is required to
-             * spell exactly needs no reserved-name rule of its own.
-             * `.swiftinterface` is deliberately absent: it is a generated
-             * module interface rather than a checked-in source file, and
-             * `.swiftmodule` beside it is a binary. */
+            /* NOTE: `.swift` is the only suffix Swift owns, and `Package.swift` carries it, so the one file name a Swift package is required to spell exactly needs no reserved-name rule of its own.
+             * `.swiftinterface` is deliberately absent: it is a generated module interface rather than a checked-in source file, and `.swiftmodule` beside it is a binary. */
             "swift" => Some((Language::Swift, Dialect::Standard)),
-            /* NOTE: `.csx` is a C# script, which `dotnet script` and the C#
-             * interactive window read: the same lexical rules with a `#!` line
-             * allowed at the first byte and statements at the top level.
-             * `.cshtml` and `.razor` are deliberately absent: a Razor page is
-             * markup with C# blocks in it, which is a scanner of its own, and
-             * `.csproj` beside them is XML. */
+            /* NOTE: `.csx` is a C# script, which `dotnet script` and the C# interactive window read: the same lexical rules with a `#!` line allowed at the first byte and statements at the top level.
+             * `.cshtml` and `.razor` are deliberately absent: a Razor page is markup with C# blocks in it, which is a scanner of its own, and `.csproj` beside them is XML. */
             "cs" | "csx" => Some((Language::CSharp, Dialect::Standard)),
-            /* NOTE: `.scala` is the language's own suffix and `.sc` the script
-             * suffix scala-cli reads, which share the one scanner. `.sbt` is
-             * deliberately absent: a build definition is a file of its own
-             * with a leading-blank `//` convention that no source file shares,
-             * and `.scala.sc` carries `.sc` as its last suffix and is detected
-             * as that. */
+            /* NOTE: `.scala` is the language's own suffix and `.sc` the script suffix scala-cli reads, which share the one scanner.
+             * `.sbt` is deliberately absent: a build definition is a file of its own with a leading-blank `//` convention that no source file shares,
+             * and `.scala.sc` carries `.sc` as its last suffix and is detected as that. */
             "scala" | "sc" => Some((Language::Scala, Dialect::Standard)),
-            /* NOTE: `.Rmd` is an R Markdown document, whose `{r}` chunk
-             * headers name R for the fenced-block scan. */
+            /* NOTE: `.Rmd` is an R Markdown document, whose `{r}` chunk headers name R for the fenced-block scan. */
             "md" | "markdown" | "rmd" => Some((Language::Markdown, Dialect::Standard)),
-            /* NOTE: `.pl`, `.pm` and `.t` are Perl — a program, a module and
-             * a test — and so is a `perl` `#!` line. `.pod` is deliberately
-             * absent: a POD document is documentation only, with no code to
-             * scan. */
+            /* NOTE: `.pl`, `.pm` and `.t` are Perl — a program, a module and a test — and so is a `perl` `#!` line.
+             * `.pod` is deliberately absent: a POD document is documentation only, with no code to scan. */
             "pl" | "pm" | "t" => Some((Language::Perl, Dialect::Standard)),
-            /* NOTE: Single-file components: an HTML template with code in
-             * it, whose script and style bodies scan as their own languages. */
+            /* NOTE: Single-file components: an HTML template with code in it, whose script and style bodies scan as their own languages. */
             "vue" => Some((Language::Vue, Dialect::Standard)),
             "svelte" => Some((Language::Svelte, Dialect::Standard)),
-            /* NOTE: The two Sass syntaxes. They share interpolation and silent
-             * comments; the second is indentation-based, so it has a dialect. */
+            /* NOTE: The two Sass syntaxes.
+             * They share interpolation and silent comments; the second is indentation-based, so it has a dialect. */
             "scss" => Some((Language::Css, Dialect::Scss)),
             "sass" => Some((Language::Css, Dialect::Sass)),
             _ => None,
@@ -464,38 +416,24 @@ pub fn detect_language(path: Option<&Path>, source: &[u8]) -> Option<Detection> 
                 Some((Language::Shell, Dialect::PosixSh))
             }
             "makefile" | "gnumakefile" => Some((Language::Shell, Dialect::PosixSh)),
-            /* NOTE: A lock file has no extension of its own to go on, and only some
-             * of them are TOML: `Cargo.lock`, `Pipfile`, and the three Python
-             * resolvers below are, while `Pipfile.lock` beside `Pipfile` is
-             * JSON and is deliberately absent. */
+            /* NOTE: A lock file has no extension of its own to go on, and only some of them are TOML: `Cargo.lock`, `Pipfile`, and the three Python resolvers below are, while `Pipfile.lock` beside `Pipfile` is JSON and is deliberately absent. */
             "cargo.lock" | "pipfile" | "poetry.lock" | "uv.lock" | "pdm.lock" => {
                 Some((Language::Toml, Dialect::Standard))
             }
-            /* NOTE: YAML owns two extensions, so only the configuration files
-             * written with none at all are named here. `.clang-format` and
-             * `.clang-tidy` are YAML documents that the LLVM tools read, and
-             * `.yamllint` is the linter's own; `.pre-commit-config.yaml` and
-             * `.gitlab-ci.yml` carry an extension and are detected by it. */
+            /* NOTE: YAML owns two extensions, so only the configuration files written with none at all are named here.
+             * `.clang-format` and `.clang-tidy` are YAML documents that the LLVM tools read, and `.yamllint` is the linter's own; `.pre-commit-config.yaml` and `.gitlab-ci.yml` carry an extension and are detected by it. */
             ".clang-format" | ".clang-tidy" | ".yamllint" => {
                 Some((Language::Yaml, Dialect::Standard))
             }
-            /* NOTE: Every one of these is a Ruby script a tool loads by name and
-             * evaluates: Bundler's `Gemfile`, Rake's `Rakefile`, and the
-             * project files of Guard, Capistrano, Vagrant, Homebrew,
-             * CocoaPods, fastlane, Berkshelf, Thor and Danger, plus the two
-             * dot files `irb` and `pry` read at start-up. `.gemrc` is
-             * deliberately absent: it carries the same air of a Ruby dot file
-             * and is a YAML document. */
+            /* NOTE: Every one of these is a Ruby script a tool loads by name and evaluates: Bundler's `Gemfile`, Rake's `Rakefile`, and the project files of Guard, Capistrano, Vagrant, Homebrew,
+             * CocoaPods, fastlane, Berkshelf, Thor and Danger, plus the two dot files `irb` and `pry` read at start-up.
+             * `.gemrc` is deliberately absent: it carries the same air of a Ruby dot file and is a YAML document. */
             "gemfile" | "rakefile" | "guardfile" | "capfile" | "vagrantfile" | "brewfile"
             | "podfile" | "fastfile" | "appfile" | "berksfile" | "thorfile" | "dangerfile"
             | ".irbrc" | ".pryrc" => Some((Language::Ruby, Dialect::Standard)),
-            /* NOTE: `.Rprofile` is the R script an R session sources at start-up
-             * and the one R file that carries no suffix. `.Renviron` beside it
-             * is deliberately absent: it is a table of `name=value` lines that
-             * R reads without parsing as code, so a `#` in one means nothing to
-             * this scanner. `Rprofile.site` is absent for a second reason — it
-             * is the system-wide profile, which lives outside a project and not
-             * in a checkout. */
+            /* NOTE: `.Rprofile` is the R script an R session sources at start-up and the one R file that carries no suffix.
+             * `.Renviron` beside it is deliberately absent: it is a table of `name=value` lines that R reads without parsing as code, so a `#` in one means nothing to this scanner.
+             * `Rprofile.site` is absent for a second reason — it is the system-wide profile, which lives outside a project and not in a checkout. */
             ".rprofile" => Some((Language::R, Dialect::Standard)),
             _ => None,
         };
