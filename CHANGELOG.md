@@ -5,6 +5,54 @@ All notable changes to OComment will be documented here. The project follows
 
 ## Unreleased
 
+### Added
+
+- A second axis: what a comment *says*, as well as whether it stays.
+  `[style]` is a table beside `[policy.allow]` rather than inside it, because
+  the two have different consequences — a comment that fails a condition of
+  survival is removed, and a comment that fails a style rule is rewritten — and
+  a reader adding a rule to a table whose entries meant two different things
+  would have to guess which they were adding.
+
+  `wrap = "sentence"` is the rule this was built for: one sentence per line.
+  A break that only exists to keep a line short is undone, a break after a
+  sentence is put back, and a break after a clause is left where its writer put
+  it — the checker accepts one, so the fixer may not remove it, or its output
+  would not be its own checker's fixed point.
+  `space_after_marker` and `trailing_whitespace` are the two cheap rules beside
+  it. Every default is "do nothing": a formatter that starts formatting because
+  it was installed is a rude one.
+
+  A verdict is three-valued now. `Action` is `Keep`, `Rewrite` or `Remove`, and
+  `Disposition::Rewrite` carries the bytes it would write, so the rule and the
+  replacement cannot disagree. Where the answer is about a paragraph rather than
+  a comment it is not on any comment at all: `ScanReport::runs` holds it, because
+  joining two comment lines moves the newline and the indentation between them
+  and those belong to neither.
+
+  What a rewrite may touch is unchanged from what a removal may touch. The crate
+  promises that the only bytes that move are the ones a comment occupied, and a
+  reflow keeps that promise literally — the code around a paragraph, the
+  indentation in front of it and the line ending after it are the same bytes
+  afterwards. A fenced block, a table, a list item and its indentation, a
+  rustdoc section heading, a link reference definition and a documentation tag
+  are passed through byte for byte, and a paragraph ends at each of them.
+
+- `[policy] mode = "none"`, which removes nothing.
+  The way to say "tidy, do not delete" was to list every comment kind under
+  `keep_kind`, which is a setting that reads as a list of exceptions to a
+  decision nobody made.
+
+- Markdown pages are prose too. `ProseOrigin::Document` is the same answer about
+  a page's own paragraphs, which are not comments, and `docs/` is where the rule
+  was first proved on something other than a comment.
+
+- Haskell and Gleam, as declarative profiles rather than as hand-written
+  scanners. Haskell needed the rule that a run of dashes opens a comment only
+  when what follows it is not an operator character (Haskell 2010 §2.2) and the
+  rule that keeps the rest of a Haddock page from being read as a remark; both
+  are now things a profile can state, so the next language costs a table entry.
+
 ### Fixed
 
 - The test suite runs on the systems this repository publishes a binary for.

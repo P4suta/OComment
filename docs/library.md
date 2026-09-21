@@ -73,6 +73,37 @@ A `TransformResult` carries the `output`, the `edits` that produced it, the `rep
   A BOM, CRLF line endings, a missing trailing newline, and non-UTF-8 bytes outside the edited spans all come back unchanged.
 - The output of a scan is deterministic for the same bytes, language, and options — that is what the OCaml reference implementation is compared against.
 
+## The other axis
+
+`Policy` decides whether a comment stays.
+`StyleRules` decides how it reads once it has, and the two are deliberately separate tables: a comment that fails a condition of survival is removed, and a comment that fails a style rule is rewritten.
+
+A verdict is therefore three-valued.
+`Action` is `Keep`, `Rewrite` or `Remove`, and the two questions worth asking about one are `removes()` and `changes_bytes()` — not `== Action::Keep`, which is a category written as one variant's name and answers wrongly the day the category gains a member.
+`Disposition::Rewrite` carries the bytes it would write, so the rule and the replacement cannot disagree.
+
+Where the answer is about a *paragraph* rather than a comment it is not on any comment at all.
+`ScanReport::runs` holds them, in source order:
+
+```rust
+use ocomment_core::{Language, ProseOrigin, ScanOptions, StyleRule, StyleRules, Wrap, scan};
+
+let options = ScanOptions {
+    policy: ocomment_core::Policy::None,
+    style: StyleRules { wrap: Wrap::Sentence, ..StyleRules::default() },
+    ..ScanOptions::default()
+};
+let report = scan(b"fn a() {}\n// One sentence. Another one.\n", Language::Rust, options);
+let run = &report.runs[0];
+assert_eq!(run.origin, ProseOrigin::Comments);
+assert_eq!(run.rule, StyleRule::Wrap);
+assert_eq!(run.replacement, b"// One sentence.\n// Another one.");
+```
+
+A run is there and not on the comments because the bytes it replaces are not any one comment's: joining two comment lines moves the newline and the indentation between them, and those belong to neither.
+`ProseOrigin::Document` is the same kind of answer about a Markdown page's own prose, which is not a comment either.
+A caller that reads only `comments` finds every removal and no reflow.
+
 ## What survives
 
 Every comment is classified as a `CommentKind` first — from its delimiters, then from its own text and position — and the `Policy` then decides that kind:

@@ -169,8 +169,44 @@ Two removable comments share a line whenever one of them sits beside code —
 `let x = 1; /* directive */ /* prose */` is two findings, asked two different questions — and named by line alone they arrive identical.
 The text formats put the column after the line in that case for the same reason, and leave it off for a comment that only happens to be indented, which is the only one on its line.
 
+A paragraph a style rule would write differently is a decision like any other, and it is in the same list.
+The one difference is that the answer is already computed: `new` carries the bytes, and `keep_instead` names the setting that would stop the rule asking.
+
+```json
+{
+  "decision": "wrap",
+  "instruction": "run `ocomment fix` and it is written for you",
+  "comments": 1,
+  "findings": [
+    {
+      "path": "src/budget.rs",
+      "span": { "start": 26, "end": 92 },
+      "line": 3,
+      "column": 5,
+      "end_line": 3,
+      "old": ["    /// One sentence. Another one."],
+      "new": ["    /// One sentence.", "    /// Another one."]
+    }
+  ],
+  "keep_instead": { "file": ".ocomment.toml", "add": "[style]\nwrap = \"preserve\"" }
+}
+```
+
+The report itself carries them too, beside the comments rather than among them, because the bytes a reflow moves belong to no single comment:
+
+```json
+{ "runs": [ { "span": { "start": 26, "end": 92 },
+              "position": { "line": 3, "column": 5, "end_line": 3, "end_column": 36 },
+              "origin": "comments", "rule": "wrap",
+              "replacement": "/// One sentence.\n    /// Another one." } ] }
+```
+
+`origin` says what the paragraph was: `comments` for a run of adjacent comments, `document` for the prose of a Markdown page.
+`runs` is absent where the run asked for no rule about how a paragraph is broken, which is every run that set none.
+
 `--format jsonl` is the same content one object per line.
 `--format sarif` and `--format github` are for the tools that read them; see [CI and hooks](ci.md).
+Both carry rewrites as well as removals — a SARIF result for a rewrite carries the replacement as its `fixes[]`, so an editor or a review bot can apply it — and both name a rewrite as a rewrite: a format that called it a removal would be telling a reader their documentation is about to be deleted.
 
 ## After a fix
 

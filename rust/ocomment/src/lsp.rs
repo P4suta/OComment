@@ -237,15 +237,40 @@ impl Backend {
             .iter()
             .filter(|comment| comment.disposition().action().changes_bytes())
         {
+            /* NOTE: A rewrite is not an unnecessary comment.
+             * `DiagnosticTag::UNNECESSARY` is what greys a span out in an editor, and greying out a paragraph that is staying -- and only being written differently -- tells the reader the opposite of what was decided. */
+            let rewrite = !comment.action().removes();
             diagnostics.push(tower_lsp::lsp_types::Diagnostic {
                 range: span_to_range(document.text.as_bytes(), comment.span, &encoding),
                 severity: Some(DiagnosticSeverity::HINT),
-                code: Some(NumberOrString::String("removable-comment".into())),
+                code: Some(NumberOrString::String(
+                    if rewrite {
+                        "restyled-comment"
+                    } else {
+                        "removable-comment"
+                    }
+                    .into(),
+                )),
                 code_description: None,
                 source: Some("ocomment".into()),
-                message: removable_label(comment.kind),
+                message: crate::output::finding_label(comment),
                 related_information: None,
-                tags: Some(vec![DiagnosticTag::UNNECESSARY]),
+                tags: (!rewrite).then(|| vec![DiagnosticTag::UNNECESSARY]),
+                data: None,
+            });
+        }
+        /* NOTE: And the paragraphs, which are not any one comment's.
+         * A reflow is decided over a run of comments or over a document's own prose, and an editor that showed only the per-comment rules would show nothing at all for the rule this tool is usually run for. */
+        for run in &result.report.runs {
+            diagnostics.push(tower_lsp::lsp_types::Diagnostic {
+                range: span_to_range(document.text.as_bytes(), run.span, &encoding),
+                severity: Some(DiagnosticSeverity::HINT),
+                code: Some(NumberOrString::String("restyled-paragraph".into())),
+                code_description: None,
+                source: Some("ocomment".into()),
+                message: crate::output::run_label(run),
+                related_information: None,
+                tags: None,
                 data: None,
             });
         }
@@ -1047,10 +1072,30 @@ impl LanguageServer for Backend {
             })
             .map(|edit| edit.span)
             .collect();
+        /* NOTE: What the edit does, and not what this server used to only do.
+         * An edit that rewrites a paragraph is offered under the same code action as an edit that removes a comment -- the plan holds both -- and a title that said "remove" would be the editor telling the reader their documentation is about to be deleted. */
+        let rewrites = |span: ByteSpan| -> bool {
+            result.report.runs.iter().any(|run| run.span == span)
+                || result
+                    .report
+                    .comments
+                    .iter()
+                    .any(|comment| comment.span == span && !comment.action().removes())
+        };
+        let anywhere = !result.report.runs.is_empty()
+            || result
+                .report
+                .comments
+                .iter()
+                .any(|comment| comment.action().changes_bytes() && !comment.action().removes());
         let mut actions = Vec::new();
         if let Some(span) = selected.first().copied() {
             actions.push(CodeActionOrCommand::CodeAction(CodeAction {
-                title: "Remove this comment".into(),
+                title: if rewrites(span) {
+                    "Tidy this paragraph".into()
+                } else {
+                    "Remove this comment".to_owned()
+                },
                 kind: Some(CodeActionKind::QUICKFIX),
                 edit: Some(
                     self.document_workspace_edit(&uri, &document, Some(&[span]))
@@ -1062,7 +1107,11 @@ impl LanguageServer for Backend {
         }
         if selected.len() > 1 {
             actions.push(CodeActionOrCommand::CodeAction(CodeAction {
-                title: "Remove comments in selection".into(),
+                title: if selected.iter().copied().any(rewrites) {
+                    "Apply OComment to the selection".into()
+                } else {
+                    "Remove comments in selection".to_owned()
+                },
                 kind: Some(CodeActionKind::QUICKFIX),
                 edit: Some(
                     self.document_workspace_edit(&uri, &document, Some(&selected))
@@ -1072,7 +1121,11 @@ impl LanguageServer for Backend {
             }));
         }
         actions.push(CodeActionOrCommand::CodeAction(CodeAction {
-            title: "Remove all comments in document".into(),
+            title: if anywhere {
+                "Apply OComment to this document".into()
+            } else {
+                "Remove all comments in document".to_owned()
+            },
             kind: Some(CodeActionKind::new("source.fixAll.ocomment")),
             edit: Some(self.document_workspace_edit(&uri, &document, None).await),
             ..CodeAction::default()

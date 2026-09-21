@@ -12,7 +12,9 @@
 //! The two implementations are held to each other over what they *decide*, and that is where the cross-check earns its keep; advice decides nothing, so mirroring it in OCaml would double the work and prove nothing.
 
 use crate::output::{ProcessedFile, sanitize_source_line};
-use ocomment_core::{Age, Comment, CommentKind, Language, Policy, ShapeRule};
+use ocomment_core::{
+    Age, Comment, CommentKind, Disposition, Language, Policy, ShapeRule, StyleRule,
+};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
@@ -44,6 +46,11 @@ pub enum Decision {
     /// Nothing about where it sits enters into that, and reading the surrounding lines for advice would answer a question nobody asked:
     /// a documentation comment taken out by `--policy all` is not a comment in the wrong place, it is a run asking for more than the reader meant.
     StricterThanTheKind { kind: CommentKind, keeps: Policy },
+    /// It stays, and a style rule would write it differently.
+    ///
+    /// Last, because it is the only one of these the tool can answer itself.
+    /// Every other decision here is a question put to a reader; this one is an edit already computed, and it is in the list rather than beside it so that a caller parsing the report finds every change in one place — a format that showed removals and silently omitted rewrites would disagree with the exit code.
+    Restyle { rule: StyleRule },
 }
 
 impl Decision {
@@ -67,6 +74,9 @@ impl Decision {
             Self::StricterThanTheKind { kind, keeps } => {
                 format!("keep `{kind}` comments with `{keeps}`, or mean to remove them")
             }
+            /* NOTE: What to run, and not what to write.
+             * The other instructions here name an edit a reader has to make; this one names the command that makes it, because the edit is in the finding beside it. */
+            Self::Restyle { .. } => "run `ocomment fix` and it is written for you".to_owned(),
         }
     }
 
@@ -83,6 +93,7 @@ impl Decision {
             Self::Expired { .. } => "expired",
             Self::TooLong { .. } => "too-long",
             Self::StricterThanTheKind { .. } => "stricter-than-the-kind",
+            Self::Restyle { rule } => rule.as_str(),
         }
     }
 
@@ -116,6 +127,13 @@ impl Decision {
             Self::StricterThanTheKind { keeps, .. } => {
                 Some(format!("[policy]\nmode = \"{keeps}\""))
             }
+            /* NOTE: The style rule that asked, turned off, and written as the value that means "leave it alone" rather than as the table removed.
+             * The other half of a rewrite is the same as the other half of a removal: a reader who disagrees with the edit has to be able to say so as a setting the repository keeps. */
+            Self::Restyle { rule } => Some(match rule {
+                StyleRule::Wrap => "[style]\nwrap = \"preserve\"".to_owned(),
+                StyleRule::SpaceAfterMarker => "[style]\nspace_after_marker = false".to_owned(),
+                StyleRule::TrailingWhitespace => "[style]\ntrailing_whitespace = true".to_owned(),
+            }),
             /* NOTE: None on purpose.
              * Commented-out code is the one situation with nothing worth keeping, and offering a way to keep it would be this file's own advice arguing against itself. */
             Self::CommentedOutCode => None,
@@ -287,10 +305,98 @@ fn file_items(file: &ProcessedFile, policy: Policy) -> Vec<(Decision, Item)> {
             }),
         }
     }
-    runs.into_iter()
+    let mut items: Vec<(Decision, Item)> = runs
+        .into_iter()
         .filter(|run| run.comments > 0)
         .filter_map(|run| item_of(file, &lines, run, policy))
-        .collect()
+        .collect();
+    /* NOTE: And the rewrites, which are decided over a paragraph rather than over the line under it.
+     * A rewrite has no run to form and no surroundings to read: the engine already reached the verdict and already computed the bytes, so the work here is placing them, not deciding them. */
+    items.extend(restyled(file, &lines, &index));
+    items
+}
+
+/// The rewrites of one file, as items, in source order.
+///
+/// Two sources, and the difference between them is the unit the rule is about.
+/// A reflow is recorded against a run because the bytes it moves belong to no single comment; every other style rule is recorded against the comment it read.
+/// A comment a run already covers is not reported twice — the run wrote its marker back itself.
+fn restyled(
+    file: &ProcessedFile,
+    lines: &[String],
+    index: &crate::output::LineIndex,
+) -> Vec<(Decision, Item)> {
+    let report = &file.result.report;
+    let mut items: Vec<(usize, (Decision, Item))> = Vec::new();
+    for run in &report.runs {
+        if let Some(item) = rewrite_item(file, lines, index, run.span, run.rule, &run.replacement) {
+            items.push((run.span.start, item));
+        }
+    }
+    for comment in &report.comments {
+        let Disposition::Rewrite { rule, replacement } = comment.disposition() else {
+            continue;
+        };
+        if report
+            .runs
+            .iter()
+            .any(|run| run.span.start <= comment.span.start && comment.span.end <= run.span.end)
+        {
+            continue;
+        }
+        if let Some(item) = rewrite_item(file, lines, index, comment.span, *rule, replacement) {
+            items.push((comment.span.start, item));
+        }
+    }
+    items.sort_by_key(|(at, _)| *at);
+    items.into_iter().map(|(_, item)| item).collect()
+}
+
+/// One rewrite, placed: the lines it covers as they are, and the lines it would write.
+fn rewrite_item(
+    file: &ProcessedFile,
+    lines: &[String],
+    index: &crate::output::LineIndex,
+    span: ocomment_core::ByteSpan,
+    rule: StyleRule,
+    replacement: &[u8],
+) -> Option<(Decision, Item)> {
+    let (first, column) = index.line_column(span.start);
+    let (last_line, last_column) = index.line_column(span.end);
+    let last = if last_column == 1 {
+        last_line.saturating_sub(1)
+    } else {
+        last_line
+    };
+    if first == 0 || last < first || last > lines.len() {
+        return None;
+    }
+    let old: Vec<String> = lines.get(first - 1..last)?.to_vec();
+    /* NOTE: The replacement written back where it sits, and not on its own.
+     * The span opens at the comment's first byte rather than at the start of its line, so the bytes in front of it on that line -- the indentation, or the code a trailing comment sits after -- are the file's and have to be shown with it, exactly as `old` shows them. */
+    let head = lines.get(first - 1)?.get(..column.saturating_sub(1))?;
+    let text = String::from_utf8_lossy(replacement);
+    let new: Vec<String> = format!("{head}{text}")
+        .lines()
+        .map(sanitize_source_line)
+        .collect();
+    Some((
+        Decision::Restyle { rule },
+        Item {
+            path: file.path.clone(),
+            start: span.start,
+            end: span.end,
+            column,
+            beside: !head.trim().is_empty(),
+            first_line: first,
+            last_line: last,
+            comments: 1,
+            old,
+            new,
+            subject: None,
+            tag: None,
+        },
+    ))
 }
 
 /// A run of adjacent comments, before anything has been decided about it.

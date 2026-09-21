@@ -8,8 +8,8 @@ use clap::ValueEnum;
 use ocomment_core::TransformResult;
 use ocomment_core::{
     Action, ByteSpan, Comment, CommentKind, Diagnostic, Disposition, DispositionExplanation,
-    DispositionPatterns, Edit, Language, Policy, ProseOrigin, Protection, ScanOptions, ScanReport,
-    Severity, SourceMap, TransformPlan, explain_comment_with,
+    DispositionPatterns, Edit, Language, Policy, ProseOrigin, ProseRun, Protection, ScanOptions,
+    ScanReport, Severity, SourceMap, StyleRule, TransformPlan, explain_comment_with,
 };
 use serde::{Serialize, Serializer, ser::SerializeSeq};
 use serde_json::{Value, json};
@@ -773,8 +773,25 @@ struct JsonFile<'a> {
 struct JsonReport<'a> {
     language: Language,
     comments: Vec<JsonComment<'a>>,
+    /// The paragraphs a style rule would write differently, in source order.
+    ///
+    /// Beside the comments rather than among them: a run's bytes belong to no single comment, and a caller that read only `comments` would find every removal and no reflow while the exit code said there was something to do.
+    /// Absent where a run asked for no rule about how a paragraph is broken, which is every run that set none.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    runs: Vec<JsonRun<'a>>,
     diagnostics: Vec<JsonDiagnostic<'a>>,
     valid: bool,
+}
+
+/// One rewritten paragraph, in the spelling the rest of this format uses.
+#[derive(Serialize)]
+struct JsonRun<'a> {
+    span: ByteSpan,
+    position: JsonPosition,
+    origin: ProseOrigin,
+    rule: StyleRule,
+    /// What would replace the span, as text.
+    replacement: std::borrow::Cow<'a, str>,
 }
 
 /// Where something the scanner reported sits, in the spelling every other OComment report uses.
@@ -883,6 +900,17 @@ fn json_report<'a>(
                 disposition: comment.disposition(),
             })
             .collect(),
+        runs: report
+            .runs
+            .iter()
+            .map(|run| JsonRun {
+                span: run.span,
+                position: JsonPosition::of(&lines, run.span),
+                origin: run.origin,
+                rule: run.rule,
+                replacement: String::from_utf8_lossy(&run.replacement),
+            })
+            .collect(),
         diagnostics: report
             .diagnostics
             .iter()
@@ -971,6 +999,43 @@ fn slice_text(source: &[u8], span: ByteSpan) -> Cow<'_, str> {
 /// The one-line label for a comment OComment would delete.
 pub fn removable_label(kind: CommentKind) -> String {
     format!("removable {kind} comment")
+}
+
+/// The one-line label for a comment a report names, whichever answer it reached.
+///
+/// A rewrite is not a removal and a format that called it one would be telling a reader their comment is about to be deleted.
+pub fn finding_label(comment: &Comment) -> String {
+    match comment.disposition() {
+        Disposition::Rewrite { rule, .. } => format!("{} {}", rewrite_label(*rule), comment.kind),
+        Disposition::Remove | Disposition::Keep { .. } => removable_label(comment.kind),
+    }
+}
+
+/// What a style rule would do, as the opening of a label.
+fn rewrite_label(rule: StyleRule) -> &'static str {
+    match rule {
+        StyleRule::Wrap => "reflowed",
+        StyleRule::SpaceAfterMarker => "respaced",
+        StyleRule::TrailingWhitespace => "trimmed",
+    }
+}
+
+/// The one-line label for a paragraph a style rule would write differently.
+pub fn run_label(run: &ProseRun) -> String {
+    let what = match run.origin {
+        ProseOrigin::Comments => "comment paragraph",
+        ProseOrigin::Document => "paragraph",
+    };
+    format!("{} {what}", rewrite_label(run.rule))
+}
+
+/// The SARIF rule identifier for a paragraph a style rule would write differently.
+fn run_rule_id(run: &ProseRun) -> String {
+    let origin = match run.origin {
+        ProseOrigin::Comments => "comments",
+        ProseOrigin::Document => "document",
+    };
+    format!("restyle-{origin}-{}", run.rule)
 }
 
 /// The one-line label for a comment OComment deliberately protects.
@@ -1602,7 +1667,13 @@ fn render_review(
         color("\x1b[38;5;80m", paint),
     );
     let groups = crate::advice::plan(files, options.policy);
-    let removable: usize = groups.iter().map(crate::advice::Group::comments).sum();
+    /* NOTE: What a reader has to decide, which is not everything in the plan.
+     * A rewrite is in the plan so that a caller parsing the report finds every change in one place, and it is not counted here because the two halves of this report ask different things: the headline asks a reader for a decision, and a rewrite is the one answer the tool already has. */
+    let removable: usize = groups
+        .iter()
+        .filter(|group| !matches!(group.decision, crate::advice::Decision::Restyle { .. }))
+        .map(crate::advice::Group::comments)
+        .sum();
     let kept: usize = files
         .iter()
         .map(|file| {
@@ -1658,48 +1729,31 @@ fn render_review(
         options.policy,
     ))?;
 
-    if restyled > 0 {
-        wrote(writeln!(output))?;
-        let instruction = "run `ocomment fix` and they are written for you";
-        let count = plural(restyled, restyled_noun);
-        wrote(writeln!(
-            output,
-            "  {bold}{blue}TIDY{reset}    {bold}{instruction}{reset}{dim}{}{count}{reset}",
-            " ".repeat(
-                56usize
-                    .saturating_sub(instruction.chars().count() + count.chars().count())
-                    .max(2)
-            )
-        ))?;
-        for file in files {
-            let here = rewritable_count(file);
-            if here == 0 {
-                continue;
-            }
-            let path = display_path(&file.path, options.presentation.hyperlinks);
-            wrote(writeln!(
-                output,
-                "    {blue}{path}{reset}{dim}{}{here}{reset}",
-                " ".repeat(
-                    60usize
-                        .saturating_sub(path.chars().count() + here.to_string().len())
-                        .max(2)
-                )
-            ))?;
-        }
-    }
-
     /* NOTE: Decided once for the whole report rather than per group, so that a reader learns one layout: either every group shows its shape and then an example, or every group shows everything.
      * A report where some groups are summarised and others are not reads as though the tool ran out of patience partway down. */
     let findings: usize = groups.iter().map(|group| group.items.len()).sum();
     let summarise = findings > FINDINGS_SHOWN_IN_FULL;
     for group in &groups {
         let instruction = group.decision.instruction();
-        let count = comments(group.comments(), "");
+        /* NOTE: A paragraph, where the decision is about one.
+         * A reflow is decided over a run and a report that called it a comment would be counting a different thing from the line above it. */
+        /* NOTE: The marker says which kind of answer this group is.
+         * `DECIDE` asks the reader for one; `TIDY` says the tool has it, and the same word heads the status line above so the two agree about what the run found. */
+        let restyle = matches!(group.decision, crate::advice::Decision::Restyle { .. });
+        let count = if restyle {
+            plural(group.comments(), restyled_noun)
+        } else {
+            comments(group.comments(), "")
+        };
+        let marker = if restyle {
+            format!("{blue}TIDY{reset}  ")
+        } else {
+            format!("{yellow}DECIDE{reset}")
+        };
         wrote(writeln!(output))?;
         wrote(writeln!(
             output,
-            "  {bold}{yellow}DECIDE{reset}  {bold}{instruction}{reset}{dim}{}{count}{reset}",
+            "  {bold}{marker}{reset}  {bold}{instruction}{reset}{dim}{}{count}{reset}",
             " ".repeat(
                 58usize
                     .saturating_sub(instruction.chars().count() + count.chars().count())
@@ -2938,6 +2992,31 @@ impl SarifRules {
                 KIND_HELP_URI,
             );
         }
+        /* NOTE: Both origins of every rule, written out rather than described on first use.
+         * The table is the tool's declared vocabulary, and a consumer that reads it to build a filter should find every identifier this run can emit whether or not this run emitted it. */
+        for rule in StyleRule::ALL {
+            for (origin, what) in [
+                (ProseOrigin::Comments, "comment paragraph"),
+                (ProseOrigin::Document, "paragraph"),
+            ] {
+                let run = ProseRun {
+                    span: ocomment_core::ByteSpan::new(0, 0),
+                    origin,
+                    rule,
+                    replacement: Vec::new(),
+                };
+                rules.describe(
+                    &run_rule_id(&run),
+                    "note",
+                    &format!("{} {what}", sentence_case(rewrite_label(rule))),
+                    &format!(
+                        "A {what} OComment would write differently: {}.",
+                        rule.detail()
+                    ),
+                    KIND_HELP_URI,
+                );
+            }
+        }
         rules
     }
 
@@ -3027,20 +3106,54 @@ impl Serialize for SarifResults<'_> {
                     "ruleId": format!("removable-{kind}"),
                     "ruleIndex": self.rules.kind(comment.kind),
                     "level": "note",
-                    "message": {"text": removable_label(comment.kind)},
+                    "message": {"text": finding_label(comment)},
                     "locations": [{"physicalLocation": {
                         "artifactLocation": location.clone(),
                         "region": {"startLine": line, "startColumn": column,
                             "endLine": end_line, "endColumn": end_column}
                     }}],
                     "fixes": [{
-                        "description": {"text": "Remove comment with OComment"},
+                        "description": {"text": if comment.action().removes() {
+                            "Remove comment with OComment"
+                        } else {
+                            "Rewrite comment with OComment"
+                        }},
                         "artifactChanges": [{
                             "artifactLocation": location.clone(),
                             "replacements": [{"deletedRegion": {
                                 "startLine": fix_line, "startColumn": fix_column,
                                 "endLine": fix_end_line, "endColumn": fix_end_column
                             }, "insertedContent": {"text": replacement}}]
+                        }]
+                    }]
+                }))?;
+            }
+            /* NOTE: And the paragraphs, which are not any one comment's.
+             * A run's replacement is the verdict itself rather than something derived from the file, so the fix here carries it directly instead of asking `fix_for_span`, which is about the lines a *removal* has to swallow. */
+            for run in &file.result.report.runs {
+                let (line, column) = lines.line_column(run.span.start);
+                let (end_line, end_column) = lines.line_column(run.span.end);
+                let id = run_rule_id(run);
+                results.serialize_element(&json!({
+                    "ruleId": id,
+                    "ruleIndex": self.rules.index(&id),
+                    "level": "note",
+                    "message": {"text": run_label(run)},
+                    "locations": [{"physicalLocation": {
+                        "artifactLocation": location.clone(),
+                        "region": {"startLine": line, "startColumn": column,
+                            "endLine": end_line, "endColumn": end_column}
+                    }}],
+                    "fixes": [{
+                        "description": {"text": "Rewrite paragraph with OComment"},
+                        "artifactChanges": [{
+                            "artifactLocation": location.clone(),
+                            "replacements": [{"deletedRegion": {
+                                "startLine": line, "startColumn": column,
+                                "endLine": end_line, "endColumn": end_column
+                            }, "insertedContent": {
+                                "text": String::from_utf8_lossy(&run.replacement)
+                            }}]
                         }]
                     }]
                 }))?;
@@ -3233,7 +3346,17 @@ fn render_github(
                 output,
                 "::{level} file={},line={line},col={column}::{}",
                 github_path(&file.path),
-                removable_label(comment.kind)
+                finding_label(comment)
+            ))?;
+        }
+        // NOTE: And the paragraphs, which are not any one comment's and are annotated where they open.
+        for run in &file.result.report.runs {
+            let (line, column) = lines.line_column(run.span.start);
+            wrote(writeln!(
+                output,
+                "::{level} file={},line={line},col={column}::{}",
+                github_path(&file.path),
+                run_label(run)
             ))?;
         }
         for diagnostic in &file.result.report.diagnostics {
@@ -3673,21 +3796,64 @@ mod tests {
         }
     }
 
+    /// Every identifier a result can carry, derived from the same lists the table is built from.
+    ///
+    /// Written this way rather than as a number, because a number is a gate that stops covering what it was written for the day a kind or a style rule is added.
+    fn prepared_rule_ids() -> Vec<String> {
+        let mut ids: Vec<String> = CommentKind::ALL
+            .iter()
+            .map(|kind| format!("removable-{kind}"))
+            .collect();
+        for rule in StyleRule::ALL {
+            for origin in [ProseOrigin::Comments, ProseOrigin::Document] {
+                ids.push(run_rule_id(&ProseRun {
+                    span: ByteSpan::new(0, 0),
+                    origin,
+                    rule,
+                    replacement: Vec::new(),
+                }));
+            }
+        }
+        ids
+    }
+
     /// Every result points into the rules by index, so the two orders have to be the same one.
     #[test]
     fn a_rule_is_described_once_and_keeps_its_index() {
+        let prepared = prepared_rule_ids();
         let mut rules = SarifRules::new();
-        assert_eq!(rules.entries.len(), CommentKind::ALL.len());
+        assert_eq!(rules.entries.len(), prepared.len());
         assert_eq!(rules.kind(CommentKind::Line), 0);
         let first = rules.describe("io-error", "error", "short", "full", TOOL_INFORMATION_URI);
-        assert_eq!(first, CommentKind::ALL.len());
+        assert_eq!(first, prepared.len());
         let again = rules.describe("io-error", "note", "other", "other", TOOL_INFORMATION_URI);
         assert_eq!(first, again, "a second sighting described the rule twice");
         assert_eq!(
             rules.entries[first]["defaultConfiguration"]["level"],
             "error"
         );
-        assert_eq!(rules.entries.len(), CommentKind::ALL.len() + 1);
+        assert_eq!(rules.entries.len(), prepared.len() + 1);
+    }
+
+    /// The table is the tool's declared vocabulary, and `SarifRules::index` panics on an identifier it has not prepared.
+    ///
+    /// So the list is checked against the thing it is a list of, in both directions: every identifier a run can emit is described, and every description answers to an identifier a run can emit.
+    #[test]
+    fn every_rule_a_result_can_name_is_described() {
+        let rules = SarifRules::new();
+        let prepared = prepared_rule_ids();
+        for id in &prepared {
+            assert!(
+                rules.indices.contains_key(id),
+                "`{id}` can be emitted and is not in the rule table"
+            );
+        }
+        for id in rules.indices.keys() {
+            assert!(
+                prepared.contains(id),
+                "`{id}` is described and nothing can emit it"
+            );
+        }
     }
 
     #[test]
