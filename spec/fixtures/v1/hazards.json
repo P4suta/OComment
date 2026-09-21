@@ -15128,6 +15128,173 @@
         "diagnostics": [],
         "output_utf8": "fn head() {}\nfn also() {}\n/// [`Thing::fail`]: removed with the run of comments it belongs to, because that run is longer than the limit.\nfn a() {}\n"
       }
+    },
+    {
+      "id": "wrap-reaches-a-markdown-paragraph",
+      "language": "markdown",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "A paragraph that wraps\nacross two lines. And a second sentence.\n",
+      "note": "A source file keeps its prose in comments and a Markdown document is prose. The rule about where a paragraph breaks is the same rule for both, and the unit it is written back under is the paragraph either way.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "diagnostics": [],
+        "output_utf8": "A paragraph that wraps across two lines.\nAnd a second sentence.\n"
+      }
+    },
+    {
+      "id": "wrap-leaves-a-markdown-fence",
+      "language": "markdown",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "Prose that wraps\nacross lines.\n\n```\ncode that wraps\nshould not join.\n```\n",
+      "note": "A fenced block runs across the blank lines that would otherwise end a paragraph, so the fence is tracked over the document rather than inside one paragraph.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "diagnostics": [],
+        "output_utf8": "Prose that wraps across lines.\n\n```\ncode that wraps\nshould not join.\n```\n"
+      }
+    },
+    {
+      "id": "wrap-leaves-markdown-front-matter",
+      "language": "markdown",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "---\ntitle: a document\nsummary: two lines\n---\n\nProse that wraps\nacross lines.\n",
+      "note": "The front matter is a document's metadata rather than its prose, and it too runs across blank lines.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "diagnostics": [],
+        "output_utf8": "---\ntitle: a document\nsummary: two lines\n---\n\nProse that wraps across lines.\n"
+      }
+    },
+    {
+      "id": "wrap-leaves-a-markdown-heading-and-table",
+      "language": "markdown",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "# A heading that is long\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\nProse that wraps\nacross lines.\n",
+      "note": "A heading is a heading and a table's line breaks are the table.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "diagnostics": [],
+        "output_utf8": "# A heading that is long\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\nProse that wraps across lines.\n"
+      }
+    },
+    {
+      "id": "wrap-leaves-a-markdown-html-comment-to-the-comment-path",
+      "language": "markdown",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "Prose that wraps\nacross lines.\n\n<!-- a comment that wraps\n     across lines. -->\n",
+      "note": "An HTML comment in a Markdown document is prose too, and the comment path has already answered for it. Reading it again as part of a paragraph would plan two edits over the same bytes.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 32,
+            "end": 80,
+            "kind": "html-comment",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "Prose that wraps across lines.\n\n<!-- a comment that wraps across lines. -->\n"
+      }
+    },
+    {
+      "id": "wrap-reaches-a-markdown-list-item",
+      "language": "markdown",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "- an item that wraps\n  onto the next line. And a second sentence.\n- another\n",
+      "note": "A list item's continuation belongs to the item in a document exactly as it does in a comment, and is written back at the marker's width.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "diagnostics": [],
+        "output_utf8": "- an item that wraps onto the next line.\n  And a second sentence.\n- another\n"
+      }
+    },
+    {
+      "id": "wrap-keeps-an-item-open-across-a-clause-break",
+      "language": "markdown",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "- An item whose first line ends at a clause:\n  the rest of it wraps\n  onto two more lines.\n- another\n",
+      "note": "A break the writer meant ends the paragraph being held, and it does not end the item that paragraph belongs to. Forgetting the marker there left every line under the first break unreachable — indented, so read as something the structure is made of rather than as the item's own prose.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "diagnostics": [],
+        "output_utf8": "- An item whose first line ends at a clause:\n  the rest of it wraps onto two more lines.\n- another\n"
+      }
+    },
+    {
+      "id": "wrap-writes-a-continued-item-under-its-marker",
+      "language": "markdown",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "- An item whose first line ends at a clause:\n  a second sentence. And a third.\n",
+      "note": "Only the first line of an item carries the marker. What every group after it is written under is the marker's width, which is what says the line still belongs to the item.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "diagnostics": [],
+        "output_utf8": "- An item whose first line ends at a clause:\n  a second sentence.\n  And a third.\n"
+      }
     }
   ]
 }

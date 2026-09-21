@@ -2,7 +2,7 @@
 //!
 //! The unit is the run, not the comment.
 //! Four consecutive `///` lines are four comments to a scanner and one paragraph to a reader, and joining two of them moves the newline and the indentation between them — bytes that belong to neither comment.
-//! That is why a rewrite here is recorded against a [`CommentRun`] and every other style rule is recorded against a comment.
+//! That is why a rewrite here is recorded against a [`ProseRun`] and every other style rule is recorded against a comment.
 //!
 //! # What it will not touch
 //!
@@ -53,7 +53,9 @@ pub(crate) fn reflow(lines: &[&str], wrap: Wrap) -> Option<Vec<String>> {
             flush(&mut out, &mut held, &under, wrap);
             under = marker;
             held.push(line.get(under.first.len()..).unwrap_or_default());
-        } else if !held.is_empty() && under.is_item() && continues_an_item(line, &under) {
+        /* NOTE: Not "and something is held".
+         * A paragraph flushed at a clause break leaves nothing held, and the item it belonged to has not ended — asking for held lines here left every line after the first break unreachable. */
+        } else if under.is_item() && continues_an_item(line, &under) {
             held.push(line.trim_start());
         } else if reads_as_prose(line) {
             if under.is_item() {
@@ -80,7 +82,17 @@ pub(crate) fn reflow(lines: &[&str], wrap: Wrap) -> Option<Vec<String>> {
         });
         if ends_at_a_break(line) || !carries_on {
             flush(&mut out, &mut held, &under, wrap);
-            under = Marker::none();
+            /* NOTE: A break inside an item does not end the item.
+             * Its first line may end at a clause, and forgetting the marker there left every line under it unreachable — indented, so read as something the structure is made of rather than as the item's own prose.
+             * What the next group loses is the marker itself, which has been written once already. */
+            under = if carries_on && under.is_item() {
+                Marker {
+                    first: under.rest.clone(),
+                    rest: under.rest,
+                }
+            } else {
+                Marker::none()
+            };
         }
     }
     flush(&mut out, &mut held, &under, wrap);
@@ -215,7 +227,7 @@ const fn written_without_spaces(character: char) -> bool {
 /// The fence token a line opens or closes a code block with, if it does.
 ///
 /// Three or more backticks or tildes, under four spaces of indentation, which is CommonMark's rule and the one the Markdown scanner in this crate already reads.
-fn fence_marker(line: &str) -> Option<char> {
+pub(crate) fn fence_marker(line: &str) -> Option<char> {
     let trimmed = line.trim_start_matches(' ');
     if line.len() - trimmed.len() >= 4 {
         return None;

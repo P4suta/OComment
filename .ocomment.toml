@@ -58,6 +58,12 @@ HACK = "14d"
 # NOTE: A comment in a documentation sample is the sample.
 # NOTE: These files quote shell sessions and configuration files, and the annotations in them belong to the quoted material rather than to this repository, so the rules about where this project puts its own comments do not reach them.
 # NOTE: The tag rule still does: a sample is still read by somebody.
+# NOTE: The changelog is release-plz's file.
+# NOTE: Its comments and its prose come back on the next release, so the style rules have nothing to offer it: a paragraph rewritten here is a paragraph rewritten again by something else.
+[[overrides]]
+paths = ["CHANGELOG.md"]
+[overrides.style]
+
 [[overrides]]
 paths = ["**/*.md"]
 [overrides.allow]

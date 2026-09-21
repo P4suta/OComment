@@ -152,6 +152,13 @@
         },
         "valid": {
           "type": "boolean"
+        },
+        "runs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/proseRun"
+          },
+          "description": "The paragraphs a style rule rewrote, in source order. Absent when none was."
         }
       }
     },
@@ -577,6 +584,36 @@
         },
         "add": {
           "type": "string"
+        }
+      }
+    },
+    "proseRun": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "span",
+        "origin",
+        "rule",
+        "replacement"
+      ],
+      "description": "A stretch of prose a style rule rewrote. The unit is the paragraph rather than the comment: four consecutive `///` lines are four comments to a scanner and one paragraph to a reader, and joining two of them moves the newline and the indentation between them \u2014 bytes that belong to neither comment. Only a run something rewrote is recorded.",
+      "properties": {
+        "span": {
+          "$ref": "#/$defs/span"
+        },
+        "origin": {
+          "enum": [
+            "comments",
+            "document"
+          ],
+          "description": "Where the prose was found. A source file keeps its prose in comments and a Markdown document is prose; the rule is the same for both, and what a rewrite may move is not."
+        },
+        "rule": {
+          "$ref": "#/$defs/styleRule"
+        },
+        "replacement": {
+          "type": "string",
+          "description": "The bytes that replace the run's span, decoded lossily."
         }
       }
     }

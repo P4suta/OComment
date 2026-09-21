@@ -1319,24 +1319,59 @@ pub struct ScanReport {
     /// Joining two comment lines moves the newline and the indentation between them, and those belong to neither.
     /// The unit was already the run everywhere it mattered — a length limit counts one, a reader reads one — and this is the first rule that has to *write* one.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub runs: Vec<CommentRun>,
+    pub runs: Vec<ProseRun>,
     /// Everything the scanner had to say about the source.
     pub diagnostics: Vec<Diagnostic>,
     /// False when any diagnostic is a [`Severity::Error`].
     pub valid: bool,
 }
 
-/// A run of comments on consecutive lines, and the bytes a style rule makes of it.
+/// Where a stretch of prose was found.
+///
+/// A source file keeps its prose in comments and a Markdown document *is* prose, and the rule about where a paragraph breaks is the same rule for both.
+/// What differs is what a rewrite is allowed to move: in a source file it is the bytes the comments occupied, and in a document it is the bytes of the paragraph — never a fence, a table, a heading or anything else the document's own structure is made of.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ProseOrigin {
+    /// A run of comments on consecutive lines.
+    #[default]
+    Comments,
+    /// A paragraph of a document whose content is prose.
+    Document,
+}
+
+impl ProseOrigin {
+    /// The canonical name, identical to the serde representation.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Comments => "comments",
+            Self::Document => "document",
+        }
+    }
+}
+
+impl fmt::Display for ProseOrigin {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// A stretch of prose a style rule rewrote, and the bytes it makes of it.
 ///
 /// Only a run something rewrote is recorded.
-/// A run with nothing to say about it is the ordinary case, and a report that listed every one of them would be a report of where the comments are, which is what the comments already are.
+/// A run with nothing to say about it is the ordinary case, and a report that listed every one of them would be a report of where the prose is, which is what the comments already are.
+///
+/// Was `CommentRun`, which named where every run came from at the time.
+/// A paragraph of a Markdown document is prose by the same rule and is not a comment.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct CommentRun {
+pub struct ProseRun {
     /// From the first comment's first byte to the last comment's last byte.
     ///
     /// The whitespace between them is inside this and is the point: it is what a rewrite has to be allowed to move.
     /// Nothing before the first byte is, so the indentation the run sits at is read rather than written, and the code around it cannot be reached.
     pub span: ByteSpan,
+    /// Where the prose was found.
+    pub origin: ProseOrigin,
     /// The style rule that asked for it.
     pub rule: StyleRule,
     /// The bytes that replace [`Self::span`].

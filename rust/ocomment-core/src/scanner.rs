@@ -407,7 +407,7 @@ pub(crate) fn apply_style_rules(
     language: Language,
     comments: &mut [Comment],
     options: &ScanOptions,
-) -> Vec<crate::CommentRun> {
+) -> Vec<crate::ProseRun> {
     apply_style_rules_with(source, language, comments, options, crate::Markers::BUILTIN)
 }
 
@@ -420,7 +420,7 @@ pub(crate) fn apply_style_rules_with(
     comments: &mut [Comment],
     options: &ScanOptions,
     markers: crate::Markers<'_>,
-) -> Vec<crate::CommentRun> {
+) -> Vec<crate::ProseRun> {
     if options.style.is_empty() {
         return Vec::new();
     }
@@ -446,8 +446,9 @@ pub(crate) fn apply_style_rules_with(
             if let Some(replacement) =
                 crate::style::reflow_run(source, run, &options.style, markers, &tags)
             {
-                runs.push(crate::CommentRun {
+                runs.push(crate::ProseRun {
                     span: crate::ByteSpan::new(run[0].span.start, run[run.len() - 1].span.end),
+                    origin: crate::ProseOrigin::Comments,
                     rule: crate::StyleRule::Wrap,
                     replacement,
                 });
@@ -459,6 +460,14 @@ pub(crate) fn apply_style_rules_with(
             comment.restyle(source, &options.style, markers);
         }
     }
+    /* NOTE: And the paragraphs of a document, which are prose by the same rule and are not comments. */
+    runs.extend(crate::style::document_runs(
+        source,
+        language,
+        comments,
+        &options.style,
+    ));
+    runs.sort_by_key(|run| run.span.start);
     runs
 }
 
@@ -567,7 +576,7 @@ const fn reads_a_preamble(language: Language) -> bool {
 }
 
 /// Whether a rewritten run already answers for these bytes.
-fn covered_by(runs: &[crate::CommentRun], span: ByteSpan) -> bool {
+fn covered_by(runs: &[crate::ProseRun], span: ByteSpan) -> bool {
     runs.iter()
         .any(|run| run.span.start <= span.start && span.end <= run.span.end)
 }
@@ -10116,9 +10125,8 @@ fn ruby_number_end(bytes: &[u8], mut index: usize) -> usize {
 /// * After `def`, `End` is Ruby's own answer for `/` and for every percent literal, which `EXPR_FNAME` reads as the method names they are.
 ///   `def` has no exception: `def%s(foo)` is `on_op "%"` then `on_ident "s"` to Ruby 3.3.12, the modulo this table reads as well.
 /// * After `class` and `module`, `End` is not Ruby's answer either:
-///   `EXPR_CLASS` expects a value, so Ruby opens a literal there. `class
-///   /x # c/` is one regular expression to Ruby 3.3.12 (`Ripper.lex` gives
-///   `on_regexp_beg`) and a division with a comment behind it here.
+///   `EXPR_CLASS` expects a value, so Ruby opens a literal there.
+///   `class /x # c/` is one regular expression to Ruby 3.3.12 (`Ripper.lex` gives `on_regexp_beg`) and a division with a comment behind it here.
 /// * `?` diverges after all five — `class ?# x` and `def ?# x` are `on_CHAR "?#"` to Ruby and a comment opener here.
 ///
 /// Both of those are spellings Ruby itself refuses: `class` and `module` take a constant, a `::` or a `<<` in any program that parses, and `def ?# x` is a syntax error, so both are reachable only where the scan is already reading a broken file, and buying them back with a state of their own — one that keeps the literal readings and refuses only the here document — would add a state to the machine for no program that runs.

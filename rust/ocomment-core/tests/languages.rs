@@ -3248,8 +3248,8 @@ fn ruby_heredocs_are_opaque_up_to_their_own_terminator() {
 /// Ground truth, Ruby 3.3.12 `Ripper.lex`:
 ///
 /// - `puts "#{ <<EOS }"` then `# not a comment` then `EOS` lexes as `on_heredoc_beg "<<EOS"`, `on_embexpr_end "}"`, `on_tstring_end`,
-///   `on_nl`, `on_tstring_content "# not a comment\n"`, `on_heredoc_end
-///   "EOS\n"`. The body line is content, not code, so its `#` opens nothing.
+///   `on_nl`, `on_tstring_content "# not a comment\n"`, `on_heredoc_end "EOS\n"`.
+///   The body line is content, not code, so its `#` opens nothing.
 /// - `puts "#{ [<<A, <<B] }"` takes the two bodies in header order: the lines under it lex as `on_tstring_content "# a body\n"`, `on_heredoc_end "A\n"`,
 ///   `on_tstring_content "# b body\n"`, `on_heredoc_end "B\n"`.
 /// - `x(<<A, "#{<<B}")` mixes the two positions on one line and Ripper still reads `A` first and `B` second, which is left-to-right across the line rather than outermost-first.

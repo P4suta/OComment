@@ -203,9 +203,12 @@ pub struct Summary {
     /// Was `files_with_removable`, which was already serialised under the name it has now: the report had been counting findings and calling them removals since before there was anything else to count.
     pub files_with_findings: usize,
     pub removable_comments: usize,
-    /// Comments a style rule would rewrite.
+    /// Comments a style rule would rewrite on their own.
     /// Counted apart from the removals because the two ask a reader for different things: a removal is a decision they have to make, and a rewrite is one the tool has already made and is offering to apply.
     pub rewritable_comments: usize,
+    /// Paragraphs a style rule would rewrite, which is a run of comments or a paragraph of a document.
+    /// Counted apart from the comments because it is not one of them: a paragraph of a Markdown document is prose the same rule reaches, and calling it a comment in a report would tell a reader something about their file that is not so.
+    pub rewritable_paragraphs: usize,
     pub kept_comments: usize,
     pub files_changed: usize,
     pub comments_removed: usize,
@@ -227,7 +230,24 @@ impl Summary {
     ///
     /// The number every "is there anything to do" question wants, and the one that has to be asked rather than reading `removable_comments` — which is how a run with nothing but rewrites to its name came to report itself clean while exiting 1.
     pub const fn findings(&self) -> usize {
-        self.removable_comments + self.rewritable_comments
+        self.removable_comments + self.rewritten()
+    }
+
+    /// Everything a style rule would rewrite, however it is counted.
+    pub const fn rewritten(&self) -> usize {
+        self.rewritable_comments + self.rewritable_paragraphs
+    }
+
+    /// What to call the things this run would rewrite.
+    ///
+    /// A run of comments and a paragraph of a document are both paragraphs; a comment a spacing rule reached on its own is a comment.
+    /// Where a run met both, the noun that covers them is the wider one.
+    pub const fn rewritten_noun(&self) -> &'static str {
+        if self.rewritable_paragraphs > 0 {
+            "paragraph"
+        } else {
+            "comment"
+        }
     }
 
     pub fn compute(files: &[ProcessedFile], skipped: &[SkippedFile], operation: Operation) -> Self {
@@ -239,8 +259,17 @@ impl Summary {
             let removable = removable_count(file);
             let rewritable = rewritable_count(file);
             summary.removable_comments += removable;
-            summary.rewritable_comments += rewritable;
-            summary.kept_comments += file.result.report.comments.len() - removable - rewritable;
+            summary.rewritable_comments += rewritable_comments(file);
+            summary.rewritable_paragraphs += rewritable_paragraphs(file);
+            /* NOTE: Counted rather than subtracted.
+             * A rewritten run is a finding and is not a comment, so taking the findings away from the comments underflowed the moment a document's paragraph became one. */
+            summary.kept_comments += file
+                .result
+                .report
+                .comments
+                .iter()
+                .filter(|comment| !reported(comment))
+                .count();
             if removable > 0 || rewritable > 0 {
                 summary.files_with_findings += 1;
             }
@@ -295,18 +324,27 @@ fn reported(comment: &Comment) -> bool {
     comment.disposition().action().changes_bytes()
 }
 
-/// How many findings this run would answer by rewriting rather than removing.
-///
-/// A rewritten run counts once.
-/// It covers several comments and asks one question about them — where the paragraph breaks — and counting it per comment would report a number nobody could act on one at a time.
-fn rewritable_count(file: &ProcessedFile) -> usize {
+/// How many comments this run would rewrite on their own.
+fn rewritable_comments(file: &ProcessedFile) -> usize {
     file.result
         .report
         .comments
         .iter()
         .filter(|comment| comment.action() == Action::Rewrite)
         .count()
-        + file.result.report.runs.len()
+}
+
+/// How many paragraphs this run would rewrite.
+///
+/// A rewritten run counts once.
+/// It covers several comments — or several lines of a document — and asks one question about them, which is where the paragraph breaks, and counting it per line would report a number nobody could act on one line at a time.
+fn rewritable_paragraphs(file: &ProcessedFile) -> usize {
+    file.result.report.runs.len()
+}
+
+/// Everything this run would rewrite rather than remove.
+fn rewritable_count(file: &ProcessedFile) -> usize {
+    rewritable_comments(file) + rewritable_paragraphs(file)
 }
 
 /// How many comments a `fix` over this file actually took out.
@@ -2263,7 +2301,7 @@ fn summary_line(summary: &Summary, options: &RenderOptions) -> String {
     let scanned = plural(summary.files_scanned, "file");
     let files = plural(summary.files_with_findings, "file");
     let found = || {
-        if summary.rewritable_comments == 0 {
+        if summary.rewritten() == 0 {
             return format!(
                 "Found {} in {files} ({scanned} scanned).",
                 comments(summary.removable_comments, "removable"),
@@ -2272,13 +2310,13 @@ fn summary_line(summary: &Summary, options: &RenderOptions) -> String {
         if summary.removable_comments == 0 {
             return format!(
                 "Found {} to rewrite in {files} ({scanned} scanned).",
-                comments(summary.rewritable_comments, ""),
+                plural(summary.rewritten(), summary.rewritten_noun()),
             );
         }
         format!(
             "Found {} and {} to rewrite in {files} ({scanned} scanned).",
             comments(summary.removable_comments, "removable"),
-            summary.rewritable_comments,
+            summary.rewritten(),
         )
     };
     match options.operation {
@@ -2287,7 +2325,7 @@ fn summary_line(summary: &Summary, options: &RenderOptions) -> String {
             if summary.findings() == 0 {
                 return format!("Nothing to fix in {scanned}.");
             }
-            if summary.rewritable_comments == 0 {
+            if summary.rewritten() == 0 {
                 return format!(
                     "Would remove {} in {files}. Rerun without --dry-run to apply.",
                     comments(summary.removable_comments, ""),
@@ -2338,7 +2376,7 @@ fn summary_line(summary: &Summary, options: &RenderOptions) -> String {
                 found()
             }
         }
-        Operation::Scan if summary.rewritable_comments == 0 => format!(
+        Operation::Scan if summary.rewritten() == 0 => format!(
             "Scanned {scanned}: {} ({} removable, {} kept).",
             comments(summary.removable_comments + summary.kept_comments, ""),
             summary.removable_comments,
@@ -2348,7 +2386,7 @@ fn summary_line(summary: &Summary, options: &RenderOptions) -> String {
             "Scanned {scanned}: {} ({} removable, {} to rewrite, {} kept).",
             comments(summary.findings() + summary.kept_comments, ""),
             summary.removable_comments,
-            summary.rewritable_comments,
+            summary.rewritten(),
             summary.kept_comments
         ),
     }

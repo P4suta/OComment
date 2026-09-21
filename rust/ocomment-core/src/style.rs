@@ -466,6 +466,128 @@ fn trim_end(line: &[u8]) -> &[u8] {
     &line[..end]
 }
 
+/// Whether a file of this language *is* prose rather than merely holding some.
+///
+/// A source file keeps its prose in comments; a Markdown document is prose,
+/// and the paragraphs are what a rule about where a paragraph breaks is aimed at.
+/// Exhaustive, so a language added later has to answer.
+const fn is_a_document(language: crate::Language) -> bool {
+    match language {
+        crate::Language::Markdown => true,
+        crate::Language::Rust
+        | crate::Language::Ocaml
+        | crate::Language::C
+        | crate::Language::Cpp
+        | crate::Language::Go
+        | crate::Language::Java
+        | crate::Language::JavaScript
+        | crate::Language::TypeScript
+        | crate::Language::Python
+        | crate::Language::Shell
+        | crate::Language::Html
+        | crate::Language::Css
+        | crate::Language::Jsonc
+        | crate::Language::Sql
+        | crate::Language::Kotlin
+        | crate::Language::Toml
+        | crate::Language::Lua
+        | crate::Language::Yaml
+        | crate::Language::Php
+        | crate::Language::Ruby
+        | crate::Language::Zig
+        | crate::Language::R
+        | crate::Language::Dart
+        | crate::Language::Swift
+        | crate::Language::CSharp
+        | crate::Language::Scala
+        | crate::Language::Vue
+        | crate::Language::Svelte
+        | crate::Language::Perl
+        | crate::Language::Unknown => false,
+    }
+}
+
+/// The paragraphs of a document that the style rules rewrite.
+///
+/// A paragraph is a stretch of consecutive lines with nothing between them:
+/// a blank line ends one, and so does anything the document's structure is made of rather than its prose.
+///
+/// Three of those are tracked here rather than inside [`crate::reflow`],
+/// because each of them runs across the blank lines that would otherwise end a paragraph: a fenced code block, the front matter at the top of a file, and an HTML comment.
+/// The comment is the interesting one — it is prose too, and the comment path has already answered for it, so reading it again here would plan two edits over the same bytes.
+#[must_use]
+pub(crate) fn document_runs(
+    source: &[u8],
+    language: crate::Language,
+    comments: &[crate::Comment],
+    rules: &StyleRules,
+) -> Vec<crate::ProseRun> {
+    if !is_a_document(language) || !rules.wrap.rewrites() {
+        return Vec::new();
+    }
+    let Ok(text) = std::str::from_utf8(source) else {
+        return Vec::new();
+    };
+    let terminator = if text.contains("\r\n") { "\r\n" } else { "\n" };
+    let mut runs = Vec::new();
+    let mut block: Vec<(usize, &str)> = Vec::new();
+    let mut fenced = false;
+    let mut front_matter = false;
+    let mut offset = 0;
+    for (number, raw) in text.split('\n').enumerate() {
+        let line = raw.strip_suffix('\r').unwrap_or(raw);
+        let start = offset;
+        offset += raw.len() + 1;
+        /* NOTE: The front matter is the block a `---` on the very first line opens, which is a document's metadata rather than its prose. */
+        if number == 0 && line.trim_end() == "---" {
+            front_matter = true;
+            continue;
+        }
+        if front_matter {
+            front_matter = !matches!(line.trim_end(), "---" | "...");
+            continue;
+        }
+        let fence = crate::reflow::fence_marker(line).is_some();
+        let inside_a_comment = comments
+            .iter()
+            .any(|comment| comment.span.start < start + line.len() && start < comment.span.end);
+        if fence || fenced || inside_a_comment || line.trim().is_empty() {
+            flush_block(&mut runs, &mut block, terminator, rules);
+            if fence {
+                fenced = !fenced;
+            }
+            continue;
+        }
+        block.push((start, line));
+    }
+    flush_block(&mut runs, &mut block, terminator, rules);
+    runs
+}
+
+/// Reflow one paragraph, and record it when the rule asks for different bytes.
+fn flush_block(
+    runs: &mut Vec<crate::ProseRun>,
+    block: &mut Vec<(usize, &str)>,
+    terminator: &str,
+    rules: &StyleRules,
+) {
+    let held = std::mem::take(block);
+    let Some((first, _)) = held.first().copied() else {
+        return;
+    };
+    let lines: Vec<&str> = held.iter().map(|(_, line)| *line).collect();
+    let Some(reflowed) = crate::reflow::reflow(&lines, rules.wrap) else {
+        return;
+    };
+    let (last, text) = held.last().copied().expect("the block is not empty");
+    runs.push(crate::ProseRun {
+        span: crate::ByteSpan::new(first, last + text.len()),
+        origin: crate::ProseOrigin::Document,
+        rule: crate::StyleRule::Wrap,
+        replacement: reflowed.join(terminator).into_bytes(),
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

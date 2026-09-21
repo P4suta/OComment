@@ -98,10 +98,16 @@ type scan_options = {
 type transform_options = { scan : scan_options; layout : layout }
 (* NOTE: A run of comments on consecutive lines, and the bytes a style rule makes of it.
    Recorded against the run because the bytes it replaces are not any one comment's. *)
-type comment_run = { run_span : byte_span; run_rule : style_rule; run_replacement : bytes }
+(* NOTE: Where a stretch of prose was found. *)
+type prose_origin = Comments | Document
+
+val prose_origin_name : prose_origin -> string
+
+type prose_run = { run_span : byte_span; run_origin : prose_origin;
+                   run_rule : style_rule; run_replacement : bytes }
 
 type scan_report = { language : language; comments : comment list;
-                     runs : comment_run list;
+                     runs : prose_run list;
                      diagnostics : diagnostic list; valid : bool }
 type edit = { span : byte_span; replacement : bytes }
 type source_map_segment = { original : byte_span; output : byte_span; exact : bool }

@@ -154,10 +154,17 @@ type scan_options = {
 type transform_options = { scan : scan_options; layout : layout }
 (* NOTE: A run of comments on consecutive lines, and the bytes a style rule makes of it.
    Recorded against the run rather than against a comment because the bytes it replaces are not any one comment's: joining two comment lines moves the newline and the indentation between them, and those belong to neither. *)
-type comment_run = { run_span : byte_span; run_rule : style_rule; run_replacement : bytes }
+(* NOTE: Where a stretch of prose was found.
+   A source file keeps its prose in comments and a Markdown document is prose, and the rule about where a paragraph breaks is the same rule for both. *)
+type prose_origin = Comments | Document
+
+let prose_origin_name = function Comments -> "comments" | Document -> "document"
+
+type prose_run = { run_span : byte_span; run_origin : prose_origin;
+                   run_rule : style_rule; run_replacement : bytes }
 
 type scan_report = { language : language; comments : comment list;
-  runs : comment_run list; diagnostics : diagnostic list; valid : bool }
+  runs : prose_run list; diagnostics : diagnostic list; valid : bool }
 type edit = { span : byte_span; replacement : bytes }
 type source_map_segment = { original : byte_span; output : byte_span; exact : bool }
 type source_map = source_map_segment list
@@ -5843,7 +5850,7 @@ let matching_tag source (span : byte_span) tags =
 (** Runs of comments on consecutive lines.
    Four consecutive line comments are four comments to a scanner and one paragraph to a reader, and a length rule is about what the reader sees.
    Code between them ends a run, a comment beside code ends one, and so does a blank line: that is how a writer says the next remark is a separate remark, and a limit that counted across one would measure the gap as well as the prose. *)
-let comment_runs source (comments : comment list) : comment list list =
+let prose_runs source (comments : comment list) : comment list list =
   let rec build (acc : comment list list) (current : comment list) = function
     | [] -> List.rev (if current = [] then acc else List.rev current :: acc)
     | (comment : comment) :: rest ->
@@ -6272,7 +6279,9 @@ let reflow lines wrap =
                       (String.length line - String.length marker.first) :: !held;
             true
           | None ->
-            if !held <> [] && is_item !under && continues_an_item line !under then begin
+            (* NOTE: Not "and something is held".
+               A paragraph flushed at a clause break leaves nothing held, and the item it belonged to has not ended. *)
+            if is_item !under && continues_an_item line !under then begin
               held := String.trim line :: !held; true
             end else if reads_as_prose line then begin
               if is_item !under then begin flush (); under := no_marker end;
@@ -6289,7 +6298,12 @@ let reflow lines wrap =
             && (if is_item !under then continues_an_item array.(index + 1) !under
                 else reads_as_prose array.(index + 1)) in
           if ends_at_a_break line || not carries_on then begin
-            flush (); under := no_marker
+            flush ();
+            (* NOTE: A break inside an item does not end the item.
+               What the next group loses is the marker itself, which has been written once already. *)
+            under := if carries_on && is_item !under
+              then { first = (!under).rest; rest = (!under).rest }
+              else no_marker
           end
         end
       end) array;
@@ -6365,7 +6379,7 @@ let apply_allow_rules source options (comments : comment list) : comment list =
     match rules.max_lines with
     | None -> comments
     | Some limit ->
-      comment_runs source comments
+      prose_runs source comments
       |> List.concat_map (fun (run : comment list) ->
         match run with
         | [] -> []
@@ -6654,7 +6668,7 @@ let safe_to_reflow source language (run : comment list) =
 
    The run comes first, because a rewrite of one subsumes every rule about the comments in it: the reflow writes their markers back itself, so asking each of them about its spacing afterwards would be a second opinion about bytes that no longer exist. *)
 let apply_style_rules_with source language options openers closers (comments : comment list)
-    : comment list * comment_run list =
+    : comment list * prose_run list =
   if style_rules_empty options.style then (comments, [])
   else begin
     (* NOTE: A run splits at a comment the style rules do not reach rather than being refused whole.
@@ -6674,7 +6688,7 @@ let apply_style_rules_with source language options openers closers (comments : c
           ([ comment ] :: (if open_ = [] then stretches else List.rev open_ :: stretches), [])
         else (stretches, comment :: open_)) ([], []) run in
       List.rev (if open_ = [] then stretches else List.rev open_ :: stretches) in
-    let runs = List.concat_map eligible (comment_runs source comments)
+    let runs = List.concat_map eligible (prose_runs source comments)
       |> List.filter_map (fun run ->
       if run = [] || not (safe_to_reflow source language run) then None
       (* NOTE: The tag is a marker only where the tag rule reads it.
@@ -6687,7 +6701,8 @@ let apply_style_rules_with source language options openers closers (comments : c
         | Some replacement ->
           let first = List.hd run and last = List.nth run (List.length run - 1) in
           Some { run_span = { start = first.span.start; finish = last.span.finish };
-                 run_rule = Wrap; run_replacement = replacement }) in
+                 run_origin = Comments; run_rule = Wrap;
+                 run_replacement = replacement }) in
     let covered (span : byte_span) =
       List.exists (fun run ->
         run.run_span.start <= span.start && span.finish <= run.run_span.finish) runs in
@@ -6704,6 +6719,54 @@ let apply_style_rules_with source language options openers closers (comments : c
           | Some (rule, replacement) ->
             { comment with disposition = Rewrite (rule, Bytes.of_string replacement) })
       comments in
+    (* NOTE: And the paragraphs of a document, which are prose by the same rule and are not comments.
+       Three things run across the blank lines that would otherwise end a paragraph and are tracked here rather than inside the reflow: a fenced code block, the front matter at the top of a file,
+       and an HTML comment -- the last of which the comment path has already answered for, so reading it again would plan two edits over the same bytes. *)
+    let document_runs =
+      if language <> Markdown || not (wrap_rewrites options.style.wrap) then []
+      else begin
+        let text = Bytes.to_string source in
+        let terminator = if contains text "\r\n" then "\r\n" else "\n" in
+        let runs = ref [] and block = ref [] in
+        let fenced = ref false and front_matter = ref false and offset = ref 0 in
+        let flush () =
+          match List.rev !block with
+          | [] -> ()
+          | held ->
+            block := [];
+            let lines = List.map snd held in
+            (match reflow lines options.style.wrap with
+             | None -> ()
+             | Some rewritten ->
+               let start = fst (List.hd held) in
+               let last_offset, last_line = List.nth held (List.length held - 1) in
+               runs := { run_span = { start; finish = last_offset + String.length last_line };
+                         run_origin = Document; run_rule = Wrap;
+                         run_replacement = Bytes.of_string (String.concat terminator rewritten) }
+                       :: !runs) in
+        List.iteri (fun number raw ->
+          let line = if String.ends_with ~suffix:"\r" raw
+            then String.sub raw 0 (String.length raw - 1) else raw in
+          let start = !offset in
+          offset := !offset + String.length raw + 1;
+          if number = 0 && String.trim line = "---" then front_matter := true
+          else if !front_matter then
+            front_matter := not (String.trim line = "---" || String.trim line = "...")
+          else begin
+            let fence = fence_marker line <> None in
+            let inside_a_comment = List.exists (fun (comment : comment) ->
+              comment.span.start < start + String.length line
+              && start < comment.span.finish) comments in
+            if fence || !fenced || inside_a_comment || String.trim line = "" then begin
+              flush ();
+              if fence then fenced := not !fenced
+            end else block := (start, line) :: !block
+          end) (String.split_on_char '\n' text);
+        flush ();
+        List.rev !runs
+      end in
+    let runs = List.stable_sort (fun left right ->
+      compare left.run_span.start right.run_span.start) (runs @ document_runs) in
     (comments, runs)
   end
 
@@ -7037,7 +7100,7 @@ let scan_profile source profile options =
     let comments =
       if not profile.doc_continuation then comments
       else
-        comment_runs source comments
+        prose_runs source comments
         |> List.concat_map (fun run ->
           let carrying = ref false in
           List.map (fun (comment : comment) ->

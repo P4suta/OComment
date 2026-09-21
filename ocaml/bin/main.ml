@@ -52,8 +52,10 @@ let shape_json = function
 let comment_json (comment : comment) = `Assoc (["span", span_json comment.span; "kind", `String (string_of_comment_kind comment.kind); "disposition", disposition_json comment.disposition] @ (match comment.shape with None -> [] | Some rule -> ["shape", shape_json rule]))
 
 (* NOTE: Absent when nothing rewrote a run, exactly as the Rust field is skipped when the list is empty, so the two encodings stay comparable. *)
-let run_json (run : comment_run) =
-  `Assoc ["span", span_json run.run_span; "rule", `String (style_rule_name run.run_rule);
+let run_json (run : prose_run) =
+  `Assoc ["span", span_json run.run_span;
+          "origin", `String (prose_origin_name run.run_origin);
+          "rule", `String (style_rule_name run.run_rule);
           "replacement", `String (Bytes.to_string run.run_replacement)]
 let severity_string = function Error -> "error" | Warning -> "warning" | Info -> "info" | Hint -> "hint"
 let diagnostic_json (diagnostic : diagnostic) = `Assoc ["code", `String diagnostic.code; "message", `String diagnostic.message;
