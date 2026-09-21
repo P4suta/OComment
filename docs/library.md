@@ -151,8 +151,7 @@ let source = b"k: |\n  a\n# ends the block\n  # yamllint disable\nz: 1\n";
 let options = ScanOptions::default();
 let report = scan(source, Language::Yaml, options.clone());
 
-// NOTE: The scan kept the first comment: removing its line would hand the directive
-// NOTE: under it back to the block scalar above.
+// NOTE: The scan kept the first comment: removing its line would hand the directive under it back to the block scalar above.
 let comment = &report.comments[0];
 let why = explain_comment(
     comment,

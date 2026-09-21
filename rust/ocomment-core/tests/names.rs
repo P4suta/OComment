@@ -1,9 +1,7 @@
 //! Stable-name contract for the public enums.
 //!
-//! `as_str` is the single source of truth for every user-visible spelling: it
-//! must equal the serde name byte-for-byte, round-trip through `FromStr`, and
-//! agree with `Display`. Every historical alias is pinned here so a refactor
-//! cannot silently drop one.
+//! `as_str` is the single source of truth for every user-visible spelling: it must equal the serde name byte-for-byte, round-trip through `FromStr`, and agree with `Display`.
+//! Every historical alias is pinned here so a refactor cannot silently drop one.
 
 use ocomment_core::{
     CommentKind, Dialect, Disposition, Language, Layout, Policy, ScanOptions, Severity, scan,
@@ -21,8 +19,7 @@ fn serde_name<T: serde::Serialize>(value: &T) -> String {
         .to_owned()
 }
 
-/// Every variant of `$type` agrees with serde, `FromStr`, and `Display`, and no
-/// spelling is claimed by two variants.
+/// Every variant of `$type` agrees with serde, `FromStr`, and `Display`, and no spelling is claimed by two variants.
 macro_rules! check_stable_names {
     ($type:ident) => {{
         let mut seen = BTreeSet::new();
@@ -113,11 +110,9 @@ fn severity_names_are_stable() {
     assert_eq!(Severity::ALL.len(), 4);
 }
 
-/// Every spelling [`Language::from_str`] accepts, written out rather than
-/// generated, so that a rename shows up here as a changed line.
+/// Every spelling [`Language::from_str`] accepts, written out rather than generated, so that a rename shows up here as a changed line.
 ///
-/// The table is also checked *against* [`Language::aliases`] below: a language
-/// added without a row, or an alias added to that function and nowhere else,
+/// The table is also checked *against* [`Language::aliases`] below: a language added without a row, or an alias added to that function and nowhere else,
 /// fails here instead of shipping unpinned.
 #[test]
 fn language_aliases_are_pinned() {
@@ -179,10 +174,8 @@ fn language_aliases_are_pinned() {
     for (text, expected) in cases {
         assert_eq!(Language::from_str(text), Ok(expected), "`{text}`");
     }
-    // NOTE: The other direction. `cases` is what pins the spellings, so every
-    // NOTE: canonical name and every alias the crate publishes has to be one of
-    // NOTE: its rows -- otherwise a new language, or a new alias for an old
-    // NOTE: one, would be accepted by `from_str` with nothing holding it there.
+    // NOTE: The other direction.
+    // NOTE: `cases` is what pins the spellings, so every canonical name and every alias the crate publishes has to be one of its rows -- otherwise a new language, or a new alias for an old one, would be accepted by `from_str` with nothing holding it there.
     let pinned: HashSet<(&str, Language)> = cases.into_iter().collect();
     let mut missing = Vec::new();
     for language in Language::ALL {
@@ -313,10 +306,8 @@ fn policy_and_layout_aliases_are_pinned() {
     assert_eq!(Layout::from_str("columns"), Ok(Layout::Columns));
     assert_eq!(Layout::from_str("compact"), Ok(Layout::Compact));
     assert_eq!(Layout::from_str("Compact"), Ok(Layout::Compact));
-    /* NOTE: The policies carry their former spellings so that a configuration
-     * or a command line written against the old names still resolves, and to
-     * the same behaviour those names always had. Pinning them here is what
-     * stops the compatibility from being dropped by accident. */
+    /* NOTE: The policies carry their former spellings so that a configuration or a command line written against the old names still resolves, and to the same behaviour those names always had.
+     * Pinning them here is what stops the compatibility from being dropped by accident. */
     assert_eq!(Policy::Conservative.aliases(), ["legal"]);
     assert_eq!(Policy::Standard.aliases(), ["safe"]);
     assert!(Policy::All.aliases().is_empty());
@@ -324,8 +315,8 @@ fn policy_and_layout_aliases_are_pinned() {
     assert_eq!(Policy::Standard.former_name(), Some("safe"));
     assert_eq!(Policy::All.former_name(), None);
     /* NOTE: The order of `ALL` is how much each policy takes, weakest first,
-     * and help output reads it in that order. A reordering would make the
-     * names stop describing a scale. */
+     * and help output reads it in that order.
+     * A reordering would make the names stop describing a scale. */
     assert!(Policy::None.aliases().is_empty());
     assert_eq!(Policy::None.former_name(), None);
     assert_eq!(
@@ -391,8 +382,7 @@ fn disposition_serde_shape_is_frozen() {
     );
 }
 
-/// The differential protocol freezes these seven strings; the OCaml reference
-/// compares them byte-for-byte.
+/// The differential protocol freezes these seven strings; the OCaml reference compares them byte-for-byte.
 const KEEP_REASONS: [&str; 7] = [
     "kept by keep_kind",
     "kept by keep_regex",
@@ -403,10 +393,8 @@ const KEEP_REASONS: [&str; 7] = [
     "structural in a YAML block scalar trail",
 ];
 
-/// One fixture for `keep_reasons_are_observable_through_scan`: a source, how it
-/// is scanned, how many comments it holds, and which of them carries the frozen
-/// reason under test. The count is pinned per fixture so a scanner that started
-/// finding a comment more or fewer fails here rather than sliding the index.
+/// One fixture for `keep_reasons_are_observable_through_scan`: a source, how it is scanned, how many comments it holds, and which of them carries the frozen reason under test.
+/// The count is pinned per fixture so a scanner that started finding a comment more or fewer fails here rather than sliding the index.
 struct ReasonFixture {
     source: &'static [u8],
     language: Language,
@@ -430,9 +418,8 @@ fn keep_reasons_are_observable_through_scan() {
             index: 0,
             reason: "kept by keep_kind",
         },
-        /* NOTE: The companion of the fixture above. The two rules used to
-         * share one reason, so one fixture covered both and neither was
-         * actually observed on its own. */
+        /* NOTE: The companion of the fixture above.
+         * The two rules used to share one reason, so one fixture covered both and neither was actually observed on its own. */
         ReasonFixture {
             source: b"// keep me\n",
             language: Language::Rust,
@@ -479,9 +466,7 @@ fn keep_reasons_are_observable_through_scan() {
             index: 0,
             reason: "conservative policy",
         },
-        /* NOTE: The one reason that needs a second comment to exist at all: the
-         * block scalar leans on the first comment only because the directive
-         * below it survives and is indented into the body. */
+        /* NOTE: The one reason that needs a second comment to exist at all: the block scalar leans on the first comment only because the directive below it survives and is indented into the body. */
         ReasonFixture {
             source: b"k: |\n  a\n# ends the block\n  # yamllint disable\nz: 1\n",
             language: Language::Yaml,
@@ -524,19 +509,16 @@ fn keep_reasons_are_observable_through_scan() {
 
 /// The policy table and the scanner agree, kind by kind and policy by policy.
 ///
-/// `Policy::keeps` is the table the crate documentation prints and the
-/// scanner decides by. It was prose in one place and a chain of `if`s in
-/// another, and the CLI grew a third copy to answer "would a weaker policy
-/// have kept this?" — which was wrong in the only case that occurs. One table
-/// now, and this is what holds it to what a scan actually does.
+/// `Policy::keeps` is the table the crate documentation prints and the scanner decides by.
+/// It was prose in one place and a chain of `if`s in another, and the CLI grew a third copy to answer "would a weaker policy have kept this?"
+/// — which was wrong in the only case that occurs.
+/// One table now, and this is what holds it to what a scan actually does.
 #[test]
 fn the_policy_table_is_what_a_scan_does() {
     for policy in Policy::ALL {
         for kind in CommentKind::ALL {
             /* NOTE: A protected kind is held back before the policy is asked,
-             * so what `keeps` answers for it is what the policy would do with
-             * the protection lifted -- which is what `force_protected` asks
-             * for, and is the arrangement this compares against. */
+             * so what `keeps` answers for it is what the policy would do with the protection lifted -- which is what `force_protected` asks for, and is the arrangement this compares against. */
             let options = ScanOptions {
                 policy,
                 force_protected: true,
@@ -584,9 +566,8 @@ fn every_kind_states_its_protection() {
         Protection::LoadBearing.reason(),
         Some("required by the language or its build")
     );
-    /* NOTE: Spelled out rather than derived, because deriving it from the same
-     * match it is checking would check nothing. A kind that changes tier has to
-     * change here too, and that is meant to be an act. */
+    /* NOTE: Spelled out rather than derived, because deriving it from the same match it is checking would check nothing.
+     * A kind that changes tier has to change here too, and that is meant to be an act. */
     for (kind, expected) in [
         (CommentKind::Line, Protection::None),
         (CommentKind::Block, Protection::None),
@@ -605,8 +586,7 @@ fn every_kind_states_its_protection() {
     }
 }
 
-/// Of the policies that would make a run clean, the one that still takes the
-/// most is the one worth suggesting.
+/// Of the policies that would make a run clean, the one that still takes the most is the one worth suggesting.
 #[test]
 fn the_policy_that_keeps_a_set_while_taking_the_most_is_found() {
     assert_eq!(
@@ -614,11 +594,8 @@ fn the_policy_that_keeps_a_set_while_taking_the_most_is_found() {
         Some(Policy::Conservative),
         "only `conservative` keeps documentation, so it is the only answer"
     );
-    /* NOTE: Both `conservative` and `standard` keep a directive, and the answer
-     * is `standard`: the caller is removing comments, so of the two the one
-     * worth naming is the one that still takes the documentation and the
-     * licence header. Naming the gentlest would answer a question nobody
-     * asked. */
+    /* NOTE: Both `conservative` and `standard` keep a directive, and the answer is `standard`: the caller is removing comments, so of the two the one worth naming is the one that still takes the documentation and the licence header.
+     * Naming the gentlest would answer a question nobody asked. */
     assert_eq!(
         Policy::strongest_keeping(&[CommentKind::Directive]),
         Some(Policy::Standard)
@@ -628,12 +605,9 @@ fn the_policy_that_keeps_a_set_while_taking_the_most_is_found() {
         None,
         "no policy keeps an ordinary comment, and saying one does would be advice that fails"
     );
-    /* NOTE: `none` keeps every kind there is, so it is the answer to every
-     * question this could be asked -- which is exactly why it is not one of
-     * the answers. A suggestion that always fits is a suggestion that has
-     * stopped depending on the question. The line above is the one that would
-     * have gone quietly wrong: it asserts `None` for an ordinary comment, and
-     * `none` keeps ordinary comments. */
+    /* NOTE: `none` keeps every kind there is, so it is the answer to every question this could be asked -- which is exactly why it is not one of the answers.
+     * A suggestion that always fits is a suggestion that has stopped depending on the question.
+     * The line above is the one that would have gone quietly wrong: it asserts `None` for an ordinary comment, and `none` keeps ordinary comments. */
     for kind in CommentKind::ALL {
         assert_ne!(
             Policy::strongest_keeping(&[kind]),

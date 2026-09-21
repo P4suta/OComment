@@ -1,16 +1,10 @@
 //! The shared fixture corpus in `spec/fixtures/v1`, run against this crate.
 //!
-//! `tools/differential.py` feeds the same corpus to this implementation and to
-//! the OCaml reference and compares the two. That says the pair agree; it does
-//! not say what they agree on, and it needs a built OCaml tree to say anything
-//! at all. This test is the other half: it runs every case here, checks the
-//! ones carrying a recorded `expect` block against it, and holds the whole
-//! corpus to the engine's structural promises — a scan never panics, and the
-//! edits of a transformation are sorted, non-overlapping, and reproduce the
-//! output when applied in one pass.
+//! `tools/differential.py` feeds the same corpus to this implementation and to the OCaml reference and compares the two.
+//! That says the pair agree; it does not say what they agree on, and it needs a built OCaml tree to say anything at all.
+//! This test is the other half: it runs every case here, checks the ones carrying a recorded `expect` block against it, and holds the whole corpus to the engine's structural promises — a scan never panics, and the edits of a transformation are sorted, non-overlapping, and reproduce the output when applied in one pass.
 //!
-//! `spec/fixtures/README.md` documents the case schema and how an `expect`
-//! block is recorded.
+//! `spec/fixtures/README.md` documents the case schema and how an `expect` block is recorded.
 
 use ocomment_core::{
     ByteSpan, CommentKind, DeclarativeProfile, Disposition, Edit, Language, Layout,
@@ -22,22 +16,16 @@ use std::{collections::BTreeSet, fs, path::PathBuf, str::FromStr};
 
 /// The file both corpus runners read their floors from.
 ///
-/// `tools/differential.py` reads it too, so a case deleted from the corpus
-/// fails the Rust test suite as well — on a machine with no OCaml toolchain —
-/// and neither runner can be raised or lowered on its own. `cases` is the
-/// least number of cases the corpus may hold; `expectations` is the least
-/// number of those that must carry a recorded `expect` block. A case with none
-/// is still held to the structural promises below, so the second floor is what
-/// stops the corpus from quietly degrading into that weaker check.
+/// `tools/differential.py` reads it too, so a case deleted from the corpus fails the Rust test suite as well — on a machine with no OCaml toolchain —
+/// and neither runner can be raised or lowered on its own.
+/// `cases` is the least number of cases the corpus may hold; `expectations` is the least number of those that must carry a recorded `expect` block.
+/// A case with none is still held to the structural promises below, so the second floor is what stops the corpus from quietly degrading into that weaker check.
 ///
-/// Deleting a block to re-record it is the documented way to change a recorded
-/// behaviour, and `differential.py --record` puts it back before this test is
-/// meant to run again.
+/// Deleting a block to re-record it is the documented way to change a recorded behaviour, and `differential.py --record` puts it back before this test is meant to run again.
 const FLOOR_FILE: &str = "floor.txt";
 
-/// One floor from `floor.txt`, which holds a `#` comment or a name and a
-/// decimal count per line. A missing name is a failure rather than a zero: the
-/// file is the only place either runner reads these numbers from.
+/// One floor from `floor.txt`, which holds a `#` comment or a name and a decimal count per line.
+/// A missing name is a failure rather than a zero: the file is the only place either runner reads these numbers from.
 fn floor(name: &str) -> usize {
     let path = corpus_directory().join(FLOOR_FILE);
     let text = std::fs::read_to_string(&path)
@@ -166,8 +154,7 @@ fn source_bytes(case: &Value) -> Vec<u8> {
     }
 }
 
-/// The scan options a case asks for; `dialect` sits beside `language`, not in
-/// `options`, and `layout` belongs to the transformation rather than the scan.
+/// The scan options a case asks for; `dialect` sits beside `language`, not in `options`, and `layout` belongs to the transformation rather than the scan.
 fn options(case: &Value) -> TransformOptions {
     let mut value = case.get("options").cloned().unwrap_or_else(|| json!({}));
     let object = value

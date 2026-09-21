@@ -1,8 +1,7 @@
 //! Put comment spans found elsewhere through the OComment policy.
 //!
-//! `transform_spans` is the hand-off point for a scanner this crate does not
-//! have — a WebAssembly plugin, or the two-line one below. The policy, the
-//! layout, the edit validation, and the source map are the built-in ones.
+//! `transform_spans` is the hand-off point for a scanner this crate does not have — a WebAssembly plugin, or the two-line one below.
+//! The policy, the layout, the edit validation, and the source map are the built-in ones.
 //!
 //! ```sh
 //! cargo run -p ocomment-core --example external_spans

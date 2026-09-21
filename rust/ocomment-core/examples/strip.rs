@@ -41,8 +41,7 @@ fn main() -> ExitCode {
     };
 
     let mut options = TransformOptions::default();
-    /* NOTE: A keep_regex override is tested before the policy, so it protects
-     * a comment the policy would otherwise remove. */
+    /* NOTE: A keep_regex override is tested before the policy, so it protects a comment the policy would otherwise remove. */
     options.scan.keep_regex.push(r"^//\s*NOTE\b".into());
 
     let result = transform(&source, language, options);

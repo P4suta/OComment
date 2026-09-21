@@ -1,33 +1,25 @@
-# NOTE: OComment checks its own repository. `ocomment` from the root is the
-# NOTE: gate the `dogfood` CI job runs, and Lefthook runs `ocomment check
-# NOTE: --staged` before every commit; see CONTRIBUTING.md for the tag
-# NOTE: convention this configuration enforces. TOML is a built-in language, so
-# NOTE: this file is now one of the files that convention applies to.
+# NOTE: OComment checks its own repository.
+# NOTE: `ocomment` from the root is the gate the `dogfood` CI job runs, and Lefthook runs `ocomment check --staged` before every commit; see CONTRIBUTING.md for the tag convention this configuration enforces.
+# NOTE: TOML is a built-in language, so this file is now one of the files that convention applies to.
 version = 1
 
 [files]
 hidden = true
 exclude = [
-  # NOTE: Upstream-derived runtime modules, fixture bytes, and packaging or
-  # NOTE: benchmark scratch are not ours to rewrite: fixture comments are the
-  # NOTE: test input itself.
+    # NOTE: Upstream-derived runtime modules, fixture bytes, and packaging or benchmark scratch are not ours to rewrite: fixture comments are the test input itself.
   "rust/ocomment/src/runtime/**",
   "spec/fixtures/**",
   "editors/vscode/test-fixtures/**",
   "release-extras/**",
   "benchmarks/**",
-  # NOTE: This generated page contains deliberate before/after source bytes;
-  # NOTE: removing their example comments would change the documented policy
-  # NOTE: output rather than clean up generator prose.
+    # NOTE: This generated page contains deliberate before/after source bytes;
+  # NOTE: removing their example comments would change the documented policy output rather than clean up generator prose.
   "docs/policies.md",
-  # NOTE: The starter file `ocomment init` writes. Its comments are addressed to
-  # NOTE: whoever runs that command, not to a reader of this repository, so the
-  # NOTE: tag convention below does not apply to them.
+    # NOTE: The starter file `ocomment init` writes.
+  # NOTE: Its comments are addressed to whoever runs that command, not to a reader of this repository, so the tag convention below does not apply to them.
   "spec/default-config.toml",
   "rust/ocomment/assets/default-config.toml",
-  # NOTE: Licence texts and the rendered manual page carry no comments to find
-  # NOTE: and are not ours to reformat, so they are excluded rather than left
-  # NOTE: to be reported as an unknown language every run.
+    # NOTE: Licence texts and the rendered manual page carry no comments to find and are not ours to reformat, so they are excluded rather than left to be reported as an unknown language every run.
   "LICENSE*",
   "editors/vscode/LICENSE",
   "docs/ocomment.1",
@@ -37,45 +29,43 @@ exclude = [
 mode = "conservative"
 layout = "lines"
 keep_regex = [
-  # NOTE: The version beside a SHA-pinned action, now that YAML is scanned.
-  # NOTE: CONTRIBUTING.md requires every `uses:` to carry one and Dependabot
-  # NOTE: rewrites it when it moves the pin, so it is read by a machine rather
-  # NOTE: than by a reader and has no rationale to tag. The pattern is the whole
-  # NOTE: comment, so prose that merely opens with a version is still prose.
+    # NOTE: The version beside a SHA-pinned action, now that YAML is scanned.
+  # NOTE: CONTRIBUTING.md requires every `uses:` to carry one and Dependabot rewrites it when it moves the pin, so it is read by a machine rather than by a reader and has no rationale to tag.
+  # NOTE: The pattern is the whole comment, so prose that merely opens with a version is still prose.
   '^#\s*v[0-9]+(\.[0-9]+)*$',
 ]
 
-# NOTE: The tag convention, as a tag rule rather than as a pattern. It was
-# NOTE: written against the raw comment token, which meant naming four comment
-# NOTE: openers and protecting only the languages that use them: the identical
-# NOTE: rule written in a Lua or SQL file was not protected at all. A tag is
-# NOTE: read from the comment's text, so one line holds in every language.
+# NOTE: The tag convention, as a tag rule rather than as a pattern.
+# NOTE: It was written against the raw comment token, which meant naming four comment openers and protecting only the languages that use them: the identical rule written in a Lua or SQL file was not protected at all.
+# NOTE: A tag is read from the comment's text, so one line holds in every language.
 [policy.allow]
 tags = ["NOTE", "SAFETY", "INVARIANT", "PERF"]
-# NOTE: A comment is at most a paragraph. Reasoning that needs more than that
-# NOTE: is documentation, and documentation is exempt from this rule because it
-# NOTE: is documentation: a `///`, a `(**`, a module docstring, a page under
-# NOTE: docs/. The rule is not "explain less", it is "explain where a reader
-# NOTE: will find it". This repository holds zero comments above the line.
+# NOTE: A comment is at most a paragraph.
+# NOTE: Reasoning that needs more than that is documentation, and documentation is exempt from this rule because it is documentation: a `///`, a `(**`, a module docstring, a page under docs/.
+# NOTE: The rule is not "explain less", it is "explain where a reader will find it".
+# NOTE: This repository holds zero comments above the line.
 max_lines = 8
 # NOTE: Beside the code is the obvious way around a rule about comments above it.
 trailing = false
 
 # NOTE: The tags that are promises rather than remarks, and what each one has.
-# NOTE: Counted from the commit that adds the line, so writing one costs
-# NOTE: nothing and the clock starts when the repository takes it on.
+# NOTE: Counted from the commit that adds the line, so writing one costs nothing and the clock starts when the repository takes it on.
 [policy.allow.expiry]
 TODO = "30d"
 FIXME = "14d"
 HACK = "14d"
 
-# NOTE: A comment in a documentation sample is the sample. These files quote
-# NOTE: shell sessions and configuration files, and the annotations in them
-# NOTE: belong to the quoted material rather than to this repository, so the
-# NOTE: rules about where this project puts its own comments do not reach them.
+# NOTE: A comment in a documentation sample is the sample.
+# NOTE: These files quote shell sessions and configuration files, and the annotations in them belong to the quoted material rather than to this repository, so the rules about where this project puts its own comments do not reach them.
 # NOTE: The tag rule still does: a sample is still read by somebody.
 [[overrides]]
 paths = ["**/*.md"]
 [overrides.allow]
 tags = ["NOTE", "SAFETY", "INVARIANT", "PERF"]
 max_lines = 8
+
+# NOTE: The other axis.
+# NOTE: A comment is prose, and prose breaks at the end of a sentence rather than at a column: a diff then reviews one sentence at a time, and a line break means something.
+# NOTE: A break after a clause is left where its writer put it.
+[style]
+wrap = "sentence"

@@ -1,9 +1,7 @@
 //! The command line, exercised through the built binary.
 //!
-//! Every case here starts a process. What a test can see is what a caller can
-//! see -- the two streams, the exit status, and the bytes on the disk
-//! afterwards -- which is the point: a promise the binary makes is a promise
-//! about those and not about a function somewhere inside it.
+//! Every case here starts a process.
+//! What a test can see is what a caller can see -- the two streams, the exit status, and the bytes on the disk afterwards -- which is the point: a promise the binary makes is a promise about those and not about a function somewhere inside it.
 
 use std::{
     collections::BTreeSet,
@@ -18,22 +16,14 @@ fn binary() -> &'static str {
     env!("CARGO_BIN_EXE_ocomment")
 }
 
-/// Create a file whose name is raw bytes, or report that this filesystem will
-/// not hold one.
+/// Create a file whose name is raw bytes, or report that this filesystem will not hold one.
 ///
-/// A Unix filename is a byte string, and what OComment does with one that is
-/// not UTF-8 is a property worth pinning: a path must reach a report, a patch
-/// and the Git index as the bytes the OS gave, never as U+FFFD. Not every Unix
-/// filesystem agrees that a name is bytes. APFS and HFS+ reject a name that is
-/// not well-formed UTF-8 with `EILSEQ`, so on macOS these tests have nothing to
-/// run against and used to fail there for a reason that says nothing about
-/// OComment.
+/// A Unix filename is a byte string, and what OComment does with one that is not UTF-8 is a property worth pinning: a path must reach a report, a patch and the Git index as the bytes the OS gave, never as U+FFFD.
+/// Not every Unix filesystem agrees that a name is bytes.
+/// APFS and HFS+ reject a name that is not well-formed UTF-8 with `EILSEQ`, so on macOS these tests have nothing to run against and used to fail there for a reason that says nothing about OComment.
 ///
-/// Skipping is only honest if it cannot quietly become permanent, so the skip
-/// is announced and `OCOMMENT_REQUIRE_NON_UTF8_PATHS` turns it into a failure.
-/// CI sets that variable on the platforms whose filesystems do hold such a
-/// name, which is what keeps the property observed rather than merely
-/// compiled.
+/// Skipping is only honest if it cannot quietly become permanent, so the skip is announced and `OCOMMENT_REQUIRE_NON_UTF8_PATHS` turns it into a failure.
+/// CI sets that variable on the platforms whose filesystems do hold such a name, which is what keeps the property observed rather than merely compiled.
 #[cfg(unix)]
 fn write_non_utf8_file(
     directory: &Path,
@@ -46,11 +36,8 @@ fn write_non_utf8_file(
     let Err(error) = fs::write(directory.join(&name), contents) else {
         return Some(name);
     };
-    /* NOTE: Which error a filesystem gives for a name it will not have is not
-     * worth encoding: `EILSEQ` is 84 on Linux and 92 on macOS, and a test that
-     * hard-codes either is wrong somewhere. Writing a name nothing can object
-     * to separates "this name" from "this directory", which is the distinction
-     * that matters and the one that needs no errno at all. */
+    /* NOTE: Which error a filesystem gives for a name it will not have is not worth encoding: `EILSEQ` is 84 on Linux and 92 on macOS, and a test that hard-codes either is wrong somewhere.
+     * Writing a name nothing can object to separates "this name" from "this directory", which is the distinction that matters and the one that needs no errno at all. */
     let probe = directory.join("probe-utf8-name.rs");
     match fs::write(&probe, contents) {
         Ok(()) => drop(fs::remove_file(&probe)),
@@ -70,12 +57,10 @@ fn write_non_utf8_file(
 
 /// Run the binary, naming `--format human` unless the test names a format.
 ///
-/// Almost everything below is about the one-line-per-finding stream: which path
-/// it prints, how it sanitises one, what it says about a skip. That stream is
-/// `human`, and it stopped being the default when `review` became it, so the
-/// tests that are about it say so. The ones that are about `review` name it,
-/// and `the_default_format_is_the_one_a_reader_decides_from` is what stops this
-/// convenience from hiding a change of default.
+/// Almost everything below is about the one-line-per-finding stream: which path it prints, how it sanitises one, what it says about a skip.
+/// That stream is `human`, and it stopped being the default when `review` became it, so the tests that are about it say so.
+/// The ones that are about `review` name it,
+/// and `the_default_format_is_the_one_a_reader_decides_from` is what stops this convenience from hiding a change of default.
 fn run(directory: &Path, arguments: &[&str]) -> Output {
     let mut arguments: Vec<&str> = arguments.to_vec();
     if !arguments
@@ -153,8 +138,8 @@ fn git_with_path(directory: &Path, arguments: &[&str], path: &std::ffi::OsStr) -
     output.stdout
 }
 
-/// What a file OComment has no built-in scanner for is skipped with. The
-/// sentence is pinned literally by `an_unknown_language_skip_says_how_to_force_one`;
+/// What a file OComment has no built-in scanner for is skipped with.
+/// The sentence is pinned literally by `an_unknown_language_skip_says_how_to_force_one`;
 /// every other test names it through this constant.
 const NO_LANGUAGE: &str =
     "no built-in language for this file (see `ocomment languages`; use --language to force)";
@@ -205,8 +190,8 @@ fn check_diff_and_fix_follow_the_exit_contract() {
     );
 }
 
-/// A patch is a byte transport, not a Unicode report. Both invalid source
-/// bytes and an OS-native file name must round-trip through Git unchanged.
+/// A patch is a byte transport, not a Unicode report.
+/// Both invalid source bytes and an OS-native file name must round-trip through Git unchanged.
 #[cfg(unix)]
 #[test]
 fn diff_is_byte_preserving_and_git_applies_quoted_non_utf8_paths() {
@@ -268,8 +253,7 @@ fn diff_is_byte_preserving_and_git_applies_quoted_non_utf8_paths() {
     assert_eq!(fs::read(path).unwrap(), b"let raw = b\"\xff\"; \n");
 }
 
-/// A lock file carries no extension the detector can use, so the whole
-/// name has to reach it through the binary for the run to scan the file at all.
+/// A lock file carries no extension the detector can use, so the whole name has to reach it through the binary for the run to scan the file at all.
 /// `Cargo.lock` is the one every Rust checkout has.
 #[test]
 fn a_toml_lock_file_is_scanned_under_its_reserved_name() {
@@ -277,9 +261,8 @@ fn a_toml_lock_file_is_scanned_under_its_reserved_name() {
     let path = directory.path().join("Cargo.lock");
     fs::write(&path, b"# generated\nname = \"# opaque\" # remove\n").unwrap();
 
-    /* NOTE: `--include-generated`, because a lock file is passed over by
-     * default now. The reserved-name detection this pins is still what decides
-     * the language once the file is read. */
+    /* NOTE: `--include-generated`, because a lock file is passed over by default now.
+     * The reserved-name detection this pins is still what decides the language once the file is read. */
     let scanned = run(
         directory.path(),
         &[
@@ -314,10 +297,8 @@ fn a_toml_lock_file_is_scanned_under_its_reserved_name() {
     assert_eq!(fs::read(&path).unwrap(), b"\nname = \"# opaque\" \n");
 }
 
-/// A `.clang-format` file is YAML with no extension for the detector to go
-/// on and a hidden name besides, so naming it is what gets it scanned at all:
-/// the whole name reaches the detector, and an explicitly named path lifts the
-/// hidden-file rule the walk applies on its own.
+/// A `.clang-format` file is YAML with no extension for the detector to go on and a hidden name besides, so naming it is what gets it scanned at all:
+/// the whole name reaches the detector, and an explicitly named path lifts the hidden-file rule the walk applies on its own.
 #[test]
 fn a_yaml_configuration_is_scanned_under_its_reserved_name() {
     let directory = tempfile::tempdir().unwrap();
@@ -356,9 +337,7 @@ fn a_yaml_configuration_is_scanned_under_its_reserved_name() {
     );
 }
 
-/// A Lua script installed as a command carries no extension at all, so the
-/// `#!` line is the only evidence the run has; this is the path from the file
-/// name through the detector and out the other side as a Lua scan.
+/// A Lua script installed as a command carries no extension at all, so the `#!` line is the only evidence the run has; this is the path from the file name through the detector and out the other side as a Lua scan.
 #[test]
 fn a_lua_script_is_scanned_from_its_shebang_alone() {
     let directory = tempfile::tempdir().unwrap();
@@ -394,9 +373,7 @@ fn a_lua_script_is_scanned_from_its_shebang_alone() {
     );
 }
 
-/// A PHP template is two languages in one file and only the code half is
-/// scanned: the inline HTML around the tags is content, so the `<!-- -->` comment
-/// in it survives a run that removes the `//` comment inside them.
+/// A PHP template is two languages in one file and only the code half is scanned: the inline HTML around the tags is content, so the `<!-- -->` comment in it survives a run that removes the `//` comment inside them.
 #[test]
 fn a_php_template_is_scanned_only_inside_its_tags() {
     let directory = tempfile::tempdir().unwrap();
@@ -435,12 +412,8 @@ fn a_php_template_is_scanned_only_inside_its_tags() {
     );
 }
 
-/// Zig is the one built-in language with no block comment, and this is what
-/// that costs a run end to end: `// zig fmt: off` is the only instruction the
-/// formatter reads out of a comment and is kept, the `//` written on a
-/// multiline string literal line is content the way one inside a quoted string
-/// is, and only the ordinary comment beside them is removed. `zig ast-check`
-/// (0.16.0) accepts the file below.
+/// Zig is the one built-in language with no block comment, and this is what that costs a run end to end: `// zig fmt: off` is the only instruction the formatter reads out of a comment and is kept, the `//` written on a multiline string literal line is content the way one inside a quoted string is, and only the ordinary comment beside them is removed.
+/// `zig ast-check` (0.16.0) accepts the file below.
 #[test]
 fn a_zig_file_keeps_its_fmt_directive_and_its_multiline_string() {
     let directory = tempfile::tempdir().unwrap();
@@ -479,15 +452,9 @@ fn a_zig_file_keeps_its_fmt_directive_and_its_multiline_string() {
     );
 }
 
-/// Dart is the one built-in C-family language whose block comment nests, and
-/// this is what that plus its interpolation costs a run end to end: the outer
-/// opener is closed by the second terminator and not the first, `${ ... }` is
-/// code so the comment written inside the string is a comment of its own, and
-/// `// dart format off` is one of the four instructions a Dart tool reads and
-/// is kept.
+/// Dart is the one built-in C-family language whose block comment nests, and this is what that plus its interpolation costs a run end to end: the outer opener is closed by the second terminator and not the first, `${ ... }` is code so the comment written inside the string is a comment of its own, and `// dart format off` is one of the four instructions a Dart tool reads and is kept.
 ///
-/// Ground truth, Dart SDK 3.13.2 `scanString`: `SINGLE_LINE_COMMENT` at
-/// [0,18), a `MULTI_LINE_COMMENT` at [48,57) inside the interpolation,
+/// Ground truth, Dart SDK 3.13.2 `scanString`: `SINGLE_LINE_COMMENT` at [0,18), a `MULTI_LINE_COMMENT` at [48,57) inside the interpolation,
 /// `SINGLE_LINE_COMMENT` at [61,70), and `MULTI_LINE_COMMENT` at [71,106).
 /// `dart analyze` accepts both the file below and the bytes `fix` leaves.
 #[test]
@@ -531,18 +498,10 @@ fn a_dart_file_keeps_its_format_directive_and_nests_its_block_comment() {
     );
 }
 
-/// Swift is the one built-in language whose regular expression literal can
-/// carry a `//` with no quote in front of it, and this is what that costs a run
-/// end to end: `#/https://x/#` holds two slashes that are pattern rather than
-/// comment, `\( ... )` is code so the block comment written inside the string is
-/// a comment of its own, the outer `/*` is closed by the second `*/` and not the
-/// first, and `// swift-tools-version:` is kept because SwiftPM reads it before
-/// it reads a manifest at all. Ground truth, the SwiftSyntax parser of the Swift
-/// 6.3.3 toolchain: `lineComment` at [0,26), a `regexLiteralPattern` at [39,48),
-/// `lineComment` at [52,61), `blockComment` at [92,101) inside the
-/// interpolation, `lineComment` at [105,114), and `blockComment` at [115,150).
-/// `swift-frontend -dump-parse -swift-version 6` accepts both the file below and
-/// the bytes `fix` leaves.
+/// Swift is the one built-in language whose regular expression literal can carry a `//` with no quote in front of it, and this is what that costs a run end to end: `#/https://x/#` holds two slashes that are pattern rather than comment, `\( ... )` is code so the block comment written inside the string is a comment of its own, the outer `/*` is closed by the second `*/` and not the first, and `// swift-tools-version:` is kept because SwiftPM reads it before it reads a manifest at all.
+/// Ground truth, the SwiftSyntax parser of the Swift 6.3.3 toolchain: `lineComment` at [0,26), a `regexLiteralPattern` at [39,48),
+/// `lineComment` at [52,61), `blockComment` at [92,101) inside the interpolation, `lineComment` at [105,114), and `blockComment` at [115,150).
+/// `swift-frontend -dump-parse -swift-version 6` accepts both the file below and the bytes `fix` leaves.
 #[test]
 fn a_swift_file_keeps_its_tools_version_and_hides_a_slash_pair_in_a_regex() {
     let directory = tempfile::tempdir().unwrap();
@@ -587,13 +546,9 @@ fn a_swift_file_keeps_its_tools_version_and_hides_a_slash_pair_in_a_regex() {
         b"// swift-tools-version:5.9\nlet url = #/https://x/#  \nlet greeting = \"hi \\( \"there\"  )\" \n\n"
     );
 
-    /* NOTE: And the run this line is classified `load-bearing` for. `--policy
-     * all` is what a project reaches for when it wants every comment gone, and
-     * it is the one policy that says so about directives too -- so until the
-     * tools-version line was held back from it, `ocomment fix --policy all`
-     * left a manifest SwiftPM reads as one written against the oldest tools
-     * version there is, which it no longer supports at all. The file still
-     * parses either way, which is why nothing downstream catches it. */
+    /* NOTE: And the run this line is classified `load-bearing` for.
+     * `--policy all` is what a project reaches for when it wants every comment gone, and it is the one policy that says so about directives too -- so until the tools-version line was held back from it, `ocomment fix --policy all` left a manifest SwiftPM reads as one written against the oldest tools version there is, which it no longer supports at all.
+     * The file still parses either way, which is why nothing downstream catches it. */
     let stripped = run(
         directory.path(),
         &["fix", "Package.swift", "--policy", "all"],
@@ -617,20 +572,13 @@ fn a_swift_file_keeps_its_tools_version_and_hides_a_slash_pair_in_a_regex() {
     );
 }
 
-/// C# is the one built-in language whose *lines* are lexed two ways, and
-/// this is what that costs a run end to end: `#region` takes the rest of its line
-/// as the label an editor folds under, so the `//` in it is not a comment, while
-/// the `//` behind `#endregion` is one; the format clause behind the `:` of an
-/// interpolation hole is text, so the `//` in it is not a comment either; a
-/// verbatim string carries its `\` and hides the `//` inside it; and a block
-/// comment does not nest, so its first closing delimiter ends it and the `//`
-/// behind the leftovers opens a comment of its own. `// <auto-generated/>` is kept because Roslyn exempts a
-/// file carrying one from every analyzer that opts out of generated code. Ground
-/// truth, the Roslyn lexer the .NET SDK 10.0.400 ships:
+/// C# is the one built-in language whose *lines* are lexed two ways, and this is what that costs a run end to end: `#region` takes the rest of its line as the label an editor folds under, so the `//` in it is not a comment, while the `//` behind `#endregion` is one; the format clause behind the `:` of an interpolation hole is text, so the `//` in it is not a comment either; a verbatim string carries its `\` and hides the `//` inside it; and a block comment does not nest, so its first closing delimiter ends it and the `//` behind the leftovers opens a comment of its own.
+/// `// <auto-generated/>` is kept because Roslyn exempts a file carrying one from every analyzer that opts out of generated code.
+/// Ground truth, the Roslyn lexer the .NET SDK 10.0.400 ships:
 /// `SingleLineCommentTrivia` at [0,20), `PreprocessingMessageTrivia` at [29,53),
 /// `SingleLineCommentTrivia` at [125,134), `MultiLineCommentTrivia` at [135,155),
-/// and `SingleLineCommentTrivia` at [156,165) and [177,186). It reports no
-/// lexical diagnostic for the file below, nor for the bytes `fix` leaves.
+/// and `SingleLineCommentTrivia` at [156,165) and [177,186).
+/// It reports no lexical diagnostic for the file below, nor for the bytes `fix` leaves.
 #[test]
 fn a_csharp_file_keeps_its_generated_marker_and_its_directive_lines() {
     let directory = tempfile::tempdir().unwrap();
@@ -641,10 +589,8 @@ fn a_csharp_file_keeps_its_generated_marker_and_its_directive_lines() {
     )
     .unwrap();
 
-    /* NOTE: `--include-generated`, because `<auto-generated/>` is now a reason
-     * to pass the file over entirely: a generated file's comments belong to the
-     * tool that wrote them. What this test is about is what the scanner does
-     * with the file when it is asked to look. */
+    /* NOTE: `--include-generated`, because `<auto-generated/>` is now a reason to pass the file over entirely: a generated file's comments belong to the tool that wrote them.
+     * What this test is about is what the scanner does with the file when it is asked to look. */
     let scanned = run(
         directory.path(),
         &[
@@ -690,13 +636,9 @@ fn a_csharp_file_keeps_its_generated_marker_and_its_directive_lines() {
     );
 }
 
-/// R is the one built-in language whose extension is written in upper case
-/// as often as in lower — `analysis.R` and `analysis.r` are the same kind of
-/// file — so this is the run that proves the suffix is folded before it is
-/// looked up. It is also what a roxygen comment costs end to end: `#'` is
-/// documentation and the default policy takes it, `# nolint` is lintr's
-/// instruction and is kept, and the `#` inside the raw string is content. R
-/// 4.3.3 `getParseData` reads the file below as `COMMENT` at [0,19), [20,30),
+/// R is the one built-in language whose extension is written in upper case as often as in lower — `analysis.R` and `analysis.r` are the same kind of file — so this is the run that proves the suffix is folded before it is looked up.
+/// It is also what a roxygen comment costs end to end: `#'` is documentation and the default policy takes it, `# nolint` is lintr's instruction and is kept, and the `#` inside the raw string is content.
+/// R 4.3.3 `getParseData` reads the file below as `COMMENT` at [0,19), [20,30),
 /// [60,68) and [116,124), with `STR_CONST` covering [80,104).
 #[test]
 fn an_r_file_keeps_its_lint_directive_and_its_raw_string() {
@@ -734,21 +676,16 @@ fn an_r_file_keeps_its_lint_directive_and_its_raw_string() {
         "{}",
         String::from_utf8_lossy(&fixed.stderr)
     );
-    /* NOTE: The two `#'` lines survive. They are roxygen2 documentation, which
-     * is what generates this package's NAMESPACE and its `.Rd` pages, so
-     * removing them would change what the package exports -- and the default
-     * policy keeps documentation for that reason. Only the untagged remark
-     * goes. */
+    /* NOTE: The two `#'` lines survive.
+     * They are roxygen2 documentation, which is what generates this package's NAMESPACE and its `.Rd` pages, so removing them would change what the package exports -- and the default policy keeps documentation for that reason.
+     * Only the untagged remark goes. */
     assert_eq!(
         fs::read(&path).unwrap(),
         b"#' Add two numbers.\n#' @export\nadd <- function(a, b) a + b  # nolint\npattern <- r\"(\\d+ # not a comment)\"\ntotal <- 1 \n"
     );
 }
 
-/// A `Gemfile` carries no extension, so it reaches the Ruby scanner by its
-/// whole name alone — and once there, the magic comment at the head of it is a
-/// directive the default policy keeps, where the embedded document below it is
-/// an ordinary comment the same run removes.
+/// A `Gemfile` carries no extension, so it reaches the Ruby scanner by its whole name alone — and once there, the magic comment at the head of it is a directive the default policy keeps, where the embedded document below it is an ordinary comment the same run removes.
 #[test]
 fn a_gemfile_is_scanned_as_ruby_by_its_name_alone() {
     let directory = tempfile::tempdir().unwrap();
@@ -841,9 +778,8 @@ fn strict_configuration_suggests_unknown_keys() {
     assert!(error.contains("policy"));
 }
 
-/// An explicit configuration is a hermetic replacement for user/project
-/// discovery. Its own directory is also the root against which path overrides
-/// are matched.
+/// An explicit configuration is a hermetic replacement for user/project discovery.
+/// Its own directory is also the root against which path overrides are matched.
 #[test]
 fn explicit_config_replaces_discovery_and_roots_its_own_globs() {
     let directory = tempfile::tempdir().unwrap();
@@ -937,8 +873,7 @@ fn path_language_override_uses_its_language_policy_and_cli_stays_final() {
     );
 }
 
-/// Disabled languages apply after path routing, except that an explicit CLI
-/// language is a request to scan regardless of the configured default.
+/// Disabled languages apply after path routing, except that an explicit CLI language is a request to scan regardless of the configured default.
 #[test]
 fn disabled_path_language_is_skipped_but_explicit_cli_language_wins() {
     let directory = tempfile::tempdir().unwrap();
@@ -1016,9 +951,7 @@ fn init_lefthook_preserves_partial_stage_contract() {
     assert!(!generated.contains("stage_fixed"));
 }
 
-/// The starter file is a decision the reader may already have made
-/// differently: a second `init` must not quietly replace the config they have
-/// been editing, and the refusal has to name both ways out.
+/// The starter file is a decision the reader may already have made differently: a second `init` must not quietly replace the config they have been editing, and the refusal has to name both ways out.
 #[test]
 fn init_config_refuses_to_overwrite_an_existing_file() {
     let directory = tempfile::tempdir().unwrap();
@@ -1084,8 +1017,7 @@ fn init_force_overwrites_an_existing_file() {
     assert!(fs::read_to_string(&hook).unwrap().contains("pre-commit:"));
 }
 
-/// `--stdout` is the read-only door: the template goes to the pipe and the
-/// working directory is left exactly as it was found.
+/// `--stdout` is the read-only door: the template goes to the pipe and the working directory is left exactly as it was found.
 #[test]
 fn init_stdout_prints_the_template_and_writes_nothing() {
     let directory = tempfile::tempdir().unwrap();
@@ -1111,9 +1043,8 @@ fn init_stdout_prints_the_template_and_writes_nothing() {
     assert!(!directory.path().join("lefthook.yml").exists());
 }
 
-/// A config in a parent directory already governs this one, so a new starter
-/// file here layers over it rather than starting from nothing. The note says
-/// so once the file exists, and does not stop it being written.
+/// A config in a parent directory already governs this one, so a new starter file here layers over it rather than starting from nothing.
+/// The note says so once the file exists, and does not stop it being written.
 #[test]
 fn init_notes_a_project_config_that_already_applies() {
     let directory = tempfile::tempdir().unwrap();
@@ -1143,8 +1074,7 @@ fn init_notes_a_project_config_that_already_applies() {
         "the note replaced the file"
     );
 
-    /* NOTE: The config the run itself just created is this directory's own, not an
-     * inherited one, so a first `init` in a bare directory says nothing. */
+    /* NOTE: The config the run itself just created is this directory's own, not an inherited one, so a first `init` in a bare directory says nothing. */
     let bare = tempfile::tempdir().unwrap();
     let quiet = run(bare.path(), &["init", "config"]);
     assert_eq!(quiet.status.code(), Some(0));
@@ -1154,9 +1084,8 @@ fn init_notes_a_project_config_that_already_applies() {
         String::from_utf8_lossy(&quiet.stderr)
     );
 
-    /* NOTE: The note is advice about a file that was just created. A refused `init`
-     * created nothing, so it has nothing to advise about: the error stands
-     * alone rather than trailing guidance for a file that does not exist. */
+    /* NOTE: The note is advice about a file that was just created.
+     * A refused `init` created nothing, so it has nothing to advise about: the error stands alone rather than trailing guidance for a file that does not exist. */
     let refused = run(&nested, &["init", "config"]);
     assert_eq!(refused.status.code(), Some(2));
     let error = String::from_utf8_lossy(&refused.stderr);
@@ -1167,8 +1096,7 @@ fn init_notes_a_project_config_that_already_applies() {
     );
 }
 
-/// Creating the file is not the end of the task, so the line that reports it
-/// names the step that is.
+/// Creating the file is not the end of the task, so the line that reports it names the step that is.
 #[test]
 fn init_success_messages_name_the_next_step() {
     let directory = tempfile::tempdir().unwrap();
@@ -1187,8 +1115,7 @@ fn init_success_messages_name_the_next_step() {
     );
 }
 
-/// One writes a file and the other refuses to; asking for both is a mistake
-/// clap can catch before anything is opened.
+/// One writes a file and the other refuses to; asking for both is a mistake clap can catch before anything is opened.
 #[test]
 fn init_refuses_force_together_with_stdout() {
     let directory = tempfile::tempdir().unwrap();
@@ -1255,10 +1182,8 @@ fn staged_fix_does_not_stage_unrelated_working_tree_changes() {
     assert!(!cached.contains("// unstaged"));
 }
 
-/// `--staged` reads its paths from the index rather than from a walk, but
-/// `[files]` says which of the project's files OComment is allowed to touch
-/// either way. A path the configuration excludes is not the commit hook's
-/// business: it is not reported, and `fix --staged` leaves its blob alone.
+/// `--staged` reads its paths from the index rather than from a walk, but `[files]` says which of the project's files OComment is allowed to touch either way.
+/// A path the configuration excludes is not the commit hook's business: it is not reported, and `fix --staged` leaves its blob alone.
 #[test]
 fn staged_runs_honour_the_files_exclude_globs() {
     let directory = repository();
@@ -1308,8 +1233,7 @@ fn staged_runs_honour_the_files_exclude_globs() {
     );
 }
 
-/// The other half of the same rule: an `include` list narrows a staged run to
-/// the paths it names, exactly as it narrows a walk.
+/// The other half of the same rule: an `include` list narrows a staged run to the paths it names, exactly as it narrows a walk.
 #[test]
 fn staged_runs_honour_the_files_include_globs() {
     let directory = repository();
@@ -1342,10 +1266,8 @@ fn staged_runs_honour_the_files_include_globs() {
     );
 }
 
-/// `git` names a staged path relative to the repository root and a `[files]`
-/// glob is written relative to the project root, so the two meet wherever the
-/// command was typed. A run from a subdirectory must reach the same verdict as
-/// a run from the top.
+/// `git` names a staged path relative to the repository root and a `[files]` glob is written relative to the project root, so the two meet wherever the command was typed.
+/// A run from a subdirectory must reach the same verdict as a run from the top.
 #[test]
 fn staged_globs_stay_root_relative_from_a_subdirectory() {
     let directory = repository();
@@ -1378,12 +1300,8 @@ fn staged_globs_stay_root_relative_from_a_subdirectory() {
     );
 }
 
-/// `[files]` bounds a walk with more than its two glob lists: `hidden` decides
-/// whether a dot-directory is looked into at all, and `max_size` decides how
-/// much of a file is worth reading. A staged path is a walked path rather than
-/// a named one, so a staged run is bounded by the same two settings — a commit
-/// that touches `.cache/generated.rs` or a two-megabyte fixture must not put
-/// either through a hook that would never have walked into them.
+/// `[files]` bounds a walk with more than its two glob lists: `hidden` decides whether a dot-directory is looked into at all, and `max_size` decides how much of a file is worth reading.
+/// A staged path is a walked path rather than a named one, so a staged run is bounded by the same two settings — a commit that touches `.cache/generated.rs` or a two-megabyte fixture must not put either through a hook that would never have walked into them.
 #[test]
 fn staged_runs_honour_the_hidden_and_size_limits() {
     let directory = repository();
@@ -1423,9 +1341,7 @@ fn staged_runs_honour_the_hidden_and_size_limits() {
         !report.contains("big.rs"),
         "a staged blob past `max_size` was reported:\n{report}"
     );
-    /* NOTE: A size skip is a fact about the run, so it is folded into the summary
-     * under the same short label a walk gives it; a hidden path was never a
-     * candidate and is not a skip at all. */
+    /* NOTE: A size skip is a fact about the run, so it is folded into the summary under the same short label a walk gives it; a hidden path was never a candidate and is not a skip at all. */
     assert!(
         summary.contains("1 file skipped (too large: 1"),
         "the oversized staged blob was passed over silently:\n{summary}"
@@ -1453,13 +1369,9 @@ fn staged_runs_honour_the_hidden_and_size_limits() {
     );
 }
 
-/// The other half of the same rule. `[files]` bounds what a run *finds*, and
-/// a path the caller typed was never found: they named it, so it is checked
-/// whatever `hidden` and `max_size` would have said about it. A walk has said
-/// so since `discover_with_scope`, and a staged run says it about the same two
-/// settings — otherwise `ocomment check --staged .hidden/x.rs` answers about
-/// nothing at all, which reads as a clean file rather than as a path outside
-/// the project's bounds.
+/// The other half of the same rule.
+/// `[files]` bounds what a run *finds*, and a path the caller typed was never found: they named it, so it is checked whatever `hidden` and `max_size` would have said about it.
+/// A walk has said so since `discover_with_scope`, and a staged run says it about the same two settings — otherwise `ocomment check --staged .hidden/x.rs` answers about nothing at all, which reads as a clean file rather than as a path outside the project's bounds.
 #[test]
 fn staged_paths_the_caller_names_bypass_the_hidden_and_size_limits() {
     let directory = repository();
@@ -1517,12 +1429,9 @@ fn staged_paths_the_caller_names_bypass_the_hidden_and_size_limits() {
 /// A pathspec is not always the prefix of the path `git` answers with.
 ///
 /// `git diff --cached` names a staged path relative to the repository root,
-/// while the pathspec beside it is written however the caller found it
-/// convenient: as an absolute path, or with a wildcard `git` expands itself.
+/// while the pathspec beside it is written however the caller found it convenient: as an absolute path, or with a wildcard `git` expands itself.
 /// Comparing the two as text answers "nobody named this" for both spellings,
-/// and the project's limits then hide the very file the caller asked about, so
-/// the question goes to `git` instead — the only party that knows what a
-/// pathspec covers.
+/// and the project's limits then hide the very file the caller asked about, so the question goes to `git` instead — the only party that knows what a pathspec covers.
 #[test]
 fn a_staged_pathspec_names_its_paths_however_it_is_spelled() {
     let directory = repository();
@@ -1559,8 +1468,7 @@ fn a_staged_pathspec_names_its_paths_however_it_is_spelled() {
 }
 
 /// A repository whose staged paths sit on both sides of every `[files]` limit:
-/// one hidden, one oversized at the top, one oversized under `src`, and one
-/// ordinary file `src` is scanned for.
+/// one hidden, one oversized at the top, one oversized under `src`, and one ordinary file `src` is scanned for.
 fn repository_with_limits() -> TempDir {
     let directory = repository();
     fs::write(
@@ -1591,11 +1499,8 @@ fn repository_with_limits() -> TempDir {
 
 /// Where a pathspec was typed decides what it covers.
 ///
-/// `ocomment check .` from `src/` walks `src/`, so `--staged .` from the same
-/// directory has to mean the same subtree — and to mean it in both directions:
-/// what sits above `src` is no business of the run, and what sits under it was
-/// named, so the project's limits are lifted from it exactly as a walk lifts
-/// them from a directory the caller pointed at.
+/// `ocomment check .` from `src/` walks `src/`, so `--staged .` from the same directory has to mean the same subtree — and to mean it in both directions:
+/// what sits above `src` is no business of the run, and what sits under it was named, so the project's limits are lifted from it exactly as a walk lifts them from a directory the caller pointed at.
 #[test]
 fn a_staged_pathspec_is_resolved_where_it_was_typed() {
     let directory = repository_with_limits();
@@ -1618,14 +1523,10 @@ fn a_staged_pathspec_is_resolved_where_it_was_typed() {
     );
 }
 
-/// The whole tree is what a staged run already covers, so naming it says
-/// nothing.
+/// The whole tree is what a staged run already covers, so naming it says nothing.
 ///
-/// A hook that spells its run `ocomment check --staged .` from the top of the
-/// repository is asking for the same run as `ocomment check --staged`, and it
-/// must get the same answer: every `[files]` limit still applies. Only a
-/// pathspec that narrows the run is a request about particular paths, which is
-/// what earns the licence to look past those limits.
+/// A hook that spells its run `ocomment check --staged .` from the top of the repository is asking for the same run as `ocomment check --staged`, and it must get the same answer: every `[files]` limit still applies.
+/// Only a pathspec that narrows the run is a request about particular paths, which is what earns the licence to look past those limits.
 #[test]
 fn a_whole_tree_staged_pathspec_keeps_the_project_limits() {
     let directory = repository_with_limits();
@@ -1662,13 +1563,10 @@ fn a_whole_tree_staged_pathspec_keeps_the_project_limits() {
     assert_eq!(String::from_utf8(bare.stderr).unwrap(), summary);
 }
 
-/// A staged path the caller named and nothing could read is answered on a line
-/// of its own.
+/// A staged path the caller named and nothing could read is answered on a line of its own.
 ///
-/// The rule is the walk's: what a run merely came across is folded into the
-/// end-of-run summary, and what the caller asked about is answered directly.
-/// `ocomment check --staged notes.unknownext` that says only "nothing to check" reads
-/// as a clean file rather than as a file with no scanner.
+/// The rule is the walk's: what a run merely came across is folded into the end-of-run summary, and what the caller asked about is answered directly.
+/// `ocomment check --staged notes.unknownext` that says only "nothing to check" reads as a clean file rather than as a file with no scanner.
 #[test]
 fn a_named_staged_path_without_a_scanner_gets_its_own_line() {
     let directory = repository();
@@ -1691,11 +1589,8 @@ fn a_named_staged_path_without_a_scanner_gets_its_own_line() {
     );
 }
 
-/// A staged blob OComment has no scanner for is passed over, and a run says so
-/// the way a walk says it: folded onto the end-of-run summary under the same
-/// short label, rather than dropped without a word. A pre-commit hook that
-/// stages a PNG and a Markdown file is otherwise indistinguishable from one
-/// that scanned them and found nothing.
+/// A staged blob OComment has no scanner for is passed over, and a run says so the way a walk says it: folded onto the end-of-run summary under the same short label, rather than dropped without a word.
+/// A pre-commit hook that stages a PNG and a Markdown file is otherwise indistinguishable from one that scanned them and found nothing.
 #[test]
 fn staged_blobs_without_a_scanner_are_counted_in_the_summary() {
     let directory = repository();
@@ -1720,8 +1615,7 @@ fn staged_blobs_without_a_scanner_are_counted_in_the_summary() {
         summary.contains("2 files skipped (binary: 1, unknown language: 1"),
         "the staged blobs nothing could read were passed over silently:\n{summary}"
     );
-    /* NOTE: Nobody typed either path, so neither is annotated on a line of its
-     * own until `-v` asks for the list. */
+    /* NOTE: Nobody typed either path, so neither is annotated on a line of its own until `-v` asks for the list. */
     assert!(
         !report.contains("notes.unknownext") && !report.contains("image.dat"),
         "a folded skip was reported per file:\n{report}"
@@ -1739,9 +1633,8 @@ fn staged_blobs_without_a_scanner_are_counted_in_the_summary() {
     );
 }
 
-/// Mode 120000 contains the link target spelling, not source bytes, and mode
-/// 160000 names a commit rather than a blob. Both must be classified before
-/// `cat-file blob` is attempted and must survive a staged fix byte-for-byte.
+/// Mode 120000 contains the link target spelling, not source bytes, and mode 160000 names a commit rather than a blob.
+/// Both must be classified before `cat-file blob` is attempted and must survive a staged fix byte-for-byte.
 #[cfg(unix)]
 #[test]
 fn staged_symlinks_and_gitlinks_are_skipped_by_index_mode() {
@@ -1980,9 +1873,8 @@ fn explicit_io_failure_returns_two_and_blocks_the_whole_fix() {
     assert!(String::from_utf8_lossy(&output.stdout).contains("path does not exist"));
 }
 
-/// A command that names no path checks the current directory, the way every
-/// other file-walking developer tool does. The repository root is still where
-/// the configuration is discovered and where the override globs are anchored,
+/// A command that names no path checks the current directory, the way every other file-walking developer tool does.
+/// The repository root is still where the configuration is discovered and where the override globs are anchored,
 /// but it is no longer what a bare `ocomment` walks: run from a subdirectory,
 /// the command must not reach back up to files the caller cannot see.
 #[test]
@@ -2004,16 +1896,14 @@ fn no_argument_scan_uses_the_current_directory_not_the_repository_root() {
         report.contains("deep.rs:1:1: removable"),
         "the bare command never checked the current directory:\n{report}"
     );
-    /* NOTE: The implicit target is `.`, and a walk rooted there prefixes every entry
-     * with `./`. `ocomment` and `ocomment check deep.rs` report one file under
-     * one name, so that prefix is not part of it. */
+    /* NOTE: The implicit target is `.`, and a walk rooted there prefixes every entry with `./`.
+     * `ocomment` and `ocomment check deep.rs` report one file under one name, so that prefix is not part of it. */
     assert!(
         !report.contains("./"),
         "the implicit target leaked its `./` into the report:\n{report}"
     );
 
-    /* NOTE: `-v` names both halves of the answer: the root the configuration came
-     * from, and the target that root no longer decides. */
+    /* NOTE: `-v` names both halves of the answer: the root the configuration came from, and the target that root no longer decides. */
     let traced = run(&nested, &["-v"]);
     let trace = String::from_utf8(traced.stderr).unwrap();
     let repository_name = directory.path().file_name().unwrap().to_str().unwrap();
@@ -2029,11 +1919,8 @@ fn no_argument_scan_uses_the_current_directory_not_the_repository_root() {
     );
 }
 
-/// The root keeps the two jobs it did not lose: it is where `.ocomment.toml`
-/// is found, and it is what `files.include`, `files.exclude`, and every
-/// `[[overrides]].paths` glob is written relative to. A path named on the
-/// command line is relative to the working directory instead, so the two only
-/// line up once a path is resolved against the directory it was typed in —
+/// The root keeps the two jobs it did not lose: it is where `.ocomment.toml` is found, and it is what `files.include`, `files.exclude`, and every `[[overrides]].paths` glob is written relative to.
+/// A path named on the command line is relative to the working directory instead, so the two only line up once a path is resolved against the directory it was typed in —
 /// whichever of the three ways the file was named.
 #[test]
 fn project_config_and_overrides_apply_from_a_subdirectory() {
@@ -2045,8 +1932,7 @@ fn project_config_and_overrides_apply_from_a_subdirectory() {
     .unwrap();
     let nested = directory.path().join("nested");
     fs::create_dir_all(nested.join("skip")).unwrap();
-    /* NOTE: A directive is kept under the default `safe` policy and removed under
-     * `all`, so the line it is reported on is the override speaking. */
+    /* NOTE: A directive is kept under the default `safe` policy and removed under `all`, so the line it is reported on is the override speaking. */
     fs::write(nested.join("kept.rs"), b"let x = 1; // rustfmt::skip\n").unwrap();
     fs::write(nested.join("skip/ignored.rs"), b"let y = 2; // remove\n").unwrap();
 
@@ -2072,9 +1958,7 @@ fn project_config_and_overrides_apply_from_a_subdirectory() {
     }
 }
 
-/// `fix` is the command that writes, so the change of target matters most
-/// there: run from a subdirectory it rewrites that subdirectory, and the
-/// files above it are none of its business.
+/// `fix` is the command that writes, so the change of target matters most there: run from a subdirectory it rewrites that subdirectory, and the files above it are none of its business.
 #[test]
 fn fix_from_a_subdirectory_leaves_the_repository_root_alone() {
     let directory = repository();
@@ -2101,10 +1985,8 @@ fn fix_from_a_subdirectory_leaves_the_repository_root_alone() {
     assert_eq!(fs::read(&rewritten).unwrap(), b"let b = 2; \n");
 }
 
-/// A reader who has only ever run `ocomment fix` from the top of a repository
-/// can read the bare command as "fix the project", so the one run that writes
-/// says where it is pointed and where the project it belongs to starts. From
-/// the root the two are the same directory and the note would be noise.
+/// A reader who has only ever run `ocomment fix` from the top of a repository can read the bare command as "fix the project", so the one run that writes says where it is pointed and where the project it belongs to starts.
+/// From the root the two are the same directory and the note would be noise.
 #[test]
 fn fix_from_a_subdirectory_notes_the_project_root() {
     let directory = repository();
@@ -2152,9 +2034,7 @@ fn explicit_directory_bypasses_hidden_and_size_limits() {
     assert!(String::from_utf8_lossy(&output.stdout).contains(".hidden.rs"));
 }
 
-/// The target a command with no PATH stands in for is not an explicitly named
-/// one: `.` substituted for a missing argument walks with the ordinary hidden
-/// and size limits, so a bare run reports what a run naming its files would.
+/// The target a command with no PATH stands in for is not an explicitly named one: `.` substituted for a missing argument walks with the ordinary hidden and size limits, so a bare run reports what a run naming its files would.
 /// Naming the same directory is a request, and still bypasses both.
 #[test]
 fn an_implicit_target_keeps_the_hidden_and_size_limits() {
@@ -2212,9 +2092,7 @@ fn an_implicit_target_keeps_the_hidden_and_size_limits() {
     );
 }
 
-/// `.git` is hidden, so nothing a bare run does may look inside it — and `fix`
-/// least of all: the sample hooks git writes into a fresh repository are full
-/// of comments, and rewriting them is not what "fix my project" asked for.
+/// `.git` is hidden, so nothing a bare run does may look inside it — and `fix` least of all: the sample hooks git writes into a fresh repository are full of comments, and rewriting them is not what "fix my project" asked for.
 #[test]
 fn a_bare_run_never_reaches_into_the_git_directory() {
     let directory = tempfile::tempdir().unwrap();
@@ -2246,10 +2124,8 @@ fn a_bare_run_never_reaches_into_the_git_directory() {
 }
 
 /// Naming the directory lifts the hidden-file rule, and so does `files.hidden`;
-/// neither may lift the one that keeps git's own storage out of a walk. `git`
-/// itself never offers `.git` as a candidate for anything, and a tool that
-/// rewrites files in place may do so least of all: `ocomment fix .` in a fresh
-/// repository would otherwise rewrite every sample hook git had just written.
+/// neither may lift the one that keeps git's own storage out of a walk.
+/// `git` itself never offers `.git` as a candidate for anything, and a tool that rewrites files in place may do so least of all: `ocomment fix .` in a fresh repository would otherwise rewrite every sample hook git had just written.
 #[test]
 fn a_named_directory_never_reaches_into_the_git_directory() {
     for configuration in ["version = 1\n", "version = 1\n[files]\nhidden = true\n"] {
@@ -2259,9 +2135,7 @@ fn a_named_directory_never_reaches_into_the_git_directory() {
         let hook = directory.path().join(".git/hooks/x.sample");
         fs::write(&hook, b"#!/bin/sh\necho hi # sample hook comment\n").unwrap();
         let before = fs::read(&hook).unwrap();
-        /* NOTE: A submodule or a linked worktree keeps its `.git` as a *file*; it
-         * points at git's storage and is no more a candidate than the
-         * directory it stands in for. */
+        /* NOTE: A submodule or a linked worktree keeps its `.git` as a *file*; it points at git's storage and is no more a candidate than the directory it stands in for. */
         fs::create_dir(directory.path().join("vendor")).unwrap();
         fs::write(
             directory.path().join("vendor/.git"),
@@ -2303,9 +2177,8 @@ fn a_named_directory_never_reaches_into_the_git_directory() {
     }
 }
 
-/// The exclusion is about where a walk may wander, not about what a caller may
-/// ask for. A path typed on the command line is a request, so a hook the
-/// caller pointed at is still reported.
+/// The exclusion is about where a walk may wander, not about what a caller may ask for.
+/// A path typed on the command line is a request, so a hook the caller pointed at is still reported.
 #[test]
 fn a_path_named_inside_the_git_directory_is_still_honoured() {
     let directory = tempfile::tempdir().unwrap();
@@ -2637,8 +2510,7 @@ fn man_subcommand_renders_a_roff_page() {
         String::from_utf8_lossy(&output.stderr)
     );
     let page = String::from_utf8(output.stdout).unwrap();
-    /* NOTE: roff requires the `\*(Aq` string definition before the title macro, so
-     * `.TH` is the first macro that is not a string definition. */
+    /* NOTE: roff requires the `\*(Aq` string definition before the title macro, so `.TH` is the first macro that is not a string definition. */
     let header = page
         .lines()
         .find(|line| !line.starts_with(".ie ") && !line.starts_with(".el "))
@@ -2654,8 +2526,7 @@ fn man_subcommand_renders_a_roff_page() {
     assert!(page.contains(".SH NAME"), "man page has no NAME section");
 }
 
-/// The shipped page had an uppercase title, the "User Commands" manual, and a
-/// SEE ALSO pointer; the generated page must keep all three.
+/// The shipped page had an uppercase title, the "User Commands" manual, and a SEE ALSO pointer; the generated page must keep all three.
 #[test]
 fn man_page_keeps_the_shipped_title_manual_and_see_also() {
     let directory = tempfile::tempdir().unwrap();
@@ -2691,9 +2562,8 @@ fn bash_completions_carry_the_policy_values() {
     }
 }
 
-/// Rust `Debug` spellings that must never reach a terminal again. Bare
-/// `Remove` is checked separately: SARIF legitimately says "Remove comment
-/// with OComment" in its fix description.
+/// Rust `Debug` spellings that must never reach a terminal again.
+/// Bare `Remove` is checked separately: SARIF legitimately says "Remove comment with OComment" in its fix description.
 const DEBUG_LEAKS: [&str; 3] = ["DocBlock", "Keep {", "Shebang"];
 
 fn assert_no_debug_leak(context: &str, text: &str) {
@@ -2713,9 +2583,7 @@ fn human_check_names_comment_kinds_in_canonical_spelling() {
         b"/** doc */\nfn main() {}\n",
     )
     .unwrap();
-    /* NOTE: The policy is named because the default keeps documentation
-     * comments; what this pins is the spelling of the kind in the report, not
-     * which policy reaches one. */
+    /* NOTE: The policy is named because the default keeps documentation comments; what this pins is the spelling of the kind in the report, not which policy reaches one. */
     let output = run(
         directory.path(),
         &["check", "doc.rs", "--policy", "standard"],
@@ -2776,8 +2644,7 @@ fn config_explain_prints_canonical_policy_and_layout() {
         stdout.contains("policy: conservative; layout: lines"),
         "config explain output is:\n{stdout}"
     );
-    /* NOTE: Only the policy line is pinned: the surrounding lines print filesystem
-     * paths that may legitimately contain any spelling. */
+    /* NOTE: Only the policy line is pinned: the surrounding lines print filesystem paths that may legitimately contain any spelling. */
     let policy_line = stdout
         .lines()
         .find(|line| line.starts_with("policy:"))
@@ -2792,13 +2659,10 @@ fn config_explain_prints_canonical_policy_and_layout() {
     );
 }
 
-/// `config explain` names every kind and pattern it resolved, and where each
-/// one was written.
+/// `config explain` names every kind and pattern it resolved, and where each one was written.
 ///
-/// It used to print three lines -- precedence, root, policy and layout -- and
-/// so explained a configuration without naming anything the configuration
-/// said. A `keep_regex` is the setting most likely to be wrong and was the one
-/// setting `explain` would not show.
+/// It used to print three lines -- precedence, root, policy and layout -- and so explained a configuration without naming anything the configuration said.
+/// A `keep_regex` is the setting most likely to be wrong and was the one setting `explain` would not show.
 #[test]
 fn config_explain_names_every_pattern_and_kind_it_resolved() {
     let directory = tempfile::tempdir().unwrap();
@@ -2819,22 +2683,17 @@ fn config_explain_names_every_pattern_and_kind_it_resolved() {
         stdout.contains("keep_regex #0 `^// *determinism:allow` ([policy] in "),
         "config explain lost the pattern it resolved:\n{stdout}"
     );
-    /* NOTE: The index is what the run's own report counts from, so the two
-     * spellings of the same setting line up. */
+    /* NOTE: The index is what the run's own report counts from, so the two spellings of the same setting line up. */
     assert!(
         stdout.contains("`ocomment check` over the root is that walk"),
         "config explain did not say where to learn which of them fire:\n{stdout}"
     );
 }
 
-/// `--deny-skipped` refuses a reason it does not know, rather than accepting
-/// it and doing nothing.
+/// `--deny-skipped` refuses a reason it does not know, rather than accepting it and doing nothing.
 ///
-/// The flag matched free text against a label that contains a space, so
-/// `unknown-language` — the spelling of every other value this tool takes, and
-/// the one its own help implies — matched nothing, was accepted, and left the
-/// gate open. A gate that is off because of a typo is the failure this flag
-/// exists to prevent.
+/// The flag matched free text against a label that contains a space, so `unknown-language` — the spelling of every other value this tool takes, and the one its own help implies — matched nothing, was accepted, and left the gate open.
+/// A gate that is off because of a typo is the failure this flag exists to prevent.
 #[test]
 fn a_reason_deny_skipped_does_not_know_is_refused() {
     let directory = tempfile::tempdir().unwrap();
@@ -2869,9 +2728,8 @@ fn a_reason_deny_skipped_does_not_know_is_refused() {
         "the refusal does not say which reasons there are:\n{stderr}"
     );
 
-    /* NOTE: The bare flag beside a path. An optional value that is not anchored
-     * to an `=` eats the path behind it, and the run then walks the default
-     * target by luck rather than by request. */
+    /* NOTE: The bare flag beside a path.
+     * An optional value that is not anchored to an `=` eats the path behind it, and the run then walks the default target by luck rather than by request. */
     let bare = run(directory.path(), &["check", "--deny-skipped", "."]);
     assert_eq!(
         bare.status.code(),
@@ -2883,12 +2741,8 @@ fn a_reason_deny_skipped_does_not_know_is_refused() {
 
 /// A path override that matched nothing is reported too.
 ///
-/// The check beside this one covers the patterns a policy carries and was
-/// silent about the globs that decide which files the policy applies to. An
-/// override is how a project exempts files from a rule it keeps everywhere
-/// else, so a glob that matches nothing leaves that rule in force over exactly
-/// the files somebody decided it should not cover — and the settings under it
-/// still read as though they were doing something.
+/// The check beside this one covers the patterns a policy carries and was silent about the globs that decide which files the policy applies to.
+/// An override is how a project exempts files from a rule it keeps everywhere else, so a glob that matches nothing leaves that rule in force over exactly the files somebody decided it should not cover — and the settings under it still read as though they were doing something.
 #[test]
 fn a_path_override_that_matched_nothing_is_reported() {
     let directory = tempfile::tempdir().unwrap();
@@ -2910,9 +2764,8 @@ fn a_path_override_that_matched_nothing_is_reported() {
         "an override that is doing its job was reported as doing nothing:\n{stderr}"
     );
 
-    /* NOTE: One character off the name of a file that is right there. The
-     * override silently stops applying and the rule it was exempting the file
-     * from comes back, which is the harm the note has to name. */
+    /* NOTE: One character off the name of a file that is right there.
+     * The override silently stops applying and the rule it was exempting the file from comes back, which is the harm the note has to name. */
     write_config("\".gitignor\"");
     let typo = run(directory.path(), &["check", "."]);
     let stderr = String::from_utf8(typo.stderr).unwrap();
@@ -2928,11 +2781,8 @@ fn a_path_override_that_matched_nothing_is_reported() {
 
 /// A setting that matched nothing is reported instead of being left silent.
 ///
-/// This is the failure that looks like success: a `keep_regex` you believe is
-/// holding a comment back, which is not, and which `fix` therefore removes.
-/// The pattern below is the real one this came from -- written against the
-/// text of the comment and matched against the whole token, so the `^` is
-/// anchored in front of a `//` that is always there.
+/// This is the failure that looks like success: a `keep_regex` you believe is holding a comment back, which is not, and which `fix` therefore removes.
+/// The pattern below is the real one this came from -- written against the text of the comment and matched against the whole token, so the `^` is anchored in front of a `//` that is always there.
 #[test]
 fn a_setting_that_matched_nothing_is_reported() {
     let directory = tempfile::tempdir().unwrap();
@@ -2968,14 +2818,13 @@ fn a_setting_that_matched_nothing_is_reported() {
         stderr.contains("matched against the whole comment token"),
         "the report did not say why the pattern missed:\n{stderr}"
     );
-    /* INVARIANT: Commentary about the run goes to standard error, so a
-     * `--format json` consumer keeps a clean pipe. */
+    /* INVARIANT: Commentary about the run goes to standard error, so a `--format json` consumer keeps a clean pipe. */
     let stdout = String::from_utf8(walked.stdout).unwrap();
     assert!(!stdout.contains("keep_regex"), "{stdout}");
 }
 
-/// The report is about a walk, where "nothing matched" means the pattern is
-/// doing no work. A run over named files is a caller asking about those files,
+/// The report is about a walk, where "nothing matched" means the pattern is doing no work.
+/// A run over named files is a caller asking about those files,
 /// and a pattern with nothing to say about them has not thereby failed.
 #[test]
 fn an_unused_setting_is_not_reported_for_a_narrowed_or_quiet_run() {
@@ -3050,12 +2899,9 @@ fn sarif_keeps_kebab_rule_ids_and_canonical_messages() {
     assert_no_debug_leak("SARIF report", &String::from_utf8(output.stdout).unwrap());
 }
 
-/// A SARIF `fix` is an offer to rewrite the file, and a tool that takes it up
-/// has to end with the bytes `ocomment fix` would have written. Under
-/// `--layout compact` the edit is wider than the comment — a comment alone on
-/// its line takes the whole line with it — so a fix cut to the comment's own
-/// span would delete the comment and leave the blank line behind, which is the
-/// output of a layout nobody asked for. The region reported is the edit's.
+/// A SARIF `fix` is an offer to rewrite the file, and a tool that takes it up has to end with the bytes `ocomment fix` would have written.
+/// Under `--layout compact` the edit is wider than the comment — a comment alone on its line takes the whole line with it — so a fix cut to the comment's own span would delete the comment and leave the blank line behind, which is the output of a layout nobody asked for.
+/// The region reported is the edit's.
 #[test]
 fn a_sarif_fix_reproduces_what_fix_writes_under_compact_layout() {
     let directory = tempfile::tempdir().unwrap();
@@ -3084,8 +2930,7 @@ fn a_sarif_fix_reproduces_what_fix_writes_under_compact_layout() {
                 .to_owned(),
         ));
     }
-    // NOTE: The whole-line comment: from the start of its line to the start of
-    // NOTE: the next one, so the line itself goes rather than being blanked.
+    // NOTE: The whole-line comment: from the start of its line to the start of the next one, so the line itself goes rather than being blanked.
     assert_eq!(
         replacements[0],
         (12, 24, String::new()),
@@ -3114,8 +2959,7 @@ fn a_sarif_fix_reproduces_what_fix_writes_under_compact_layout() {
     );
 }
 
-/// Where a 1-based line and a 1-based byte column land in the source, so a
-/// SARIF region can be turned back into the bytes it names.
+/// Where a 1-based line and a 1-based byte column land in the source, so a SARIF region can be turned back into the bytes it names.
 fn byte_offset(source: &str, line: usize, column: usize) -> usize {
     let mut offset = 0;
     for _ in 1..line {
@@ -3127,10 +2971,7 @@ fn byte_offset(source: &str, line: usize, column: usize) -> usize {
     offset + column - 1
 }
 
-/// `strip` writes the stripped source and `config` answers a question about
-/// the configuration; neither has a report to render, so a format that
-/// describes one is refused rather than silently ignored — the way `languages`
-/// refuses the same flags.
+/// `strip` writes the stripped source and `config` answers a question about the configuration; neither has a report to render, so a format that describes one is refused rather than silently ignored — the way `languages` refuses the same flags.
 #[test]
 fn strip_and_config_refuse_the_formats_they_cannot_honour() {
     let directory = tempfile::tempdir().unwrap();
@@ -3199,8 +3040,8 @@ fn strip_and_config_refuse_the_formats_they_cannot_honour() {
     }
 }
 
-/// Every comment kind a rule id can name, in the spelling `CommentKind`
-/// serialises. A kind added without a rule to describe it fails this test.
+/// Every comment kind a rule id can name, in the spelling `CommentKind` serialises.
+/// A kind added without a rule to describe it fails this test.
 const SARIF_KINDS: [&str; 12] = [
     "line",
     "block",
@@ -3216,15 +3057,12 @@ const SARIF_KINDS: [&str; 12] = [
     "load-bearing",
 ];
 
-/// The SARIF failure levels OComment reports at. `none` is a level too, but
-/// nothing OComment writes uses it.
+/// The SARIF failure levels OComment reports at.
+/// `none` is a level too, but nothing OComment writes uses it.
 const SARIF_LEVELS: [&str; 3] = ["error", "warning", "note"];
 
-/// A code-scanning UI shows a finding through the rule it names: the title, the
-/// sentence under it, and the link it offers all come from
-/// `tool.driver.rules`, which a result reaches by `ruleIndex`. A rule the tool
-/// never describes leaves the finding with nothing but its id, so every id a
-/// run can emit is described and every result points at its own description.
+/// A code-scanning UI shows a finding through the rule it names: the title, the sentence under it, and the link it offers all come from `tool.driver.rules`, which a result reaches by `ruleIndex`.
+/// A rule the tool never describes leaves the finding with nothing but its id, so every id a run can emit is described and every result points at its own description.
 #[test]
 fn sarif_describes_every_rule_it_reports() {
     let directory = tempfile::tempdir().unwrap();
@@ -3333,8 +3171,7 @@ fn sarif_describes_every_rule_it_reports() {
     assert_no_debug_leak("SARIF report", &report);
 }
 
-/// A file OComment cannot read is reported as a result too, and it names a rule
-/// like any other finding.
+/// A file OComment cannot read is reported as a result too, and it names a rule like any other finding.
 #[cfg(unix)]
 #[test]
 fn sarif_describes_the_io_error_rule_when_it_reports_one() {
@@ -3362,11 +3199,8 @@ fn sarif_describes_the_io_error_rule_when_it_reports_one() {
     assert_eq!(rule["defaultConfiguration"]["level"], "error");
 }
 
-/// A code-scanning UI resolves `artifactLocation.uri` against the checkout, so
-/// a reported path has to be spelled the way the repository spells it: forward
-/// slashes, no `./` standing in for the directory the run started in, and
-/// `%SRCROOT%` saying what the rest is relative to. Every location in the
-/// document is read that way, the ones under `fixes` included.
+/// A code-scanning UI resolves `artifactLocation.uri` against the checkout, so a reported path has to be spelled the way the repository spells it: forward slashes, no `./` standing in for the directory the run started in, and `%SRCROOT%` saying what the rest is relative to.
+/// Every location in the document is read that way, the ones under `fixes` included.
 #[test]
 fn sarif_locates_reported_files_under_the_source_root() {
     let directory = tempfile::tempdir().unwrap();
@@ -3405,9 +3239,7 @@ fn sarif_locates_reported_files_under_the_source_root() {
     }
 }
 
-/// A path the user typed as an absolute one is not under the checkout, so it
-/// keeps its absolute spelling and names no base id — a base id would say it is
-/// relative to the source root, which it is not.
+/// A path the user typed as an absolute one is not under the checkout, so it keeps its absolute spelling and names no base id — a base id would say it is relative to the source root, which it is not.
 #[test]
 fn sarif_leaves_an_absolute_path_absolute_and_unbased() {
     let directory = tempfile::tempdir().unwrap();
@@ -3430,8 +3262,7 @@ fn sarif_leaves_an_absolute_path_absolute_and_unbased() {
     }
 }
 
-/// Standard input has no place in the checkout either, so the pseudo-path it is
-/// reported under is left alone rather than resolved against the source root.
+/// Standard input has no place in the checkout either, so the pseudo-path it is reported under is left alone rather than resolved against the source root.
 #[test]
 fn sarif_leaves_the_stdin_pseudo_path_unbased() {
     let directory = tempfile::tempdir().unwrap();
@@ -3452,17 +3283,11 @@ fn sarif_leaves_the_stdin_pseudo_path_unbased() {
     }
 }
 
-/// A relative URI is read as a URI, and RFC 3986 gives a first segment holding
-/// a colon back to the scheme: `c:/a.rs` parses as the scheme `c` rather than
-/// as a path, and a Windows reader sees a drive letter in it besides. A POSIX
-/// checkout is free to hold a directory named `c:`, so the emitter puts the one
-/// `.` segment a URI is allowed to keep in front of that path — `./c:/a.rs`,
+/// A relative URI is read as a URI, and RFC 3986 gives a first segment holding a colon back to the scheme: `c:/a.rs` parses as the scheme `c` rather than as a path, and a Windows reader sees a drive letter in it besides.
+/// A POSIX checkout is free to hold a directory named `c:`, so the emitter puts the one `.` segment a URI is allowed to keep in front of that path — `./c:/a.rs`,
 /// still measured from `%SRCROOT%` — and no reader can misread it.
 ///
-/// A GitHub annotation is matched against the paths the repository uses rather
-/// than parsed as a URI, so `file=` keeps the plain spelling — with the `%3A`
-/// the annotation format already owes a colon, which is a property delimiter
-/// there.
+/// A GitHub annotation is matched against the paths the repository uses rather than parsed as a URI, so `file=` keeps the plain spelling — with the `%3A` the annotation format already owes a colon, which is a property delimiter there.
 #[cfg(unix)]
 #[test]
 fn sarif_disambiguates_a_leading_segment_that_reads_as_a_drive_letter() {
@@ -3509,8 +3334,7 @@ fn sarif_disambiguates_a_leading_segment_that_reads_as_a_drive_letter() {
     );
 }
 
-/// Every `artifactLocation` in a SARIF document, from the locations a result
-/// reports and from the changes its fix would make.
+/// Every `artifactLocation` in a SARIF document, from the locations a result reports and from the changes its fix would make.
 fn artifact_locations(document: &serde_json::Value) -> Vec<serde_json::Value> {
     let mut found = Vec::new();
     for run in document["runs"].as_array().into_iter().flatten() {
@@ -3529,8 +3353,8 @@ fn artifact_locations(document: &serde_json::Value) -> Vec<serde_json::Value> {
 }
 
 /// GitHub matches an annotation to a line of the diff by the path in `file=`,
-/// and matches it against the paths the repository uses. A `./` the walk left
-/// behind is enough to lose the annotation.
+/// and matches it against the paths the repository uses.
+/// A `./` the walk left behind is enough to lose the annotation.
 #[test]
 fn github_annotations_report_repository_paths() {
     let directory = tempfile::tempdir().unwrap();
@@ -3559,14 +3383,10 @@ fn github_annotations_report_repository_paths() {
     );
 }
 
-/// The `::` level a removable comment is annotated at is the one its run's
-/// exit status justifies.
+/// The `::` level a removable comment is annotated at is the one its run's exit status justifies.
 ///
-/// `check` answers a finding with 1, and a gate that fails on that 1 was
-/// posting `::notice` about the comments it failed over -- which reads in the
-/// checks tab as though nothing had gone wrong, and which GitHub folds away
-/// where it surfaces an error. `scan` ends at 0 whatever it finds, so it is
-/// offering the same comments for information and says so.
+/// `check` answers a finding with 1, and a gate that fails on that 1 was posting `::notice` about the comments it failed over -- which reads in the checks tab as though nothing had gone wrong, and which GitHub folds away where it surfaces an error.
+/// `scan` ends at 0 whatever it finds, so it is offering the same comments for information and says so.
 #[test]
 fn github_annotations_follow_the_exit_status() {
     let directory = tempfile::tempdir().unwrap();
@@ -3586,8 +3406,7 @@ fn github_annotations_follow_the_exit_status() {
         "::notice file=a.rs,line=1,col=14::removable line comment\n"
     );
 
-    /* NOTE: A job that posts annotations without gating on them, or gates
-     * without wanting the red, says so and is believed. */
+    /* NOTE: A job that posts annotations without gating on them, or gates without wanting the red, says so and is believed. */
     let overruled = run(
         directory.path(),
         &[
@@ -3608,10 +3427,9 @@ fn github_annotations_follow_the_exit_status() {
 
 /// A machine format carries the position and the text the human report prints.
 ///
-/// A byte span is what a patcher needs and not what a reporter needs: turning
-/// `13..22` into `1:14` means reopening the file and counting line breaks,
-/// which is work the run has already done. Until this held, `--format json`
-/// was less useful to a machine than the prose was to a person.
+/// A byte span is what a patcher needs and not what a reporter needs: turning `13..22` into `1:14` means reopening the file and counting line breaks,
+/// which is work the run has already done.
+/// Until this held, `--format json` was less useful to a machine than the prose was to a person.
 #[test]
 fn json_carries_the_position_and_text_the_human_report_prints() {
     let directory = tempfile::tempdir().unwrap();
@@ -3635,9 +3453,7 @@ fn json_carries_the_position_and_text_the_human_report_prints() {
     assert_eq!(comment["line"], 2);
     assert_eq!(comment["column"], 15);
     assert_eq!(comment["text"], "// hello");
-    /* INVARIANT: The positions are derived from the span beside them, so the
-     * end is the half-open one the span already promises: one past the last
-     * byte of the comment. */
+    /* INVARIANT: The positions are derived from the span beside them, so the end is the half-open one the span already promises: one past the last byte of the comment. */
     assert_eq!(comment["end_line"], 2);
     assert_eq!(
         comment["end_column"].as_u64().unwrap(),
@@ -3646,9 +3462,7 @@ fn json_carries_the_position_and_text_the_human_report_prints() {
                 - comment["span"]["start"].as_u64().unwrap())
     );
 
-    /* NOTE: `--no-preview` is how a report over a large tree stays small, and
-     * it drops the comment text here for the reason it drops the preview from
-     * a human line. */
+    /* NOTE: `--no-preview` is how a report over a large tree stays small, and it drops the comment text here for the reason it drops the preview from a human line. */
     let terse = run(
         directory.path(),
         &["scan", "a.rs", "--format", "json", "--no-preview"],
@@ -3659,9 +3473,8 @@ fn json_carries_the_position_and_text_the_human_report_prints() {
     assert_eq!(comment["line"], 2);
 }
 
-/// SARIF locations are URIs and GitHub `file=` values are workflow-command
-/// properties. They deliberately have different escaping rules, but neither
-/// is allowed to replace a raw Unix filename byte with U+FFFD.
+/// SARIF locations are URIs and GitHub `file=` values are workflow-command properties.
+/// They deliberately have different escaping rules, but neither is allowed to replace a raw Unix filename byte with U+FFFD.
 #[cfg(unix)]
 #[test]
 fn machine_reports_encode_raw_unix_paths_without_loss() {
@@ -3738,9 +3551,9 @@ fn json_and_jsonl_serde_names_are_frozen() {
         "the JSONL protocol changed"
     );
 
-    /* NOTE: And without it. The map is one segment per unchanged run of bytes,
-     * which is the largest thing a report carries and the thing a caller who
-     * only wanted the findings was paying for; `--source-map` is what asks. */
+    /* NOTE: And without it.
+     * The map is one segment per unchanged run of bytes,
+     * which is the largest thing a report carries and the thing a caller who only wanted the findings was paying for; `--source-map` is what asks. */
     let without = run(
         directory.path(),
         &["scan", "sample.py", "--format", "jsonl"],
@@ -3792,8 +3605,7 @@ fn json_diagnostics_keep_the_lower_case_serde_severity() {
     assert_eq!(diagnostic["code"], "unterminated-comment");
 }
 
-/// The end-of-run summary belongs on standard error so that `check` keeps a
-/// grep-able `path:line:col` stream on standard output.
+/// The end-of-run summary belongs on standard error so that `check` keeps a grep-able `path:line:col` stream on standard output.
 #[test]
 fn check_writes_its_summary_to_standard_error() {
     let directory = tempfile::tempdir().unwrap();
@@ -4048,8 +3860,7 @@ fn machine_formats_never_emit_the_summary() {
     }
 }
 
-/// A single invalid file blocks the whole transaction, so the summary must not
-/// claim removals that never reached the disk.
+/// A single invalid file blocks the whole transaction, so the summary must not claim removals that never reached the disk.
 #[test]
 fn a_blocked_fix_does_not_claim_removals() {
     let directory = tempfile::tempdir().unwrap();
@@ -4117,10 +3928,8 @@ fn help_lists_the_verbosity_and_progress_flags() {
     );
 }
 
-/// `-q` does not print nothing: it drops the commentary and keeps whatever the
-/// command was asked to produce — the findings, the patch, the listing. A help
-/// line that claims otherwise sends a reader hunting for output that was never
-/// dropped, or piping a run they think is silent.
+/// `-q` does not print nothing: it drops the commentary and keeps whatever the command was asked to produce — the findings, the patch, the listing.
+/// A help line that claims otherwise sends a reader hunting for output that was never dropped, or piping a run they think is silent.
 #[test]
 fn quiet_help_says_what_it_keeps() {
     let directory = tempfile::tempdir().unwrap();
@@ -4154,8 +3963,7 @@ fn many_files(count: usize) -> TempDir {
     directory
 }
 
-/// `--progress always` draws a live counter on standard error and still leaves
-/// the end-of-run summary readable once the counter line is cleared.
+/// `--progress always` draws a live counter on standard error and still leaves the end-of-run summary readable once the counter line is cleared.
 #[test]
 fn progress_always_draws_a_live_counter_and_keeps_the_summary() {
     let directory = many_files(120);
@@ -4170,10 +3978,8 @@ fn progress_always_draws_a_live_counter_and_keeps_the_summary() {
         stderr.contains("\r\x1b[2K"),
         "the counter line was never cleared:\n{stderr:?}"
     );
-    /* NOTE: Contained rather than final: a run this size now carries two lines
-     * after the verdict saying where the findings are and what would answer
-     * them. What this pins is that the counter was cleared before the summary
-     * and the summary survived it. */
+    /* NOTE: Contained rather than final: a run this size now carries two lines after the verdict saying where the findings are and what would answer them.
+     * What this pins is that the counter was cleared before the summary and the summary survived it. */
     assert!(
         stderr.contains(
             "Found 120 removable comments in 120 files (120 files scanned). \
@@ -4288,9 +4094,8 @@ fn a_previewed_comment_cannot_inject_escape_sequences() {
     );
 }
 
-/// A file name is chosen by whoever made the file, so the half of a report
-/// line that shows a path is untrusted input on its way to a terminal exactly
-/// like the preview beside it. It gets the same treatment, and is cut nowhere:
+/// A file name is chosen by whoever made the file, so the half of a report line that shows a path is untrusted input on its way to a terminal exactly like the preview beside it.
+/// It gets the same treatment, and is cut nowhere:
 /// a path ending in an ellipsis names no file.
 #[cfg(unix)]
 #[test]
@@ -4330,10 +4135,9 @@ fn a_reported_path_cannot_inject_escape_sequences() {
         "the skip lost the file it names:\n{stdout}"
     );
 
-    /* NOTE: Asked for hyperlinks, the report writes escape bytes of its own: the
-     * OSC 8 frame is delimited by them. They are the only ones it may write.
-     * The name goes into the frame's *target* as well as its text, so the
-     * target percent-encodes what it is given rather than forwarding it. */
+    /* NOTE: Asked for hyperlinks, the report writes escape bytes of its own: the OSC 8 frame is delimited by them.
+     * They are the only ones it may write.
+     * The name goes into the frame's *target* as well as its text, so the target percent-encodes what it is given rather than forwarding it. */
     let linked = run(
         directory.path(),
         &["check", "-v", ".", "--hyperlinks", "always"],
@@ -4360,10 +4164,9 @@ fn a_reported_path_cannot_inject_escape_sequences() {
     );
 }
 
-/// A file name is not commentary. The spaces and tabs in it are the name — a
-/// reader who cannot see them cannot type the name back, and a report that
-/// quietly drops them names a file the checkout does not have. Every control
-/// character is still replaced, the tab included, so the row stays one row.
+/// A file name is not commentary.
+/// The spaces and tabs in it are the name — a reader who cannot see them cannot type the name back, and a report that quietly drops them names a file the checkout does not have.
+/// Every control character is still replaced, the tab included, so the row stays one row.
 #[cfg(unix)]
 #[test]
 fn a_reported_path_keeps_the_spacing_of_the_name_it_reports() {
@@ -4399,9 +4202,8 @@ fn a_reported_path_keeps_the_spacing_of_the_name_it_reports() {
     );
 }
 
-/// A directory and a file inside it are both named, so the walk meets the file
-/// twice. It is one file: the report says so once, exactly as it does for a
-/// file it can scan.
+/// A directory and a file inside it are both named, so the walk meets the file twice.
+/// It is one file: the report says so once, exactly as it does for a file it can scan.
 #[test]
 fn a_file_reached_twice_is_skipped_once() {
     let directory = tempfile::tempdir().unwrap();
@@ -4433,9 +4235,8 @@ fn a_file_reached_twice_is_skipped_once() {
     );
 }
 
-/// A configuration file is read from the project, and the pattern in it is
-/// echoed back on the line that rejects it. That makes it untrusted input on
-/// its way to a terminal, and it is folded like every other one.
+/// A configuration file is read from the project, and the pattern in it is echoed back on the line that rejects it.
+/// That makes it untrusted input on its way to a terminal, and it is folded like every other one.
 #[test]
 fn an_invalid_policy_regex_cannot_inject_escape_sequences() {
     let directory = tempfile::tempdir().unwrap();
@@ -4465,10 +4266,8 @@ fn an_invalid_policy_regex_cannot_inject_escape_sequences() {
     );
 }
 
-/// The same rule for the other pattern a project file carries. A `[files]`
-/// glob is echoed back on the line that rejects it — twice, because `globset`
-/// quotes the glob inside its own parse error — so both halves are folded
-/// before either reaches a terminal.
+/// The same rule for the other pattern a project file carries.
+/// A `[files]` glob is echoed back on the line that rejects it — twice, because `globset` quotes the glob inside its own parse error — so both halves are folded before either reaches a terminal.
 #[test]
 fn an_invalid_file_glob_cannot_inject_escape_sequences() {
     let directory = tempfile::tempdir().unwrap();
@@ -4502,10 +4301,8 @@ fn an_invalid_file_glob_cannot_inject_escape_sequences() {
     );
 }
 
-/// The GitHub renderer annotates a pull request, and an annotation costs the
-/// reader a line in the checks tab. So it folds a skip away exactly as the
-/// human renderer does: an I/O error and a path the caller named are always
-/// worth saying, while a file a walk merely wandered past is `-v` material.
+/// The GitHub renderer annotates a pull request, and an annotation costs the reader a line in the checks tab.
+/// So it folds a skip away exactly as the human renderer does: an I/O error and a path the caller named are always worth saying, while a file a walk merely wandered past is `-v` material.
 #[test]
 fn github_annotations_fold_walked_skips_away_unless_asked() {
     let directory = tempfile::tempdir().unwrap();
@@ -4514,9 +4311,7 @@ fn github_annotations_fold_walked_skips_away_unless_asked() {
 
     let quiet = run(directory.path(), &["check", "--format", "github"]);
     let stdout = String::from_utf8(quiet.stdout).unwrap();
-    /* NOTE: A finding is annotated at the level its run's exit status
-     * justifies, and `check` answers a finding with 1; a skip is not a finding
-     * and stays a notice whatever the run returns. */
+    /* NOTE: A finding is annotated at the level its run's exit status justifies, and `check` answers a finding with 1; a skip is not a finding and stays a notice whatever the run returns. */
     assert!(stdout.contains("::error file=a.rs"), "{stdout}");
     assert!(
         !stdout.contains("notes.unknownext"),
@@ -4551,11 +4346,8 @@ fn github_annotations_fold_walked_skips_away_unless_asked() {
     );
 }
 
-/// `-q` trims the human report down to what went wrong; it is a human-format
-/// concept and has no business reaching a machine format. A GitHub annotation
-/// is the product of `--format github`, so a hook that runs quietly still
-/// annotates the path the caller named and the file it could not read — the
-/// walked skip stays folded because `-v`, not `-q`, is what decides that.
+/// `-q` trims the human report down to what went wrong; it is a human-format concept and has no business reaching a machine format.
+/// A GitHub annotation is the product of `--format github`, so a hook that runs quietly still annotates the path the caller named and the file it could not read — the walked skip stays folded because `-v`, not `-q`, is what decides that.
 #[test]
 fn quiet_does_not_take_annotations_off_a_machine_format() {
     let directory = tempfile::tempdir().unwrap();
@@ -4591,10 +4383,8 @@ fn quiet_does_not_take_annotations_off_a_machine_format() {
     );
 }
 
-/// The `regex` crate writes a parse error over several lines, with a caret
-/// under the byte it stopped at. The caret means nothing once the pattern is
-/// folded, but the sentence after it is the whole answer, so the report keeps
-/// every word of it and puts the lot on the one line an error is.
+/// The `regex` crate writes a parse error over several lines, with a caret under the byte it stopped at.
+/// The caret means nothing once the pattern is folded, but the sentence after it is the whole answer, so the report keeps every word of it and puts the lot on the one line an error is.
 #[test]
 fn an_invalid_policy_regex_is_reported_whole_on_one_line() {
     let directory = tempfile::tempdir().unwrap();
@@ -4626,11 +4416,9 @@ fn an_invalid_policy_regex_is_reported_whole_on_one_line() {
     );
 }
 
-/// The same rule for the file as a whole. A `toml` parse error quotes the
-/// line it stopped on, and that line came out of a project file, so it carries
-/// whatever bytes the file carries — an escape sequence among them — over four
-/// lines of caret diagram. The verdict is one line, and every byte of it is
-/// printable.
+/// The same rule for the file as a whole.
+/// A `toml` parse error quotes the line it stopped on, and that line came out of a project file, so it carries whatever bytes the file carries — an escape sequence among them — over four lines of caret diagram.
+/// The verdict is one line, and every byte of it is printable.
 #[test]
 fn an_invalid_configuration_is_reported_whole_on_one_line() {
     let directory = tempfile::tempdir().unwrap();
@@ -4669,11 +4457,8 @@ fn an_invalid_configuration_is_reported_whole_on_one_line() {
 
 /// The other half of that line: the path in front of the colon.
 ///
-/// A configuration file is named by the directory it was found in, and a
-/// directory name carries whatever bytes the file system allowed — a `\x07`
-/// that rings the terminal's bell among them. The name is still the answer to
-/// "which file?", so it is printed rather than withheld, and it gets the
-/// treatment every other path in the report gets.
+/// A configuration file is named by the directory it was found in, and a directory name carries whatever bytes the file system allowed — a `\x07` that rings the terminal's bell among them.
+/// The name is still the answer to "which file?", so it is printed rather than withheld, and it gets the treatment every other path in the report gets.
 #[test]
 fn an_invalid_configuration_names_its_file_without_ringing_the_terminal() {
     let parent = tempfile::tempdir().unwrap();
@@ -4738,8 +4523,7 @@ fn help_documents_the_preview_switch() {
     );
 }
 
-/// `clap_mangen` dumps `after_long_help` as one opaque `.SH EXTRA` blob; the
-/// manual must carry the same content as real roff sections instead.
+/// `clap_mangen` dumps `after_long_help` as one opaque `.SH EXTRA` blob; the manual must carry the same content as real roff sections instead.
 #[test]
 fn man_page_renders_real_sections_instead_of_one_extra_blob() {
     let directory = tempfile::tempdir().unwrap();
@@ -4765,8 +4549,7 @@ fn man_page_renders_real_sections_instead_of_one_extra_blob() {
     );
 }
 
-/// A bidirectional override can make a comment render as its own reverse; the
-/// preview must neutralize the whole format-control class, not only C0.
+/// A bidirectional override can make a comment render as its own reverse; the preview must neutralize the whole format-control class, not only C0.
 #[test]
 fn a_previewed_comment_cannot_reorder_the_line_with_bidi_controls() {
     let directory = tempfile::tempdir().unwrap();
@@ -4788,8 +4571,7 @@ fn a_previewed_comment_cannot_reorder_the_line_with_bidi_controls() {
     );
 }
 
-/// An explicitly named skip already has its own line on standard output, so
-/// the folded clause must not count it a second time.
+/// An explicitly named skip already has its own line on standard output, so the folded clause must not count it a second time.
 #[test]
 fn a_named_skip_is_not_counted_twice_in_the_summary() {
     let directory = tempfile::tempdir().unwrap();
@@ -4817,8 +4599,7 @@ fn a_named_skip_is_not_counted_twice_in_the_summary() {
     );
 }
 
-/// Scanning nothing at all is not "no removable comments in 0 files": say what
-/// actually happened to the files that were passed over.
+/// Scanning nothing at all is not "no removable comments in 0 files": say what actually happened to the files that were passed over.
 #[test]
 fn a_run_that_scans_nothing_reports_the_skips_instead() {
     let directory = tempfile::tempdir().unwrap();
@@ -4871,8 +4652,7 @@ fn the_summary_counts_io_errors() {
     );
 }
 
-/// `-q` silences the chatter, never the product: a patch is the whole point of
-/// `diff`, so it survives.
+/// `-q` silences the chatter, never the product: a patch is the whole point of `diff`, so it survives.
 #[test]
 fn quiet_diff_still_writes_the_patch() {
     let directory = tempfile::tempdir().unwrap();
@@ -4912,8 +4692,7 @@ fn quiet_scan_still_writes_the_listing() {
     assert_eq!(String::from_utf8(output.stderr).unwrap(), "");
 }
 
-/// Nothing was scanned and the only skip was named on the command line, where
-/// it already has its own line: the summary says so without repeating it.
+/// Nothing was scanned and the only skip was named on the command line, where it already has its own line: the summary says so without repeating it.
 #[test]
 fn a_run_of_only_named_skips_does_not_repeat_them() {
     let directory = tempfile::tempdir().unwrap();
@@ -4931,8 +4710,7 @@ fn a_run_of_only_named_skips_does_not_repeat_them() {
     );
 }
 
-/// `-` in the PATH list is standard input: it is scanned like any other file
-/// and reported under the pseudo path `<stdin>`.
+/// `-` in the PATH list is standard input: it is scanned like any other file and reported under the pseudo path `<stdin>`.
 #[test]
 fn a_dash_reads_standard_input_as_a_file() {
     let directory = tempfile::tempdir().unwrap();
@@ -4968,8 +4746,7 @@ fn a_dash_diffs_standard_input_under_the_pseudo_path() {
     assert!(stdout.contains("-let x = 1; // note"), "diff is:\n{stdout}");
 }
 
-/// The machine formats carry the pseudo path too, so a piped run is as
-/// scriptable as a walked one.
+/// The machine formats carry the pseudo path too, so a piped run is as scriptable as a walked one.
 #[test]
 fn a_dash_names_standard_input_in_json() {
     let directory = tempfile::tempdir().unwrap();
@@ -4986,8 +4763,7 @@ fn a_dash_names_standard_input_in_json() {
     );
 }
 
-/// Standard input has no name to detect a language from, so bytes that carry
-/// no signature are a usage error with an actionable message.
+/// Standard input has no name to detect a language from, so bytes that carry no signature are a usage error with an actionable message.
 #[test]
 fn undetectable_standard_input_asks_for_a_language() {
     let directory = tempfile::tempdir().unwrap();
@@ -5024,8 +4800,7 @@ fn strip_and_check_agree_on_the_undetectable_input_message() {
     }
 }
 
-/// A pipe cannot be rewritten in place; `fix` says so and names the command
-/// that does write a stripped stream.
+/// A pipe cannot be rewritten in place; `fix` says so and names the command that does write a stripped stream.
 #[test]
 fn fix_refuses_standard_input() {
     let directory = tempfile::tempdir().unwrap();
@@ -5041,8 +4816,7 @@ fn fix_refuses_standard_input() {
     );
 }
 
-/// There is only one standard input, so naming it twice is a usage error
-/// rather than a silently deduplicated target.
+/// There is only one standard input, so naming it twice is a usage error rather than a silently deduplicated target.
 #[test]
 fn standard_input_may_be_named_only_once() {
     let directory = tempfile::tempdir().unwrap();
@@ -5076,9 +4850,7 @@ fn standard_input_conflicts_with_staged() {
     );
 }
 
-/// `fix --dry-run` is `diff` with fix vocabulary: the patch goes to standard
-/// output, the file keeps every byte, and the exit code still reports a
-/// pending change.
+/// `fix --dry-run` is `diff` with fix vocabulary: the patch goes to standard output, the file keeps every byte, and the exit code still reports a pending change.
 #[test]
 fn fix_dry_run_writes_a_patch_and_leaves_the_file_alone() {
     let directory = tempfile::tempdir().unwrap();
@@ -5116,15 +4888,11 @@ fn fix_dry_run_on_a_clean_file_reports_nothing_to_fix() {
     );
 }
 
-/// A skipped path can be the whole answer to the run, so the preview still has
-/// to name it — but `fix --dry-run` promises a patch on standard output, and a
-/// reader piping that into `git apply` cannot be handed a prose line in the
-/// middle of it. The reason goes to standard error instead, directly above the
-/// summary that counts it, word for word what the `fix` it stands in for says.
+/// A skipped path can be the whole answer to the run, so the preview still has to name it — but `fix --dry-run` promises a patch on standard output, and a reader piping that into `git apply` cannot be handed a prose line in the middle of it.
+/// The reason goes to standard error instead, directly above the summary that counts it, word for word what the `fix` it stands in for says.
 ///
-/// Spec change: the preview used to print that line on standard output, where
-/// it corrupted the patch. Plain `fix` writes no patch and keeps its skips on
-/// standard output; plain `diff` folds them into the summary as before.
+/// Spec change: the preview used to print that line on standard output, where it corrupted the patch.
+/// Plain `fix` writes no patch and keeps its skips on standard output; plain `diff` folds them into the summary as before.
 #[test]
 fn fix_dry_run_lists_a_skipped_path_the_way_fix_does() {
     let directory = tempfile::tempdir().unwrap();
@@ -5185,8 +4953,7 @@ fn help_documents_standard_input_and_the_dry_run() {
     );
 }
 
-/// Standard input is one target among others, not a mode: a piped file and a
-/// named one are reported by the same run.
+/// Standard input is one target among others, not a mode: a piped file and a named one are reported by the same run.
 #[test]
 fn a_dash_can_be_mixed_with_named_paths() {
     let directory = tempfile::tempdir().unwrap();
@@ -5204,8 +4971,7 @@ fn a_dash_can_be_mixed_with_named_paths() {
     );
 }
 
-/// The default command takes the same PATH list, so `-` works without naming
-/// `check` at all.
+/// The default command takes the same PATH list, so `-` works without naming `check` at all.
 #[test]
 fn the_default_command_also_reads_a_dash() {
     let directory = tempfile::tempdir().unwrap();
@@ -5221,8 +4987,7 @@ fn the_default_command_also_reads_a_dash() {
     );
 }
 
-/// `--dry-run` previews the staged run too: the patch is the one `--staged`
-/// would apply, and the index keeps every byte.
+/// `--dry-run` previews the staged run too: the patch is the one `--staged` would apply, and the index keeps every byte.
 #[test]
 fn fix_dry_run_previews_the_staged_patch_without_writing_the_index() {
     let directory = repository();
@@ -5249,8 +5014,7 @@ fn fix_dry_run_previews_the_staged_patch_without_writing_the_index() {
     );
 }
 
-/// A tree whose report is far larger than any pipe buffer, so a reader that
-/// stops early is guaranteed to close the pipe while the run is still writing.
+/// A tree whose report is far larger than any pipe buffer, so a reader that stops early is guaranteed to close the pipe while the run is still writing.
 fn wide_tree(files: usize, comments: usize) -> TempDir {
     let directory = tempfile::tempdir().unwrap();
     let mut source = String::new();
@@ -5263,8 +5027,7 @@ fn wide_tree(files: usize, comments: usize) -> TempDir {
     directory
 }
 
-/// Run the binary, take `head` bytes of its output, then close the pipe and
-/// report how the run ended and what it said on standard error.
+/// Run the binary, take `head` bytes of its output, then close the pipe and report how the run ended and what it said on standard error.
 fn run_closed_pipe(directory: &Path, arguments: &[&str], head: usize) -> (ExitStatus, String) {
     let mut child = Command::new(binary())
         .current_dir(directory)
@@ -5280,8 +5043,7 @@ fn run_closed_pipe(directory: &Path, arguments: &[&str], head: usize) -> (ExitSt
     if head > 0 {
         output.read_exact(&mut taken).unwrap();
     }
-    /* NOTE: The reader has what it wanted; from here every write the run attempts
-     * fails with EPIPE. */
+    /* NOTE: The reader has what it wanted; from here every write the run attempts fails with EPIPE. */
     drop(output);
     let mut message = String::new();
     child
@@ -5293,8 +5055,7 @@ fn run_closed_pipe(directory: &Path, arguments: &[&str], head: usize) -> (ExitSt
     (child.wait().unwrap(), message)
 }
 
-/// `ocomment check --format json . | head` is a reader that stops early, not a
-/// failure: the run ends quietly with status 0 and says nothing.
+/// `ocomment check --format json . | head` is a reader that stops early, not a failure: the run ends quietly with status 0 and says nothing.
 #[test]
 fn a_closed_pipe_ends_the_json_report_quietly() {
     let directory = wide_tree(100, 50);
@@ -5307,13 +5068,10 @@ fn a_closed_pipe_ends_the_json_report_quietly() {
     assert_eq!(stderr, "");
 }
 
-/// The one-line-per-finding stream is written the same way, so it ends the
-/// same way.
+/// The one-line-per-finding stream is written the same way, so it ends the same way.
 ///
-/// Named rather than defaulted, and that is the point of naming it: `review`
-/// summarises a report this size into something that fits in a pipe buffer, so
-/// a reader stopping after ten lines never closes anything. The stream that can
-/// still be cut off mid-write is `human`, which is the one this is about.
+/// Named rather than defaulted, and that is the point of naming it: `review` summarises a report this size into something that fits in a pipe buffer, so a reader stopping after ten lines never closes anything.
+/// The stream that can still be cut off mid-write is `human`, which is the one this is about.
 #[test]
 fn a_closed_pipe_ends_the_human_report_quietly() {
     let directory = wide_tree(100, 50);
@@ -5339,8 +5097,8 @@ fn a_closed_pipe_ends_the_sarif_report_quietly() {
     assert_eq!(stderr, "");
 }
 
-/// A short report can lose its reader before it writes its first byte. The
-/// listing commands must survive that too.
+/// A short report can lose its reader before it writes its first byte.
+/// The listing commands must survive that too.
 #[test]
 fn a_pipe_closed_before_the_first_byte_ends_languages_quietly() {
     let directory = tempfile::tempdir().unwrap();
@@ -5352,8 +5110,7 @@ fn a_pipe_closed_before_the_first_byte_ends_languages_quietly() {
     assert_eq!(stderr, "");
 }
 
-/// `clap_complete` writes straight into the handle it is handed and panics if
-/// that write fails, so the completion script is buffered before it is written.
+/// `clap_complete` writes straight into the handle it is handed and panics if that write fails, so the completion script is buffered before it is written.
 #[test]
 fn a_pipe_closed_before_the_first_byte_ends_completions_quietly() {
     let directory = tempfile::tempdir().unwrap();
@@ -5365,8 +5122,7 @@ fn a_pipe_closed_before_the_first_byte_ends_completions_quietly() {
     assert_eq!(stderr, "");
 }
 
-/// Run the binary with its standard error piped to a reader that closes at
-/// once, and report how it ended.
+/// Run the binary with its standard error piped to a reader that closes at once, and report how it ended.
 fn run_closed_error_pipe(directory: &Path, arguments: &[&str]) -> ExitStatus {
     let mut child = Command::new(binary())
         .current_dir(directory)
@@ -5381,9 +5137,7 @@ fn run_closed_error_pipe(directory: &Path, arguments: &[&str]) -> ExitStatus {
     child.wait().unwrap()
 }
 
-/// Standard error carries commentary, not the product of the run, so losing
-/// its reader changes nothing: `-v` still reports its verdict through the exit
-/// status instead of dying on the trace it could not write.
+/// Standard error carries commentary, not the product of the run, so losing its reader changes nothing: `-v` still reports its verdict through the exit status instead of dying on the trace it could not write.
 #[test]
 fn a_closed_error_pipe_does_not_end_the_run() {
     let directory = tempfile::tempdir().unwrap();
@@ -5402,10 +5156,8 @@ fn a_closed_error_pipe_does_not_end_the_run() {
 
 /// The real `git` on this machine, found on `PATH` the way a shell finds it.
 ///
-/// A fake `git` planted ahead of it has to hand every other subcommand to the
-/// genuine one by absolute path: the fake is first on `PATH` itself, so `exec
-/// git` would only call it back. `/usr/bin/git` is the fallback for a `PATH`
-/// that names none.
+/// A fake `git` planted ahead of it has to hand every other subcommand to the genuine one by absolute path: the fake is first on `PATH` itself, so `exec git` would only call it back.
+/// `/usr/bin/git` is the fallback for a `PATH` that names none.
 #[cfg(unix)]
 fn real_git() -> std::path::PathBuf {
     std::env::var_os("PATH")
@@ -5418,23 +5170,16 @@ fn real_git() -> std::path::PathBuf {
 }
 
 /// A closed pipe is benign only when it is *our* report that lost its reader.
-/// `git hash-object` exiting before it reads the rewritten blob breaks a pipe
-/// the run owns in the other direction: the index was never updated, so the
-/// run must report the failure instead of ending quietly with success.
+/// `git hash-object` exiting before it reads the rewritten blob breaks a pipe the run owns in the other direction: the index was never updated, so the run must report the failure instead of ending quietly with success.
 #[cfg(unix)]
 #[test]
 fn a_broken_pipe_from_git_hash_object_fails_the_staged_fix() {
     use std::os::unix::fs::PermissionsExt;
 
     let directory = repository();
-    /* NOTE: What travels down the pipe is the blob with the comments already taken
-     * out, so it is that which has to outgrow the pipe buffer — 64 KiB on
-     * Linux — for the write to still be in flight when the fake
-     * `git hash-object` drops the reading end. Half again as much is margin
-     * enough. The file is therefore sized by the bytes that survive the fix
-     * rather than by its own length, and it carries them on a few long lines
-     * instead of many short ones: the run costs time per comment, and this
-     * test needs bytes. */
+    /* NOTE: What travels down the pipe is the blob with the comments already taken out, so it is that which has to outgrow the pipe buffer — 64 KiB on Linux — for the write to still be in flight when the fake `git hash-object` drops the reading end.
+     * Half again as much is margin enough.
+     * The file is therefore sized by the bytes that survive the fix rather than by its own length, and it carries them on a few long lines instead of many short ones: the run costs time per comment, and this test needs bytes. */
     let padding = "x".repeat(200);
     let mut source = String::new();
     let mut stripped = 0;
@@ -5450,8 +5195,7 @@ fn a_broken_pipe_from_git_hash_object_fails_the_staged_fix() {
     git(directory.path(), &["add", "wide.rs"]);
     let staged_before = git(directory.path(), &["show", ":wide.rs"]);
 
-    /* NOTE: Every invocation reaches the real Git except `hash-object`, which closes
-     * its standard input and fails without reading a byte. */
+    /* NOTE: Every invocation reaches the real Git except `hash-object`, which closes its standard input and fails without reading a byte. */
     let fake = tempfile::tempdir().unwrap();
     let script = fake.path().join("git");
     fs::write(
@@ -5490,9 +5234,8 @@ fn a_broken_pipe_from_git_hash_object_fails_the_staged_fix() {
         stderr.contains("git hash-object"),
         "the report does not say which write failed:\n{stderr}"
     );
-    /* NOTE: `hash-object` also exits non-zero, and that failure carries the same
-     * name. This is the test for the broken pipe, so the blob must have been
-     * in flight when the reader went away, not sitting whole in the buffer. */
+    /* NOTE: `hash-object` also exits non-zero, and that failure carries the same name.
+     * This is the test for the broken pipe, so the blob must have been in flight when the reader went away, not sitting whole in the buffer. */
     assert!(
         stderr.contains("cannot write the rewritten blob"),
         "the run failed before the blob was ever written, so the broken pipe \
@@ -5534,8 +5277,7 @@ fn fix_help_does_not_advertise_the_standard_input_it_refuses() {
     );
 }
 
-/// The counter line is erased only if one was ever drawn: a run that scans
-/// nothing must not write an escape sequence to a terminal that saw no counter.
+/// The counter line is erased only if one was ever drawn: a run that scans nothing must not write an escape sequence to a terminal that saw no counter.
 #[test]
 fn progress_clears_the_counter_only_when_one_was_drawn() {
     let empty = tempfile::tempdir().unwrap();
@@ -5557,15 +5299,13 @@ fn progress_clears_the_counter_only_when_one_was_drawn() {
     );
 }
 
-/// "Nothing to check" is the vocabulary of `check`. Every command has its own
-/// verb for the run that found nothing to work on.
+/// "Nothing to check" is the vocabulary of `check`.
+/// Every command has its own verb for the run that found nothing to work on.
 #[test]
 fn an_empty_run_summarizes_itself_in_the_vocabulary_of_its_command() {
     let directory = tempfile::tempdir().unwrap();
     fs::write(directory.path().join("notes.unknownext"), b"# notes\n").unwrap();
-    /* NOTE: `fix --dry-run` keeps its standard output for the patch, so the named
-     * skip it met stands on standard error directly above the summary this
-     * test is about; every other command reports the skip elsewhere. */
+    /* NOTE: `fix --dry-run` keeps its standard output for the patch, so the named skip it met stands on standard error directly above the summary this test is about; every other command reports the skip elsewhere. */
     let skip = format!("notes.unknownext: skipped: {NO_LANGUAGE}\n");
     for (arguments, expected) in [
         (
@@ -5605,10 +5345,8 @@ fn an_empty_run_summarizes_itself_in_the_vocabulary_of_its_command() {
     );
 }
 
-/// A file OComment has no scanner for is not "unknown": the skip line names
-/// the list to consult and the flag that forces a language anyway. The folded
-/// summary clause keeps the short key, so a walk over a hundred unreadable
-/// extensions still reads as one clause instead of a hundred sentences.
+/// A file OComment has no scanner for is not "unknown": the skip line names the list to consult and the flag that forces a language anyway.
+/// The folded summary clause keeps the short key, so a walk over a hundred unreadable extensions still reads as one clause instead of a hundred sentences.
 #[test]
 fn an_unknown_language_skip_says_how_to_force_one() {
     let directory = tempfile::tempdir().unwrap();
@@ -5635,9 +5373,7 @@ fn an_unknown_language_skip_says_how_to_force_one() {
     );
 }
 
-/// A path that was named and is not there says where it was looked for, so a
-/// typo, a wrong working directory, and a deleted file are told apart without
-/// a second run.
+/// A path that was named and is not there says where it was looked for, so a typo, a wrong working directory, and a deleted file are told apart without a second run.
 #[test]
 fn a_missing_path_says_where_it_was_looked_for() {
     let directory = tempfile::tempdir().unwrap();
@@ -5654,16 +5390,12 @@ fn a_missing_path_says_where_it_was_looked_for() {
     );
 }
 
-/// A project configuration without the version key is refused; saying which
-/// line to add, and to which file, is the whole fix.
+/// A project configuration without the version key is refused; saying which line to add, and to which file, is the whole fix.
 #[test]
 fn a_configuration_without_a_version_says_how_to_add_one() {
     let directory = tempfile::tempdir().unwrap();
-    /* NOTE: Resolved, because the error names the file OComment found and
-     * OComment resolves what it finds. On macOS the system temporary directory
-     * is reached through a symlink -- `/var` is `/private/var` -- so a test
-     * that compares against `TempDir::path` compares against a spelling the
-     * binary never prints. */
+    /* NOTE: Resolved, because the error names the file OComment found and OComment resolves what it finds.
+     * On macOS the system temporary directory is reached through a symlink -- `/var` is `/private/var` -- so a test that compares against `TempDir::path` compares against a spelling the binary never prints. */
     let root = directory.path().canonicalize().unwrap();
     let config = root.join(".ocomment.toml");
     fs::write(&config, b"[policy]\nmode = \"all\"\n").unwrap();
@@ -5684,8 +5416,7 @@ fn a_configuration_without_a_version_says_how_to_add_one() {
     );
 }
 
-/// A misspelled `[languages.*]` key is refused by name; the fix is the list of
-/// the languages that do exist.
+/// A misspelled `[languages.*]` key is refused by name; the fix is the list of the languages that do exist.
 #[test]
 fn an_unknown_language_key_points_at_the_language_list() {
     let directory = tempfile::tempdir().unwrap();
@@ -5707,8 +5438,8 @@ fn an_unknown_language_key_points_at_the_language_list() {
     );
 }
 
-/// `--staged` reads the index, so outside a repository the flag is the thing
-/// to drop. Git's own words are kept: they say which directory was searched.
+/// `--staged` reads the index, so outside a repository the flag is the thing to drop.
+/// Git's own words are kept: they say which directory was searched.
 #[test]
 fn staged_outside_a_repository_names_the_flag_and_quotes_git() {
     let directory = tempfile::tempdir().unwrap();
@@ -5725,9 +5456,7 @@ fn staged_outside_a_repository_names_the_flag_and_quotes_git() {
     );
 }
 
-/// A lock file left behind by a crashed Git is indistinguishable from a Git
-/// that is running right now, so the message offers both readings and the
-/// path to delete.
+/// A lock file left behind by a crashed Git is indistinguishable from a Git that is running right now, so the message offers both readings and the path to delete.
 #[test]
 fn a_locked_git_index_says_what_to_do_about_the_lock() {
     let directory = repository();
@@ -5750,14 +5479,12 @@ fn a_locked_git_index_says_what_to_do_about_the_lock() {
     );
 }
 
-/// The plugin commands shell out to four tools. A missing one must name the
-/// binary, say what this run wanted it for, and point at the command that
-/// reports the whole environment at once.
+/// The plugin commands shell out to four tools.
+/// A missing one must name the binary, say what this run wanted it for, and point at the command that reports the whole environment at once.
 #[test]
 fn a_missing_plugin_tool_names_it_its_purpose_and_doctor() {
     let directory = tempfile::tempdir().unwrap();
-    /* NOTE: Pin the project root: without a configuration the walk upwards can find
-     * a repository marker above the temporary directory and install there. */
+    /* NOTE: Pin the project root: without a configuration the walk upwards can find a repository marker above the temporary directory and install there. */
     fs::write(directory.path().join(".ocomment.toml"), b"version = 1\n").unwrap();
     let empty = tempfile::tempdir().unwrap();
     for (source, expected) in [
@@ -5797,9 +5524,8 @@ fn a_missing_plugin_tool_names_it_its_purpose_and_doctor() {
     }
 }
 
-/// Write an executable stand-in for one external tool, printing `lines` and
-/// nothing else. `doctor` reports whatever a tool says about itself, so a fake
-/// that says something recognizable is enough to pin the row it produces.
+/// Write an executable stand-in for one external tool, printing `lines` and nothing else.
+/// `doctor` reports whatever a tool says about itself, so a fake that says something recognizable is enough to pin the row it produces.
 #[cfg(unix)]
 fn fake_tool_lines(directory: &Path, name: &str, lines: &[&str]) {
     use std::os::unix::fs::PermissionsExt;
@@ -5824,8 +5550,7 @@ fn fake_tool(directory: &Path, name: &str, line: &str) {
     fake_tool_lines(directory, name, &[line]);
 }
 
-/// Run the binary with `PATH` pointing at `tools` and nothing else, so a probe
-/// sees exactly the tools the test installed there.
+/// Run the binary with `PATH` pointing at `tools` and nothing else, so a probe sees exactly the tools the test installed there.
 #[cfg(unix)]
 fn run_with_tools(directory: &Path, tools: &Path, arguments: &[&str]) -> Output {
     Command::new(binary())
@@ -5836,11 +5561,8 @@ fn run_with_tools(directory: &Path, tools: &Path, arguments: &[&str]) -> Output 
         .unwrap()
 }
 
-/// `doctor` is the command every missing-tool failure points at, so it has to
-/// probe the tools the plugin commands and `--staged` shell out to instead of
-/// assuming them. A tool that is not installed is reported with the very
-/// purpose the failure would have named, and is not itself a failure: all five
-/// are optional, and a run that never touches a plugin never needs one.
+/// `doctor` is the command every missing-tool failure points at, so it has to probe the tools the plugin commands and `--staged` shell out to instead of assuming them.
+/// A tool that is not installed is reported with the very purpose the failure would have named, and is not itself a failure: all five are optional, and a run that never touches a plugin never needs one.
 #[cfg(unix)]
 #[test]
 fn doctor_probes_the_optional_tools_it_shells_out_to() {
@@ -5873,10 +5595,8 @@ fn doctor_probes_the_optional_tools_it_shells_out_to() {
     }
 }
 
-/// The row carries the tool's own version line, whatever the tool chose to
-/// say: `doctor` reports the environment rather than parsing it. `git` is
-/// probed for the same reason as the rest — `--staged` is the part of the run
-/// that stops working without it.
+/// The row carries the tool's own version line, whatever the tool chose to say: `doctor` reports the environment rather than parsing it.
+/// `git` is probed for the same reason as the rest — `--staged` is the part of the run that stops working without it.
 #[cfg(unix)]
 #[test]
 fn doctor_reports_a_probed_tools_own_version_line() {
@@ -5897,11 +5617,8 @@ fn doctor_reports_a_probed_tools_own_version_line() {
     );
 }
 
-/// `cosign version` draws several lines of ASCII art before it says anything
-/// about itself, and a row carrying the top of that banner would tell a reader
-/// nothing at all. A version has a number in it, so that is the line the row
-/// carries — sanitised like every probed line, so the run of spaces the tool
-/// aligned its banner with is collapsed to one.
+/// `cosign version` draws several lines of ASCII art before it says anything about itself, and a row carrying the top of that banner would tell a reader nothing at all.
+/// A version has a number in it, so that is the line the row carries — sanitised like every probed line, so the run of spaces the tool aligned its banner with is collapsed to one.
 #[cfg(unix)]
 #[test]
 fn doctor_looks_past_a_banner_for_the_version_line() {
@@ -5936,11 +5653,8 @@ fn doctor_looks_past_a_banner_for_the_version_line() {
     );
 }
 
-/// A probed tool chooses the bytes `doctor` prints, so a version line is
-/// untrusted input on its way to a terminal: a tool planted on `PATH` could
-/// clear the screen or repaint the report from its own banner. The row carries
-/// what the tool said with every control sequence replaced, and a tool that
-/// answers at all is still a healthy row rather than a failing run.
+/// A probed tool chooses the bytes `doctor` prints, so a version line is untrusted input on its way to a terminal: a tool planted on `PATH` could clear the screen or repaint the report from its own banner.
+/// The row carries what the tool said with every control sequence replaced, and a tool that answers at all is still a healthy row rather than a failing run.
 #[cfg(unix)]
 #[test]
 fn doctor_strips_control_sequences_from_a_probed_tools_version_line() {
@@ -5971,9 +5685,8 @@ fn doctor_strips_control_sequences_from_a_probed_tools_version_line() {
     );
 }
 
-/// The other half of "why did that run do that?" is the environment the run
-/// resolved for itself: where it stood, what it took as the root, which
-/// configuration files it merged, and whether its output is decorated.
+/// The other half of "why did that run do that?"
+/// is the environment the run resolved for itself: where it stood, what it took as the root, which configuration files it merged, and whether its output is decorated.
 #[test]
 fn doctor_reports_the_environment_it_resolved() {
     let directory = tempfile::tempdir().unwrap();
@@ -5983,8 +5696,7 @@ fn doctor_reports_the_environment_it_resolved() {
         command
             .current_dir(directory.path())
             .env("PATH", "/usr/bin:/bin")
-            /* NOTE: Pin the user layer away from whoever is running the tests: the
-             * trace this reports has to be the one this run resolved. */
+            /* NOTE: Pin the user layer away from whoever is running the tests: the trace this reports has to be the one this run resolved. */
             .env("XDG_CONFIG_HOME", empty.path())
             .arg("doctor");
         match no_color {
@@ -6015,8 +5727,7 @@ fn doctor_reports_the_environment_it_resolved() {
         report.contains("config: built-in defaults"),
         "doctor never traced the configuration it merged:\n{report}"
     );
-    /* NOTE: The report is read through a pipe, so the decoration it describes is the
-     * decoration this very run chose. */
+    /* NOTE: The report is read through a pipe, so the decoration it describes is the decoration this very run chose. */
     assert!(
         report.contains("stdout: not a terminal"),
         "doctor never said whether its output is a terminal:\n{report}"
@@ -6047,22 +5758,18 @@ fn doctor_reports_the_environment_it_resolved() {
 }
 
 /// A directory name is chosen by whoever made the directory, not by OComment,
-/// so the two rows that print one are untrusted input on their way to a
-/// terminal exactly like a probed tool's version line. They are sanitised the
-/// same way and cut nowhere: a path is the answer the reader came for, and one
-/// ending in an ellipsis names no directory at all.
+/// so the two rows that print one are untrusted input on their way to a terminal exactly like a probed tool's version line.
+/// They are sanitised the same way and cut nowhere: a path is the answer the reader came for, and one ending in an ellipsis names no directory at all.
 #[cfg(unix)]
 #[test]
 fn doctor_sanitises_the_directories_it_reports_without_cutting_them_short() {
-    /* NOTE: Long enough that a preview-width cap would have to cut it, and carrying
-     * the escape that would let a directory name repaint the report. */
+    /* NOTE: Long enough that a preview-width cap would have to cut it, and carrying the escape that would let a directory name repaint the report. */
     let name = format!("ocomment\u{1b}{}", "a".repeat(90));
     let directory = tempfile::Builder::new()
         .prefix(&name)
         .tempdir()
         .expect("a directory name may carry an escape on this platform");
-    /* NOTE: A project file of its own makes this directory the root as well, so both
-     * rows name it and both are pinned by one run. */
+    /* NOTE: A project file of its own makes this directory the root as well, so both rows name it and both are pinned by one run. */
     fs::write(directory.path().join(".ocomment.toml"), b"version = 1\n").unwrap();
     let empty = tempfile::tempdir().unwrap();
     let output = Command::new(binary())
@@ -6103,9 +5810,8 @@ fn doctor_sanitises_the_directories_it_reports_without_cutting_them_short() {
     }
 }
 
-/// The scaffold refuses to write into a directory that already exists, and a
-/// refusal that only says "refusing" leaves the reader to guess. There are two
-/// ways out — take the directory away, or take the plugin that owns it away —
+/// The scaffold refuses to write into a directory that already exists, and a refusal that only says "refusing" leaves the reader to guess.
+/// There are two ways out — take the directory away, or take the plugin that owns it away —
 /// and the message names both.
 #[test]
 fn plugin_new_refuses_an_existing_directory_and_says_what_to_do() {
@@ -6131,9 +5837,7 @@ fn plugin_new_refuses_an_existing_directory_and_says_what_to_do() {
     );
 }
 
-/// `--policy all` means "take everything out", so the one thing it deliberately
-/// leaves behind has to explain itself: the summary counts the kept preambles
-/// and names the flag that removes them too.
+/// `--policy all` means "take everything out", so the one thing it deliberately leaves behind has to explain itself: the summary counts the kept preambles and names the flag that removes them too.
 #[test]
 fn policy_all_says_how_to_remove_a_kept_preamble() {
     let directory = tempfile::tempdir().unwrap();
@@ -6163,8 +5867,7 @@ fn policy_all_says_how_to_remove_a_kept_preamble() {
         "the hint outlived the flag that answers it:\n{stderr}"
     );
 
-    /* NOTE: Under `safe` the preamble is one of many deliberate keeps; singling it
-     * out would be noise on every run. */
+    /* NOTE: Under `safe` the preamble is one of many deliberate keeps; singling it out would be noise on every run. */
     let safe = run(directory.path(), &["check", "a.py"]);
     let stderr = String::from_utf8(safe.stderr).unwrap();
     assert!(
@@ -6181,8 +5884,7 @@ fn policy_all_says_how_to_remove_a_kept_preamble() {
         "a run that kept no preamble advertised the flag anyway:\n{stderr}"
     );
 
-    /* NOTE: The hint counts what it kept, so its pronoun has to agree with the
-     * count: one preamble is removed with "it", several with "them". */
+    /* NOTE: The hint counts what it kept, so its pronoun has to agree with the count: one preamble is removed with "it", several with "them". */
     fs::write(
         directory.path().join("c.py"),
         b"#!/usr/bin/env python3\nx = 2\n",
@@ -6200,25 +5902,21 @@ fn policy_all_says_how_to_remove_a_kept_preamble() {
     );
 }
 
-/// A file that ships with the repository, resolved from the crate directory so
-/// a test can read it from whatever temporary directory it runs in.
+/// A file that ships with the repository, resolved from the crate directory so a test can read it from whatever temporary directory it runs in.
 fn shipped(relative: &str) -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .join(relative)
 }
 
-/// How `clap_mangen` writes one option name: every `-` escaped, the name in
-/// bold. Help text that merely mentions a flag is rendered in roman, so this
-/// matches a real entry rather than a passing reference in someone else's
-/// description.
+/// How `clap_mangen` writes one option name: every `-` escaped, the name in bold.
+/// Help text that merely mentions a flag is rendered in roman, so this matches a real entry rather than a passing reference in someone else's description.
 fn roff_option(flag: &str) -> String {
     format!("\\fB{}\\fR", flag.replace('-', "\\-"))
 }
 
-/// Every long flag the CLI shows a user, gathered by walking `--help` down
-/// every subcommand. Descriptions are scanned too: a flag a description names
-/// is a flag the reader will look up.
+/// Every long flag the CLI shows a user, gathered by walking `--help` down every subcommand.
+/// Descriptions are scanned too: a flag a description names is a flag the reader will look up.
 fn long_flags_in_help(directory: &Path, path: &[&str], found: &mut BTreeSet<String>) {
     let mut arguments = path.to_vec();
     arguments.push("--help");
@@ -6255,10 +5953,9 @@ fn long_flags_in_help(directory: &Path, path: &[&str], found: &mut BTreeSet<Stri
     }
 }
 
-/// A flag nobody can look up is a flag nobody knows about. The manual page is
-/// the reference the `man` subcommand and the release archives both hand out,
-/// so every flag `--help` mentions anywhere in the command tree has to have an
-/// entry there.
+/// A flag nobody can look up is a flag nobody knows about.
+/// The manual page is the reference the `man` subcommand and the release archives both hand out,
+/// so every flag `--help` mentions anywhere in the command tree has to have an entry there.
 #[test]
 fn the_manual_page_documents_every_long_flag() {
     let directory = tempfile::tempdir().unwrap();
@@ -6268,8 +5965,7 @@ fn the_manual_page_documents_every_long_flag() {
         flags.len() >= 20,
         "the help walk stopped finding flags, so this test proves nothing: {flags:?}"
     );
-    /* NOTE: A walk that stopped at the root would still collect enough flags to look
-     * healthy, so it is pinned to one flag from each depth it has to reach. */
+    /* NOTE: A walk that stopped at the root would still collect enough flags to look healthy, so it is pinned to one flag from each depth it has to reach. */
     for reached in ["--dry-run", "--sha256"] {
         assert!(
             flags.contains(reached),
@@ -6287,9 +5983,8 @@ fn the_manual_page_documents_every_long_flag() {
     );
 }
 
-/// The manual page is generated from the parser, and the generated bytes are
-/// checked in twice: once for `man -l docs/ocomment.1` and once for the release
-/// archives. A page that drifted from the binary documents a tool nobody ships.
+/// The manual page is generated from the parser, and the generated bytes are checked in twice: once for `man -l docs/ocomment.1` and once for the release archives.
+/// A page that drifted from the binary documents a tool nobody ships.
 #[test]
 fn the_checked_in_manual_page_is_the_one_the_binary_renders() {
     let directory = tempfile::tempdir().unwrap();
@@ -6311,8 +6006,7 @@ fn the_checked_in_manual_page_is_the_one_the_binary_renders() {
     }
 }
 
-/// The completion scripts ship from the same generator and go stale the same
-/// way, so they are pinned to the binary too.
+/// The completion scripts ship from the same generator and go stale the same way, so they are pinned to the binary too.
 #[test]
 fn the_checked_in_completions_are_the_ones_the_binary_generates() {
     let directory = tempfile::tempdir().unwrap();
@@ -6340,9 +6034,8 @@ fn the_checked_in_completions_are_the_ones_the_binary_generates() {
 }
 
 /// `--explain` answers "why was this comment kept?": it lists every comment,
-/// kept ones included, and names both the rule that decided each one and the
-/// table that rule was written in. A plain `check` still reports only what it
-/// would remove.
+/// kept ones included, and names both the rule that decided each one and the table that rule was written in.
+/// A plain `check` still reports only what it would remove.
 #[test]
 fn check_explain_names_the_override_and_the_pattern_that_kept_a_comment() {
     let directory = tempfile::tempdir().unwrap();
@@ -6380,10 +6073,8 @@ fn check_explain_names_the_override_and_the_pattern_that_kept_a_comment() {
         "gen/b.rs:1:1: kept block comment: /* generated */",
         "kept: matched keep_regex #1 `(?i)generated` ([[overrides]] #0, paths = [\"gen/**\"])",
         "gen/b.rs:2:12: removable line comment: // TODO",
-        /* NOTE: Nothing set `[policy] mode`, so the reader is told it is a default
-         * rather than sent to a file that never mentions it. The pattern the
-         * same file does set is named with the file, spelled the way the reader
-         * typed their way into the directory. */
+        /* NOTE: Nothing set `[policy] mode`, so the reader is told it is a default rather than sent to a file that never mentions it.
+         * The pattern the same file does set is named with the file, spelled the way the reader typed their way into the directory. */
         "removed: policy `conservative` removes ordinary comments (built-in defaults)",
         "a.rs:1:1: kept line comment: // API stays",
         "kept: matched keep_regex #0 `(?i)^// api` ([policy] in .ocomment.toml)",
@@ -6395,8 +6086,7 @@ fn check_explain_names_the_override_and_the_pattern_that_kept_a_comment() {
     }
 }
 
-/// A comment no setting decided is explained by the flag that would change its
-/// fate, because there is no table to send the reader to.
+/// A comment no setting decided is explained by the flag that would change its fate, because there is no table to send the reader to.
 #[test]
 fn check_explain_says_what_would_remove_a_preamble_or_a_directive() {
     let directory = tempfile::tempdir().unwrap();
@@ -6434,10 +6124,8 @@ fn check_explain_says_what_would_remove_a_preamble_or_a_directive() {
     }
 }
 
-/// The one keep no setting decided and no flag overrules: a YAML block scalar
-/// ends at the comment above the directive it would otherwise swallow. The
-/// explanation names the block scalar and the line that has to go first, and
-/// the run reports nothing removable at all.
+/// The one keep no setting decided and no flag overrules: a YAML block scalar ends at the comment above the directive it would otherwise swallow.
+/// The explanation names the block scalar and the line that has to go first, and the run reports nothing removable at all.
 #[test]
 fn check_explain_names_the_block_scalar_a_kept_comment_separates() {
     let directory = tempfile::tempdir().unwrap();
@@ -6465,8 +6153,7 @@ fn check_explain_names_the_block_scalar_a_kept_comment_separates() {
             "`check --explain` lacks {needle:?}:\n{report}"
         );
     }
-    /* NOTE: `all` takes the directive out, and with nothing left standing under
-     * the body the comment above it is ordinary again. */
+    /* NOTE: `all` takes the directive out, and with nothing left standing under the body the comment above it is ordinary again. */
     let widened = run(directory.path(), &["check", "--explain", "--policy", "all"]);
     let widened = String::from_utf8(widened.stdout).unwrap();
     assert!(
@@ -6475,8 +6162,7 @@ fn check_explain_names_the_block_scalar_a_kept_comment_separates() {
     );
 }
 
-/// A setting the command line supplied is named as the command line, not as
-/// the file it would otherwise have been written in.
+/// A setting the command line supplied is named as the command line, not as the file it would otherwise have been written in.
 #[test]
 fn explain_names_the_command_line_when_a_flag_set_the_policy() {
     let directory = tempfile::tempdir().unwrap();
@@ -6510,10 +6196,9 @@ fn explain_names_the_command_line_when_a_flag_set_the_policy() {
     }
 }
 
-/// SARIF is a fixed schema and a GitHub workflow command is one line per
-/// annotation, so neither has anywhere to put a reason. Asking for one is a
-/// usage error rather than a flag that quietly does nothing. The JSON formats
-/// do have somewhere, and carry it.
+/// SARIF is a fixed schema and a GitHub workflow command is one line per annotation, so neither has anywhere to put a reason.
+/// Asking for one is a usage error rather than a flag that quietly does nothing.
+/// The JSON formats do have somewhere, and carry it.
 #[test]
 fn explain_is_refused_by_the_formats_with_nowhere_to_put_it() {
     let directory = tempfile::tempdir().unwrap();
@@ -6558,11 +6243,9 @@ fn explain_is_refused_by_the_formats_with_nowhere_to_put_it() {
     }
 }
 
-/// `--explain` annotates a report of comments, and only `check` and `scan`
-/// write one: `fix` reports the files it rewrote, `diff` writes a patch,
-/// `strip` writes the stripped source, and the rest of the commands are not
-/// about comments at all. The flag is global, so asking for it anywhere else
-/// is a usage error rather than a flag that quietly does nothing.
+/// `--explain` annotates a report of comments, and only `check` and `scan` write one: `fix` reports the files it rewrote, `diff` writes a patch,
+/// `strip` writes the stripped source, and the rest of the commands are not about comments at all.
+/// The flag is global, so asking for it anywhere else is a usage error rather than a flag that quietly does nothing.
 #[test]
 fn explain_is_refused_by_the_commands_that_write_no_report() {
     let directory = tempfile::tempdir().unwrap();
@@ -6625,8 +6308,7 @@ fn explain_is_refused_by_the_commands_that_write_no_report() {
     }
 }
 
-/// `scan` already lists every comment; `--explain` puts the reason under each
-/// of its lines without disturbing the listing itself.
+/// `scan` already lists every comment; `--explain` puts the reason under each of its lines without disturbing the listing itself.
 #[test]
 fn scan_explain_annotates_every_listed_comment() {
     let directory = tempfile::tempdir().unwrap();
@@ -6686,10 +6368,9 @@ fn explain_is_refused_by_a_staged_run() {
     );
 }
 
-/// `fix -i` asks a question per comment, so it needs somebody there to answer
-/// it. A piped or redirected run would otherwise read the prompt's answer out
-/// of whatever the pipe carried — a script's own data — and start writing
-/// files from it. The refusal names both ways out and touches nothing.
+/// `fix -i` asks a question per comment, so it needs somebody there to answer it.
+/// A piped or redirected run would otherwise read the prompt's answer out of whatever the pipe carried — a script's own data — and start writing files from it.
+/// The refusal names both ways out and touches nothing.
 #[test]
 fn fix_interactive_without_a_terminal_refuses_and_writes_nothing() {
     let directory = tempfile::tempdir().unwrap();
@@ -6707,8 +6388,7 @@ fn fix_interactive_without_a_terminal_refuses_and_writes_nothing() {
     );
 }
 
-/// The long spelling refuses the same way, so a script that uses it is not
-/// told something different from one that uses `-i`.
+/// The long spelling refuses the same way, so a script that uses it is not told something different from one that uses `-i`.
 #[test]
 fn fix_interactive_long_spelling_refuses_without_a_terminal() {
     let directory = tempfile::tempdir().unwrap();
@@ -6725,10 +6405,8 @@ fn fix_interactive_long_spelling_refuses_without_a_terminal() {
     );
 }
 
-/// A machine format has no prompt to put a question on and no place to put the
-/// answer, so the combination is refused rather than quietly ignoring one of
-/// the two flags. It is refused before the terminal is looked at, because the
-/// flag combination is wrong however the run was started.
+/// A machine format has no prompt to put a question on and no place to put the answer, so the combination is refused rather than quietly ignoring one of the two flags.
+/// It is refused before the terminal is looked at, because the flag combination is wrong however the run was started.
 #[test]
 fn fix_interactive_refuses_a_machine_format() {
     let directory = tempfile::tempdir().unwrap();
@@ -6748,11 +6426,8 @@ fn fix_interactive_refuses_a_machine_format() {
     );
 }
 
-/// Each of these describes a run that cannot also be interactive: the index
-/// carries no working-tree file to show a hunk from, `--dry-run` writes
-/// nothing whatever the answers were, and `-q` asks for a run with no
-/// commentary at all. Clap refuses the pair at parse time, before any file is
-/// read.
+/// Each of these describes a run that cannot also be interactive: the index carries no working-tree file to show a hunk from, `--dry-run` writes nothing whatever the answers were, and `-q` asks for a run with no commentary at all.
+/// Clap refuses the pair at parse time, before any file is read.
 #[test]
 fn fix_interactive_conflicts_with_the_flags_that_contradict_it() {
     let directory = repository();
@@ -6794,10 +6469,8 @@ fn help_documents_the_interactive_fix() {
     );
 }
 
-/// The listing is a table of languages, not a report of comments, so the
-/// formats that describe a report have nowhere to put it. Each is refused with
-/// the pair that does work rather than answered with the human table, which is
-/// what `--format json` used to be given.
+/// The listing is a table of languages, not a report of comments, so the formats that describe a report have nowhere to put it.
+/// Each is refused with the pair that does work rather than answered with the human table, which is what `--format json` used to be given.
 #[test]
 fn languages_refuses_the_formats_that_carry_no_table() {
     let directory = tempfile::tempdir().unwrap();
@@ -6836,9 +6509,7 @@ fn languages_refuses_the_formats_that_carry_no_table() {
     }
 }
 
-/// A Scala file keeps its scala-cli directive and hides a `//` inside an XML
-/// literal's text, while comments inside an interpolation and a nested block
-/// comment are removed.
+/// A Scala file keeps its scala-cli directive and hides a `//` inside an XML literal's text, while comments inside an interpolation and a nested block comment are removed.
 #[test]
 fn a_scala_file_keeps_its_directive_and_hides_xml_text() {
     let directory = tempfile::tempdir().unwrap();
@@ -6887,9 +6558,7 @@ fn a_scala_file_keeps_its_directive_and_hides_xml_text() {
     );
 }
 
-/// A Vue file scans its template, script and style blocks, keeps the
-/// template's HTML comment, and removes a comment from the mustache and from
-/// each embedded language.
+/// A Vue file scans its template, script and style blocks, keeps the template's HTML comment, and removes a comment from the mustache and from each embedded language.
 #[test]
 fn a_vue_file_scans_its_template_script_and_style_blocks() {
     let directory = tempfile::tempdir().unwrap();
@@ -6931,8 +6600,7 @@ fn a_vue_file_scans_its_template_script_and_style_blocks() {
     );
 }
 
-/// A Markdown file scans its fenced code blocks as their named languages and
-/// keeps its HTML comment, while inline code stays opaque.
+/// A Markdown file scans its fenced code blocks as their named languages and keeps its HTML comment, while inline code stays opaque.
 #[test]
 fn a_markdown_file_scans_its_fenced_code_blocks() {
     let directory = tempfile::tempdir().unwrap();
@@ -6972,8 +6640,7 @@ fn a_markdown_file_scans_its_fenced_code_blocks() {
     );
 }
 
-/// A Perl file hides the `#` in its quote words and regexes and keeps its POD
-/// opaque, while a division's `#` is a comment.
+/// A Perl file hides the `#` in its quote words and regexes and keeps its POD opaque, while a division's `#` is a comment.
 #[test]
 fn a_perl_file_hides_quote_words_and_keeps_pod_opaque() {
     let directory = tempfile::tempdir().unwrap();
@@ -7013,12 +6680,9 @@ fn a_perl_file_hides_quote_words_and_keeps_pod_opaque() {
 
 /// The removal tool's worst possible failure, pinned so it cannot come back.
 ///
-/// `--force-invalid` exists to edit a file that does not lex, and the file it
-/// is asked about is one where the scanner has lost its place. An unterminated
-/// block opener is reported as a comment running to the end of the file, so the
-/// verdict "removable" covers every line under it. Acting on that verdict
-/// deletes code, and the run that did it would still exit 2 and look like a
-/// refusal.
+/// `--force-invalid` exists to edit a file that does not lex, and the file it is asked about is one where the scanner has lost its place.
+/// An unterminated block opener is reported as a comment running to the end of the file, so the verdict "removable" covers every line under it.
+/// Acting on that verdict deletes code, and the run that did it would still exit 2 and look like a refusal.
 #[test]
 fn force_invalid_leaves_the_code_under_an_unterminated_comment_alone() {
     let directory = tempfile::tempdir().unwrap();
@@ -7050,8 +6714,7 @@ fn force_invalid_leaves_the_code_under_an_unterminated_comment_alone() {
     );
 }
 
-/// The same run in the machine format: the verdicts stand, and the report says
-/// which of them rest on a lex that had already failed.
+/// The same run in the machine format: the verdicts stand, and the report says which of them rest on a lex that had already failed.
 #[test]
 fn json_marks_the_verdicts_a_failed_scan_did_not_establish() {
     let directory = tempfile::tempdir().unwrap();
@@ -7085,8 +6748,7 @@ fn json_marks_the_verdicts_a_failed_scan_did_not_establish() {
     );
 }
 
-/// A file that lexes carries no mark, so nothing a caller already parses
-/// changes shape.
+/// A file that lexes carries no mark, so nothing a caller already parses changes shape.
 #[test]
 fn a_report_that_established_everything_marks_nothing() {
     let directory = tempfile::tempdir().unwrap();
@@ -7103,9 +6765,7 @@ fn a_report_that_established_everything_marks_nothing() {
 
 /// An error that cost the lexer nothing does not cost the run anything either.
 ///
-/// Java's `\uXXXX` escapes are decoded before a token is read, so a malformed
-/// one makes the file invalid without putting a single comment in doubt, and a
-/// forced run over it still edits.
+/// Java's `\uXXXX` escapes are decoded before a token is read, so a malformed one makes the file invalid without putting a single comment in doubt, and a forced run over it still edits.
 #[test]
 fn an_error_the_lexer_recovered_from_does_not_hold_back_a_forced_run() {
     let directory = tempfile::tempdir().unwrap();
@@ -7122,12 +6782,10 @@ fn an_error_the_lexer_recovered_from_does_not_hold_back_a_forced_run() {
 
 /// A licence header is a licence header whichever reader found it.
 ///
-/// A `.gitignore` is read by a bundled declarative profile rather than by a
-/// built-in language scanner, and that reader used to stop at the lexical kind:
+/// A `.gitignore` is read by a bundled declarative profile rather than by a built-in language scanner, and that reader used to stop at the lexical kind:
 /// the same `# SPDX-License-Identifier:` was a licence in a Python file and an
-/// ordinary comment here, so a default `fix` took it out of one and left it in
-/// the other. A repository that requires the header on every file and runs this
-/// as a gate had the two pointed at each other.
+/// ordinary comment here, so a default `fix` took it out of one and left it in the other.
+/// A repository that requires the header on every file and runs this as a gate had the two pointed at each other.
 #[test]
 fn a_profile_reader_classifies_a_licence_the_way_every_other_reader_does() {
     let directory = tempfile::tempdir().unwrap();
@@ -7165,15 +6823,10 @@ fn a_profile_reader_classifies_a_licence_the_way_every_other_reader_does() {
     );
 }
 
-/// A `#` inside a pattern is part of the pattern, and removing it rewrites what
-/// the file matches.
+/// A `#` inside a pattern is part of the pattern, and removing it rewrites what the file matches.
 ///
-/// `.gitignore` and the formats that share its shape give `#` one rule: it
-/// opens a comment as the first byte of a line and nowhere else. Read anywhere
-/// else, a default `fix` wrote a shorter pattern back — `file#name` became
-/// `file`, `\#literal` became `\` — so the file quietly stopped ignoring what
-/// the line named, and the re-scan that guards every write saw nothing wrong
-/// because the result still lexed and was still idempotent.
+/// `.gitignore` and the formats that share its shape give `#` one rule: it opens a comment as the first byte of a line and nowhere else.
+/// Read anywhere else, a default `fix` wrote a shorter pattern back — `file#name` became `file`, `\#literal` became `\` — so the file quietly stopped ignoring what the line named, and the re-scan that guards every write saw nothing wrong because the result still lexed and was still idempotent.
 #[test]
 fn a_hash_inside_a_pattern_is_not_a_comment() {
     let directory = tempfile::tempdir().unwrap();
@@ -7188,8 +6841,7 @@ fn a_hash_inside_a_pattern_is_not_a_comment() {
     );
     fs::write(path.join(".gitignore"), patterns).unwrap();
 
-    /* NOTE: `--policy all` because it is the one that reaches every kind: if a
-     * pattern survives this it survives anything weaker. */
+    /* NOTE: `--policy all` because it is the one that reaches every kind: if a pattern survives this it survives anything weaker. */
     let fixed = run(path, &["fix", "--policy", "all", ".gitignore"]);
     assert_eq!(fixed.status.code(), Some(0));
     assert_eq!(
@@ -7204,9 +6856,8 @@ fn a_hash_inside_a_pattern_is_not_a_comment() {
         "a removal rewrote what the file matches"
     );
 
-    /* NOTE: The other half of the `#` family, where git's own configuration
-     * syntax does let a comment open after a value. The two rules disagree
-     * about the same byte, which is why they are two profiles. */
+    /* NOTE: The other half of the `#` family, where git's own configuration syntax does let a comment open after a value.
+     * The two rules disagree about the same byte, which is why they are two profiles. */
     fs::write(path.join(".gitmodules"), b"\tpath = vendor  # why\n").unwrap();
     let anywhere =
         String::from_utf8(run(path, &["scan", "--format", "human", ".gitmodules"]).stdout).unwrap();
@@ -7216,26 +6867,19 @@ fn a_hash_inside_a_pattern_is_not_a_comment() {
     );
 }
 
-/// Go's module files are read, and the two markers in them are kept at the
-/// strength each one has earned.
+/// Go's module files are read, and the two markers in them are kept at the strength each one has earned.
 ///
-/// `go.mod` and `go.work` take `//` to end of line and nothing else, so a
-/// delimiter list describes them completely — and until it did, a repository
-/// that gated on this tool was not reading them at all. `// indirect` is
-/// addressed to `go mod tidy`, which puts it back, so the default policies keep
-/// it and `--policy all` may still take it. `// Deprecated:` is not put back by
-/// anything: it is what `go get` warns with and what a proxy serves downstream,
+/// `go.mod` and `go.work` take `//` to end of line and nothing else, so a delimiter list describes them completely — and until it did, a repository that gated on this tool was not reading them at all.
+/// `// indirect` is addressed to `go mod tidy`, which puts it back, so the default policies keep it and `--policy all` may still take it.
+/// `// Deprecated:` is not put back by anything: it is what `go get` warns with and what a proxy serves downstream,
 /// so no policy reaches it.
 #[test]
 fn a_go_module_file_is_read_and_its_markers_are_kept_by_strength() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path();
     fs::write(path.join(".ocomment.toml"), b"version = 1\n").unwrap();
-    /* NOTE: The licence header first. A project that requires one on every
-     * file and gates on this tool had `go.mod` unread until now, so the day
-     * it becomes readable is the day the header is classified for the first
-     * time -- and a reader that stopped at the lexical kind would call it
-     * ordinary and ask for its removal. */
+    /* NOTE: The licence header first.
+     * A project that requires one on every file and gates on this tool had `go.mod` unread until now, so the day it becomes readable is the day the header is classified for the first time -- and a reader that stopped at the lexical kind would call it ordinary and ask for its removal. */
     let module = concat!(
         "// SPDX-License-Identifier: Apache-2.0\n",
         "// Deprecated: use example.com/x/v2 instead.\n",
@@ -7257,8 +6901,8 @@ fn a_go_module_file_is_read_and_its_markers_are_kept_by_strength() {
         "the module files were not read:\n{coverage}"
     );
 
-    /* NOTE: The prose line and nothing else. A gate that reported the two
-     * markers would be asking a project to delete what its toolchain wrote. */
+    /* NOTE: The prose line and nothing else.
+     * A gate that reported the two markers would be asking a project to delete what its toolchain wrote. */
     let default = run(path, &["check", "--format", "human", "go.mod"]);
     let report = String::from_utf8(default.stdout).unwrap();
     assert!(
@@ -7299,10 +6943,8 @@ fn a_go_module_file_is_read_and_its_markers_are_kept_by_strength() {
 
 /// A name that still works has to say that it has moved.
 ///
-/// `legal` and `safe` resolve to `conservative` and `standard` so that a
-/// repository which pinned one does not break on an upgrade. Saying nothing is
-/// the other half of that bargain going unkept: the run is steered by a name
-/// the help no longer lists, and the reader finds out on the day it is removed.
+/// `legal` and `safe` resolve to `conservative` and `standard` so that a repository which pinned one does not break on an upgrade.
+/// Saying nothing is the other half of that bargain going unkept: the run is steered by a name the help no longer lists, and the reader finds out on the day it is removed.
 #[test]
 fn a_run_steered_by_the_old_name_of_a_policy_says_so() {
     let directory = tempfile::tempdir().unwrap();
@@ -7336,10 +6978,9 @@ fn a_run_steered_by_the_old_name_of_a_policy_says_so() {
 /// `doctor` says which binary answered, not just which version it claims.
 ///
 /// Two builds can both say `ocomment 0.1.0` and disagree about the same file.
-/// That is not hypothetical: a release build and a working-tree build resolved
-/// from `mise exec` and from a bare `PATH` on one machine on one day, and the
-/// session that hit it spent an afternoon reporting a gate as broken that was
-/// not. A version string cannot tell them apart. The bytes can.
+/// That is not hypothetical: a release build and a working-tree build resolved from `mise exec` and from a bare `PATH` on one machine on one day, and the session that hit it spent an afternoon reporting a gate as broken that was not.
+/// A version string cannot tell them apart.
+/// The bytes can.
 #[test]
 fn doctor_names_the_binary_that_answered() {
     let directory = tempfile::tempdir().unwrap();
@@ -7353,8 +6994,7 @@ fn doctor_names_the_binary_that_answered() {
         line.contains("sha256:") && line.contains("ocomment"),
         "the line does not identify the running binary: {line}"
     );
-    /* NOTE: Sixty-four hexadecimal digits, so a truncated or placeholder digest
-     * is not mistaken for one. */
+    /* NOTE: Sixty-four hexadecimal digits, so a truncated or placeholder digest is not mistaken for one. */
     let digest = line.rsplit("sha256:").next().unwrap().trim_end_matches(')');
     assert_eq!(digest.len(), 64, "not a whole digest: {digest:?}");
     assert!(
@@ -7364,8 +7004,7 @@ fn doctor_names_the_binary_that_answered() {
         "not a digest: {digest:?}"
     );
 
-    /* NOTE: The same binary twice, because a digest that changed between two
-     * runs of one file would be measuring something other than the file. */
+    /* NOTE: The same binary twice, because a digest that changed between two runs of one file would be measuring something other than the file. */
     let again = run(directory.path(), &["doctor"]);
     assert!(
         String::from_utf8_lossy(&again.stdout).contains(line),

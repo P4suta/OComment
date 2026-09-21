@@ -21,11 +21,8 @@ pub struct Config {
     pub policy: PolicyConfig,
     /// How the comments that survive are written.
     ///
-    /// A table of its own rather than a corner of `[policy]`, because the
-    /// policy decides what stays and this decides how what stays reads. A
-    /// project that removes nothing still has an opinion about the second, and
-    /// under `[policy]` it would have had to say so inside a table whose every
-    /// other entry is about removal.
+    /// A table of its own rather than a corner of `[policy]`, because the policy decides what stays and this decides how what stays reads.
+    /// A project that removes nothing still has an opinion about the second, and under `[policy]` it would have had to say so inside a table whose every other entry is about removal.
     #[serde(default)]
     pub style: StyleRules,
     pub git: GitConfig,
@@ -46,13 +43,10 @@ pub struct FilesConfig {
     pub ignore: bool,
     pub include: Vec<String>,
     pub exclude: Vec<String>,
-    /// Scan files another tool writes: lock files, recorded seed lists, the
-    /// output of a code generator.
+    /// Scan files another tool writes: lock files, recorded seed lists, the output of a code generator.
     ///
-    /// Off, because a comment in one of those belongs to the tool that wrote
-    /// it and will be written again on the next run. It is the class most
-    /// likely to be auto-fixed without being read, since nobody opens a
-    /// generated file before committing it.
+    /// Off, because a comment in one of those belongs to the tool that wrote it and will be written again on the next run.
+    /// It is the class most likely to be auto-fixed without being read, since nobody opens a generated file before committing it.
     pub include_generated: bool,
 }
 
@@ -92,10 +86,8 @@ pub struct PolicyConfig {
 impl Default for PolicyConfig {
     fn default() -> Self {
         Self {
-            /* NOTE: Deferred to the core enum rather than named here, so the
-             * built-in default the CLI reports and the default the library
-             * documents cannot drift apart. They did: renaming the policies
-             * left this line naming the old default under its new spelling. */
+            /* NOTE: Deferred to the core enum rather than named here, so the built-in default the CLI reports and the default the library documents cannot drift apart.
+             * They did: renaming the policies left this line naming the old default under its new spelling. */
             mode: Policy::default(),
             layout: Layout::Lines,
             keep_kind: Vec::new(),
@@ -112,8 +104,7 @@ impl Default for PolicyConfig {
 
 /// Where the ledger lives, and whether a run is held to it.
 ///
-/// Empty means no ledger: a project that has not asked for one is not held to
-/// a file that does not exist.
+/// Empty means no ledger: a project that has not asked for one is not held to a file that does not exist.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct RatchetConfig {
@@ -182,23 +173,17 @@ pub struct PathOverride {
     pub remove_kind: Vec<CommentKind>,
     pub keep_regex: Vec<String>,
     pub remove_regex: Vec<String>,
-    /// A different `[policy.allow]` for this part of the tree, replacing the
-    /// global one whole rather than merging into it.
+    /// A different `[policy.allow]` for this part of the tree, replacing the global one whole rather than merging into it.
     ///
-    /// Whole, because these rules are a convention and half a convention is
-    /// not one: a table that merged would let a subtree inherit a length limit
-    /// it never asked for and could not turn off.
+    /// Whole, because these rules are a convention and half a convention is not one: a table that merged would let a subtree inherit a length limit it never asked for and could not turn off.
     pub allow: Option<AllowRules>,
-    /// A different `[style]` for this part of the tree, replacing the global
-    /// one whole rather than merging into it, for the reason `allow` does.
+    /// A different `[style]` for this part of the tree, replacing the global one whole rather than merging into it, for the reason `allow` does.
     pub style: Option<StyleRules>,
 }
 
 /// Where one effective setting came from.
 ///
-/// The layers are the ones [`ResolvedConfig::for_path`] merges, and a source
-/// names the layer a value arrived on rather than the value itself, so
-/// `--explain` can send a reader to the table they have to edit.
+/// The layers are the ones [`ResolvedConfig::for_path`] merges, and a source names the layer a value arrived on rather than the value itself, so `--explain` can send a reader to the table they have to edit.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum Source {
     /// The `[policy]` table, or the built-in default when no file set it.
@@ -213,11 +198,9 @@ pub enum Source {
 }
 
 impl Source {
-    /// How an explanation names this source, given the `[policy]` key it
-    /// decided and the file a `Global` value was written in.
+    /// How an explanation names this source, given the `[policy]` key it decided and the file a `Global` value was written in.
     ///
-    /// `#N` counts an `[[overrides]]` table from zero, the way the regex
-    /// indices printed beside it count the patterns they address.
+    /// `#N` counts an `[[overrides]]` table from zero, the way the regex indices printed beside it count the patterns they address.
     fn describe(&self, key: &str, origin: Option<&Path>) -> String {
         match self {
             Self::Global => match origin {
@@ -237,8 +220,7 @@ impl Source {
     }
 }
 
-/// The `[policy]` keys a trace can attribute to a file, spelled as the file
-/// spells them.
+/// The `[policy]` keys a trace can attribute to a file, spelled as the file spells them.
 const POLICY_KEYS: [&str; 8] = [
     "mode",
     "layout",
@@ -250,12 +232,10 @@ const POLICY_KEYS: [&str; 8] = [
     "style",
 ];
 
-/// The table a `[policy]` key is written in, which is the table an explanation
-/// sends a reader to. Most are written in `[policy]` itself.
+/// The table a `[policy]` key is written in, which is the table an explanation sends a reader to.
+/// Most are written in `[policy]` itself.
 ///
-/// `style` is not under `[policy]` at all, and the answer here is what sends a
-/// reader to the table they would actually edit rather than to the one the
-/// trace happens to file it under.
+/// `style` is not under `[policy]` at all, and the answer here is what sends a reader to the table they would actually edit rather than to the one the trace happens to file it under.
 fn policy_table(key: &str) -> &'static str {
     match key {
         "allow" => "[policy.allow]",
@@ -264,23 +244,18 @@ fn policy_table(key: &str) -> &'static str {
     }
 }
 
-/// Which configuration file last set each `[policy]` key. A key no file sets
-/// keeps no entry, and an explanation calls it a built-in default rather than
-/// sending the reader to a file that never mentions it.
+/// Which configuration file last set each `[policy]` key.
+/// A key no file sets keeps no entry, and an explanation calls it a built-in default rather than sending the reader to a file that never mentions it.
 type PolicyOrigins = BTreeMap<&'static str, PathBuf>;
 
-/// What the command line overrode, recorded while it was applied so a trace
-/// can say the command line rather than the file the value would otherwise
-/// have been written in.
+/// What the command line overrode, recorded while it was applied so a trace can say the command line rather than the file the value would otherwise have been written in.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CliOverrides {
     pub language: Option<Language>,
     pub dialect: Option<Dialect>,
     pub policy: bool,
     pub layout: bool,
-    /// Where the `--keep-kind` values start in `policy.keep_kind`: the command
-    /// line appends to the configured list instead of replacing it, so only
-    /// the tail of that list belongs to the command line.
+    /// Where the `--keep-kind` values start in `policy.keep_kind`: the command line appends to the configured list instead of replacing it, so only the tail of that list belongs to the command line.
     pub keep_kind_from: Option<usize>,
     /// The same boundary for `--remove-kind` in `policy.remove_kind`.
     pub remove_kind_from: Option<usize>,
@@ -288,9 +263,7 @@ pub struct CliOverrides {
 
 /// Where every effective disposition setting for one path came from.
 ///
-/// The `*_kind` and `*_regex` vectors run parallel to the vectors in the
-/// [`ScanOptions`] that [`ResolvedConfig::for_path_traced`] returned beside
-/// this: entry `i` says which layer contributed entry `i` of that list.
+/// The `*_kind` and `*_regex` vectors run parallel to the vectors in the [`ScanOptions`] that [`ResolvedConfig::for_path_traced`] returned beside this: entry `i` says which layer contributed entry `i` of that list.
 #[derive(Clone, Debug, Default)]
 pub struct PolicyTrace {
     pub policy: Source,
@@ -298,8 +271,8 @@ pub struct PolicyTrace {
     pub remove_kind: Vec<Source>,
     pub keep_regex: Vec<Source>,
     pub remove_regex: Vec<Source>,
-    /// Which layer last set `[policy.allow]`. The table is replaced whole
-    /// rather than merged entry by entry, so one source covers all of it.
+    /// Which layer last set `[policy.allow]`.
+    /// The table is replaced whole rather than merged entry by entry, so one source covers all of it.
     pub allow: Source,
     /// Which layer last set `[style]`, for the reason `allow` has one.
     pub style: Source,
@@ -307,13 +280,9 @@ pub struct PolicyTrace {
 }
 
 impl PolicyTrace {
-    /// Where the setting that decided `explanation` came from, worded the way
-    /// `--explain` prints it, or `None` when a built-in rule decided it and
-    /// there is no table to point at.
+    /// Where the setting that decided `explanation` came from, worded the way `--explain` prints it, or `None` when a built-in rule decided it and there is no table to point at.
     ///
-    /// `options` is the one the explanation was produced from: a regex
-    /// explanation carries its index into those lists, and a kind explanation
-    /// is found by the kind it names.
+    /// `options` is the one the explanation was produced from: a regex explanation carries its index into those lists, and a kind explanation is found by the kind it names.
     pub fn origin_of(
         &self,
         explanation: &DispositionExplanation,
@@ -338,15 +307,13 @@ impl PolicyTrace {
             DispositionExplanation::RemovedByRegex { index, .. } => {
                 (self.remove_regex.get(*index)?, "remove_regex")
             }
-            /* NOTE: Every one of these is the policy having the last word, whether it
-             * took the comment out or protected it. */
+            /* NOTE: Every one of these is the policy having the last word, whether it took the comment out or protected it. */
             DispositionExplanation::RemovedByPolicy { .. }
             | DispositionExplanation::RemovedByDefault { .. }
             | DispositionExplanation::KeptByPolicy { .. }
             | DispositionExplanation::KeptDocumentation { .. }
             | DispositionExplanation::KeptLicense { .. } => (&self.policy, "mode"),
-            /* NOTE: The three rules that are about a comment's shape rather
-             * than its kind, and the one table that sets all three. */
+            /* NOTE: The three rules that are about a comment's shape rather than its kind, and the one table that sets all three. */
             DispositionExplanation::KeptByTag { .. }
             | DispositionExplanation::RemovedAsTrailing
             | DispositionExplanation::RemovedAsExpired { .. }
@@ -363,12 +330,10 @@ impl PolicyTrace {
         Some(source.describe(key, self.origins.get(key).map(PathBuf::as_path)))
     }
 
-    /// Where the `key` entry at `index` was written, worded exactly as
-    /// [`Self::origin_of`] words the setting behind a verdict.
+    /// Where the `key` entry at `index` was written, worded exactly as [`Self::origin_of`] words the setting behind a verdict.
     ///
     /// `origin_of` starts from a comment and asks which setting decided it.
-    /// This starts from the setting, which is what a report about a setting
-    /// *nothing* decided has to do: there is no comment to ask about.
+    /// This starts from the setting, which is what a report about a setting *nothing* decided has to do: there is no comment to ask about.
     pub fn origin_at(&self, key: &str, index: usize) -> Option<String> {
         let source = match key {
             "keep_kind" => self.keep_kind.get(index),
@@ -393,10 +358,8 @@ struct TracedLayer<'a> {
 
 /// Attribute every entry of one merged list to the layer that introduced it.
 ///
-/// [`ResolvedConfig::for_path`] starts from the global list verbatim and then
-/// appends whatever a later layer adds that is not there yet, so replaying that
-/// walk reproduces the merged list position for position. The tail of the
-/// global list from `cli_from` on is what `flag` appended to it.
+/// [`ResolvedConfig::for_path`] starts from the global list verbatim and then appends whatever a later layer adds that is not there yet, so replaying that walk reproduces the merged list position for position.
+/// The tail of the global list from `cli_from` on is what `flag` appended to it.
 fn attribute<T: Clone + Eq>(
     global: &[T],
     cli_from: Option<usize>,
@@ -425,8 +388,7 @@ fn attribute<T: Clone + Eq>(
     sources
 }
 
-/// Where a setting that holds a single value came from, before any language or
-/// path layer has had its say.
+/// Where a setting that holds a single value came from, before any language or path layer has had its say.
 fn scalar_source(overridden: bool, flag: &'static str) -> Source {
     if overridden {
         Source::Cli { flag }
@@ -451,13 +413,10 @@ pub struct ResolvedConfig {
     pub config: Config,
     pub trace: ConfigTrace,
     /// Where the project starts: the directory `.ocomment.toml` was found in,
-    /// the repository above the working directory, or the working directory
-    /// itself. It decides where configuration is discovered, what the file and
-    /// override globs are written relative to, and where the plugin lock
-    /// lives — no longer what a command with no path walks.
+    /// the repository above the working directory, or the working directory itself.
+    /// It decides where configuration is discovered, what the file and override globs are written relative to, and where the plugin lock lives — no longer what a command with no path walks.
     pub root: PathBuf,
-    /// The directory the command was run from, which is what a path typed on
-    /// the command line is relative to.
+    /// The directory the command was run from, which is what a path typed on the command line is relative to.
     pub cwd: PathBuf,
     /// What the command line overrode, filled in after the files were merged.
     pub cli_overrides: CliOverrides,
@@ -466,23 +425,15 @@ pub struct ResolvedConfig {
 }
 
 impl ResolvedConfig {
-    /// Where `path` sits under the project root, spelled the way a
-    /// configuration glob is written.
+    /// Where `path` sits under the project root, spelled the way a configuration glob is written.
     ///
-    /// `files.include`, `files.exclude`, and every `[[overrides]].paths`
-    /// pattern is relative to the root, while a path named on the command line
-    /// is relative to the working directory. The two agree only when the
-    /// command is run from the root, so the path is resolved against the
-    /// directory it was typed in before it is measured against the root, and
-    /// the separators come out as forward slashes so one glob reads the same
-    /// on every platform.
+    /// `files.include`, `files.exclude`, and every `[[overrides]].paths` pattern is relative to the root, while a path named on the command line is relative to the working directory.
+    /// The two agree only when the command is run from the root, so the path is resolved against the directory it was typed in before it is measured against the root, and the separators come out as forward slashes so one glob reads the same on every platform.
     ///
-    /// A path outside the root — an explicit target above it, say — has no
-    /// root-relative spelling at all, so it keeps its absolute one and only an
-    /// absolute glob can match it.
+    /// A path outside the root — an explicit target above it, say — has no root-relative spelling at all, so it keeps its absolute one and only an absolute glob can match it.
     pub fn relative_to_root(&self, path: &Path) -> String {
-        /* NOTE: Standard input has no place on disk. The pseudo-path is what the
-         * renderers print, so it is also what the globs are shown. */
+        /* NOTE: Standard input has no place on disk.
+         * The pseudo-path is what the renderers print, so it is also what the globs are shown. */
         if path.as_os_str() == crate::files::STDIN_PATH {
             return crate::files::STDIN_PATH.to_owned();
         }
@@ -495,18 +446,10 @@ impl ResolvedConfig {
     /// The `[[overrides]]` entries whose globs matched none of these paths,
     /// with the globs they were written as.
     ///
-    /// A settings block that matches no file does nothing, and nothing said
-    /// so. The report this feeds exists to catch a `keep_regex` that will
-    /// never fire; a path glob that will never fire is the same mistake one
-    /// level up, and it is the level at which a project narrows a rule to the
-    /// files the rule is about — so a typo there does not narrow anything, it
-    /// leaves the wider rule in place over files somebody had decided to
-    /// exempt.
+    /// A settings block that matches no file does nothing, and nothing said so.
+    /// The report this feeds exists to catch a `keep_regex` that will never fire; a path glob that will never fire is the same mistake one level up, and it is the level at which a project narrows a rule to the files the rule is about — so a typo there does not narrow anything, it leaves the wider rule in place over files somebody had decided to exempt.
     ///
-    /// Matched against every path the walk reached, scanned or skipped: a file
-    /// the walk passed over is still a file the glob was written for, and
-    /// calling the glob unused because its file is in a language this build
-    /// cannot read would send a reader to fix the wrong line.
+    /// Matched against every path the walk reached, scanned or skipped: a file the walk passed over is still a file the glob was written for, and calling the glob unused because its file is in a language this build cannot read would send a reader to fix the wrong line.
     pub fn unused_overrides<'a>(
         &'a self,
         paths: impl IntoIterator<Item = &'a Path>,
@@ -552,10 +495,8 @@ impl ResolvedConfig {
         let normalized = self.relative_to_root(path);
         let mut chosen_language = language;
         let mut chosen_dialect = dialect;
-        /* NOTE: Language is selected before its language-specific policy is
-         * applied. A language change without an accompanying dialect starts at
-         * that language's standard dialect instead of carrying (for example)
-         * `tsx` into a Rust scan. */
+        /* NOTE: Language is selected before its language-specific policy is applied.
+         * A language change without an accompanying dialect starts at that language's standard dialect instead of carrying (for example) `tsx` into a Rust scan. */
         for override_ in &self.overrides {
             if override_
                 .matchers
@@ -652,14 +593,10 @@ impl ResolvedConfig {
         Ok((chosen_language, TransformOptions { scan, layout }))
     }
 
-    /// The same answer as [`Self::for_path`], with a record of where each
-    /// setting came from.
+    /// The same answer as [`Self::for_path`], with a record of where each setting came from.
     ///
-    /// The values are [`Self::for_path`]'s own, so what a run does and what
-    /// `--explain` says about it cannot disagree; only the attribution is
-    /// computed here, by replaying the same merge with the layer names
-    /// attached. `--explain` is the only caller, which is why the hot path is
-    /// left as it was.
+    /// The values are [`Self::for_path`]'s own, so what a run does and what `--explain` says about it cannot disagree; only the attribution is computed here, by replaying the same merge with the layer names attached.
+    /// `--explain` is the only caller, which is why the hot path is left as it was.
     pub fn for_path_traced(
         &self,
         path: &Path,
@@ -731,26 +668,23 @@ impl ResolvedConfig {
                 "--remove-kind",
                 &remove_kinds,
             ),
-            /* NOTE: No flag supplies a pattern, so no entry of either list can have
-             * come from the command line. */
+            /* NOTE: No flag supplies a pattern, so no entry of either list can have come from the command line. */
             keep_regex: attribute(&self.config.policy.keep_regex, None, "", &keep_patterns),
             remove_regex: attribute(&self.config.policy.remove_regex, None, "", &remove_patterns),
-            /* NOTE: No flag sets an allow rule, so the command line never wins
-             * this one and the file the merge left standing is the answer. */
+            /* NOTE: No flag sets an allow rule, so the command line never wins this one and the file the merge left standing is the answer. */
             allow: Source::Global,
             // NOTE: No flag sets a style rule either, for now.
             style: Source::Global,
             origins: self.origins.clone(),
         };
-        /* NOTE: A single-valued setting is not merged but replaced, so the last layer
-         * that names it is the one that decided it. */
+        /* NOTE: A single-valued setting is not merged but replaced, so the last layer that names it is the one that decided it. */
         for layer in &layers {
             if layer.policy.is_some() {
                 trace.policy = layer.source.clone();
             }
         }
-        /* NOTE: Flags are the final layer. Starting the trace at CLI and then
-         * replaying path layers would claim that a value which never won did. */
+        /* NOTE: Flags are the final layer.
+         * Starting the trace at CLI and then replaying path layers would claim that a value which never won did. */
         if cli.policy {
             trace.policy = Source::Cli { flag: "--policy" };
         }
@@ -764,8 +698,8 @@ pub fn load(explicit: Option<&Path>) -> Result<ResolvedConfig> {
 }
 
 /// Resolve configuration as though the command were invoked from `cwd`,
-/// without changing the process-wide current directory. LSP workspace folders
-/// use this to keep discovery and glob roots independent.
+/// without changing the process-wide current directory.
+/// LSP workspace folders use this to keep discovery and glob roots independent.
 pub fn load_from(cwd: &Path, explicit: Option<&Path>) -> Result<ResolvedConfig> {
     let cwd = if cwd.is_absolute() {
         lexical(cwd)
@@ -780,9 +714,8 @@ pub fn load_from(cwd: &Path, explicit: Option<&Path>) -> Result<ResolvedConfig> 
         };
         lexical(&joined)
     });
-    /* NOTE: `--config` is discovery's replacement, not one more layer on top
-     * of whatever happens to surround the caller. Its own directory is the
-     * root for globs and the plugin lock. */
+    /* NOTE: `--config` is discovery's replacement, not one more layer on top of whatever happens to surround the caller.
+     * Its own directory is the root for globs and the plugin lock. */
     let project_path = explicit_path
         .is_none()
         .then(|| locate_project(&cwd))
@@ -840,12 +773,8 @@ pub fn load_from(cwd: &Path, explicit: Option<&Path>) -> Result<ResolvedConfig> 
     let mut config: Config = merged
         .try_into()
         .context("cannot resolve merged configuration")?;
-    /* NOTE: Under the configuration's own, never over it: a project that
-     * disagrees with a shipped profile replaces it by declaring one of the
-     * same name, which is the ordinary way every other setting is overridden.
-     * They are added after the merge because they are not a configuration
-     * layer -- no `[profiles]` table in any file should be able to delete one
-     * by being silent about it. */
+    /* NOTE: Under the configuration's own, never over it: a project that disagrees with a shipped profile replaces it by declaring one of the same name, which is the ordinary way every other setting is overridden.
+     * They are added after the merge because they are not a configuration layer -- no `[profiles]` table in any file should be able to delete one by being silent about it. */
     for (name, profile) in bundled_profiles()? {
         config.profiles.entry(name).or_insert(profile);
     }
@@ -871,11 +800,8 @@ pub fn load_from(cwd: &Path, explicit: Option<&Path>) -> Result<ResolvedConfig> 
 
 /// The declarative profiles OComment ships with.
 ///
-/// `spec/profiles.toml` is the canonical copy and this is the one the binary
-/// embeds; `tools/check_embedded_specs.py` holds them to each other. They
-/// describe file formats whose comments delimiters describe completely --
-/// `.gitignore`, `dune`, `.wit` -- and exist because the alternative was not
-/// reading those files at all.
+/// `spec/profiles.toml` is the canonical copy and this is the one the binary embeds; `tools/check_embedded_specs.py` holds them to each other.
+/// They describe file formats whose comments delimiters describe completely -- `.gitignore`, `dune`, `.wit` -- and exist because the alternative was not reading those files at all.
 pub fn bundled_profiles() -> Result<Vec<(String, DeclarativeProfile)>> {
     #[derive(Deserialize)]
     struct Bundled {
@@ -886,12 +812,9 @@ pub fn bundled_profiles() -> Result<Vec<(String, DeclarativeProfile)>> {
     Ok(bundled.profiles.into_iter().collect())
 }
 
-/// Layer one configuration file over the merged document, noting every
-/// `[policy]` key it sets on the way.
+/// Layer one configuration file over the merged document, noting every `[policy]` key it sets on the way.
 ///
-/// A later layer overwrites an earlier one exactly as `merge_value` does, so
-/// what is left is the file whose value survived the merge — the one an
-/// explanation is worth sending a reader to.
+/// A later layer overwrites an earlier one exactly as `merge_value` does, so what is left is the file whose value survived the merge — the one an explanation is worth sending a reader to.
 fn merge_layer(
     merged: &mut toml::Value,
     origins: &mut PolicyOrigins,
@@ -909,13 +832,10 @@ fn merge_layer(
     merge_value(merged, layer);
 }
 
-/// How an explanation names a configuration file: relative to the directory
-/// the command was run from when it sits there, and absolute otherwise.
+/// How an explanation names a configuration file: relative to the directory the command was run from when it sits there, and absolute otherwise.
 ///
-/// The label is repeated on every explained line, so the short spelling is
-/// worth having — but only where it still names the file the reader would open.
-/// A file further up the tree, or the user file under `$HOME`, keeps its
-/// absolute path.
+/// The label is repeated on every explained line, so the short spelling is worth having — but only where it still names the file the reader would open.
+/// A file further up the tree, or the user file under `$HOME`, keeps its absolute path.
 fn origin_label(path: &Path, cwd: &Path) -> PathBuf {
     path.strip_prefix(cwd).unwrap_or(path).to_path_buf()
 }
@@ -1027,14 +947,9 @@ fn validate_policy_regexes(config: &Config) -> Result<()> {
         );
     for pattern in patterns {
         regex::bytes::Regex::new(pattern).map_err(|error| {
-            /* INVARIANT: Both halves of this line came out of a file in the project: the
-             * pattern the caller wrote, and a parse error that quotes that
-             * same pattern back with a caret under it. Neither may reach a
-             * terminal verbatim, and the line stays one line. The pattern
-             * keeps the spacing it was written with, because a reader who is
-             * shown something else cannot find it in the file; the parse
-             * error, which `regex` spreads over four lines, is folded onto
-             * this one and kept whole. */
+            /* INVARIANT: Both halves of this line came out of a file in the project: the pattern the caller wrote, and a parse error that quotes that same pattern back with a caret under it.
+             * Neither may reach a terminal verbatim, and the line stays one line.
+             * The pattern keeps the spacing it was written with, because a reader who is shown something else cannot find it in the file; the parse error, which `regex` spreads over four lines, is folded onto this one and kept whole. */
             anyhow!(
                 "invalid comment policy regex `{}`: {}",
                 crate::output::sanitize_path(pattern),
@@ -1050,28 +965,20 @@ fn parse_layer(path: &Path, require_version: bool) -> Result<toml::Value> {
         fs::read_to_string(path).with_context(|| format!("cannot read {}", path.display()))?;
     let config: Config = toml::from_str(&text).map_err(|error| {
         let message = error.to_string();
-        /* INVARIANT: `toml` quotes the line it stopped on, with a caret under the byte
-         * that is wrong with it, so the whole of that line — bytes a project
-         * file chose, an escape sequence among them — is on its way to a
-         * terminal over four lines of diagram. It is folded onto the one line
-         * an error is and kept whole, the way an invalid `[policy]` regex is:
-         * the caret means nothing once the lines are joined, and the sentence
-         * after it is the entire answer. The hint reads the unfolded message
-         * because it quotes nothing back — only a key it found in the schema. */
+        /* INVARIANT: `toml` quotes the line it stopped on, with a caret under the byte that is wrong with it, so the whole of that line — bytes a project file chose, an escape sequence among them — is on its way to a terminal over four lines of diagram.
+         * It is folded onto the one line an error is and kept whole, the way an invalid `[policy]` regex is:
+         * the caret means nothing once the lines are joined, and the sentence after it is the entire answer.
+         * The hint reads the unfolded message because it quotes nothing back — only a key it found in the schema. */
         anyhow!(
             "invalid configuration {}: {}{}",
-            /* NOTE: The path is the project's too — a directory it named — so it is
-             * held to what every other path in the report is held to: printed
-             * as it was spelled, with nothing in it a terminal would act on. */
+            /* NOTE: The path is the project's too — a directory it named — so it is held to what every other path in the report is held to: printed as it was spelled, with nothing in it a terminal would act on. */
             crate::output::sanitize_path(&path.display().to_string()),
             crate::output::sanitize_message(&message),
             unknown_key_hint(&message) + &unknown_value_hint(&message)
         )
     })?;
     if require_version && config.version != Some(1) {
-        /* NOTE: The path is repeated deliberately: the first half is the verdict on
-         * a file the reader may not have opened, the second is the edit that
-         * settles it, and an editor is opened on the second one. */
+        /* NOTE: The path is repeated deliberately: the first half is the verdict on a file the reader may not have opened, the second is the edit that settles it, and an editor is opened on the second one. */
         let path = path.display();
         bail!("{path} must contain `version = 1` (add `version = 1` at the top of {path})");
     }
@@ -1135,12 +1042,9 @@ fn compile_overrides(overrides: &[PathOverride]) -> Result<Vec<CompiledOverride>
 
 /// Resolve `.` and `..` without asking the file system.
 ///
-/// A configuration glob is matched against text, so the text has to be the one
-/// the reader would have written: `../sibling/main.rs`, named from `nested/`,
-/// is `sibling/main.rs` under the root, and leaving the `..` in place would
-/// let it match a `nested/**` override it is not under. The resolution is
-/// lexical because the path need not exist and because `canonicalize` would
-/// also resolve the symbolic links the root itself may be reached through,
+/// A configuration glob is matched against text, so the text has to be the one the reader would have written: `../sibling/main.rs`, named from `nested/`,
+/// is `sibling/main.rs` under the root, and leaving the `..` in place would let it match a `nested/**` override it is not under.
+/// The resolution is lexical because the path need not exist and because `canonicalize` would also resolve the symbolic links the root itself may be reached through,
 /// which would leave the two ends of the comparison in different spellings.
 pub(crate) fn lexical(path: &Path) -> PathBuf {
     let mut resolved = PathBuf::new();
@@ -1176,9 +1080,9 @@ pub fn locate_project(start: &Path) -> Option<PathBuf> {
     None
 }
 
-/// Locate the nearest repository without starting `git`. A `.git` directory
-/// and the indirection file used by worktrees are both accepted. This keeps
-/// the no-argument command fast while making its scope the current repository.
+/// Locate the nearest repository without starting `git`.
+/// A `.git` directory and the indirection file used by worktrees are both accepted.
+/// This keeps the no-argument command fast while making its scope the current repository.
 pub fn locate_repository(start: &Path) -> Option<PathBuf> {
     let start = if start.is_dir() {
         start
@@ -1208,16 +1112,12 @@ fn extend_unique<T: Clone + Eq>(target: &mut Vec<T>, values: &[T]) {
 
 /// What to say when a value is one this build does not know.
 ///
-/// A configuration written for a newer OComment reaches an older one as
-/// `unknown variant \`conservative\``. That is accurate and says nothing about
-/// the fix, and the reader cannot work it out: both builds answer `--version`
-/// with the same number for the whole of a release cycle, so neither they nor
-/// the file can tell which binary is running. Naming the build turns "unknown
-/// variant" into "reinstall".
+/// A configuration written for a newer OComment reaches an older one as `unknown variant \`conservative\``.
+/// That is accurate and says nothing about the fix, and the reader cannot work it out: both builds answer `--version` with the same number for the whole of a release cycle, so neither they nor the file can tell which binary is running.
+/// Naming the build turns "unknown variant" into "reinstall".
 ///
-/// Only for an unknown *value*. An unknown key is a typo far more often than
-/// it is a version skew, and [`unknown_key_hint`] already answers that one by
-/// naming the key the writer meant.
+/// Only for an unknown *value*.
+/// An unknown key is a typo far more often than it is a version skew, and [`unknown_key_hint`] already answers that one by naming the key the writer meant.
 fn unknown_value_hint(message: &str) -> String {
     if message.contains("unknown variant") {
         format!(
@@ -1282,9 +1182,7 @@ mod tests {
         assert!(unknown_key_hint(message).contains("layout"));
     }
 
-    /// `for_path_traced` must not become a second copy of the merge that can
-    /// drift from it: the values it returns are `for_path`'s own, and the trace
-    /// beside them lines up with those values position for position.
+    /// `for_path_traced` must not become a second copy of the merge that can drift from it: the values it returns are `for_path`'s own, and the trace beside them lines up with those values position for position.
     #[test]
     fn a_traced_lookup_returns_the_untraced_answer_and_lines_up_with_it() {
         let directory = tempfile::tempdir().unwrap();
@@ -1302,8 +1200,7 @@ mod tests {
         config.overrides = vec![PathOverride {
             paths: vec!["nested/**".to_owned()],
             policy: Some(Policy::All),
-            /* NOTE: The duplicate is dropped by the merge, so the trace must not
-             * record a source for it either. */
+            /* NOTE: The duplicate is dropped by the merge, so the trace must not record a source for it either. */
             keep_regex: vec!["override".to_owned(), "global".to_owned()],
             ..PathOverride::default()
         }];

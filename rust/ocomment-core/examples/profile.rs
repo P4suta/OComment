@@ -1,8 +1,7 @@
 //! Describe a syntax this crate has no scanner for, with no code.
 //!
-//! A declarative profile is literal comment and string delimiters and nothing
-//! else, which is exactly what one byte-oriented pass can read. Anything that
-//! would make that pass ambiguous is refused up front.
+//! A declarative profile is literal comment and string delimiters and nothing else, which is exactly what one byte-oriented pass can read.
+//! Anything that would make that pass ambiguous is refused up front.
 //!
 //! ```sh
 //! cargo run -p ocomment-core --example profile
@@ -69,11 +68,8 @@ fn main() {
     println!("---");
     print!("{}", String::from_utf8_lossy(&result.output));
 
-    /* NOTE: Two delimiters spelled the same way have no single reading, so the
-     * profile is refused rather than resolved by an arbitrary rule. A token
-     * that is merely the *start* of another is a different matter: that is how
-     * a language spells a documentation comment, and the scan takes the
-     * longest token that matches. */
+    /* NOTE: Two delimiters spelled the same way have no single reading, so the profile is refused rather than resolved by an arbitrary rule.
+     * A token that is merely the *start* of another is a different matter: that is how a language spells a documentation comment, and the scan takes the longest token that matches. */
     let mut ambiguous = ini_like();
     ambiguous.line_comments.push(LineDelimiter {
         start: ";".into(),

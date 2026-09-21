@@ -50,9 +50,7 @@ function looksLikePath(value: string): boolean {
 /**
  * The command to spawn for a setting.
  *
- * A bare name is left alone so that `PATH` decides it; anything that looks
- * like a path is made absolute, because the server is spawned with the
- * workspace as its working directory only when there is one.
+ * A bare name is left alone so that `PATH` decides it; anything that looks like a path is made absolute, because the server is spawned with the workspace as its working directory only when there is one.
  */
 export function commandFor(request: BinaryRequest): string {
 	const configured = request.configured.trim();
@@ -79,9 +77,7 @@ function isRunnable(candidate: string, windows: boolean): boolean {
 		if (!statSync(candidate).isFile()) {
 			return false;
 		}
-		/* NOTE: Windows has no execute bit — every readable file is runnable
-		 * there, and the extension list below is what decides instead — so
-		 * asking for X_OK would turn every candidate down. */
+		/* NOTE: Windows has no execute bit — every readable file is runnable there, and the extension list below is what decides instead — so asking for X_OK would turn every candidate down. */
 		accessSync(candidate, windows ? constants.R_OK : constants.X_OK);
 		return true;
 	} catch {
@@ -95,10 +91,8 @@ export function locate(
 	request: BinaryRequest,
 ): string | undefined {
 	const windows = platformOf(request) === "win32";
-	/* NOTE: `PATHEXT` is spelled in upper case and the files it names are
-	 * almost always lower case. That only matters on a case-sensitive
-	 * directory, which Windows has been able to mount since 1803, so each
-	 * suffix is tried as given and folded down. */
+	/* NOTE: `PATHEXT` is spelled in upper case and the files it names are almost always lower case.
+	 * That only matters on a case-sensitive directory, which Windows has been able to mount since 1803, so each suffix is tried as given and folded down. */
 	const suffixes = windows
 		? [
 				...new Set(
@@ -130,13 +124,9 @@ export function locate(
 /**
  * Resolve the binary and ask it for its version.
  *
- * Nothing is spawned when the file was not found, so a missing binary costs a
- * `stat` rather than a failed process, and the message names what was looked
- * for instead of repeating the operating system's `ENOENT`.
+ * Nothing is spawned when the file was not found, so a missing binary costs a `stat` rather than a failed process, and the message names what was looked for instead of repeating the operating system's `ENOENT`.
  *
- * The spawn is asynchronous on purpose: this runs during activation, and a
- * synchronous one would block the extension host for as long as the binary
- * takes to answer — up to the timeout, if it never does.
+ * The spawn is asynchronous on purpose: this runs during activation, and a synchronous one would block the extension host for as long as the binary takes to answer — up to the timeout, if it never does.
  */
 export async function probe(request: BinaryRequest): Promise<BinaryReport> {
 	const command = commandFor(request);

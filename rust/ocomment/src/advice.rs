@@ -1,20 +1,15 @@
 //! What to do about a comment, read from where it sits.
 //!
-//! A verdict says a comment may go. That is not the question its author has.
-//! Theirs is "and then what" — and the answer is not the same for a line that
-//! explains the function under it, a note wedged beside an assignment, and a
-//! promise nobody kept. The engine cannot tell them apart because the verdict
-//! does not depend on the difference; a reader deciding what to do can tell
-//! them apart at a glance, from the bytes around the comment, and so can this.
+//! A verdict says a comment may go.
+//! That is not the question its author has.
+//! Theirs is "and then what" — and the answer is not the same for a line that explains the function under it, a note wedged beside an assignment, and a promise nobody kept.
+//! The engine cannot tell them apart because the verdict does not depend on the difference; a reader deciding what to do can tell them apart at a glance, from the bytes around the comment, and so can this.
 //!
-//! Nothing here changes a verdict. Every decision below is a rendering of a
-//! comment the scanner already reported, and a comment whose situation is not
-//! one this recognises gets the weakest advice rather than a guess.
+//! Nothing here changes a verdict.
+//! Every decision below is a rendering of a comment the scanner already reported, and a comment whose situation is not one this recognises gets the weakest advice rather than a guess.
 //!
-//! It lives in the CLI rather than in the engine on purpose. The two
-//! implementations are held to each other over what they *decide*, and that is
-//! where the cross-check earns its keep; advice decides nothing, so mirroring
-//! it in OCaml would double the work and prove nothing.
+//! It lives in the CLI rather than in the engine on purpose.
+//! The two implementations are held to each other over what they *decide*, and that is where the cross-check earns its keep; advice decides nothing, so mirroring it in OCaml would double the work and prove nothing.
 
 use crate::output::{ProcessedFile, sanitize_source_line};
 use ocomment_core::{Age, Comment, CommentKind, Language, Policy, ShapeRule};
@@ -23,14 +18,11 @@ use std::path::PathBuf;
 
 /// The decision a removable comment asks its author for.
 ///
-/// Ordered by which claim wins when a comment is several of these at once: a
-/// `// TODO:` beside an assignment is a promise first, because "do it or delete
-/// it" is a larger question than which line it sits on.
+/// Ordered by which claim wins when a comment is several of these at once: a `// TODO:` beside an assignment is a promise first, because "do it or delete it" is a larger question than which line it sits on.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Decision {
-    /// It opens with a tag that promises something. The tag is on the item
-    /// rather than here, so that two promises are one decision asked twice
-    /// rather than two decisions that happen to rhyme.
+    /// It opens with a tag that promises something.
+    /// The tag is on the item rather than here, so that two promises are one decision asked twice rather than two decisions that happen to rhyme.
     Promise,
     /// It shares a line with code.
     BesideCode,
@@ -42,18 +34,15 @@ pub enum Decision {
     AtTheTopOfTheFile,
     /// Anything else: it sits among statements.
     AmongStatements,
-    /// A promise whose deadline has passed. The engine decided this one and
-    /// knows by how much, so its words win over anything read from the
-    /// surrounding lines.
+    /// A promise whose deadline has passed.
+    /// The engine decided this one and knows by how much, so its words win over anything read from the surrounding lines.
     Expired { age: Age, limit: Age },
-    /// Longer than the configured paragraph. Also the engine's, and also
-    /// answered by an edit to the comment rather than by deleting it.
+    /// Longer than the configured paragraph.
+    /// Also the engine's, and also answered by an edit to the comment rather than by deleting it.
     TooLong { limit: usize },
-    /// The policy is stricter than the kind of comment this is, and a gentler
-    /// one keeps it. Nothing about where it sits enters into that, and reading
-    /// the surrounding lines for advice would answer a question nobody asked:
-    /// a documentation comment taken out by `--policy all` is not a comment in
-    /// the wrong place, it is a run asking for more than the reader meant.
+    /// The policy is stricter than the kind of comment this is, and a gentler one keeps it.
+    /// Nothing about where it sits enters into that, and reading the surrounding lines for advice would answer a question nobody asked:
+    /// a documentation comment taken out by `--policy all` is not a comment in the wrong place, it is a run asking for more than the reader meant.
     StricterThanTheKind { kind: CommentKind, keeps: Policy },
 }
 
@@ -97,15 +86,10 @@ impl Decision {
         }
     }
 
-    /// The setting that would stop this being reported, and the table it goes
-    /// in.
+    /// The setting that would stop this being reported, and the table it goes in.
     ///
-    /// The other half of every decision. A gate that can only say "delete it"
-    /// is a gate somebody turns off the first time it is wrong about one
-    /// comment, so the way to keep a comment has to be as visible as the way to
-    /// remove it — and it has to be a setting rather than a flag, because a
-    /// flag makes one run pass and a setting is a decision the repository
-    /// keeps.
+    /// The other half of every decision.
+    /// A gate that can only say "delete it" is a gate somebody turns off the first time it is wrong about one comment, so the way to keep a comment has to be as visible as the way to remove it — and it has to be a setting rather than a flag, because a flag makes one run pass and a setting is a decision the repository keeps.
     #[must_use]
     pub fn keep_route(&self, tags: &BTreeSet<String>, longest: usize) -> Option<String> {
         let named = |names: &BTreeSet<String>| {
@@ -118,10 +102,8 @@ impl Decision {
             Self::AmongStatements | Self::AtTheTopOfTheFile | Self::ExplainsTheItemBelow => {
                 Some("[policy.allow]\ntags = [\"NOTE\"]".to_owned())
             }
-            /* NOTE: A deadline is kept by changing the deadline, so the value
-             * is left for the reader to choose. Filling one in would be this
-             * offering a number nobody decided, for a rule whose whole point is
-             * that somebody did. */
+            /* NOTE: A deadline is kept by changing the deadline, so the value is left for the reader to choose.
+             * Filling one in would be this offering a number nobody decided, for a rule whose whole point is that somebody did. */
             Self::Expired { .. } => Some(format!(
                 "[policy.allow.expiry]\n{} = \"...\"  # longer than the oldest above",
                 tags.iter().next().map_or("TODO", String::as_str)
@@ -130,15 +112,12 @@ impl Decision {
                 "[policy.allow]\nmax_lines = {longest}  # {limit} now, {longest} is the longest above"
             )),
             /* NOTE: The policy itself, because the policy is what decided it.
-             * Offering `[policy.allow] tags` here was the old answer and it was
-             * wrong twice over: a `///` carries no tag to allow, and allowing
-             * one would not reach a rule that is about kinds. */
+             * Offering `[policy.allow] tags` here was the old answer and it was wrong twice over: a `///` carries no tag to allow, and allowing one would not reach a rule that is about kinds. */
             Self::StricterThanTheKind { keeps, .. } => {
                 Some(format!("[policy]\nmode = \"{keeps}\""))
             }
-            /* NOTE: None on purpose. Commented-out code is the one situation
-             * with nothing worth keeping, and offering a way to keep it would
-             * be this file's own advice arguing against itself. */
+            /* NOTE: None on purpose.
+             * Commented-out code is the one situation with nothing worth keeping, and offering a way to keep it would be this file's own advice arguing against itself. */
             Self::CommentedOutCode => None,
         }
     }
@@ -148,23 +127,17 @@ impl Decision {
 #[derive(Clone, Debug)]
 pub struct Item {
     pub path: PathBuf,
-    /// The bytes the run covers, from its first comment's first byte to its
-    /// last comment's last.
+    /// The bytes the run covers, from its first comment's first byte to its last comment's last.
     ///
-    /// The path and the line do not identify a finding. Two removable comments
-    /// share a line whenever one of them sits beside code, and a lookup keyed
-    /// on the line returned the first of them for both — so `--explain`
-    /// printed one comment's verdict under the other, which is the one thing a
-    /// reader consults `--explain` to check, and two findings reached a
-    /// machine format identical in every field.
+    /// The path and the line do not identify a finding.
+    /// Two removable comments share a line whenever one of them sits beside code, and a lookup keyed on the line returned the first of them for both — so `--explain` printed one comment's verdict under the other, which is the one thing a reader consults `--explain` to check, and two findings reached a machine format identical in every field.
     pub start: usize,
     pub end: usize,
     /// One-based, the column the first comment of the run opens at.
     pub column: usize,
     /// Something other than whitespace is in front of it on its line.
     ///
-    /// Which is exactly when a path and a line stop naming one finding: the
-    /// thing in front may be code, and it may be another comment.
+    /// Which is exactly when a path and a line stop naming one finding: the thing in front may be code, and it may be another comment.
     pub beside: bool,
     /// One-based, inclusive on both ends.
     pub first_line: usize,
@@ -173,7 +146,8 @@ pub struct Item {
     pub comments: usize,
     /// The lines as they are, sanitised.
     pub old: Vec<String>,
-    /// What would replace them, sanitised. Empty when the advice is to delete.
+    /// What would replace them, sanitised.
+    /// Empty when the advice is to delete.
     pub new: Vec<String>,
     /// The line the comment is about, when there is one worth showing.
     pub subject: Option<String>,
@@ -215,19 +189,14 @@ impl Group {
 
 /// The tags that promise something, as opposed to the ones that remark.
 ///
-/// `NOTE`, `SAFETY` and the rest say why the code is as it is and are answered
-/// by reading them. These say the code is not as it should be, which is a debt
-/// somebody took on, and the only two ways to answer a debt are to pay it or to
-/// write it off.
+/// `NOTE`, `SAFETY` and the rest say why the code is as it is and are answered by reading them.
+/// These say the code is not as it should be, which is a debt somebody took on, and the only two ways to answer a debt are to pay it or to write it off.
 const PROMISES: [&str; 5] = ["TODO", "FIXME", "HACK", "XXX", "BUG"];
 
 /// How a language spells a documentation comment that a prefix rewrite reaches.
 ///
-/// Only the languages where the rewrite is the whole edit: `//` becomes `///`
-/// and the comment is documentation. A language whose documentation lives
-/// somewhere else -- Python's inside the item, Java's in a block that has to be
-/// opened and closed -- is absent, and the advice for it says what to do
-/// without pretending the edit is one character.
+/// Only the languages where the rewrite is the whole edit: `//` becomes `///` and the comment is documentation.
+/// A language whose documentation lives somewhere else -- Python's inside the item, Java's in a block that has to be opened and closed -- is absent, and the advice for it says what to do without pretending the edit is one character.
 const DOC_PREFIX: [(Language, &str); 8] = [
     (Language::Rust, "///"),
     (Language::C, "///"),
@@ -241,8 +210,7 @@ const DOC_PREFIX: [(Language, &str); 8] = [
 
 /// Everything the run found, grouped by the decision it asks for.
 ///
-/// Groups come out in the order the decisions are declared, so two runs over
-/// the same tree print the same report.
+/// Groups come out in the order the decisions are declared, so two runs over the same tree print the same report.
 #[must_use]
 pub fn plan(files: &[ProcessedFile], policy: Policy) -> Vec<Group> {
     let mut groups: Vec<Group> = Vec::new();
@@ -264,16 +232,12 @@ pub fn plan(files: &[ProcessedFile], policy: Policy) -> Vec<Group> {
 
 /// The removable comments of one file, as runs, each with its decision.
 ///
-/// Runs are formed before anything is decided, and that order is the whole of
-/// it: a paragraph's decision is read from the line *under the paragraph*, so
-/// deciding comment by comment asks the first line what the second line is,
-/// gets "another comment", and files four lines of prose about a struct under
-/// "it sits among statements".
+/// Runs are formed before anything is decided, and that order is the whole of it: a paragraph's decision is read from the line *under the paragraph*, so deciding comment by comment asks the first line what the second line is,
+/// gets "another comment", and files four lines of prose about a struct under "it sits among statements".
 fn file_items(file: &ProcessedFile, policy: Policy) -> Vec<(Decision, Item)> {
     let lines = source_lines(&file.source);
-    /* NOTE: Once per file. Building it per comment turns a report over a large
-     * file into a quadratic one, and a file with a thousand comments is exactly
-     * the file somebody runs this on first. */
+    /* NOTE: Once per file.
+     * Building it per comment turns a report over a large file into a quadratic one, and a file with a thousand comments is exactly the file somebody runs this on first. */
     let index = crate::output::LineIndex::new(&file.source);
     let mut runs: Vec<Run> = Vec::new();
     for comment in &file.result.report.comments {
@@ -286,10 +250,8 @@ fn file_items(file: &ProcessedFile, policy: Policy) -> Vec<(Decision, Item)> {
             continue;
         };
         match runs.last_mut() {
-            /* NOTE: A run of adjacent comment lines is one paragraph to a
-             * reader and one decision to its author. A promise never joins
-             * one: it asks a different question, and merging it would hide
-             * that question inside a block of prose. */
+            /* NOTE: A run of adjacent comment lines is one paragraph to a reader and one decision to its author.
+             * A promise never joins one: it asks a different question, and merging it would hide that question inside a block of prose. */
             Some(open)
                 if open.comments > 0
                     && open.column == placed.column
@@ -297,17 +259,13 @@ fn file_items(file: &ProcessedFile, policy: Policy) -> Vec<(Decision, Item)> {
                     && open.tag.is_none()
                     && placed.tag.is_none()
                     /* NOTE: A comment beside code is never part of a paragraph.
-                     * Forty trailing notes on forty consecutive assignments
-                     * share a column and are adjacent, and they are forty
-                     * decisions: each one is about the statement it sits on,
+                     * Forty trailing notes on forty consecutive assignments share a column and are adjacent, and they are forty decisions: each one is about the statement it sits on,
                      * and the statement is different every time. */
                     && !open.beside
                     && !placed.beside
-                    /* NOTE: Equal, not absent. A paragraph that ran over the
-                     * line limit carries the same `TooLong` on every line it
-                     * covers, and splitting it back into one finding per line
-                     * would report a single paragraph as several. A deadline
-                     * is the other way: each one is its own promise. */
+                    /* NOTE: Equal, not absent.
+                     * A paragraph that ran over the line limit carries the same `TooLong` on every line it covers, and splitting it back into one finding per line would report a single paragraph as several.
+                     * A deadline is the other way: each one is its own promise. */
                     && open.shape == placed.shape
                     && open.kind == placed.kind =>
             {
@@ -337,11 +295,8 @@ fn file_items(file: &ProcessedFile, policy: Policy) -> Vec<(Decision, Item)> {
 
 /// A run of adjacent comments, before anything has been decided about it.
 struct Run {
-    /// From the first comment's first byte to the last comment's last. A run
-    /// is reported by path and line, and neither a reader asking the engine
-    /// for the verdict behind one finding nor a program applying its edit can
-    /// name it by the line: two removable comments share a line whenever one
-    /// of them sits beside code.
+    /// From the first comment's first byte to the last comment's last.
+    /// A run is reported by path and line, and neither a reader asking the engine for the verdict behind one finding nor a program applying its edit can name it by the line: two removable comments share a line whenever one of them sits beside code.
     start: usize,
     end: usize,
     first: usize,
@@ -355,8 +310,7 @@ struct Run {
 }
 
 impl Run {
-    /// A run that nothing joins, which is how a kept comment or a comment this
-    /// could not place separates the two paragraphs around it.
+    /// A run that nothing joins, which is how a kept comment or a comment this could not place separates the two paragraphs around it.
     const BREAK: Self = Self {
         start: 0,
         end: 0,
@@ -388,9 +342,8 @@ fn item_of(
         .get(..run.column.saturating_sub(1))?
         .trim();
     let body = body_of(lines.get(run.first - 1)?, run.column);
-    /* NOTE: A rule the engine decided over the whole file wins. It knows by
-     * how much a deadline was missed and by how many lines a paragraph ran
-     * over, and a situation read from the surrounding lines cannot say either.
+    /* NOTE: A rule the engine decided over the whole file wins.
+     * It knows by how much a deadline was missed and by how many lines a paragraph ran over, and a situation read from the surrounding lines cannot say either.
      * `Tagged` never reaches here, because a tagged comment was kept. */
     let decision = if let Some(shape) = &run.shape {
         match shape {
@@ -452,9 +405,8 @@ fn item_of(
 
 /// One comment, placed: which lines it covers and whether it opens a promise.
 struct Placed {
-    /// The bytes the comment covers. The start is the only thing about a
-    /// comment that is unique: two of them share a line whenever one sits
-    /// beside code.
+    /// The bytes the comment covers.
+    /// The start is the only thing about a comment that is unique: two of them share a line whenever one sits beside code.
     start: usize,
     end: usize,
     first: usize,
@@ -498,10 +450,7 @@ fn place(lines: &[String], index: &crate::output::LineIndex, comment: &Comment) 
 
 /// A policy gentler than this run's that would keep a comment of this kind.
 ///
-/// `None` when no policy keeps it, which is every ordinary comment: the reader
-/// of one of those has a decision to make about the comment, and the reader of
-/// a documentation comment removed by `--policy all` has a decision to make
-/// about the run.
+/// `None` when no policy keeps it, which is every ordinary comment: the reader of one of those has a decision to make about the comment, and the reader of a documentation comment removed by `--policy all` has a decision to make about the run.
 fn gentler_policy(kind: CommentKind, policy: Policy) -> Option<Policy> {
     let keeps = Policy::strongest_keeping(&[kind])?;
     (keeps != policy && !policy.keeps(kind)).then_some(keeps)
@@ -516,11 +465,9 @@ fn body_of(line: &str, column: usize) -> String {
         .to_owned()
 }
 
-/// The promise a comment opens with, upper-cased, or `None` when it opens with
-/// prose.
+/// The promise a comment opens with, upper-cased, or `None` when it opens with prose.
 ///
-/// The tag has to end at a boundary: `TODO:` and `TODO(name)` are promises and
-/// `TODOs are tracked elsewhere` is a sentence about them.
+/// The tag has to end at a boundary: `TODO:` and `TODO(name)` are promises and `TODOs are tracked elsewhere` is a sentence about them.
 fn promise_tag(body: &str) -> Option<String> {
     let word: String = body
         .chars()
@@ -535,9 +482,8 @@ fn promise_tag(body: &str) -> Option<String> {
 
 /// Whether a comment's text reads as code rather than as prose.
 ///
-/// Deliberately timid. Calling prose "code" advises deleting something a reader
-/// wrote on purpose, so this only answers yes for text that ends the way a
-/// statement ends and does not end the way a sentence does.
+/// Deliberately timid.
+/// Calling prose "code" advises deleting something a reader wrote on purpose, so this only answers yes for text that ends the way a statement ends and does not end the way a sentence does.
 fn reads_as_code(body: &str) -> bool {
     let trimmed = body.trim_end();
     trimmed.ends_with([';', '{', '}'])
@@ -547,10 +493,7 @@ fn reads_as_code(body: &str) -> bool {
 
 /// Whether a line opens something a language would document.
 ///
-/// One list for every language, which is coarse and is the right kind of
-/// coarse: the question is only whether a doc comment would have somewhere to
-/// attach, and a word that opens a definition in one language is not a word
-/// that opens a statement in another.
+/// One list for every language, which is coarse and is the right kind of coarse: the question is only whether a doc comment would have somewhere to attach, and a word that opens a definition in one language is not a word that opens a statement in another.
 fn opens_an_item(line: &str) -> bool {
     const OPENERS: [&str; 16] = [
         "fn ",
@@ -629,14 +572,11 @@ pub fn promote(lines: &[String], prefix: &str) -> Vec<String> {
 }
 
 impl Item {
-    /// The path and lines as every report here writes them, so a reader
-    /// searching one can search the other.
+    /// The path and lines as every report here writes them, so a reader searching one can search the other.
     ///
-    /// The column comes too when something other than whitespace is in front
-    /// of the comment. That is exactly when a path and a line stop naming one
-    /// finding — a second comment on a line always has the first in front of
-    /// it — and the report was printing the two as one location twice. An
-    /// indented comment is the only one on its line and does not need it.
+    /// The column comes too when something other than whitespace is in front of the comment.
+    /// That is exactly when a path and a line stop naming one finding — a second comment on a line always has the first in front of it — and the report was printing the two as one location twice.
+    /// An indented comment is the only one on its line and does not need it.
     #[must_use]
     pub fn where_it_is(&self) -> String {
         let path = crate::output::sanitize_path(&self.path.to_string_lossy());

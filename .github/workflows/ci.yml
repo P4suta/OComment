@@ -28,72 +28,50 @@ jobs:
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
         with:
           components: clippy,rustfmt
-      # NOTE: For the formatter-conformance cases. `gofmt` ships with the Go
-      # NOTE: toolchain and the runner image already carries one; this is the
-      # NOTE: line that says the test depends on it.
+            # NOTE: For the formatter-conformance cases.
+      # NOTE: `gofmt` ships with the Go toolchain and the runner image already carries one; this is the line that says the test depends on it.
       - run: gofmt --help 2>/dev/null || command -v gofmt
       - run: cargo fmt --all --manifest-path rust/Cargo.toml -- --check
       - run: cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets --locked -- -D warnings
-      # NOTE: The tests that name a file with raw non-UTF-8 bytes skip
-      # NOTE: themselves on a filesystem that refuses such a name, which is how
-      # NOTE: they stop failing on macOS for a reason that is not about
-      # NOTE: OComment. ext4 holds one, so here the skip is a failure and the
-      # NOTE: property is actually observed rather than merely compiled.
-      # NOTE: And the formatter-conformance cases, for the same reason: they
-      # NOTE: skip where `gofmt` or `rustfmt` is missing, and this runner has
-      # NOTE: both, so a skip here is a test that quietly stopped running.
+            # NOTE: The tests that name a file with raw non-UTF-8 bytes skip themselves on a filesystem that refuses such a name, which is how they stop failing on macOS for a reason that is not about OComment.
+      # NOTE: ext4 holds one, so here the skip is a failure and the property is actually observed rather than merely compiled.
+      # NOTE: And the formatter-conformance cases, for the same reason: they skip where `gofmt` or `rustfmt` is missing, and this runner has both, so a skip here is a test that quietly stopped running.
       - run: cargo test --manifest-path rust/Cargo.toml --workspace --all-targets --locked
         env:
           OCOMMENT_REQUIRE_NON_UTF8_PATHS: "1"
           OCOMMENT_REQUIRE_FORMATTERS: "1"
-      # NOTE: `--all-targets` above builds every target but silently drops the
-      # NOTE: doctests, so the examples in the library rustdoc are only ever
-      # NOTE: compiled and run by this step.
+            # NOTE: `--all-targets` above builds every target but silently drops the doctests, so the examples in the library rustdoc are only ever compiled and run by this step.
       - run: cargo test --manifest-path rust/Cargo.toml --doc --workspace --locked
-      # NOTE: docs/library.md is hand-written prose and the step above never reads
-      # NOTE: it: `--doc` compiles what is in the crate sources and nothing else. The
-      # NOTE: page says every example on it is compiled and run, so it is handed to
-      # NOTE: `rustdoc` as its own doctest file, linked against the library it
-      # NOTE: documents.
+            # NOTE: docs/library.md is hand-written prose and the step above never reads it: `--doc` compiles what is in the crate sources and nothing else.
+      # NOTE: The page says every example on it is compiled and run, so it is handed to `rustdoc` as its own doctest file, linked against the library it documents.
       - name: The examples on the library page still compile
         run: |
           cargo build --manifest-path rust/Cargo.toml --locked -p ocomment-core
           rustdoc --test docs/library.md --edition 2024 \
             --extern ocomment_core=rust/target/debug/libocomment_core.rlib \
             -L rust/target/debug/deps
-      # NOTE: The binary crate is in here for its links alone: nothing publishes its
-      # NOTE: rustdoc, but its modules document each other, and a link that names a
-      # NOTE: function somebody has since renamed is a wrong sentence wherever it is
-      # NOTE: written. `missing_docs` stays off for it — a `clap` derive has no
-      # NOTE: documentation to give.
+            # NOTE: The binary crate is in here for its links alone: nothing publishes its rustdoc, but its modules document each other, and a link that names a function somebody has since renamed is a wrong sentence wherever it is written.
+      # NOTE: `missing_docs` stays off for it — a `clap` derive has no documentation to give.
       - name: The documentation builds with no broken links
         env:
           RUSTDOCFLAGS: -D warnings
         run: cargo doc --manifest-path rust/Cargo.toml --no-deps -p ocomment-core -p ocomment-plugin-sdk -p ocomment --locked
       - run: python3 tools/check_embedded_specs.py
-      # NOTE: Half a gate is a gate that would go on passing if the thing it
-      # NOTE: tests stopped refusing anything; see the file for the run that
-      # NOTE: did exactly that here.
+            # NOTE: Half a gate is a gate that would go on passing if the thing it tests stopped refusing anything; see the file for the run that did exactly that here.
       - run: python3 tools/check_gate_symmetry.py
       - run: python3 tools/gen_selftest_corpus.py --check
       - run: python3 tools/check_hooks.py
       - run: python3 tools/check_editor_ids.py
       - run: python3 tools/check_ci_contracts.py
-      # NOTE: The only check here that asks somebody else. The table beside it
-      # NOTE: settles everything a file in this repository can be wrong about
-      # NOTE: and cannot settle whether a digest really is the version it is
-      # NOTE: labelled with, which lives upstream. It runs here and not in
-      # NOTE: `preflight` because a laptop is allowed to be offline and a gate
-      # NOTE: is not.
+            # NOTE: The only check here that asks somebody else.
+      # NOTE: The table beside it settles everything a file in this repository can be wrong about and cannot settle whether a digest really is the version it is labelled with, which lives upstream.
+      # NOTE: It runs here and not in `preflight` because a laptop is allowed to be offline and a gate is not.
       - name: The reviewed action pins are what upstream says they are
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 tools/check_action_pins.py
-      # NOTE: Dependabot raises alerts on this repository and they are worth
-      # NOTE: having, but an alert arrives after a merge and can be triaged
-      # NOTE: away -- both `qs` advisories here had been auto-dismissed, so
-      # NOTE: asking for open ones returned none while the lockfile still
-      # NOTE: carried them. This runs before the merge and answers to a ledger.
+            # NOTE: Dependabot raises alerts on this repository and they are worth having, but an alert arrives after a merge and can be triaged away -- both `qs` advisories here had been auto-dismissed, so asking for open ones returned none while the lockfile still carried them.
+      # NOTE: This runs before the merge and answers to a ledger.
       - name: Both lockfiles answer to the advisory ledger
         run: python3 tools/check_advisories.py
       - run: python3 tools/sync_release_docs.py --check
@@ -167,8 +145,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
       - run: cargo build --manifest-path rust/Cargo.toml --locked -p ocomment
       - run: python3 -m pip install --disable-pip-version-check pyyaml==6.0.2
-      # NOTE: Why this runs, and why only the random set is cut here: see "The
-      # NOTE: YAML round trip" in docs/ci.md.
+            # NOTE: Why this runs, and why only the random set is cut here: see "The YAML round trip" in docs/ci.md.
       - name: Removing YAML comments never changes what the document parses to
         run: python3 tools/yaml_roundtrip.py --cases 200
       - name: Report the environment and the configuration OComment resolved
@@ -176,23 +153,17 @@ jobs:
           set -euo pipefail
           ./rust/target/debug/ocomment doctor
           ./rust/target/debug/ocomment config explain
-      # NOTE: The same corpus the library test and the differential run use,
-      # NOTE: asked of the executable instead. It is not a third copy of that
-      # NOTE: check: it is the one that runs where `spec/` is not on disk, which
-      # NOTE: is every machine an artefact is installed on. Running it here is
-      # NOTE: what keeps it working, because a self-test nobody runs is a
-      # NOTE: self-test that quietly stopped reaching the corpus.
+            # NOTE: The same corpus the library test and the differential run use,
+      # NOTE: asked of the executable instead.
+      # NOTE: It is not a third copy of that check: it is the one that runs where `spec/` is not on disk, which is every machine an artefact is installed on.
+      # NOTE: Running it here is what keeps it working, because a self-test nobody runs is a self-test that quietly stopped reaching the corpus.
       - name: The binary re-runs the shared corpus against itself
         run: ./rust/target/debug/ocomment selftest
-      # NOTE: `coverage` and not `check`, because this step is about the files
-      # NOTE: nothing read rather than about what was found in the ones that
-      # NOTE: were: its exit code answers for skips alone.
+            # NOTE: `coverage` and not `check`, because this step is about the files nothing read rather than about what was found in the ones that were: its exit code answers for skips alone.
       - name: Every file was read
         run: ./rust/target/debug/ocomment coverage --deny-skipped --quiet
-      # NOTE: The gate. A bare run walks the repository under the ordinary
-      # NOTE: limits and under `.ocomment.toml`, so a comment that carries no
-      # NOTE: tag, runs past the length rule, or sits beside code fails the
-      # NOTE: build -- and so does a promise whose deadline has passed.
+            # NOTE: The gate.
+      # NOTE: A bare run walks the repository under the ordinary limits and under `.ocomment.toml`, so a comment that carries no tag, runs past the length rule, or sits beside code fails the build -- and so does a promise whose deadline has passed.
       - name: OComment checks its own repository
         run: ./rust/target/debug/ocomment --format github
       - name: Strip every comment out of a copy of the workspace
@@ -239,14 +210,10 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: '& rust/target/release/ocomment.exe --version'
-      # NOTE: The suite, on the systems this repository ships a binary for.
-      # NOTE: Until now `cargo test` ran on Linux alone while `release.yml`
-      # NOTE: shipped x86_64-pc-windows-msvc: what Windows measured was that it
-      # NOTE: builds and prints its version, and because this job went green
-      # NOTE: the whole run did, reading as "Windows passes". Skipped on Linux,
-      # NOTE: where the `rust` job runs it with the switches that turn a skip
-      # NOTE: into a failure -- which must not be set here, because they are
-      # NOTE: read with `is_some` and a "0" would demand rather than excuse.
+            # NOTE: The suite, on the systems this repository ships a binary for.
+      # NOTE: Until now `cargo test` ran on Linux alone while `release.yml` shipped x86_64-pc-windows-msvc: what Windows measured was that it builds and prints its version, and because this job went green the whole run did, reading as "Windows passes".
+      # NOTE: Skipped on Linux,
+      # NOTE: where the `rust` job runs it with the switches that turn a skip into a failure -- which must not be set here, because they are read with `is_some` and a "0" would demand rather than excuse.
       - name: The suite runs where the binary ships
         if: runner.os != 'Linux'
         run: cargo test --manifest-path rust/Cargo.toml --workspace --locked
@@ -325,8 +292,7 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run compile
-      # NOTE: The manifest suite checks the independently versioned extension's
-      # NOTE: packaging, activation, commands, and language selector before build.
+            # NOTE: The manifest suite checks the independently versioned extension's packaging, activation, commands, and language selector before build.
       - run: npm run unit
       - name: Build the ocomment the extension launches
         working-directory: ${{ github.workspace }}
@@ -334,8 +300,7 @@ jobs:
       - name: Put that ocomment first on PATH
         working-directory: ${{ github.workspace }}
         run: echo "${GITHUB_WORKSPACE}/rust/target/debug" >>"$GITHUB_PATH"
-      # NOTE: `npm test` downloads a real VS Code and drives it, so it needs a
-      # NOTE: display; the runner has no X server of its own.
+            # NOTE: `npm test` downloads a real VS Code and drives it, so it needs a display; the runner has no X server of its own.
       - run: xvfb-run -a npm test
       - name: Package the source-only extension
         run: npm run package -- --out ocomment.vsix
@@ -352,10 +317,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # NOTE: A source build on one platform, which is the path a release never
-      # NOTE: takes, so the Dockerfile's own builder stage cannot rot between
-      # NOTE: releases. The step after the smoke test takes the release path over the
-      # NOTE: same file.
+            # NOTE: A source build on one platform, which is the path a release never takes, so the Dockerfile's own builder stage cannot rot between releases.
+      # NOTE: The step after the smoke test takes the release path over the same file.
       - name: Build the image from source
         shell: bash
         run: docker build -t ocomment:ci .
@@ -372,13 +335,9 @@ jobs:
             exit 1
           fi
           python3 -c 'import json, sys; json.load(open(sys.argv[1]))' container-report.json
-      # NOTE: The release image is not compiled: the workflow replaces the `builder`
-      # NOTE: stage with a buildx named context holding the musl binaries the release
-      # NOTE: matrix already built. Handing the image its own binary back through
-      # NOTE: that context exercises the second path over the same Dockerfile, so a
-      # NOTE: release build is never the first to find the layout broken. The hosted
-      # NOTE: runner's default buildx builder supplies `--build-context`; this step
-      # NOTE: uses that same builder.
+            # NOTE: The release image is not compiled: the workflow replaces the `builder` stage with a buildx named context holding the musl binaries the release matrix already built.
+      # NOTE: Handing the image its own binary back through that context exercises the second path over the same Dockerfile, so a release build is never the first to find the layout broken.
+      # NOTE: The hosted runner's default buildx builder supplies `--build-context`; this step uses that same builder.
       - name: Build the image again through the release path
         shell: bash
         run: |

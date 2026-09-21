@@ -34,9 +34,9 @@ test("a concurrent restart cannot leave two servers running", async () => {
 	const serial = new Serial();
 	let live = 0;
 	let peak = 0;
-	// NOTE: The shape of `start()`: stop whatever is there, then bring one up,
-	// NOTE: with an await either side. Without the queue the three requests
-	// NOTE: below interleave and `peak` reaches 3.
+		// NOTE: The shape of `start()`: stop whatever is there, then bring one up,
+	// NOTE: with an await either side.
+	// NOTE: Without the queue the three requests below interleave and `peak` reaches 3.
 	const restart = (): Promise<void> =>
 		serial.run(async () => {
 			live = 0;

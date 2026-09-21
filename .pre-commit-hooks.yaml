@@ -1,5 +1,5 @@
-# NOTE: Hook definitions pre-commit reads when this repository is a `repo:`
-# NOTE: entry. Why they take every text file, and why `language: system`:
+# NOTE: Hook definitions pre-commit reads when this repository is a `repo:` entry.
+# NOTE: Why they take every text file, and why `language: system`:
 # NOTE: see "The published pre-commit hooks" in docs/ci.md.
 - id: ocomment-check
   name: ocomment check

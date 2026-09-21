@@ -8,8 +8,7 @@ const options = {
 	entryPoints: ["src/extension.ts"],
 	outfile: "dist/extension.js",
 	bundle: true,
-	// NOTE: `vscode` is supplied by the extension host at run time and has no
-	// NOTE: package on disk, so it is the one import that must stay external.
+		// NOTE: `vscode` is supplied by the extension host at run time and has no package on disk, so it is the one import that must stay external.
 	external: ["vscode"],
 	format: "cjs",
 	platform: "node",

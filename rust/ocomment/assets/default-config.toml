@@ -49,6 +49,7 @@ force_protected = false
 # the removals.
 #
 # [style]
+# wrap = "sentence"            # one sentence per line, joining cosmetic wraps
 # space_after_marker = true    # `//text` becomes `// text`
 # trailing_whitespace = false  # strip it from every line of a comment
 

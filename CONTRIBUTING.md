@@ -209,9 +209,7 @@ The tag is matched against the head of a single comment token, so a rationale
 that runs past one line is one block comment rather than a run of `//` lines:
 
 ```rust
-/* INVARIANT: a Rust string literal carries a bare newline as content, unlike
- * its C, Go, and Java cousins, so only the closing quote or the end of the
- * file ends one. */
+/* INVARIANT: a Rust string literal carries a bare newline as content, unlike its C, Go, and Java cousins, so only the closing quote or the end of the file ends one. */
 ```
 
 Keep the continuation lines on ` * `; `rustfmt` reflows the other block-comment

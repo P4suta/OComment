@@ -21,8 +21,7 @@ class OComment {
 	private readonly status: CommentStatus;
 	private readonly watcher: vscode.FileSystemWatcher;
 	private readonly disposables: vscode.Disposable[] = [];
-	/* NOTE: Every start and stop goes through this, so a settings change during a
-	 * restart cannot leave a second server running with nothing holding it. */
+	/* NOTE: Every start and stop goes through this, so a settings change during a restart cannot leave a second server running with nothing holding it. */
 	private readonly lifecycle = new Serial();
 	private client: LanguageClient | undefined;
 	private clientState: vscode.Disposable | undefined;
@@ -37,11 +36,8 @@ class OComment {
 			0,
 		);
 		this.status = new CommentStatus(this.item);
-		/* NOTE: One watcher for the life of the extension. It was created per start
-		 * before, which leaked one file watcher for every restart: the client
-		 * only ever disposes the listeners it hooked onto the watcher it was
-		 * handed, never the watcher itself, which is what makes handing the
-		 * same one to each successive client safe. */
+		/* NOTE: One watcher for the life of the extension.
+		 * It was created per start before, which leaked one file watcher for every restart: the client only ever disposes the listeners it hooked onto the watcher it was handed, never the watcher itself, which is what makes handing the same one to each successive client safe. */
 		this.watcher = vscode.workspace.createFileSystemWatcher(
 			"**/.ocomment.{toml,lock}",
 		);
@@ -52,10 +48,8 @@ class OComment {
 		this.register("ocomment.showOutput", () => {
 			this.output.show(true);
 		});
-		/* NOTE: `ocomment.fixWorkspace` is deliberately not registered here. The
-		 * language client registers a handler for every name the server lists
-		 * in `executeCommandProvider`, and that registration throws if the name
-		 * is already taken — which would take the whole client down with it.
+		/* NOTE: `ocomment.fixWorkspace` is deliberately not registered here.
+		 * The language client registers a handler for every name the server lists in `executeCommandProvider`, and that registration throws if the name is already taken — which would take the whole client down with it.
 		 * The manifest contributes the name for its palette title only. */
 
 		this.disposables.push(
@@ -97,10 +91,8 @@ class OComment {
 
 	/** Stop whatever is running, then start the server, one request at a time. */
 	async start(): Promise<void> {
-		/* INVARIANT: `launch` and `shutdown` are the bodies, and neither may reach for
-		 * the queue itself: work queued from inside the queue waits for the
-		 * work that queued it, which never finishes. Every public entry
-		 * point queues exactly once, here or in `stop`. */
+		/* INVARIANT: `launch` and `shutdown` are the bodies, and neither may reach for the queue itself: work queued from inside the queue waits for the work that queued it, which never finishes.
+		 * Every public entry point queues exactly once, here or in `stop`. */
 		return this.lifecycle.run(async () => {
 			await this.shutdown();
 			await this.launch();
@@ -129,11 +121,8 @@ class OComment {
 		}
 		this.output.info(`Using ${report.located} (${String(report.version)})`);
 
-		/* NOTE: No transport is named on purpose. The client already talks over
-		 * the child's stdio when none is given; naming the stdio transport
-		 * additionally appends `--stdio` to the arguments, and `ocomment lsp`
-		 * rejects an argument it does not define rather than ignoring it, so the
-		 * server would exit before the first request reached it. */
+		/* NOTE: No transport is named on purpose.
+		 * The client already talks over the child's stdio when none is given; naming the stdio transport additionally appends `--stdio` to the arguments, and `ocomment lsp` rejects an argument it does not define rather than ignoring it, so the server would exit before the first request reached it. */
 		const serverOptions: ServerOptions = {
 			command: report.located,
 			args: ["lsp", ...configuration.get<string[]>("extraArgs", [])],
@@ -146,16 +135,11 @@ class OComment {
 				language,
 			})),
 			synchronize: {
-				/* NOTE: The server registers watchers for these two names itself
-				 * when the client advertises dynamic registration. This one is
-				 * the fallback for the same files, so a configuration change is
-				 * picked up either way. */
+				/* NOTE: The server registers watchers for these two names itself when the client advertises dynamic registration.
+				 * This one is the fallback for the same files, so a configuration change is picked up either way. */
 				fileEvents: this.watcher,
 			},
-			/* NOTE: The server advertises `workspaceDiagnostics`, and the client
-			 * drives that pull on its own; the two flags below are the ones for
-			 * the open documents, which the client would otherwise only pull on
-			 * open. */
+			/* NOTE: The server advertises `workspaceDiagnostics`, and the client drives that pull on its own; the two flags below are the ones for the open documents, which the client would otherwise only pull on open. */
 			diagnosticPullOptions: { onChange: true, onSave: true },
 			outputChannel: this.output,
 			revealOutputChannelOn: RevealOutputChannelOn.Never,
@@ -168,9 +152,7 @@ class OComment {
 			clientOptions,
 		);
 		this.client = client;
-		// NOTE: Held on its own rather than in `disposables`, which lives as
-		// NOTE: long as the extension does: a restart replaces the client, and
-		// NOTE: a listener per restart would accumulate for the session.
+				// NOTE: Held on its own rather than in `disposables`, which lives as long as the extension does: a restart replaces the client, and a listener per restart would accumulate for the session.
 		this.clientState = client.onDidChangeState((event) => {
 			this.enter(event.newState === State.Running ? "running" : "stopped");
 		});
@@ -238,10 +220,8 @@ class OComment {
 			);
 			return;
 		}
-		/* NOTE: `ocomment.fixDocument` is the server's own command, registered
-		 * by the language client. Going through it rather than through a second
-		 * request keeps this command and the code lens on one code path, and
-		 * the edit arrives as the annotated workspace edit the server built. */
+		/* NOTE: `ocomment.fixDocument` is the server's own command, registered by the language client.
+		 * Going through it rather than through a second request keeps this command and the code lens on one code path, and the edit arrives as the annotated workspace edit the server built. */
 		await vscode.commands.executeCommand(
 			"ocomment.fixDocument",
 			editor.document.uri.toString(),

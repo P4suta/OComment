@@ -25,9 +25,7 @@ test("a relative path is resolved against the workspace, an absolute one is not"
 		commandFor({ configured: "/opt/ocomment", workspaceRoot: "/w" }),
 		"/opt/ocomment",
 	);
-	// NOTE: With no folder open there is nothing to resolve against, so the
-	// NOTE: setting is handed to the spawn untouched rather than to the
-	// NOTE: process working directory, which the user never chose.
+		// NOTE: With no folder open there is nothing to resolve against, so the setting is handed to the spawn untouched rather than to the process working directory, which the user never chose.
 	assert.equal(commandFor({ configured: "./bin/ocomment" }), "./bin/ocomment");
 });
 
@@ -48,8 +46,7 @@ test("a leading tilde is expanded from the environment", () => {
 		}),
 		join("C:\\Users\\dev", "bin", "ocomment"),
 	);
-	// NOTE: `~user` is a shell expansion this extension cannot resolve, so it
-	// NOTE: stays literal instead of turning into a wrong path.
+		// NOTE: `~user` is a shell expansion this extension cannot resolve, so it stays literal instead of turning into a wrong path.
 	assert.equal(
 		commandFor({ configured: "~other/ocomment", env: { HOME: "/home/dev" } }),
 		"~other/ocomment",
@@ -91,9 +88,7 @@ test("a bare name is looked up on PATH and an unexecutable file is not a match",
 test("PATHEXT decides the suffix on Windows", () => {
 	const directory = scratch();
 	const executable = join(directory, "ocomment.exe");
-	// NOTE: Windows has no execute bit, so the mode is deliberately left plain
-	// NOTE: here: finding this file is what proves the lookup does not ask for
-	// NOTE: one on a platform that has none.
+		// NOTE: Windows has no execute bit, so the mode is deliberately left plain here: finding this file is what proves the lookup does not ask for one on a platform that has none.
 	writeFileSync(executable, "");
 	assert.equal(
 		locate(DEFAULT_COMMAND, {
@@ -125,9 +120,7 @@ test("a path that names a file is used without consulting PATH", () => {
 });
 
 test("probing reports the version of a real executable", async () => {
-	// NOTE: `process.execPath --version` is the one executable every runner of
-	// NOTE: this suite is guaranteed to have, so the probe is tested without
-	// NOTE: depending on a built ocomment.
+		// NOTE: `process.execPath --version` is the one executable every runner of this suite is guaranteed to have, so the probe is tested without depending on a built ocomment.
 	const report = await probe({ configured: process.execPath });
 	assert.equal(report.command, process.execPath);
 	assert.equal(report.located, process.execPath);

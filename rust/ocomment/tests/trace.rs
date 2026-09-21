@@ -1,9 +1,7 @@
 //! What `--trace` records, and what it must not disturb.
 //!
-//! The trace is diagnostic: it goes to standard error so that the product on
-//! standard output stays exactly what it was, and it is off unless asked for.
-//! Both of those are properties a change could break without any other test
-//! noticing, because every other test runs without the flag.
+//! The trace is diagnostic: it goes to standard error so that the product on standard output stays exactly what it was, and it is off unless asked for.
+//! Both of those are properties a change could break without any other test noticing, because every other test runs without the flag.
 
 use std::{path::Path, process::Command};
 
@@ -13,9 +11,7 @@ fn binary() -> &'static str {
 
 /// A fixture reaching every kind of event the trace can record.
 ///
-/// `diff` plans edits, so `edit-planned` is produced; the unreadable file
-/// makes `file-skipped` happen; the source carries a kept comment and a
-/// removed one so that `comment-decided` is seen deciding both ways.
+/// `diff` plans edits, so `edit-planned` is produced; the unreadable file makes `file-skipped` happen; the source carries a kept comment and a removed one so that `comment-decided` is seen deciding both ways.
 fn fixture() -> tempfile::TempDir {
     let directory = tempfile::tempdir().expect("a temporary directory");
     std::fs::write(
@@ -33,9 +29,7 @@ fn fixture() -> tempfile::TempDir {
 
 /// Run the binary, naming `--format human` unless the test names a format.
 ///
-/// These read the summary and the trace, both of which are the same whichever
-/// report format the run wrote; `human` is named so that the product on
-/// standard output stays the stream they were written against.
+/// These read the summary and the trace, both of which are the same whichever report format the run wrote; `human` is named so that the product on standard output stays the stream they were written against.
 fn run(directory: &Path, arguments: &[&str]) -> (String, String) {
     let mut arguments: Vec<&str> = arguments.to_vec();
     if !arguments.contains(&"--format") {
@@ -71,9 +65,7 @@ fn the_trace_is_off_until_it_is_asked_for() {
 
 /// The trace must not reach standard output, whatever the format is.
 ///
-/// This is the property that lets `--trace json` be combined with `--format
-/// json`: if either one moved, the combination would stop producing a document
-/// a caller can parse, and the caller would find out at run time.
+/// This is the property that lets `--trace json` be combined with `--format json`: if either one moved, the combination would stop producing a document a caller can parse, and the caller would find out at run time.
 #[test]
 fn the_trace_leaves_the_product_alone() {
     let directory = fixture();
@@ -95,9 +87,7 @@ fn the_trace_leaves_the_product_alone() {
 
 /// Every event the trace can record is reached by one fixture.
 ///
-/// A variant added without a fixture that produces it is a step the trace
-/// claims to record and has never been observed recording, which is the same
-/// gap as a gate that has only ever been seen passing.
+/// A variant added without a fixture that produces it is a step the trace claims to record and has never been observed recording, which is the same gap as a gate that has only ever been seen passing.
 #[test]
 fn every_recorded_event_is_reached_by_a_fixture() {
     let directory = fixture();
@@ -139,9 +129,8 @@ fn every_recorded_event_is_reached_by_a_fixture() {
 
 /// `--quiet` is what makes the stream parseable line by line.
 ///
-/// Standard error carries the run summary too, so a caller that wants every
-/// line to be an event has to say so. Documenting it is not enough: the
-/// combination is pinned here.
+/// Standard error carries the run summary too, so a caller that wants every line to be an event has to say so.
+/// Documenting it is not enough: the combination is pinned here.
 #[test]
 fn quiet_makes_every_error_line_an_event() {
     let directory = fixture();
@@ -157,8 +146,7 @@ fn quiet_makes_every_error_line_an_event() {
 
 /// The human rendering names the evidence that chose the language.
 ///
-/// It is the first thing a run that scanned a file as the wrong language
-/// needs, and detection already knew it — it was being dropped.
+/// It is the first thing a run that scanned a file as the wrong language needs, and detection already knew it — it was being dropped.
 #[test]
 fn the_human_trace_names_the_evidence_for_a_language() {
     let directory = fixture();
@@ -171,9 +159,7 @@ fn the_human_trace_names_the_evidence_for_a_language() {
 
 /// `selftest` re-runs the embedded corpus and says what it could not reach.
 ///
-/// The count matters as much as the verdict: "agrees with everything" is a
-/// weaker claim when the corpus it agreed with has quietly shrunk, which is
-/// what the floors recorded beside the corpus are for.
+/// The count matters as much as the verdict: "agrees with everything" is a weaker claim when the corpus it agreed with has quietly shrunk, which is what the floors recorded beside the corpus are for.
 #[test]
 fn selftest_checks_the_embedded_corpus_and_accounts_for_what_it_skips() {
     let directory = tempfile::tempdir().expect("a temporary directory");
@@ -200,10 +186,8 @@ fn selftest_checks_the_embedded_corpus_and_accounts_for_what_it_skips() {
         cases,
         "every case is either checked or accounted for as out of reach"
     );
-    /* NOTE: A floor of its own, so that a corpus emptied by accident cannot
-     * make this test pass by having nothing to disagree with. It is well under
-     * the recorded floor, which is what actually guards the size; this only
-     * guards against the corpus vanishing entirely. */
+    /* NOTE: A floor of its own, so that a corpus emptied by accident cannot make this test pass by having nothing to disagree with.
+     * It is well under the recorded floor, which is what actually guards the size; this only guards against the corpus vanishing entirely. */
     assert!(
         checked > 100,
         "selftest checked only {checked} cases, so the corpus did not reach the binary"
@@ -231,13 +215,10 @@ fn a_concentrated_report_says_where_the_findings_are() {
     );
 }
 
-/// When one policy keeps every kind the run found, that is worth saying --
-/// because it is a statement about what the findings are.
+/// When one policy keeps every kind the run found, that is worth saying -- because it is a statement about what the findings are.
 ///
-/// A Rust crate with both documentation and a licence header produces exactly
-/// two kinds and never one, and `conservative` keeps both. The reader has
-/// picked a policy stricter than the one their code is written for, which is a
-/// different thing from having comments to answer for.
+/// A Rust crate with both documentation and a licence header produces exactly two kinds and never one, and `conservative` keeps both.
+/// The reader has picked a policy stricter than the one their code is written for, which is a different thing from having comments to answer for.
 #[test]
 fn a_run_whose_findings_one_policy_keeps_is_told_so() {
     let directory = tempfile::tempdir().expect("a temporary directory");
@@ -257,10 +238,9 @@ fn a_run_whose_findings_one_policy_keeps_is_told_so() {
 
 /// No policy answers, and the run does not offer a way to silence itself.
 ///
-/// `--keep-kind line,block` was printed here. It is the shortest way to a green
-/// run and says nothing about whether the run should be green: a gate that
-/// names the flag which silences it, at the moment it fires, is arguing against
-/// its own finding. What the findings are and where they are is still said.
+/// `--keep-kind line,block` was printed here.
+/// It is the shortest way to a green run and says nothing about whether the run should be green: a gate that names the flag which silences it, at the moment it fires, is arguing against its own finding.
+/// What the findings are and where they are is still said.
 #[test]
 fn a_run_no_policy_answers_is_not_offered_a_way_to_silence_it() {
     let directory = tempfile::tempdir().expect("a temporary directory");
@@ -288,9 +268,7 @@ fn a_run_no_policy_answers_is_not_offered_a_way_to_silence_it() {
 
 /// A short report is left alone.
 ///
-/// Under the threshold a reader has already read every line by the time they
-/// reach the summary, and telling them where the findings are would be telling
-/// them what they just saw.
+/// Under the threshold a reader has already read every line by the time they reach the summary, and telling them where the findings are would be telling them what they just saw.
 #[test]
 fn a_short_report_gets_no_summary_of_itself() {
     let directory = tempfile::tempdir().expect("a temporary directory");
@@ -308,18 +286,13 @@ fn a_short_report_gets_no_summary_of_itself() {
 
 /// `fix` checks what it is about to write before it writes it.
 ///
-/// The check is that the result still lexes and holds nothing removable. A
-/// scanner that produced a span opening a string would fail the first; one
-/// that made a new comment token out of the bytes around a hole would fail the
-/// second. Neither is reachable today, which is the point — this pins that the
-/// check runs and passes on every rewrite, so a regression that made one
-/// reachable stops at the gate instead of reaching a file.
+/// The check is that the result still lexes and holds nothing removable.
+/// A scanner that produced a span opening a string would fail the first; one that made a new comment token out of the bytes around a hole would fail the second.
+/// Neither is reachable today, which is the point — this pins that the check runs and passes on every rewrite, so a regression that made one reachable stops at the gate instead of reaching a file.
 #[test]
 fn fix_verifies_the_bytes_it_is_about_to_write() {
     let directory = tempfile::tempdir().expect("a temporary directory");
-    /* NOTE: A file whose comments sit in the places a removal is most likely to
-     * get wrong: beside a string holding a comment token, between two operators
-     * that must not join, and at the end of a line. */
+    /* NOTE: A file whose comments sit in the places a removal is most likely to get wrong: beside a string holding a comment token, between two operators that must not join, and at the end of a line. */
     std::fs::write(
         directory.path().join("edge.rs"),
         br#"fn main() {
@@ -347,9 +320,7 @@ fn fix_verifies_the_bytes_it_is_about_to_write() {
         rewritten.contains("- -9_i32"),
         "the two minus signs joined:\n{rewritten}"
     );
-    /* NOTE: And the check's own claim, made again from outside: a second run
-     * finds nothing, which is what "idempotent" means and what the verifier
-     * asserted before writing. */
+    /* NOTE: And the check's own claim, made again from outside: a second run finds nothing, which is what "idempotent" means and what the verifier asserted before writing. */
     let (_, second) = run(directory.path(), &["check", "."]);
     assert!(
         second.contains("No removable comments"),
@@ -359,10 +330,9 @@ fn fix_verifies_the_bytes_it_is_about_to_write() {
 
 /// A ledger only falls, and it is checked in both directions.
 ///
-/// The second direction is what makes it different from a baseline file. A
-/// baseline forgives what it recorded and says nothing when the work is done;
-/// a ledger asks to be updated, so the number in the file is always the number
-/// in the tree and the distance left to go stays readable.
+/// The second direction is what makes it different from a baseline file.
+/// A baseline forgives what it recorded and says nothing when the work is done;
+/// a ledger asks to be updated, so the number in the file is always the number in the tree and the distance left to go stays readable.
 #[test]
 fn a_ledger_fails_when_a_count_rises_and_when_it_falls() {
     let directory = tempfile::tempdir().expect("a temporary directory");

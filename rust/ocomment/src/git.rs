@@ -47,8 +47,7 @@ pub struct StagedRequest<'a> {
     pub json: crate::output::JsonOptions,
     /// `--annotation-level`, passed through to `--format github`.
     pub annotation_level: Option<AnnotationLevel>,
-    /// The run only previews the patch; `fix --dry-run` writes nothing to
-    /// the index and reports what a real run would remove.
+    /// The run only previews the patch; `fix --dry-run` writes nothing to the index and reports what a real run would remove.
     pub dry_run: bool,
 }
 
@@ -71,11 +70,8 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
     } = request;
     let root = repository_root()?;
     let (blobs, mut skipped) = configured_paths(&root, staged_paths(&root, paths)?, resolved)?;
-    /* NOTE: Nothing staged is a run that reports nothing and exits 0, which
-     * reads exactly like a clean index -- and that is how `--staged` under
-     * `pre-commit run --all-files`, which stages nothing, becomes a gate that
-     * is green forever. The run is still correct; it is the silence that is
-     * the trap, so the silence goes. */
+    /* NOTE: Nothing staged is a run that reports nothing and exits 0, which reads exactly like a clean index -- and that is how `--staged` under `pre-commit run --all-files`, which stages nothing, becomes a gate that is green forever.
+     * The run is still correct; it is the silence that is the trap, so the silence goes. */
     if blobs.is_empty() && skipped.is_empty() {
         let stderr = std::io::stderr();
         let mut sink = stderr.lock();
@@ -97,10 +93,7 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
     for StagedBlob { path, named, mode } in blobs {
         let source = index_blob(&root, &path)?;
         if source.iter().take(8192).any(|byte| *byte == 0) {
-            /* NOTE: A walk says why it passed a file over, and so does this: a hook
-             * that stages a PNG beside its source has to read as one file
-             * scanned and one passed over, not as two files with nothing
-             * to say about them. */
+            /* NOTE: A walk says why it passed a file over, and so does this: a hook that stages a PNG beside its source has to read as one file scanned and one passed over, not as two files with nothing to say about them. */
             skipped.push(skipped_blob(
                 path,
                 "binary file (NUL byte)".to_owned(),
@@ -240,9 +233,7 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
         });
     }
     entries.sort_by(|left, right| left.path.cmp(&right.path));
-    /* NOTE: The size skips were found before the blobs were read and the rest while
-     * reading them, so the two arrive interleaved by nothing at all; a
-     * machine format publishes this list, which owes its reader one order. */
+    /* NOTE: The size skips were found before the blobs were read and the rest while reading them, so the two arrive interleaved by nothing at all; a machine format publishes this list, which owes its reader one order. */
     skipped.sort_by(|left, right| left.path.cmp(&right.path));
     let invalid = entries
         .iter()
@@ -271,8 +262,7 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
             presentation,
             verbosity,
             preview,
-            /* NOTE: A staged run reports index blobs through a path that
-             * carries no policy trace, so there is nothing to explain from;
+            /* NOTE: A staged run reports index blobs through a path that carries no policy trace, so there is nothing to explain from;
              * `run_target` refuses the pair before it gets here. */
             json: crate::output::JsonOptions {
                 explain: false,
@@ -321,8 +311,7 @@ fn fix_index(root: &Path, entries: &[IndexEntry], index_only: bool) -> Result<()
     temporary_index.write_all(&original_index)?;
     temporary_index.flush()?;
     temporary_index.as_file_mut().sync_all()?;
-    /* NOTE: Close the file before Git replaces it through `<path>.lock`; retaining an
-     * open NamedTempFile handle makes this update fail on Windows. */
+    /* NOTE: Close the file before Git replaces it through `<path>.lock`; retaining an open NamedTempFile handle makes this update fail on Windows. */
     let temporary_path = temporary_index.into_temp_path();
 
     for entry in &changed {
@@ -364,8 +353,8 @@ fn fix_index(root: &Path, entries: &[IndexEntry], index_only: bool) -> Result<()
             });
         }
     }
-    /* INVARIANT: Treat the index itself as the last journaled file. The shared transaction
-     * rolls working-tree files and index back together on any rename failure. */
+    /* INVARIANT: Treat the index itself as the last journaled file.
+     * The shared transaction rolls working-tree files and index back together on any rename failure. */
     plans.push(WritePlan {
         path: index_path,
         original: Cow::Owned(original_index),
@@ -418,14 +407,11 @@ fn repository_root() -> Result<PathBuf> {
     Ok(bytes_to_path(&output))
 }
 
-/// Every staged path a run has to consider, and which of them the caller
-/// named.
+/// Every staged path a run has to consider, and which of them the caller named.
 struct StagedPaths {
-    /// What `git diff --cached` answered: root-relative, sorted, each path
-    /// once however many pathspecs covered it.
+    /// What `git diff --cached` answered: root-relative, sorted, each path once however many pathspecs covered it.
     paths: Vec<PathBuf>,
-    /// The paths a pathspec picked out, which is what lifts the project's own
-    /// limits from them.
+    /// The paths a pathspec picked out, which is what lifts the project's own limits from them.
     named: BTreeSet<PathBuf>,
 }
 
@@ -438,20 +424,12 @@ struct StagedBlob {
 
 /// Ask `git` what is staged, one question for each pathspec.
 ///
-/// A pathspec is `git`'s to interpret and nobody else's. `.hidden/*.rs` is a
-/// wildcard it expands, an absolute path is one it makes root-relative, `.` is
-/// a directory it resolves against the directory the command was typed in, and
-/// the answer to all of them is a path relative to the repository root. So
-/// each pathspec is put to `git` on its own and the answers are unioned, which
-/// leaves the run with both of the things it needs — the paths to scan, and
-/// the paths a caller asked about — without restating a word of pathspec
-/// syntax here, and so without the two readings drifting apart.
+/// A pathspec is `git`'s to interpret and nobody else's.
+/// `.hidden/*.rs` is a wildcard it expands, an absolute path is one it makes root-relative, `.` is a directory it resolves against the directory the command was typed in, and the answer to all of them is a path relative to the repository root.
+/// So each pathspec is put to `git` on its own and the answers are unioned, which leaves the run with both of the things it needs — the paths to scan, and the paths a caller asked about — without restating a word of pathspec syntax here, and so without the two readings drifting apart.
 ///
-/// It costs one `git` invocation for each pathspec the caller typed, where the
-/// single combined question it replaces cost one for all of them. A hook that
-/// passes its staged file names in one by one pays that per name, next to the
-/// four this run already spends on every path it keeps, and it buys the only
-/// reading of a pathspec that `git` itself would agree with.
+/// It costs one `git` invocation for each pathspec the caller typed, where the single combined question it replaces cost one for all of them.
+/// A hook that passes its staged file names in one by one pays that per name, next to the four this run already spends on every path it keeps, and it buys the only reading of a pathspec that `git` itself would agree with.
 fn staged_paths(root: &Path, filters: &[PathBuf]) -> Result<StagedPaths> {
     let base = pathspec_base(root);
     let mut paths = Vec::new();
@@ -496,69 +474,40 @@ fn list_staged(base: &Path, pathspec: Option<&Path>) -> Result<Vec<PathBuf>> {
 
 /// The directory a relative pathspec is measured from.
 ///
-/// It is the directory the command was typed in, which is what `git` resolves
-/// `.` or `../lib` against. `resolved.cwd` cannot answer this question: a
-/// staged run points it at the repository root before it begins, because a
-/// staged path arrives root-relative and a `[files]` glob is written
-/// root-relative too. The root stands in where the working directory cannot be
-/// read at all: it is inside the repository by construction, so the worst it
-/// can do is read a relative pathspec as the top of the tree would.
+/// It is the directory the command was typed in, which is what `git` resolves `.` or `../lib` against.
+/// `resolved.cwd` cannot answer this question: a staged run points it at the repository root before it begins, because a staged path arrives root-relative and a `[files]` glob is written root-relative too.
+/// The root stands in where the working directory cannot be read at all: it is inside the repository by construction, so the worst it can do is read a relative pathspec as the top of the tree would.
 fn pathspec_base(root: &Path) -> PathBuf {
     std::env::current_dir().unwrap_or_else(|_| root.to_path_buf())
 }
 
 /// Whether a pathspec covers the repository, and so picks nothing out of it.
 ///
-/// `ocomment check --staged .` from the top of the repository asks for the run
-/// that `ocomment check --staged` already is, and it has to get that run's
-/// answer — every `[files]` limit included. Naming a path is what lifts those
-/// limits, and the whole tree is not a path anybody picked out: a hook that
-/// spells its run with a trailing `.` would otherwise put exactly the hidden
-/// or oversized blob through a commit that a bare run passes over. The same
-/// `.` typed in `src/` does pick a subtree out, which is why the pathspec is
-/// resolved where it was written before it is compared.
+/// `ocomment check --staged .` from the top of the repository asks for the run that `ocomment check --staged` already is, and it has to get that run's answer — every `[files]` limit included.
+/// Naming a path is what lifts those limits, and the whole tree is not a path anybody picked out: a hook that spells its run with a trailing `.` would otherwise put exactly the hidden or oversized blob through a commit that a bare run passes over.
+/// The same `.` typed in `src/` does pick a subtree out, which is why the pathspec is resolved where it was written before it is compared.
 ///
-/// Only a pathspec that is a path is understood here. `git`'s `:(magic)`
-/// spellings are read as picking something out, which is the reading that
-/// answers about the paths the caller wrote rather than silently dropping
-/// them.
+/// Only a pathspec that is a path is understood here.
+/// `git`'s `:(magic)` spellings are read as picking something out, which is the reading that answers about the paths the caller wrote rather than silently dropping them.
 fn names_whole_tree(pathspec: &Path, base: &Path, root: &Path) -> bool {
     let joined = base.join(pathspec);
     let absolute = std::path::absolute(&joined).unwrap_or(joined);
     crate::config::lexical(&absolute) == crate::config::lexical(root)
 }
 
-/// Drop the staged paths `[files]` puts out of bounds, and say which of them
-/// were passed over.
+/// Drop the staged paths `[files]` puts out of bounds, and say which of them were passed over.
 ///
-/// `git diff --cached` answers with every path the commit carries, which is a
-/// different question from the one `[files]` answers: a vendored tree the
-/// project excludes is still staged on the commit that updates it. A walk
-/// applies `include` and `exclude` in `files::load_one`, so a staged run
-/// applies them here, and to the same root-relative spelling — `git` names a
-/// staged path relative to the repository root, and `run_target` has already
-/// pointed `resolved.cwd` there for exactly this reason.
+/// `git diff --cached` answers with every path the commit carries, which is a different question from the one `[files]` answers: a vendored tree the project excludes is still staged on the commit that updates it.
+/// A walk applies `include` and `exclude` in `files::load_one`, so a staged run applies them here, and to the same root-relative spelling — `git` names a staged path relative to the repository root, and `run_target` has already pointed `resolved.cwd` there for exactly this reason.
 ///
-/// A staged path nobody named is a walked path: it never carries the licence
-/// an explicit argument does to look past the project's own limits. That is the
-/// whole of `[files]` and not just its two glob lists — `hidden` decides
-/// whether a dot-directory is looked into at all and `max_size` decides how
-/// much of a file is worth reading, and a hook that applied neither would put
-/// through a commit exactly what a walk would never have reached.
+/// A staged path nobody named is a walked path: it never carries the licence an explicit argument does to look past the project's own limits.
+/// That is the whole of `[files]` and not just its two glob lists — `hidden` decides whether a dot-directory is looked into at all and `max_size` decides how much of a file is worth reading, and a hook that applied neither would put through a commit exactly what a walk would never have reached.
 ///
-/// A path the caller *did* name is the other case, and
-/// [`StagedPaths::named`] is what tells the two apart.
-/// `ocomment check --staged .hidden/x.rs` is a request about that file, so
-/// answering "0 files" because the project does not walk into dot-directories
-/// reads as a clean file rather than as a path out of bounds — which is why a
-/// walk lifts both limits for an explicit argument, and why this lifts them
-/// for the same argument spelled as a pathspec.
+/// A path the caller *did* name is the other case, and [`StagedPaths::named`] is what tells the two apart.
+/// `ocomment check --staged .hidden/x.rs` is a request about that file, so answering "0 files" because the project does not walk into dot-directories reads as a clean file rather than as a path out of bounds — which is why a walk lifts both limits for an explicit argument, and why this lifts them for the same argument spelled as a pathspec.
 ///
-/// The two limits answer differently when they do apply, because they mean
-/// differently. A hidden path was never a candidate, so it leaves no trace; an
-/// oversized blob is a file the run *met* and declined, so it comes back as the
-/// same folded "too large" skip a walk reports, counted in the summary rather
-/// than annotated once per file.
+/// The two limits answer differently when they do apply, because they mean differently.
+/// A hidden path was never a candidate, so it leaves no trace; an oversized blob is a file the run *met* and declined, so it comes back as the same folded "too large" skip a walk reports, counted in the summary rather than annotated once per file.
 fn configured_paths(
     root: &Path,
     staged: StagedPaths,
@@ -572,9 +521,7 @@ fn configured_paths(
     let mut skipped = Vec::new();
     for path in paths {
         let relative = resolved.relative_to_root(&path);
-        /* NOTE: The glob lists bound a named path too — a walk asks them about every
-         * candidate before it asks anything else, and `load_one` asks them of
-         * an explicit argument exactly as it asks them of a walked one. */
+        /* NOTE: The glob lists bound a named path too — a walk asks them about every candidate before it asks anything else, and `load_one` asks them of an explicit argument exactly as it asks them of a walked one. */
         if (!include.is_empty() && !include.is_match(&relative)) || exclude.is_match(&relative) {
             continue;
         }
@@ -582,8 +529,8 @@ fn configured_paths(
         if !explicit && !resolved.config.files.hidden && has_hidden_component(&path) {
             continue;
         }
-        /* NOTE: Read the index mode before asking Git for blob bytes. A
-         * symlink's blob is its target spelling and a gitlink names a commit,
+        /* NOTE: Read the index mode before asking Git for blob bytes.
+         * A symlink's blob is its target spelling and a gitlink names a commit,
          * neither of which is source text. */
         let mode = index_mode(root, &path)?;
         let special = match mode.as_str() {
@@ -600,8 +547,7 @@ fn configured_paths(
                 path,
                 reason: format!("larger than {max_size} bytes"),
                 error: false,
-                /* NOTE: Nobody typed this path, so its skip is folded into the summary
-                 * exactly as a walked one is. */
+                /* NOTE: Nobody typed this path, so its skip is folded into the summary exactly as a walked one is. */
                 explicit: false,
             });
             continue;
@@ -617,14 +563,8 @@ fn configured_paths(
 
 /// A staged blob that was met and declined.
 ///
-/// Neither reason depends on what the caller typed — a PNG is not text and a
-/// `.md` file has no scanner however it got into the commit — but who typed
-/// the path decides where the skip is reported. One nobody named is counted in
-/// the end-of-run summary under the short label [`crate::output::skip_label`]
-/// gives it, and listed per file only when `-v` asks for the list; one the
-/// caller named is answered on a line of its own, because
-/// `ocomment check --staged notes.md` that says only "nothing to check" reads
-/// as a clean file rather than as a file nothing could read.
+/// Neither reason depends on what the caller typed — a PNG is not text and a `.md` file has no scanner however it got into the commit — but who typed the path decides where the skip is reported.
+/// One nobody named is counted in the end-of-run summary under the short label [`crate::output::skip_label`] gives it, and listed per file only when `-v` asks for the list; one the caller named is answered on a line of its own, because `ocomment check --staged notes.md` that says only "nothing to check" reads as a clean file rather than as a file nothing could read.
 fn skipped_blob(path: PathBuf, reason: String, named: bool) -> SkippedFile {
     SkippedFile {
         path,
@@ -636,11 +576,8 @@ fn skipped_blob(path: PathBuf, reason: String, named: bool) -> SkippedFile {
 
 /// Whether any component of a staged path is a hidden name.
 ///
-/// `git` names a staged path relative to the repository root, so every
-/// component of it is a real directory or file name — there is no walk root in
-/// front to leave out, the way `ignore` leaves one out. A leading `.` is the
-/// only byte that decides it, so a name that is not UTF-8 is judged on the
-/// bytes it actually has rather than on a lossy reading of them.
+/// `git` names a staged path relative to the repository root, so every component of it is a real directory or file name — there is no walk root in front to leave out, the way `ignore` leaves one out.
+/// A leading `.` is the only byte that decides it, so a name that is not UTF-8 is judged on the bytes it actually has rather than on a lossy reading of them.
 fn has_hidden_component(path: &Path) -> bool {
     path.components().any(|component| {
         matches!(component, Component::Normal(name) if name.as_encoded_bytes().starts_with(b"."))
@@ -656,15 +593,11 @@ fn index_specification(path: &Path) -> OsString {
 
 /// How large the staged blob is, without reading it.
 ///
-/// The size is asked of the index rather than of the working tree, because
-/// `--staged` judges the bytes the commit will carry: a file can be a line
-/// long on disk and a megabyte in the index, or the other way round.
+/// The size is asked of the index rather than of the working tree, because `--staged` judges the bytes the commit will carry: a file can be a line long on disk and a megabyte in the index, or the other way round.
 ///
 /// Asking costs one `git` invocation for each path that got past the globs,
-/// next to the three the run already spends on every path it keeps. It buys
-/// the thing `max_size` exists for, which is that an oversized blob is never
-/// brought into memory at all — measuring it from `index_blob`'s answer would
-/// have read it first.
+/// next to the three the run already spends on every path it keeps.
+/// It buys the thing `max_size` exists for, which is that an oversized blob is never brought into memory at all — measuring it from `index_blob`'s answer would have read it first.
 fn index_blob_size(root: &Path, path: &Path) -> Result<u64> {
     let mut output = command_output(
         Command::new("git")
@@ -830,17 +763,13 @@ fn bytes_to_path(bytes: &[u8]) -> PathBuf {
     PathBuf::from(String::from_utf8_lossy(bytes).into_owned())
 }
 
-/// The working-tree files that differ from `base`, as paths relative to the
-/// repository root.
+/// The working-tree files that differ from `base`, as paths relative to the repository root.
 ///
-/// `merge-base` rather than `base` itself: on a branch several commits behind
-/// its trunk, a plain diff against the trunk reports every file the trunk
-/// changed as well, and a gate that reported those would be asking this branch
-/// to answer for somebody else's work.
+/// `merge-base` rather than `base` itself: on a branch several commits behind its trunk, a plain diff against the trunk reports every file the trunk changed as well, and a gate that reported those would be asking this branch to answer for somebody else's work.
 ///
 /// A deletion is dropped rather than reported: there is no file left to read,
-/// and a gate that failed on one would be refusing the change that cleaned it
-/// up. `--diff-filter=d` is git's own way of saying so.
+/// and a gate that failed on one would be refusing the change that cleaned it up.
+/// `--diff-filter=d` is git's own way of saying so.
 pub fn changed_since(base: &str) -> Result<(PathBuf, Vec<PathBuf>)> {
     let root = repository_root()?;
     let merge_base = command_output(

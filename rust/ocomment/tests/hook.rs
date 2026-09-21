@@ -1,11 +1,8 @@
 //! The agent-facing report, and the editing hook that carries it.
 //!
-//! Two promises are under test and neither is visible from any other test. The
-//! report is an instruction rather than a listing: the verb on each line is
-//! the rule that decided the comment, and a comment that only had to move must
-//! not be reported as one to delete. The hook is silent unless it has
-//! something to say — a hook that spoke on every event would stand between an
-//! agent and every file it touched.
+//! Two promises are under test and neither is visible from any other test.
+//! The report is an instruction rather than a listing: the verb on each line is the rule that decided the comment, and a comment that only had to move must not be reported as one to delete.
+//! The hook is silent unless it has something to say — a hook that spoke on every event would stand between an agent and every file it touched.
 
 use serde_json::{Value, json};
 use std::{path::Path, process::Command};
@@ -14,8 +11,7 @@ fn binary() -> &'static str {
     env!("CARGO_BIN_EXE_ocomment")
 }
 
-/// A project with the three shape rules turned on, so a single fixture reaches
-/// all three verbs.
+/// A project with the three shape rules turned on, so a single fixture reaches all three verbs.
 fn project() -> tempfile::TempDir {
     let directory = tempfile::tempdir().expect("a temporary directory");
     std::fs::write(
@@ -70,9 +66,7 @@ fn the_verb_on_each_line_is_the_rule_that_decided_the_comment() {
         "a comment that only had to be shorter was not reported that way:\n{stdout}"
     );
     /* NOTE: Tagged, so the tag rule kept it and the trailing rule took it back.
-     * The verb is the one that decided it: an untagged comment beside code is
-     * removed by the policy and would still be removed a line higher up, so
-     * telling a reader to move that one would be wrong advice. */
+     * The verb is the one that decided it: an untagged comment beside code is removed by the policy and would still be removed a line higher up, so telling a reader to move that one would be wrong advice. */
     assert!(
         stdout.contains("move it above the code, or drop it")
             && stdout.contains("FINDING sample.rs:4"),
@@ -156,8 +150,7 @@ fn a_write_that_would_add_a_comment_is_refused_before_it_happens() {
         reason.contains("shorten to 1 line"),
         "the refusal does not say what to do:\n{reason}"
     );
-    /* NOTE: The file does not hold these bytes and may not exist, so `fix`
-     * would be sent at something that is not there. */
+    /* NOTE: The file does not hold these bytes and may not exist, so `fix` would be sent at something that is not there. */
     assert!(
         reason.contains("not on disk yet: write it without them"),
         "the refusal sent the reader to a file that does not hold these bytes:\n{reason}"
@@ -182,9 +175,7 @@ fn a_write_that_would_be_clean_is_waved_through_silently() {
     );
     let (stdout, stderr, code) = run(directory.path(), &["hook", "claude-code"], &payload);
     assert_eq!(code, 0);
-    /* NOTE: Silence rather than `allow`: answering `allow` would wave the edit
-     * past the permission rules its user set, which is not this hook's
-     * business. */
+    /* NOTE: Silence rather than `allow`: answering `allow` would wave the edit past the permission rules its user set, which is not this hook's business. */
     assert_eq!(stdout, "", "a clean edit got a decision it did not need");
     assert_eq!(stderr, "");
 }
@@ -210,9 +201,7 @@ fn an_edit_is_judged_by_what_the_file_would_become() {
     let reason = decision["hookSpecificOutput"]["permissionDecisionReason"]
         .as_str()
         .expect("a reason the model can read");
-    /* NOTE: Line 2 of the file the edit would produce, not line 1 of the
-     * replacement: the hook judges the whole file, so the position it reports
-     * is the one the reader will find. */
+    /* NOTE: Line 2 of the file the edit would produce, not line 1 of the replacement: the hook judges the whole file, so the position it reports is the one the reader will find. */
     assert!(
         reason.contains("sample.rs:2-3"),
         "the report is not in the coordinates of the file:\n{reason}"
@@ -237,8 +226,8 @@ fn a_comment_that_lands_is_reported_back_after_the_fact() {
         directory.path(),
     );
     let (stdout, stderr, code) = run(directory.path(), &["hook", "claude-code"], &payload);
-    /* NOTE: The edit already happened, so there is nothing to refuse. Exit 2 is
-     * how this host puts the text of standard error in front of the model. */
+    /* NOTE: The edit already happened, so there is nothing to refuse.
+     * Exit 2 is how this host puts the text of standard error in front of the model. */
     assert_eq!(
         code, 2,
         "an unclean file after the fact did not report back"
@@ -254,9 +243,7 @@ fn a_comment_that_lands_is_reported_back_after_the_fact() {
     );
 }
 
-/// A hook that answered events it was not asked about would stand between an
-/// agent and every file it read, every command it ran, and every session it
-/// started.
+/// A hook that answered events it was not asked about would stand between an agent and every file it read, every command it ran, and every session it started.
 #[test]
 fn the_hook_is_silent_about_everything_that_is_not_an_edit() {
     let directory = project();
@@ -281,9 +268,7 @@ fn the_hook_is_silent_about_everything_that_is_not_an_edit() {
         // NOTE: An event about neither.
         json!({ "hook_event_name": "SessionStart", "cwd": directory.path().to_string_lossy() })
             .to_string(),
-        /* NOTE: An edit whose replacement is not in the file is one the host
-         * will refuse on its own; judging the bytes it would have produced
-         * would be judging bytes that never exist. */
+        /* NOTE: An edit whose replacement is not in the file is one the host will refuse on its own; judging the bytes it would have produced would be judging bytes that never exist. */
         hook_payload(
             "PreToolUse",
             "Edit",
@@ -303,9 +288,7 @@ fn the_hook_is_silent_about_everything_that_is_not_an_edit() {
     }
 }
 
-/// A payload this build cannot read is the host's business rather than the
-/// edit's: standing in the way of an edit nothing has judged would make every
-/// protocol change a broken editing session.
+/// A payload this build cannot read is the host's business rather than the edit's: standing in the way of an edit nothing has judged would make every protocol change a broken editing session.
 #[test]
 fn an_unreadable_payload_fails_without_blocking_the_edit() {
     let directory = project();

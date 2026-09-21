@@ -1,10 +1,7 @@
 //! `clap::ValueEnum` wrappers around the core vocabulary enums.
 //!
-//! The orphan rule forbids implementing `clap::ValueEnum` on the types owned by
-//! `ocomment-core`, so every user-facing enum gets a transparent newtype here.
-//! Names, aliases, and the variant list all come from the core enum, which stays
-//! the single source of truth; this module only adds the per-value help clap
-//! needs for `--help`, error messages, and shell completions.
+//! The orphan rule forbids implementing `clap::ValueEnum` on the types owned by `ocomment-core`, so every user-facing enum gets a transparent newtype here.
+//! Names, aliases, and the variant list all come from the core enum, which stays the single source of truth; this module only adds the per-value help clap needs for `--help`, error messages, and shell completions.
 
 use crate::output::AnnotationLevel;
 use clap::{ValueEnum, builder::PossibleValue};
@@ -13,9 +10,8 @@ use std::ops::Deref;
 
 /// Register the canonical spelling plus every accepted alias.
 ///
-/// `clap` matches a command-line value through `PossibleValue::matches`, so an
-/// alias that is not registered here is not accepted, however well the core
-/// `FromStr` understands it. Core aliases are stored with `-` as the separator;
+/// `clap` matches a command-line value through `PossibleValue::matches`, so an alias that is not registered here is not accepted, however well the core `FromStr` understands it.
+/// Core aliases are stored with `-` as the separator;
 /// the `_` spelling is registered too so both keep working.
 fn possible_value(
     name: &'static str,
@@ -85,11 +81,8 @@ macro_rules! value_enum_wrapper {
     };
 }
 
-/* NOTE: These name the kinds each policy takes, rather than summarising them
- * as "preambles". A reader deciding between two policies is deciding about
- * licence notices, and the word "preamble" is the one that hid that: it reads
- * as "the header at the top of the file", which is exactly where a licence
- * notice sits, while the code means the shebang and the encoding line. */
+/* NOTE: These name the kinds each policy takes, rather than summarising them as "preambles".
+ * A reader deciding between two policies is deciding about licence notices, and the word "preamble" is the one that hid that: it reads as "the header at the top of the file", which is exactly where a licence notice sits, while the code means the shebang and the encoding line. */
 value_enum_wrapper!(PolicyArg, Policy, |value| match value {
     Policy::None =>
         "Remove nothing. Every comment is kept, which is the mode for a repository that \
@@ -120,9 +113,7 @@ value_enum_wrapper!(LayoutArg, Layout, |value| match value {
 });
 
 /* NOTE: The CLI is deliberately stricter than the core `FromStr`, which folds case,
- * dashes, and underscores away before it looks a name up: only the canonical
- * spelling, the pinned aliases, and their underscore variants are registered
- * here, so `--language r-u-s-t` stays an error even though the core accepts it. */
+ * dashes, and underscores away before it looks a name up: only the canonical spelling, the pinned aliases, and their underscore variants are registered here, so `--language r-u-s-t` stays an error even though the core accepts it. */
 value_enum_wrapper!(LanguageArg, Language, |value| match value {
     Language::Rust => "Rust source files",
     Language::Ocaml => "OCaml implementation and interface files",
@@ -201,8 +192,7 @@ value_enum_wrapper!(CommentKindArg, CommentKind, |value| match value {
 mod tests {
     use super::*;
 
-    /// Every spelling the core enum accepts must reach clap, which matches only
-    /// through the registered name and aliases.
+    /// Every spelling the core enum accepts must reach clap, which matches only through the registered name and aliases.
     fn round_trip<T>(canonical: &'static str, aliases: &'static [&'static str])
     where
         T: ValueEnum + Copy + PartialEq + std::fmt::Debug,

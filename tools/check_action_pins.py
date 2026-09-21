@@ -46,18 +46,12 @@ API = "https://api.github.com"
 class Refused(Exception):
     """The API answered, and the answer was not the one asked for."""
 
-# NOTE: `vN.N` and `vN.N.N` both count. What does not count is a moving major
-# NOTE: like `v3`, which names whatever its publisher last pointed it at rather
-# NOTE: than the commit under review -- so a table entry carrying one cannot be
-# NOTE: checked and must not be allowed to look as though it was.
+# NOTE: `vN.N` and `vN.N.N` both count.
+# NOTE: What does not count is a moving major like `v3`, which names whatever its publisher last pointed it at rather than the commit under review -- so a table entry carrying one cannot be checked and must not be allowed to look as though it was.
 EXACT_VERSION = re.compile(r"^v\d+(?:\.\d+)+$")
 
-# NOTE: Actions that publish no version tags, with what is true of them
-# NOTE: instead. `dtolnay/rust-toolchain` force-updates a `stable` branch as
-# NOTE: Rust releases, so the commit under review is reachable from nothing
-# NOTE: today -- which is the argument for pinning it by digest rather than
-# NOTE: against it, and the reason the only thing worth asserting is that the
-# NOTE: digest names a commit of that repository.
+# NOTE: Actions that publish no version tags, with what is true of them instead.
+# NOTE: `dtolnay/rust-toolchain` force-updates a `stable` branch as Rust releases, so the commit under review is reachable from nothing today -- which is the argument for pinning it by digest rather than against it, and the reason the only thing worth asserting is that the digest names a commit of that repository.
 UNTAGGED = {
     "dtolnay/rust-toolchain": "publishes no version tags; `stable` is a branch it force-updates",
 }
@@ -97,11 +91,8 @@ def fetch(path: str) -> dict | None:
     except urllib.error.HTTPError as error:
         if error.code == 404:
             return None
-        # NOTE: A refusal is not an absence. Being rate-limited or told no means
-        # NOTE: the answer exists and was not read, which `--skip-when-offline`
-        # NOTE: must not be allowed to turn into a pass -- that flag is for a
-        # NOTE: laptop with no network, and a gate that treats "would not say"
-        # NOTE: as "nothing to say" is the failure this whole file is about.
+                # NOTE: A refusal is not an absence.
+        # NOTE: Being rate-limited or told no means the answer exists and was not read, which `--skip-when-offline` must not be allowed to turn into a pass -- that flag is for a laptop with no network, and a gate that treats "would not say" as "nothing to say" is the failure this whole file is about.
         raise Refused(f"{error.code} {error.reason}") from error
 
 
@@ -140,11 +131,8 @@ def check(name: str, digest: str, label: str) -> list[str]:
     if tagged is None:
         return [f"{name}: {repo} publishes no tag {label}"]
     if tagged != digest:
-        # NOTE: Whole digests. Abbreviating them printed the same twelve
-        # NOTE: characters twice under the word "but", because the character
-        # NOTE: that differed was past the cut -- a mismatch reported as two
-        # NOTE: identical strings, which reads as a bug in the checker rather
-        # NOTE: than a finding about the pin.
+                # NOTE: Whole digests.
+        # NOTE: Abbreviating them printed the same twelve characters twice under the word "but", because the character that differed was past the cut -- a mismatch reported as two identical strings, which reads as a bug in the checker rather than a finding about the pin.
         return [
             f"{name}: the table says {label} is\n"
             f"  {digest}\n"
@@ -200,8 +188,7 @@ def main() -> int:
             failures.extend(check(name, digest, label))
         except (Refused, urllib.error.URLError, TimeoutError) as error:
             if arguments.best_effort:
-                # NOTE: Said on the way past rather than folded into the final
-                # NOTE: line, because the run passed and did not check anything,
+                                # NOTE: Said on the way past rather than folded into the final line, because the run passed and did not check anything,
                 # NOTE: and a reader who sees only the count would not know.
                 print(f"not checked: {name} could not be read ({error})")
                 return 0

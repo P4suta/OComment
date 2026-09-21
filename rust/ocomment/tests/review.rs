@@ -1,14 +1,11 @@
 //! The two formats a reader decides from, pinned byte for byte.
 //!
-//! A layout is a contract like any other. These two are read by a person on a
-//! screen and by an agent through a pipe, and both of them build a habit out of
-//! the shape: where the count sits, what a marker means, which line is the edit.
-//! A change to any of that is a change to the contract, and the way to make one
-//! deliberate is to make it show up in a diff.
+//! A layout is a contract like any other.
+//! These two are read by a person on a screen and by an agent through a pipe, and both of them build a habit out of the shape: where the count sits, what a marker means, which line is the edit.
+//! A change to any of that is a change to the contract, and the way to make one deliberate is to make it show up in a diff.
 //!
-//! Both are taken from the same file, because the point of the pair is that
-//! they say the same thing. If one of these ever has to change without the
-//! other, that is the finding.
+//! Both are taken from the same file, because the point of the pair is that they say the same thing.
+//! If one of these ever has to change without the other, that is the finding.
 
 use std::{
     path::Path,
@@ -30,8 +27,7 @@ fn run(directory: &Path, arguments: &[&str]) -> Output {
         .expect("the binary runs")
 }
 
-/// One file holding one of every decision, so neither golden can lose a branch
-/// without the diff saying which.
+/// One file holding one of every decision, so neither golden can lose a branch without the diff saying which.
 fn project() -> TempDir {
     let directory = tempfile::tempdir().expect("a temporary directory");
     std::fs::write(directory.path().join(".ocomment.toml"), b"version = 1\n")
@@ -181,9 +177,8 @@ fn the_agent_report_is_the_one_recorded_here() {
 
 /// The shape does not follow the terminal.
 ///
-/// Every neighbouring tool switches layout when standard output stops being a
-/// terminal, and here that would put a person and the agent working beside them
-/// in front of two different reports of the same run. The test runs in a pipe,
+/// Every neighbouring tool switches layout when standard output stops being a terminal, and here that would put a person and the agent working beside them in front of two different reports of the same run.
+/// The test runs in a pipe,
 /// which is the case that would differ if it ever did.
 #[test]
 fn the_default_format_is_the_one_a_reader_decides_from() {
@@ -237,10 +232,8 @@ fn the_line_per_finding_stream_is_still_reachable() {
 
 /// After a fix, the half worth reading is what is still there.
 ///
-/// A run that says only what it removed is a run whose judgement nobody can
-/// audit: the reader is told five went and has no way to check that the sixth
-/// was right to stay. Asking for the decisions again would be worse -- they are
-/// answered, and the comments are not in the file any more.
+/// A run that says only what it removed is a run whose judgement nobody can audit: the reader is told five went and has no way to check that the sixth was right to stay.
+/// Asking for the decisions again would be worse -- they are answered, and the comments are not in the file any more.
 #[test]
 fn a_fix_says_what_it_left_behind() {
     let directory = project();
@@ -270,9 +263,7 @@ fn a_fix_says_what_it_left_behind() {
 
 /// The commentary on standard error does not depend on the layout above it.
 ///
-/// It lived inside the one-line renderer, so a second format arrived without
-/// it: the summary a CI job greps for went missing, and the job that strips
-/// this repository's own OCaml and rebuilds it is what noticed.
+/// It lived inside the one-line renderer, so a second format arrived without it: the summary a CI job greps for went missing, and the job that strips this repository's own OCaml and rebuilds it is what noticed.
 #[test]
 fn the_summary_is_written_whichever_format_wrote_the_report() {
     let directory = project();
@@ -294,9 +285,8 @@ fn the_summary_is_written_whichever_format_wrote_the_report() {
 /// A large report is a map, not a list.
 ///
 /// This repository under `--policy all` finds over nine thousand comments.
-/// Printed one finding at a time that is nearly eighteen thousand lines, and
-/// nobody reads the ten thousandth. What a reader needs at that size is which
-/// decision, how many, where they are, and somewhere to start.
+/// Printed one finding at a time that is nearly eighteen thousand lines, and nobody reads the ten thousandth.
+/// What a reader needs at that size is which decision, how many, where they are, and somewhere to start.
 #[test]
 fn a_report_too_large_to_read_becomes_one_to_navigate() {
     let directory = tempfile::tempdir().expect("a temporary directory");
@@ -359,10 +349,8 @@ fn a_report_small_enough_to_read_stays_one_to_read() {
 /// `--explain` answers the question the report does not.
 ///
 /// The report says what to do, which is read from where a comment sits.
-/// `--explain` says why it is being asked, which is the rule the engine applied
-/// and the setting behind it. They are different questions, and the flag was
-/// accepted and silently ignored -- the one shape this project refuses
-/// everywhere else.
+/// `--explain` says why it is being asked, which is the rule the engine applied and the setting behind it.
+/// They are different questions, and the flag was accepted and silently ignored -- the one shape this project refuses everywhere else.
 #[test]
 fn explain_names_the_rule_under_each_finding() {
     let directory = project();
@@ -403,9 +391,8 @@ fn explain_names_the_rule_under_each_finding() {
 
 /// The count of what was kept becomes the list of it.
 ///
-/// `ALLOWED 1 comment this run did not report` is a promise that somebody
-/// checked. The list is what lets a reader check the checker, and a gate nobody
-/// can audit when it is green is a gate whose green means nothing.
+/// `ALLOWED 1 comment this run did not report` is a promise that somebody checked.
+/// The list is what lets a reader check the checker, and a gate nobody can audit when it is green is a gate whose green means nothing.
 #[test]
 fn explain_turns_the_allowed_count_into_the_list() {
     let directory = project();
@@ -438,12 +425,9 @@ fn explain_turns_the_allowed_count_into_the_list() {
 
 /// When the policy is stricter than the kind, the decision is about the policy.
 ///
-/// A `///` taken out by `--policy all` is not a comment in the wrong place. The
-/// advice read from the lines around it said "let the code say it, or tag it"
-/// and offered `[policy.allow] tags = ["NOTE"]`, and both halves were wrong: a
-/// doc comment carries no tag to allow, and allowing one would not reach a rule
-/// that is about kinds. Under the default policy this never fires, because no
-/// policy keeps an ordinary comment.
+/// A `///` taken out by `--policy all` is not a comment in the wrong place.
+/// The advice read from the lines around it said "let the code say it, or tag it" and offered `[policy.allow] tags = ["NOTE"]`, and both halves were wrong: a doc comment carries no tag to allow, and allowing one would not reach a rule that is about kinds.
+/// Under the default policy this never fires, because no policy keeps an ordinary comment.
 #[test]
 fn a_policy_stricter_than_the_kind_is_a_decision_about_the_policy() {
     let directory = project();
@@ -487,14 +471,10 @@ fn a_policy_stricter_than_the_kind_is_a_decision_about_the_policy() {
     );
 }
 
-/// The one number a reader takes from the headline is how much of the
-/// repository the run actually read, and it was the sum of what was read and
-/// what was passed over.
+/// The one number a reader takes from the headline is how much of the repository the run actually read, and it was the sum of what was read and what was passed over.
 ///
-/// Every format that prints a coverage figure is checked here at once, because
-/// the three of them drifted apart the first time: the headline said seven, the
-/// end-of-run summary said two, and `ocomment coverage` said 28.5%. Whichever
-/// one a reader believed, two of the three were wrong.
+/// Every format that prints a coverage figure is checked here at once, because the three of them drifted apart the first time: the headline said seven, the end-of-run summary said two, and `ocomment coverage` said 28.5%.
+/// Whichever one a reader believed, two of the three were wrong.
 #[test]
 fn a_headline_counts_what_was_read_and_not_what_was_passed_over() {
     let directory = project();
@@ -517,8 +497,7 @@ fn a_headline_counts_what_was_read_and_not_what_was_passed_over() {
         "the headline counted the files it skipped as files it scanned:\n{headline}"
     );
 
-    /* NOTE: The machine format carries the same two numbers, because its
-     * reader is the one that cannot re-run the scan to check them. */
+    /* NOTE: The machine format carries the same two numbers, because its reader is the one that cannot re-run the scan to check them. */
     let agent = run(directory.path(), &["check", ".", "--format", "agent"]);
     let first = String::from_utf8_lossy(&agent.stdout)
         .lines()
@@ -537,8 +516,7 @@ fn a_headline_counts_what_was_read_and_not_what_was_passed_over() {
     );
 }
 
-/// A file no built-in language claims is read by a profile, in full, and the
-/// reports said `unknown` about it.
+/// A file no built-in language claims is read by a profile, in full, and the reports said `unknown` about it.
 #[test]
 fn every_report_says_which_reader_answered() {
     let directory = project();
@@ -578,33 +556,30 @@ fn every_report_says_which_reader_answered() {
         "the readers are only legible beside each other:\n{coverage}"
     );
 
-    /* NOTE: A listing of its own. `ocomment languages` is spec/languages.toml
-     * rendered, and a profile name is not something `--language` takes. */
+    /* NOTE: A listing of its own.
+     * `ocomment languages` is spec/languages.toml rendered, and a profile name is not something `--language` takes. */
     let profiles =
         String::from_utf8_lossy(&run(directory.path(), &["profiles"]).stdout).into_owned();
     assert!(
         profiles.contains("hash-line\tbundled\t") && profiles.contains(".gitignore"),
         "`ocomment profiles` does not say this build can read the file:\n{profiles}"
     );
-    /* NOTE: This project declares no profiles of its own, so every row is a
-     * shipped one. The comparison is by value, and a shipped profile that left
-     * a field implicit would differ from its resolved copy and be reported
-     * here as the project's. */
+    /* NOTE: This project declares no profiles of its own, so every row is a shipped one.
+     * The comparison is by value, and a shipped profile that left a field implicit would differ from its resolved copy and be reported here as the project's. */
     assert!(
         !profiles.contains("\tconfigured\t"),
         "a shipped profile is reported as one this project declared:\n{profiles}"
     );
 }
 
-/// A finding names the comment it was built from, not the line that comment
-/// sits on.
+/// A finding names the comment it was built from, not the line that comment sits on.
 ///
 /// Two removable comments share a line whenever one of them sits beside code,
 /// and the lookup that fetches a verdict for `--explain` matched on the line —
-/// so it returned the first of the two for both findings, and a plain comment
-/// beside a directive was explained as `this one a `directive``. Everything
-/// around that line was right: the decision, the settings that would keep it,
-/// the code shown above. Only the reason was another comment's.
+/// so it returned the first of the two for both findings, and a plain comment beside a directive was explained as `this one a `directive``.
+/// Everything around that line was right: the decision, the settings that would keep it,
+/// the code shown above.
+/// Only the reason was another comment's.
 #[test]
 fn explain_asks_about_the_comment_the_finding_was_built_from() {
     let directory = project();

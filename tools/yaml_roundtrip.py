@@ -61,31 +61,24 @@ DEFAULT_BINARY = ROOT / "rust/target/debug/ocomment"
 CORPUS = ROOT / "spec/fixtures/v1"
 LAYOUTS = ("lines", "columns", "compact")
 # NOTE: `all` takes every comment out, which is the widest removal there is;
-# NOTE: `safe` keeps the directives, which is the only way to reach the shapes
-# NOTE: where a surviving comment still shelters the empty lines under it;
-# NOTE: `legal` keeps a licence notice, which is a second kind of survivor and
-# NOTE: reaches those shapes through a comment no directive marker explains.
+# NOTE: `safe` keeps the directives, which is the only way to reach the shapes where a surviving comment still shelters the empty lines under it;
+# NOTE: `legal` keeps a licence notice, which is a second kind of survivor and reaches those shapes through a comment no directive marker explains.
 POLICIES = ("safe", "legal", "all")
 
-# NOTE: The sweep the docstring calls the full one, and the size the floor below
-# NOTE: is written against.
+# NOTE: The sweep the docstring calls the full one, and the size the floor below is written against.
 DEFAULT_CASES = 2400
 
-# INVARIANT: The generated set is the gate, so a run whose generator produced
-# INVARIANT: almost nothing parseable is a broken generator rather than a pass.
+# INVARIANT: The generated set is the gate, so a run whose generator produced almost nothing parseable is a broken generator rather than a pass.
 # INVARIANT: This many *generated* documents have to parse before the removal;
 # INVARIANT: the corpus and the sweeps are counted separately and do not fill it.
 MINIMUM_CHECKED = 2000
 
-# INVARIANT: The same floor as a fraction, for the shorter runs CI asks for. A
-# INVARIANT: full-length run is still held to the absolute count above, so this
-# INVARIANT: relaxes nothing there; it is what keeps a generator that started
-# INVARIANT: emitting garbage from passing a `--cases 200` run.
+# INVARIANT: The same floor as a fraction, for the shorter runs CI asks for.
+# INVARIANT: A full-length run is still held to the absolute count above, so this relaxes nothing there; it is what keeps a generator that started emitting garbage from passing a `--cases 200` run.
 MINIMUM_PARSE_RATE = MINIMUM_CHECKED / DEFAULT_CASES
 
-# NOTE: How many `ocomment fix` runs are kept in flight. Each one costs an
-# NOTE: `fsync` per rewritten file, so the sweep is latency-bound rather than
-# NOTE: CPU-bound and oversubscribing the cores is what makes it finish.
+# NOTE: How many `ocomment fix` runs are kept in flight.
+# NOTE: Each one costs an `fsync` per rewritten file, so the sweep is latency-bound rather than CPU-bound and oversubscribing the cores is what makes it finish.
 DEFAULT_JOBS = 24
 
 
@@ -96,21 +89,17 @@ def minimum_checked(cases):
     return math.ceil(MINIMUM_PARSE_RATE * cases)
 
 
-# INVARIANT: A run where nothing was removed proves nothing at all, so the
-# INVARIANT: fraction of documents the binary actually rewrote is checked too.
+# INVARIANT: A run where nothing was removed proves nothing at all, so the fraction of documents the binary actually rewrote is checked too.
 # INVARIANT: This is what would catch a harness that quietly stopped stripping.
 MINIMUM_REWRITTEN = 0.5
 
 BLOCK_HEADERS = ("|", "|-", "|+", ">", ">-", ">+", "|2", "|2+", "|+2", ">2-")
 
-# NOTE: A comment `safe` keeps. Under that policy it still shelters the empty
-# NOTE: lines beneath it, so the removals around it must leave its own line
-# NOTE: alone and still take what they were sheltering.
+# NOTE: A comment `safe` keeps.
+# NOTE: Under that policy it still shelters the empty lines beneath it, so the removals around it must leave its own line alone and still take what they were sheltering.
 DIRECTIVE = "# yamllint disable-line rule:line-length"
 
-# NOTE: A second directive marker, so a kept trail line is not always the same
-# NOTE: bytes, and a licence notice, which only `legal` keeps -- between them
-# NOTE: every policy under test has a comment it will not remove.
+# NOTE: A second directive marker, so a kept trail line is not always the same bytes, and a licence notice, which only `legal` keeps -- between them every policy under test has a comment it will not remove.
 SCHEMA = "# yaml-language-server: $schema=https://example.test/schema.json"
 LICENSE = "# SPDX-License-Identifier: MIT"
 
@@ -202,8 +191,7 @@ def structural_documents():
         patterns.extend(
             "".join(item)
             for item in itertools.product(alphabet, repeat=width)
-            # NOTE: A trail with no indented line in it is what the sweep above
-            # NOTE: already enumerates, in more arrangements than this one.
+                        # NOTE: A trail with no indented line in it is what the sweep above already enumerates, in more arrangements than this one.
             if any(item.islower() for item in item)
         )
     for header in BLOCK_HEADERS:
@@ -364,9 +352,7 @@ def generated_documents(count, seed):
 
 def parse(text):
     """The documents `text` holds, or `None` when PyYAML will not have it."""
-    # NOTE: Every complaint a YAML parser can make means the same thing here --
-    # NOTE: this document is not one the invariant is about -- so they are all
-    # NOTE: caught together rather than enumerated.
+        # NOTE: Every complaint a YAML parser can make means the same thing here -- this document is not one the invariant is about -- so they are all caught together rather than enumerated.
     try:
         return list(yaml.safe_load_all(text))
     except Exception:
@@ -409,9 +395,7 @@ def strip_chunk(binary, layout, policy, sources, room):
         check=False,
     )
     report = result.stdout.decode("utf-8", "replace")
-    # NOTE: Only documents PyYAML accepted are written here, so a file the
-    # NOTE: scanner calls invalid — exit code 2 — is a disagreement worth the
-    # NOTE: run, not a document to skip past.
+        # NOTE: Only documents PyYAML accepted are written here, so a file the scanner calls invalid — exit code 2 — is a disagreement worth the run, not a document to skip past.
     if result.returncode not in (0, 1) or "invalid syntax" in report:
         raise SystemExit(
             f"ocomment fix --policy {policy} --layout {layout} exited "

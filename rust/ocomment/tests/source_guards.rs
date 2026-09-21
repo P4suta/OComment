@@ -1,14 +1,12 @@
 //! Guards that read this crate's own source text.
 //!
-//! A test that runs the binary can only catch a bypass on the paths it
-//! happens to exercise. These read the sources instead, so an invariant that
-//! holds today cannot be broken quietly by a line added tomorrow.
+//! A test that runs the binary can only catch a bypass on the paths it happens to exercise.
+//! These read the sources instead, so an invariant that holds today cannot be broken quietly by a line added tomorrow.
 
 use std::{collections::BTreeSet, fs, path::PathBuf};
 
-/// Every first-party source file of the crate, embedded at compile time so the
-/// scan does not depend on the directory the test runs in. The internal runtime
-/// is upstream-derived code and cannot obtain the CLI's stdout handle.
+/// Every first-party source file of the crate, embedded at compile time so the scan does not depend on the directory the test runs in.
+/// The internal runtime is upstream-derived code and cannot obtain the CLI's stdout handle.
 const SOURCES: [(&str, &str); 20] = [
     ("advice.rs", include_str!("../src/advice.rs")),
     ("atomic.rs", include_str!("../src/atomic.rs")),
@@ -32,14 +30,11 @@ const SOURCES: [(&str, &str); 20] = [
     ("values.rs", include_str!("../src/values.rs")),
 ];
 
-/// The names this crate gives a handle on the program's standard output: the
-/// locked writer `output::stdout()` returns is bound as `stdout`, and every
-/// function that is handed it takes it as `output`. Nothing else in the crate
-/// is written to under either name.
+/// The names this crate gives a handle on the program's standard output: the locked writer `output::stdout()` returns is bound as `stdout`, and every function that is handed it takes it as `output`.
+/// Nothing else in the crate is written to under either name.
 const STDOUT_HANDLES: [&str; 2] = ["stdout", "output"];
 
-/// The write macros, matched with their opening parenthesis so the target is
-/// the text that follows.
+/// The write macros, matched with their opening parenthesis so the target is the text that follows.
 const MACROS: [&str; 2] = ["write!(", "writeln!("];
 
 /// The method form of the same write.
@@ -55,21 +50,12 @@ struct StdoutWrite {
     wrapped: bool,
 }
 
-/// Every write to the program's own standard output is raised through
-/// [`output::wrote`], which tags a lost reader as `OutputPipeClosed` so `main`
-/// can end quietly for that case and only that case. A raw `writeln!` would
-/// return a bare `BrokenPipe` that the chain cannot tell apart from a real
-/// failure — `git hash-object` dropping the blob it was being handed, say —
-/// and `ocomment … | head` would start failing runs, or a failed staged fix
-/// would start passing.
+/// Every write to the program's own standard output is raised through [`output::wrote`], which tags a lost reader as `OutputPipeClosed` so `main` can end quietly for that case and only that case.
+/// A raw `writeln!` would return a bare `BrokenPipe` that the chain cannot tell apart from a real failure — `git hash-object` dropping the blob it was being handed, say —
+/// and `ocomment … | head` would start failing runs, or a failed staged fix would start passing.
 ///
-/// The invariant checked here is textual: a `write!`, `writeln!`, or
-/// `write_all` whose target names a standard-output handle must have `wrote(`
-/// immediately in front of it. It is deliberately syntactic rather than
-/// semantic — it cannot know what a handle is, only what it is called — so it
-/// leans on the naming convention above and on
-/// `standard_output_is_locked_in_exactly_one_place`, which keeps a writer from
-/// being conjured anonymously under some other name.
+/// The invariant checked here is textual: a `write!`, `writeln!`, or `write_all` whose target names a standard-output handle must have `wrote(` immediately in front of it.
+/// It is deliberately syntactic rather than semantic — it cannot know what a handle is, only what it is called — so it leans on the naming convention above and on `standard_output_is_locked_in_exactly_one_place`, which keeps a writer from being conjured anonymously under some other name.
 #[test]
 fn every_write_to_standard_output_goes_through_wrote() {
     let mut wrapped = 0;
@@ -98,11 +84,9 @@ fn every_write_to_standard_output_goes_through_wrote() {
     );
 }
 
-/// The handle can only be watched by name if it is only ever made in one
-/// place. `output::stdout()` locks standard output for the whole run; nowhere
-/// else may turn it into a writer, whether by locking it, writing to it, or
-/// flushing it. (Naming it to ask whether it is a terminal is not writing to
-/// it, and neither is handing the LSP server its own protocol channel.)
+/// The handle can only be watched by name if it is only ever made in one place.
+/// `output::stdout()` locks standard output for the whole run; nowhere else may turn it into a writer, whether by locking it, writing to it, or flushing it.
+/// (Naming it to ask whether it is a terminal is not writing to it, and neither is handing the LSP server its own protocol channel.)
 #[test]
 fn standard_output_is_locked_in_exactly_one_place() {
     let mut offenders = Vec::new();
@@ -127,9 +111,8 @@ fn standard_output_is_locked_in_exactly_one_place() {
     );
 }
 
-/// The embedded list is the whole first-party CLI crate, so a module added
-/// later is scanned rather than silently exempt. Upstream-derived runtime
-/// modules are the sole explicit exclusion.
+/// The embedded list is the whole first-party CLI crate, so a module added later is scanned rather than silently exempt.
+/// Upstream-derived runtime modules are the sole explicit exclusion.
 #[test]
 fn the_guard_reads_every_source() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
@@ -157,8 +140,8 @@ fn the_guard_reads_every_source() {
     );
 }
 
-/// Warning suppressions hide cleanup work and can quietly outlive the reason
-/// they were introduced. The release tree keeps every Rust lint actionable.
+/// Warning suppressions hide cleanup work and can quietly outlive the reason they were introduced.
+/// The release tree keeps every Rust lint actionable.
 #[test]
 fn rust_sources_do_not_suppress_lints() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -167,16 +150,11 @@ fn rust_sources_do_not_suppress_lints() {
         .to_path_buf();
     let mut pending = vec![root.clone()];
     let mut offenders = Vec::new();
-    /* NOTE: The one exception, and it is a path rather than a judgement: the
-     * internal runtime is upstream-derived, so a lint rule about the decisions
-     * *this* program makes does not reach it, and rewriting its match arms
-     * would put a patch between us and every version we take next. The list is
-     * compared exactly below, so a second exception fails here. */
+    /* NOTE: The one exception, and it is a path rather than a judgement: the internal runtime is upstream-derived, so a lint rule about the decisions *this* program makes does not reach it, and rewriting its match arms would put a patch between us and every version we take next.
+     * The list is compared exactly below, so a second exception fails here. */
     const SUPPRESSION_ALLOWED: [&str; 1] = ["src/runtime/mod.rs"];
-    /* NOTE: And it has to be an `expect`. An `allow` that has outlived its
-     * subject is indistinguishable from one that is still working; an `expect`
-     * fails the build the day the lint stops firing, which is the only way a
-     * suppression tells anybody it is no longer needed. */
+    /* NOTE: And it has to be an `expect`.
+     * An `allow` that has outlived its subject is indistinguishable from one that is still working; an `expect` fails the build the day the lint stops firing, which is the only way a suppression tells anybody it is no longer needed. */
     let excused_file = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(SUPPRESSION_ALLOWED[0]);
     let excused_source = fs::read_to_string(&excused_file).unwrap();
     assert!(
@@ -272,24 +250,20 @@ fn line_of(source: &str, at: usize) -> usize {
     source[..at].matches('\n').count() + 1
 }
 
-/// The first argument of a call, given everything after its opening
-/// parenthesis. A target too involved to end at the first comma — a call of
-/// its own, say — comes back as something no handle is named, and the write is
-/// left to `standard_output_is_locked_in_exactly_one_place`.
+/// The first argument of a call, given everything after its opening parenthesis.
+/// A target too involved to end at the first comma — a call of its own, say — comes back as something no handle is named, and the write is left to `standard_output_is_locked_in_exactly_one_place`.
 fn first_argument(rest: &str) -> &str {
     let end = rest.find([',', ')']).unwrap_or(rest.len());
     rest[..end].trim()
 }
 
-/// A target expression reduced to the name it writes through, so that
-/// `&mut output` and `output` are the same handle.
+/// A target expression reduced to the name it writes through, so that `&mut output` and `output` are the same handle.
 fn handle(target: &str) -> &str {
     let target = target.trim_start_matches('&').trim_start();
     target.strip_prefix("mut ").unwrap_or(target).trim()
 }
 
-/// The identifier ending at byte `at`, empty when the byte before it is not
-/// part of one.
+/// The identifier ending at byte `at`, empty when the byte before it is not part of one.
 fn identifier_before(source: &str, at: usize) -> &str {
     let start = source[..at]
         .char_indices()
@@ -302,22 +276,15 @@ fn identifier_before(source: &str, at: usize) -> &str {
 
 /// Suppression is not something a caller can decide, and this says so.
 ///
-/// The convention in CONTRIBUTING.md is that standard output carries the
-/// command's product and standard error carries the summary and the notes, and
-/// that `-q` drops the second. It was a convention rather than a mechanism, so
-/// three separate tests of the quiet level grew on the product side — one of
-/// which left `ocomment check -q` exiting 1 having printed nothing at all,
-/// which is exactly the shape a pre-commit hook wants and the one thing it
-/// could not get.
+/// The convention in CONTRIBUTING.md is that standard output carries the command's product and standard error carries the summary and the notes, and that `-q` drops the second.
+/// It was a convention rather than a mechanism, so three separate tests of the quiet level grew on the product side — one of which left `ocomment check -q` exiting 1 having printed nothing at all,
+/// which is exactly the shape a pre-commit hook wants and the one thing it could not get.
 ///
-/// The mechanism is now in the type: `Verbosity` wraps a private `Level` and
-/// derives no `PartialEq`, so `verbosity == Verbosity::Quiet` does not
-/// compile. The only question available is `shows(Detail)`, and the only
-/// writer that asks it is `note`.
+/// The mechanism is now in the type: `Verbosity` wraps a private `Level` and derives no `PartialEq`, so `verbosity == Verbosity::Quiet` does not compile.
+/// The only question available is `shows(Detail)`, and the only writer that asks it is `note`.
 ///
-/// This checks the mechanism is still there. A `PartialEq` derive or a public
-/// level would put the old failure back within reach, and neither would break
-/// anything else.
+/// This checks the mechanism is still there.
+/// A `PartialEq` derive or a public level would put the old failure back within reach, and neither would break anything else.
 #[test]
 fn a_caller_cannot_ask_whether_the_run_is_quiet() {
     let output = SOURCES
@@ -351,11 +318,9 @@ fn a_caller_cannot_ask_whether_the_run_is_quiet() {
 
 /// The list above is the whole crate, and this is what keeps it so.
 ///
-/// Every guard in this file reads `SOURCES`, so a module missing from it is a
-/// module none of them covers — and nothing about adding a module makes anyone
-/// come here. The directory is the authority; the list only has to agree with
-/// it. `runtime/` is the one exclusion, for the reason the list's own doc
-/// comment gives, and it is named rather than inferred.
+/// Every guard in this file reads `SOURCES`, so a module missing from it is a module none of them covers — and nothing about adding a module makes anyone come here.
+/// The directory is the authority; the list only has to agree with it.
+/// `runtime/` is the one exclusion, for the reason the list's own doc comment gives, and it is named rather than inferred.
 #[test]
 fn the_embedded_list_is_every_source_file_in_the_crate() {
     let directory = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
@@ -378,16 +343,12 @@ fn the_embedded_list_is_every_source_file_in_the_crate() {
     );
 }
 
-/// `std::env::args` panics on an argument that is not UTF-8, and this program
-/// is given paths.
+/// `std::env::args` panics on an argument that is not UTF-8, and this program is given paths.
 ///
-/// A path on a Unix filesystem is bytes. `args()` decides that bytes which are
-/// not text are a reason to abort the process, which is the wrong answer for a
-/// tool whose arguments are mostly filenames -- and the failure is invisible to
-/// anyone developing on macOS, where such a name cannot be created at all. The
-/// Linux job caught it once. This is so that fixing it once is enough: the next
-/// reader reaching for the command line finds `args_os` because the other one
-/// does not build.
+/// A path on a Unix filesystem is bytes.
+/// `args()` decides that bytes which are not text are a reason to abort the process, which is the wrong answer for a tool whose arguments are mostly filenames -- and the failure is invisible to anyone developing on macOS, where such a name cannot be created at all.
+/// The Linux job caught it once.
+/// This is so that fixing it once is enough: the next reader reaching for the command line finds `args_os` because the other one does not build.
 #[test]
 fn the_command_line_is_read_as_bytes() {
     let offenders: Vec<&str> = SOURCES
@@ -403,14 +364,10 @@ fn the_command_line_is_read_as_bytes() {
     );
 }
 
-/// A skipped file was reached and not read, so the only honest thing to call
-/// the sum of the two is what the walk reached.
+/// A skipped file was reached and not read, so the only honest thing to call the sum of the two is what the walk reached.
 ///
-/// Two report headlines added them and called the total `scanned`, which
-/// overstated coverage in the one direction that matters: a run that could
-/// read two of seven files headlined `7 scanned` while `ocomment coverage`
-/// said `28.5%` and the end-of-run summary, three lines below, said `2`. The
-/// addition now happens once, inside the clause that knows what to call it.
+/// Two report headlines added them and called the total `scanned`, which overstated coverage in the one direction that matters: a run that could read two of seven files headlined `7 scanned` while `ocomment coverage` said `28.5%` and the end-of-run summary, three lines below, said `2`.
+/// The addition now happens once, inside the clause that knows what to call it.
 #[test]
 fn what_was_skipped_is_never_counted_as_scanned() {
     const ADDITION: &str = "files.len() + skipped.len()";
