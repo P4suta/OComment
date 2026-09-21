@@ -13,6 +13,18 @@ use std::{
 };
 use tempfile::TempDir;
 
+/// The `PATH` a run under test is given.
+///
+/// Fixed on Unix, so the suite reads the system's own tools rather than whatever the machine it runs on puts in front of them -- the author of this one has a `git` shim earlier on PATH that refuses a force push, and a suite that inherited it would be testing that.
+/// Inherited on Windows, which has no such pair of fixed directories: a process needs the system ones on PATH to start at all, and Git is found through PATH or not found.
+fn test_path() -> std::ffi::OsString {
+    if cfg!(unix) {
+        std::ffi::OsString::from("/usr/bin:/bin")
+    } else {
+        std::env::var_os("PATH").unwrap_or_default()
+    }
+}
+
 fn binary() -> &'static str {
     env!("CARGO_BIN_EXE_ocomment")
 }
@@ -32,7 +44,7 @@ fn run(directory: &Path, arguments: &[&str]) -> Output {
     Command::new(binary())
         .env("XDG_CONFIG_HOME", no_user_config())
         .current_dir(directory)
-        .env("PATH", "/usr/bin:/bin")
+        .env("PATH", test_path())
         .env_remove("NO_COLOR")
         .args(arguments)
         .output()

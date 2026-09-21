@@ -12,6 +12,18 @@ use std::{
 };
 use tempfile::TempDir;
 
+/// The `PATH` a run under test is given.
+///
+/// Fixed on Unix, so the suite reads the system's own tools rather than whatever the machine it runs on puts in front of them -- the author of this one has a `git` shim earlier on PATH that refuses a force push, and a suite that inherited it would be testing that.
+/// Inherited on Windows, which has no such pair of fixed directories: a process needs the system ones on PATH to start at all, and Git is found through PATH or not found.
+fn test_path() -> std::ffi::OsString {
+    if cfg!(unix) {
+        std::ffi::OsString::from("/usr/bin:/bin")
+    } else {
+        std::env::var_os("PATH").unwrap_or_default()
+    }
+}
+
 fn binary() -> &'static str {
     env!("CARGO_BIN_EXE_ocomment")
 }
@@ -86,7 +98,7 @@ fn run(directory: &Path, arguments: &[&str]) -> Output {
     }
     command()
         .current_dir(directory)
-        .env("PATH", "/usr/bin:/bin")
+        .env("PATH", test_path())
         .args(&arguments)
         .output()
         .unwrap()
@@ -104,7 +116,7 @@ fn run_stdin(directory: &Path, arguments: &[&str], input: &[u8]) -> Output {
     }
     let mut child = command()
         .current_dir(directory)
-        .env("PATH", "/usr/bin:/bin")
+        .env("PATH", test_path())
         .args(&arguments)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -120,8 +132,16 @@ fn run_stdin(directory: &Path, arguments: &[&str], input: &[u8]) -> Output {
     child.wait_with_output().unwrap()
 }
 
+/// The Git the suite drives.
+///
+/// Named by absolute path on Unix for the reason [`test_path`] fixes PATH: a shim earlier on the developer's PATH does not get to answer for the suite.
+/// Windows keeps its Git wherever the installer put it, so there it is resolved through PATH like any other program.
+fn git_program() -> &'static str {
+    if cfg!(unix) { "/usr/bin/git" } else { "git" }
+}
+
 fn git(directory: &Path, arguments: &[&str]) -> Vec<u8> {
-    let output = Command::new("/usr/bin/git")
+    let output = Command::new(git_program())
         .current_dir(directory)
         .args(arguments)
         .output()
@@ -137,7 +157,7 @@ fn git(directory: &Path, arguments: &[&str]) -> Vec<u8> {
 
 #[cfg(unix)]
 fn git_with_path(directory: &Path, arguments: &[&str], path: &std::ffi::OsStr) -> Vec<u8> {
-    let output = Command::new("/usr/bin/git")
+    let output = Command::new(git_program())
         .current_dir(directory)
         .args(arguments)
         .arg(path)
@@ -269,7 +289,7 @@ fn diff_is_byte_preserving_and_git_applies_quoted_non_utf8_paths() {
 
     let output = command()
         .current_dir(directory.path())
-        .env("PATH", "/usr/bin:/bin")
+        .env("PATH", test_path())
         .arg("diff")
         .arg(&name)
         .output()
@@ -294,7 +314,7 @@ fn diff_is_byte_preserving_and_git_applies_quoted_non_utf8_paths() {
         String::from_utf8_lossy(&output.stdout)
     );
 
-    let mut apply = Command::new("/usr/bin/git")
+    let mut apply = Command::new(git_program())
         .current_dir(directory.path())
         .args(["apply", "--whitespace=nowarn", "-"])
         .stdin(Stdio::piped())
@@ -875,7 +895,7 @@ fn explicit_config_replaces_discovery_and_roots_its_own_globs() {
 
     let output = command()
         .current_dir(directory.path())
-        .env("PATH", "/usr/bin:/bin")
+        .env("PATH", test_path())
         .env("XDG_CONFIG_HOME", directory.path().join("xdg"))
         .args([
             "check",
@@ -2346,7 +2366,7 @@ fn a_wide_transaction_completes_under_a_low_file_descriptor_limit() {
     /* NOTE: The shell carries the isolation `command` would have given, because the binary is reached through it rather than spawned directly: a user configuration this machine really has would otherwise decide what this test observes. */
     let output = Command::new("/bin/bash")
         .current_dir(directory.path())
-        .env("PATH", "/usr/bin:/bin")
+        .env("PATH", test_path())
         .env("XDG_CONFIG_HOME", directory.path().join("no-user-config"))
         .args([
             "-c",
@@ -5100,7 +5120,7 @@ fn wide_tree(files: usize, comments: usize) -> TempDir {
 fn run_closed_pipe(directory: &Path, arguments: &[&str], head: usize) -> (ExitStatus, String) {
     let mut child = command()
         .current_dir(directory)
-        .env("PATH", "/usr/bin:/bin")
+        .env("PATH", test_path())
         .args(arguments)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -5195,7 +5215,7 @@ fn a_pipe_closed_before_the_first_byte_ends_completions_quietly() {
 fn run_closed_error_pipe(directory: &Path, arguments: &[&str]) -> ExitStatus {
     let mut child = command()
         .current_dir(directory)
-        .env("PATH", "/usr/bin:/bin")
+        .env("PATH", test_path())
         .args(arguments)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
@@ -5764,7 +5784,7 @@ fn doctor_reports_the_environment_it_resolved() {
         let mut command = command();
         command
             .current_dir(directory.path())
-            .env("PATH", "/usr/bin:/bin")
+            .env("PATH", test_path())
             /* NOTE: Pin the user layer away from whoever is running the tests: the trace this reports has to be the one this run resolved. */
             .env("XDG_CONFIG_HOME", empty.path())
             .arg("doctor");
@@ -5843,7 +5863,7 @@ fn doctor_sanitises_the_directories_it_reports_without_cutting_them_short() {
     let empty = tempfile::tempdir().unwrap();
     let output = command()
         .current_dir(directory.path())
-        .env("PATH", "/usr/bin:/bin")
+        .env("PATH", test_path())
         .env("XDG_CONFIG_HOME", empty.path())
         .arg("doctor")
         .output()
