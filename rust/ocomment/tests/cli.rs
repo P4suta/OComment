@@ -1859,9 +1859,10 @@ fn staged_non_utf8_paths_remain_os_native() {
     git_with_path(directory.path(), &["add", "--"], &name);
 
     let output = run(directory.path(), &["fix", "--staged", "--index-only"]);
+    // NOTE: 1 because the index changed under the author -- see the exit contract test.
     assert_eq!(
         output.status.code(),
-        Some(0),
+        Some(1),
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
