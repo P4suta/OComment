@@ -401,10 +401,11 @@ loading configuration, and so are two delimiters spelled the same way — nothin
 could choose between them.
 
 One comment token being the *start* of another is not ambiguous and is not
-refused. It is how a language spells a documentation comment — `//` beside
-`///` beside `////` — and the scan takes the longest token that matches, so the
-order the delimiters are written in carries no meaning and an author cannot get
-it wrong.
+refused. It is how a language spells a documentation comment: Gleam writes
+`//`, `///` and `////`, Haskell writes `--` and `-- |`, WIT writes `//` and
+`///`. The scan takes the longest token that matches, so the order the
+delimiters are written in carries no meaning and an author cannot get it
+wrong.
 
 ```toml
 [profiles.lisp]
@@ -516,13 +517,26 @@ keep_kind = ["line"]
   `go.sum` and `go.work.sum` are not here: they are lock files, and
   `spec/generated.toml` is where a file another tool writes belongs.
 - **`wit`** is the Component Model's interface language, which OComment's own
-  plugin contract is written in. It is listed with `//` alone and not `///`
-  beside it: a profile is read in one pass, so a delimiter that is a prefix of
-  another is ambiguous and `validate_profile` refuses the pair rather than
-  guessing. The cost is that WIT's `///` documentation comments are reported as
-  ordinary line comments, which is not worth a hand-written scanner — they are
-  still found, and a project that wants the distinction can name it with
-  `keep_regex`.
+  plugin contract is written in. `///` documents the item below it and `//` is
+  a remark, and the two are listed side by side. They could not be, once: a
+  delimiter that was the start of another was refused as ambiguous, so WIT's
+  documentation comments were reported as ordinary line comments and a default
+  policy was entitled to remove them.
+- **`gleam`** has three line comment forms and nothing else: `//` is a remark,
+  `///` documents the item below it, and `////` documents the module. All three
+  share a prefix, which is exactly what the longest-token rule exists for.
+- **`haskell`** is the one that needed new vocabulary. Its comment opener is a
+  *run* of dashes, and whether it opens a comment depends on what follows the
+  run: `-- x` is a comment, `-->` and `---->` are operators, and `---x` is a
+  comment again. `forbidden_after` states that clause (Haskell 2010 §2.2).
+  Haddock marks only the first line of a documentation comment and continues it
+  with the plain opener, so the profile sets `doc_continuation`; without it the
+  conservative policy would keep the first line of a published page and remove
+  the rest. `{-|` and `{-` both close with `-}` and both nest, and the nesting
+  count is kept against the closing token rather than the opener — a remark
+  nested inside documentation still has to be got past. Literate Haskell is
+  deliberately absent: a `.lhs` file is a different format, where code is what
+  is marked up rather than prose.
 
 A `[profiles.<name>]` entry in your configuration wins over the shipped profile
 of the same name, so a project that disagrees with one can replace it rather

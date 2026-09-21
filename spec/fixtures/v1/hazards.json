@@ -13194,6 +13194,848 @@
         "diagnostics": [],
         "output_utf8": "<!-- note-->\n<p>x</p>\n"
       }
+    },
+    {
+      "id": "profile-longest-token-wins-over-declaration-order",
+      "language": "c",
+      "operation": "scan-profile",
+      "options": {
+        "policy": "conservative"
+      },
+      "profile": {
+        "name": "gleam",
+        "extensions": [
+          "gleam"
+        ],
+        "line_comments": [
+          {
+            "start": "////",
+            "kind": "doc-line"
+          },
+          {
+            "start": "///",
+            "kind": "doc-line"
+          },
+          {
+            "start": "//",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [],
+        "strings": [
+          {
+            "start": "\"",
+            "end": "\"",
+            "escape": "\\",
+            "multiline": true
+          }
+        ],
+        "protected_patterns": []
+      },
+      "source_utf8": "//// module\n/// item\n// remark\n",
+      "note": "Gleam spells three comment forms as extensions of one another. The scan takes the longest token that matches rather than the first one declared, so the order the delimiters are written in carries no meaning and an author cannot get it wrong.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 11,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 12,
+            "end": 20,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 21,
+            "end": 30,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "profile-prefix-delimiters-are-not-ambiguous",
+      "language": "c",
+      "operation": "scan-profile",
+      "options": {
+        "policy": "conservative"
+      },
+      "profile": {
+        "name": "gleam",
+        "extensions": [
+          "gleam"
+        ],
+        "line_comments": [
+          {
+            "start": "////",
+            "kind": "doc-line"
+          },
+          {
+            "start": "///",
+            "kind": "doc-line"
+          },
+          {
+            "start": "//",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [],
+        "strings": [
+          {
+            "start": "\"",
+            "end": "\"",
+            "escape": "\\",
+            "multiline": true
+          }
+        ],
+        "protected_patterns": []
+      },
+      "source_utf8": "///doc\n//remark\n",
+      "note": "A comment token that is the start of another was refused as ambiguous, which made a language with a documentation comment inexpressible. Longest-match resolves it, so the pair is accepted and each opens what it spells.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 6,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 7,
+            "end": 15,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "profile-a-string-still-hides-a-comment-token",
+      "language": "c",
+      "operation": "scan-profile",
+      "options": {
+        "policy": "conservative"
+      },
+      "profile": {
+        "name": "gleam",
+        "extensions": [
+          "gleam"
+        ],
+        "line_comments": [
+          {
+            "start": "////",
+            "kind": "doc-line"
+          },
+          {
+            "start": "///",
+            "kind": "doc-line"
+          },
+          {
+            "start": "//",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [],
+        "strings": [
+          {
+            "start": "\"",
+            "end": "\"",
+            "escape": "\\",
+            "multiline": true
+          }
+        ],
+        "protected_patterns": []
+      },
+      "source_utf8": "pub const s = \"// not a comment\"\n// a comment\n",
+      "note": "Strings are matched before comments, so a token inside one is text. Adding longest-match among the comment delimiters must not disturb that.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 33,
+            "end": 45,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "profile-haskell-dashes-open-a-comment",
+      "language": "c",
+      "operation": "scan-profile",
+      "options": {
+        "policy": "conservative"
+      },
+      "profile": {
+        "name": "haskell",
+        "extensions": [
+          "hs"
+        ],
+        "doc_continuation": true,
+        "line_comments": [
+          {
+            "start": "-- |",
+            "kind": "doc-line"
+          },
+          {
+            "start": "-- ^",
+            "kind": "doc-line"
+          },
+          {
+            "start": "--",
+            "forbidden_after": "!#$%&*+./<=>?@\\^|~:-",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [
+          {
+            "start": "{-|",
+            "end": "-}",
+            "nested": true,
+            "kind": "doc-block"
+          },
+          {
+            "start": "{-",
+            "end": "-}",
+            "nested": true,
+            "kind": "block"
+          }
+        ],
+        "strings": [
+          {
+            "start": "\"",
+            "end": "\"",
+            "escape": "\\"
+          }
+        ],
+        "protected_patterns": []
+      },
+      "source_utf8": "-- a remark\nx = 1\n",
+      "note": "Haskell 2010 section 2.2: a comment is a run of dashes followed by something that is not a symbol character.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 11,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "profile-haskell-an-operator-is-not-a-comment",
+      "language": "c",
+      "operation": "transform-profile",
+      "options": {
+        "policy": "conservative"
+      },
+      "profile": {
+        "name": "haskell",
+        "extensions": [
+          "hs"
+        ],
+        "doc_continuation": true,
+        "line_comments": [
+          {
+            "start": "-- |",
+            "kind": "doc-line"
+          },
+          {
+            "start": "-- ^",
+            "kind": "doc-line"
+          },
+          {
+            "start": "--",
+            "forbidden_after": "!#$%&*+./<=>?@\\^|~:-",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [
+          {
+            "start": "{-|",
+            "end": "-}",
+            "nested": true,
+            "kind": "doc-block"
+          },
+          {
+            "start": "{-",
+            "end": "-}",
+            "nested": true,
+            "kind": "block"
+          }
+        ],
+        "strings": [
+          {
+            "start": "\"",
+            "end": "\"",
+            "escape": "\\"
+          }
+        ],
+        "protected_patterns": []
+      },
+      "source_utf8": "a --> b\nc <-- d\n",
+      "note": "The same clause the other way. `-->` is an operator because `>` is a symbol character, and a reader that opened a comment there would swallow the rest of the line and rewrite the program.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 11,
+            "end": 15,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "a --> b\nc <\n"
+      }
+    },
+    {
+      "id": "profile-haskell-a-longer-run-of-dashes-is-still-a-comment",
+      "language": "c",
+      "operation": "scan-profile",
+      "options": {
+        "policy": "conservative"
+      },
+      "profile": {
+        "name": "haskell",
+        "extensions": [
+          "hs"
+        ],
+        "doc_continuation": true,
+        "line_comments": [
+          {
+            "start": "-- |",
+            "kind": "doc-line"
+          },
+          {
+            "start": "-- ^",
+            "kind": "doc-line"
+          },
+          {
+            "start": "--",
+            "forbidden_after": "!#$%&*+./<=>?@\\^|~:-",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [
+          {
+            "start": "{-|",
+            "end": "-}",
+            "nested": true,
+            "kind": "doc-block"
+          },
+          {
+            "start": "{-",
+            "end": "-}",
+            "nested": true,
+            "kind": "block"
+          }
+        ],
+        "strings": [
+          {
+            "start": "\"",
+            "end": "\"",
+            "escape": "\\"
+          }
+        ],
+        "protected_patterns": []
+      },
+      "source_utf8": "---x is a comment\ny = 2\n",
+      "note": "The token's final character may repeat before the test: `dashes` in the grammar is two or more, so `---x` is a comment while `---->` is an operator.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 17,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "profile-haskell-a-longer-run-before-a-symbol-is-an-operator",
+      "language": "c",
+      "operation": "transform-profile",
+      "options": {
+        "policy": "conservative"
+      },
+      "profile": {
+        "name": "haskell",
+        "extensions": [
+          "hs"
+        ],
+        "doc_continuation": true,
+        "line_comments": [
+          {
+            "start": "-- |",
+            "kind": "doc-line"
+          },
+          {
+            "start": "-- ^",
+            "kind": "doc-line"
+          },
+          {
+            "start": "--",
+            "forbidden_after": "!#$%&*+./<=>?@\\^|~:-",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [
+          {
+            "start": "{-|",
+            "end": "-}",
+            "nested": true,
+            "kind": "doc-block"
+          },
+          {
+            "start": "{-",
+            "end": "-}",
+            "nested": true,
+            "kind": "block"
+          }
+        ],
+        "strings": [
+          {
+            "start": "\"",
+            "end": "\"",
+            "escape": "\\"
+          }
+        ],
+        "protected_patterns": []
+      },
+      "source_utf8": "a ----> b\n",
+      "note": "The repetition is consumed before the character after it is judged. Testing the byte directly after `--` would have read this as a comment.",
+      "expect": {
+        "valid": true,
+        "comments": [],
+        "diagnostics": [],
+        "output_utf8": "a ----> b\n"
+      }
+    },
+    {
+      "id": "profile-haskell-haddock-continues-with-the-plain-opener",
+      "language": "c",
+      "operation": "scan-profile",
+      "options": {
+        "policy": "conservative"
+      },
+      "profile": {
+        "name": "haskell",
+        "extensions": [
+          "hs"
+        ],
+        "doc_continuation": true,
+        "line_comments": [
+          {
+            "start": "-- |",
+            "kind": "doc-line"
+          },
+          {
+            "start": "-- ^",
+            "kind": "doc-line"
+          },
+          {
+            "start": "--",
+            "forbidden_after": "!#$%&*+./<=>?@\\^|~:-",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [
+          {
+            "start": "{-|",
+            "end": "-}",
+            "nested": true,
+            "kind": "doc-block"
+          },
+          {
+            "start": "{-",
+            "end": "-}",
+            "nested": true,
+            "kind": "block"
+          }
+        ],
+        "strings": [
+          {
+            "start": "\"",
+            "end": "\"",
+            "escape": "\\"
+          }
+        ],
+        "protected_patterns": []
+      },
+      "source_utf8": "-- | The first line is marked.\n--   The rest is not.\nadd = 1\n",
+      "note": "Haddock marks only the first line of a documentation comment and continues it with the ordinary opener. Read one token at a time the second line is a remark, and the conservative policy would take half a published page away.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 30,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 31,
+            "end": 52,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "profile-haskell-a-blank-line-ends-the-continuation",
+      "language": "c",
+      "operation": "scan-profile",
+      "options": {
+        "policy": "conservative"
+      },
+      "profile": {
+        "name": "haskell",
+        "extensions": [
+          "hs"
+        ],
+        "doc_continuation": true,
+        "line_comments": [
+          {
+            "start": "-- |",
+            "kind": "doc-line"
+          },
+          {
+            "start": "-- ^",
+            "kind": "doc-line"
+          },
+          {
+            "start": "--",
+            "forbidden_after": "!#$%&*+./<=>?@\\^|~:-",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [
+          {
+            "start": "{-|",
+            "end": "-}",
+            "nested": true,
+            "kind": "doc-block"
+          },
+          {
+            "start": "{-",
+            "end": "-}",
+            "nested": true,
+            "kind": "block"
+          }
+        ],
+        "strings": [
+          {
+            "start": "\"",
+            "end": "\"",
+            "escape": "\\"
+          }
+        ],
+        "protected_patterns": []
+      },
+      "source_utf8": "-- | Documentation.\n\n-- an unrelated remark\nadd = 1\n",
+      "note": "A run ends at a blank line, which is how a writer says the next remark is a separate remark. The continuation must not reach across one.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 19,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 21,
+            "end": 43,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "profile-haskell-a-remark-below-code-is-not-documentation",
+      "language": "c",
+      "operation": "scan-profile",
+      "options": {
+        "policy": "conservative"
+      },
+      "profile": {
+        "name": "haskell",
+        "extensions": [
+          "hs"
+        ],
+        "doc_continuation": true,
+        "line_comments": [
+          {
+            "start": "-- |",
+            "kind": "doc-line"
+          },
+          {
+            "start": "-- ^",
+            "kind": "doc-line"
+          },
+          {
+            "start": "--",
+            "forbidden_after": "!#$%&*+./<=>?@\\^|~:-",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [
+          {
+            "start": "{-|",
+            "end": "-}",
+            "nested": true,
+            "kind": "doc-block"
+          },
+          {
+            "start": "{-",
+            "end": "-}",
+            "nested": true,
+            "kind": "block"
+          }
+        ],
+        "strings": [
+          {
+            "start": "\"",
+            "end": "\"",
+            "escape": "\\"
+          }
+        ],
+        "protected_patterns": []
+      },
+      "source_utf8": "-- | Documentation.\nadd = 1\n-- an unrelated remark\n",
+      "note": "Code between two comments ends the run as surely as a blank line does.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 19,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 28,
+            "end": 50,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "profile-haskell-nesting-counts-the-pairing",
+      "language": "c",
+      "operation": "transform-profile",
+      "options": {
+        "policy": "conservative"
+      },
+      "profile": {
+        "name": "haskell",
+        "extensions": [
+          "hs"
+        ],
+        "doc_continuation": true,
+        "line_comments": [
+          {
+            "start": "-- |",
+            "kind": "doc-line"
+          },
+          {
+            "start": "-- ^",
+            "kind": "doc-line"
+          },
+          {
+            "start": "--",
+            "forbidden_after": "!#$%&*+./<=>?@\\^|~:-",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [
+          {
+            "start": "{-|",
+            "end": "-}",
+            "nested": true,
+            "kind": "doc-block"
+          },
+          {
+            "start": "{-",
+            "end": "-}",
+            "nested": true,
+            "kind": "block"
+          }
+        ],
+        "strings": [
+          {
+            "start": "\"",
+            "end": "\"",
+            "escape": "\\"
+          }
+        ],
+        "protected_patterns": []
+      },
+      "source_utf8": "{-| Documentation.\n  It nests {- like this -} properly.\n-}\ndata T = T\n",
+      "note": "Nesting is a property of the closing token, not of the opener that began the comment. Counting only `{-|` let the inner `-}` close the outer comment and left the rest of it standing as code, which a removal would then have written out.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 58,
+            "kind": "doc-block",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "{-| Documentation.\n  It nests {- like this -} properly.\n-}\ndata T = T\n"
+      }
+    },
+    {
+      "id": "profile-haskell-a-string-hides-both-comment-forms",
+      "language": "c",
+      "operation": "scan-profile",
+      "options": {
+        "policy": "conservative"
+      },
+      "profile": {
+        "name": "haskell",
+        "extensions": [
+          "hs"
+        ],
+        "doc_continuation": true,
+        "line_comments": [
+          {
+            "start": "-- |",
+            "kind": "doc-line"
+          },
+          {
+            "start": "-- ^",
+            "kind": "doc-line"
+          },
+          {
+            "start": "--",
+            "forbidden_after": "!#$%&*+./<=>?@\\^|~:-",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [
+          {
+            "start": "{-|",
+            "end": "-}",
+            "nested": true,
+            "kind": "doc-block"
+          },
+          {
+            "start": "{-",
+            "end": "-}",
+            "nested": true,
+            "kind": "block"
+          }
+        ],
+        "strings": [
+          {
+            "start": "\"",
+            "end": "\"",
+            "escape": "\\"
+          }
+        ],
+        "protected_patterns": []
+      },
+      "source_utf8": "s = \"-- not a comment, {- nor this -}\"\n-- a comment\n",
+      "note": "The escape and the string delimiters are the profile's own, and a comment token inside a string is text in Haskell as in every other language.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 39,
+            "end": 51,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "profile-style-reads-the-profiles-own-marker",
+      "language": "c",
+      "operation": "transform-profile",
+      "options": {
+        "policy": "none",
+        "style": {
+          "space_after_marker": true
+        }
+      },
+      "profile": {
+        "name": "haskell",
+        "extensions": [
+          "hs"
+        ],
+        "doc_continuation": true,
+        "line_comments": [
+          {
+            "start": "-- |",
+            "kind": "doc-line"
+          },
+          {
+            "start": "--",
+            "forbidden_after": "!#$%&*+./<=>?@\\^|~:-",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [
+          {
+            "start": "{-",
+            "end": "-}",
+            "nested": true,
+            "kind": "block"
+          }
+        ],
+        "strings": [
+          {
+            "start": "\"",
+            "end": "\"",
+            "escape": "\\"
+          }
+        ],
+        "protected_patterns": []
+      },
+      "source_utf8": "-- |Documentation written against its marker.\nadd = 1\n",
+      "note": "The style rules are asked about the delimiters the profile declares, not about the built-in list. The built-in list knows `--` and not Haddock's `-- |`, so it would have found the space that belongs to the marker and left the text written against it alone.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 45,
+            "kind": "doc-line",
+            "action": "rewrite"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "-- | Documentation written against its marker.\nadd = 1\n"
+      }
     }
   ]
 }

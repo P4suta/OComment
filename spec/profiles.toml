@@ -51,8 +51,13 @@ strings = [{ start = '"', end = '"', escape = '\' }]
 [profiles.wit]
 name = "wit"
 extensions = ["wit"]
-# NOTE: `//` alone; `///` beside it would be an ambiguous prefix.
-line_comments = [{ start = "//", kind = "line" }]
+# NOTE: `///` documents the item below it and sits beside `//` rather than
+# NOTE: instead of it. It could not, before the scan took the longest token
+# NOTE: that matches, and WIT's documentation was reported as ordinary prose.
+line_comments = [
+    { start = "///", kind = "doc-line" },
+    { start = "//", kind = "line" },
+]
 block_comments = [{ start = "/*", end = "*/", nested = true, kind = "block" }]
 strings = [{ start = '"', end = '"', escape = '\' }]
 
@@ -85,3 +90,38 @@ protected_patterns = [
     # NOTE: module file that contains it is a deprecation notice.
     { contains = "// Deprecated:", reason = "go get and go list read this to warn whoever depends on the module", tier = "load-bearing" },
 ]
+
+# NOTE: Gleam. `//` is a remark, `///` documents the item below it and `////`
+# NOTE: documents the module. The three share a prefix; the scan takes the
+# NOTE: longest token that matches, so the order here carries no meaning.
+[profiles.gleam]
+name = "gleam"
+extensions = ["gleam"]
+line_comments = [
+    { start = "////", kind = "doc-line" },
+    { start = "///", kind = "doc-line" },
+    { start = "//", kind = "line" },
+]
+strings = [{ start = '"', end = '"', escape = '\', multiline = true }]
+
+# NOTE: Haskell. The opener is a run of dashes and what follows the run decides
+# NOTE: whether it opens a comment at all: `forbidden_after` states Haskell
+# NOTE: 2010 section 2.2, and `doc_continuation` is what keeps the rest of a
+# NOTE: Haddock page from being read as a remark. Literate Haskell is
+# NOTE: deliberately absent. See docs/configuration.md.
+[profiles.haskell]
+name = "haskell"
+extensions = ["hs"]
+doc_continuation = true
+line_comments = [
+    { start = "-- |", kind = "doc-line" },
+    { start = "-- ^", kind = "doc-line" },
+    { start = "--", forbidden_after = "!#$%&*+./<=>?@\\^|~:-", kind = "line" },
+]
+# NOTE: `{-|` is Haddock and `{-` is a remark. Both nest, and the count is kept
+# NOTE: against the closing token, so one nested in the other is got past.
+block_comments = [
+    { start = "{-|", end = "-}", nested = true, kind = "doc-block" },
+    { start = "{-", end = "-}", nested = true, kind = "block" },
+]
+strings = [{ start = '"', end = '"', escape = '\' }]
