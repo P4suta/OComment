@@ -42,10 +42,25 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+import os
 import pathlib
 import re
 import subprocess
+import tempfile
 import tomllib
+
+# NOTE: The binary reads a user configuration from `$XDG_CONFIG_HOME/ocomment/config.toml`,
+# NOTE: which is a real setting on a real machine and is meant to reach every run.
+# NOTE: A check that let this machine's through would be a check whose answer depends on whose machine it ran on; `tools/gen_docs.py` has pointed both variables at an empty directory since it was written, and this follows it.
+def _isolated_environment() -> dict[str, str]:
+    environment = dict(os.environ)
+    empty = tempfile.mkdtemp(prefix="ocomment-no-user-config-")
+    environment.update({"HOME": empty, "XDG_CONFIG_HOME": empty})
+    return environment
+
+
+ISOLATED = _isolated_environment()
+
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -99,7 +114,7 @@ SAMPLES: dict[str, Sample] = {
         None,
         f"{SLOT}\n# control\n",
         "#!/bin/sh",
-                # NOTE: Every `#!` line at the first byte is a shebang, whatever interpreter follows, so running letters on past `/bin/sh` would still be one.
+        # NOTE: Every `#!` line at the first byte is a shebang, whatever interpreter follows, so running letters on past `/bin/sh` would still be one.
         # NOTE: What the rule also promises is that the `!` touches the `#`, and that is what the near-miss takes away.
         "# !/bin/shish note",
         KEPT_AS_PREAMBLE,
@@ -117,7 +132,7 @@ SAMPLES: dict[str, Sample] = {
         None,
         f"{SLOT}\n// control\n",
         "//go:build linux",
-                # NOTE: `//go:` is a namespace: every Go directive is spelled `//go:<name>`, so `//go:ish` is exactly the shape of one and protecting it is right.
+        # NOTE: `//go:` is a namespace: every Go directive is spelled `//go:<name>`, so `//go:ish` is exactly the shape of one and protecting it is right.
         # NOTE: What the marker still promises is that it opens the comment, so the near-miss mentions it instead.
         "// a note about go:build linux",
         KEPT_AS_LOAD_BEARING,
@@ -135,7 +150,7 @@ SAMPLES: dict[str, Sample] = {
         None,
         f"{SLOT}\n// control\n",
         '/// <reference path="types.d.ts" />',
-                # NOTE: The marker is a shape rather than a word: a `///` comment opening with `<` is a reference whatever element follows, so the boundary left to get wrong is the opener.
+        # NOTE: The marker is a shape rather than a word: a `///` comment opening with `<` is a reference whatever element follows, so the boundary left to get wrong is the opener.
         # NOTE: Two slashes are an ordinary comment that happens to quote the directive.
         '// <reference path="types.d.ts" />',
         KEPT_AS_LOAD_BEARING,
@@ -161,7 +176,7 @@ SAMPLES: dict[str, Sample] = {
         None,
         f"const value = {SLOT} factory();\n// control\n",
         "/*#__PURE__*/",
-                # NOTE: The annotation ends in its own delimiter, so there is no word boundary after it to get wrong; `#__PURE__ish` is still the bundler's marker with rubbish appended.
+        # NOTE: The annotation ends in its own delimiter, so there is no word boundary after it to get wrong; `#__PURE__ish` is still the bundler's marker with rubbish appended.
         "/* a note about #__PURE__ elsewhere */",
         KEPT_AS_LOAD_BEARING,
     ),
@@ -186,7 +201,7 @@ SAMPLES: dict[str, Sample] = {
         None,
         f'const m = import({SLOT} "./m");\n// control\n',
         '/* webpackChunkName: "x" */',
-                # NOTE: The same option with the colon taken out.
+        # NOTE: The same option with the colon taken out.
         # NOTE: A webpack option is the word, one more word, and a colon, so this is the marker right up to the byte that ends its name -- which is the byte worth getting wrong, and the one `/* webpackish prose */` would never have exercised.
         '/* webpackChunkName "x" */',
         KEPT_AS_LOAD_BEARING,
@@ -196,7 +211,7 @@ SAMPLES: dict[str, Sample] = {
         None,
         f"const m = import({SLOT} url);\n// control\n",
         "/* @vite-ignore */",
-                # NOTE: The marker stands alone before the import expression, so it ends at whitespace and `@vite-ignoreish` is not it.
+        # NOTE: The marker stands alone before the import expression, so it ends at whitespace and `@vite-ignoreish` is not it.
         "/* @vite-ignoreish */",
         KEPT_AS_LOAD_BEARING,
     ),
@@ -205,7 +220,7 @@ SAMPLES: dict[str, Sample] = {
         None,
         f"{SLOT}\n// control\n",
         "// eslint-disable-next-line no-eval",
-                # NOTE: `eslint` is a namespace as much as `go:` is -- every rule of it is spelled `eslint-<something>` -- so the near-miss is again the comment that talks about the directive instead of being it.
+        # NOTE: `eslint` is a namespace as much as `go:` is -- every rule of it is spelled `eslint-<something>` -- so the near-miss is again the comment that talks about the directive instead of being it.
         "// a note about eslint-disable-next-line",
         KEPT_AS_DIRECTIVE,
     ),
@@ -214,7 +229,7 @@ SAMPLES: dict[str, Sample] = {
         None,
         f"value = 1  {SLOT}\n# control\n",
         "# type: ignore",
-                # NOTE: The marker is matched as a bare prefix, so what is left to get wrong is its front: `type: ignore` ends where the checker's own word ends, and prose that runs on past it is not addressed to the checker at all.
+        # NOTE: The marker is matched as a bare prefix, so what is left to get wrong is its front: `type: ignore` ends where the checker's own word ends, and prose that runs on past it is not addressed to the checker at all.
         "# typeish: ignore",
         KEPT_AS_DIRECTIVE,
     ),
@@ -223,7 +238,7 @@ SAMPLES: dict[str, Sample] = {
         "oracle",
         f"select {SLOT} 1 from dual; -- control\n",
         "/*+ index(t) */",
-                # NOTE: The `+` has to touch the `/*`, which is the whole of what makes a hint a hint; a block comment that merely opens with one is an ordinary comment about the index.
+        # NOTE: The `+` has to touch the `/*`, which is the whole of what makes a hint a hint; a block comment that merely opens with one is an ordinary comment about the index.
         "/* + index(t) */",
         KEPT_AS_LOAD_BEARING,
     ),
@@ -240,7 +255,7 @@ SAMPLES: dict[str, Sample] = {
         None,
         f"{SLOT}\n# control\n",
         "# syntax=docker/dockerfile:1",
-                # NOTE: BuildKit writes the frontend straight after the `=`, so the marker carries its own boundary and `syntax=ish` is the directive naming a frontend that does not exist.
+        # NOTE: BuildKit writes the frontend straight after the `=`, so the marker carries its own boundary and `syntax=ish` is the directive naming a frontend that does not exist.
         "# a note about syntax=docker/dockerfile:1",
         KEPT_AS_LOAD_BEARING,
     ),
@@ -257,7 +272,7 @@ SAMPLES: dict[str, Sample] = {
         None,
         f"{SLOT}\n# control\n",
         "#:schema https://example.test/pyproject.json",
-                # NOTE: Taplo writes the schema URL after whitespace, so the marker ends at a boundary and prose that runs letters on past it -- a note about schemas rather than the file's own -- is not the marker.
+        # NOTE: Taplo writes the schema URL after whitespace, so the marker ends at a boundary and prose that runs letters on past it -- a note about schemas rather than the file's own -- is not the marker.
         f"#:schema{NEGATIVE_SUFFIX}",
         KEPT_AS_DIRECTIVE,
     ),
@@ -266,7 +281,7 @@ SAMPLES: dict[str, Sample] = {
         None,
         f"{SLOT}\n# control\n",
         "# taplo: array_auto_expand = false",
-                # NOTE: The colon is the marker's own boundary, so `taplo:ish` is still an instruction to the formatter -- one naming an option it does not have.
+        # NOTE: The colon is the marker's own boundary, so `taplo:ish` is still an instruction to the formatter -- one naming an option it does not have.
         # NOTE: What is left to get wrong is the front of it, which is what a comment merely mentioning the tool takes away.
         "# a note about taplo: array_auto_expand",
         KEPT_AS_DIRECTIVE,
@@ -276,7 +291,7 @@ SAMPLES: dict[str, Sample] = {
         None,
         f"{SLOT}\n-- control\n",
         "---@diagnostic disable-next-line: undefined-global",
-                # NOTE: `---@` is a shape rather than a word: every annotation of the Lua language server is spelled that way, and running letters on past `diagnostic` would still be one of them.
+        # NOTE: `---@` is a shape rather than a word: every annotation of the Lua language server is spelled that way, and running letters on past `diagnostic` would still be one of them.
         # NOTE: What the marker promises is that it opens the comment, so the near-miss is the comment that talks about the annotation instead -- written with two dashes, because a third would make it documentation, which this repository's own configuration keeps for a reason that has nothing to do with the marker under test.
         "-- a note about ---@diagnostic disable-next-line",
         KEPT_AS_DIRECTIVE,
@@ -318,7 +333,7 @@ SAMPLES: dict[str, Sample] = {
         None,
         f"{SLOT}\n# control\n",
         "# yaml-language-server: $schema=https://example.test/schema.json",
-                # NOTE: The colon is the marker's own boundary, so letters run on past it are still an instruction to the editor's YAML server.
+        # NOTE: The colon is the marker's own boundary, so letters run on past it are still an instruction to the editor's YAML server.
         # NOTE: What is left to get wrong is the front of it, which is what a comment merely mentioning the server takes away.
         "# a note about yaml-language-server: $schema",
         KEPT_AS_DIRECTIVE,
@@ -344,7 +359,7 @@ SAMPLES: dict[str, Sample] = {
         None,
         f"{SLOT}\n# control\n",
         "# checkov:skip=CKV_AWS_20:public by design",
-                # NOTE: Checkov writes the rule straight after the `=`, so the marker carries its own boundary and what is left to get wrong is again whether it opens the comment.
+        # NOTE: Checkov writes the rule straight after the `=`, so the marker carries its own boundary and what is left to get wrong is again whether it opens the comment.
         "# a note about checkov:skip=CKV_AWS_20",
         KEPT_AS_DIRECTIVE,
     ),
@@ -377,7 +392,7 @@ SAMPLES: dict[str, Sample] = {
         None,
         f"<?php\n{SLOT}\n// control\n",
         "// phpcs:ignore Squiz.Commenting.FunctionComment",
-                # NOTE: The colon is the marker's own boundary and the whole namespace is addressed with it -- `ignore`, `disable`, `enable`,
+        # NOTE: The colon is the marker's own boundary and the whole namespace is addressed with it -- `ignore`, `disable`, `enable`,
         # NOTE: `ignoreFile` -- so what is left to get wrong is the front of it,
         # NOTE: which is what running letters on past `phpcs` takes away.
         f"// phpcs{NEGATIVE_SUFFIX}",
@@ -388,7 +403,7 @@ SAMPLES: dict[str, Sample] = {
         None,
         f"<?php\n{SLOT}\n// control\n",
         "// @phpstan-ignore-next-line",
-                # NOTE: `@phpstan-ignore` is a namespace: `-line`, `-next-line`, and the bare form with an identifier behind it are all spelled by running letters on past it, so protecting `@phpstan-ignoreish` is right.
+        # NOTE: `@phpstan-ignore` is a namespace: `-line`, `-next-line`, and the bare form with an identifier behind it are all spelled by running letters on past it, so protecting `@phpstan-ignoreish` is right.
         # NOTE: What the marker still promises is the `@` and that it opens the comment, so the near-miss mentions it instead.
         "// a note about @phpstan-ignore-next-line",
         KEPT_AS_DIRECTIVE,
@@ -398,7 +413,7 @@ SAMPLES: dict[str, Sample] = {
         None,
         f"<?php\n{SLOT}\n// control\n",
         "/** @psalm-suppress InvalidReturnType */",
-                # NOTE: Psalm writes the issue it silences after whitespace, so the marker ends at a boundary and prose that runs letters on past it is a note about the checker rather than an instruction to it.
+        # NOTE: Psalm writes the issue it silences after whitespace, so the marker ends at a boundary and prose that runs letters on past it is a note about the checker rather than an instruction to it.
         # NOTE: The near-miss drops one star, because a documentation comment is kept by this repository's own configuration for a reason that has nothing to do with the marker under test.
         f"/* @psalm-suppress{NEGATIVE_SUFFIX} */",
         KEPT_AS_DIRECTIVE,
@@ -408,11 +423,11 @@ SAMPLES: dict[str, Sample] = {
         None,
         f"<?php\n{SLOT}\n// control\n",
         "// @codeCoverageIgnoreStart",
-                # NOTE: The three forms PHPUnit reads differ only in what runs on past the marker -- nothing, `Start`, `End` -- so a suffix is still the shape of one and the near-miss is again the comment that talks about the annotation instead of being it.
+        # NOTE: The three forms PHPUnit reads differ only in what runs on past the marker -- nothing, `Start`, `End` -- so a suffix is still the shape of one and the near-miss is again the comment that talks about the annotation instead of being it.
         "// a note about @codeCoverageIgnoreStart",
         KEPT_AS_DIRECTIVE,
     ),
-        # NOTE: Ruby's three magic comments, which the interpreter reads out of the head of a file.
+    # NOTE: Ruby's three magic comments, which the interpreter reads out of the head of a file.
     # NOTE: Each carries its own boundary in the colon, so what is left to get wrong is the front of it -- which is what running letters on past the word takes away.
     "frozen_string_literal:": Sample(
         "ruby",
@@ -438,7 +453,7 @@ SAMPLES: dict[str, Sample] = {
         f"# shareable_constant_value{NEGATIVE_SUFFIX}",
         KEPT_AS_LOAD_BEARING,
     ),
-        # NOTE: The three tools every Ruby project runs.
+    # NOTE: The three tools every Ruby project runs.
     # NOTE: `rubocop:` and `standard:` are namespaces -- `disable`, `enable`, `todo` -- so letters run on past the colon are still an instruction to the linter, and the near-miss is again the comment that talks about the directive instead of being it.
     "rubocop:": Sample(
         "ruby",
@@ -464,7 +479,7 @@ SAMPLES: dict[str, Sample] = {
         "# a note about typed: strict",
         KEPT_AS_DIRECTIVE,
     ),
-        # NOTE: `zig fmt` is the only tool that reads a Zig comment, and it reads the whole phrase rather than a prefix of it (`Ast/Render.zig` compares the trimmed comment past `//` with `zig fmt: off` for equality), so letters run on past `off` turn nothing off and must not be protected.
+    # NOTE: `zig fmt` is the only tool that reads a Zig comment, and it reads the whole phrase rather than a prefix of it (`Ast/Render.zig` compares the trimmed comment past `//` with `zig fmt: off` for equality), so letters run on past `off` turn nothing off and must not be protected.
     "zig fmt:": Sample(
         "zig",
         None,
@@ -478,7 +493,7 @@ SAMPLES: dict[str, Sample] = {
         None,
         f"{SLOT}\n# control\n",
         "# styler: off",
-                # NOTE: The colon is the marker's own boundary, so `styler:ish` is still an instruction to the formatter -- one naming a state it does not have.
+        # NOTE: The colon is the marker's own boundary, so `styler:ish` is still an instruction to the formatter -- one naming a state it does not have.
         # NOTE: What is left to get wrong is the front of it, which is what a comment merely mentioning the tool takes away.
         "# a note about styler: off",
         KEPT_AS_DIRECTIVE,
@@ -488,11 +503,11 @@ SAMPLES: dict[str, Sample] = {
         None,
         f"{SLOT}\n# control\n",
         "# nocov start",
-                # NOTE: `nocov` is the whole word covr looks for -- `start`, `end`, and nothing at all may follow it -- so letters run straight on past it are prose about the tool rather than an instruction to it.
+        # NOTE: `nocov` is the whole word covr looks for -- `start`, `end`, and nothing at all may follow it -- so letters run straight on past it are prose about the tool rather than an instruction to it.
         f"# nocov{NEGATIVE_SUFFIX}",
         KEPT_AS_DIRECTIVE,
     ),
-        # NOTE: `// @dart = 2.12` is the language version comment the Dart scanner reads itself, and it decides which version of the language the file is written in, so a removal that took it would change what the code below it means.
+    # NOTE: `// @dart = 2.12` is the language version comment the Dart scanner reads itself, and it decides which version of the language the file is written in, so a removal that took it would change what the code below it means.
     # NOTE: The `@dart` has to be followed by `=` and a version,
     # NOTE: which is what the near-miss takes away.
     "@dart": Sample(
@@ -503,7 +518,7 @@ SAMPLES: dict[str, Sample] = {
         f"// @dart{NEGATIVE_SUFFIX}",
         KEPT_AS_LOAD_BEARING,
     ),
-        # NOTE: `dart_style` matches its two markers by equality on the whole comment rather than by prefix -- `front_end/piece_writer.dart` switches on `comment.text` against `// dart format off` -- so letters run on past `off` turn nothing off.
+    # NOTE: `dart_style` matches its two markers by equality on the whole comment rather than by prefix -- `front_end/piece_writer.dart` switches on `comment.text` against `// dart format off` -- so letters run on past `off` turn nothing off.
     # NOTE: Measured on `dart format` from SDK 3.13.2,
     # NOTE: which reformatted the near-miss and left the marker's region alone.
     "dart format": Sample(
@@ -519,7 +534,7 @@ SAMPLES: dict[str, Sample] = {
         None,
         f"{SLOT}\n// control\n",
         "// ignore: unused_local_variable",
-                # NOTE: The colon is the marker's own boundary, so `ignore:ish` is still an instruction to the analyzer -- one naming a diagnostic it does not have.
+        # NOTE: The colon is the marker's own boundary, so `ignore:ish` is still an instruction to the analyzer -- one naming a diagnostic it does not have.
         # NOTE: What is left to get wrong is the front of it, which is what a comment merely mentioning the mechanism takes away.
         "// a note about ignore: unused_local_variable",
         KEPT_AS_DIRECTIVE,
@@ -532,7 +547,7 @@ SAMPLES: dict[str, Sample] = {
         "// a note about ignore_for_file: unused_import",
         KEPT_AS_DIRECTIVE,
     ),
-        # NOTE: SwiftPM reads the tools version out of the first line of a `Package.swift` before it reads the manifest at all, so a removal that took it would leave a package that no longer builds.
+    # NOTE: SwiftPM reads the tools version out of the first line of a `Package.swift` before it reads the manifest at all, so a removal that took it would leave a package that no longer builds.
     # NOTE: The colon is the marker's own boundary, which is why the near-miss mentions the marker instead of opening with it.
     "swift-tools-version:": Sample(
         "swift",
@@ -558,7 +573,7 @@ SAMPLES: dict[str, Sample] = {
         "// a note about swiftformat:disable redundantSelf",
         KEPT_AS_DIRECTIVE,
     ),
-        # NOTE: `swift-format` reads three spellings of this one -- the bare marker,
+    # NOTE: `swift-format` reads three spellings of this one -- the bare marker,
     # NOTE: the `-file` that widens it to the whole file, and a `:` and a rule name -- and its own regular expressions anchor at the end of each, so letters run straight on past the marker turn nothing off.
     # NOTE: Measured on
     # NOTE: `swift-format` 6.3.3, which left `let    a     = 1` unformatted under
@@ -571,7 +586,7 @@ SAMPLES: dict[str, Sample] = {
         f"// swift-format-ignore{NEGATIVE_SUFFIX}",
         KEPT_AS_DIRECTIVE,
     ),
-        # NOTE: Roslyn's own `BeginsWithAutoGeneratedComment` searches the comments in front of a file's first token for `<auto-generated` and exempts a file that carries one from every analyzer that opts out of generated code, so a removal that took it would light up the diagnostics the file was written to escape.
+    # NOTE: Roslyn's own `BeginsWithAutoGeneratedComment` searches the comments in front of a file's first token for `<auto-generated` and exempts a file that carries one from every analyzer that opts out of generated code, so a removal that took it would light up the diagnostics the file was written to escape.
     # NOTE: That search is `contains` rather than a prefix, and it is followed, so the near-miss cannot run letters on past the marker: what it takes away instead is the `<` that makes the marker an XML tag rather than prose about generated code.
     "<auto-generated": Sample(
         "csharp",
@@ -586,16 +601,16 @@ SAMPLES: dict[str, Sample] = {
         None,
         f"{SLOT}\n// control\n",
         "// ReSharper disable once UnusedMember.Local",
-                # NOTE: `disable` and `restore` are the two verbs the tool reads, and white space has to stand between them and its name, so a comment that mentions the instruction is the near-miss the rule still has to tell apart.
+        # NOTE: `disable` and `restore` are the two verbs the tool reads, and white space has to stand between them and its name, so a comment that mentions the instruction is the near-miss the rule still has to tell apart.
         "// a note about ReSharper disable once",
         KEPT_AS_DIRECTIVE,
     ),
-        # NOTE: CSharpier matches this one on the whole text of a `//` comment rather than by prefix.
+    # NOTE: CSharpier matches this one on the whole text of a `//` comment rather than by prefix.
     # NOTE: Measured on `csharpier` 1.3.0, which left
     # NOTE: `int    a     =    1;` unformatted under the marker and reformatted
     # NOTE: it under `// csharpier-ignore some text`, under `//  csharpier-ignore` with a second space, and under the near-miss below.
 
-        # NOTE: The tool tier of the languages whose entries were blank.
+    # NOTE: The tool tier of the languages whose entries were blank.
     # NOTE: Eclipse reads `$NON-NLS-n$` and stops reporting the string literal on that line as one that was never externalised; Checkstyle's suppression filter reads `CHECKSTYLE:OFF`; SonarQube reads `NOSONAR` in most of the languages it analyses; Eclipse and IntelliJ both read `@formatter:off`.
     # NOTE: Each near-miss is a comment that opens with the same letters and means nothing to the tool.
     "$non-nls": Sample(
@@ -631,7 +646,7 @@ SAMPLES: dict[str, Sample] = {
         KEPT_AS_DIRECTIVE,
     ),
 
-        # NOTE: Python's two blank spots.
+    # NOTE: Python's two blank spots.
     # NOTE: `# pylint: disable=` turns one check off and `# pragma: no cover` takes the line out of the coverage report,
     # NOTE: which is the same job `# nocov` does for R and `@codeCoverageIgnore` for PHP.
     "pylint:": Sample(
@@ -651,7 +666,7 @@ SAMPLES: dict[str, Sample] = {
         KEPT_AS_DIRECTIVE,
     ),
 
-        # NOTE: Perl::Critic is addressed and released by a phrase rather than by a prefix, so each near-miss is the phrase with a longer word in place of its last.
+    # NOTE: Perl::Critic is addressed and released by a phrase rather than by a prefix, so each near-miss is the phrase with a longer word in place of its last.
     "no critic": Sample(
         "perl",
         None,
@@ -669,7 +684,7 @@ SAMPLES: dict[str, Sample] = {
         KEPT_AS_DIRECTIVE,
     ),
 
-        # NOTE: Three more the survey asked for.
+    # NOTE: Three more the survey asked for.
     # NOTE: cppcheck reads its own name as a prefix, so the near-miss is a comment that mentions it; staticcheck's two are named in full because `lint:` alone is also a note about linting; scalafmt reads its pair by equality.
     "cppcheck-suppress": Sample(
         "c",
@@ -703,7 +718,7 @@ SAMPLES: dict[str, Sample] = {
         f"// csharpier-ignore{NEGATIVE_SUFFIX}",
         KEPT_AS_DIRECTIVE,
     ),
-        # NOTE: scala-cli reads a directive line before it reads the manifest at all, and the directive is `//>` followed by a space and a name, of which `using` is the one that configures the build.
+    # NOTE: scala-cli reads a directive line before it reads the manifest at all, and the directive is `//>` followed by a space and a name, of which `using` is the one that configures the build.
     # NOTE: The boundary after `using` is what tells the instruction from a comment that only opens with the same letters: `//> usingless` is not one, and neither is a comment that mentions the directive.
     "//> using": Sample(
         "scala",
@@ -718,7 +733,7 @@ SAMPLES: dict[str, Sample] = {
         None,
         f"{SLOT}\n# control\n",
         "# @schema type: string",
-                # NOTE: The `@` is what tells the annotation from prose: `schema` on its own is a word any comment about a schema opens with, so the near-miss is the comment that mentions the annotation instead of being one.
+        # NOTE: The `@` is what tells the annotation from prose: `schema` on its own is a word any comment about a schema opens with, so the near-miss is the comment that mentions the annotation instead of being one.
         "# a note about @schema type",
         KEPT_AS_DIRECTIVE,
     ),
@@ -775,6 +790,7 @@ def check_language_survey(binary: pathlib.Path, failures: list[str]) -> None:
         capture_output=True,
         check=True,
         text=True,
+        env=ISOLATED,
     ).stdout.splitlines()
     languages = {line.split("\t", 1)[0] for line in listing[1:] if line.strip()}
     protected, load_bearing = protected_names()
@@ -829,7 +845,11 @@ def scan(
     if sample.dialect is not None:
         arguments += ["--dialect", sample.dialect]
     completed = subprocess.run(
-        arguments + ["-"], input=sample.source(comment), check=True, capture_output=True
+        arguments + ["-"],
+        input=sample.source(comment),
+        check=True,
+        capture_output=True,
+        env=ISOLATED,
     )
     document = json.loads(completed.stdout)
     return document["files"][0]["report"]["comments"]
@@ -902,7 +922,7 @@ def check_policy_all(
         )
         return
     action = comments[0]["disposition"].get("action")
-        # NOTE: A preamble is held back from `all` by the same force_protected gate as a load-bearing directive -- it is the older half of that gate -- so the two expect a keep and only the tool tier expects a removal.
+    # NOTE: A preamble is held back from `all` by the same force_protected gate as a load-bearing directive -- it is the older half of that gate -- so the two expect a keep and only the tool tier expects a removal.
     if sample.reason in (KEPT_AS_LOAD_BEARING, KEPT_AS_PREAMBLE):
         if action != "keep":
             failures.append(
@@ -943,7 +963,7 @@ def main() -> int:
         failures.append(
             f"`{name}` has a sample but {DIRECTIVES.relative_to(ROOT)} does not protect it"
         )
-        # INVARIANT: The tier a marker is filed under in the shared spec and the reason its sample expects are two spellings of one decision, so they are compared rather than both trusted.
+    # INVARIANT: The tier a marker is filed under in the shared spec and the reason its sample expects are two spellings of one decision, so they are compared rather than both trusted.
     # INVARIANT: Moving a marker between the lists is meant to be a visible act: it changes what `--policy all` does to a real checkout.
     for name in sorted(set(load_bearing) & set(SAMPLES)):
         if SAMPLES[name].reason != KEPT_AS_LOAD_BEARING:

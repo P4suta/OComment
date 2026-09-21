@@ -16,6 +16,20 @@ fn binary() -> &'static str {
     env!("CARGO_BIN_EXE_ocomment")
 }
 
+/// The binary, with this machine's own configuration out of reach.
+///
+/// `ocomment` reads `$XDG_CONFIG_HOME/ocomment/config.toml`, which is a real setting on a real machine and is meant to reach every run.
+/// A suite that let it through is a suite whose answers depend on whose machine it ran on, and this one found that out the day its author installed one: ninety-nine tests failed because a user file said `mode = "none"`.
+///
+/// A test that wants a user configuration sets its own after this, and the later value wins.
+fn command() -> Command {
+    static EMPTY: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
+    let empty = EMPTY.get_or_init(|| tempfile::tempdir().expect("a temporary directory"));
+    let mut command = Command::new(binary());
+    command.env("XDG_CONFIG_HOME", empty.path());
+    command
+}
+
 /// Create a file whose name is raw bytes, or report that this filesystem will not hold one.
 ///
 /// A Unix filename is a byte string, and what OComment does with one that is not UTF-8 is a property worth pinning: a path must reach a report, a patch and the Git index as the bytes the OS gave, never as U+FFFD.
@@ -70,7 +84,7 @@ fn run(directory: &Path, arguments: &[&str]) -> Output {
         arguments.push("--format");
         arguments.push("human");
     }
-    Command::new(binary())
+    command()
         .current_dir(directory)
         .env("PATH", "/usr/bin:/bin")
         .args(&arguments)
@@ -88,7 +102,7 @@ fn run_stdin(directory: &Path, arguments: &[&str], input: &[u8]) -> Output {
         arguments.push("--format");
         arguments.push("human");
     }
-    let mut child = Command::new(binary())
+    let mut child = command()
         .current_dir(directory)
         .env("PATH", "/usr/bin:/bin")
         .args(&arguments)
@@ -202,7 +216,7 @@ fn diff_is_byte_preserving_and_git_applies_quoted_non_utf8_paths() {
     };
     let path = directory.path().join(&name);
 
-    let output = Command::new(binary())
+    let output = command()
         .current_dir(directory.path())
         .env("PATH", "/usr/bin:/bin")
         .arg("diff")
@@ -808,7 +822,7 @@ fn explicit_config_replaces_discovery_and_roots_its_own_globs() {
     )
     .unwrap();
 
-    let output = Command::new(binary())
+    let output = command()
         .current_dir(directory.path())
         .env("PATH", "/usr/bin:/bin")
         .env("XDG_CONFIG_HOME", directory.path().join("xdg"))
@@ -2276,9 +2290,11 @@ fn a_wide_transaction_completes_under_a_low_file_descriptor_limit() {
         .unwrap();
     }
 
+    /* NOTE: The shell carries the isolation `command` would have given, because the binary is reached through it rather than spawned directly: a user configuration this machine really has would otherwise decide what this test observes. */
     let output = Command::new("/bin/bash")
         .current_dir(directory.path())
         .env("PATH", "/usr/bin:/bin")
+        .env("XDG_CONFIG_HOME", directory.path().join("no-user-config"))
         .args([
             "-c",
             "ulimit -n 64; exec \"$1\" fix .",
@@ -5029,7 +5045,7 @@ fn wide_tree(files: usize, comments: usize) -> TempDir {
 
 /// Run the binary, take `head` bytes of its output, then close the pipe and report how the run ended and what it said on standard error.
 fn run_closed_pipe(directory: &Path, arguments: &[&str], head: usize) -> (ExitStatus, String) {
-    let mut child = Command::new(binary())
+    let mut child = command()
         .current_dir(directory)
         .env("PATH", "/usr/bin:/bin")
         .args(arguments)
@@ -5124,7 +5140,7 @@ fn a_pipe_closed_before_the_first_byte_ends_completions_quietly() {
 
 /// Run the binary with its standard error piped to a reader that closes at once, and report how it ended.
 fn run_closed_error_pipe(directory: &Path, arguments: &[&str]) -> ExitStatus {
-    let mut child = Command::new(binary())
+    let mut child = command()
         .current_dir(directory)
         .env("PATH", "/usr/bin:/bin")
         .args(arguments)
@@ -5213,7 +5229,7 @@ fn a_broken_pipe_from_git_hash_object_fails_the_staged_fix() {
     .unwrap();
     fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
 
-    let output = Command::new(binary())
+    let output = command()
         .current_dir(directory.path())
         .env("PATH", format!("{}:/usr/bin:/bin", fake.path().display()))
         .args(["fix", "--staged"])
@@ -5501,7 +5517,7 @@ fn a_missing_plugin_tool_names_it_its_purpose_and_doctor() {
             "cannot run `oras` (needed for oci: plugin sources); run `ocomment doctor`",
         ),
     ] {
-        let output = Command::new(binary())
+        let output = command()
             .current_dir(directory.path())
             .env("PATH", empty.path())
             .args([
@@ -5553,7 +5569,7 @@ fn fake_tool(directory: &Path, name: &str, line: &str) {
 /// Run the binary with `PATH` pointing at `tools` and nothing else, so a probe sees exactly the tools the test installed there.
 #[cfg(unix)]
 fn run_with_tools(directory: &Path, tools: &Path, arguments: &[&str]) -> Output {
-    Command::new(binary())
+    command()
         .current_dir(directory)
         .env("PATH", tools)
         .args(arguments)
@@ -5692,7 +5708,7 @@ fn doctor_reports_the_environment_it_resolved() {
     let directory = tempfile::tempdir().unwrap();
     let empty = tempfile::tempdir().unwrap();
     let doctor = |no_color: Option<&str>| {
-        let mut command = Command::new(binary());
+        let mut command = command();
         command
             .current_dir(directory.path())
             .env("PATH", "/usr/bin:/bin")
@@ -5772,7 +5788,7 @@ fn doctor_sanitises_the_directories_it_reports_without_cutting_them_short() {
     /* NOTE: A project file of its own makes this directory the root as well, so both rows name it and both are pinned by one run. */
     fs::write(directory.path().join(".ocomment.toml"), b"version = 1\n").unwrap();
     let empty = tempfile::tempdir().unwrap();
-    let output = Command::new(binary())
+    let output = command()
         .current_dir(directory.path())
         .env("PATH", "/usr/bin:/bin")
         .env("XDG_CONFIG_HOME", empty.path())

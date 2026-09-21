@@ -9,6 +9,17 @@ fn binary() -> &'static str {
     env!("CARGO_BIN_EXE_ocomment")
 }
 
+/// A scratch directory with no `ocomment/config.toml` in it.
+///
+/// `ocomment` reads `$XDG_CONFIG_HOME/ocomment/config.toml`, which is a real setting on a real machine and is meant to reach every run.
+/// A suite that let it through is a suite whose answers depend on whose machine it ran on.
+fn no_user_config() -> &'static std::path::Path {
+    static EMPTY: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
+    EMPTY
+        .get_or_init(|| tempfile::tempdir().expect("a temporary directory"))
+        .path()
+}
+
 /// A fixture reaching every kind of event the trace can record.
 ///
 /// `diff` plans edits, so `edit-planned` is produced; the unreadable file makes `file-skipped` happen; the source carries a kept comment and a removed one so that `comment-decided` is seen deciding both ways.
@@ -37,6 +48,7 @@ fn run(directory: &Path, arguments: &[&str]) -> (String, String) {
         arguments.push("human");
     }
     let output = Command::new(binary())
+        .env("XDG_CONFIG_HOME", no_user_config())
         .current_dir(directory)
         .env("PATH", "/usr/bin:/bin")
         .args(&arguments)
@@ -164,6 +176,7 @@ fn the_human_trace_names_the_evidence_for_a_language() {
 fn selftest_checks_the_embedded_corpus_and_accounts_for_what_it_skips() {
     let directory = tempfile::tempdir().expect("a temporary directory");
     let output = Command::new(binary())
+        .env("XDG_CONFIG_HOME", no_user_config())
         .current_dir(directory.path())
         .env("PATH", "/usr/bin:/bin")
         .args(["selftest", "--format", "json"])
@@ -358,6 +371,7 @@ fn a_ledger_fails_when_a_count_rises_and_when_it_falls() {
     )
     .expect("the fixture is writable");
     let grew = Command::new(binary())
+        .env("XDG_CONFIG_HOME", no_user_config())
         .current_dir(directory.path())
         .env("PATH", "/usr/bin:/bin")
         .args(["ratchet"])
@@ -374,6 +388,7 @@ fn a_ledger_fails_when_a_count_rises_and_when_it_falls() {
     std::fs::write(directory.path().join("a.rs"), b"fn main() {}\n")
         .expect("the fixture is writable");
     let shrank = Command::new(binary())
+        .env("XDG_CONFIG_HOME", no_user_config())
         .current_dir(directory.path())
         .env("PATH", "/usr/bin:/bin")
         .args(["ratchet"])

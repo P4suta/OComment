@@ -18,8 +18,12 @@ struct LspClient {
 
 impl LspClient {
     fn start(directory: &Path) -> Self {
+        /* NOTE: A scratch `XDG_CONFIG_HOME`, because `ocomment` reads a user configuration from it and a suite that let this machine's through would be a suite whose answers depend on whose machine it ran on. */
+        static EMPTY: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
+        let empty = EMPTY.get_or_init(|| tempfile::tempdir().expect("a temporary directory"));
         let mut child = Command::new(env!("CARGO_BIN_EXE_ocomment"))
             .arg("lsp")
+            .env("XDG_CONFIG_HOME", empty.path())
             .current_dir(directory)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

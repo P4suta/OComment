@@ -5,10 +5,24 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import pathlib
 import subprocess
 import tempfile
 import tomllib
+
+# NOTE: The binary reads a user configuration from `$XDG_CONFIG_HOME/ocomment/config.toml`,
+# NOTE: which is a real setting on a real machine and is meant to reach every run.
+# NOTE: A check that let this machine's through would be a check whose answer depends on whose machine it ran on; `tools/gen_docs.py` has pointed both variables at an empty directory since it was written, and this follows it.
+def _isolated_environment() -> dict[str, str]:
+    environment = dict(os.environ)
+    empty = tempfile.mkdtemp(prefix="ocomment-no-user-config-")
+    environment.update({"HOME": empty, "XDG_CONFIG_HOME": empty})
+    return environment
+
+
+ISOLATED = _isolated_environment()
+
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -32,7 +46,7 @@ SARIF_URI_CASES: tuple[tuple[str, str | None, bool], ...] = (
     ("C:/src/a.rs", None, True),
     ("../sibling/a.rs", None, True),
     ("sub/../../sibling/a.rs", None, True),
-        # NOTE: A relative URI with no base resolves against nothing, and a base on a URI that has left the checkout claims a place it is not in.
+    # NOTE: A relative URI with no base resolves against nothing, and a base on a URI that has left the checkout claims a place it is not in.
     ("a.rs", None, False),
     ("../sibling/a.rs", SARIF_SRCROOT, False),
     ("sub/../../sibling/a.rs", SARIF_SRCROOT, False),
@@ -43,7 +57,7 @@ SARIF_URI_CASES: tuple[tuple[str, str | None, bool], ...] = (
     ("./a.rs", SARIF_SRCROOT, False),
     ("sub/./doc.rs", SARIF_SRCROOT, False),
     ("sub\\doc.rs", SARIF_SRCROOT, False),
-        # NOTE: A first segment of one letter and a colon is read as a drive letter wherever it turns up -- and as a URI scheme besides -- while a POSIX checkout is free to hold a directory named `c:`.
+    # NOTE: A first segment of one letter and a colon is read as a drive letter wherever it turns up -- and as a URI scheme besides -- while a POSIX checkout is free to hold a directory named `c:`.
     # NOTE: The emitter says which it meant by keeping one `.` segment in front of that path, and only that path: `./c:/a.rs` is a relative reference to any reader and still resolves against the source root.
     # NOTE: The bare spelling below is what the two would disagree about, so it stays turned down.
     ("./c:/a.rs", SARIF_SRCROOT, True),
@@ -129,17 +143,17 @@ def check_sarif_uri(location: object, where: str, failures: list[str]) -> None:
     if not isinstance(uri, str) or not uri:
         failures.append(f"{where}.uri is not a non-empty string: {uri!r}")
         return
-        # NOTE: A path is what the emitter reports; a URL with a scheme in front of it is something else entirely, and no checkout holds one.
+    # NOTE: A path is what the emitter reports; a URL with a scheme in front of it is something else entirely, and no checkout holds one.
     if "://" in uri:
         failures.append(f"{where}.uri is a URL rather than a path: {uri!r}")
         return
-        # NOTE: A code-scanning UI matches the URI against the paths the checkout uses, and neither a backslash nor a `.` segment names a file any checkout has.
+    # NOTE: A code-scanning UI matches the URI against the paths the checkout uses, and neither a backslash nor a `.` segment names a file any checkout has.
     # NOTE: The one exception is the `./` the emitter puts in front of a first segment that would read as a drive letter, which is there so the rest of the path is read as a path at all.
     if "\\" in uri:
         failures.append(f"{where}.uri uses a backslash separator: {uri!r}")
     if "/./" in uri or (uri.startswith("./") and not sarif_disambiguated_drive(uri)):
         failures.append(f"{where}.uri keeps a `.` segment: {uri!r}")
-        # INVARIANT: A relative URI resolves against a base id.
+    # INVARIANT: A relative URI resolves against a base id.
     # INVARIANT: Standard input is not a file, an absolute path already says where it starts, and a path that climbs out through `..` has left the tree the base id would measure it from -- the emitter leaves the base off all three, so demanding one here would fail a document that is right.
     # INVARIANT: The climb is looked for as a path segment rather than a prefix: `sub/../../sibling/a.rs` leaves the tree just as surely as `../sibling/a.rs`, and `..pending/a.rs` does not leave it.
     if uri == SARIF_STDIN_URI or sarif_uri_is_absolute(uri) or ".." in uri.split("/"):
@@ -333,7 +347,7 @@ def main() -> int:
         help="check the artifact-URI rule against the URIs the CLI emits, and stop",
     )
     args = parser.parse_args()
-        # INVARIANT: The rule is checked wherever this script runs: on the schema job that takes no arguments, and on the three-operating-system job that hands it a SARIF document.
+    # INVARIANT: The rule is checked wherever this script runs: on the schema job that takes no arguments, and on the three-operating-system job that hands it a SARIF document.
     # INVARIANT: Neither has to remember to ask for it.
     if self_test() != 0:
         return 1
@@ -367,10 +381,11 @@ def main() -> int:
             [str(binary), "scan", str(fixture), "--format", "json"],
             check=True,
             capture_output=True,
+            env=ISOLATED,
         )
     jsonschema.validate(json.loads(completed.stdout), result_schema)
 
-        # NOTE: The trace goes to standard error beside the run summary, so `--quiet` is what makes every line one of these objects.
+    # NOTE: The trace goes to standard error beside the run summary, so `--quiet` is what makes every line one of these objects.
     # NOTE: `diff` is used because it is the command that plans edits, and `edit-planned` is otherwise never produced; the unreadable file is there so that `file-skipped` is too.
     # NOTE: Between them the fixture reaches every event the schema has.
     with tempfile.TemporaryDirectory(prefix="ocomment-trace-") as raw:
@@ -382,6 +397,7 @@ def main() -> int:
             cwd=directory,
             check=False,
             capture_output=True,
+            env=ISOLATED,
         )
     seen: set[str] = set()
     for line in completed.stderr.decode().splitlines():
@@ -398,7 +414,7 @@ def main() -> int:
         "edit-planned",
         "file-summary",
     }
-        # NOTE: The summary is written for a run of every operation, because the operation decides which of its counts can be non-zero and a schema that only ever saw `check` would not have met `comments_removed`.
+    # NOTE: The summary is written for a run of every operation, because the operation decides which of its counts can be non-zero and a schema that only ever saw `check` would not have met `comments_removed`.
     with tempfile.TemporaryDirectory(prefix="ocomment-summary-") as raw:
         directory = pathlib.Path(raw)
         (directory / "schema.rs").write_bytes(b"let value = 1; // removable\n")

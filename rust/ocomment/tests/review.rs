@@ -17,8 +17,20 @@ fn binary() -> &'static str {
     env!("CARGO_BIN_EXE_ocomment")
 }
 
+/// A scratch directory with no `ocomment/config.toml` in it.
+///
+/// `ocomment` reads `$XDG_CONFIG_HOME/ocomment/config.toml`, which is a real setting on a real machine and is meant to reach every run.
+/// A suite that let it through is a suite whose answers depend on whose machine it ran on.
+fn no_user_config() -> &'static std::path::Path {
+    static EMPTY: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
+    EMPTY
+        .get_or_init(|| tempfile::tempdir().expect("a temporary directory"))
+        .path()
+}
+
 fn run(directory: &Path, arguments: &[&str]) -> Output {
     Command::new(binary())
+        .env("XDG_CONFIG_HOME", no_user_config())
         .current_dir(directory)
         .env("PATH", "/usr/bin:/bin")
         .env_remove("NO_COLOR")
