@@ -15907,6 +15907,111 @@
         "diagnostics": [],
         "output_utf8": "# The cat sat on the mat and then the dog ran away.\n# A second sentence.\nversion = 1\n"
       }
+    },
+    {
+      "id": "allow-rules-do-not-reach-policy-none",
+      "language": "rust",
+      "operation": "scan",
+      "options": {
+        "policy": "none",
+        "allow": {
+          "tags": [
+            "NOTE"
+          ],
+          "max_lines": 1,
+          "trailing": false
+        }
+      },
+      "source_utf8": "// NOTE: one line.\npub fn a() {}\n\n// NOTE: goes on\n// NOTE: and on.\npub fn b() {}\n\npub fn c() {} // NOTE: beside code\n\n// plain\npub fn d() {}\n",
+      "note": "The same source as `allow-rules-tag-length-and-trailing`, under the mode whose whole meaning is that it removes nothing. `max_lines` and `trailing` name removals, so neither reaches a comment here: `mode = \"none\"` is documented as the mode for a repository that wants the style rules and not the removals, and a shape rule firing under it would be the one way such a run could still delete something.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 18,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 34,
+            "end": 50,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 51,
+            "end": 67,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 97,
+            "end": 117,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 119,
+            "end": 127,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "policy-none-restyles-what-it-refuses-to-remove",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "allow": {
+          "max_lines": 1,
+          "trailing": false
+        },
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "// A first sentence wrapped to a\n// column. A second sentence.\npub fn a() {}\n\npub fn b() {} // beside code\n",
+      "note": "Both axes at once under `none`. The paragraph is reflowed because that is what the style rules are for; the trailing comment and the two-line paragraph are left alone, because `max_lines` and `trailing` are removals and this mode has none. This is the pairing a machine-wide commit hook runs on: free to rewrite what a machine can settle, and never to take a comment away.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 32,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 33,
+            "end": 62,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 92,
+            "end": 106,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 0,
+            "end": 62,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "// A first sentence wrapped to a column.\n// A second sentence."
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "// A first sentence wrapped to a column.\n// A second sentence.\npub fn a() {}\n\npub fn b() {} // beside code\n"
+      }
     }
   ]
 }

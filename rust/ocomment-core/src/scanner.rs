@@ -228,6 +228,7 @@ fn finish_scan(mut scanner: Scanner<'_>) -> (ScanReport, Vec<usize>, bool) {
 /// Apply the rules that are about a comment's shape rather than its kind.
 ///
 /// These cut across the policy rather than under it: a comment that fails one is removed whatever the *policy* said about its kind.
+/// [`Policy::None`] is the one thing above them rather than beside them, for the reason below.
 /// What they do not reach is a comment somebody named — see [`named_outright`] — or one of the kinds [`subject_to_shape`] leaves out.
 ///
 /// `tags` is the opposite direction: it keeps a comment the policy would have removed.
@@ -238,6 +239,12 @@ pub(crate) fn apply_allow_rules(
     options: &ScanOptions,
     patterns: &DispositionPatterns,
 ) {
+    /* NOTE: `none` answers before these rules for the reason it answers before the policy table in `Policy::keeps`: the mode whose whole meaning is that it removes nothing cannot carry an axis that removes something anyway.
+     * `tags` alone would be harmless, since it keeps what the policy would have taken and this policy takes nothing, but the other three name removals. */
+    if options.policy == Policy::None {
+        return;
+    }
+
     let rules = &options.allow;
     if rules.is_empty() {
         return;

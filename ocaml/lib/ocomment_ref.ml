@@ -6373,10 +6373,15 @@ let reachable source options (comment : comment) =
       (max 0 (comment.span.finish - comment.span.start)) in
   subject_to_shape comment.kind && not (named_outright options comment.kind raw)
 
+(** Apply the rules that are about a comment's shape rather than its kind.
+
+   [RemoveNothing] answers before these rules for the reason it answers before the policy table: the mode whose whole meaning is that it removes nothing cannot carry an axis that removes something anyway.
+   [tags] alone would be harmless, since it keeps what the policy would have taken and this policy takes nothing, but the other three name removals. *)
 let apply_allow_rules source options (comments : comment list) : comment list =
   let rules = options.allow in
   let tags = rules.tags @ rules.expiring_tags in
-  if tags = [] && rules.max_lines = None && rules.trailing = None then comments
+  if options.policy = RemoveNothing then comments
+  else if tags = [] && rules.max_lines = None && rules.trailing = None then comments
   else
     let tagged comment =
       if comment.disposition <> Remove then comment
