@@ -260,7 +260,7 @@ jobs:
           pattern: ocomment-*-unknown-linux-musl
           path: musl
           merge-multiple: true
-            # NOTE: The image ships the binaries this release already built, smoke tested,
+      # NOTE: The image ships the binaries this release already built, smoke tested,
       # NOTE: signed, and published as archives rather than a second compilation of the same tag.
       # NOTE: `builder` below is the buildx named context the Dockerfile copies from, so this layout is the whole contract between them.
       - name: Lay the released musl binaries out as the `builder` context

@@ -91,7 +91,7 @@ def fetch(path: str) -> dict | None:
     except urllib.error.HTTPError as error:
         if error.code == 404:
             return None
-                # NOTE: A refusal is not an absence.
+        # NOTE: A refusal is not an absence.
         # NOTE: Being rate-limited or told no means the answer exists and was not read, which `--skip-when-offline` must not be allowed to turn into a pass -- that flag is for a laptop with no network, and a gate that treats "would not say" as "nothing to say" is the failure this whole file is about.
         raise Refused(f"{error.code} {error.reason}") from error
 
@@ -131,7 +131,7 @@ def check(name: str, digest: str, label: str) -> list[str]:
     if tagged is None:
         return [f"{name}: {repo} publishes no tag {label}"]
     if tagged != digest:
-                # NOTE: Whole digests.
+        # NOTE: Whole digests.
         # NOTE: Abbreviating them printed the same twelve characters twice under the word "but", because the character that differed was past the cut -- a mismatch reported as two identical strings, which reads as a bug in the checker rather than a finding about the pin.
         return [
             f"{name}: the table says {label} is\n"
@@ -188,7 +188,7 @@ def main() -> int:
             failures.extend(check(name, digest, label))
         except (Refused, urllib.error.URLError, TimeoutError) as error:
             if arguments.best_effort:
-                                # NOTE: Said on the way past rather than folded into the final line, because the run passed and did not check anything,
+                # NOTE: Said on the way past rather than folded into the final line, because the run passed and did not check anything,
                 # NOTE: and a reader who sees only the count would not know.
                 print(f"not checked: {name} could not be read ({error})")
                 return 0

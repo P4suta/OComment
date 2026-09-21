@@ -6,20 +6,20 @@ version = 1
 [files]
 hidden = true
 exclude = [
-    # NOTE: Upstream-derived runtime modules, fixture bytes, and packaging or benchmark scratch are not ours to rewrite: fixture comments are the test input itself.
+  # NOTE: Upstream-derived runtime modules, fixture bytes, and packaging or benchmark scratch are not ours to rewrite: fixture comments are the test input itself.
   "rust/ocomment/src/runtime/**",
   "spec/fixtures/**",
   "editors/vscode/test-fixtures/**",
   "release-extras/**",
   "benchmarks/**",
-    # NOTE: This generated page contains deliberate before/after source bytes;
+  # NOTE: This generated page contains deliberate before/after source bytes;
   # NOTE: removing their example comments would change the documented policy output rather than clean up generator prose.
   "docs/policies.md",
-    # NOTE: The starter file `ocomment init` writes.
+  # NOTE: The starter file `ocomment init` writes.
   # NOTE: Its comments are addressed to whoever runs that command, not to a reader of this repository, so the tag convention below does not apply to them.
   "spec/default-config.toml",
   "rust/ocomment/assets/default-config.toml",
-    # NOTE: Licence texts and the rendered manual page carry no comments to find and are not ours to reformat, so they are excluded rather than left to be reported as an unknown language every run.
+  # NOTE: Licence texts and the rendered manual page carry no comments to find and are not ours to reformat, so they are excluded rather than left to be reported as an unknown language every run.
   "LICENSE*",
   "editors/vscode/LICENSE",
   "docs/ocomment.1",
@@ -29,7 +29,7 @@ exclude = [
 mode = "conservative"
 layout = "lines"
 keep_regex = [
-    # NOTE: The version beside a SHA-pinned action, now that YAML is scanned.
+  # NOTE: The version beside a SHA-pinned action, now that YAML is scanned.
   # NOTE: CONTRIBUTING.md requires every `uses:` to carry one and Dependabot rewrites it when it moves the pin, so it is read by a machine rather than by a reader and has no rationale to tag.
   # NOTE: The pattern is the whole comment, so prose that merely opens with a version is still prose.
   '^#\s*v[0-9]+(\.[0-9]+)*$',

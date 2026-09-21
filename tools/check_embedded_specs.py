@@ -11,7 +11,7 @@ PAIRS = (
     (ROOT / "spec/ocomment-scanner.wit", ROOT / "rust/ocomment/assets/ocomment-scanner.wit"),
     (ROOT / "spec/profiles.toml", ROOT / "rust/ocomment/assets/profiles.toml"),
     (ROOT / "spec/generated.toml", ROOT / "rust/ocomment/assets/generated.toml"),
-        # NOTE: Was absent, and drifted: the asset was a copy of `spec/directives.toml` from before the survey that asked every language what its toolchain reads, and it shipped to crates.io in that state.
+    # NOTE: Was absent, and drifted: the asset was a copy of `spec/directives.toml` from before the survey that asked every language what its toolchain reads, and it shipped to crates.io in that state.
     # NOTE: Nothing reads it today, which is exactly why nothing noticed.
     (ROOT / "spec/directives.toml", ROOT / "rust/ocomment/assets/directives.toml"),
 )

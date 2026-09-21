@@ -450,7 +450,7 @@ fn external_spans_keep_the_comment_a_yaml_block_scalar_leans_on() {
 }
 
 proptest! {
-        /// With every removed comment between two tokens on one line, `compact` has no line to drop and no trailing whitespace to trim, so it must leave exactly the bytes `lines` leaves.
+    /// With every removed comment between two tokens on one line, `compact` has no line to drop and no trailing whitespace to trim, so it must leave exactly the bytes `lines` leaves.
     #[test]
     fn compact_equals_lines_when_no_comment_ends_its_line(
         left in "[a-z]{1,8}", body in "[a-z ]{0,20}", right in "[a-z]{1,8}", tail in "[a-z]{1,8}")
@@ -459,7 +459,7 @@ proptest! {
         prop_assert_eq!(compact(&source), lines(&source));
     }
 
-        /// A comment alone on its line is the one case the two layouts differ over, and they differ by exactly that line.
+    /// A comment alone on its line is the one case the two layouts differ over, and they differ by exactly that line.
     #[test]
     fn compact_drops_the_line_that_lines_leaves_blank(
         indent in " {0,6}", body in "[a-z ]{0,20}", head in "[a-z]{1,8}", tail in "[a-z]{1,8}")

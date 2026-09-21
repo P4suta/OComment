@@ -191,7 +191,7 @@ def structural_documents():
         patterns.extend(
             "".join(item)
             for item in itertools.product(alphabet, repeat=width)
-                        # NOTE: A trail with no indented line in it is what the sweep above already enumerates, in more arrangements than this one.
+            # NOTE: A trail with no indented line in it is what the sweep above already enumerates, in more arrangements than this one.
             if any(item.islower() for item in item)
         )
     for header in BLOCK_HEADERS:
@@ -352,7 +352,7 @@ def generated_documents(count, seed):
 
 def parse(text):
     """The documents `text` holds, or `None` when PyYAML will not have it."""
-        # NOTE: Every complaint a YAML parser can make means the same thing here -- this document is not one the invariant is about -- so they are all caught together rather than enumerated.
+    # NOTE: Every complaint a YAML parser can make means the same thing here -- this document is not one the invariant is about -- so they are all caught together rather than enumerated.
     try:
         return list(yaml.safe_load_all(text))
     except Exception:
@@ -395,7 +395,7 @@ def strip_chunk(binary, layout, policy, sources, room):
         check=False,
     )
     report = result.stdout.decode("utf-8", "replace")
-        # NOTE: Only documents PyYAML accepted are written here, so a file the scanner calls invalid — exit code 2 — is a disagreement worth the run, not a document to skip past.
+    # NOTE: Only documents PyYAML accepted are written here, so a file the scanner calls invalid — exit code 2 — is a disagreement worth the run, not a document to skip past.
     if result.returncode not in (0, 1) or "invalid syntax" in report:
         raise SystemExit(
             f"ocomment fix --policy {policy} --layout {layout} exited "

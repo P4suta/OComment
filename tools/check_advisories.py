@@ -71,7 +71,7 @@ class Unreadable(Exception):
 def crates() -> list[tuple[str, str, str]]:
     """Every crate the Rust lockfile pins, as `(ecosystem, name, version)`."""
     lock = tomllib.loads((ROOT / "rust/Cargo.lock").read_text(encoding="utf-8"))
-        # NOTE: `source` is absent for the workspace's own members, which have no registry to have an advisory in.
+    # NOTE: `source` is absent for the workspace's own members, which have no registry to have an advisory in.
     return [
         ("crates.io", package["name"], package["version"])
         for package in lock["package"]

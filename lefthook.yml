@@ -10,7 +10,7 @@ pre-commit:
   parallel: true
   commands:
     ocomment:
-            # NOTE: Built from this workspace rather than taken from PATH.
+      # NOTE: Built from this workspace rather than taken from PATH.
       # NOTE: A tool that gates its own repository has to be the version in that repository:
       # NOTE: an installed copy is whatever was last `cargo install`ed, so a commit that changes what OComment accepts gets judged by a build that predates the change.
       # NOTE: That happened -- an installed 0.1.0 rejected this repository's own configuration for naming a policy that the commit adding it had just introduced.

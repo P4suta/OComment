@@ -152,7 +152,7 @@ class OComment {
 			clientOptions,
 		);
 		this.client = client;
-				// NOTE: Held on its own rather than in `disposables`, which lives as long as the extension does: a restart replaces the client, and a listener per restart would accumulate for the session.
+		// NOTE: Held on its own rather than in `disposables`, which lives as long as the extension does: a restart replaces the client, and a listener per restart would accumulate for the session.
 		this.clientState = client.onDidChangeState((event) => {
 			this.enter(event.newState === State.Running ? "running" : "stopped");
 		});

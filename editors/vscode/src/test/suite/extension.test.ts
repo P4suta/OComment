@@ -27,7 +27,7 @@ test("the workspace's .ocomment.toml activates the extension", async () => {
 });
 
 test("the language client registers the server's workspace fix", async () => {
-		// NOTE: `ocomment.fixWorkspace` is contributed for its palette title only.
+	// NOTE: `ocomment.fixWorkspace` is contributed for its palette title only.
 	// NOTE: The handler is the one the language client registers out of the server's `executeCommandProvider`, so seeing the command here is what proves the server started and finished initialising.
 	await waitFor(
 		async () =>
@@ -69,7 +69,7 @@ test("fixActiveDocument removes the comment it reported", async () => {
 		() => !document.getText().includes("// the extension test removes this"),
 		"fixActiveDocument left the comment in the buffer",
 	);
-		// NOTE: The removal is byte-preserving, so the code either side of the comment has to come back untouched, and the file on disk is not written: the edit is reverted below so the fixture stays as it is in the repository.
+	// NOTE: The removal is byte-preserving, so the code either side of the comment has to come back untouched, and the file on disk is not written: the edit is reverted below so the fixture stays as it is in the repository.
 	assert.ok(document.getText().includes("let value = 1;"));
 	assert.ok(document.isDirty);
 	await vscode.commands.executeCommand("workbench.action.files.revert");

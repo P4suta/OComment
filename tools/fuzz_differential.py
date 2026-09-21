@@ -416,7 +416,7 @@ def shrink(item, tokens, language, budget):
                 changed = True
             else:
                 index += 1
-        # NOTE: The two answers are read back from the shrunken source, so what the report prints is what the source it prints really produces.
+    # NOTE: The two answers are read back from the shrunken source, so what the report prints is what the source it prints really produces.
     probe = request(item["id"], language, assemble(current), item["options"],
                     item["operation"])
     _, left, right = compare([probe])[0]

@@ -63,10 +63,10 @@ line_comments = [{ start = "//", kind = "line" }]
 # NOTE: A profile matches a substring, so each of these also claims a comment that merely opens with the same words -- `// indirect dependencies are pinned here` is kept, and told it was kept for a marker it is not.
 # NOTE: That is the cost of the only matcher a profile has, and it is paid differently by the two below.
 protected_patterns = [
-        # NOTE: Addressed to a tool, and the tier says so: `go mod tidy` writes this and puts it back when it is gone, so the default policies keep it and `--policy all` may still take it.
+    # NOTE: Addressed to a tool, and the tier says so: `go mod tidy` writes this and puts it back when it is gone, so the default policies keep it and `--policy all` may still take it.
     # NOTE: That also caps what the substring match costs -- a line of prose caught by it is kept by a gate and is not beyond every policy there is.
     { contains = "// indirect", reason = "go mod tidy writes and reads this marker" },
-        # NOTE: Nothing puts this one back.
+    # NOTE: Nothing puts this one back.
     # NOTE: Before the module declaration it is what `go get` warns with and what a proxy serves to everyone downstream; inside a `retract` block it is the reason `go list -m -retracted` prints.
     # NOTE: Removed, a published deprecation is gone and the people it was addressed to never hear it -- so this one is out of reach of every policy.
     # NOTE: Go reserves the spelling for exactly this meaning, in godoc as much as here, so a comment in a module file that contains it is a deprecation notice.
