@@ -153,5 +153,7 @@ pub use scanner::{
     explain_disposition, explain_disposition_with, scan,
 };
 pub use style::{Markers, restyle};
-pub use transform::{apply_edits, plan_report, transform, transform_plan, transform_spans};
+pub use transform::{
+    apply_edits, plan_report, plan_rewrites, transform, transform_plan, transform_spans,
+};
 pub use types::*;

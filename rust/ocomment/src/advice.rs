@@ -76,7 +76,9 @@ impl Decision {
             }
             /* NOTE: What to run, and not what to write.
              * The other instructions here name an edit a reader has to make; this one names the command that makes it, because the edit is in the finding beside it. */
-            Self::Restyle { .. } => "run `ocomment fix` and it is written for you".to_owned(),
+            Self::Restyle { .. } => {
+                "run `ocomment fix --tidy` and it is written for you".to_owned()
+            }
         }
     }
 

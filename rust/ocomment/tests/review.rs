@@ -112,12 +112,14 @@ const REVIEW: &str = r#"
 
 const AGENT: &str = r#"# ocomment: 5 comments to answer for in 1 of 1 file scanned, policy conservative.
 # Every line starts with a marker. DECIDE opens one question, asked of each
-# FINDING under it. A FINDING names a path and the first and last line of one
-# comment, which may span several, and the column when the comment does not
-# open its line. `-` is what is there now, `+` what would replace it, `=` the
-# code the comment is about. KEEP names a file and `|` the setting that would
-# stop the question being asked. BROKEN is a file that did not parse. The
-# argv lines are commands, ready to run.
+# FINDING under it, and only you can answer it. TIDY opens one this tool has
+# already answered and is offering to write; TIDY-ALL applies every one of
+# them and removes nothing. A FINDING names a path and the first and last line
+# of one comment, which may span several, and the column when the comment does
+# not open its line. `-` is what is there now, `+` what would replace it, `=`
+# the code the comment is about. KEEP names a file and `|` the setting that
+# would stop the question being asked. BROKEN is a file that did not parse.
+# The argv lines are commands, ready to run.
 
 DECIDE make it a documentation comment | 2 comments
 FINDING src/budget.rs:3-4

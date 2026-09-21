@@ -61,7 +61,7 @@ Every edit of a run is prepared first and committed as one transaction, so an in
 | Code | Meaning |
 | --- | --- |
 | `0` | Nothing removable was found, and every requested change was applied. |
-| `1` | Removable comments were reported, or a diff was printed. |
+| `1` | Removable comments were reported, a diff was printed, `--tidy` left a removal for you, or a staged fix rewrote the index. |
 | `2` | An invalid source, configuration, plugin, or I/O failure. |
 
 That is why `ocomment check` works as a CI gate on its own, and why `1` from `diff` is not an error: it means the patch is not empty.
@@ -107,9 +107,11 @@ ocomment check --explain
 ## Put it in the loop
 
 ```sh
-ocomment init lefthook --fix
+ocomment init lefthook --tidy
 lefthook install
 ```
 
-The generated hook runs `ocomment check --staged`, which judges the bytes the commit will actually carry rather than the working tree — the distinction that matters for a partially staged file.
+The generated hook runs `ocomment fix --tidy --staged`, which judges the bytes the commit will actually carry rather than the working tree — the distinction that matters for a partially staged file.
+`--tidy` writes the half a machine can settle and leaves every removal reported and unapplied, so nothing is deleted on your behalf; the run exits 1 when it rewrote the index, which stops the commit long enough for you to look at what changed.
+Write `ocomment init lefthook` for a hook that only reports, or `--fix` for one that applies the removals too.
 [CI and hooks](ci.md) covers the pre-commit manifest, the composite GitHub Action, and SARIF upload to code scanning; [Editors and LSP](editors.md) covers seeing the same diagnostics as you type.

@@ -142,11 +142,14 @@ It launches this binary, so a local extension build still needs `ocomment` insta
 `ocomment fix --staged` reads and rewrites Git index blobs, then maps only those edits to the working tree when the mapping is unique.
 It never stages unrelated working-tree changes.
 Use `--index-only` when a working-tree mapping is ambiguous.
+A staged run that rewrote the index exits 1: the bytes the commit will carry have stopped being the ones that were staged, and the hook that called it has no other way to find that out.
 
 ```sh
-ocomment init lefthook --fix
+ocomment init lefthook --tidy
 lefthook install
 ```
+
+`--tidy` is the hook worth having on every commit: it writes what the style rules settle and leaves every removal to you.
 
 The generated hook deliberately does not use Lefthook `stage_fixed`, because that setting would add the complete working-tree file and destroy partial staging.
 

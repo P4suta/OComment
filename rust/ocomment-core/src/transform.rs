@@ -218,6 +218,40 @@ pub fn plan_report(
     layout: Layout,
     force_invalid: bool,
 ) -> TransformPlan {
+    plan_edits(source, report, force_invalid, Edits::All(layout))
+}
+
+/// Plan the edits the style rules called for, and none of the removals.
+///
+/// The other axis' verdicts are still in the returned report, so a caller that wants to show them has them; what is missing is any edit that would act on one.
+/// Applying this plan cannot take a comment away.
+///
+/// This is the half of the work a machine can finish on its own.
+/// A reflow is decided from the bytes and verified against the checker that asked for it, while a removal is a judgement about whether a sentence is worth keeping — which is why the two travel together in a report and separately in a plan.
+pub fn plan_rewrites(
+    source: &[u8],
+    report: crate::ScanReport,
+    force_invalid: bool,
+) -> TransformPlan {
+    plan_edits(source, report, force_invalid, Edits::Rewrites)
+}
+
+/// Which of the two axes' verdicts a plan turns into edits.
+#[derive(Clone, Copy)]
+enum Edits {
+    /// Both.
+    /// [`Layout`] rides on this variant rather than beside it because it describes what a removal leaves behind, and the other variant has no removals for it to describe.
+    All(Layout),
+    /// The style rules alone.
+    Rewrites,
+}
+
+fn plan_edits(
+    source: &[u8],
+    report: crate::ScanReport,
+    force_invalid: bool,
+    plan: Edits,
+) -> TransformPlan {
     let edits = if report.valid || force_invalid {
         /* NOTE: A forced run is a run over a file the scanner could not finish,
          * so the comments it reported are not all worth the same.
@@ -234,14 +268,19 @@ pub fn plan_report(
                     .collect(),
             )
         };
-        /* NOTE: The one hole whose own bytes carry meaning, so every layout has to be told where not to leave one.
-         * `compact` takes the line already;
-         * what it does not know on its own is how far past the line to go under a `|+` body. */
-        let swallow = lines_a_removal_must_swallow(source, report.language, &considered);
-        let mut edits = match layout {
-            Layout::Lines => line_edits(source, &considered, &swallow),
-            Layout::Columns => column_edits(source, &considered, &swallow),
-            Layout::Compact => compact_edits(source, &considered, &swallow),
+        let mut edits = match plan {
+            Edits::All(layout) => {
+                /* NOTE: The one hole whose own bytes carry meaning, so every layout has to be told where not to leave one.
+                 * `compact` takes the line already;
+                 * what it does not know on its own is how far past the line to go under a `|+` body. */
+                let swallow = lines_a_removal_must_swallow(source, report.language, &considered);
+                match layout {
+                    Layout::Lines => line_edits(source, &considered, &swallow),
+                    Layout::Columns => column_edits(source, &considered, &swallow),
+                    Layout::Compact => compact_edits(source, &considered, &swallow),
+                }
+            }
+            Edits::Rewrites => considered.iter().filter_map(rewrite_edit).collect(),
         };
         /* NOTE: A run's edit cannot collide with a comment's.
          * A run is only recorded over comments the policy kept and no other rule touched, so the layouts above have nothing to say about any of them, and the two sets are disjoint by construction rather than by a check here. */

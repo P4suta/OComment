@@ -397,6 +397,7 @@ complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l summary -d 'Al
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l staged -d 'Read and update Git index blobs rather than treating the working tree as the source'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l index-only -d 'With `--staged`, do not attempt a uniquely mappable working-tree update'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l dry-run -d 'Print the patch `fix` would apply and write nothing'
+complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l tidy -d 'Apply what the style rules rewrote and leave every removal to you'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -s i -l interactive -d 'Ask about each comment in turn and remove only the accepted ones'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l include-generated -d 'Scan files another tool writes: lock files, recorded seeds, generated output'
 complete -c ocomment -n "__fish_ocomment_using_subcommand fix" -l force-invalid -d 'Edit a file that failed to scan, outside the bytes the failure covers. What the scanner calls a comment inside them is a guess: the code under an unterminated block opener is reported as part of it and is not a comment'
@@ -994,6 +995,7 @@ always\t''
 never\t''"
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -s j -l jobs -d 'How many threads the run uses to walk, read and scan; 0 chooses one per core' -r
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l summary -d 'Also write the end-of-run counts to this file, as one JSON object' -r -F
+complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l tidy -d 'For the Lefthook hook, run `fix --tidy` instead of `check`'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l fix -d 'For the Lefthook hook, run `fix` instead of `check`'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l force -d 'Replace the file if it already exists'
 complete -c ocomment -n "__fish_ocomment_using_subcommand init" -l stdout -d 'Print the template to standard output and write no file'

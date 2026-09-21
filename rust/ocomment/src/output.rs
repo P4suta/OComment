@@ -60,8 +60,51 @@ impl OutputFormat {
 pub enum Operation {
     Check,
     Scan,
-    Diff,
-    Fix,
+    /// The patch a writing run would apply, carrying which half it would apply.
+    Diff(Writes),
+    /// A run that writes, carrying which half of the report it writes.
+    ///
+    /// The half is inside the variant rather than beside it so that the places that asked `== Operation::Fix` have to be read again.
+    /// Most of them mean "this run writes" and a few mean "this run removes", and the two were the same question until a tidying run existed; a new variant beside `Fix` would have left every one of them answering the old one.
+    Fix(Writes),
+}
+
+/// Which of the two axes a writing run puts on the disk.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Writes {
+    /// Every edit the report called for, removals included.
+    Everything,
+    /// What the style rules rewrote, and no removal.
+    /// The removals are still reported and still decide the exit code; they simply do not reach the file.
+    RewritesOnly,
+}
+
+impl Operation {
+    /// Whether this run puts bytes on the disk at all.
+    #[must_use]
+    pub const fn writes(self) -> bool {
+        matches!(self, Self::Fix(_))
+    }
+
+    /// Whether this run is one that takes comments away.
+    ///
+    /// Separate from [`Self::writes`] because a tidying run does the first and not the second, and the reports differ in every word that names what happened.
+    #[must_use]
+    pub const fn removes(self) -> bool {
+        matches!(
+            self,
+            Self::Fix(Writes::Everything) | Self::Diff(Writes::Everything)
+        )
+    }
+
+    /// Which half of the report this run acts on, for the two that act on one.
+    #[must_use]
+    pub const fn half(self) -> Option<Writes> {
+        match self {
+            Self::Diff(writes) | Self::Fix(writes) => Some(writes),
+            Self::Check | Self::Scan => None,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -281,7 +324,7 @@ impl Summary {
                 if !file.result.report.valid {
                     summary.forced_files += 1;
                 }
-                if operation == Operation::Fix {
+                if operation.removes() {
                     summary.comments_removed += removed_count(file);
                 }
             }
@@ -345,6 +388,35 @@ fn rewritable_paragraphs(file: &ProcessedFile) -> usize {
 /// Everything this run would rewrite rather than remove.
 fn rewritable_count(file: &ProcessedFile) -> usize {
     rewritable_comments(file) + rewritable_paragraphs(file)
+}
+
+/// Whether a paragraph rule's verdict covers this comment.
+///
+/// A [`ProseRun`] spans the comments it reflows and records nothing on any of them, so a caller asking a comment what happened to it would be told "nothing" about a line the run is about to rewrite.
+fn covered_by_a_run(report: &ScanReport, comment: &Comment) -> bool {
+    report
+        .runs
+        .iter()
+        .any(|run| run.span.start <= comment.span.start && comment.span.end <= run.span.end)
+}
+
+/// How many of this file's comments and paragraphs a tidying run actually rewrote.
+///
+/// [`rewritable_count`] with the establishment filter [`removed_count`] carries, and for the same reason: a scan that failed part-way leaves the rest of the file unplanned,
+/// and a count that ignored that would report rewrites that did not happen.
+fn rewritten_count(file: &ProcessedFile) -> usize {
+    let report = &file.result.report;
+    let comments = report
+        .comments
+        .iter()
+        .filter(|comment| comment.action() == Action::Rewrite && report.established(comment.span))
+        .count();
+    let paragraphs = report
+        .runs
+        .iter()
+        .filter(|run| report.established(run.span))
+        .count();
+    comments + paragraphs
 }
 
 /// How many comments a `fix` over this file actually took out.
@@ -787,6 +859,9 @@ struct JsonReport<'a> {
 #[derive(Serialize)]
 struct JsonRun<'a> {
     span: ByteSpan,
+    /* NOTE: Flattened, as it is on a comment and on a diagnostic.
+     * This was the one place in the format that nested it, which left a caller reading positions one way for two thirds of a report and another way for the rest. */
+    #[serde(flatten)]
     position: JsonPosition,
     origin: ProseOrigin,
     rule: StyleRule,
@@ -1589,28 +1664,84 @@ fn render_fixed(
         color("\x1b[1m", paint),
         color("\x1b[0m", paint),
     );
-    let (green, blue) = (
+    let (green, blue, yellow) = (
         color("\x1b[38;5;114m", paint),
         color("\x1b[38;5;75m", paint),
+        color("\x1b[38;5;179m", paint),
     );
-    let removed: usize = files.iter().map(removed_count).sum();
+    let summary = Summary::compute(files, skipped, options.operation);
     let changed = files.iter().filter(|file| file.result.changed()).count();
+    /* NOTE: The headline names what the run did, in the words for what it did.
+     * A tidying run took nothing away, and a line reading "removed" over one would be describing a different run than the one that just finished. */
+    let (headline, preposition) = if options.operation.removes() {
+        (
+            format!(
+                "{} removed",
+                comments(files.iter().map(removed_count).sum(), "")
+            ),
+            "from",
+        )
+    } else {
+        (
+            format!(
+                "{} rewritten",
+                plural(
+                    files.iter().map(rewritten_count).sum(),
+                    summary.rewritten_noun()
+                )
+            ),
+            "in",
+        )
+    };
     wrote(writeln!(output))?;
     wrote(writeln!(
         output,
-        "  {green}OK{reset}  {bold}{} removed{reset}{dim} from {} · {}{reset}",
-        comments(removed, ""),
+        "  {green}OK{reset}  {bold}{headline}{reset}{dim} {preposition} {} · {}{reset}",
         plural(changed, "file"),
         scanned_clause(files.len(), skipped.len()),
     ))?;
+    /* NOTE: What a tidying run was told not to touch, listed rather than counted.
+     * The run exits 1 for these, and a reader looking at why has to be able to see which comments they were without running a second command. */
+    if !options.operation.removes() {
+        let left: Vec<(&ProcessedFile, &Comment)> = files
+            .iter()
+            .flat_map(|file| {
+                file.result
+                    .report
+                    .comments
+                    .iter()
+                    .filter(|comment| comment.action().removes())
+                    .map(move |comment| (file, comment))
+            })
+            .collect();
+        if !left.is_empty() {
+            wrote(writeln!(output))?;
+            wrote(writeln!(
+                output,
+                "  {bold}{yellow}DECIDE{reset}  {}{dim}, left for you{reset}",
+                comments(left.len(), "")
+            ))?;
+            for (file, comment) in left {
+                let index = LineIndex::new(&file.source);
+                let (line, _) = index.line_column(comment.span.start);
+                wrote(writeln!(
+                    output,
+                    "    {blue}{}:{line}{reset}  {dim}{}{reset}",
+                    display_path(&file.path, options.presentation.hyperlinks),
+                    preview(&file.source, comment.span, PREVIEW_COLUMNS)
+                ))?;
+            }
+        }
+    }
+    /* NOTE: A comment a run rewrote is not one it kept, and the paragraph rules record their verdict beside the comments rather than on them -- so "untouched" has to ask the runs too, or every reflowed line would be listed here as one nothing happened to. */
     let kept: Vec<(&ProcessedFile, &Comment)> = files
         .iter()
         .flat_map(|file| {
-            file.result
-                .report
+            let report = &file.result.report;
+            report
                 .comments
                 .iter()
-                .filter(|comment| !reported(comment))
+                .filter(|comment| !reported(comment) && !covered_by_a_run(report, comment))
                 .map(move |comment| (file, comment))
         })
         .collect();
@@ -1645,10 +1776,10 @@ fn render_review(
 ) -> Result<()> {
     /* NOTE: `diff` writes a patch, and a patch is the product rather than a report about one: a reader pipes it into `git apply`, and anything else on that stream is corruption.
      * There is no decision view of a patch, so this is the one operation where the two person-facing formats are the same bytes. */
-    if options.operation == Operation::Diff {
+    if matches!(options.operation, Operation::Diff(_)) {
         return render_human(output, files, skipped, options, explanations);
     }
-    if options.operation == Operation::Fix && options.applied {
+    if options.operation.writes() && options.applied {
         /* NOTE: After a fix the decisions are answered and the comments are gone, so asking for them again would be a report about a file that no longer holds them.
          * What a reader has not seen is the other half. */
         return render_fixed(output, files, skipped, options);
@@ -1891,7 +2022,7 @@ fn render_review(
             ))?;
         }
     }
-    if removable > 0 && options.operation != Operation::Fix {
+    if removable > 0 && !options.operation.removes() {
         wrote(writeln!(output))?;
         wrote(writeln!(output, "  {dim}{}{reset}", "─".repeat(70)))?;
         /* NOTE: Where to start, before what to run.
@@ -1921,7 +2052,7 @@ fn render_human(
     let operation = options.operation;
     let presentation = options.presentation;
     for file in files {
-        if operation == Operation::Diff && file.result.changed() {
+        if matches!(operation, Operation::Diff(_)) && file.result.changed() {
             /* NOTE: The patch is the product of `diff`, so `-q` keeps it and drops only the summary that follows on standard error. */
             wrote(output.write_all(&unified_diff(
                 &file.path,
@@ -1932,12 +2063,12 @@ fn render_human(
         }
         let reports_comments = match operation {
             Operation::Scan => !file.result.report.comments.is_empty(),
-            Operation::Fix => false,
+            Operation::Fix(_) => false,
             // NOTE: The findings are the product of `check`, as the patch is of `diff`.
-            Operation::Check | Operation::Diff if options.explain => {
+            Operation::Check | Operation::Diff(_) if options.explain => {
                 !file.result.report.comments.is_empty()
             }
-            Operation::Check | Operation::Diff => {
+            Operation::Check | Operation::Diff(_) => {
                 file.result.report.comments.iter().any(reported)
                     || !file.result.report.runs.is_empty()
             }
@@ -1985,13 +2116,19 @@ fn render_human(
                 ))?;
                 write_explanation(output, file, comment, explainer, options)?;
             }
-        } else if operation == Operation::Fix {
+        } else if operation.writes() {
             if options.applied && file.result.changed() {
+                /* NOTE: A tidying run took nothing away, so it does not say it did.
+                 * The line names what reached the file, and for that run what reached it was the rewrites. */
+                let done = if operation.removes() {
+                    format!("removed {}", comments(removed_count(file), ""))
+                } else {
+                    format!("rewrote {}", comments(rewritten_count(file), ""))
+                };
                 wrote(writeln!(
                     output,
-                    "fixed {}: removed {}",
+                    "fixed {}: {done}",
                     display_path(&file.path, presentation.hyperlinks),
-                    comments(removed_count(file), "")
                 ))?;
             }
         } else {
@@ -2072,7 +2209,7 @@ fn write_commentary(
     /* NOTE: `diff` keeps standard output for the patch alone, so the skips it met are left to standard error.
      * `fix --dry-run` is that same `diff` speaking for the `fix` it stands in for: a skipped path can be the whole answer to the run, so the preview still owes the reader the reason — but beside the summary that counts it, because what the preview promises on standard output is a patch that has to survive being piped into `git apply`.
      * A plain `fix` writes no patch and keeps its skips there. */
-    if operation != Operation::Diff {
+    if !matches!(operation, Operation::Diff(_)) {
         for line in &skips {
             wrote(writeln!(output, "{line}"))?;
         }
@@ -2081,7 +2218,7 @@ fn write_commentary(
     finish(output)?;
     let stderr = io::stderr();
     let mut report = stderr.lock();
-    if operation == Operation::Diff && options.dry_run {
+    if matches!(operation, Operation::Diff(_)) && options.dry_run {
         for line in &skips {
             note(&mut report, options.verbosity, Detail::Normal, line)?;
         }
@@ -2297,7 +2434,7 @@ fn concentration(files: &[ProcessedFile], options: &RenderOptions) -> Vec<String
         .filter(|(slot, _)| kinds[*slot] > 0)
         .map(|(_, kind)| kind)
         .collect();
-    if options.operation != Operation::Fix
+    if !options.operation.removes()
         && let Some(advice) = advice_for(&present, options.policy)
     {
         lines.push(advice);
@@ -2354,9 +2491,11 @@ fn summary_report(summary: &Summary, options: &RenderOptions, folded: bool) -> S
 fn nothing_to(options: &RenderOptions) -> &'static str {
     match options.operation {
         Operation::Check => "check",
-        Operation::Fix => "fix",
-        Operation::Diff if options.dry_run => "fix",
-        Operation::Diff => "diff",
+        Operation::Fix(Writes::Everything) => "fix",
+        Operation::Fix(Writes::RewritesOnly) => "tidy",
+        Operation::Diff(Writes::Everything) if options.dry_run => "fix",
+        Operation::Diff(Writes::RewritesOnly) if options.dry_run => "tidy",
+        Operation::Diff(_) => "diff",
         Operation::Scan => "scan",
     }
 }
@@ -2404,7 +2543,7 @@ fn summary_line(summary: &Summary, options: &RenderOptions) -> String {
     };
     match options.operation {
         /* NOTE: `fix --dry-run` is the diff of a fix: it counts what a real run would take out and points back at the run that would write it. */
-        Operation::Diff if options.dry_run => {
+        Operation::Diff(_) if options.dry_run => {
             if summary.findings() == 0 {
                 return format!("Nothing to fix in {scanned}.");
             }
@@ -2419,11 +2558,11 @@ fn summary_line(summary: &Summary, options: &RenderOptions) -> String {
                 comments(summary.findings(), ""),
             )
         }
-        Operation::Check | Operation::Diff => {
+        Operation::Check | Operation::Diff(_) => {
             if summary.findings() == 0 {
                 return format!("No removable comments in {scanned}.");
             }
-            let next = if options.operation == Operation::Diff {
+            let next = if matches!(options.operation, Operation::Diff(_)) {
                 "apply the patch"
             } else if summary.removable_comments == 0 {
                 "apply the rewrites"
@@ -2434,26 +2573,40 @@ fn summary_line(summary: &Summary, options: &RenderOptions) -> String {
             };
             format!("{} Run `ocomment fix` to {next}.", found())
         }
-        Operation::Fix => {
+        Operation::Fix(writes) => {
             if options.applied && summary.files_changed > 0 {
                 /* NOTE: The evidence, not just the count -- what makes a tool safe to wire into a hook is being able to say what was checked.
                  * Which is why it cannot be printed unconditionally: a file that did not scan produces a result that does not scan,
                  * so a forced write skips that check, and claiming it anyway would put the strongest sentence here prints on the one run that did not earn it. */
-                let head = format!(
-                    "Removed {} in {} ({scanned} scanned)",
-                    comments(summary.comments_removed, ""),
-                    plural(summary.files_changed, "file")
-                );
+                let head = match writes {
+                    Writes::Everything => format!(
+                        "Removed {} in {} ({scanned} scanned)",
+                        comments(summary.comments_removed, ""),
+                        plural(summary.files_changed, "file")
+                    ),
+                    Writes::RewritesOnly => format!(
+                        "Rewrote {} in {} ({scanned} scanned)",
+                        plural(summary.rewritten(), summary.rewritten_noun()),
+                        plural(summary.files_changed, "file")
+                    ),
+                };
                 if summary.forced_files > 0 {
-                    format!(
+                    return format!(
                         "{head}; {} written from a scan that failed, edited only outside what the failure covers and re-scanned by nothing.",
                         plural(summary.forced_files, "file")
-                    )
-                } else {
-                    format!("{head}; each re-scanned clean and idempotent before writing.")
+                    );
                 }
+                /* NOTE: A tidying run ends with the half it was told not to touch still in the files.
+                 * Saying only what it wrote would read as "done" over a tree that still has the decisions in it, and the run exits 1 for exactly those. */
+                if writes == Writes::RewritesOnly && summary.removable_comments > 0 {
+                    return format!(
+                        "{head}; {} left to decide on. Run `ocomment check` to see them.",
+                        comments(summary.removable_comments, "removable")
+                    );
+                }
+                format!("{head}; each re-scanned clean and idempotent before writing.")
             } else if summary.findings() == 0 {
-                format!("Nothing to fix in {scanned}.")
+                format!("Nothing to {} in {scanned}.", nothing_to(options))
             } else {
                 /* NOTE: The transaction never reached the disk; report what is still there rather than claiming a removal. */
                 found()
@@ -2497,7 +2650,7 @@ fn skip_clause(summary: &Summary, folded: bool) -> String {
 
 /// The `-v` breakdown of what each comment kind contributed.
 fn kind_breakdown(files: &[ProcessedFile], options: &RenderOptions) -> Option<String> {
-    let verb = if options.operation == Operation::Fix && options.applied {
+    let verb = if options.operation.removes() && options.applied {
         "removed"
     } else {
         "removable"
@@ -3319,8 +3472,8 @@ fn annotation_level(options: &RenderOptions) -> &'static str {
         return level.as_str();
     }
     match options.operation {
-        Operation::Check | Operation::Diff => "error",
-        Operation::Scan | Operation::Fix => "notice",
+        Operation::Check | Operation::Diff(_) => "error",
+        Operation::Scan | Operation::Fix(_) => "notice",
     }
 }
 
@@ -3555,6 +3708,25 @@ fn github_escape(text: &str) -> String {
 
 pub fn changed(files: &[ProcessedFile]) -> bool {
     files.iter().any(|file| file.result.changed())
+}
+
+/// The code a finished run answers with.
+///
+/// One function rather than the same `match` at each of the two places a run can finish -- over a working tree and over a Git index -- because they are one contract that had grown the same shape twice.
+/// Exit 2 is decided before this: a run that could not do its job at all does not reach here.
+///
+/// The last two clauses are the ones a commit hook depends on.
+/// A tidying run wrote one half of what it found and left the other where it was, and the half it left is a finding like any other.
+/// A staged write changed the bytes the commit will carry, so the run that did it cannot also report that there was nothing to see: what the author typed and what Git is about to record have stopped being the same thing, and the exit code is the only place that can say so.
+#[must_use]
+pub fn exit_code(operation: Operation, files: &[ProcessedFile], rewrote_the_index: bool) -> u8 {
+    let left_to_decide = files.iter().any(|file| removable_count(file) > 0);
+    match operation {
+        Operation::Check | Operation::Diff(_) if changed(files) => 1,
+        Operation::Fix(Writes::RewritesOnly) if left_to_decide => 1,
+        Operation::Fix(_) if rewrote_the_index => 1,
+        Operation::Check | Operation::Scan | Operation::Diff(_) | Operation::Fix(_) => 0,
+    }
 }
 pub fn invalid(files: &[ProcessedFile]) -> bool {
     files.iter().any(|file| !file.result.report.valid)
@@ -4216,7 +4388,14 @@ fn write_agent(
     subject: Subject,
 ) -> Result<()> {
     let groups = crate::advice::plan(files, options.policy);
-    let removable: usize = groups.iter().map(crate::advice::Group::comments).sum();
+    /* NOTE: Two numbers, because they ask two different things of the reader.
+     * A removal is a judgement nobody but them can make; a rewrite is one this tool has already made and is offering to apply, and counting the two together told an agent it had twice as much to think about as it did. */
+    let (tidy, removable): (Vec<_>, Vec<_>) = groups
+        .iter()
+        .partition(|group| matches!(group.decision, crate::advice::Decision::Restyle { .. }));
+    let to_tidy: usize = tidy.iter().map(|group| group.comments()).sum();
+    let removable: usize = removable.iter().map(|group| group.comments()).sum();
+    let findings = to_tidy + removable;
     let broken: Vec<String> = files
         .iter()
         .flat_map(|file| {
@@ -4237,7 +4416,7 @@ fn write_agent(
         })
         .collect();
     let unreadable: Vec<&SkippedFile> = skipped.iter().filter(|item| item.error).collect();
-    if removable == 0 && broken.is_empty() && unreadable.is_empty() {
+    if findings == 0 && broken.is_empty() && unreadable.is_empty() {
         /* NOTE: Silence is the pass, and a caller embedding this in a hook decision reads emptiness rather than parsing a sentence to find out there was nothing to say. */
         return Ok(());
     }
@@ -4258,9 +4437,15 @@ fn write_agent(
             plural(skipped.len(), "file")
         )
     };
+    /* NOTE: The tidy half is named only when there is one, so a report with nothing but removals reads exactly as it did. */
+    let tidy_clause = if to_tidy == 0 {
+        String::new()
+    } else {
+        format!(" and {} this tool can write for you", comments(to_tidy, ""))
+    };
     wrote(writeln!(
         output,
-        "# ocomment: {} to answer for in {} of {} scanned{unread}, policy {}.",
+        "# ocomment: {} to answer for{tidy_clause} in {} of {} scanned{unread}, policy {}.",
         comments(removable, ""),
         touched.len(),
         plural(files.len(), "file"),
@@ -4271,10 +4456,17 @@ fn write_agent(
     }
 
     for group in &groups {
+        /* NOTE: The same split the review format makes, in the marker rather than in colour.
+         * A reader told to DECIDE about a reflow would be asked for a judgement that was already made, and the obvious way to answer it is to delete the comment. */
+        let marker = if matches!(group.decision, crate::advice::Decision::Restyle { .. }) {
+            "TIDY"
+        } else {
+            "DECIDE"
+        };
         wrote(writeln!(output))?;
         wrote(writeln!(
             output,
-            "DECIDE {} | {}",
+            "{marker} {} | {}",
             group.decision.instruction(),
             comments(group.comments(), "")
         ))?;
@@ -4329,14 +4521,26 @@ fn write_agent(
             "# these bytes are not on disk yet: write it without them."
         ))?;
     }
-    if on_disk && options.operation != Operation::Fix {
+    if on_disk && !options.operation.removes() {
         wrote(writeln!(output, "RECHECK {}", argv(&["ocomment", "check"])))?;
-        wrote(writeln!(
-            output,
-            "REMOVE-ALL {} removes {}, including any above that were worth keeping",
-            argv(&["ocomment", "fix"]),
-            comments(removable, "")
-        ))?;
+        /* NOTE: Offered before the blunt one, and only when there is something for it to do.
+         * This is the command that applies every TIDY above and touches no DECIDE, which makes it the one an agent can run without reading the report first. */
+        if to_tidy > 0 {
+            wrote(writeln!(
+                output,
+                "TIDY-ALL {} writes {} and removes nothing",
+                argv(&["ocomment", "fix", "--tidy"]),
+                comments(to_tidy, "")
+            ))?;
+        }
+        if removable > 0 {
+            wrote(writeln!(
+                output,
+                "REMOVE-ALL {} removes {}, including any above that were worth keeping",
+                argv(&["ocomment", "fix"]),
+                comments(removable, "")
+            ))?;
+        }
     }
     Ok(())
 }
@@ -4345,14 +4549,16 @@ fn write_agent(
 ///
 /// A machine format that needs its schema fetched from somewhere else is a format its reader has to go and learn before it can act, and the reader this is for is one that would rather spend that round trip on the work.
 /// Six lines of preamble buy every one of them back.
-const AGENT_SCHEMA: [&str; 7] = [
+const AGENT_SCHEMA: [&str; 9] = [
     "Every line starts with a marker. DECIDE opens one question, asked of each",
-    "FINDING under it. A FINDING names a path and the first and last line of one",
-    "comment, which may span several, and the column when the comment does not",
-    "open its line. `-` is what is there now, `+` what would replace it, `=` the",
-    "code the comment is about. KEEP names a file and `|` the setting that would",
-    "stop the question being asked. BROKEN is a file that did not parse. The",
-    "argv lines are commands, ready to run.",
+    "FINDING under it, and only you can answer it. TIDY opens one this tool has",
+    "already answered and is offering to write; TIDY-ALL applies every one of",
+    "them and removes nothing. A FINDING names a path and the first and last line",
+    "of one comment, which may span several, and the column when the comment does",
+    "not open its line. `-` is what is there now, `+` what would replace it, `=`",
+    "the code the comment is about. KEEP names a file and `|` the setting that",
+    "would stop the question being asked. BROKEN is a file that did not parse.",
+    "The argv lines are commands, ready to run.",
 ];
 
 /// A command as the argv a caller can run without retyping it.
@@ -4400,8 +4606,9 @@ pub fn write_summary(
         "operation": match operation {
             Operation::Check => "check",
             Operation::Scan => "scan",
-            Operation::Diff => "diff",
-            Operation::Fix => "fix",
+            Operation::Diff(_) => "diff",
+            Operation::Fix(Writes::Everything) => "fix",
+            Operation::Fix(Writes::RewritesOnly) => "tidy",
         },
         "files_scanned": summary.files_scanned,
         "files_with_findings": summary.files_with_findings,

@@ -78,8 +78,9 @@ See [Why was this comment kept?](why-kept.md).
 ## What do the exit codes mean?
 
 `0` clean, `1` findings, `2` failure.
-Specifically: `0` when nothing removable was found and every requested change was applied, `1` when removable comments were reported or a diff was printed, and `2` for an invalid source,
-configuration, plugin, or I/O failure.
+Specifically: `0` when nothing removable was found and every requested change was applied, and `2` for an invalid source, configuration, plugin, or I/O failure.
+`1` covers the four ways a run ends with something outstanding: removable comments were reported, a diff was printed, `fix --tidy` left a removal for whoever is reading, or a staged fix rewrote the index.
+The last is why a hook can trust it — the bytes the commit will carry are no longer the bytes their author staged, and the exit code is where that is said.
 
 `1` from `diff` or `fix --dry-run` means the patch is not empty, which is why a CI gate can be `ocomment check` with nothing around it, and why a script that tests `$? -ne 0` will misread a non-empty diff as an error.
 

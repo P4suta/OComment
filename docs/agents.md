@@ -32,7 +32,10 @@ Telling a reader to delete a comment that had to move is wrong advice however co
 A report that lists three comments and never says what would have been acceptable teaches nothing: the reader fixes those three and writes the fourth the same way.
 This line is written only when every file in the report was judged by the same rules — a `[[overrides]]` table covering part of the tree means there is no single sentence to write, and none is written rather than one that is true of only some of the findings.
 
-**The way through.** `ocomment fix` when the bytes are on the disk, and a plain instruction when they are not.
+**The way through**, split by who has to answer.
+`TIDY-ALL` runs `ocomment fix --tidy`, which writes every rewrite in the report and takes no comment away; it is safe to run without reading the findings first, because nothing it does is a judgement.
+`REMOVE-ALL` runs `ocomment fix`, which also applies every removal above — including the ones that were worth keeping, which is why its line says how many.
+Both are named only when the bytes are on the disk; a proposal a hook is judging gets a plain instruction instead.
 
 One verb is deliberately not a single action:
 

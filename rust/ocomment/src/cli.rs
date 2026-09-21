@@ -3,7 +3,7 @@ use crate::{
     config, coverage, deadline, files, git, hook, interactive, lsp,
     output::{
         self, AnnotationLevel, Detail, Explanations, FileExplanation, Operation, OutputFormat,
-        Presentation, ProcessedFile, ProcessedResult, RenderOptions, Verbosity,
+        Presentation, ProcessedFile, ProcessedResult, RenderOptions, Verbosity, Writes,
     },
     plugin, ratchet, selftest, tags,
     trace::{TraceMode, trace_decisions, trace_discovery},
@@ -13,7 +13,7 @@ use anyhow::{Context, Result, bail, ensure};
 use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{Shell, generate};
 use ocomment_core::{
-    CommentKind, DeclarativeProfile, Dialect, Language, PreparedScanner, transform,
+    Action, CommentKind, DeclarativeProfile, Dialect, Language, PreparedScanner, transform,
 };
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -39,7 +39,8 @@ committed as one rollback-backed transaction.";
 const AFTER_LONG_HELP: &str = "\
 EXIT STATUS
   0  Nothing removable was found and every requested change was applied.
-  1  Removable comments were reported, or a diff was printed.
+  1  Removable comments were reported, a diff was printed, `--tidy` left a
+     removal for you, or a staged fix rewrote the index.
   2  Invalid source, configuration, plugin, or I/O failure.
 
 FILES
@@ -54,6 +55,8 @@ EXAMPLES
       Check the current directory and report removable comments.
   ocomment fix --policy all --layout compact src
       Remove every comment under src and close the gaps it leaves.
+  ocomment fix --tidy --staged
+      Reflow what the style rules decide and leave every removal to you.
   ocomment strip --language rust < before.rs > after.rs
       Strip one file from standard input to standard output.
 
@@ -68,7 +71,7 @@ const MAN_SECTIONS: &str = r#".SH EXIT STATUS
 Nothing removable was found and every requested change was applied.
 .TP
 .B 1
-Removable comments were reported, or a diff was printed.
+Removable comments were reported, a diff was printed, \fB--tidy\fR left a removal for you, or a staged fix rewrote the index.
 .TP
 .B 2
 Invalid source, configuration, plugin, or I/O failure.
@@ -428,6 +431,12 @@ struct FixArgs {
     /// Print the patch `fix` would apply and write nothing.
     #[arg(long)]
     dry_run: bool,
+    /// Apply what the style rules rewrote and leave every removal to you.
+    ///
+    /// The removals are still reported and the run still exits 1 for them; what changes is that none of them reaches the file.
+    /// This is the half a machine can finish on its own, which is what makes it the half a commit hook may run unattended.
+    #[arg(long, conflicts_with = "interactive")]
+    tidy: bool,
     /// Ask about each comment in turn and remove only the accepted ones.
     ///
     /// The index has no working-tree line to show a hunk from, `--dry-run` writes nothing whatever the answers were, and `-q` asks for a run with no commentary at all.
@@ -437,6 +446,15 @@ struct FixArgs {
 }
 
 impl FixArgs {
+    /// Which half of what the run found it is being asked to write.
+    const fn writes(&self) -> Writes {
+        if self.tidy {
+            Writes::RewritesOnly
+        } else {
+            Writes::Everything
+        }
+    }
+
     /// The same targets in the shape every other command hands to the run.
     fn target(self) -> TargetArgs {
         TargetArgs {
@@ -458,7 +476,15 @@ struct InitArgs {
     /// Which starter file to write.
     #[arg(value_enum, default_value_t)]
     kind: InitKind,
+    /// For the Lefthook hook, run `fix --tidy` instead of `check`.
+    ///
+    /// The hook writes what the style rules settle and leaves every removal reported and unapplied, which is the shape a gate on every commit wants.
+    #[arg(long, conflicts_with = "fix")]
+    tidy: bool,
     /// For the Lefthook hook, run `fix` instead of `check`.
+    ///
+    /// The removals too, including the comments above them that were worth keeping.
+    /// `--tidy` is the one that writes nothing a reader would have wanted back.
     #[arg(long)]
     fix: bool,
     /// Replace the file if it already exists.
@@ -609,7 +635,8 @@ pub fn run() -> Result<u8> {
         Some(Command::Check(args)) => run_target(Operation::Check, args, &common, RunFlags::NONE),
         /* NOTE: `--dry-run` runs the diff and reports it in fix vocabulary: the two commands must agree on the patch, so only the wording differs. */
         Some(Command::Fix(args)) if args.dry_run => {
-            run_target(Operation::Diff, args.target(), &common, RunFlags::DRY_RUN)
+            let operation = Operation::Diff(args.writes());
+            run_target(operation, args.target(), &common, RunFlags::DRY_RUN)
         }
         Some(Command::Fix(args)) if args.interactive => {
             /* NOTE: The prompt is prose on a terminal and the answers come back the same way; a machine format has nowhere to put either, so the combination is refused rather than one of the two flags being quietly dropped.
@@ -624,16 +651,22 @@ pub fn run() -> Result<u8> {
                 bail!("--interactive needs a terminal; run without -i or use `ocomment diff`");
             }
             run_target(
-                Operation::Fix,
+                Operation::Fix(args.writes()),
                 args.target(),
                 &common,
                 RunFlags::INTERACTIVE,
             )
         }
         Some(Command::Fix(args)) => {
-            run_target(Operation::Fix, args.target(), &common, RunFlags::NONE)
+            let operation = Operation::Fix(args.writes());
+            run_target(operation, args.target(), &common, RunFlags::NONE)
         }
-        Some(Command::Diff(args)) => run_target(Operation::Diff, args, &common, RunFlags::NONE),
+        Some(Command::Diff(args)) => run_target(
+            Operation::Diff(Writes::Everything),
+            args,
+            &common,
+            RunFlags::NONE,
+        ),
         Some(Command::Scan(args)) => run_target(Operation::Scan, args, &common, RunFlags::NONE),
         Some(Command::Strip) => run_strip(&common),
         Some(Command::Lsp) => lsp::run(common.config.as_deref()),
@@ -705,7 +738,7 @@ fn run_target(
     }
     let progress = progress_enabled(common);
     let staged = args.git.staged || resolved.config.git.staged;
-    if operation == Operation::Fix && !staged && args.paths.is_empty() {
+    if operation.writes() && !staged && args.paths.is_empty() {
         note_fix_scope(&resolved, common)?;
     }
     /* NOTE: `git` names a staged path relative to the repository root rather than to the working directory, so a staged run measures its paths against the root from there.
@@ -714,7 +747,7 @@ fn run_target(
         resolved.cwd = repository;
     }
     /* NOTE: `fix --dry-run` writes nothing, but it is still the command whose job is to rewrite files in place, and standard input cannot be rewritten. */
-    let rewrites = operation == Operation::Fix || flags.dry_run;
+    let rewrites = operation.writes() || flags.dry_run;
     let (paths, stdin) = target_paths(&args.paths, rewrites, staged)?;
     if staged {
         /* NOTE: A staged run reports index blobs through a path that carries no policy trace, so it says so rather than printing a listing with every explanation quietly missing. */
@@ -757,9 +790,9 @@ fn run_target(
     /* NOTE: And the agent format, whose per-finding verb is the rule that decided the comment: telling a reader to delete one that only had to move is wrong advice however correct the verdict was. */
     let needs_explanations =
         explain || trace_mode.is_on() || common.output.format == OutputFormat::Agent;
-    let materialize_output = operation == Operation::Fix
+    let materialize_output = operation.writes()
         || flags.interactive
-        || (operation == Operation::Diff && common.output.format.for_a_person());
+        || (matches!(operation, Operation::Diff(_)) && common.output.format.for_a_person());
     /* NOTE: Built only for a run that will print it.
      * It is one segment per unchanged run of bytes, which is the largest thing a report carries. */
     let materialize_source_map = common.output.source_map
@@ -834,12 +867,21 @@ fn run_target(
                 now,
             )?;
             let result = if needs_plan {
-                let plan = ocomment_core::plan_report(
-                    &file.source,
-                    report,
-                    options.layout,
-                    options.scan.force_invalid,
-                );
+                /* NOTE: A tidying run plans one axis and reports both.
+                 * The removals stay in the report so that the run still names them and still exits 1 for them; what they do not get is an edit. */
+                let plan = match operation.half() {
+                    Some(Writes::RewritesOnly) => ocomment_core::plan_rewrites(
+                        &file.source,
+                        report,
+                        options.scan.force_invalid,
+                    ),
+                    Some(Writes::Everything) | None => ocomment_core::plan_report(
+                        &file.source,
+                        report,
+                        options.layout,
+                        options.scan.force_invalid,
+                    ),
+                };
                 let result = ProcessedResult::plan(
                     &file.source,
                     plan,
@@ -849,12 +891,12 @@ fn run_target(
                 /* NOTE: Only a run that is going to write checks what it would write; `diff` and `check` show a person the same bytes.
                  * A file already reported broken is exempt and has to be, since its result cannot scan cleanly either.
                  * The flag is not the exemption: a valid file in a forced run is still checked. */
-                if operation == Operation::Fix
+                if operation.writes()
                     && result.changed()
                     && (result.report.valid || !options.scan.force_invalid)
                 {
                     let rescan = scan_bytes(result.output(), &file, scanner, &plugin_host)?;
-                    verify_rewrite(&file.path, &rescan)?;
+                    verify_rewrite(&file.path, &rescan, operation)?;
                 }
                 result
             } else {
@@ -903,7 +945,7 @@ fn run_target(
     if flags.interactive && may_fix {
         return run_interactive(&files, &discovery.skipped, invalid, presentation, verbosity);
     }
-    let applied = operation == Operation::Fix && may_fix;
+    let applied = operation.writes() && may_fix;
     if applied {
         let plans = files
             .iter()
@@ -988,10 +1030,8 @@ fn run_target(
         common.policy.deny_skipped.as_deref(),
         verbosity,
     )?;
-    match operation {
-        Operation::Check | Operation::Diff if output::changed(&files) => Ok(1),
-        Operation::Check | Operation::Scan | Operation::Diff | Operation::Fix => Ok(denied),
-    }
+    /* NOTE: A working-tree run rewrites files the author can still look at before committing them, so it has no index to have changed under anybody. */
+    Ok(output::exit_code(operation, &files, false).max(denied))
 }
 
 /// Re-scan what a rewrite produced, and refuse it if it is wrong.
@@ -1000,27 +1040,46 @@ fn run_target(
 /// It cannot be proved without a parser for every language -- which would cost the property that makes this one binary that runs anywhere -- but the failures that are actually reachable can be caught by asking the scanner about its own output:
 ///
 /// - the result still lexes, so a removal did not open or close a string;
-/// - nothing removable is left, so the rewrite reached a fixed point.
+/// - nothing the run planned for is left, so the rewrite reached a fixed point.
 ///
 /// Idempotence is the sharper of the two: it is what catches a removal that made a new comment token out of the bytes around the hole.
+/// Which verdicts count as "left" is the half of the report the run actually planned from.
+/// A tidying run leaves every removal where it found it and has to, so asking it for a report with none would fail every time it was asked to do exactly what it was told.
 ///
 /// This runs before anything reaches the disk, so a failure costs nothing.
 /// The transaction is still there for an I/O failure part-way through; this is for the failure a transaction cannot help with, which is having computed the wrong bytes in the first place.
-fn verify_rewrite(path: &std::path::Path, rewritten: &ocomment_core::ScanReport) -> Result<()> {
+fn verify_rewrite(
+    path: &std::path::Path,
+    rewritten: &ocomment_core::ScanReport,
+    operation: Operation,
+) -> Result<()> {
     let path = output::sanitize_path(&path.to_string_lossy());
     ensure!(
         rewritten.valid,
         "{path}: the rewrite does not scan cleanly, so nothing was written. \
          This is a defect in OComment; the file is unchanged."
     );
-    let left = rewritten
-        .comments
-        .iter()
-        .filter(|comment| comment.action().removes())
-        .count();
+    let (left, subject) = if operation.half() == Some(Writes::RewritesOnly) {
+        let comments = rewritten
+            .comments
+            .iter()
+            .filter(|comment| comment.action() == Action::Rewrite)
+            .count();
+        (
+            comments + rewritten.runs.len(),
+            "comment(s) left to rewrite",
+        )
+    } else {
+        let comments = rewritten
+            .comments
+            .iter()
+            .filter(|comment| comment.action().removes())
+            .count();
+        (comments, "removable comment(s)")
+    };
     ensure!(
         left == 0,
-        "{path}: the rewrite still holds {left} removable comment(s), so nothing \
+        "{path}: the rewrite still holds {left} {subject}, so nothing \
          was written. This is a defect in OComment; the file is unchanged."
     );
     Ok(())
@@ -1429,7 +1488,9 @@ fn run_init(args: InitArgs, verbosity: Verbosity) -> Result<u8> {
             "edit [policy] and run `ocomment check`",
         ),
         InitKind::Lefthook => {
-            let command = if args.fix {
+            let command = if args.tidy {
+                "ocomment fix --tidy --staged"
+            } else if args.fix {
                 "ocomment fix --staged"
             } else {
                 "ocomment check --staged"

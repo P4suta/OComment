@@ -7,6 +7,13 @@
   entry: ocomment check
   language: system
   types: [text]
+- id: ocomment-tidy
+  name: ocomment tidy
+  description: 'Reflow comment prose in pre-commit-selected text files and remove nothing; every removal is still reported, and pre-commit blocks the commit when a file changes so the rewrite can be reviewed and staged.'
+  entry: ocomment fix --tidy
+  language: system
+  types: [text]
+  require_serial: true
 - id: ocomment-fix
   name: ocomment fix
   description: 'Remove comments from pre-commit-selected text files in place; pre-commit blocks the commit when a file changes so the result can be reviewed and staged.'

@@ -204,6 +204,57 @@ fn check_diff_and_fix_follow_the_exit_contract() {
     );
 }
 
+/// The two ways a `fix` finishes with something still to answer for.
+///
+/// `--tidy` writes one half of what it found and leaves the other where it was; a staged run writes the bytes the commit is about to carry.
+/// Both exit 1.
+/// The first because the decisions are still in the file and nobody has made them, the second because what the author typed and what Git will record have stopped being the same thing.
+/// A hook that read 0 from either would commit straight past the thing it was installed to catch, which is the failure this contract exists to prevent.
+#[test]
+fn a_tidy_and_a_staged_write_both_exit_one() {
+    let directory = repository();
+    fs::write(
+        directory.path().join(".ocomment.toml"),
+        b"version = 1\n\n[policy]\nmode = \"conservative\"\n\n[policy.allow]\ntags = [\"NOTE\"]\ntrailing = false\n\n[style]\nwrap = \"sentence\"\n",
+    )
+    .unwrap();
+    let path = directory.path().join("sample.rs");
+    let source = b"// NOTE: A first sentence wrapped to a\n// NOTE: column. A second sentence.\nlet x = 1; // NOTE: beside the code\n";
+    fs::write(&path, source).unwrap();
+
+    let tidied = run(directory.path(), &["fix", "--tidy", "sample.rs"]);
+    assert_eq!(
+        tidied.status.code(),
+        Some(1),
+        "{}",
+        String::from_utf8_lossy(&tidied.stderr)
+    );
+    let after = fs::read(&path).unwrap();
+    assert_eq!(
+        after,
+        b"// NOTE: A first sentence wrapped to a column.\n// NOTE: A second sentence.\nlet x = 1; // NOTE: beside the code\n"
+    );
+
+    /* NOTE: Run again over what it just wrote.
+     * The paragraph is settled, the trailing comment is not, and the second run has to keep exiting 1 for the one it was told to leave -- an exit that only fired while there was writing to do would go quiet exactly when a hook stopped noticing. */
+    let again = run(directory.path(), &["fix", "--tidy", "sample.rs"]);
+    assert_eq!(again.status.code(), Some(1));
+    assert_eq!(fs::read(&path).unwrap(), after);
+
+    git(directory.path(), &["add", "."]);
+    let staged = run(directory.path(), &["fix", "--staged", "--index-only"]);
+    assert_eq!(
+        staged.status.code(),
+        Some(1),
+        "{}",
+        String::from_utf8_lossy(&staged.stderr)
+    );
+    assert_eq!(
+        git(directory.path(), &["show", ":sample.rs"]),
+        b"// NOTE: A first sentence wrapped to a column.\n// NOTE: A second sentence.\nlet x = 1; \n"
+    );
+}
+
 /// A patch is a byte transport, not a Unicode report.
 /// Both invalid source bytes and an OS-native file name must round-trip through Git unchanged.
 #[cfg(unix)]
@@ -1173,9 +1224,10 @@ fn staged_fix_does_not_stage_unrelated_working_tree_changes() {
     .unwrap();
 
     let output = run(directory.path(), &["fix", "--staged"]);
+    // NOTE: 1 because the index changed under the author -- see the exit contract test.
     assert_eq!(
         output.status.code(),
-        Some(0),
+        Some(1),
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
@@ -1232,7 +1284,7 @@ fn staged_runs_honour_the_files_exclude_globs() {
     let fixed = run(directory.path(), &["fix", "--staged"]);
     assert_eq!(
         fixed.status.code(),
-        Some(0),
+        Some(1),
         "{}",
         String::from_utf8_lossy(&fixed.stderr)
     );
@@ -1769,7 +1821,7 @@ fn staged_new_rename_delete_and_unusual_paths_are_handled_from_index_blobs() {
     let output = run(directory.path(), &["fix", "--staged", "--index-only"]);
     assert_eq!(
         output.status.code(),
-        Some(0),
+        Some(1),
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
@@ -1854,7 +1906,7 @@ fn ambiguous_staged_mapping_changes_nothing_and_suggests_index_only() {
     assert_eq!(fs::read(&path).unwrap(), working);
 
     let index_only = run(directory.path(), &["fix", "--staged", "--index-only"]);
-    assert_eq!(index_only.status.code(), Some(0));
+    assert_eq!(index_only.status.code(), Some(1));
     assert_eq!(
         git(directory.path(), &["show", ":ambiguous.rs"]),
         b"let base = 1;\nlet staged = 2; \n"

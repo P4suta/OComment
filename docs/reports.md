@@ -175,7 +175,7 @@ The one difference is that the answer is already computed: `new` carries the byt
 ```json
 {
   "decision": "wrap",
-  "instruction": "run `ocomment fix` and it is written for you",
+  "instruction": "run `ocomment fix --tidy` and it is written for you",
   "comments": 1,
   "findings": [
     {
@@ -196,7 +196,7 @@ The report itself carries them too, beside the comments rather than among them, 
 
 ```json
 { "runs": [ { "span": { "start": 26, "end": 92 },
-              "position": { "line": 3, "column": 5, "end_line": 3, "end_column": 36 },
+              "line": 3, "column": 5, "end_line": 3, "end_column": 36,
               "origin": "comments", "rule": "wrap",
               "replacement": "/// One sentence.\n    /// Another one." } ] }
 ```

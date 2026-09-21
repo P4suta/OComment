@@ -296,7 +296,8 @@ Output:
 
 EXIT STATUS
   0  Nothing removable was found and every requested change was applied.
-  1  Removable comments were reported, or a diff was printed.
+  1  Removable comments were reported, a diff was printed, `--tidy` left a
+     removal for you, or a staged fix rewrote the index.
   2  Invalid source, configuration, plugin, or I/O failure.
 
 FILES
@@ -311,6 +312,8 @@ EXAMPLES
       Check the current directory and report removable comments.
   ocomment fix --policy all --layout compact src
       Remove every comment under src and close the gaps it leaves.
+  ocomment fix --tidy --staged
+      Reflow what the style rules decide and leave every removal to you.
   ocomment strip --language rust < before.rs > after.rs
       Strip one file from standard input to standard output.
 
@@ -572,6 +575,11 @@ Options:
 
       --dry-run
           Print the patch `fix` would apply and write nothing
+
+      --tidy
+          Apply what the style rules rewrote and leave every removal to you.
+          
+          The removals are still reported and the run still exits 1 for them; what changes is that none of them reaches the file. This is the half a machine can finish on its own, which is what makes it the half a commit hook may run unattended.
 
   -i, --interactive
           Ask about each comment in turn and remove only the accepted ones.
@@ -1696,8 +1704,15 @@ Arguments:
           [possible values: config, lefthook]
 
 Options:
+      --tidy
+          For the Lefthook hook, run `fix --tidy` instead of `check`.
+          
+          The hook writes what the style rules settle and leaves every removal reported and unapplied, which is the shape a gate on every commit wants.
+
       --fix
-          For the Lefthook hook, run `fix` instead of `check`
+          For the Lefthook hook, run `fix` instead of `check`.
+          
+          The removals too, including the comments above them that were worth keeping. `--tidy` is the one that writes nothing a reader would have wanted back.
 
       --force
           Replace the file if it already exists

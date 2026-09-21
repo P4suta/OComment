@@ -374,16 +374,38 @@ def main() -> int:
     binary = args.binary.resolve()
     if not binary.is_file():
         parser.error(f"CLI binary does not exist: {binary}")
+    # NOTE: Two fixtures, because the report has two axes and a fixture that only reaches one leaves the other's half of the schema unchecked.
+    # NOTE: That is not hypothetical: every style rule shipped with `$defs.styleRule` undefined,
+    # NOTE: `rewrite` missing from the disposition list and `proseRun.position` absent under `additionalProperties: false`, and this file validated clean the whole time because nothing it ran ever produced a rewrite.
     with tempfile.TemporaryDirectory(prefix="ocomment-schema-") as raw:
-        fixture = pathlib.Path(raw) / "schema.rs"
-        fixture.write_bytes(b"let value = 1; // removable\n")
-        completed = subprocess.run(
-            [str(binary), "scan", str(fixture), "--format", "json"],
-            check=True,
-            capture_output=True,
-            env=ISOLATED,
+        directory = pathlib.Path(raw)
+        (directory / ".ocomment.toml").write_bytes(
+            b'version = 1\n\n[policy]\nmode = "conservative"\n\n'
+            b'[policy.allow]\ntags = ["NOTE"]\n\n'
+            b'[style]\nwrap = "sentence"\nspace_after_marker = true\n'
+            b"trailing_whitespace = false\n"
         )
-    jsonschema.validate(json.loads(completed.stdout), result_schema)
+        (directory / "removed.rs").write_bytes(b"let value = 1; // removable\n")
+        (directory / "rewritten.rs").write_bytes(
+            b"// NOTE: A first sentence wrapped to a\n"
+            b"// NOTE: column. A second sentence in the same paragraph.\n"
+            b"//NOTE: no space after the marker.\n"
+            b"let value = 1;\n"
+        )
+        for argv in (
+            ["scan", "removed.rs", "--format", "json"],
+            ["scan", "rewritten.rs", "--format", "json"],
+            ["check", ".", "--format", "json", "--explain"],
+        ):
+            completed = subprocess.run(
+                [str(binary), *argv],
+                cwd=directory,
+                check=False,
+                capture_output=True,
+                env=ISOLATED,
+            )
+            document = json.loads(completed.stdout)
+            jsonschema.validate(document, result_schema)
 
     # NOTE: The trace goes to standard error beside the run summary, so `--quiet` is what makes every line one of these objects.
     # NOTE: `diff` is used because it is the command that plans edits, and `edit-planned` is otherwise never produced; the unreadable file is there so that `file-skipped` is too.
@@ -419,10 +441,18 @@ def main() -> int:
         directory = pathlib.Path(raw)
         (directory / "schema.rs").write_bytes(b"let value = 1; // removable\n")
         (directory / "opaque.unknownext").write_bytes(b"not a language\n")
-        for operation in ("check", "scan", "diff", "fix"):
+        # NOTE: `tidy` is a run rather than a subcommand, and it is the one whose summary names an operation the command line never spelled -- so the argv and the name it reports are listed apart rather than assumed equal.
+        runs = (
+            (["check"], "check"),
+            (["scan"], "scan"),
+            (["diff"], "diff"),
+            (["fix"], "fix"),
+            (["fix", "--tidy"], "tidy"),
+        )
+        for argv, operation in runs:
             summary_file = directory / f"{operation}.json"
             subprocess.run(
-                [str(binary), operation, ".", "--quiet", "--summary", str(summary_file)],
+                [str(binary), *argv, ".", "--quiet", "--summary", str(summary_file)],
                 cwd=directory,
                 check=False,
                 capture_output=True,

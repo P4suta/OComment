@@ -4,7 +4,7 @@ use crate::{
     files::SkippedFile,
     output::{
         self, AnnotationLevel, Operation, OutputFormat, Presentation, ProcessedFile,
-        ProcessedResult, ReadBy, RenderOptions, Verbosity,
+        ProcessedResult, ReadBy, RenderOptions, Verbosity, Writes,
     },
     plugin::PluginHost,
 };
@@ -85,7 +85,7 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
         )?;
     }
     let materialize_output =
-        operation == Operation::Fix || (operation == Operation::Diff && format.for_a_person());
+        operation.writes() || (matches!(operation, Operation::Diff(_)) && format.for_a_person());
     let materialize_source_map =
         json.source_map && matches!(format, OutputFormat::Json | OutputFormat::Jsonl);
     let mut scanners = HashMap::new();
@@ -150,9 +150,11 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
             ));
             continue;
         }
-        let full = if let Some(profile) = &profile {
+        /* NOTE: Scanned first and planned second, rather than asked for a plan in one call.
+         * Which half of the report becomes edits is the run's to decide, and a call that did both would have decided it here -- which is how a staged tidy came to report a removal as left alone and take it out anyway. */
+        let report = if let Some(profile) = &profile {
             scanner
-                .transform_profile_plan(&source, profile, options.layout)
+                .scan_profile(&source, profile)
                 .expect("profiles were validated while loading configuration")
         } else if let Some(name) = &routed_plugin {
             let language_name = path
@@ -160,9 +162,20 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
                 .and_then(|value| value.to_str())
                 .unwrap_or("unknown")
                 .to_ascii_lowercase();
-            plugin_host.transform_plan(name, &source, &language_name, &path, &options, &scanner)?
+            plugin_host.scan_report(name, &source, &language_name, &path, &options, &scanner)?
         } else {
-            scanner.transform_plan(&source, language, options.layout)
+            scanner.scan(&source, language)
+        };
+        let full = match operation.half() {
+            Some(Writes::RewritesOnly) => {
+                ocomment_core::plan_rewrites(&source, report, options.scan.force_invalid)
+            }
+            Some(Writes::Everything) | None => ocomment_core::plan_report(
+                &source,
+                report,
+                options.layout,
+                options.scan.force_invalid,
+            ),
         };
         let ranges = added_line_ranges(&root, &path)?;
         let lines = LineNumberIndex::new(&source);
@@ -263,7 +276,7 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
             .iter()
             .any(|diagnostic| diagnostic.code == "staged-existing-block-comment")
     });
-    let applied = operation == Operation::Fix
+    let applied = operation.writes()
         && (!invalid || (resolved.config.policy.force_invalid && !staged_conflict));
     if applied {
         fix_index(&root, &entries, index_only)?;
@@ -295,10 +308,11 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
     if invalid {
         return Ok(2);
     }
-    match operation {
-        Operation::Check | Operation::Diff if output::changed(&files) => Ok(1),
-        Operation::Check | Operation::Scan | Operation::Diff | Operation::Fix => Ok(0),
-    }
+    Ok(output::exit_code(
+        operation,
+        &files,
+        applied && output::changed(&files),
+    ))
 }
 
 fn fix_index(root: &Path, entries: &[IndexEntry], index_only: bool) -> Result<()> {

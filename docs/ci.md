@@ -1,7 +1,7 @@
 # Hooks and CI
 
 OComment ships two integrations: a [pre-commit](https://pre-commit.com) hook manifest at `.pre-commit-hooks.yaml`, and a composite GitHub Action at `action.yml`.
-Both drive the same CLI and the same exit codes: `0` clean, `1` removable comments exist, `2` an invalid source, configuration, plugin, or I/O failure.
+Both drive the same CLI and the same exit codes: `0` clean, `1` something is outstanding — a removable comment, a printed diff, a removal a `--tidy` run left alone, or an index a staged fix rewrote — and `2` an invalid source, configuration, plugin, or I/O failure.
 
 ## pre-commit
 
@@ -31,8 +31,23 @@ repos:
 `ocomment-check` reports removable comments in the staged source files and exits 1, which blocks the commit and leaves the fix to you.
 That is the safe default: nothing is rewritten behind your back.
 
-To rewrite instead of reporting, use `ocomment-fix`.
-Run it *before* `ocomment-check` so the check confirms the result:
+To let the hook write what a machine can settle, add `ocomment-tidy` in front of it:
+
+```yaml
+repos:
+  - repo: https://github.com/P4suta/OComment
+    rev: v0.1.0
+    hooks:
+      - id: ocomment-tidy
+      - id: ocomment-check
+```
+
+`ocomment-tidy` runs `ocomment fix --tidy`, which applies the style axis — a paragraph reflowed to one sentence per line, a missing space after a marker — and takes no comment away.
+Every removal it found is still reported by the `ocomment-check` behind it, so the gate is no weaker for the rewrite.
+It is the pairing to reach for when OComment runs on every commit: the half nobody has to think about is written, and the half only its author can answer is left to them.
+
+`ocomment-fix` is the blunt one.
+It applies the removals too, including the comments above that were worth keeping, so run it when that is what you mean:
 
 ```yaml
 repos:
@@ -70,16 +85,17 @@ Found 1 removable comment in 1 file (1 file scanned). Run `ocomment fix` to remo
 
 Two caveats come with `--staged`, and both are worth knowing before you enable it.
 
-**`fix --staged` rewrites the index and the working tree together, so pre-commit does not notice.** pre-commit decides that "files were modified by this hook" by comparing the unstaged diff before and after the hook.
-After pre-commit's stash the working tree already equals the index, and `ocomment fix --staged` moves both sides by the same edits, so the unstaged diff is empty both before and after:
+**pre-commit cannot see that `fix --staged` changed anything, so the exit code is what stops the commit.** pre-commit decides that "files were modified by this hook" by comparing the unstaged diff before and after the hook.
+After its stash the working tree already equals the index, and `ocomment fix --staged` moves both sides by the same edits, so the unstaged diff is empty both before and after:
 
 ```console
 $ git status --short
 M  a.rs                     # staged, working tree clean
 ```
 
-The detection therefore does not fire, and the commit proceeds with the removals already staged.
-If you want the commit stopped so you can look at the result, keep `ocomment-fix` without `--staged` — that rewrites only the working tree, leaves an unstaged diff, and pre-commit fails the commit — or follow it with `ocomment-check --staged`.
+That detection never fires.
+A staged fix therefore exits 1 whenever it rewrote the index: the bytes the commit will carry have stopped being the bytes their author staged, and with pre-commit's own check blind to it the exit code is the only place that can say so.
+The commit stops, `git diff --cached` shows what changed, and committing again records it.
 
 Outside pre-commit, where a file really is partially staged, `fix --staged` refuses rather than guessing:
 

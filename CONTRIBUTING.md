@@ -24,8 +24,11 @@ cargo build --manifest-path rust/Cargo.toml --workspace --locked
 lefthook install
 ```
 
-`lefthook install` wires up `lefthook.yml`, whose `pre-commit` hook runs `ocomment check --staged` and `cargo fmt --check`.
-The hook reads the staged blobs rather than the working tree, so a partially staged file is judged by the bytes the commit will carry, and it reports rather than rewrites: `fix --staged` under Lefthook would need `stage_fixed`, which stages the whole working-tree file and destroys partial staging.
+`lefthook install` wires up `lefthook.yml`, whose `pre-commit` hook runs `ocomment fix --tidy --staged` and `cargo fmt --check`.
+The hook reads the staged blobs rather than the working tree, so a partially staged file is judged by the bytes the commit will carry.
+`--tidy` writes the half a machine can settle — a comment paragraph reflowed to one sentence per line — and leaves every removal reported and unapplied, so the gate is no weaker for writing.
+Lefthook's `stage_fixed` is deliberately not set: `fix --staged` writes the index itself, and that setting would stage the whole working-tree file and destroy the partial staging.
+A run that rewrote the index exits 1, so the rewrite is reviewed before it is committed rather than after.
 It prefers an `ocomment` on `PATH` and falls back to the workspace copy, so a fresh clone needs no `cargo install` first.
 
 The repository is intentionally split into independent implementations:

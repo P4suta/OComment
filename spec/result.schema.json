@@ -300,6 +300,27 @@
               "type": "string"
             }
           }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The comment stays and is written differently. The bytes that replace it travel with the verdict because the two are decided together, and recomputing one from the other later would be the rule implemented a second time.",
+          "required": [
+            "action",
+            "rule",
+            "replacement"
+          ],
+          "properties": {
+            "action": {
+              "const": "rewrite"
+            },
+            "rule": {
+              "$ref": "#/$defs/styleRule"
+            },
+            "replacement": {
+              "type": "string"
+            }
+          }
         }
       ]
     },
@@ -495,7 +516,10 @@
             "among-statements",
             "expired",
             "too-long",
-            "stricter-than-the-kind"
+            "stricter-than-the-kind",
+            "wrap",
+            "space-after-marker",
+            "trailing-whitespace"
           ],
           "description": "A stable name to branch on, unlike the sentence beside it."
         },
@@ -587,11 +611,23 @@
         }
       }
     },
+    "styleRule": {
+      "enum": [
+        "wrap",
+        "space-after-marker",
+        "trailing-whitespace"
+      ],
+      "description": "Which rule of the style axis decided a rewrite. A stable name to branch on, unlike the sentence the human report words the same verdict with."
+    },
     "proseRun": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "span",
+        "line",
+        "column",
+        "end_line",
+        "end_column",
         "origin",
         "rule",
         "replacement"
@@ -600,6 +636,22 @@
       "properties": {
         "span": {
           "$ref": "#/$defs/span"
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "end_line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "end_column": {
+          "type": "integer",
+          "minimum": 1
         },
         "origin": {
           "enum": [
