@@ -60,7 +60,7 @@ def load_floor():
         if len(parts) != 2 or not parts[1].isdigit():
             raise SystemExit(f"{FLOOR.name}:{number}: expected `name count`, got {line!r}")
         floor[parts[0]] = int(parts[1])
-        # NOTE: `expectations` is enforced by the Rust test rather than here: this runner is also the one that records a missing block, and a floor it enforced would refuse to run on the way to putting one back.
+    # NOTE: `expectations` is enforced by the Rust test rather than here: this runner is also the one that records a missing block, and a floor it enforced would refuse to run on the way to putting one back.
     # NOTE: It is still required to be present, so a typo in the file is an error rather than a floor that silently stops being read.
     for name in ("cases", "expectations"):
         if name not in floor:
@@ -155,6 +155,25 @@ def observed_comments(report):
     ]
 
 
+def observed_runs(report):
+    """A report's rewritten runs in the shape an `expect` block records them.
+
+    The replacement bytes are recorded and not only the span. A run's bytes belong
+    to no single comment, so every other field of a report can be right while the
+    bytes a rewrite would write are wrong.
+    """
+    return [
+        {
+            "start": run["span"]["start"],
+            "end": run["span"]["end"],
+            "origin": run["origin"],
+            "rule": run["rule"],
+            "replacement": run["replacement"],
+        }
+        for run in report.get("runs", [])
+    ]
+
+
 def observed_diagnostics(report):
     """A report's diagnostics in the shape an `expect` block records them."""
     return [
@@ -173,6 +192,7 @@ def check_expect(case, payload):
         failures.append(f"valid: expected {expect['valid']}, got {report['valid']}")
     for name, observed in (
         ("comments", observed_comments),
+        ("runs", observed_runs),
         ("diagnostics", observed_diagnostics),
     ):
         if name in expect:
@@ -219,6 +239,9 @@ def recorded_expect(payload):
     if "comments" in report:
         expect["valid"] = report["valid"]
         expect["comments"] = observed_comments(report)
+        runs = observed_runs(report)
+        if runs:
+            expect["runs"] = runs
         expect["diagnostics"] = observed_diagnostics(report)
     if "output_base64" in payload:
         output = base64.b64decode(payload["output_base64"], validate=True)
@@ -268,7 +291,7 @@ def main(argv):
             print(f"mismatch: {label}", file=sys.stderr)
             print(json.dumps({"rust": left, "ocaml": right}, indent=2), file=sys.stderr)
             continue
-                # NOTE: Both implementations refusing a case alike is still a corpus bug: every case is meant to run, and there is no way to record an expected refusal.
+        # NOTE: Both implementations refusing a case alike is still a corpus bug: every case is meant to run, and there is no way to record an expected refusal.
         if "ok" not in left:
             failures += 1
             print(f"refused: {label} {left.get('error')!r}", file=sys.stderr)

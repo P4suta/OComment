@@ -1622,6 +1622,14 @@ fn render_review(
         .len();
 
     let restyled: usize = files.iter().map(rewritable_count).sum();
+    /* NOTE: What to call them.
+     * A run of comments and a paragraph of a document are both paragraphs; a comment a spacing rule reached on its own is a comment.
+     * Where a run met both, the noun that covers them is the wider one. */
+    let restyled_noun = if files.iter().any(|file| rewritable_paragraphs(file) > 0) {
+        "paragraph"
+    } else {
+        "comment"
+    };
     /* NOTE: Three marks for three kinds of answer.
      * A removal is a decision the reader has to make and the run is not clean until they make it; a rewrite is one the tool has already made and is offering to apply.
      * A report that called both `NO` would be asking for a decision that has been taken. */
@@ -1636,7 +1644,7 @@ fn render_review(
     wrote(writeln!(
         output,
         "  {mark}  {bold}{}{reset}{dim} in {} · {} · policy {}{reset}",
-        comments(removable + restyled, ""),
+        headline_count(removable, restyled, restyled_noun),
         plural(
             touched.max(
                 files
@@ -1653,7 +1661,7 @@ fn render_review(
     if restyled > 0 {
         wrote(writeln!(output))?;
         let instruction = "run `ocomment fix` and they are written for you";
-        let count = comments(restyled, "");
+        let count = plural(restyled, restyled_noun);
         wrote(writeln!(
             output,
             "  {bold}{blue}TIDY{reset}    {bold}{instruction}{reset}{dim}{}{count}{reset}",
@@ -2297,6 +2305,21 @@ fn nothing_to(options: &RenderOptions) -> &'static str {
         Operation::Diff => "diff",
         Operation::Scan => "scan",
     }
+}
+
+/// What the headline counts, under the noun that covers it.
+///
+/// A run that only removed comments says `comments`, as it always has.
+/// A run that rewrote a document's paragraphs has to say something else: a paragraph of Markdown is not a comment, and a headline that called it one would be the report's first line telling a reader something about their file that is not so.
+fn headline_count(removable: usize, restyled: usize, noun: &str) -> String {
+    if removable == 0 || noun == "comment" {
+        return plural(removable + restyled, noun);
+    }
+    format!(
+        "{} and {}",
+        comments(removable, "removable"),
+        plural(restyled, noun)
+    )
 }
 
 /// The one-line verdict for the run, without the skipped-file clause.

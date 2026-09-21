@@ -1,6 +1,6 @@
 use crate::{
-    ByteSpan, Language, Layout, PreparedScanner, ScanOptions, ScanReport, TransformOptions,
-    TransformResult,
+    ByteSpan, Comment, Language, Layout, PreparedScanner, ScanOptions, ScanReport,
+    TransformOptions, TransformResult,
     scanner::{
         RestartRules, preamble_is_settled, scan_until_checkpoint_prepared,
         scan_with_checkpoints_prepared,
@@ -88,6 +88,14 @@ pub struct IncrementalDocument {
     language: Language,
     options: ScanOptions,
     prepared: PreparedScanner,
+    /// The comments as the scanner and the allow rules left them, before the style rules had their turn.
+    ///
+    /// The style rules are the one pass a rescan cannot splice.
+    /// A paragraph is a run of adjacent comments, a run can straddle the byte a rescan restarts at, and what the rules say about any comment in it therefore depends on bytes an edit may have moved — so they are re-derived over the whole document on every revision.
+    /// Re-deriving them needs the comments as they stood before the last derivation: a `Rewrite` has replaced the `Keep` it was reached from, and there is no asking that comment again.
+    ///
+    /// `report.comments` is this list with the style pass applied, and nothing else writes it.
+    scanned: Vec<Comment>,
     report: ScanReport,
     checkpoints: Vec<usize>,
     safe_checkpoints: Vec<usize>,
@@ -122,8 +130,11 @@ impl IncrementalDocument {
     /// `version` is the client's revision number for these bytes; every later [`Self::apply_changes`] has to advance on it.
     pub fn new(source: Vec<u8>, language: Language, options: ScanOptions, version: i64) -> Self {
         let prepared = PreparedScanner::lossy(options.clone());
-        let (report, safe_checkpoints) =
+        let (mut report, safe_checkpoints) =
             scan_with_checkpoints_prepared(&source, language, &prepared, 0);
+        let scanned = report.comments.clone();
+        report.runs =
+            crate::scanner::apply_style_rules(&source, language, &mut report.comments, &options);
         let checkpoints = line_checkpoints(&source);
         let last_rescan = ByteSpan::new(0, source.len());
         Self {
@@ -131,6 +142,7 @@ impl IncrementalDocument {
             language,
             options,
             prepared,
+            scanned,
             report,
             checkpoints,
             safe_checkpoints,
@@ -310,8 +322,7 @@ impl IncrementalDocument {
             (report, checkpoints, next.len())
         });
         let mut comments: Vec<_> = self
-            .report
-            .comments
+            .scanned
             .iter()
             .take_while(|comment| comment.span.start < safe_start && comment.span.end <= safe_start)
             .cloned()
@@ -319,8 +330,7 @@ impl IncrementalDocument {
         comments.append(&mut suffix.comments);
         if let Some((old_convergence, new_convergence)) = reused_tail {
             comments.extend(
-                self.report
-                    .comments
+                self.scanned
                     .iter()
                     .filter(|comment| comment.span.start >= old_convergence)
                     .cloned()
@@ -355,13 +365,18 @@ impl IncrementalDocument {
                     }),
             );
         }
+        /* NOTE: The style rules over the whole document, and spliced from `scanned` rather than from the last report.
+         * The pass costs a walk of the comments rather than a walk of the bytes, and it returns at once when no style rule is configured, which is the case a client that only removes comments is in. */
+        let scanned = comments.clone();
+        let runs =
+            crate::scanner::apply_style_rules(&next, self.language, &mut comments, &self.options);
         let report = ScanReport {
             language: self.language,
             valid: !diagnostics
                 .iter()
                 .any(|diagnostic| diagnostic.severity.is_failure()),
             comments,
-            runs: Vec::new(),
+            runs,
             diagnostics,
         };
         let mut safe_checkpoints: Vec<_> = self
@@ -388,6 +403,7 @@ impl IncrementalDocument {
         let checkpoints = line_checkpoints(&next);
         self.last_rescan = ByteSpan::new(safe_start, rescan_end);
         self.source = next;
+        self.scanned = scanned;
         self.report = report;
         self.checkpoints = checkpoints;
         self.safe_checkpoints = safe_checkpoints;

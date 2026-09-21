@@ -100,7 +100,8 @@ is a partial assertion rather than a weaker one.
 | Field | Checked against |
 | --- | --- |
 | `valid` | `ScanReport::valid`. |
-| `comments` | Every comment, in order, as `{start, end, kind, action}`. `action` is `keep` or `remove`; the human-readable keep reason is deliberately not pinned here. |
+| `comments` | Every comment, in order, as `{start, end, kind, action}`. `action` is `keep`, `rewrite` or `remove`; the human-readable keep reason is deliberately not pinned here. |
+| `runs` | Every rewritten run of prose, in order, as `{start, end, origin, rule, replacement}`. Recorded only where there is one, and the replacement bytes are part of it: a run's bytes belong to no single comment, so a report can name the right span and still write the wrong text. |
 | `diagnostics` | Every diagnostic, in order, as `{code, start, end}`. An empty array asserts that there are none. |
 | `output_utf8` / `output_base64` | The transformed bytes. |
 

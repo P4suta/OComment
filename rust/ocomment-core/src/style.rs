@@ -117,23 +117,21 @@ pub(crate) fn reflow_run(
             return reflow_block(source, only, rules, markers);
         }
     }
-    let (opener, mut lines) = take_apart(source, comments, markers)?;
+    let (opener, indent, mut bodies) = take_apart(source, comments, markers)?;
     let opener = opener.as_slice();
-    let tag = shared_tag(&lines, tags)?;
-    for line in &mut lines {
-        line.body = line.body.get(tag.len()..)?;
+    let tag = shared_tag(&bodies, tags)?;
+    for body in &mut bodies {
+        *body = body.get(tag.len()..)?;
     }
-    let bodies: Vec<&str> = lines.iter().map(|line| line.body).collect();
     let reflowed = crate::reflow::reflow(&bodies, rules.wrap)?;
-    let indent = lines.first()?.indent;
+    let marker = RunMarker::new(indent, opener);
     let terminator = run_terminator(source, comments);
     let mut bytes = Vec::with_capacity(source.len());
     for (index, body) in reflowed.iter().enumerate() {
         if index > 0 {
             bytes.extend_from_slice(terminator);
         }
-        bytes.extend_from_slice(indent);
-        bytes.extend_from_slice(opener);
+        bytes.extend_from_slice(marker.line(index));
         /* NOTE: One space, or none where there is nothing to separate.
          * A reflow has to write the marker back, so it has to choose; choosing anything else would be a second opinion about the spacing rule. */
         if !body.is_empty() || !tag.is_empty() {
@@ -292,58 +290,80 @@ fn continuation_prefix<'a>(interior: &[&'a str], opener: &str) -> Option<&'a str
 ///
 /// A common prefix would be the general form of this and is deliberately not what is looked for: `# The cat sat` above `# The dog ran` shares one, and treating `The ` as a marker would join them into nonsense.
 /// Only a tag the configuration named is a marker.
-fn shared_tag<'a>(lines: &[Line<'a>], tags: &[&str]) -> Option<&'a str> {
-    let opening = |line: &Line<'a>| -> Option<&'a str> {
+fn shared_tag<'a>(bodies: &[&'a str], tags: &[&str]) -> Option<&'a str> {
+    let opening = |body: &'a str| -> Option<&'a str> {
         tags.iter()
             .filter_map(|tag| {
-                let rest = line.body.get(..tag.len())?;
+                let rest = body.get(..tag.len())?;
                 (rest.eq_ignore_ascii_case(tag)).then(|| {
                     /* NOTE: The tag and the punctuation that introduces what follows it, and nothing past that.
                      * Skipping every non-alphanumeric byte was greedy enough to swallow the opening backtick of the first word, which made one line's prefix differ from the next one's and refused the run. */
-                    let rest = line.body.get(tag.len()..)?;
+                    let rest = body.get(tag.len()..)?;
                     let rest = rest.strip_prefix('(').map_or(rest, |inner| {
                         inner.find(')').map_or(rest, |at| &inner[at + 1..])
                     });
                     let rest = rest.strip_prefix([':', '-', '.']).unwrap_or(rest);
-                    let punctuation = line.body.len() - rest.len();
+                    let punctuation = body.len() - rest.len();
                     let spaces = rest.len() - rest.trim_start_matches(' ').len();
-                    line.body.get(..punctuation + spaces)
+                    body.get(..punctuation + spaces)
                 })
             })
             .flatten()
             .max_by_key(|found| found.len())
     };
-    let first = lines.first()?;
-    let Some(tag) = opening(first) else {
+    let Some(tag) = opening(bodies.first()?) else {
         // NOTE: No tag anywhere is the ordinary case, and the whole body is prose.
-        return lines
+        return bodies
             .iter()
-            .all(|line| opening(line).is_none())
+            .all(|body| opening(body).is_none())
             .then_some("");
     };
-    lines
+    bodies
         .iter()
-        .all(|line| opening(line) == Some(tag))
+        .all(|body| opening(body) == Some(tag))
         .then_some(tag)
 }
 
-/// One line of a run, with its indentation, its marker and its ending taken off.
-struct Line<'a> {
-    /// The white space in front of the marker, which every line of the rewrite is written back at.
-    indent: &'a [u8],
-    /// The prose, which is what a reflow reads.
-    body: &'a str,
+/// What each line of a rewritten run begins with.
+///
+/// Two prefixes rather than one, because the run's first line is already begun.
+/// The replacement covers the run from its first comment's opener, so the indentation in front of that opener is source the rewrite does not cover and the first line must not write it; every line after a break is begun by the rewrite itself and carries it.
+/// Writing one prefix for both moves the paragraph right by its own indentation each time it is reflowed, which is a formatter re-indenting a file it was told it could only reach inside comments.
+struct RunMarker {
+    /// What the replacement opens with, the indentation excluded.
+    first: Vec<u8>,
+    /// What each line after a break opens with, the indentation included.
+    rest: Vec<u8>,
+}
+
+impl RunMarker {
+    fn new(indent: &[u8], opener: &[u8]) -> Self {
+        let mut rest = indent.to_vec();
+        rest.extend_from_slice(opener);
+        Self {
+            first: opener.to_vec(),
+            rest,
+        }
+    }
+
+    /// What the line at `index` of the rewrite begins with.
+    fn line(&self, index: usize) -> &[u8] {
+        if index == 0 { &self.first } else { &self.rest }
+    }
 }
 
 /// Take a run apart, or refuse it.
 ///
-/// The opener is returned once rather than per line: a run whose lines open differently is not one paragraph, and a rewrite that normalised them would be changing what each line is rather than where it breaks.
+/// The opener and the indentation are returned once rather than per line, and that is the whole of what this refuses for.
+/// A run whose lines open differently is not one paragraph, and neither is a run whose lines sit at different columns: a commented-out block of shell holds its structure in its indentation, and reading it as prose flattens the structure into a sentence.
+/// Returning one of each is what stops a rewrite from having to choose between them — there is no line whose indentation the answer could disagree with.
 fn take_apart<'a>(
     source: &'a [u8],
     comments: &[crate::Comment],
     markers: Markers<'_>,
-) -> Option<(Vec<u8>, Vec<Line<'a>>)> {
+) -> Option<(Vec<u8>, &'a [u8], Vec<&'a str>)> {
     let mut opener: Option<&[u8]> = None;
+    let mut indentation: Option<&[u8]> = None;
     let mut lines = Vec::with_capacity(comments.len());
     for comment in comments {
         let raw = source.get(comment.span.start..comment.span.end)?;
@@ -367,20 +387,21 @@ fn take_apart<'a>(
         if !indent.iter().all(u8::is_ascii_whitespace) {
             return None;
         }
+        if *indentation.get_or_insert(indent) != indent {
+            return None;
+        }
         /* NOTE: One space comes off, not all of them.
          * The space after the marker separates the marker from the text; anything past it is the writer's own indentation, and it is what tells a list item's continuation from a new paragraph.
          * Trimming it away is how the gate this replaces flattened a nested list. */
         let rest = text.get(found.len()..)?;
-        lines.push(Line {
-            indent,
-            body: rest
-                .strip_prefix(' ')
+        lines.push(
+            rest.strip_prefix(' ')
                 .or_else(|| rest.strip_prefix('\t'))
                 .unwrap_or(rest)
                 .trim_end(),
-        });
+        );
     }
-    Some((opener?.to_vec(), lines))
+    Some((opener?.to_vec(), indentation?, lines))
 }
 
 /// The byte the line holding `offset` begins at.

@@ -35,7 +35,9 @@ impl PreparedScanner {
 
     /// Scan one source without recompiling its policy regular expressions.
     pub fn scan(&self, source: &[u8], language: Language) -> ScanReport {
-        scan_prepared_internal(source, language, self, 0, false, None).0
+        let mut report = scan_prepared_internal(source, language, self, 0, false, None).0;
+        report.runs = apply_style_rules(source, language, &mut report.comments, &self.options);
+        report
     }
 
     pub(crate) fn lossy(options: ScanOptions) -> Self {
@@ -85,7 +87,9 @@ impl PreparedScanner {
 /// assert!(!linted.comments[0].action().removes());
 /// ```
 pub fn scan(source: &[u8], language: Language, options: ScanOptions) -> ScanReport {
-    scan_internal(source, language, options, 0, false, None).0
+    let mut report = scan_internal(source, language, options.clone(), 0, false, None).0;
+    report.runs = apply_style_rules(source, language, &mut report.comments, &options);
+    report
 }
 
 #[cfg(test)]
@@ -204,19 +208,15 @@ fn finish_scan(mut scanner: Scanner<'_>) -> (ScanReport, Vec<usize>, bool) {
         &scanner.options,
         &scanner.patterns,
     );
-    /* NOTE: After, and not beside.
-     * The style rules are asked only about comments that are staying, and which those are is not settled until the shape rules have had their turn. */
-    let runs = apply_style_rules(
-        scanner.source,
-        language,
-        &mut scanner.comments,
-        &scanner.options,
-    );
+    /* NOTE: And not the style rules, which are not a scan's to settle.
+     * They are asked after the shape rules, because they are asked only about comments that are staying and which those are is not settled until the shape rules have had their turn — but they are also asked about a *paragraph*, and this function is reached with a fragment of a document as often as with the whole of one: the incremental scanner rescans a suffix and splices it onto the comments it kept.
+     * A paragraph can straddle the byte such a rescan restarted at, so whoever holds the whole document applies them; [`scan`] and [`PreparedScanner::scan`] do it here, and [`IncrementalDocument`](crate::IncrementalDocument) does it over the document it holds.
+     * Applying them here as well is what made a rescan disagree with a scan of the same bytes: the pass had already turned a `Keep` into a `Rewrite` and there is no asking that comment a second time. */
     (
         ScanReport {
             language,
             comments: scanner.comments,
-            runs,
+            runs: Vec::new(),
             diagnostics: scanner.diagnostics,
             valid,
         },
@@ -402,6 +402,7 @@ const fn subject_to_style(kind: CommentKind) -> bool {
 ///
 /// Unlike [`apply_allow_rules`] this reads one comment at a time, because every rule it holds today is about one comment's own bytes.
 /// The rule that is not — a paragraph wrapped at a column, which is a property of the run a comment belongs to — is why `comments` is taken as a slice rather than an iterator.
+#[must_use]
 pub(crate) fn apply_style_rules(
     source: &[u8],
     language: Language,
@@ -414,6 +415,7 @@ pub(crate) fn apply_style_rules(
 /// The same, against the delimiters a declarative profile declares.
 ///
 /// A profile's comments open with the profile's tokens, and a rule about the text written against the marker has to be asked about the marker the file actually uses.
+#[must_use]
 pub(crate) fn apply_style_rules_with(
     source: &[u8],
     language: Language,
@@ -484,7 +486,10 @@ fn eligible_stretches(
     let mut stretches = Vec::new();
     let mut open: Option<usize> = None;
     for (index, comment) in run.iter().enumerate() {
-        let reachable = comment.action() == Action::Keep && subject_to_style(comment.kind);
+        /* NOTE: "not going", and not `== Keep`, which is the opposite of the choice two rules above.
+         * Those run before the style rules and cannot meet a rewritten comment; this one can, because an incremental rescan hands the style pass the comments of the previous revision and some of them have already been through it.
+         * A comment that is being rewritten is a comment that is staying, and reading it as unreachable cut the paragraph in half at the line an earlier edit had touched. */
+        let reachable = !comment.action().removes() && subject_to_style(comment.kind);
         /* NOTE: A delimited comment is a paragraph on its own.
          * It carries its own opener, closer and continuation prefix, and a line comment written directly under one is a separate remark rather than more of it -- which is what a `///` under a `/* ... */` is, and grouping the two refused both. */
         let alone = crate::style::is_block(

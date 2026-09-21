@@ -661,7 +661,7 @@ fn scan_profile_with(
      * The profile's own delimiters are what it is asked about, because they are what the file opens its comments with. */
     let openers = profile_openers(profile);
     let closers = profile_closers(profile);
-    crate::scanner::apply_style_rules_with(
+    let runs = crate::scanner::apply_style_rules_with(
         source,
         Language::Unknown,
         &mut comments,
@@ -674,7 +674,7 @@ fn scan_profile_with(
     Ok(ScanReport {
         language: Language::Unknown,
         comments,
-        runs: Vec::new(),
+        runs,
         diagnostics,
         valid,
     })

@@ -6433,6 +6433,9 @@ let take_run_apart source openers (run : comment list) =
           let start = line_start comment.span.start in
           let here = Bytes.sub_string source start (comment.span.start - start) in
           if not (String.for_all (fun c -> c = ' ' || c = '\t') here) then None
+          (* NOTE: One indentation for the run, as there is one opener for it.
+             A run whose lines sit at different columns is not one paragraph: a commented-out block of shell holds its structure in its indentation, and a reflow that read it as prose would flatten the structure into a sentence. *)
+          else if indent <> None && indent <> Some here then None
           else
             let rest_of = String.sub raw (String.length found)
                 (String.length raw - String.length found) in
@@ -6627,9 +6630,13 @@ let reflow_run source (run : comment list) rules openers closers tags =
       | Some rewritten ->
         let terminator = run_terminator source first in
         let buffer = Buffer.create 256 in
+        (* NOTE: The indentation belongs to the lines after a break and not to the first one.
+           The replacement covers the run from its first comment's opener, so the white space in front of that opener is source the rewrite does not cover; writing it again moves the paragraph right by its own indentation every time it is reflowed. *)
         List.iteri (fun index body ->
-          if index > 0 then Buffer.add_string buffer terminator;
-          Buffer.add_string buffer indent;
+          if index > 0 then begin
+            Buffer.add_string buffer terminator;
+            Buffer.add_string buffer indent
+          end;
           Buffer.add_string buffer opener;
           (* NOTE: One space, or none where there is nothing to separate.
              A reflow has to write the marker back, so it has to choose. *)

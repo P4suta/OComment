@@ -64,6 +64,18 @@ struct ExpectedComment {
     action: String,
 }
 
+/// One rewritten run of prose as an `expect` block records it.
+///
+/// The replacement is here and the comments' `action` is not enough on its own: a run's bytes belong to no single comment, so a report that named the right span and wrote the wrong bytes would agree with every other field.
+#[derive(Debug, Eq, PartialEq)]
+struct ExpectedRun {
+    start: usize,
+    end: usize,
+    origin: String,
+    rule: String,
+    replacement: String,
+}
+
 /// One diagnostic as an `expect` block records it.
 #[derive(Debug, Eq, PartialEq)]
 struct ExpectedDiagnostic {
@@ -402,6 +414,45 @@ fn check_expectation(case: &Value, expect: &Value, outcome: &Outcome) {
             })
             .collect();
         assert_eq!(observed, recorded, "{case_id}: `comments`");
+    }
+    if let Some(runs) = expect.get("runs") {
+        let report = outcome
+            .report
+            .as_ref()
+            .unwrap_or_else(|| panic!("{case_id}: `expect.runs` needs an operation that reports"));
+        let observed: Vec<_> = report
+            .runs
+            .iter()
+            .map(|run| ExpectedRun {
+                start: run.span.start,
+                end: run.span.end,
+                origin: json!(run.origin)
+                    .as_str()
+                    .expect("run origin is a string")
+                    .to_owned(),
+                rule: json!(run.rule)
+                    .as_str()
+                    .expect("run rule is a string")
+                    .to_owned(),
+                replacement: String::from_utf8_lossy(&run.replacement).into_owned(),
+            })
+            .collect();
+        let recorded: Vec<_> = runs
+            .as_array()
+            .unwrap_or_else(|| panic!("{case_id}: `expect.runs` is not an array"))
+            .iter()
+            .map(|run| ExpectedRun {
+                start: usize::try_from(run["start"].as_u64().expect("run start")).expect("fits"),
+                end: usize::try_from(run["end"].as_u64().expect("run end")).expect("fits"),
+                origin: run["origin"].as_str().expect("run origin").to_owned(),
+                rule: run["rule"].as_str().expect("run rule").to_owned(),
+                replacement: run["replacement"]
+                    .as_str()
+                    .expect("run replacement")
+                    .to_owned(),
+            })
+            .collect();
+        assert_eq!(observed, recorded, "{case_id}: `runs`");
     }
     if let Some(diagnostics) = expect.get("diagnostics") {
         let report = outcome.report.as_ref().unwrap_or_else(|| {

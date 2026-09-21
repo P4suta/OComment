@@ -14066,6 +14066,15 @@
             "action": "keep"
           }
         ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 84,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// A sentence that was broken to keep the line short."
+          }
+        ],
         "diagnostics": [],
         "output_utf8": "fn head() {}\nfn also() {}\n/// A sentence that was broken to keep the line short.\nfn a() {}\n"
       }
@@ -14091,6 +14100,15 @@
             "end": 74,
             "kind": "doc-line",
             "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 74,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// One sentence.\n/// And a second on the same line."
           }
         ],
         "diagnostics": [],
@@ -14165,6 +14183,15 @@
             "action": "keep"
           }
         ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 97,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// One sentence. And a second.\n/// A third that was broken to fit."
+          }
+        ],
         "diagnostics": [],
         "output_utf8": "fn head() {}\nfn also() {}\n/// One sentence. And a second.\n/// A third that was broken to fit.\nfn a() {}\n"
       }
@@ -14226,6 +14253,15 @@
             "end": 117,
             "kind": "doc-line",
             "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 117,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// Prose that wraps here.\n///\n/// ```\n/// let x = 1;\n/// let y = 2. Not prose.\n/// ```"
           }
         ],
         "diagnostics": [],
@@ -14333,6 +14369,15 @@
             "action": "keep"
           }
         ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 119,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// - an item whose text wraps onto the next line.\n///   And a second sentence.\n/// - another"
+          }
+        ],
         "diagnostics": [],
         "output_utf8": "fn head() {}\nfn also() {}\n/// - an item whose text wraps onto the next line.\n///   And a second sentence.\n/// - another\nfn a() {}\n"
       }
@@ -14399,6 +14444,15 @@
             "action": "keep"
           }
         ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 93,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// See https://example.com/a.b/c for details.\n/// Version 1.5 is fine."
+          }
+        ],
         "diagnostics": [],
         "output_utf8": "fn head() {}\nfn also() {}\n/// See https://example.com/a.b/c for details.\n/// Version 1.5 is fine.\nfn a() {}\n"
       }
@@ -14426,6 +14480,15 @@
             "action": "keep"
           }
         ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 98,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// Abbreviations e.g. this one do not end a sentence.\n/// J. Smith neither."
+          }
+        ],
         "diagnostics": [],
         "output_utf8": "fn head() {}\nfn also() {}\n/// Abbreviations e.g. this one do not end a sentence.\n/// J. Smith neither.\nfn a() {}\n"
       }
@@ -14451,6 +14514,15 @@
             "end": 75,
             "kind": "doc-line",
             "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 75,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// 日本語の文です。\n/// これは二文目。"
           }
         ],
         "diagnostics": [],
@@ -14486,6 +14558,15 @@
             "action": "keep"
           }
         ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 89,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// 日本語の文がここで折り返されている。"
+          }
+        ],
         "diagnostics": [],
         "output_utf8": "fn head() {}\nfn also() {}\n/// 日本語の文がここで折り返されている。\nfn a() {}\n"
       }
@@ -14517,6 +14598,15 @@
             "end": 80,
             "kind": "line",
             "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 80,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "// A remark that was broken to keep the line short."
           }
         ],
         "diagnostics": [],
@@ -14577,6 +14667,15 @@
             "end": 73,
             "kind": "block",
             "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 73,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/* A block that wraps onto a second line. */"
           }
         ],
         "diagnostics": [],
@@ -14645,6 +14744,15 @@
             "action": "keep"
           }
         ],
+        "runs": [
+          {
+            "start": 28,
+            "end": 87,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// A sentence that was broken to keep the line short."
+          }
+        ],
         "diagnostics": [],
         "output_utf8": "fn head() {}\r\nfn also() {}\r\n/// A sentence that was broken to keep the line short.\r\nfn a() {}\r\n"
       }
@@ -14682,6 +14790,15 @@
             "end": 100,
             "kind": "line",
             "action": "remove"
+          }
+        ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 78,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// Documentation that wraps onto a second line."
           }
         ],
         "diagnostics": [],
@@ -14744,6 +14861,15 @@
             "action": "keep"
           }
         ],
+        "runs": [
+          {
+            "start": 0,
+            "end": 68,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "//! Module documentation that was broken to keep the line short."
+          }
+        ],
         "diagnostics": [],
         "output_utf8": "//! Module documentation that was broken to keep the line short.\nfn a() {}\n"
       }
@@ -14769,6 +14895,15 @@
             "end": 74,
             "kind": "block",
             "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 74,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/* A block that wraps onto a second line.\n */"
           }
         ],
         "diagnostics": [],
@@ -14825,6 +14960,15 @@
             "action": "keep"
           }
         ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 118,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "(* A block whose continuation lines are aligned under the text.\n   And a second sentence. *)"
+          }
+        ],
         "diagnostics": [],
         "output_utf8": "let head = 1\nlet also = 2\n(* A block whose continuation lines are aligned under the text.\n   And a second sentence. *)\nlet a = 3\n"
       }
@@ -14852,6 +14996,15 @@
             "action": "keep"
           }
         ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 80,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "(** Documentation that wraps onto a second line. *)"
+          }
+        ],
         "diagnostics": [],
         "output_utf8": "let head = 1\nlet also = 2\n(** Documentation that wraps onto a second line. *)\nlet a = 3\n"
       }
@@ -14877,6 +15030,15 @@
             "end": 98,
             "kind": "block",
             "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 98,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/* One paragraph that wraps onto a line.\n *\n * A second paragraph. */"
           }
         ],
         "diagnostics": [],
@@ -14963,6 +15125,15 @@
             "action": "keep"
           }
         ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 107,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// - an item that wraps onto a line:\n///\n///     let x = 1;\n///\n/// After."
+          }
+        ],
         "diagnostics": [],
         "output_utf8": "fn head() {}\nfn also() {}\n/// - an item that wraps onto a line:\n///\n///     let x = 1;\n///\n/// After.\nfn a() {}\n"
       }
@@ -15008,6 +15179,15 @@
             "action": "keep"
           }
         ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 121,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// - outer item that wraps onto a line\n///   - inner item that wraps onto a line"
+          }
+        ],
         "diagnostics": [],
         "output_utf8": "fn head() {}\nfn also() {}\n/// - outer item that wraps onto a line\n///   - inner item that wraps onto a line\nfn a() {}\n"
       }
@@ -15039,6 +15219,15 @@
             "end": 76,
             "kind": "doc-line",
             "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 76,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// 1. One sentence.\n///    And a second.\n/// 2. Another."
           }
         ],
         "diagnostics": [],
@@ -15092,6 +15281,22 @@
             "action": "keep"
           }
         ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 69,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// Prose above that wraps onto a line."
+          },
+          {
+            "start": 105,
+            "end": 148,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// Prose below that wraps onto a line."
+          }
+        ],
         "diagnostics": [],
         "output_utf8": "fn head() {}\nfn also() {}\n/// Prose above that wraps onto a line.\n/// noqa is a word a linter reads.\n/// Prose below that wraps onto a line.\nfn a() {}\n"
       }
@@ -15125,6 +15330,15 @@
             "action": "keep"
           }
         ],
+        "runs": [
+          {
+            "start": 26,
+            "end": 141,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// [`Thing::fail`]: removed with the run of comments it belongs to, because that run is longer than the limit."
+          }
+        ],
         "diagnostics": [],
         "output_utf8": "fn head() {}\nfn also() {}\n/// [`Thing::fail`]: removed with the run of comments it belongs to, because that run is longer than the limit.\nfn a() {}\n"
       }
@@ -15145,6 +15359,15 @@
       "expect": {
         "valid": true,
         "comments": [],
+        "runs": [
+          {
+            "start": 0,
+            "end": 63,
+            "origin": "document",
+            "rule": "wrap",
+            "replacement": "A paragraph that wraps across two lines.\nAnd a second sentence."
+          }
+        ],
         "diagnostics": [],
         "output_utf8": "A paragraph that wraps across two lines.\nAnd a second sentence.\n"
       }
@@ -15165,6 +15388,15 @@
       "expect": {
         "valid": true,
         "comments": [],
+        "runs": [
+          {
+            "start": 0,
+            "end": 30,
+            "origin": "document",
+            "rule": "wrap",
+            "replacement": "Prose that wraps across lines."
+          }
+        ],
         "diagnostics": [],
         "output_utf8": "Prose that wraps across lines.\n\n```\ncode that wraps\nshould not join.\n```\n"
       }
@@ -15185,6 +15417,15 @@
       "expect": {
         "valid": true,
         "comments": [],
+        "runs": [
+          {
+            "start": 46,
+            "end": 76,
+            "origin": "document",
+            "rule": "wrap",
+            "replacement": "Prose that wraps across lines."
+          }
+        ],
         "diagnostics": [],
         "output_utf8": "---\ntitle: a document\nsummary: two lines\n---\n\nProse that wraps across lines.\n"
       }
@@ -15205,6 +15446,15 @@
       "expect": {
         "valid": true,
         "comments": [],
+        "runs": [
+          {
+            "start": 57,
+            "end": 87,
+            "origin": "document",
+            "rule": "wrap",
+            "replacement": "Prose that wraps across lines."
+          }
+        ],
         "diagnostics": [],
         "output_utf8": "# A heading that is long\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\nProse that wraps across lines.\n"
       }
@@ -15232,6 +15482,22 @@
             "action": "keep"
           }
         ],
+        "runs": [
+          {
+            "start": 0,
+            "end": 30,
+            "origin": "document",
+            "rule": "wrap",
+            "replacement": "Prose that wraps across lines."
+          },
+          {
+            "start": 32,
+            "end": 80,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "<!-- a comment that wraps across lines. -->"
+          }
+        ],
         "diagnostics": [],
         "output_utf8": "Prose that wraps across lines.\n\n<!-- a comment that wraps across lines. -->\n"
       }
@@ -15252,6 +15518,15 @@
       "expect": {
         "valid": true,
         "comments": [],
+        "runs": [
+          {
+            "start": 0,
+            "end": 75,
+            "origin": "document",
+            "rule": "wrap",
+            "replacement": "- an item that wraps onto the next line.\n  And a second sentence.\n- another"
+          }
+        ],
         "diagnostics": [],
         "output_utf8": "- an item that wraps onto the next line.\n  And a second sentence.\n- another\n"
       }
@@ -15272,6 +15547,15 @@
       "expect": {
         "valid": true,
         "comments": [],
+        "runs": [
+          {
+            "start": 0,
+            "end": 100,
+            "origin": "document",
+            "rule": "wrap",
+            "replacement": "- An item whose first line ends at a clause:\n  the rest of it wraps onto two more lines.\n- another"
+          }
+        ],
         "diagnostics": [],
         "output_utf8": "- An item whose first line ends at a clause:\n  the rest of it wraps onto two more lines.\n- another\n"
       }
@@ -15292,8 +15576,219 @@
       "expect": {
         "valid": true,
         "comments": [],
+        "runs": [
+          {
+            "start": 0,
+            "end": 78,
+            "origin": "document",
+            "rule": "wrap",
+            "replacement": "- An item whose first line ends at a clause:\n  a second sentence.\n  And a third."
+          }
+        ],
         "diagnostics": [],
         "output_utf8": "- An item whose first line ends at a clause:\n  a second sentence.\n  And a third.\n"
+      }
+    },
+    {
+      "id": "wrap-keeps-the-indentation-the-source-wrote",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "impl T {\n    /// A sentence that was broken\n    /// to keep the line short.\n    fn a() {}\n}\n",
+      "note": "The replacement covers the run from its first comment's opener, so the white space in front of that opener is source it does not cover. A rewrite that writes the indentation back in front of its first line writes it twice, and the paragraph walks right by its own indentation every time it is reflowed.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 13,
+            "end": 43,
+            "kind": "doc-line",
+            "action": "keep"
+          },
+          {
+            "start": 48,
+            "end": 75,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 13,
+            "end": 75,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// A sentence that was broken to keep the line short."
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "impl T {\n    /// A sentence that was broken to keep the line short.\n    fn a() {}\n}\n"
+      }
+    },
+    {
+      "id": "wrap-indents-the-lines-a-split-opens",
+      "language": "rust",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "impl T {\n    /// One sentence. Another one.\n    fn a() {}\n}\n",
+      "note": "The other direction of the same rule: a line the rewrite opens is a line the rewrite has to indent, because no source sits in front of it.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 13,
+            "end": 43,
+            "kind": "doc-line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 13,
+            "end": 43,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "/// One sentence.\n    /// Another one."
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "impl T {\n    /// One sentence.\n    /// Another one.\n    fn a() {}\n}\n"
+      }
+    },
+    {
+      "id": "wrap-refuses-a-run-whose-lines-sit-at-different-columns",
+      "language": "yaml",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "a: 1\n\n# - script: |\n    # echo building the image\n    # docker build --rm .\n\nb: 2\n",
+      "note": "A commented-out block of shell holds its structure in its indentation. Its lines are consecutive comments and so they are one run, but they are not one paragraph, and a rewrite that gave them all the first line's column would flatten the structure into a sentence and move the rest of the block left. One indentation per run, as there is one opener per run.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 6,
+            "end": 19,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 24,
+            "end": 49,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 54,
+            "end": 75,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "a: 1\n\n# - script: |\n    # echo building the image\n    # docker build --rm .\n\nb: 2\n"
+      }
+    },
+    {
+      "id": "declarative-profile-reaches-the-style-axis-too",
+      "language": "c",
+      "operation": "transform-profile",
+      "options": {
+        "policy": "none",
+        "style": {
+          "wrap": "sentence"
+        },
+        "layout": "lines"
+      },
+      "profile": {
+        "name": "demo",
+        "extensions": [
+          "demo"
+        ],
+        "line_comments": [
+          {
+            "start": "//",
+            "kind": "line"
+          }
+        ],
+        "block_comments": [],
+        "strings": [],
+        "protected_patterns": []
+      },
+      "source_utf8": "call()\n// A remark. Another one.\ncall()\n",
+      "note": "Both axes reach a file read under a profile, and a reflow is the one the run carries rather than the one a comment carries. The Rust side dropped the runs the style pass returned and kept only the per-comment rules, so a `.gleam` file was checked for the space after its marker and never for where its sentences end. A transformation and not a scan, because a scan's recorded block compares comments and diagnostics and would have agreed with the bug.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 7,
+            "end": 32,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 7,
+            "end": 32,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "// A remark.\n// Another one."
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "call()\n// A remark.\n// Another one.\ncall()\n"
+      }
+    },
+    {
+      "id": "a-scan-records-the-run-it-rewrote",
+      "language": "rust",
+      "operation": "scan",
+      "options": {
+        "policy": "none",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "fn head() {}\n// A remark. Another one.\nfn also() {}\n",
+      "note": "The span a rewrite replaces, where it came from, the rule that asked for it, and the bytes it writes are all reported, and nothing in this corpus compared any of them: every wrap case was a transformation, which compares the output and never the report. A library caller reads the report.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 13,
+            "end": 38,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "runs": [
+          {
+            "start": 13,
+            "end": 38,
+            "origin": "comments",
+            "rule": "wrap",
+            "replacement": "// A remark.\n// Another one."
+          }
+        ],
+        "diagnostics": []
       }
     }
   ]

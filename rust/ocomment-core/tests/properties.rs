@@ -119,6 +119,24 @@ proptest! {
         prop_assert_eq!(document.report(), &scan(document.source(), Language::Rust, ScanOptions::default()));
     }
 
+    /* NOTE: The same promise with the style rules turned on, which is a separate case rather than a stronger one.
+     * `ScanOptions::default()` asks for no style rule, so every report either side of that comparison has an empty list of runs and the two agree about a field neither of them filled.
+     * The incremental path returned an empty list unconditionally, and this is the property that says so. */
+    #[test]
+    fn one_incremental_edit_matches_a_full_scan_with_the_style_rules_on(
+        head in "[a-z ]{0,20}", old in "[a-z. ]{0,30}", replacement in "[a-z. ]{0,30}", tail in "[a-z ]{0,20}")
+    {
+        let options = style_only(every_style_rule()).scan;
+        let source = format!("fn a() {{}}\n//{head}\n//{old}\nfn b() {{}}\n//{tail}\n").into_bytes();
+        let start = 12 + 2 + head.len() + 1 + 2;
+        let end = start + old.len();
+        let mut document = IncrementalDocument::new(source, Language::Rust, options.clone(), 1);
+        document.apply_changes(&[DocumentChange {
+            span: ByteSpan::new(start, end), replacement: replacement.as_bytes().to_vec(),
+        }], 2).unwrap();
+        prop_assert_eq!(document.report(), &scan(document.source(), Language::Rust, options));
+    }
+
     #[test]
     fn arbitrary_incremental_edits_match_full_scans_for_every_builtin(
         source in lexical_source(0..48),
