@@ -3,11 +3,9 @@
 //! `[policy.allow] tags` and `[policy.allow.expiry]` differ in one thing and it is the thing that needs a repository: whether the tag runs out.
 //! These tests build one, commit at a date of their choosing, and check that the run reaches the verdict the dates call for — and, just as importantly, that it leaves a comment alone when it cannot read them.
 
-use std::{
-    fs,
-    path::Path,
-    process::{Command, Output},
-};
+mod common;
+
+use std::{fs, path::Path, process::Output};
 use tempfile::TempDir;
 
 fn binary() -> &'static str {
@@ -26,7 +24,7 @@ fn no_user_config() -> &'static std::path::Path {
 }
 
 fn git(directory: &Path, arguments: &[&str], date: Option<&str>) {
-    let mut command = Command::new("git");
+    let mut command = common::isolated("git");
     command.current_dir(directory).args(arguments);
     if let Some(date) = date {
         command
@@ -50,7 +48,7 @@ fn run(directory: &Path, arguments: &[&str]) -> Output {
         arguments.push("--format");
         arguments.push("human");
     }
-    Command::new(binary())
+    common::isolated(binary())
         .env("XDG_CONFIG_HOME", no_user_config())
         .current_dir(directory)
         .args(&arguments)
@@ -223,7 +221,7 @@ fn a_proposed_edit_is_judged_against_the_history_of_the_file_it_would_change() {
         },
     })
     .to_string();
-    let mut child = Command::new(binary())
+    let mut child = common::isolated(binary())
         .env("XDG_CONFIG_HOME", no_user_config())
         .current_dir(path)
         .args(["hook", "claude-code"])

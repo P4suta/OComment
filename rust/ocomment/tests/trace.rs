@@ -3,7 +3,9 @@
 //! The trace is diagnostic: it goes to standard error so that the product on standard output stays exactly what it was, and it is off unless asked for.
 //! Both of those are properties a change could break without any other test noticing, because every other test runs without the flag.
 
-use std::{path::Path, process::Command};
+mod common;
+
+use std::path::Path;
 
 /// The `PATH` a run under test is given.
 ///
@@ -59,7 +61,7 @@ fn run(directory: &Path, arguments: &[&str]) -> (String, String) {
         arguments.push("--format");
         arguments.push("human");
     }
-    let output = Command::new(binary())
+    let output = common::isolated(binary())
         .env("XDG_CONFIG_HOME", no_user_config())
         .current_dir(directory)
         .env("PATH", test_path())
@@ -187,7 +189,7 @@ fn the_human_trace_names_the_evidence_for_a_language() {
 #[test]
 fn selftest_checks_the_embedded_corpus_and_accounts_for_what_it_skips() {
     let directory = tempfile::tempdir().expect("a temporary directory");
-    let output = Command::new(binary())
+    let output = common::isolated(binary())
         .env("XDG_CONFIG_HOME", no_user_config())
         .current_dir(directory.path())
         .env("PATH", test_path())
@@ -382,7 +384,7 @@ fn a_ledger_fails_when_a_count_rises_and_when_it_falls() {
         b"// one\n// two\n// three\nfn main() {}\n",
     )
     .expect("the fixture is writable");
-    let grew = Command::new(binary())
+    let grew = common::isolated(binary())
         .env("XDG_CONFIG_HOME", no_user_config())
         .current_dir(directory.path())
         .env("PATH", test_path())
@@ -399,7 +401,7 @@ fn a_ledger_fails_when_a_count_rises_and_when_it_falls() {
     // NOTE: The half a baseline does not have: finishing the work fails too.
     std::fs::write(directory.path().join("a.rs"), b"fn main() {}\n")
         .expect("the fixture is writable");
-    let shrank = Command::new(binary())
+    let shrank = common::isolated(binary())
         .env("XDG_CONFIG_HOME", no_user_config())
         .current_dir(directory.path())
         .env("PATH", test_path())

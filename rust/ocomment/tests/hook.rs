@@ -4,8 +4,10 @@
 //! The report is an instruction rather than a listing: the verb on each line is the rule that decided the comment, and a comment that only had to move must not be reported as one to delete.
 //! The hook is silent unless it has something to say — a hook that spoke on every event would stand between an agent and every file it touched.
 
+mod common;
+
 use serde_json::{Value, json};
-use std::{path::Path, process::Command};
+use std::path::Path;
 
 /// The `PATH` a run under test is given.
 ///
@@ -47,7 +49,7 @@ fn project() -> tempfile::TempDir {
 
 fn run(directory: &Path, arguments: &[&str], stdin: &str) -> (String, String, i32) {
     use std::io::Write;
-    let mut child = Command::new(binary())
+    let mut child = common::isolated(binary())
         .env("XDG_CONFIG_HOME", no_user_config())
         .current_dir(directory)
         .env("PATH", test_path())

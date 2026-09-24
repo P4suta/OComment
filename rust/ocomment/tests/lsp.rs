@@ -2,11 +2,13 @@
 //!
 //! An editor speaks to this over a pipe and never links the crate, so the cases here do the same: they write framed JSON-RPC in and read framed JSON-RPC out.
 
+mod common;
+
 use serde_json::{Value, json};
 use std::{
     io::{BufRead, BufReader, Read, Write},
     path::Path,
-    process::{Child, ChildStdin, ChildStdout, Command, Stdio},
+    process::{Child, ChildStdin, ChildStdout, Stdio},
 };
 use tower_lsp::lsp_types::Url;
 
@@ -21,7 +23,7 @@ impl LspClient {
         /* NOTE: A scratch `XDG_CONFIG_HOME`, because `ocomment` reads a user configuration from it and a suite that let this machine's through would be a suite whose answers depend on whose machine it ran on. */
         static EMPTY: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
         let empty = EMPTY.get_or_init(|| tempfile::tempdir().expect("a temporary directory"));
-        let mut child = Command::new(env!("CARGO_BIN_EXE_ocomment"))
+        let mut child = common::isolated(env!("CARGO_BIN_EXE_ocomment"))
             .arg("lsp")
             .env("XDG_CONFIG_HOME", empty.path())
             .current_dir(directory)
