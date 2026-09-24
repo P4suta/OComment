@@ -1,10 +1,8 @@
 //! The three things a gate needs besides a verdict: a way to narrow itself to what a branch changed, a refusal to be silently green, and numbers a later step can read.
 
-use std::{
-    fs,
-    path::Path,
-    process::{Command, Output},
-};
+mod common;
+
+use std::{fs, path::Path, process::Output};
 use tempfile::TempDir;
 
 fn binary() -> &'static str {
@@ -23,7 +21,7 @@ fn no_user_config() -> &'static std::path::Path {
 }
 
 fn git(directory: &Path, arguments: &[&str]) {
-    let output = Command::new("git")
+    let output = common::isolated("git")
         .current_dir(directory)
         .args(arguments)
         .output()
@@ -44,7 +42,7 @@ fn run(directory: &Path, arguments: &[&str]) -> Output {
         arguments.push("--format");
         arguments.push("human");
     }
-    Command::new(binary())
+    common::isolated(binary())
         .env("XDG_CONFIG_HOME", no_user_config())
         .current_dir(directory)
         .args(&arguments)

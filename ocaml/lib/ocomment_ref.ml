@@ -589,8 +589,31 @@ let bundler_directive compact =
   in
   webpack || opens_with_keyword compact "vite-ignore"
 
+(** A mise file task's header line: "#" or "//", optional whitespace, then "MISE" or "USAGE", bare or in square brackets, ending at whitespace or at the end of the comment.
+   mise and the usage library it hands argument lines to both match the raw line case-sensitively, so this is asked of [raw] rather than of the folded text, and "# mise installs the runtime" stays prose.
+   A file task is any executable file, so every language is asked. *)
+let mise_task_header raw =
+  let length = String.length raw in
+  let after_marker =
+    if String.starts_with ~prefix:"#" raw then Some 1
+    else if String.starts_with ~prefix:"//" raw then Some 2
+    else None in
+  match after_marker with
+  | None -> false
+  | Some index ->
+    let rec skip cursor =
+      if cursor < length && ascii_whitespace raw.[cursor] then skip (cursor + 1) else cursor in
+    let start = skip index in
+    let rest = String.sub raw start (length - start) in
+    List.exists (fun word ->
+        let size = String.length word in
+        String.starts_with ~prefix:word rest &&
+        (String.length rest = size || ascii_whitespace rest.[size]))
+      ["MISE"; "[MISE]"; "USAGE"; "[USAGE]"]
+
 let is_directive language text raw =
   let compact = directive_compact text in
+  mise_task_header raw ||
   let prefixes = ["sourcemappingurl="; "sourceurl="; "#__pure__"; "@__pure__";
     "__pure__"; "#__no_side_effects__"; "__no_side_effects__"; "ts-ignore";
     "ts-expect-error"; "ts-nocheck"; "ts-check"; "eslint"; "prettier-ignore";
@@ -736,6 +759,8 @@ let bundler_is_load_bearing compact =
 
 let is_load_bearing language text raw =
   let compact = directive_compact text in
+  (* NOTE: A mise task's header decides what the task runs and which arguments it takes, so removing one changes the task rather than a report about it; asked of every language, as [is_directive] asks it. *)
+  mise_task_header raw ||
   match language with
   (* NOTE: The same distinction as in [directive_name], and it has to be made again here because this decides load-bearing from the text rather than from the directive name the other one returned.
      A spaced "// go:generate" is prose, and prose no policy can reach is worse than prose that stays. *)

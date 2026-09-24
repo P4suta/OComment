@@ -3,6 +3,8 @@
 //! Every case here starts a process.
 //! What a test can see is what a caller can see -- the two streams, the exit status, and the bytes on the disk afterwards -- which is the point: a promise the binary makes is a promise about those and not about a function somewhere inside it.
 
+mod common;
+
 use std::{
     collections::BTreeSet,
     fs,
@@ -37,7 +39,7 @@ fn binary() -> &'static str {
 fn command() -> Command {
     static EMPTY: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
     let empty = EMPTY.get_or_init(|| tempfile::tempdir().expect("a temporary directory"));
-    let mut command = Command::new(binary());
+    let mut command = common::isolated(binary());
     command.env("XDG_CONFIG_HOME", empty.path());
     command
 }
@@ -141,7 +143,7 @@ fn git_program() -> &'static str {
 }
 
 fn git(directory: &Path, arguments: &[&str]) -> Vec<u8> {
-    let output = Command::new(git_program())
+    let output = common::isolated(git_program())
         .current_dir(directory)
         .args(arguments)
         .output()
@@ -157,7 +159,7 @@ fn git(directory: &Path, arguments: &[&str]) -> Vec<u8> {
 
 #[cfg(unix)]
 fn git_with_path(directory: &Path, arguments: &[&str], path: &std::ffi::OsStr) -> Vec<u8> {
-    let output = Command::new(git_program())
+    let output = common::isolated(git_program())
         .current_dir(directory)
         .args(arguments)
         .arg(path)
@@ -222,6 +224,27 @@ fn check_diff_and_fix_follow_the_exit_contract() {
         run(directory.path(), &["check", "sample.rs"]).status.code(),
         Some(0)
     );
+}
+
+#[test]
+#[cfg(unix)]
+fn a_repository_named_by_the_callers_environment_is_left_alone() {
+    let sentinel = tempfile::tempdir().unwrap();
+    git(sentinel.path(), &["init", "-q"]);
+    let config = sentinel.path().join(".git/config");
+    let before = fs::read(&config).unwrap();
+
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "a_tidy_and_a_staged_write_both_exit_one"])
+        .env("GIT_DIR", sentinel.path().join(".git"))
+        .env("GIT_WORK_TREE", sentinel.path())
+        .env("GIT_INDEX_FILE", sentinel.path().join(".git/index"))
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{stdout}");
+    assert!(stdout.contains("1 passed"), "{stdout}");
+    assert_eq!(fs::read(&config).unwrap(), before);
 }
 
 /// The two ways a `fix` finishes with something still to answer for.
@@ -314,7 +337,7 @@ fn diff_is_byte_preserving_and_git_applies_quoted_non_utf8_paths() {
         String::from_utf8_lossy(&output.stdout)
     );
 
-    let mut apply = Command::new(git_program())
+    let mut apply = common::isolated(git_program())
         .current_dir(directory.path())
         .args(["apply", "--whitespace=nowarn", "-"])
         .stdin(Stdio::piped())
@@ -2364,7 +2387,7 @@ fn a_wide_transaction_completes_under_a_low_file_descriptor_limit() {
     }
 
     /* NOTE: The shell carries the isolation `command` would have given, because the binary is reached through it rather than spawned directly: a user configuration this machine really has would otherwise decide what this test observes. */
-    let output = Command::new("/bin/bash")
+    let output = common::isolated("/bin/bash")
         .current_dir(directory.path())
         .env("PATH", test_path())
         .env("XDG_CONFIG_HOME", directory.path().join("no-user-config"))

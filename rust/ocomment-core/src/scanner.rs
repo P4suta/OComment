@@ -6094,6 +6094,11 @@ const fn protected_reason(kind: CommentKind) -> Option<&'static str> {
 /// The namespace is the compiler's, `//go:generate` is the only member of it a project could argue is bookkeeping, and the argument is not worth the asymmetry: a marker protected in error is one comment left behind that `--force-protected` takes away, while a marker missed in error is a silent change to the build.
 /// Protect generously, and say why.
 fn is_load_bearing(name: &str, language: Language) -> bool {
+    /* NOTE: A mise file task's header is the task's own definition: `#MISE depends=` and `dir=` decide what runs and where, and `#USAGE flag` declares an argument the task accepts, so a task stripped of one still runs and no longer does what it did.
+     * That is the toolchain's output changing rather than a report, and it is asked of every language because a file task can be written in any of them. */
+    if matches!(name, "MISE" | "USAGE") {
+        return true;
+    }
     match language {
         /* NOTE: `//go:build` and its retired `// +build` twin decide whether the file is compiled at all, `//go:embed` decides what a variable holds, and `//go:noescape` and its neighbours decide what the compiler is allowed to assume. */
         Language::Go => matches!(name, "go:" | "+build"),
@@ -6929,6 +6934,9 @@ fn go_directive(compact: &str, raw: &[u8]) -> Option<&'static str> {
 }
 
 fn directive_name(text: &str, language: Language, raw: &[u8]) -> Option<&'static str> {
+    if let Some(name) = mise_task_header(raw) {
+        return Some(name);
+    }
     let compact = text.trim_start_matches(['!', '/', '*', '#', '@', ' ']);
     let common = [
         "sourcemappingurl=",
@@ -7174,6 +7182,34 @@ fn directive_name(text: &str, language: Language, raw: &[u8]) -> Option<&'static
         | Language::Markdown
         | Language::Unknown => None,
     }
+}
+
+/// The header line a mise file task declares itself in, if `raw` is one.
+///
+/// mise reads a task's description, dependencies, working directory, environment and arguments out of comments at the head of the script, and the `usage` library it hands the argument lines to reads them the same way.
+/// Both match the raw line, case-sensitively: `#` or `//`, optional white space, then `MISE` or `USAGE`, bare or in square brackets (mise 2026.9.12, `^(?:#|//|::)\s*(?:(USAGE|MISE)|\[(USAGE|MISE)\])(.*)$`).
+/// So this reads `raw` rather than the folded text, which is what keeps `# mise installs the runtime` and `# Usage: foo` prose.
+/// The word ends at white space or at the end of the comment, as the tools' own keywords do in [`opens_with_keyword`];
+/// `::` is a batch file's marker, and no built-in language opens a comment with it.
+///
+/// Asked of every language, because a file task is any executable file — shell, Python, Ruby, a Node script — and each writes the header in its own comment marker.
+fn mise_task_header(raw: &[u8]) -> Option<&'static str> {
+    let rest = raw
+        .strip_prefix(b"#")
+        .or_else(|| raw.strip_prefix(b"//"))?
+        .trim_ascii_start();
+    [
+        (&b"MISE"[..], "MISE"),
+        (b"[MISE]", "MISE"),
+        (b"USAGE", "USAGE"),
+        (b"[USAGE]", "USAGE"),
+    ]
+    .into_iter()
+    .find(|(word, _)| {
+        rest.strip_prefix(*word)
+            .is_some_and(|tail| tail.first().is_none_or(u8::is_ascii_whitespace))
+    })
+    .map(|(_, name)| name)
 }
 
 /// Whether `text` opens with `keyword` and then ends it.

@@ -7,10 +7,9 @@
 //! Both are taken from the same file, because the point of the pair is that they say the same thing.
 //! If one of these ever has to change without the other, that is the finding.
 
-use std::{
-    path::Path,
-    process::{Command, Output},
-};
+mod common;
+
+use std::{path::Path, process::Output};
 use tempfile::TempDir;
 
 /// The `PATH` a run under test is given.
@@ -41,7 +40,7 @@ fn no_user_config() -> &'static std::path::Path {
 }
 
 fn run(directory: &Path, arguments: &[&str]) -> Output {
-    Command::new(binary())
+    common::isolated(binary())
         .env("XDG_CONFIG_HOME", no_user_config())
         .current_dir(directory)
         .env("PATH", test_path())

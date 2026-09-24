@@ -123,6 +123,7 @@ DIRECTIVE_WORDS = [
     "eslint-disable", "prettier-ignore", "region", "endregion", "noqa",
     ":schema", "taplo:", "luacheck:", "---@diagnostic", "go:generate",
     "yamllint", "@schema", "yaml-language-server:",
+    "MISE", "USAGE", "[MISE]", "[USAGE]", "mise", "MISEish",
     "Copyright (c) 2020", "SPDX-License-Identifier: MIT", "@license", "NOTE:",
     "coding: utf-8", "pragma once",
 ]

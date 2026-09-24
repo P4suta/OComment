@@ -259,6 +259,24 @@ SAMPLES: dict[str, Sample] = {
         "# a note about syntax=docker/dockerfile:1",
         KEPT_AS_LOAD_BEARING,
     ),
+    # NOTE: A mise file task's header, which mise and the `usage` library read case-sensitively from the raw line.
+    # NOTE: Each near-miss is the same word in the case prose writes it in, which is the boundary the raw-byte match exists to hold.
+    "MISE": Sample(
+        "shell",
+        None,
+        f"{SLOT}\n# control\n",
+        '#MISE description="Audit the signing posture"',
+        "# mise installs the runtime this task needs",
+        KEPT_AS_LOAD_BEARING,
+    ),
+    "USAGE": Sample(
+        "javascript",
+        None,
+        f"{SLOT}\n// control\n",
+        '//USAGE flag "--fix" help="Repair what the audit finds"',
+        "// Usage: node audit.js [--fix]",
+        KEPT_AS_LOAD_BEARING,
+    ),
     "hadolint": Sample(
         "shell",
         None,

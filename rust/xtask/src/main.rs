@@ -63,6 +63,24 @@ const GREEN: &str = "\x1b[32m";
 const YELLOW: &str = "\x1b[33m";
 const RESET: &str = "\x1b[0m";
 
+const GIT_REPOSITORY_ENVIRONMENT: [&str; 15] = [
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_CONFIG",
+    "GIT_CONFIG_PARAMETERS",
+    "GIT_CONFIG_COUNT",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_IMPLICIT_WORK_TREE",
+    "GIT_GRAFT_FILE",
+    "GIT_INDEX_FILE",
+    "GIT_NO_REPLACE_OBJECTS",
+    "GIT_REPLACE_REF_BASE",
+    "GIT_PREFIX",
+    "GIT_SHALLOW_FILE",
+    "GIT_COMMON_DIR",
+];
+
 /// Where the repository is, found from this crate rather than from the directory the caller happened to be in.
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -119,6 +137,9 @@ impl Sweep {
         println!("\n{BOLD}[{:02}] {name}{RESET}", self.number);
         let mut command = Command::new(program);
         command.current_dir(&self.root).args(arguments);
+        for key in GIT_REPOSITORY_ENVIRONMENT {
+            command.env_remove(key);
+        }
         for (key, value) in environment {
             command.env(key, value);
         }

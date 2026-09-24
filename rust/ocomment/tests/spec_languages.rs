@@ -4,6 +4,8 @@
 //! A table like that is only worth publishing while it is true, so every claim it makes is checked here against the code that would have to honour it —
 //! `ocomment_core::detect_language` for the file names, the binary itself for the dialects and for the listing — and the JSON listing is checked against the table byte for byte, so the two cannot drift apart quietly.
 
+mod common;
+
 use ocomment_core::{Dialect, Language, detect_language};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
@@ -11,7 +13,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     io::Write,
     path::Path,
-    process::{Command, Output, Stdio},
+    process::{Output, Stdio},
 };
 
 /// The canonical table, as it sits in `spec/`.
@@ -114,7 +116,7 @@ fn language(name: &str) -> Language {
 /// Run the built binary somewhere no configuration file of this machine can reach it, with `input` on its standard input.
 fn run(arguments: &[&str], input: &[u8]) -> Output {
     let home = tempfile::tempdir().unwrap();
-    let mut child = Command::new(env!("CARGO_BIN_EXE_ocomment"))
+    let mut child = common::isolated(env!("CARGO_BIN_EXE_ocomment"))
         .current_dir(home.path())
         .env("PATH", test_path())
         .env("HOME", home.path())
