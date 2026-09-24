@@ -30,10 +30,14 @@ load_bearing = [
   "optimizer-hint", "version-comment",
   # NOTE: The bundlers': each decides what comes out of the build.
   "webpack", "vite-ignore",
-  "#__PURE__", "@__PURE__", "#__NO_SIDE_EFFECTS__"
+  "#__PURE__", "@__PURE__", "#__NO_SIDE_EFFECTS__",
+  # NOTE: A mise file task's header: `#MISE` and `#USAGE` define what the task runs and which arguments it takes.
+  # NOTE: A file task is any executable file, so both are read in every language and no entry below names them.
+  "MISE", "USAGE"
 ]
 
 # NOTE: Every built-in language answers, an empty list included: surveyed and found to have none is a different claim from nobody having looked.
+# NOTE: The mise task header is the one load-bearing marker read in every language, and it is left out of the entries for the reason the cross-language tool markers are left out of `[protected_by_language]`.
 [load_bearing_by_language]
 go = ["go:", "+build"]
 swift = ["swift-tools-version:"]

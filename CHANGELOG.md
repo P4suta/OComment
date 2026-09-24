@@ -55,6 +55,11 @@ All notable changes to OComment will be documented here. The project follows
 
 ### Fixed
 
+- A mise file task's header is a load-bearing directive in every language.
+  mise and its `usage` library read `#MISE`, `#USAGE`, `#[MISE]` and `#[USAGE]` — and the same after `//` — case-sensitively from the raw line, and `#MISE depends=`, `dir=` and `#USAGE flag` decide what the task runs and which arguments it accepts.
+  They were read as prose, so `ocomment fix --tidy` under `wrap = "sentence"` joined a `#MISE` line and the `#USAGE flag` line under it into one `# MISE` line, and the task stopped declaring the flag.
+  They are now kept by every policy, including `--policy all` without `--force-protected`, and end a paragraph as `# shellcheck` does, while `# mise installs the runtime` and `# Usage: audit` stay prose.
+
 - The test suite runs on the systems this repository publishes a binary for.
   `cargo test` ran on Linux alone while `release.yml` shipped
   `x86_64-pc-windows-msvc`; what Windows CI measured was that the crate builds

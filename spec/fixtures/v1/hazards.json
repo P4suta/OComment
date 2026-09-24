@@ -1210,6 +1210,126 @@
       }
     },
     {
+      "id": "mise-task-header-survives-every-policy",
+      "language": "shell",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "#!/usr/bin/env bash\n#MISE description=\"Audit the signing posture\"\n#USAGE flag \"--fix\" help=\"Repair what the audit finds\"\n# [MISE] dir=\"{{cwd}}\"\n#\t[USAGE] arg \"<repo>\"\n#MISE\n#MISEish note\n##MISE doubled marker\n# mise installs the runtime\n# Usage: audit [--fix]\necho audit\n",
+      "note": "mise reads a file task's configuration out of its header, and mise 2026.9.12 and its usage library match the raw line case-sensitively: `#` or `//`, optional whitespace, then `MISE` or `USAGE`, bare or in square brackets. `#MISE depends=` and `dir=` decide what runs and `#USAGE flag` declares an argument the task accepts, so the header is load-bearing and even `--policy all` keeps it. The word ends at whitespace or at the end of the comment, and prose that opens with the same letters in another case, a word running on past them, or a second `#` is an ordinary comment.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 19,
+            "kind": "shebang",
+            "action": "keep"
+          },
+          {
+            "start": 20,
+            "end": 65,
+            "kind": "load-bearing",
+            "action": "keep"
+          },
+          {
+            "start": 66,
+            "end": 120,
+            "kind": "load-bearing",
+            "action": "keep"
+          },
+          {
+            "start": 121,
+            "end": 143,
+            "kind": "load-bearing",
+            "action": "keep"
+          },
+          {
+            "start": 144,
+            "end": 166,
+            "kind": "load-bearing",
+            "action": "keep"
+          },
+          {
+            "start": 167,
+            "end": 172,
+            "kind": "load-bearing",
+            "action": "keep"
+          },
+          {
+            "start": 173,
+            "end": 186,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 187,
+            "end": 208,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 209,
+            "end": 236,
+            "kind": "line",
+            "action": "remove"
+          },
+          {
+            "start": 237,
+            "end": 259,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "#!/usr/bin/env bash\n#MISE description=\"Audit the signing posture\"\n#USAGE flag \"--fix\" help=\"Repair what the audit finds\"\n# [MISE] dir=\"{{cwd}}\"\n#\t[USAGE] arg \"<repo>\"\n#MISE\n\n\n\n\necho audit\n"
+      }
+    },
+    {
+      "id": "mise-task-header-in-javascript",
+      "language": "javascript",
+      "operation": "transform",
+      "options": {
+        "policy": "all",
+        "layout": "lines"
+      },
+      "source_utf8": "//MISE description=\"Audit the signing posture\"\n// USAGE flag \"--fix\"\n/// MISE is not read behind a third slash\n/* MISE is not read in a block comment */\nrun();\n",
+      "note": "A mise file task is any executable file, so the header is recognised in every language, written with `//` as mise reads it. A third slash is not whitespace and a block comment is not a line mise reads, so neither is a header.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 46,
+            "kind": "load-bearing",
+            "action": "keep"
+          },
+          {
+            "start": 47,
+            "end": 68,
+            "kind": "load-bearing",
+            "action": "keep"
+          },
+          {
+            "start": 69,
+            "end": 110,
+            "kind": "doc-line",
+            "action": "remove"
+          },
+          {
+            "start": 111,
+            "end": 152,
+            "kind": "block",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "//MISE description=\"Audit the signing posture\"\n// USAGE flag \"--fix\"\n\n\nrun();\n"
+      }
+    },
+    {
       "id": "shell-case-command-substitution",
       "language": "shell",
       "operation": "transform",
@@ -15822,6 +15942,57 @@
         ],
         "diagnostics": [],
         "output_utf8": "x=1\n# --- keybindings ------------------------------------\n# Splits, mapped the same way the other machine maps them.\ny=2\n"
+      }
+    },
+    {
+      "id": "wrap-leaves-a-mise-task-header-alone",
+      "language": "shell",
+      "operation": "transform",
+      "options": {
+        "policy": "none",
+        "layout": "lines",
+        "style": {
+          "wrap": "sentence"
+        }
+      },
+      "source_utf8": "#!/usr/bin/env bash\n#MISE description=\"Audit signing posture across local git repos under $HOME\"\n#USAGE flag \"--fix-stale-hooks\" help=\"Remove legacy hooks\"\n#\n# Walks $HOME and audits each repository.\necho audit\n",
+      "note": "The header of a mise file task, as a dotfiles repository wrote it. Read as prose, the two header lines were joined into one `# MISE` line and the reflow wrote a space after the `#`, so mise read a single MISE line and the `--fix-stale-hooks` flag was no longer declared. Each header line is a directive, and a directive ends a paragraph rather than joining one.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 0,
+            "end": 19,
+            "kind": "shebang",
+            "action": "keep"
+          },
+          {
+            "start": 20,
+            "end": 96,
+            "kind": "load-bearing",
+            "action": "keep"
+          },
+          {
+            "start": 97,
+            "end": 155,
+            "kind": "load-bearing",
+            "action": "keep"
+          },
+          {
+            "start": 156,
+            "end": 157,
+            "kind": "line",
+            "action": "keep"
+          },
+          {
+            "start": 158,
+            "end": 199,
+            "kind": "line",
+            "action": "keep"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "#!/usr/bin/env bash\n#MISE description=\"Audit signing posture across local git repos under $HOME\"\n#USAGE flag \"--fix-stale-hooks\" help=\"Remove legacy hooks\"\n#\n# Walks $HOME and audits each repository.\necho audit\n"
       }
     },
     {

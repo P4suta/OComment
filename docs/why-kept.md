@@ -133,6 +133,8 @@ is the only way to give one up.
 | `#__PURE__` | `javascript` | `/*#__PURE__*/` | `load-bearing` | required by the language or its build |
 | `@__PURE__` | `javascript` | `/*@__PURE__*/` | `load-bearing` | required by the language or its build |
 | `#__NO_SIDE_EFFECTS__` | `javascript` | `/*#__NO_SIDE_EFFECTS__*/` | `load-bearing` | required by the language or its build |
+| `MISE` | `shell` | `#MISE description="Audit the signing posture"` | `load-bearing` | required by the language or its build |
+| `USAGE` | `shell` | `#USAGE flag "--fix" help="Repair what the audit finds"` | `load-bearing` | required by the language or its build |
 | `shebang` | `shell` | `#!/bin/sh` | `shebang` | required source preamble |
 | `encoding` | `python` | `# -*- coding: utf-8 -*-` | `encoding` | required source preamble |
 | `sourceMappingURL` | `javascript` | `//# sourceMappingURL=bundle.js.map` | `directive` | tool or language directive |

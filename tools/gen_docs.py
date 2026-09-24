@@ -93,6 +93,8 @@ PROTECTED_SAMPLES: dict[str, tuple[str, str | None, bytes]] = {
     "optimizer-hint": ("sql", "oracle", b"select /*+ index(t) */ 1 from dual;\n"),
     "version-comment": ("sql", "mysql", b"/*!40101 SET NAMES utf8 */\n"),
     "syntax=": ("shell", None, b"# syntax=docker/dockerfile:1\n"),
+    "MISE": ("shell", None, b'#MISE description="Audit the signing posture"\n'),
+    "USAGE": ("shell", None, b'#USAGE flag "--fix" help="Repair what the audit finds"\n'),
     "hadolint": ("shell", None, b"# hadolint ignore=DL3018\n"),
     ":schema": ("toml", None, b"#:schema https://example.test/pyproject.json\n"),
     "taplo:": ("toml", None, b"# taplo: array_auto_expand = false\n"),

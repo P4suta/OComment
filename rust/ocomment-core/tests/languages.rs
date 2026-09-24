@@ -534,6 +534,75 @@ fn dockerfile_parser_and_linter_directives_are_protected() {
     assert_eq!(removable(&report), 3);
 }
 
+/// A mise file task declares its description, dependencies, working directory and arguments in comments at its head, and mise 2026.9.12 and its `usage` library read them case-sensitively from the raw line: `#` or `//`, optional white space, then `MISE` or `USAGE`, bare or in square brackets.
+/// A file task is any executable file, so every language is asked, and removing a line changes what the task runs or accepts, so none of them is reachable by `--policy all`.
+/// The same letters in another case, running on past the word, or behind a marker mise does not read are prose.
+#[test]
+fn mise_task_headers_are_load_bearing_in_every_language() {
+    let all = ScanOptions {
+        policy: Policy::All,
+        ..ScanOptions::default()
+    };
+    let cases: [(Language, &[u8]); 5] = [
+        (
+            Language::Shell,
+            b"#MISE description=\"audit\"\n#USAGE flag \"--fix\"\n# [MISE] dir=\"{{cwd}}\"\n#\t[USAGE] arg \"<repo>\"\n#MISE\n",
+        ),
+        (Language::Python, b"#MISE depends=[\"build\"]\n# USAGE arg \"<file>\"\n"),
+        (Language::Ruby, b"#MISE description=\"audit\"\n#USAGE flag \"--fix\"\n"),
+        (Language::JavaScript, b"//MISE description=\"audit\"\n// [USAGE] flag \"--fix\"\n"),
+        (Language::TypeScript, b"//USAGE flag \"--fix\"\n//[MISE] alias=\"a\"\n"),
+    ];
+    for (language, source) in cases {
+        let report = scan(source, language, all.clone());
+        assert!(report.valid, "{language:?}");
+        for comment in &report.comments {
+            assert_eq!(
+                comment.kind,
+                CommentKind::LoadBearing,
+                "{language:?}: {comment:?}"
+            );
+            assert!(!comment.action().removes(), "{language:?}: {comment:?}");
+        }
+        assert!(!report.comments.is_empty(), "{language:?}");
+    }
+
+    let prose = b"# mise installs the runtime\n# Usage: audit [--fix]\n#MISEish note\n##MISE doubled\n# usage flag\n";
+    let report = scan(prose, Language::Shell, all.clone());
+    assert_eq!(report.comments.len(), 5);
+    assert_eq!(removable(&report), 5);
+
+    let javascript = b"/// MISE doc\n/* MISE block */\nrun();\n";
+    let report = scan(javascript, Language::JavaScript, all);
+    assert_eq!(removable(&report), 2);
+}
+
+/// The header a dotfiles repository wrote, which `fix --tidy` under `wrap = "sentence"` used to join into one `# MISE` line, so mise read the `#USAGE flag` as part of the description and the task no longer took the flag.
+/// A header line is a directive, and a directive ends a paragraph rather than joining one.
+#[test]
+fn a_sentence_wrap_leaves_a_mise_task_header_alone() {
+    let source = b"#!/usr/bin/env bash\n#MISE description=\"Audit signing posture across local git repos under $HOME\"\n#USAGE flag \"--fix-stale-hooks\" help=\"Remove legacy hooks\"\n#\n# Walks $HOME and audits each repository.\necho audit\n";
+    let options = ScanOptions {
+        policy: Policy::None,
+        style: ocomment_core::StyleRules {
+            wrap: ocomment_core::Wrap::Sentence,
+            ..Default::default()
+        },
+        ..ScanOptions::default()
+    };
+    let report = scan(source, Language::Shell, options);
+    assert!(report.valid);
+    assert!(report.runs.is_empty(), "{:?}", report.runs);
+    assert!(
+        report
+            .comments
+            .iter()
+            .all(|comment| !matches!(comment.disposition(), Disposition::Rewrite { .. })),
+        "{:?}",
+        report.comments
+    );
+}
+
 #[test]
 fn shell_command_substitutions_are_scanned_inside_quotes() {
     let source = b"value=\"$(printf ok # nested\n)\"\nold=`printf ok # legacy\n`\ntext=\"# opaque\"\n# remove\n";
