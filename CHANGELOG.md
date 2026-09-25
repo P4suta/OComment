@@ -55,6 +55,11 @@ All notable changes to OComment will be documented here. The project follows
 
 ### Fixed
 
+- A fenced code block indented under a list item is read the way CommonMark reads it.
+  Up to as many spaces as the opening fence is indented come off each line of the body, and a tab that crosses that column leaves the rest of its width as spaces.
+  The body was scanned with the indentation still on, so a heredoc terminator written at the fence's indentation was not one, and the page was reported as invalid syntax with exit status 2.
+  Spans still name the bytes on the page, so `fix` removes a comment in such a block where it stands.
+
 - A mise file task's header is a load-bearing directive in every language.
   mise and its `usage` library read `#MISE`, `#USAGE`, `#[MISE]` and `#[USAGE]` — and the same after `//` — case-sensitively from the raw line, and `#MISE depends=`, `dir=` and `#USAGE flag` decide what the task runs and which arguments it accepts.
   They were read as prose, so `ocomment fix --tidy` under `wrap = "sentence"` joined a `#MISE` line and the `#USAGE flag` line under it into one `# MISE` line, and the task stopped declaring the flag.

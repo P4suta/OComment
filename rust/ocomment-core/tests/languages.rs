@@ -6383,6 +6383,80 @@ fn markdown_fences_close_only_at_their_own_marker() {
     assert!(report.comments.is_empty(), "{:?}", report.comments);
 }
 
+/// A fence under a list item is read without the three columns in front of it, per CommonMark 4.5 and 5.2, so the `EOF` written at the fence's indentation ends the heredoc: the `#` line inside it is heredoc text, and the comment after it is found.
+///
+/// Ground truth, `commonmark` 0.31.2: the block's content is `cat <<'EOF'\n# heredoc text\nEOF\necho done # remove\n`.
+#[test]
+fn markdown_an_indented_fence_is_read_without_its_indentation() {
+    let source = b"1. Step:\n\n   ```sh\n   cat <<'EOF'\n   # heredoc text\n   EOF\n   echo done # remove\n   ```\n";
+    let report = scan(source, Language::Markdown, ScanOptions::default());
+    assert!(report.valid, "diagnostics: {:?}", report.diagnostics);
+    let comments = report
+        .comments
+        .iter()
+        .map(|comment| &source[comment.span.start..comment.span.end])
+        .collect::<Vec<_>>();
+    assert_eq!(comments, vec![b"# remove".as_slice()]);
+}
+
+/// The body of an indented fence is scanned without its indentation, but a removal is written to the page: each span comes back to the bytes it was read from, so `fix` takes the comment and leaves the indentation in front of it.
+#[test]
+fn markdown_a_comment_in_an_indented_fence_is_removed_where_it_stands() {
+    let source = b"- item\n\n  ```sh\n  cat <<'EOF'\n  # text\n  EOF\n  # own line\n  echo done # trailing\n  ```\n";
+    let result = transform(source, Language::Markdown, TransformOptions::default());
+    assert!(result.report.valid, "{:?}", result.report.diagnostics);
+    let comments = result
+        .report
+        .comments
+        .iter()
+        .map(|comment| &source[comment.span.start..comment.span.end])
+        .collect::<Vec<_>>();
+    assert_eq!(
+        comments,
+        vec![b"# own line".as_slice(), b"# trailing".as_slice()]
+    );
+    assert_eq!(
+        result.output,
+        b"- item\n\n  ```sh\n  cat <<'EOF'\n  # text\n  EOF\n  \n  echo done \n  ```\n"
+    );
+}
+
+/// A block comment across the lines of an indented fence comes back as one span over the page, the indentation of its inner lines included, and is removed exactly as the same lines would be from a C file of their own.
+#[test]
+fn markdown_a_block_comment_across_indented_fence_lines_is_removed_whole() {
+    let body: &[u8] = b"   /* one\n      two */\n   int x; /* three\n      four */ int y;\n";
+    let source = [b"1. Build:\n\n   ```c\n".as_slice(), body, b"   ```\n"].concat();
+    let result = transform(&source, Language::Markdown, TransformOptions::default());
+    assert!(result.report.valid, "{:?}", result.report.diagnostics);
+    let comments = result
+        .report
+        .comments
+        .iter()
+        .map(|comment| &source[comment.span.start..comment.span.end])
+        .collect::<Vec<_>>();
+    assert_eq!(
+        comments,
+        vec![
+            b"/* one\n      two */".as_slice(),
+            b"/* three\n      four */".as_slice(),
+        ]
+    );
+    assert_eq!(
+        result.output,
+        b"1. Build:\n\n   ```c\n   \n\n   int x; \n int y;\n   ```\n"
+    );
+    let alone = transform(body, Language::C, TransformOptions::default());
+    assert_eq!(
+        result.output,
+        [
+            b"1. Build:\n\n   ```c\n".as_slice(),
+            &alone.output,
+            b"   ```\n"
+        ]
+        .concat()
+    );
+}
+
 /// Markdown is detected from `.md`, `.markdown` and the `.Rmd` of an R Markdown document, whose `{r}` chunk headers name R.
 #[test]
 fn markdown_is_detected_from_its_extensions() {

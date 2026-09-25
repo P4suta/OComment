@@ -321,6 +321,20 @@ let check_markdown_commonmark_boundaries () =
   Alcotest.(check (list string)) "markdown comments"
     ["# r comment"; "<!-- visible -->"] (raw_comments source report)
 
+(* NOTE: A fence indented N spaces is read with up to N spaces off each line of its body, so the EOF under a list item ends the heredoc; a span still covers the page, indentation between its lines included. *)
+let check_markdown_indented_fence () =
+  let shell = Bytes.of_string
+    "1. Step:\n\n   ```sh\n   cat <<'EOF'\n   # heredoc text\n   EOF\n   echo done # remove\n   ```\n" in
+  let report = scan shell Markdown default_scan_options in
+  Alcotest.(check bool) "heredoc under a list item valid" true report.valid;
+  Alcotest.(check (list string)) "only the comment after the heredoc"
+    ["# remove"] (raw_comments shell report);
+  let block = Bytes.of_string
+    "1. Build:\n\n   ```c\n   /* one\n      two */\n   int x;\n   ```\n" in
+  let report = scan block Markdown default_scan_options in
+  Alcotest.(check (list string)) "block comment over the page"
+    ["/* one\n      two */"] (raw_comments block report)
+
 let check_perl_compound_opaque_constructs () =
   let source = Bytes.of_string
     "print $#items, $^X, $!, $1; # variables\nmy $q = \"escaped \\\" # opaque\"; # quote\n$x =~ s/foo#one/bar#two/g; # substitution\n$x =~ tr/a#b/c#d/; # transliteration\nprint <<  \"ONE\", <<~'TWO';\n# first\nONE\n  # second\n  TWO\n=pod\n# pod\n=cutlery\n# still pod\n=cut\nformat STDOUT =\n@<<<<\n# picture\n.\n# after format\n__DATA__\n# data\n" in
@@ -415,6 +429,7 @@ let () = Alcotest.run "ocomment-ref" [
     Alcotest.test_case "kotlin-multi-dollar" `Quick check_kotlin_multi_dollar_and_quote_runs;
     Alcotest.test_case "scala-characters" `Quick check_scala_characters_and_symbols;
     Alcotest.test_case "markdown-commonmark" `Quick check_markdown_commonmark_boundaries;
+    Alcotest.test_case "markdown-indented-fence" `Quick check_markdown_indented_fence;
     Alcotest.test_case "perl-compounds" `Quick check_perl_compound_opaque_constructs;
     Alcotest.test_case "sfc-attributes-and-sass" `Quick check_sfc_exact_attributes_and_sass;
     Alcotest.test_case "span-bounds" `Quick check_all_spans_are_bounded;
