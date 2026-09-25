@@ -1012,7 +1012,7 @@ impl<'a> Scanner<'a> {
                 0,
             );
             child.scan_c_family_unmapped();
-            self.merge_mapped(child, &mapped);
+            self.merge_mapped(child, &mapped, 0);
         } else {
             self.scan_c_family_unmapped();
         }
@@ -1683,20 +1683,28 @@ impl<'a> Scanner<'a> {
             }
             index += 1;
         }
-        self.merge_mapped(child, &mapped);
+        self.merge_mapped(child, &mapped, 0);
     }
 
-    fn merge_mapped(&mut self, child: Scanner<'_>, mapped: &MappedBytes) {
+    /// Fold in a child that scanned `mapped`, a remapped copy of this source from `origin` on.
+    /// The child reports spans in the copy's coordinates shifted by its own offset, and each comes back as the original bytes it was read from.
+    fn merge_mapped(&mut self, child: Scanner<'_>, mapped: &MappedBytes, origin: usize) {
+        let shift = child.offset;
+        let base = self.offset + origin;
+        let place = |span: ByteSpan| {
+            let copied = ByteSpan::new(
+                span.start.saturating_sub(shift),
+                span.end.saturating_sub(shift),
+            );
+            let original = mapped.original_span(copied);
+            ByteSpan::new(original.start + base, original.end + base)
+        };
         for mut comment in child.comments {
-            comment.span = mapped.original_span(comment.span);
-            comment.span.start += self.offset;
-            comment.span.end += self.offset;
+            comment.span = place(comment.span);
             self.comments.push(comment);
         }
         for mut diagnostic in child.diagnostics {
-            diagnostic.span = mapped.original_span(diagnostic.span);
-            diagnostic.span.start += self.offset;
-            diagnostic.span.end += self.offset;
+            diagnostic.span = place(diagnostic.span);
             self.diagnostics.push(diagnostic);
         }
     }
@@ -5633,7 +5641,7 @@ impl<'a> Scanner<'a> {
                     let valid_info =
                         marker != b'`' || !bytes[cursor + run..info_end].contains(&b'`');
                     if run >= 3 && valid_info {
-                        index = self.scan_markdown_fence(cursor, marker, run);
+                        index = self.scan_markdown_fence(cursor, marker, run, indent);
                         continue;
                     }
                 }
@@ -5653,9 +5661,18 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    /// One fenced code block, beginning at its opening run of backticks or tildes.
+    /// One fenced code block, beginning at its opening run of backticks or tildes, which stands `indent` columns in.
     /// The body is scanned as the language its info string names, or as nothing when the string names none; the block ends at a line of the same marker with a run at least as long as the opener's, and a block that never closes is a file CommonMark reads to its end, so the rest of the document is opaque.
-    fn scan_markdown_fence(&mut self, opener: usize, marker: u8, run: usize) -> usize {
+    ///
+    /// An indented opener takes up to as much indentation off every line of the body, per CommonMark 4.5, and the body is scanned as those lines rather than as the bytes on the page: a heredoc terminator written at the fence's indentation under a list item is at the start of its line.
+    /// The spans come back to the page through [`MappedBytes`].
+    fn scan_markdown_fence(
+        &mut self,
+        opener: usize,
+        marker: u8,
+        run: usize,
+        indent: usize,
+    ) -> usize {
         let bytes = self.source;
         let info_start = opener + run;
         let info_end = line_end(bytes, info_start);
@@ -5696,15 +5713,29 @@ impl<'a> Scanner<'a> {
                 Language::Html | Language::Vue | Language::Svelte | Language::Markdown
             )
         {
-            let mut child = Scanner::child(
-                &bytes[info_end..content_end],
-                language,
-                self.options.clone(),
-                self.patterns.clone(),
-                self.offset + info_end,
-            );
-            child.scan_language();
-            self.merge_child(child);
+            let content = &bytes[info_end..content_end];
+            if indent == 0 {
+                let mut child = Scanner::child(
+                    content,
+                    language,
+                    self.options.clone(),
+                    self.patterns.clone(),
+                    self.offset + info_end,
+                );
+                child.scan_language();
+                self.merge_child(child);
+            } else {
+                let mapped = MappedBytes::without_fence_indentation(content, indent);
+                let mut child = Scanner::child(
+                    &mapped.bytes,
+                    language,
+                    self.options.clone(),
+                    self.patterns.clone(),
+                    self.offset + info_end,
+                );
+                child.scan_language();
+                self.merge_mapped(child, &mapped, info_end);
+            }
         }
         closer.map_or(bytes.len(), |(_, resume)| resume)
     }
@@ -10680,6 +10711,50 @@ impl MappedBytes {
         }
     }
 
+    /// The body of a fenced code block whose opener stands `indent` columns in, as CommonMark 4.5 hands it on: up to `indent` columns of indentation come off the start of every line.
+    ///
+    /// `content` begins at the line terminator that ends the opener, so its first line is the empty rest of that one and loses nothing.
+    /// A tab counts to the next multiple of four, per CommonMark 2.2, and one that runs past `indent` is taken off and the columns it had left are put back as spaces — `commonmark` 0.31.2 and `markdown-it` 15.0.2 both read `\tEOF` under a three-space opener as ` EOF`.
+    /// Each of those spaces maps back to the tab.
+    fn without_fence_indentation(content: &[u8], indent: usize) -> Self {
+        let mut bytes = Vec::with_capacity(content.len());
+        let mut origins = Vec::with_capacity(content.len());
+        let mut index = 0;
+        let mut line_start = false;
+        while index < content.len() {
+            if line_start {
+                line_start = false;
+                let mut column = 0;
+                while column < indent && index < content.len() {
+                    match content[index] {
+                        b' ' => column += 1,
+                        b'\t' => {
+                            let stop = column + 4 - column % 4;
+                            for _ in indent..stop {
+                                bytes.push(b' ');
+                                origins.push(ByteSpan::new(index, index + 1));
+                            }
+                            column = stop;
+                        }
+                        _ => break,
+                    }
+                    index += 1;
+                }
+                continue;
+            }
+            let byte = content[index];
+            bytes.push(byte);
+            origins.push(ByteSpan::new(index, index + 1));
+            index += 1;
+            line_start = byte == b'\n' || (byte == b'\r' && content.get(index) != Some(&b'\n'));
+        }
+        Self {
+            bytes,
+            origins,
+            original_len: content.len(),
+        }
+    }
+
     fn java_unicode(source: &[u8]) -> (Self, Vec<ByteSpan>) {
         let mut bytes = Vec::with_capacity(source.len());
         let mut origins = Vec::with_capacity(source.len());
@@ -10822,6 +10897,40 @@ mod tests {
             &br"int x; \u002f\u002f hi\nint y;"
                 [report.comments[0].span.start..report.comments[0].span.end],
             br"\u002f\u002f hi\nint y;"
+        );
+    }
+
+    /// The copy an indented fence's body is scanned over, and where each of its bytes came from.
+    /// The body begins at the break that ends the opener's line, every line after a LF, a CRLF or a bare CR loses up to the opener's three columns, and a tab that crosses the third leaves its fourth behind as a space that maps back to the tab.
+    /// A span across lines comes back with the indentation between them.
+    #[test]
+    fn a_fence_body_loses_the_opener_indentation_and_maps_back() {
+        let content = b"\n    a\r\n  b\r\tc\n";
+        let mapped = MappedBytes::without_fence_indentation(content, 3);
+        assert_eq!(mapped.bytes, b"\n a\r\nb\r c\n");
+        assert_eq!(
+            mapped
+                .origins
+                .iter()
+                .map(|origin| origin.start)
+                .collect::<Vec<_>>(),
+            vec![0, 4, 5, 6, 7, 10, 11, 12, 13, 14]
+        );
+        assert_eq!(
+            mapped.original_span(ByteSpan::new(1, 6)),
+            ByteSpan::new(4, 11)
+        );
+        assert_eq!(
+            mapped.original_span(ByteSpan::new(7, 9)),
+            ByteSpan::new(12, 14)
+        );
+        assert_eq!(
+            mapped.original_span(ByteSpan::new(8, 10)),
+            ByteSpan::new(13, 15)
+        );
+        assert_eq!(
+            mapped.original_span(ByteSpan::new(5, 5)),
+            ByteSpan::new(10, 10)
         );
     }
 

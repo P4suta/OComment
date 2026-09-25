@@ -11821,6 +11821,78 @@
       }
     },
     {
+      "id": "markdown-indented-fence-takes-its-indentation-off-each-line",
+      "language": "markdown",
+      "operation": "transform",
+      "options": {
+        "policy": "standard",
+        "layout": "lines"
+      },
+      "source_utf8": "  ```sh\n  cat <<'EOF'\n   EOF\n EOF\n  # comment\n  ```\n",
+      "note": "CommonMark 0.31.2, 4.5: a fence indented N spaces takes up to N spaces of indentation off each line of its content, so under a two-space opener `   EOF` keeps one space and is heredoc text, ` EOF` loses the one it has and ends the heredoc, and `# comment` after it is a shell comment. Ground truth, `commonmark` 0.31.2 and `markdown-it` 15.0.2: the block's content is `cat <<'EOF'\\n EOF\\nEOF\\n# comment\\n`, and bash run over it prints ` EOF`.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 36,
+            "end": 45,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "  ```sh\n  cat <<'EOF'\n   EOF\n EOF\n  \n  ```\n"
+      }
+    },
+    {
+      "id": "markdown-fence-under-a-list-item-loses-the-item-indentation",
+      "language": "markdown",
+      "operation": "transform",
+      "options": {
+        "policy": "standard",
+        "layout": "lines"
+      },
+      "source_utf8": "# T\n\n1. Step:\n\n   ```sh\n   cat <<'EOF'\n   # heredoc text\n   EOF\n   echo done # remove\n   ```\n",
+      "note": "CommonMark 0.31.2, 5.2 and 4.5: the three columns in front of a fence under `1. ` belong to the list item, which takes them off every line of the block; read as the fence's own indentation they come off the same way. So the `EOF` ends the heredoc, `# heredoc text` is heredoc text, and only `# remove` is a comment. Ground truth, `commonmark` 0.31.2 and `markdown-it` 15.0.2: the block's content is `cat <<'EOF'\\n# heredoc text\\nEOF\\necho done # remove\\n`, and bash run over it prints `# heredoc text` and `done`.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 77,
+            "end": 85,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "# T\n\n1. Step:\n\n   ```sh\n   cat <<'EOF'\n   # heredoc text\n   EOF\n   echo done \n   ```\n"
+      }
+    },
+    {
+      "id": "markdown-indented-fence-counts-a-tab-to-its-stop",
+      "language": "markdown",
+      "operation": "transform",
+      "options": {
+        "policy": "standard",
+        "layout": "lines"
+      },
+      "source_utf8": "   ```sh\n   cat <<-EOF\n\tEOF\n   # still heredoc text\n   EOF\n   echo done # remove\n   ```\n",
+      "note": "CommonMark 0.31.2, 2.2 and 4.5: a tab in the indentation reaches the next multiple of four columns, so a three-space opener takes three of a leading tab's four columns and leaves one as a space. `\\tEOF` becomes ` EOF`, which `<<-` does not strip and so does not end the heredoc: `# still heredoc text` is heredoc text, the `EOF` under it ends the heredoc, and only `# remove` is a comment. Ground truth, `commonmark` 0.31.2 and `markdown-it` 15.0.2: the block's content is `cat <<-EOF\\n EOF\\n# still heredoc text\\nEOF\\necho done # remove\\n`, and bash run over it prints ` EOF` and `# still heredoc text`.",
+      "expect": {
+        "valid": true,
+        "comments": [
+          {
+            "start": 72,
+            "end": 80,
+            "kind": "line",
+            "action": "remove"
+          }
+        ],
+        "diagnostics": [],
+        "output_utf8": "   ```sh\n   cat <<-EOF\n\tEOF\n   # still heredoc text\n   EOF\n   echo done \n   ```\n"
+      }
+    },
+    {
       "id": "sass-nested-interpolation-single-diagnostic",
       "language": "css",
       "dialect": "sass",

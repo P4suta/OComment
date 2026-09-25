@@ -831,6 +831,30 @@ fn a_gemfile_is_scanned_as_ruby_by_its_name_alone() {
     );
 }
 
+/// A fence under a list item is read without the item's indentation, as CommonMark reads it, so the heredoc in it ends at its `EOF`, the file is valid, and `fix` removes the comment after the heredoc where it stands on the page.
+#[test]
+fn a_heredoc_in_a_fence_under_a_list_item_is_fixed_in_place() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("steps.md");
+    fs::write(
+        &path,
+        b"1. Step:\n\n   ```sh\n   cat <<'EOF'\n   # heredoc text\n   EOF\n   echo done # remove\n   ```\n",
+    )
+    .unwrap();
+
+    let fixed = run(directory.path(), &["fix", "steps.md"]);
+    assert_eq!(
+        fixed.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&fixed.stderr)
+    );
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        b"1. Step:\n\n   ```sh\n   cat <<'EOF'\n   # heredoc text\n   EOF\n   echo done \n   ```\n"
+    );
+}
+
 #[test]
 fn invalid_input_returns_two_and_fix_is_non_destructive() {
     let directory = tempfile::tempdir().unwrap();
