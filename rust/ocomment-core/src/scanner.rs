@@ -324,7 +324,7 @@ fn reachable(
 /// The specific wins.
 ///
 /// Not a nicety.
-/// This repository pins every GitHub Action to a SHA and writes the version beside it as a comment, which Dependabot rewrites when it moves the pin — so a `keep_regex` names it, and it *has* to sit beside the code it annotates.
+/// This repository pins every GitHub Action to a SHA and writes the version beside it as a comment, which Renovate rewrites when it moves the pin — so a `keep_regex` names it, and it *has* to sit beside the code it annotates.
 /// Under the older rule `trailing = false` took all of them, and there was no way to have both settings mean what they say.
 fn named_outright(
     raw: &[u8],

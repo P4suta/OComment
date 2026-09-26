@@ -127,7 +127,7 @@ Two things are out of their reach, and both for the same reason — the rules ar
 
 **A comment somebody named outright.** `keep_kind` names a kind and `keep_regex` names the bytes; both are a project saying *keep exactly this*,
 and a shape rule is a project saying *keep things like this*. The specific wins.
-This repository pins every GitHub Action to a SHA and writes the version beside it as a comment that Dependabot rewrites — a `keep_regex` names it, and it has to sit beside the line it annotates.
+This repository pins every GitHub Action to a SHA and writes the version beside it as a comment that Renovate rewrites — a `keep_regex` names it, and it has to sit beside the line it annotates.
 
 **A comment that is not prose.** Documentation comments and licence notices are as long as their content requires.
 A directive is *addressed* to a tool, and a tool reads it where it sits: `x = 1  # noqa` silences a warning about that line and silences nothing a line above it.
