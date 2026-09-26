@@ -31,7 +31,7 @@ mode = "conservative"
 layout = "lines"
 keep_regex = [
   # NOTE: The version beside a SHA-pinned action, now that YAML is scanned.
-  # NOTE: CONTRIBUTING.md requires every `uses:` to carry one and Dependabot rewrites it when it moves the pin, so it is read by a machine rather than by a reader and has no rationale to tag.
+  # NOTE: CONTRIBUTING.md requires every `uses:` to carry one and Renovate rewrites it when it moves the pin, so it is read by a machine rather than by a reader and has no rationale to tag.
   # NOTE: The pattern is the whole comment, so prose that merely opens with a version is still prose.
   '^#\s*v[0-9]+(\.[0-9]+)*$',
 ]

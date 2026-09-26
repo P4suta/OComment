@@ -178,7 +178,7 @@ A language whose only comment is `#` — shell, Python, the Dockerfile — has n
 
 Prose that documents a Python object belongs in its docstring instead, which is not a comment at all.
 
-A comment that a machine reads and rewrites is the one thing this rule has no tag for, and `[policy] keep_regex` in `.ocomment.toml` is where such a shape is named instead: the version beside a SHA-pinned action is required by this document, is maintained by Dependabot rather than by a reader, and is kept by a pattern that matches the whole comment.
+A comment that a machine reads and rewrites is the one thing this rule has no tag for, and `[policy] keep_regex` in `.ocomment.toml` is where such a shape is named instead: the version beside a SHA-pinned action is required by this document, is maintained by Renovate rather than by a reader, and is kept by a pattern that matches the whole comment.
 Adding a language can bring more files under the gate and so more such shapes; a bare `ocomment` is what finds them.
 
 `ocomment config explain` names the setting behind each of these rules, and `ocomment --explain` names the rule that decided any one comment.
