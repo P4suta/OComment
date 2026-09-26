@@ -5,6 +5,41 @@ All notable changes to OComment will be documented here. The project follows
 
 ## Unreleased
 
+## [0.2.0](https://github.com/P4suta/OComment/compare/v0.1.0...v0.2.0) - 2026-09-26
+
+### Added
+
+- [**breaking**] decide what a comment says, and write the half a machine can settle ([#64](https://github.com/P4suta/OComment/pull/64))
+- read Go's module files ([#52](https://github.com/P4suta/OComment/pull/52))
+- say which binary answered, and why a cached gate is not one ([#47](https://github.com/P4suta/OComment/pull/47))
+- make `--explain` answer under the report it is asked of ([#44](https://github.com/P4suta/OComment/pull/44))
+- make a report too large to read into one to navigate ([#43](https://github.com/P4suta/OComment/pull/43))
+- [**breaking**] report the decisions a run asks for, not the lines it found ([#42](https://github.com/P4suta/OComment/pull/42))
+- [**breaking**] make the deletion tool decide by what a comment promises, and answer the agent writing it ([#30](https://github.com/P4suta/OComment/pull/30))
+
+### Fixed
+
+- *(markdown)* remove a fence's indentation before scanning its body ([#72](https://github.com/P4suta/OComment/pull/72))
+- keep mise task headers as directives, and keep the suite off an inherited GIT_DIR ([#68](https://github.com/P4suta/OComment/pull/68))
+- *(go)* require //go: and //line to begin at the comment marker ([#62](https://github.com/P4suta/OComment/pull/62))
+- a `#` inside a pattern is not a comment ([#54](https://github.com/P4suta/OComment/pull/54))
+- a gate that is off says so ([#51](https://github.com/P4suta/OComment/pull/51))
+- say which one — which reader answered, which comment a finding is ([#48](https://github.com/P4suta/OComment/pull/48))
+- when the policy is stricter than the kind, say so instead of guessing ([#46](https://github.com/P4suta/OComment/pull/46))
+- give a profile's reader the classification every other reader runs ([#41](https://github.com/P4suta/OComment/pull/41))
+- read what a `<style>` says it holds, and stop claiming it says nothing ([#37](https://github.com/P4suta/OComment/pull/37))
+- read what a `<script>` says it holds before reading it as JavaScript ([#36](https://github.com/P4suta/OComment/pull/36))
+- stop --force-invalid removing the code under an unterminated comment ([#35](https://github.com/P4suta/OComment/pull/35))
+- count the files the walk never reached ([#33](https://github.com/P4suta/OComment/pull/33))
+- ask whether a scan failed, rather than naming the severity that means it ([#45](https://github.com/P4suta/OComment/pull/45))
+- ask every language what its toolchain reads, not just the load-bearing tier ([#38](https://github.com/P4suta/OComment/pull/38))
+
+### Other
+
+- [**breaking**] make the task runner code, and let the compiler refuse a variant nobody classified ([#32](https://github.com/P4suta/OComment/pull/32))
+- automate preparation and publish only product crates ([#17](https://github.com/P4suta/OComment/pull/17))
+- name every field of every verdict, so a new one cannot go unsaid ([#40](https://github.com/P4suta/OComment/pull/40))
+
 ### Added
 
 - A second axis: what a comment *says*, as well as whether it stays.

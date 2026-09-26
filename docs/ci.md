@@ -23,7 +23,7 @@ Until then, a missing `ocomment` fails the hook with a "command not found" error
 ```yaml
 repos:
   - repo: https://github.com/P4suta/OComment
-    rev: v0.1.0
+    rev: v0.2.0
     hooks:
       - id: ocomment-check
 ```
@@ -36,7 +36,7 @@ To let the hook write what a machine can settle, add `ocomment-tidy` in front of
 ```yaml
 repos:
   - repo: https://github.com/P4suta/OComment
-    rev: v0.1.0
+    rev: v0.2.0
     hooks:
       - id: ocomment-tidy
       - id: ocomment-check
@@ -52,7 +52,7 @@ It applies the removals too, including the comments above that were worth keepin
 ```yaml
 repos:
   - repo: https://github.com/P4suta/OComment
-    rev: v0.1.0
+    rev: v0.2.0
     hooks:
       - id: ocomment-fix
       - id: ocomment-check
@@ -156,7 +156,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: P4suta/OComment@v0.1.0
+      - uses: P4suta/OComment@v0.2.0
         with:
           paths: src tests
 ```
@@ -172,7 +172,7 @@ jobs:
       security-events: write # NOTE: Upload the SARIF file to code scanning.
     steps:
       - uses: actions/checkout@v7
-      - uses: P4suta/OComment@v0.1.0
+      - uses: P4suta/OComment@v0.2.0
         with:
           format: sarif
           upload-sarif: "true"
@@ -214,7 +214,7 @@ The SARIF is uploaded under the `ocomment` category, so it does not collide with
 
 ```yaml
       - id: comments
-        uses: P4suta/OComment@v0.1.0
+        uses: P4suta/OComment@v0.2.0
         with:
           fail-on-findings: "false"
       - if: steps.comments.outputs.exit-code == '1'
@@ -258,7 +258,7 @@ This is how the repository's own `action-smoke` job tests the action against a f
 
 ### Pinning
 
-Version tags are immutable under the repository's release-tag ruleset, so `P4suta/OComment@v0.1.0` is a stable reference and there is no moving `v0` tag to follow.
+Version tags are immutable under the repository's release-tag ruleset, so `P4suta/OComment@v0.2.0` is a stable reference and there is no moving `v0` tag to follow.
 Pin to a full version, or to a commit SHA with a version comment if your policy requires it.
 
 ## Keeping the protected directives honest
@@ -363,16 +363,16 @@ if _, err := os.ReadFile(binary); err != nil {
 ```
 
 Read the binary rather than recording `ocomment --version`.
-Two builds can answer `ocomment 0.1.0` and disagree about the same file — one from a release,
+Two builds can answer `ocomment 0.2.0` and disagree about the same file — one from a release,
 one from a working tree — and a version string cannot tell them apart.
 `ocomment doctor` says which one answered:
 
 ```console
 $ ocomment doctor
-ocomment 0.1.0
+ocomment 0.2.0
 binary: /usr/local/bin/ocomment (sha256:19010bf16aa8983d95a7f6d83b8aae9854369961ecd8dc1edff12c8a40a7208b)
 ``` This is
-not hypothetical: it is how the licence bug that `[policy] mode` fixed was reported as a failing gate in one shell and a passing one in another, on the same machine, on the same day, with `mise exec` and a bare `PATH` resolving to different `0.1.0`s.
+not hypothetical: it is how the licence bug that `[policy] mode` fixed was reported as a failing gate in one shell and a passing one in another, on the same machine, on the same day, with `mise exec` and a bare `PATH` resolving to different `0.2.0`s.
 
 The same hole is not Go's.
 Any runner that caches on declared inputs has it: a Cargo build script needs `cargo:rerun-if-changed` for a tool it shells out to,
