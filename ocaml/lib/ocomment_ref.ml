@@ -938,6 +938,37 @@ let without_c_line_splices source =
   { mapped = Bytes.of_string (Buffer.contents buffer);
     origins = Array.of_list (List.rev !origins); original_length = Bytes.length source }
 
+(** The body of a fenced code block whose opener is indented [indent] columns, with up to that many columns taken off the start of each line (CommonMark 4.5).
+    The body starts at the line break that ends the opener, so its first line is not a line of the block and keeps what it has.
+    A tab reaches the next multiple of four (CommonMark 2.2); when it crosses [indent] it is replaced by the spaces that remain past [indent], each of which maps back to the tab. *)
+let without_fence_indentation source indent =
+  let length = Bytes.length source in
+  let buffer = Buffer.create length and origins = ref [] in
+  let keep character origin =
+    Buffer.add_char buffer character;
+    origins := { start = origin; finish = origin + 1 } :: !origins in
+  let rec strip index column =
+    if column >= indent || index >= length then index
+    else match Bytes.get source index with
+      | ' ' -> strip (index + 1) (column + 1)
+      | '\t' ->
+        let stop = (column / 4 + 1) * 4 in
+        for _ = 1 to stop - indent do keep ' ' index done;
+        strip (index + 1) stop
+      | _ -> index in
+  let rec copy index =
+    if index < length then begin
+      let character = Bytes.get source index in
+      keep character index;
+      let next = index + 1 in
+      let ends_line = character = '\n'
+        || (character = '\r' && (next >= length || Bytes.get source next <> '\n')) in
+      copy (if ends_line then strip next 0 else next)
+    end in
+  copy 0;
+  { mapped = Bytes.of_string (Buffer.contents buffer);
+    origins = Array.of_list (List.rev !origins); original_length = length }
+
 let hex_digit = function
   | '0' .. '9' as value -> Some (Char.code value - Char.code '0')
   | 'a' .. 'f' as value -> Some (Char.code value - Char.code 'a' + 10)
@@ -4953,7 +4984,7 @@ let vue_style_language lang =
    }" opens an expression. *)
 
 (** One Markdown document.
-   An HTML comment is a comment, a fenced code block is scanned as the language its info string names, and a code span or indented block is opaque.
+   An HTML comment is a comment, a fenced code block is scanned as the language its info string names, over its lines with the opener's indentation taken off each, and a code span or indented block is opaque.
    Every construct is recognised at its own start and read forward, so no decision depends on a byte behind a restart. *)
 
 (** One Perl document.
@@ -5311,7 +5342,7 @@ let scan_markdown source language options accumulator =
     if word = "" then None else match language_of_string word with
       | Ok found -> Some found
       | Error _ -> None in
-  let fence opener marker run =
+  let fence opener marker run columns =
     let info_start = opener + run in
     let info_finish = line_end source info_start in
     let embedded = fence_language
@@ -5346,7 +5377,9 @@ let scan_markdown source language options accumulator =
     (match embedded with
      | Some (Html | Markdown | Vue | Svelte | Unknown) | None -> ()
      | Some embedded ->
-       let child_source = Bytes.sub source info_finish (content_finish - info_finish) in
+       let mapping = without_fence_indentation
+         (Bytes.sub source info_finish (content_finish - info_finish)) columns in
+       let child_source = mapping.mapped in
        let child = { comments_rev = []; diagnostics_rev = []; yaml_blocks_rev = [] } in
        (match embedded with
         | Css when options.dialect = Sass -> scan_sass child_source embedded options child
@@ -5370,15 +5403,16 @@ let scan_markdown source language options accumulator =
         | R -> scan_r child_source embedded options child
         | Perl -> scan_perl child_source embedded options child
         | Html | Markdown | Vue | Svelte | Unknown -> ());
+       let place span =
+         let span = mapped_span mapping span in
+         { start = span.start + info_finish; finish = span.finish + info_finish } in
        List.iter (fun (comment : comment) ->
-         accumulator.comments_rev <- { comment with span = {
-           start = comment.span.start + info_finish;
-           finish = comment.span.finish + info_finish } } :: accumulator.comments_rev)
+         accumulator.comments_rev <- { comment with span = place comment.span }
+           :: accumulator.comments_rev)
          (List.rev child.comments_rev);
        List.iter (fun (diagnostic : diagnostic) ->
-         accumulator.diagnostics_rev <- { diagnostic with span = {
-           start = diagnostic.span.start + info_finish;
-           finish = diagnostic.span.finish + info_finish } } :: accumulator.diagnostics_rev)
+         accumulator.diagnostics_rev <- { diagnostic with span = place diagnostic.span }
+           :: accumulator.diagnostics_rev)
          (List.rev child.diagnostics_rev));
     match closer with Some (_, resume) -> resume | None -> length in
   let indented start =
@@ -5407,7 +5441,7 @@ let scan_markdown source language options accumulator =
         let valid_info = marker <> '`'
           || not (String.contains
                     (Bytes.sub_string source (cursor + run) (info_finish - cursor - run)) '`') in
-        if run >= 3 && valid_info then loop (fence cursor marker run)
+        if run >= 3 && valid_info then loop (fence cursor marker run columns)
         else if marker = '`' then loop (inline_code_end cursor)
         else loop (index + 1)
       end else if Bytes.get source index = '`' then loop (inline_code_end index)
