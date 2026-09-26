@@ -359,3 +359,18 @@ jobs:
           docker buildx build --build-context builder=release/binaries \
             --load -t ocomment:ci-prebuilt .
           docker run --rm ocomment:ci-prebuilt --version
+
+  required:
+    name: required
+    if: always()
+    needs: [rust, msrv, reference, dogfood, host-smoke, action-smoke, vscode, docker]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Fail unless every needed job succeeded or was skipped
+        env:
+          RESULTS: ${{ toJSON(needs.*.result) }}
+        run: |
+          echo "${RESULTS}"
+          jq -e 'all(.[]; IN("success", "skipped"))' <<< "${RESULTS}"
