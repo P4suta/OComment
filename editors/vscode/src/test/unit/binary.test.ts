@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -90,14 +90,16 @@ test("PATHEXT decides the suffix on Windows", () => {
 	const executable = join(directory, "ocomment.exe");
 	// NOTE: Windows has no execute bit, so the mode is deliberately left plain here: finding this file is what proves the lookup does not ask for one on a platform that has none.
 	writeFileSync(executable, "");
-	assert.equal(
-		locate(DEFAULT_COMMAND, {
-			configured: "",
-			env: { PATH: directory, PATHEXT: ".COM;.EXE;.BAT" },
-			platform: "win32",
-		}),
-		executable,
-	);
+	const located = locate(DEFAULT_COMMAND, {
+		configured: "",
+		env: { PATH: directory, PATHEXT: ".COM;.EXE;.BAT" },
+		platform: "win32",
+	});
+	assert.ok(located);
+	const actual = statSync(located);
+	const expected = statSync(executable);
+	assert.equal(actual.dev, expected.dev);
+	assert.equal(actual.ino, expected.ino);
 });
 
 test("a path that names a file is used without consulting PATH", () => {
