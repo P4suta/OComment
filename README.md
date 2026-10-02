@@ -31,7 +31,7 @@ ocomment fix src
 printf '%s\n' 'let x = 1; // remove' | ocomment strip --language rust
 ```
 
-Or install nothing: `docker run --rm -v "$PWD:/src" ghcr.io/p4suta/ocomment:0.1.0 check` runs the same CLI from the [container image](docs/docker.md).
+Or install nothing: `docker run --rm -v "$PWD:/src" ghcr.io/p4suta/ocomment:0.2.0 check` runs the same CLI from the [container image](docs/docker.md).
 
 A command that names no path checks the current directory, so running it from a subdirectory checks that subdirectory; a bare `ocomment` run from the repository root already checks the whole repository, under the ordinary walk limits — `cd "$(git rev-parse --show-toplevel)"` gets there from anywhere inside it.
 Naming a path explicitly (`ocomment .`, `ocomment src`) is a request rather than a default, so it bypasses the hidden-file and size limits, as [configuration](docs/configuration.md) describes.
@@ -161,7 +161,7 @@ The hooks are `language: system`, so install the CLI first, then point a `.pre-c
 ```yaml
 repos:
   - repo: https://github.com/P4suta/OComment
-    rev: v0.1.0
+    rev: v0.2.0
     hooks:
       - id: ocomment-check
 ```
@@ -173,7 +173,7 @@ repos:
 It downloads the release archive for the runner, verifies its SHA-256 and its build-provenance attestation, and annotates the pull request:
 
 ```yaml
-      - uses: P4suta/OComment@v0.1.0
+      - uses: P4suta/OComment@v0.2.0
         with:
           paths: src tests
 ```
