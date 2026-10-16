@@ -5,7 +5,7 @@
 # NOTE: docs/docker.md says what a caller gives up for that, and how a published image is verified.
 
 # NOTE: Docker Hub index digest for the multi-platform rust:1.88-alpine image.
-FROM rust:1.88-alpine@sha256:9dfaae478ecd298b6b5a039e1f2cc4fc040fc818a2de9aa78fa714dea036574d AS builder
+FROM rust:1.98-alpine@sha256:7cc1c22d77d9432f7fe012a70e6d3e555af54c2a6832700ed7d553f1769ae89f AS builder
 ARG TARGETARCH
 # NOTE: musl-dev is deliberately unpinned: the version that matters is the one the pinned `rust:1.88-alpine` tag resolves to, and pinning a package version on top of that only breaks the build when the base image moves.
 # hadolint ignore=DL3018
