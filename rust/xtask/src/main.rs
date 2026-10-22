@@ -197,6 +197,7 @@ fn available(program: &str) -> bool {
 /// Naming the interpreter here rather than assuming `python3` is what keeps the sweep runnable on a machine whose `python3` is older than the tools need.
 fn python(root: &Path) -> Result<String> {
     let mut candidates: Vec<String> = std::env::var("OCOMMENT_PYTHON").ok().into_iter().collect();
+    candidates.push("python".to_owned());
     candidates.push("python3".to_owned());
     candidates.extend((11..=20).rev().map(|minor| format!("python3.{minor}")));
     // NOTE: A version manager's interpreter is not on the path under its own name unless it has been activated here, and the one it installed is usually the only one new enough.
@@ -235,7 +236,11 @@ fn python(root: &Path) -> Result<String> {
 }
 
 const MANIFEST: &str = "rust/Cargo.toml";
-const BINARY: &str = "rust/target/debug/ocomment";
+const BINARY: &str = if cfg!(windows) {
+    "rust/target/debug/ocomment.exe"
+} else {
+    "rust/target/debug/ocomment"
+};
 
 fn preflight(arguments: &[String]) -> Result<()> {
     let mut quick = false;
@@ -249,6 +254,25 @@ fn preflight(arguments: &[String]) -> Result<()> {
     let root = root();
     let python = python(&root)?;
     let mut sweep = Sweep::new(root, python);
+
+    sweep.step(
+        "Python types",
+        "uv",
+        [
+            "run",
+            "--with-requirements",
+            "tools/requirements-ci.txt",
+            "python",
+            "-m",
+            "mypy",
+            "--strict",
+            "tools/check_ci_contracts.py",
+            "tools/sync_release_docs.py",
+            "tools/test_sync_release_docs.py",
+        ],
+    )?;
+
+    sweep.step("Workflows", "actionlint", std::iter::empty::<&str>())?;
 
     sweep.step(
         "Format",
@@ -500,7 +524,11 @@ fn release_check() -> Result<()> {
             "throughput",
         ],
     )?;
-    const RELEASE_BINARY: &str = "rust/target/release/ocomment";
+    const RELEASE_BINARY: &str = if cfg!(windows) {
+        "rust/target/release/ocomment.exe"
+    } else {
+        "rust/target/release/ocomment"
+    };
     sweep.step(
         "Schemas (release)",
         &python,

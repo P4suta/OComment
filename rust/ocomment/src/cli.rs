@@ -105,6 +105,7 @@ The complete schemas and guides are available in the OComment repository.
 #[derive(Parser)]
 #[command(
     name = "ocomment",
+    bin_name = "ocomment",
     version,
     about = "Check and remove source-code comments safely"
 )]
@@ -2208,8 +2209,8 @@ fn running_binary() -> String {
     let shown = output::sanitize_path(&path.to_string_lossy());
     match std::fs::read(&path) {
         Ok(bytes) => {
-            let digest = <sha2::Sha256 as sha2::Digest>::digest(&bytes);
-            format!("{shown} (sha256:{digest:x})")
+            let digest = crate::plugin::hex_sha256(&bytes);
+            format!("{shown} (sha256:{digest})")
         }
         Err(error) => format!("{shown} (unreadable: {error})"),
     }
@@ -2485,4 +2486,24 @@ fn config_trace(trace: &config::ConfigTrace) -> Vec<String> {
         return vec!["built-in defaults".to_owned()];
     }
     sources
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Cli;
+    use clap::{Parser, error::ErrorKind};
+
+    #[test]
+    fn help_keeps_the_product_name_for_executable_aliases() {
+        for arguments in [
+            &["renamed.exe", "--help"][..],
+            &["renamed.exe", "check", "--help"][..],
+        ] {
+            let help = Cli::try_parse_from(arguments).err().expect("help output");
+            assert_eq!(help.kind(), ErrorKind::DisplayHelp);
+            let text = help.to_string();
+            assert!(text.contains("Usage: ocomment"), "{text}");
+            assert!(!text.contains("renamed.exe"), "{text}");
+        }
+    }
 }

@@ -53,9 +53,17 @@ class SyncReleaseDocsTests(unittest.TestCase):
         root = self.fixture(version="0.1.0")
         (root / "docs/verify.md").write_text("no release example\n", encoding="utf-8")
         self.assertIn(
-            "docs/verify.md has no stable OComment version pin",
+            f"{pathlib.Path('docs/verify.md')} has no stable OComment version pin",
             sync_release_docs.failures(root),
         )
+
+    def test_a_versionless_readme_needs_no_release_update(self) -> None:
+        root = self.fixture(version="0.1.0")
+        readme = "# OComment\n\n```sh\ncargo install ocomment --locked\n```\n"
+        (root / "README.md").write_text(readme, encoding="utf-8")
+        self.assertEqual(sync_release_docs.failures(root), [])
+        self.assertEqual(sync_release_docs.synchronize(root), 0)
+        self.assertEqual((root / "README.md").read_text(encoding="utf-8"), readme)
 
 
 if __name__ == "__main__":

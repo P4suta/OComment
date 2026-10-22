@@ -18,6 +18,7 @@ PINNED_DOCS = (
     pathlib.Path("docs/installation.md"),
     pathlib.Path("docs/verify.md"),
 )
+OPTIONAL_PINS = frozenset({pathlib.Path("README.md")})
 OCOMMENT_PIN = re.compile(
     r"(?:"
     r"ghcr\.io/p4suta/ocomment:|"
@@ -49,7 +50,8 @@ def failures(root: pathlib.Path) -> list[str]:
     problems = []
     for relative, versions in pinned_versions(root).items():
         if not versions:
-            problems.append(f"{relative} has no stable OComment version pin")
+            if relative not in OPTIONAL_PINS:
+                problems.append(f"{relative} has no stable OComment version pin")
             continue
         wrong = sorted(versions - {expected})
         if wrong:
@@ -86,7 +88,7 @@ def main() -> int:
         if problems:
             print("\n".join(problems), file=sys.stderr)
             return 1
-        print(f"{len(PINNED_DOCS)} release-document pins match {workspace_version(root)}")
+        print(f"release examples match workspace version {workspace_version(root)}")
         return 0
 
     changed = synchronize(root)

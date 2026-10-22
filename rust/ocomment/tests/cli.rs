@@ -1877,7 +1877,11 @@ fn staged_new_rename_delete_and_unusual_paths_are_handled_from_index_blobs() {
     git(directory.path(), &["add", "renamed target.rs"]);
     fs::remove_file(directory.path().join("deleted.rs")).unwrap();
     git(directory.path(), &["add", "deleted.rs"]);
-    let unusual = "odd\n名前.rs";
+    let unusual = if cfg!(windows) {
+        "odd 名前.rs"
+    } else {
+        "odd\n名前.rs"
+    };
     fs::write(
         directory.path().join(unusual),
         b"let new = 1; // new file\n",
@@ -2205,7 +2209,10 @@ fn an_implicit_target_keeps_the_hidden_and_size_limits() {
         "bare run said:\n{stdout}{stderr}"
     );
     assert!(
-        stdout.contains("src/a.rs:1:12: removable line comment"),
+        stdout.contains(&format!(
+            "{}:1:12: removable line comment",
+            Path::new("src").join("a.rs").display()
+        )),
         "a bare run missed the one file it should report:\n{stdout}"
     );
     assert!(
@@ -4593,12 +4600,13 @@ fn an_invalid_configuration_is_reported_whole_on_one_line() {
 
 /// The other half of that line: the path in front of the colon.
 ///
-/// A configuration file is named by the directory it was found in, and a directory name carries whatever bytes the file system allowed — a `\x07` that rings the terminal's bell among them.
+/// A directory name can carry direction controls, and Unix also admits an ASCII bell.
 /// The name is still the answer to "which file?", so it is printed rather than withheld, and it gets the treatment every other path in the report gets.
 #[test]
 fn an_invalid_configuration_names_its_file_without_ringing_the_terminal() {
     let parent = tempfile::tempdir().unwrap();
-    let directory = parent.path().join("ring\u{7}ing");
+    let control = if cfg!(windows) { '\u{202e}' } else { '\u{7}' };
+    let directory = parent.path().join(format!("ring{control}ing"));
     fs::create_dir(&directory).unwrap();
     fs::write(
         directory.join(".ocomment.toml"),
@@ -4613,12 +4621,11 @@ fn an_invalid_configuration_names_its_file_without_ringing_the_terminal() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(
-        !output.stderr.contains(&0x07),
-        "a control byte from the path reached the terminal: {:?}",
-        String::from_utf8_lossy(&output.stderr)
-    );
     let error = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        !error.contains(control),
+        "a control from the path reached the terminal: {error:?}"
+    );
     assert!(
         error.contains("invalid configuration ") && error.contains(".ocomment.toml"),
         "the error lost the file it rejects:\n{error}"
@@ -5513,7 +5520,7 @@ fn an_unknown_language_skip_says_how_to_force_one() {
 #[test]
 fn a_missing_path_says_where_it_was_looked_for() {
     let directory = tempfile::tempdir().unwrap();
-    let cwd = fs::canonicalize(directory.path()).unwrap();
+    let cwd = dunce::canonicalize(directory.path()).unwrap();
     let output = run(&cwd, &["check", "missing.rs"]);
     assert_eq!(output.status.code(), Some(2));
     let stdout = String::from_utf8(output.stdout).unwrap();
@@ -5530,9 +5537,7 @@ fn a_missing_path_says_where_it_was_looked_for() {
 #[test]
 fn a_configuration_without_a_version_says_how_to_add_one() {
     let directory = tempfile::tempdir().unwrap();
-    /* NOTE: Resolved, because the error names the file OComment found and OComment resolves what it finds.
-     * On macOS the system temporary directory is reached through a symlink -- `/var` is `/private/var` -- so a test that compares against `TempDir::path` compares against a spelling the binary never prints. */
-    let root = directory.path().canonicalize().unwrap();
+    let root = dunce::canonicalize(directory.path()).unwrap();
     let config = root.join(".ocomment.toml");
     fs::write(&config, b"[policy]\nmode = \"all\"\n").unwrap();
     fs::write(
@@ -5540,7 +5545,7 @@ fn a_configuration_without_a_version_says_how_to_add_one() {
         b"let x = 1; // remove\n",
     )
     .unwrap();
-    let output = run(directory.path(), &["check", "sample.rs"]);
+    let output = run(&root, &["check", "sample.rs"]);
     assert_eq!(output.status.code(), Some(2));
     let stderr = String::from_utf8(output.stderr).unwrap();
     assert!(
@@ -5623,9 +5628,16 @@ fn a_missing_plugin_tool_names_it_its_purpose_and_doctor() {
     /* NOTE: Pin the project root: without a configuration the walk upwards can find a repository marker above the temporary directory and install there. */
     fs::write(directory.path().join(".ocomment.toml"), b"version = 1\n").unwrap();
     let empty = tempfile::tempdir().unwrap();
+    // NOTE: Windows can find system curl even with an empty PATH.
+    // NOTE: A URL without a host tests its failure without contacting a network.
+    let https_source = if cfg!(windows) {
+        "https://"
+    } else {
+        "https://example.invalid/scanner.wasm"
+    };
     for (source, expected) in [
         (
-            "https://example.invalid/scanner.wasm",
+            https_source,
             "cannot run `curl` (needed for https:// plugin sources); run `ocomment doctor`",
         ),
         (
@@ -5653,8 +5665,11 @@ fn a_missing_plugin_tool_names_it_its_purpose_and_doctor() {
             .unwrap();
         assert_eq!(output.status.code(), Some(2), "`plugin add {source}`");
         let stderr = String::from_utf8(output.stderr).unwrap();
+        let invalid_system_url = cfg!(windows)
+            && source == https_source
+            && stderr.contains("plugin retrieval failed with exit code: 3");
         assert!(
-            stderr.contains(expected),
+            stderr.contains(expected) || invalid_system_url,
             "`plugin add {source}` said:\n{stderr}"
         );
     }
@@ -5826,11 +5841,12 @@ fn doctor_strips_control_sequences_from_a_probed_tools_version_line() {
 #[test]
 fn doctor_reports_the_environment_it_resolved() {
     let directory = tempfile::tempdir().unwrap();
+    let cwd = dunce::canonicalize(directory.path()).unwrap();
     let empty = tempfile::tempdir().unwrap();
     let doctor = |no_color: Option<&str>| {
         let mut command = command();
         command
-            .current_dir(directory.path())
+            .current_dir(&cwd)
             .env("PATH", test_path())
             /* NOTE: Pin the user layer away from whoever is running the tests: the trace this reports has to be the one this run resolved. */
             .env("XDG_CONFIG_HOME", empty.path())
@@ -5850,7 +5866,6 @@ fn doctor_reports_the_environment_it_resolved() {
     };
 
     let report = doctor(None);
-    let cwd = fs::canonicalize(directory.path()).unwrap();
     assert!(
         report.contains(&format!("cwd: {}", cwd.display())),
         "doctor never said where it was standing:\n{report}"
@@ -5877,7 +5892,7 @@ fn doctor_reports_the_environment_it_resolved() {
         "doctor ignored the NO_COLOR that silences its colour"
     );
 
-    let created = run(directory.path(), &["init", "config"]);
+    let created = run(&cwd, &["init", "config"]);
     assert_eq!(created.status.code(), Some(0));
     let report = doctor(None);
     assert!(
@@ -6205,10 +6220,19 @@ fn check_explain_names_the_override_and_the_pattern_that_kept_a_comment() {
         String::from_utf8_lossy(&output.stderr)
     );
     let report = String::from_utf8(output.stdout).unwrap();
+    let generated = Path::new("gen").join("b.rs");
+    let kept = format!(
+        "{}:1:1: kept block comment: /* generated */",
+        generated.display()
+    );
+    let removable = format!(
+        "{}:2:12: removable line comment: // TODO",
+        generated.display()
+    );
     for needle in [
-        "gen/b.rs:1:1: kept block comment: /* generated */",
+        kept.as_str(),
         "kept: matched keep_regex #1 `(?i)generated` ([[overrides]] #0, paths = [\"gen/**\"])",
-        "gen/b.rs:2:12: removable line comment: // TODO",
+        removable.as_str(),
         /* NOTE: Nothing set `[policy] mode`, so the reader is told it is a default rather than sent to a file that never mentions it.
          * The pattern the same file does set is named with the file, spelled the way the reader typed their way into the directory. */
         "removed: policy `conservative` removes ordinary comments (built-in defaults)",

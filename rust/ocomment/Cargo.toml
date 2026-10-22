@@ -64,6 +64,7 @@ wit-component.workspace = true
 wit-parser.workspace = true
 
 [dev-dependencies]
-wat = "1.252.0"
+dunce = "1.0.5"
+wat = "1.262.0"
 wit-component = "0.19.1"
 wit-parser = "0.13.2"

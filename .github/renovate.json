@@ -1,0 +1,55 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["github>P4suta/renovate-config"],
+  "minimumReleaseAgeBehaviour": "timestamp-required",
+  "packageRules": [
+    {
+      "description": "Keep crate updates compatible with Rust 1.88.",
+      "matchManagers": ["cargo"],
+      "constraints": { "rust": "1.88.0" },
+      "constraintsFiltering": "strict"
+    },
+    {
+      "description": "Keep the minimum supported compiler check on Rust 1.88.",
+      "matchDatasources": ["rust-version"],
+      "matchCurrentVersion": "/^1\\.88(?:\\.0)?$/",
+      "allowedVersions": ">=1.88 <1.89"
+    },
+    {
+      "description": "Keep the source image on the supported minimum compiler.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["rust"],
+      "allowedVersions": "<1.89"
+    },
+    {
+      "description": "The component adapter uses the wasmtime-environ 18 metadata API.",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["wasmtime-environ"],
+      "allowedVersions": "<19"
+    },
+    {
+      "description": "TypeScript ESLint supports TypeScript versions below 6.1.",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["typescript"],
+      "allowedVersions": "<6.1"
+    },
+    {
+      "description": "The plugin adapter uses the wasmi 0.31 API.",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["wasmi"],
+      "allowedVersions": "<0.32"
+    },
+    {
+      "description": "The component adapter uses the wit-component 0.19 API.",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["wit-component"],
+      "allowedVersions": "<0.20"
+    },
+    {
+      "description": "The component adapter uses the wit-parser 0.13 API.",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["wit-parser"],
+      "allowedVersions": "<0.14"
+    }
+  ]
+}

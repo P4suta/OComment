@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import pathlib
+import itertools
+import json
 import re
 import subprocess
 import sys
@@ -22,41 +24,43 @@ PINS = {
     "actions/deploy-pages": ("368f82528645a54fb793d4d04e342629a3f51346",
         "v5.0.1"),
     "actions/download-artifact": (
-        "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
-        "v8.0.1",
+        "9000827ccba6bdab643e8b6fd33ac0654aef8333",
+        "v8.0.2",
     ),
-    "actions/setup-node": ("820762786026740c76f36085b0efc47a31fe5020", "v7.0.0"),
+    "actions/setup-node": ("949feb2413d6458794dcd2491c4babbbce0c15c1", "v7.1.0"),
     "actions/upload-artifact": (
-        "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-        "v7.0.1",
+        "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+        "v7.0.2",
     ),
     "actions/upload-pages-artifact": (
         "fc324d3547104276b827a68afc52ff2a11cc49c9",
         "v5.0.0",
     ),
-    "anchore/sbom-action": ("3ad7283483fc7af8ff2b4ea19663c2d5ca935e26",
-        "v0.24.2"),
+    "anchore/sbom-action": ("66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c",
+        "v0.24.3"),
     "docker/build-push-action": (
-        "53b7df96c91f9c12dcc8a07bcb9ccacbed38856a",
-        "v7.3.0",
+        "c3c9e263c25d99ce0380d002d59b67737d91b0dc",
+        "v7.4.0",
     ),
     "docker/login-action": ("dbcb813823bdd20940b903addbd779551569679f", "v4.6.0"),
     "docker/metadata-action": ("dc802804100637a589fabce1cb79ff13a1411302", "v6.2.0"),
     "docker/setup-buildx-action": (
-        "37fe631027851001ddb9b187196cc803df7f5f0e",
-        "v4.3.0",
+        "f87e5991a6d7451dcb8d9637bfbc97413f497069",
+        "v4.4.1",
     ),
     "docker/setup-qemu-action": (
-        "1f40c72289eff860ee54a304f1438e3cff362e0a",
-        "v4.3.0",
+        "99012661954931238ded8c8b007157a8430204e1",
+        "v4.4.0",
     ),
     "dtolnay/rust-toolchain": ("4360b52568e2003a75bf9bc1d59f33a8e3fc893c", "stable toolchain action"),
-    "github/codeql-action": ("b96794f015dfd88f77b49b1c93e0fa7110f94c63",
-        "v4.38.0"),
+    "dorny/paths-filter": ("ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d", "v4.0.3"),
+    "jdx/mise-action": ("fc42bcc7ddbf51124c30f95a877a0c5168a3bfde", "v5.2.1"),
+    "github/codeql-action": ("6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee",
+        "v4.39.0"),
     # NOTE: The exact release and not the `v3` this action's own README shows.
     # NOTE: A moving major names whatever its publisher last pointed it at, so a table carrying one records nothing a reader or `check_action_pins.py` can hold the pin to.
-    "ocaml/setup-ocaml": ("e89b2ded52a6e13f50162220cf5fe47290162032",
-        "v3.8.0"),
+    "ocaml/setup-ocaml": ("93303b622b2522e4411e295f9e77411a24912ac7",
+        "v3.9.0"),
     "rust-lang/crates-io-auth-action": (
         "c6f97d42243bad5fab37ca0427f495c86d5b1a18",
         "v1.0.5",
@@ -93,7 +97,7 @@ def refuse_shell_scripts(found: set[str]) -> list[str]:
 
 def shell_scripts_here() -> set[str]:
     """Every `tools/*.sh` the repository actually holds."""
-    return {str(path.relative_to(ROOT)) for path in ROOT.glob("tools/*.sh")}
+    return {path.relative_to(ROOT).as_posix() for path in ROOT.glob("tools/*.sh")}
 
 
 def self_test_shell_rule() -> int:
@@ -273,6 +277,90 @@ def self_test_pipefail_rule() -> int:
     return 0
 
 
+CI_CHECKS: dict[str, str] = {
+    "rust": "runtime",
+    "msrv": "runtime",
+    "reference": "reference",
+    "dogfood": "runtime",
+    "action-smoke": "action",
+    "vscode": "editor",
+    "docker": "container",
+}
+
+
+def check_ci_selection(workflow: str) -> list[str]:
+    """Execute the workflow's actual summary predicate on admitted result states."""
+    match = re.search(
+        r'''(?s)jq -e --argjson full "\$\{FULL\}" '(.*?)' <<< "\$\{RESULTS\}"''',
+        workflow,
+    )
+    if match is None:
+        return ["the CI summary must expose its checked jq predicate"]
+    jobs = dict(re.findall(
+        r"(?ms)^  ([a-z][a-z0-9-]+):\n(.*?)(?=^  [a-z][a-z0-9-]+:\n|\Z)",
+        workflow.split("\njobs:\n", 1)[-1],
+    ))
+    expected_jobs = set(CI_CHECKS) | {"changes", "required"}
+    if set(jobs) != expected_jobs:
+        return ["the CI summary and job inventory must cover the same checks"]
+    needs = re.search(r"needs: \[([^\]]+)\]", jobs["required"])
+    if needs is None or set(needs.group(1).replace(" ", "").split(",")) != expected_jobs - {"required"}:
+        return ["the required job must await every selected check and its selection"]
+    for job, selector in CI_CHECKS.items():
+        condition = f"if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.{selector} == 'true'"
+        if "needs: changes" not in jobs[job] or condition not in jobs[job]:
+            return [f"{job} must use its {selector} selection and full manual dispatch"]
+    if any("continue-on-error" in jobs[job] for job in CI_CHECKS):
+        return ["selected check failures must block the required check"]
+    if "runs-on: ubuntu-24.04" not in jobs["action-smoke"] or "matrix:" in jobs["action-smoke"]:
+        return ["pull request action tests must use one Linux runner"]
+    if re.search(r"(?m)^  (push|schedule):", workflow):
+        return ["CI must not repeat pull request checks on main or on a schedule"]
+
+    selectors = sorted(set(CI_CHECKS.values()))
+    states = ("success", "failure", "cancelled", "skipped")
+    query = ". as $case | ($case.input | (" + match.group(1) + ")) == $case.expected"
+    for full in (False, True):
+        inputs: list[str] = []
+
+        def add(needs: dict[str, object], expected: bool) -> None:
+            inputs.append(json.dumps({"input": needs, "expected": expected}))
+
+        for flags in itertools.product((False, True), repeat=len(selectors)):
+            selection = dict(zip(selectors, flags, strict=True))
+            outputs = {key: str(value).lower() for key, value in selection.items()}
+            baseline: dict[str, object] = {
+                "changes": {"result": "success", "outputs": outputs},
+                **{
+                    job: {"result": "success" if full or selection[key] else "skipped"}
+                    for job, key in CI_CHECKS.items()
+                },
+            }
+            add(baseline, True)
+            for job, selector in CI_CHECKS.items():
+                required = "success" if full or selection[selector] else "skipped"
+                for state in states:
+                    if state != required:
+                        add(baseline | {job: {"result": state}}, False)
+                add({key: value for key, value in baseline.items() if key != job}, False)
+            for state in states:
+                if state != "success":
+                    add(baseline | {"changes": {"result": state, "outputs": outputs}}, False)
+            for selector in selectors:
+                for invalid in (None, "", "yes"):
+                    add(baseline | {"changes": {
+                        "result": "success", "outputs": outputs | {selector: invalid},
+                    }}, False)
+        checked = subprocess.run(
+            ["jq", "-e", "--argjson", "full", json.dumps(full), query],
+            input="\n".join(inputs), text=True, capture_output=True, check=False,
+        )
+        verdicts = checked.stdout.splitlines()
+        if checked.returncode != 0 or len(verdicts) != len(inputs) or any(value != "true" for value in verdicts):
+            return [f"the CI summary failed its result table (full={full}): {checked.stderr}"]
+    return []
+
+
 def main() -> int:
     # NOTE: Asked of every run rather than behind a flag.
     # NOTE: A negative control nobody remembers to ask for is a negative control that stops happening, and this one costs nothing.
@@ -284,7 +372,7 @@ def main() -> int:
     )
     if any(self_test() != 0 for self_test in self_tests):
         return 1
-    failures = []
+    failures = check_ci_selection((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
     seen = set()
     for path in AUTOMATION:
         text = path.read_text(encoding="utf-8")
@@ -339,11 +427,11 @@ def main() -> int:
         ).stdout.split()
     )
     for chapter in sorted(set(re.findall(r"\]\(([^)#]+\.md)\)", summary))):
-        path = f"docs/{chapter}"
-        if path not in tracked:
+        chapter_path = f"docs/{chapter}"
+        if chapter_path not in tracked:
             failures.append(
                 f"docs/SUMMARY.md lists {chapter}, which Git does not track"
-                f" ({'it is not on disk either' if not (ROOT / path).is_file() else 'it is ignored or unstaged'})"
+                f" ({'it is not on disk either' if not (ROOT / chapter_path).is_file() else 'it is ignored or unstaged'})"
             )
 
     # NOTE: Every `tools/*.py` gate CI runs also runs in `cargo xtask preflight`.
@@ -416,6 +504,15 @@ def main() -> int:
             failures.append(f"VS Code CI is missing {required!r}")
 
     release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+    native_tests = (
+        "      - name: Test native release targets\n"
+        "        if: ${{ !matrix.cross }}\n"
+        '        run: cargo test --manifest-path rust/Cargo.toml --workspace --all-targets --release --locked --target "${{ matrix.target }}"'
+    )
+    if native_tests not in release:
+        failures.append("every native release target must pass the workspace suite before publication")
+    if "binary-path: rust/target/${{ matrix.target }}/release/ocomment" not in release:
+        failures.append("native release targets must exercise the composite action")
     for required in (
         "metadata:",
         "draft-release:",
@@ -527,7 +624,7 @@ def main() -> int:
         )
     if any(package.get("version_group") != "ocomment" for package in configured_packages):
         failures.append("all release-plz packages must share the ocomment version group")
-    cli_release = next(
+    cli_release: dict[str, object] = next(
         (package for package in configured_packages if package.get("name") == "ocomment"),
         {},
     )

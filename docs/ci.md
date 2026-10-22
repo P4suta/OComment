@@ -3,6 +3,24 @@
 OComment ships two integrations: a [pre-commit](https://pre-commit.com) hook manifest at `.pre-commit-hooks.yaml`, and a composite GitHub Action at `action.yml`.
 Both drive the same CLI and the same exit codes: `0` clean, `1` something is outstanding — a removable comment, a printed diff, a removal a `--tidy` run left alone, or an index a staged fix rewrote — and `2` an invalid source, configuration, plugin, or I/O failure.
 
+## This repository's checks
+
+Every pull request runs workflow validation, the required-check rejection cases, and the documentation build.
+Source changes select Linux tests, independent reference checks, action tests, editor checks, and container checks from `.github/filters/ci.yml`.
+The action smoke test uses one Linux runner.
+The release matrix runs the full workspace suite and the composite action on each native Linux, macOS, and Windows target before publication.
+The required summary rejects a selected job that fails, is cancelled, or is skipped.
+
+Ordinary verification runs on pull requests and merge queues.
+The documentation deployment runs after changes reach the default branch.
+Manual workflow runs check every selected contract, and the protected release workflow keeps its own checks.
+
+Run the native checks before pushing:
+
+```sh
+mise x -- uv run --with-requirements tools/requirements-ci.txt cargo xtask preflight
+```
+
 ## pre-commit
 
 ### Install the CLI first

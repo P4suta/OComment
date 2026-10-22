@@ -962,7 +962,7 @@ def main() -> int:
     parser.add_argument(
         "--binary",
         type=pathlib.Path,
-        default=ROOT / "rust/target/debug/ocomment",
+        default=(ROOT / "rust/target/debug/ocomment").with_suffix(".exe" if os.name == "nt" else ""),
     )
     args = parser.parse_args()
     binary = args.binary.resolve()

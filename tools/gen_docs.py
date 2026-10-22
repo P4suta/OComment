@@ -54,8 +54,8 @@ LANGUAGES = ROOT / "spec/languages.toml"
 DIRECTIVES = ROOT / "spec/directives.toml"
 MAN_PAGE = DOCS / "ocomment.1"
 DEFAULT_BINARIES = (
-    ROOT / "rust/target/debug/ocomment",
-    ROOT / "rust/target/release/ocomment",
+    (ROOT / "rust/target/debug/ocomment").with_suffix(".exe" if os.name == "nt" else ""),
+    (ROOT / "rust/target/release/ocomment").with_suffix(".exe" if os.name == "nt" else ""),
 )
 
 # INVARIANT: See "PROTECTED_SAMPLES" in this file's docstring.
@@ -1071,6 +1071,8 @@ def why_kept_page(cli: Cli, workspace: pathlib.Path) -> str:
     (fixture / ".ocomment.toml").write_text(WHY_CONFIG, encoding="utf-8", newline="\n")
     completed = cli.run(["check", "--explain"], cwd=fixture, expected=(1,))
     transcript = completed.stdout.decode("utf-8") + completed.stderr.decode("utf-8")
+    for name in WHY_FIXTURE:
+        transcript = transcript.replace(str(pathlib.Path(name)), name)
     tree = "".join(f"{name}\n" for name in [".ocomment.toml", *WHY_FIXTURE])
     # NOTE: a reported comment starts at the left margin and the rule under it is indented, so the unindented lines are the comments the run met.
     reported = sum(

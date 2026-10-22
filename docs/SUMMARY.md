@@ -2,6 +2,7 @@
 
 [Introduction](introduction.md)
 
+- [Documentation index](README.md)
 - [Getting started](getting-started.md)
 - [Installation](installation.md)
 - [Commands](commands.md)

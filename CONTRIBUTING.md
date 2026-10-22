@@ -17,11 +17,13 @@ Small fixes can go directly to a pull request.
 
 The production workspace requires Rust 1.88 or newer.
 Differential verification also requires OCaml 5.5, opam, Dune 3.24.2, Python 3, and the dependencies from `ocaml/ocomment-ref.opam`.
+`mise.toml` pins the development tools, and `tools/requirements-ci.txt` pins the Python check dependencies.
 
 ```sh
-opam install ./ocaml/ocomment-ref.opam --deps-only --with-test
-cargo build --manifest-path rust/Cargo.toml --workspace --locked
-lefthook install
+mise install
+mise x -- opam install ./ocaml/ocomment-ref.opam --deps-only --with-test
+mise x -- cargo build --manifest-path rust/Cargo.toml --workspace --locked
+mise x -- lefthook install
 ```
 
 `lefthook install` wires up `lefthook.yml`, whose `pre-commit` hook runs `ocomment fix --tidy --staged` and `cargo fmt --check`.
@@ -29,7 +31,7 @@ The hook reads the staged blobs rather than the working tree, so a partially sta
 `--tidy` writes the half a machine can settle — a comment paragraph reflowed to one sentence per line — and leaves every removal reported and unapplied, so the gate is no weaker for writing.
 Lefthook's `stage_fixed` is deliberately not set: `fix --staged` writes the index itself, and that setting would stage the whole working-tree file and destroy the partial staging.
 A run that rewrote the index exits 1, so the rewrite is reviewed before it is committed rather than after.
-It prefers an `ocomment` on `PATH` and falls back to the workspace copy, so a fresh clone needs no `cargo install` first.
+The hook builds the workspace copy with the pinned tools, so a fresh clone needs no `cargo install` first.
 
 The repository is intentionally split into independent implementations:
 
@@ -50,11 +52,11 @@ A fixture recording *what another tool does* is worth more than one recording wh
 ## Before you push
 
 ```sh
-cargo xtask preflight            # NOTE: everything CI checks that a laptop can
-cargo xtask preflight --quick    # NOTE: everything but the slowest three
+mise x -- uv run --with-requirements tools/requirements-ci.txt cargo xtask preflight
 ```
 
 Waiting eight minutes to be told about a stale manual page is not a review cycle.
+The check runs Python type checks, native tests, generated-document checks, and the deterministic regression inputs with the same tools as CI.
 Every gate below that a laptop can run, runs there, in the order that fails soonest for the least money — and `tools/check_ci_contracts.py` holds the task against `.github/workflows/ci.yml`, so a gate added to CI cannot quietly stop running locally.
 
 `lefthook install` wires it into `pre-push`.

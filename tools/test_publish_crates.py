@@ -6,6 +6,7 @@ from __future__ import annotations
 import os
 import pathlib
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -19,6 +20,13 @@ class PublishCratesTests(unittest.TestCase):
             state = pathlib.Path(raw)
             binary = state / "bin"
             binary.mkdir()
+            python = binary / "python3"
+            python.write_text(
+                '#!/bin/sh\nexec "$TEST_PYTHON" "$@"\n',
+                encoding="utf-8",
+                newline="\n",
+            )
+            python.chmod(0o755)
             fake = binary / "cargo"
             fake.write_text(
                 """#!/bin/sh
@@ -44,8 +52,7 @@ identity() {
 case "$command" in
   metadata)
     set -- $(identity)
-    absolute=$(cd "$(dirname "$manifest")" && pwd)/$(basename "$manifest")
-    printf '{"packages":[{"name":"%s","version":"%s","manifest_path":"%s"}]}\n' "$1" "$2" "$absolute"
+    python3 -c 'import json, os, sys; print(json.dumps({"packages": [{"name": sys.argv[1], "version": sys.argv[2], "manifest_path": os.path.realpath(sys.argv[3])}]}))' "$1" "$2" "$manifest"
     ;;
   info)
     requested=$1
@@ -72,24 +79,40 @@ case "$command" in
 esac
 """,
                 encoding="utf-8",
+                newline="\n",
             )
             fake.chmod(0o755)
             environment = dict(os.environ)
             environment.update(
                 {
-                    "PATH": f"{binary}:{environment['PATH']}",
-                    "FAKE_CARGO_STATE": str(state),
+                    "FAKE_CARGO_BIN": binary.as_posix(),
+                    "FAKE_CARGO_STATE": state.as_posix(),
+                    "TEST_PYTHON": pathlib.Path(sys.executable).as_posix(),
                     "CARGO_REGISTRY_TOKEN": "test-token",
                     "PUBLISH_MAX_ATTEMPTS": "2",
                     "PUBLISH_RETRY_DELAY": "0",
                 }
             )
+            shell = "sh"
+            if os.name == "nt":
+                git_exec = subprocess.check_output(
+                    ["git", "--exec-path"], text=True
+                ).strip()
+                shell = str(pathlib.Path(git_exec).parents[2] / "bin" / "sh.exe")
+            command = [
+                shell,
+                "-c",
+                'fake_bin=$(cd "$FAKE_CARGO_BIN" && pwd) || exit 92; '
+                'export PATH="$fake_bin:$PATH"; '
+                'test "$(command -v cargo)" = "$fake_bin/cargo" || exit 93; '
+                'exec sh ./tools/publish-crates.sh',
+            ]
             first = subprocess.run(
-                ["./tools/publish-crates.sh"], cwd=ROOT, env=environment, check=False
+                command, cwd=ROOT, env=environment, check=False
             )
             self.assertNotEqual(first.returncode, 0)
             second = subprocess.run(
-                ["./tools/publish-crates.sh"], cwd=ROOT, env=environment, check=False
+                command, cwd=ROOT, env=environment, check=False
             )
             self.assertEqual(second.returncode, 0)
             attempts = (state / "publish.log").read_text(encoding="utf-8").splitlines()

@@ -13,10 +13,10 @@ pre-commit:
       # NOTE: A tool that gates its own repository has to be the version in that repository:
       # NOTE: an installed copy is whatever was last `cargo install`ed, so a commit that changes what OComment accepts gets judged by a build that predates the change.
       # NOTE: That happened -- an installed 0.1.0 rejected this repository's own configuration for naming a policy that the commit adding it had just introduced.
-      run: cargo run --quiet --manifest-path rust/Cargo.toml --locked -p ocomment -- fix --tidy --staged
+      run: mise x -- cargo run --quiet --manifest-path rust/Cargo.toml --locked -p ocomment -- fix --tidy --staged
     rustfmt:
       glob: "rust/**/*.rs"
-      run: cargo fmt --all --manifest-path rust/Cargo.toml -- --check
+      run: mise x -- cargo fmt --all --manifest-path rust/Cargo.toml -- --check
 
   skip:
     - merge
@@ -27,7 +27,7 @@ pre-commit:
 pre-push:
   commands:
     preflight:
-      run: cargo xtask preflight
+      run: mise x -- uv run --with-requirements tools/requirements-ci.txt cargo xtask preflight
 
   skip:
     - merge

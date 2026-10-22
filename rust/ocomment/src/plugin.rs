@@ -1125,7 +1125,7 @@ fn save_lock(root: &Path, lock: &LockFile) -> Result<()> {
     Ok(())
 }
 
-fn hex_sha256(bytes: &[u8]) -> String {
+pub(crate) fn hex_sha256(bytes: &[u8]) -> String {
     let digest = Sha256::digest(bytes);
     digest.iter().map(|byte| format!("{byte:02x}")).collect()
 }
@@ -1155,6 +1155,18 @@ mod tests {
     use std::path::Path;
     use wit_component::{ComponentEncoder, StringEncoding, embed_component_metadata};
     use wit_parser::{Resolve, UnresolvedPackage};
+
+    #[test]
+    fn sha256_uses_standard_lowercase_hex_values() {
+        assert_eq!(
+            hex_sha256(b""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+        assert_eq!(
+            hex_sha256(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
 
     #[test]
     fn locked_artifacts_are_confined_to_the_plugin_cache() {

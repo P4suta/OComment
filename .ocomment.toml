@@ -4,6 +4,10 @@
 # NOTE: TOML is a built-in language, so this file is now one of the files that convention applies to.
 version = 1
 
+[profiles.ci-dependencies]
+filenames = ["requirements-ci.txt"]
+line_comments = [{ start = "#", requires_line_start = true, kind = "line" }]
+
 [files]
 hidden = true
 exclude = [

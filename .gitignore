@@ -4,6 +4,7 @@ target/
 /target/book/
 /.ocomment.lock.tmp
 __pycache__/
+/.mypy_cache/
 *.py[cod]
 *.profraw
 .env

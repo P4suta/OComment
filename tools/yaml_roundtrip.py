@@ -57,7 +57,7 @@ except ModuleNotFoundError:
     raise SystemExit("yaml_roundtrip.py needs PyYAML: pip install pyyaml")
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-DEFAULT_BINARY = ROOT / "rust/target/debug/ocomment"
+DEFAULT_BINARY = (ROOT / "rust/target/debug/ocomment").with_suffix(".exe" if sys.platform == "win32" else "")
 CORPUS = ROOT / "spec/fixtures/v1"
 LAYOUTS = ("lines", "columns", "compact")
 # NOTE: `all` takes every comment out, which is the widest removal there is;

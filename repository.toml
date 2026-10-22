@@ -1,0 +1,16 @@
+name = "OComment"
+summary = "Check, format, and remove source comments"
+install = "cargo install ocomment --locked"
+usage_language = "sh"
+usage = "ocomment check ."
+documentation_index = true
+copyright = "2026 OComment contributors"
+license = "MIT OR Apache-2.0"
+
+[[consent]]
+contributor = "Yasunobu"
+evidence = "https://github.com/P4suta/OComment/commit/457a6b495aba0c7f71dc9fea9d7bc5371bf58558"
+
+[[consent]]
+contributor = "github-actions"
+evidence = "https://github.com/P4suta/OComment/commit/f295f14b75e542b4f8cf9b5b22688897cbf42c71"
