@@ -772,6 +772,7 @@ fn run_target(
             preview: !common.output.no_preview,
             json: common.json_options(),
             annotation_level: common.output.annotation_level.map(AnnotationLevel::from),
+            deny_skipped: common.policy.deny_skipped.as_deref(),
             dry_run: flags.dry_run,
         });
     }
@@ -2155,7 +2156,7 @@ fn run_tags(target: &TargetArgs, common: &CommonArgs) -> Result<u8> {
 /// `1` when a skip the run refuses to pass over happened, `0` otherwise.
 ///
 /// The refused paths are named on standard error rather than counted, because the answer to this failure is a decision about particular files -- teach the language, exclude the path, or accept the gap -- and a count does not say which files to decide about.
-fn deny_exit_code(
+pub(crate) fn deny_exit_code(
     skipped: &[files::SkippedFile],
     reasons: Option<&[output::SkipReason]>,
     verbosity: Verbosity,

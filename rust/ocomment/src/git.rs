@@ -47,6 +47,7 @@ pub struct StagedRequest<'a> {
     pub json: crate::output::JsonOptions,
     /// `--annotation-level`, passed through to `--format github`.
     pub annotation_level: Option<AnnotationLevel>,
+    pub deny_skipped: Option<&'a [output::SkipReason]>,
     /// The run only previews the patch; `fix --dry-run` writes nothing to the index and reports what a real run would remove.
     pub dry_run: bool,
 }
@@ -66,9 +67,11 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
         preview,
         json,
         annotation_level,
+        deny_skipped,
         dry_run,
     } = request;
     let root = repository_root()?;
+    let generated = crate::generated::Generated::load()?;
     let (blobs, mut skipped) = configured_paths(&root, staged_paths(&root, paths)?, resolved)?;
     /* NOTE: Nothing staged is a run that reports nothing and exits 0, which reads exactly like a clean index -- and that is how `--staged` under `pre-commit run --all-files`, which stages nothing, becomes a gate that is green forever.
      * The run is still correct; it is the silence that is the trap, so the silence goes. */
@@ -97,6 +100,14 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
             skipped.push(skipped_blob(
                 path,
                 "binary file (NUL byte)".to_owned(),
+                named,
+            ));
+            continue;
+        }
+        if !resolved.config.files.include_generated && generated.claims(&path, &source) {
+            skipped.push(skipped_blob(
+                path,
+                crate::generated::REASON.to_owned(),
                 named,
             ));
             continue;
@@ -308,11 +319,8 @@ pub fn run_staged(request: StagedRequest<'_>) -> Result<u8> {
     if invalid {
         return Ok(2);
     }
-    Ok(output::exit_code(
-        operation,
-        &files,
-        applied && output::changed(&files),
-    ))
+    let denied = crate::cli::deny_exit_code(&skipped, deny_skipped, verbosity)?;
+    Ok(output::exit_code(operation, &files, applied && output::changed(&files)).max(denied))
 }
 
 fn fix_index(root: &Path, entries: &[IndexEntry], index_only: bool) -> Result<()> {
